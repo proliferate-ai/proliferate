@@ -1,9 +1,15 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  resetRendererDiagnosticsSinkForTest,
+  setRendererDiagnosticsSink,
+  type RendererDiagnosticInput,
+} from "@proliferate/product-client/internal/lib/infra/diagnostics/renderer-diagnostics-port";
 
 import {
   bindMeasurementCategories,
   finishMeasurementOperation,
   measureDebugComputation,
+  onMeasurementOperationFinish,
   recordMeasurementDiagnostic,
   recordMeasurementMetric,
   resetDebugMeasurementForTest,
@@ -31,7 +37,15 @@ const TEST_HOT_SUMMARY_BUDGET = {
 } satisfies MeasurementSummaryBudget;
 
 describe("debug measurement registry", () => {
+  let diagnostics: RendererDiagnosticInput[];
+
+  beforeEach(() => {
+    diagnostics = [];
+    setRendererDiagnosticsSink({ emit: (input) => diagnostics.push(input) });
+  });
+
   afterEach(() => {
+    resetRendererDiagnosticsSinkForTest();
     resetDebugMeasurementForTest();
     vi.useRealTimers();
     vi.unstubAllEnvs();
@@ -64,6 +78,10 @@ describe("debug measurement registry", () => {
     expect(row.requestCount).toBe(1);
     expect(row.maxRequestMs).toBe(12.3);
     expect(Object.values(row).join(" ")).not.toContain("/v1/");
+    expect(diagnostics).toContainEqual(expect.objectContaining({
+      name: "renderer.measurement.summary",
+      correlation: { operationId },
+    }));
   });
 
   it("attributes unscoped request metrics through scoped category bindings", () => {
@@ -232,6 +250,32 @@ describe("debug measurement registry", () => {
     expect(String(budgetRows[0]?.failureLabels)).toContain("first_commit_ms");
     expect(error).toHaveBeenCalledOnce();
     expect(JSON.stringify(error.mock.calls[0])).not.toContain("/v1/");
+    expect(diagnostics).toContainEqual(expect.objectContaining({
+      name: "renderer.measurement.budget_violation",
+      errorClassification: "measurement_budget_violation",
+      correlation: { operationId },
+    }));
+  });
+
+  it("captures a failed finish listener without affecting completion", () => {
+    vi.stubEnv("VITE_PROLIFERATE_DEBUG_ANYHARNESS_TIMING", "1");
+    vi.spyOn(console, "table").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const operationId = startMeasurementOperation({
+      kind: "workspace_open",
+      surfaces: ["workspace-shell"],
+    });
+    expect(operationId).not.toBeNull();
+    onMeasurementOperationFinish(operationId!, () => {
+      throw new Error("listener failed");
+    });
+
+    expect(() => finishMeasurementOperation(operationId!, "completed")).not.toThrow();
+    expect(diagnostics).toContainEqual(expect.objectContaining({
+      name: "renderer.measurement.listener_failed",
+      errorClassification: "measurement_listener_failed",
+      correlation: { operationId },
+    }));
   });
 
   it("emits one hot budget row and one sanitized error for violated hot operations", () => {

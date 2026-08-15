@@ -46,10 +46,10 @@ All converge on one flow
 4. Hard failure fails the pending entry with a specific message; the row
    survives and renders in the error state with a retry action.
 
-## The status panel
+## The status takeover
 
-One panel owns every not-usable-yet state:
-`WorkspaceArrivalCloudPanel`, a composer-attached panel (stack position per
+One surface owns every not-usable-yet state: the blocked-status composer
+takeover (`useComposerBlockedState`, rendering rules per
 [composer.md](../chat/composer.md)), driven by one model builder
 ([cloud-workspace-status-presentation.ts](../../../../../apps/packages/product-client/src/lib/domain/workspaces/cloud/cloud-workspace-status-presentation.ts))
 over one gate
@@ -72,8 +72,8 @@ the presentation module and nowhere else.
 
 Reconnect is not a mode: opening a workspace whose VM is paused just
 works — the first gateway call wakes it (access spec choreography, roughly
-a second) — so there is no "waking" screen, only the ordinary connecting
-affordance of `CloudRuntimeAttachedPanel`.
+a second) — so there is no "waking" screen, only the ordinary
+runtime-connecting takeover line in the composer.
 
 ## Archive, delete, unarchive
 
@@ -133,7 +133,6 @@ apps/packages/product-client/src/
 │   ├── cloud-workspace-status.ts            the status gate
 │   └── cloud-workspace-status-presentation.ts   the five modes, all copy
 └── components/workspace/
-    ├── chat/panels/WorkspaceArrivalCloudPanel.tsx   the status panel
     └── chat/input/
         ├── EnvironmentStatusCard.tsx        resources card (worktrees, CPU/mem/disk)
         └── RuntimePressureDetailsDialog.tsx worktrees dialog + delete confirmation

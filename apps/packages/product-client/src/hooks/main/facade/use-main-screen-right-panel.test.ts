@@ -76,6 +76,123 @@ function renderRightPanel() {
 }
 
 describe("useMainScreenRightPanel drag wiring", () => {
+  it("seeds a drag from the rendered rail width when the floor clamp holds it below the persisted width", () => {
+    // A rail whose rendered width sits below the persisted 700 — the shape
+    // the MAIN_PANE_MIN_WIDTH clamp produces on a small window.
+    const rail = document.createElement("div");
+    rail.setAttribute("data-right-panel-rail", "");
+    rail.getBoundingClientRect = () =>
+      ({ width: 420 } as DOMRect);
+    document.body.appendChild(rail);
+
+    try {
+      const { result, rerender } = renderRightPanel();
+      act(() => {
+        result.current.setRightPanelOpen(true);
+      });
+      act(() => {
+        result.current.setRightPanelWidth(700);
+      });
+      rerender();
+
+      // Drag 30px narrower. Seeded from the rendered 420 this lands at 390;
+      // seeded from the persisted 700 it would land at 670 — the first 280px
+      // of pointer travel would be dead.
+      fireDrag(result.current.onRightSeparatorDown, [-30]);
+      rerender();
+
+      expect(result.current.rightPanelWidth).toBe(390);
+    } finally {
+      rail.remove();
+    }
+  });
+
+  it("lets a drag widen the panel past the legacy ceiling when the window affords it", () => {
+    // A wide shell row: the drag's ceiling is the row minus the chat pane's
+    // floor (2000 − 440 = 1560), not the legacy fixed 700.
+    const row = document.createElement("div");
+    row.getBoundingClientRect = () => ({ width: 2000 } as DOMRect);
+    const rail = document.createElement("div");
+    rail.setAttribute("data-right-panel-rail", "");
+    rail.getBoundingClientRect = () => ({ width: 420 } as DOMRect);
+    row.appendChild(rail);
+    document.body.appendChild(row);
+
+    try {
+      const { result, rerender } = renderRightPanel();
+      act(() => {
+        result.current.setRightPanelOpen(true);
+      });
+      rerender();
+
+      // Widen by 500 from the rendered 420 → 920, beyond the old 700 cap.
+      fireDrag(result.current.onRightSeparatorDown, [500]);
+      rerender();
+
+      expect(result.current.rightPanelWidth).toBe(920);
+    } finally {
+      row.remove();
+    }
+  });
+
+  it("keeps a sub-threshold rail open while the drag widens it", () => {
+    // The floor clamp has rendered the rail at 204 — below the collapse
+    // threshold. Seeded there, an outward drag must resize (pinned to the
+    // panel's floor), and only an inward shove may close.
+    const row = document.createElement("div");
+    row.getBoundingClientRect = () => ({ width: 1000 } as DOMRect);
+    const rail = document.createElement("div");
+    rail.setAttribute("data-right-panel-rail", "");
+    rail.getBoundingClientRect = () => ({ width: 204 } as DOMRect);
+    row.appendChild(rail);
+    document.body.appendChild(row);
+
+    try {
+      const { result, rerender } = renderRightPanel();
+      act(() => {
+        result.current.setRightPanelOpen(true);
+      });
+      rerender();
+
+      fireDrag(result.current.onRightSeparatorDown, [50]);
+      rerender();
+      expect(result.current.rightPanelOpen).toBe(true);
+      expect(result.current.rightPanelWidth).toBe(RIGHT_PANEL_MIN_WIDTH);
+
+      fireDrag(result.current.onRightSeparatorDown, [-20]);
+      rerender();
+      expect(result.current.rightPanelOpen).toBe(false);
+    } finally {
+      row.remove();
+    }
+  });
+
+  it("caps a widening drag at the chat pane's floor", () => {
+    const row = document.createElement("div");
+    row.getBoundingClientRect = () => ({ width: 1000 } as DOMRect);
+    const rail = document.createElement("div");
+    rail.setAttribute("data-right-panel-rail", "");
+    rail.getBoundingClientRect = () => ({ width: 420 } as DOMRect);
+    row.appendChild(rail);
+    document.body.appendChild(row);
+
+    try {
+      const { result, rerender } = renderRightPanel();
+      act(() => {
+        result.current.setRightPanelOpen(true);
+      });
+      rerender();
+
+      // Asks for 920; the 1000px row only affords 1000 − 440 = 560.
+      fireDrag(result.current.onRightSeparatorDown, [500]);
+      rerender();
+
+      expect(result.current.rightPanelWidth).toBe(560);
+    } finally {
+      row.remove();
+    }
+  });
+
   it("resizes the panel through a real mousedown/mousemove/mouseup sequence", () => {
     const { result, rerender } = renderRightPanel();
     act(() => {
@@ -204,5 +321,59 @@ describe("useMainScreenRightPanel drag wiring", () => {
     expect(
       useWorkspaceUiStore.getState().rightPanelDurableByWorkspace[WORKSPACE_ID]?.width,
     ).toBe(startWidth);
+  });
+});
+
+describe("useMainScreenRightPanel external durable open writes", () => {
+  it("honors a store-level open written while a session override holds the frame closed (PRO-242)", () => {
+    const { result, rerender } = renderRightPanel();
+    // A toggle seeds the session override; closing leaves it at open:false,
+    // which used to shadow every later store-level open write.
+    act(() => {
+      result.current.setRightPanelOpen(true);
+    });
+    act(() => {
+      result.current.setRightPanelOpen(false);
+    });
+    rerender();
+    expect(result.current.rightPanelOpen).toBe(false);
+
+    // A chat file-link click opens the frame through the store, the same
+    // write `openViewerTargetInRightPanel` issues.
+    act(() => {
+      useWorkspaceUiStore.getState().setRightPanelOpenForWorkspace(WORKSPACE_ID, true);
+    });
+    rerender();
+    expect(result.current.rightPanelOpen).toBe(true);
+
+    // The user can still close it afterwards.
+    act(() => {
+      result.current.setRightPanelOpen(false);
+    });
+    rerender();
+    expect(result.current.rightPanelOpen).toBe(false);
+  });
+
+  it("keeps the frame shell-level on workspace switches instead of adopting the next workspace's persisted open", () => {
+    const OTHER_WORKSPACE_ID = "workspace-switch-test";
+    const { result, rerender } = renderHook(
+      ({ workspaceUiKey }: { workspaceUiKey: string }) =>
+        useMainScreenRightPanel({
+          workspaceUiKey,
+          materializedWorkspaceId: workspaceUiKey,
+          isCloudWorkspaceSelected: false,
+          rightPanelSuppressed: false,
+        }),
+      { initialProps: { workspaceUiKey: WORKSPACE_ID } },
+    );
+    act(() => {
+      result.current.setRightPanelOpen(true);
+    });
+    act(() => {
+      useWorkspaceUiStore.getState().setRightPanelOpenForWorkspace(OTHER_WORKSPACE_ID, false);
+    });
+
+    rerender({ workspaceUiKey: OTHER_WORKSPACE_ID });
+    expect(result.current.rightPanelOpen).toBe(true);
   });
 });

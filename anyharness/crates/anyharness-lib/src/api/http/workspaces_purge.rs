@@ -2,39 +2,15 @@ use std::collections::BTreeSet;
 
 use crate::api::http::access::admit_session_mutation;
 use crate::domains::sessions::admission::{SessionMutationKind, SessionMutationPermit};
-use anyharness_contract::v1::{
-    WorkspacePurgeOutcome, WorkspacePurgePreflightResponse, WorkspacePurgeResponse,
-};
+use anyharness_contract::v1::{WorkspacePurgeOutcome, WorkspacePurgeResponse};
 use axum::{
     extract::{Path, State},
     Json,
 };
 
 use super::error::ApiError;
-use super::workspaces_contract::{
-    workspace_cleanup_operation_to_contract, workspace_cleanup_to_contract,
-    workspace_kind_to_contract, workspace_lifecycle_to_contract, workspace_to_contract,
-};
 use crate::app::AppState;
-use crate::domains::workspaces::purge::WorkspacePurgeServiceOutcome;
-use crate::domains::workspaces::retire_preflight::RetirePreflightMode;
-
-#[utoipa::path(
-    get,
-    path = "/v1/workspaces/{workspace_id}/purge/preflight",
-    params(("workspace_id" = String, Path, description = "Workspace ID")),
-    responses(
-        (status = 200, description = "Purge preflight", body = WorkspacePurgePreflightResponse),
-        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
-    ),
-    tag = "workspaces"
-)]
-pub async fn purge_workspace_preflight(
-    State(state): State<AppState>,
-    Path(workspace_id): Path<String>,
-) -> Result<Json<WorkspacePurgePreflightResponse>, ApiError> {
-    Ok(Json(build_purge_preflight(&state, &workspace_id).await?))
-}
+use crate::domains::workspaces::deletion::purge::{WorkspacePurgeError, WorkspacePurgeOutcome as ServiceWorkspacePurgeOutcome};
 
 /// The result of the up-front workspace-destruction admission snapshot: the
 /// held permits (dropped at end of the destructive operation) PLUS the SET of
@@ -112,17 +88,13 @@ pub async fn purge_workspace(
     #[cfg(test)]
     purge_barriers::at_pre_exclusive(&workspace_id).await;
 
-    purge_response_from_service_outcome(
-        &state,
-        None,
-        state
-            .workspace_purge_service
-            .purge_with_admitted_session_ids(&workspace_id, false, Some(admitted_session_ids))
-            .await
-            .map_err(|error| ApiError::internal(error.to_string()))?,
-    )
-    .await
-    .map(Json)
+    let outcome = state
+        .workspace_purge_service
+        .purge_with_admitted_session_ids(&workspace_id, Some(admitted_session_ids))
+        .await
+        .map_err(map_purge_error)?;
+
+    Ok(Json(purge_response_from_service_outcome(outcome)))
 }
 
 /// PR1227-WORKSPACE-FENCE-01 proof seam. A keyed, test-only barrier that parks
@@ -180,121 +152,47 @@ pub(crate) mod purge_barriers {
     }
 }
 
-#[utoipa::path(
-    post,
-    path = "/v1/workspaces/{workspace_id}/purge/retry",
-    params(("workspace_id" = String, Path, description = "Workspace ID")),
-    responses(
-        (status = 200, description = "Purge retry result", body = WorkspacePurgeResponse),
-        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
-    ),
-    tag = "workspaces"
-)]
-pub async fn retry_purge_workspace(
-    State(state): State<AppState>,
-    Path(workspace_id): Path<String>,
-) -> Result<Json<WorkspacePurgeResponse>, ApiError> {
-    purge_response_from_service_outcome(
-        &state,
-        None,
-        state
-            .workspace_purge_service
-            .purge(&workspace_id, true)
-            .await
-            .map_err(|error| ApiError::internal(error.to_string()))?,
-    )
-    .await
-    .map(Json)
-}
-
-async fn build_purge_preflight(
-    state: &AppState,
-    workspace_id: &str,
-) -> Result<WorkspacePurgePreflightResponse, ApiError> {
-    let workspace = state
-        .workspace_runtime
-        .get_workspace(workspace_id)
-        .map_err(|e| ApiError::internal(e.to_string()))?
-        .ok_or_else(|| {
-            ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
-        })?;
-    let preflight = state
-        .retire_preflight_checker
-        .check_workspace(workspace.clone(), RetirePreflightMode::Purge)
-        .await
-        .map_err(|error| ApiError::internal(error.to_string()))?;
-    Ok(WorkspacePurgePreflightResponse {
-        workspace_id: workspace.id,
-        workspace_kind: workspace_kind_to_contract(workspace.kind),
-        lifecycle_state: workspace_lifecycle_to_contract(workspace.lifecycle_state),
-        cleanup_state: workspace_cleanup_to_contract(workspace.cleanup_state),
-        cleanup_operation: workspace
-            .cleanup_operation
-            .map(workspace_cleanup_operation_to_contract),
-        can_purge: preflight.can_purge,
-        materialized: preflight.materialized,
-        blockers: preflight.blockers,
-    })
-}
-
-async fn purge_response_from_service_outcome(
-    state: &AppState,
-    preflight: Option<WorkspacePurgePreflightResponse>,
-    outcome: WorkspacePurgeServiceOutcome,
-) -> Result<WorkspacePurgeResponse, ApiError> {
+fn purge_response_from_service_outcome(
+    outcome: ServiceWorkspacePurgeOutcome,
+) -> WorkspacePurgeResponse {
     match outcome {
-        WorkspacePurgeServiceOutcome::Deleted {
-            already_deleted,
-            cleanup_attempted,
-        } => Ok(WorkspacePurgeResponse {
+        ServiceWorkspacePurgeOutcome::Deleted { already_deleted } => WorkspacePurgeResponse {
             outcome: WorkspacePurgeOutcome::Deleted,
-            workspace: None,
-            preflight,
             already_deleted,
-            cleanup_attempted,
-            cleanup_succeeded: true,
-            cleanup_message: None,
-        }),
-        WorkspacePurgeServiceOutcome::Blocked { workspace, message } => {
-            Ok(WorkspacePurgeResponse {
-                outcome: WorkspacePurgeOutcome::Blocked,
-                workspace: Some(workspace_to_contract(state, workspace).await?),
-                preflight,
-                already_deleted: false,
-                cleanup_attempted: false,
-                cleanup_succeeded: false,
-                cleanup_message: Some(message),
-            })
-        }
-        WorkspacePurgeServiceOutcome::CleanupFailed { workspace, message } => {
-            Ok(WorkspacePurgeResponse {
-                outcome: WorkspacePurgeOutcome::CleanupFailed,
-                workspace: Some(workspace_to_contract(state, workspace).await?),
-                preflight,
-                already_deleted: false,
-                cleanup_attempted: true,
-                cleanup_succeeded: false,
-                cleanup_message: Some(message),
-            })
-        }
+        },
+    }
+}
+
+/// Maps every [`WorkspacePurgeError`] variant to the same stable HTTP shape
+/// the pre-split purge answered with: the two fence rejections both surface
+/// as the same `SESSION_CONTROLLED_BY_WORKFLOW` 409 they always have (no
+/// client-visible behavior change from the internal type split), a timed-out
+/// bounded acquire is the same "in flight, retry" conflict archive/unarchive
+/// already answer with, and every other failure — mechanical, and never past
+/// a destructive point by construction — is a plain 500.
+fn map_purge_error(error: WorkspacePurgeError) -> ApiError {
+    match error {
         // PR1227-WORKSPACE-FENCE-01: the under-lease re-check observed a
         // workflow-controlled session created after up-front admission. Fail
         // closed with the same stable 409 as the up-front fence.
-        WorkspacePurgeServiceOutcome::ControlledByWorkflow { .. } => Err(ApiError::conflict(
+        WorkspacePurgeError::ControlledByWorkflow { .. } => ApiError::conflict(
             "session execution is controlled by an active workflow run",
             "SESSION_CONTROLLED_BY_WORKFLOW",
-        )),
+        ),
         // PR1227-WORKSPACE-FENCE-02: the under-lease re-enumeration observed a
         // session id absent from the up-front admitted set (bound after the
         // snapshot, possibly already terminalized). Fail closed with the same
         // stable 409 code; the detail names the unadmitted session id only —
         // no raw internal state, nothing persisted.
-        WorkspacePurgeServiceOutcome::SessionAppearedAfterAdmission { session_id } => {
-            Err(ApiError::conflict(
-                format!("session {session_id} appeared after destruction admission"),
-                "SESSION_CONTROLLED_BY_WORKFLOW",
-            ))
-        }
+        WorkspacePurgeError::SessionAppearedAfterAdmission { session_id } => ApiError::conflict(
+            format!("session {session_id} appeared after destruction admission"),
+            "SESSION_CONTROLLED_BY_WORKFLOW",
+        ),
+        WorkspacePurgeError::OperationInFlight => ApiError::conflict(
+            "a workspace operation is already in flight",
+            "WORKSPACE_OPERATION_IN_FLIGHT",
+        ),
+        WorkspacePurgeError::Failed(message) => ApiError::internal(message),
     }
 }
 
@@ -306,193 +204,130 @@ mod tests {
     use super::*;
     use crate::app::test_support;
     use crate::domains::agents::installer::seed::AgentSeedStore;
-    use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
-    use crate::domains::sessions::store::SessionStore;
     use crate::domains::workspaces::model::{
-        WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
-        WorkspaceRecord, WorkspaceSurface,
+        WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord, WorkspaceSurface,
     };
-    use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
     use crate::domains::workspaces::store::WorkspaceStore;
     use crate::persistence::Db;
-    use anyharness_contract::v1::WorkspaceRetireBlockerCode;
 
-    #[tokio::test(flavor = "current_thread")]
-    async fn purge_preflight_allows_retired_complete_workspace() {
-        let state = test_state("purge-retired-complete");
-        let workspace = workspace_record(
-            "workspace-retired-complete",
-            "retired",
-            "complete",
-            Some("retire"),
+    /// Real repo, real managed worktree, real `AppState` — the managed
+    /// worktrees root is `runtime_home.parent()/worktrees`, so purge's
+    /// containment guard is meaningfully exercised here rather than vacuously
+    /// true. Mirrors `deletion/tests/purge_tests.rs`'s
+    /// `Harness::worktree_workspace`. Returns `(runtime_home, repo_root,
+    /// workspace_path)`.
+    fn seed_managed_worktree(
+        base: &TempDirGuard,
+        workspace_id: &str,
+    ) -> (PathBuf, PathBuf, PathBuf) {
+        let runtime_home = base.path().join("runtime");
+        let worktrees_root = base.path().join("worktrees");
+        let repo_root = base.path().join("repo");
+        std::fs::create_dir_all(&runtime_home).expect("create runtime home");
+        std::fs::create_dir_all(&worktrees_root).expect("create managed worktrees root");
+        std::fs::create_dir_all(&repo_root).expect("create repo root");
+        run_git(&repo_root, ["init", "-b", "main"]);
+        run_git(&repo_root, ["config", "user.email", "test@example.com"]);
+        run_git(&repo_root, ["config", "user.name", "Test"]);
+        run_git(&repo_root, ["config", "commit.gpgsign", "false"]);
+        run_git(&repo_root, ["commit", "--allow-empty", "-m", "init"]);
+        let workspace_path = worktrees_root.join(workspace_id);
+        let workspace_path_string = workspace_path.to_string_lossy().into_owned();
+        run_git(
+            &repo_root,
+            [
+                "worktree",
+                "add",
+                "-b",
+                workspace_id,
+                &workspace_path_string,
+                "HEAD",
+            ],
         );
-        WorkspaceStore::new(state.db.clone())
-            .insert(&workspace)
-            .expect("insert workspace");
-
-        let preflight = match build_purge_preflight(&state, &workspace.id).await {
-            Ok(preflight) => preflight,
-            Err(_) => panic!("purge preflight failed"),
-        };
-
-        assert!(preflight.can_purge);
-        assert!(preflight.blockers.is_empty());
+        (runtime_home, repo_root, workspace_path)
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn purge_preflight_allows_retired_purge_retry_workspace() {
-        let state = test_state("purge-retired-retry");
+    async fn purge_workspace_deletes_an_active_worktree_row_and_its_checkout() {
+        let base = TempDirGuard::new("purge-http-active");
+        let (runtime_home, repo_root, workspace_path) =
+            seed_managed_worktree(&base, "workspace-http-active");
+
+        let workspace_path_string = workspace_path.to_string_lossy().into_owned();
+        let state = test_state(runtime_home, &repo_root);
         let workspace =
-            workspace_record("workspace-purge-retry", "retired", "failed", Some("purge"));
-        WorkspaceStore::new(state.db.clone())
-            .insert(&workspace)
-            .expect("insert workspace");
+            workspace_record("workspace-http-active", "active", &workspace_path_string);
+        let store = WorkspaceStore::new(state.db.clone());
+        store.insert(&workspace).expect("insert workspace");
 
-        let preflight = match build_purge_preflight(&state, &workspace.id).await {
-            Ok(preflight) => preflight,
-            Err(_) => panic!("purge preflight failed"),
-        };
-
-        assert!(preflight.can_purge);
-        assert!(preflight.blockers.is_empty());
-    }
-
-    #[tokio::test(flavor = "current_thread")]
-    async fn purge_preflight_allows_dirty_active_workspace() {
-        let checkout = TempDirGuard::new("purge-dirty-active");
-        run_git(checkout.path(), ["init"]);
-        std::fs::write(checkout.path().join("dirty.txt"), "delete me").expect("write dirty file");
-
-        let state = test_state("purge-dirty-active");
-        let workspace = workspace_record_with_path(
-            "workspace-dirty-active",
-            "active",
-            "none",
-            None,
-            checkout.path().to_string_lossy().as_ref(),
-        );
-        WorkspaceStore::new(state.db.clone())
-            .insert(&workspace)
-            .expect("insert workspace");
-
-        let preflight = match build_purge_preflight(&state, &workspace.id).await {
-            Ok(preflight) => preflight,
-            Err(_) => panic!("purge preflight failed"),
-        };
-
-        assert!(preflight.can_purge);
-        assert!(preflight.blockers.iter().all(|blocker| {
-            blocker.code != WorkspaceRetireBlockerCode::DirtyWorkingTree
-                && blocker.code != WorkspaceRetireBlockerCode::ConflictedFiles
-                && blocker.code != WorkspaceRetireBlockerCode::ActiveGitOperation
-        }));
-    }
-
-    #[tokio::test(flavor = "current_thread")]
-    async fn purge_preflight_reports_single_unsupported_workspace_blocker() {
-        let state = test_state("purge-unsupported");
-        let workspace = workspace_record_with_kind_surface(
-            "workspace-local",
-            "local",
-            "standard",
-            "active",
-            "none",
-            None,
-            "/tmp/anyharness-local-workspace",
-        );
-        WorkspaceStore::new(state.db.clone())
-            .insert(&workspace)
-            .expect("insert workspace");
-
-        let preflight = match build_purge_preflight(&state, &workspace.id).await {
-            Ok(preflight) => preflight,
-            Err(_) => panic!("purge preflight failed"),
-        };
-
-        assert!(!preflight.can_purge);
-        assert_eq!(preflight.blockers.len(), 1);
-        assert_eq!(
-            preflight.blockers[0].message,
-            "Purge is only available for standard worktree workspaces."
-        );
-    }
-
-    #[tokio::test(flavor = "current_thread")]
-    async fn purge_preflight_still_blocks_active_workspace_operations() {
-        let state = test_state("purge-active-operation");
-        let workspace = workspace_record("workspace-active-operation", "active", "none", None);
-        WorkspaceStore::new(state.db.clone())
-            .insert(&workspace)
-            .expect("insert workspace");
-        let _lease = state
-            .workspace_operation_gate
-            .acquire_shared(&workspace.id, WorkspaceOperationKind::ProcessRun)
-            .await;
-
-        let preflight = match build_purge_preflight(&state, &workspace.id).await {
-            Ok(preflight) => preflight,
-            Err(_) => panic!("purge preflight failed"),
-        };
-
-        assert!(!preflight.can_purge);
-        assert!(preflight
-            .blockers
-            .iter()
-            .any(|blocker| blocker.code == WorkspaceRetireBlockerCode::RunningCommand));
-    }
-
-    #[tokio::test(flavor = "current_thread")]
-    async fn purge_retry_deletes_rows_when_attachment_cleanup_fails() {
-        let state = test_state("purge-attachment-cleanup-failure");
-        let workspace = workspace_record(
-            "workspace-purge-attachment-failure",
-            "retired",
-            "failed",
-            Some("purge"),
-        );
-        let workspace_store = WorkspaceStore::new(state.db.clone());
-        workspace_store
-            .insert(&workspace)
-            .expect("insert workspace");
-
-        let session = session_record("session-attachment-cleanup-failure", &workspace.id);
-        let session_store = SessionStore::new(state.db.clone());
-        session_store.insert(&session).expect("insert session");
-
-        let attachment_path = state
-            .runtime_home
-            .join("attachments")
-            .join("sessions")
-            .join(&session.id);
-        std::fs::create_dir_all(attachment_path.parent().expect("attachment parent"))
-            .expect("create attachment parent");
-        std::fs::write(&attachment_path, "not a directory").expect("write attachment file");
-
-        let outcome = state
-            .workspace_purge_service
-            .purge(&workspace.id, true)
+        let response = purge_workspace(State(state.clone()), Path(workspace.id.clone()))
             .await
             .expect("purge workspace");
 
-        assert!(matches!(
-            outcome,
-            WorkspacePurgeServiceOutcome::Deleted {
-                already_deleted: false,
-                cleanup_attempted: true,
-            }
-        ));
-        assert!(workspace_store
+        assert_eq!(response.outcome, WorkspacePurgeOutcome::Deleted);
+        assert!(!response.already_deleted);
+        assert!(store
             .find_by_id(&workspace.id)
             .expect("find workspace")
             .is_none());
-        assert!(session_store
-            .find_by_id(&session.id)
-            .expect("find session")
-            .is_none());
-        assert!(attachment_path.is_file());
+        assert!(!workspace_path.exists(), "the worktree checkout must be removed");
     }
 
-    fn test_state(name: &str) -> AppState {
+    #[tokio::test(flavor = "current_thread")]
+    async fn purge_workspace_deletes_an_archived_row_whose_checkout_is_already_gone() {
+        // The ADR's headline flow over the real HTTP handler: an ARCHIVED row
+        // has no checkout by construction (archive's phase 2 removed it), so
+        // this is the shape every `DELETE` of an archived workspace arrives
+        // in. Before the containment guard grew its missing-directory
+        // early-out this answered 500 "refusing to remove a worktree outside
+        // the managed worktrees root" and left the row behind forever.
+        let base = TempDirGuard::new("purge-http-archived");
+        let (runtime_home, repo_root, workspace_path) =
+            seed_managed_worktree(&base, "workspace-http-archived");
+        let workspace_path_string = workspace_path.to_string_lossy().into_owned();
+        run_git(
+            &repo_root,
+            ["worktree", "remove", "--force", &workspace_path_string],
+        );
+        assert!(
+            !workspace_path.exists(),
+            "an archived row's checkout is gone before DELETE is ever called"
+        );
+
+        let state = test_state(runtime_home, &repo_root);
+        let workspace = workspace_record(
+            "workspace-http-archived",
+            "archived",
+            &workspace_path_string,
+        );
+        let store = WorkspaceStore::new(state.db.clone());
+        store.insert(&workspace).expect("insert workspace");
+
+        let response = purge_workspace(State(state.clone()), Path(workspace.id.clone()))
+            .await
+            .expect("an archived workspace must be deletable");
+
+        assert_eq!(response.outcome, WorkspacePurgeOutcome::Deleted);
+        assert!(!response.already_deleted);
+        assert!(store
+            .find_by_id(&workspace.id)
+            .expect("find workspace")
+            .is_none());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn purge_workspace_is_idempotent_on_a_repeat_call() {
+        let base = TempDirGuard::new("purge-http-idempotent");
+        let state = test_state(base.path().join("runtime"), &base.path().join("repo"));
+        let response = purge_workspace(State(state), Path("workspace-does-not-exist".to_string()))
+            .await
+            .expect("purge missing workspace");
+
+        assert_eq!(response.outcome, WorkspacePurgeOutcome::Deleted);
+        assert!(response.already_deleted);
+    }
+
+    fn test_state(runtime_home: PathBuf, repo_root_path: &std::path::Path) -> AppState {
         let _lock = test_support::ENV_MUTEX
             .get_or_init(|| Mutex::new(()))
             .lock()
@@ -500,22 +335,23 @@ mod tests {
         let _bearer_guard = test_support::set_bearer_token_env(None);
         let _data_key_guard = test_support::set_data_key_env(None);
         let db = Db::open_in_memory().expect("open db");
+        let repo_root_path = repo_root_path.to_string_lossy().to_string();
         db.with_conn(|conn| {
             conn.execute(
                 "INSERT INTO repo_roots (
                     id, kind, path, display_name, default_branch, remote_provider, remote_owner,
                     remote_repo_name, remote_url, created_at, updated_at
                  ) VALUES (
-                    'repo-root-1', 'external', '/tmp/repo-root-1', NULL, 'main', NULL, NULL,
+                    'repo-root-1', 'external', ?1, NULL, 'main', NULL, NULL,
                     NULL, NULL, '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z'
                  )",
-                [],
+                [&repo_root_path],
             )?;
             Ok(())
         })
         .expect("seed repo root");
         AppState::new(
-            PathBuf::from(format!("/tmp/anyharness-{name}-runtime")),
+            runtime_home,
             "http://127.0.0.1:8457".to_string(),
             db,
             false,
@@ -524,84 +360,13 @@ mod tests {
         .expect("app state")
     }
 
-    fn session_record(id: &str, workspace_id: &str) -> SessionRecord {
-        SessionRecord {
-            id: id.to_string(),
-            workspace_id: workspace_id.to_string(),
-            agent_kind: "claude".to_string(),
-            native_session_id: None,
-            agent_auth_contexts: None,
-            requested_model_id: None,
-            current_model_id: None,
-            requested_mode_id: None,
-            current_mode_id: None,
-            title: None,
-            thinking_level_id: None,
-            thinking_budget_tokens: None,
-            status: "idle".to_string(),
-            created_at: "2026-03-25T00:00:00Z".to_string(),
-            updated_at: "2026-03-25T00:00:00Z".to_string(),
-            last_prompt_at: None,
-            closed_at: None,
-            dismissed_at: None,
-            mcp_bindings_ciphertext: None,
-            mcp_binding_summaries_json: None,
-            mcp_binding_policy: SessionMcpBindingPolicy::InheritWorkspace,
-            system_prompt_append: None,
-            subagents_enabled: true,
-            action_capabilities_json: None,
-            origin: None,
-        }
-    }
-
-    fn workspace_record(
-        id: &str,
-        lifecycle_state: &str,
-        cleanup_state: &str,
-        cleanup_operation: Option<&str>,
-    ) -> WorkspaceRecord {
-        workspace_record_with_path(
-            id,
-            lifecycle_state,
-            cleanup_state,
-            cleanup_operation,
-            &format!("/tmp/anyharness-nonexistent-{id}"),
-        )
-    }
-
-    fn workspace_record_with_path(
-        id: &str,
-        lifecycle_state: &str,
-        cleanup_state: &str,
-        cleanup_operation: Option<&str>,
-        path: &str,
-    ) -> WorkspaceRecord {
-        workspace_record_with_kind_surface(
-            id,
-            "worktree",
-            "standard",
-            lifecycle_state,
-            cleanup_state,
-            cleanup_operation,
-            path,
-        )
-    }
-
-    fn workspace_record_with_kind_surface(
-        id: &str,
-        kind: &str,
-        surface: &str,
-        lifecycle_state: &str,
-        cleanup_state: &str,
-        cleanup_operation: Option<&str>,
-        path: &str,
-    ) -> WorkspaceRecord {
+    fn workspace_record(id: &str, lifecycle_state: &str, path: &str) -> WorkspaceRecord {
         WorkspaceRecord {
             id: id.to_string(),
-            kind: WorkspaceKind::try_from(kind).expect("test workspace kind"),
+            kind: WorkspaceKind::Worktree,
             repo_root_id: "repo-root-1".to_string(),
             path: path.to_string(),
-            surface: WorkspaceSurface::try_from(surface).expect("test workspace surface"),
+            surface: WorkspaceSurface::Standard,
             original_branch: Some("main".to_string()),
             current_branch: Some("main".to_string()),
             display_name: None,
@@ -609,14 +374,10 @@ mod tests {
             creator_context: None,
             lifecycle_state: WorkspaceLifecycleState::try_from(lifecycle_state)
                 .expect("test lifecycle state"),
-            cleanup_state: WorkspaceCleanupState::try_from(cleanup_state)
-                .expect("test cleanup state"),
-            cleanup_operation: cleanup_operation.map(|operation| {
-                WorkspaceCleanupOperation::try_from(operation).expect("test cleanup operation")
-            }),
-            cleanup_error_message: None,
-            cleanup_failed_at: None,
-            cleanup_attempted_at: None,
+            archived_head_sha: None,
+            archived_branch: None,
+            archived_at: None,
+            partial_capture_json: None,
             created_at: "2025-01-01T00:00:00Z".to_string(),
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         }
@@ -641,6 +402,11 @@ mod tests {
     }
 
     impl TempDirGuard {
+        /// A scratch base directory. Callers that need a managed worktree
+        /// (purge's containment guard is real, not vacuous) create
+        /// `<base>/runtime`, `<base>/worktrees`, and `<base>/repo`
+        /// underneath it themselves, matching
+        /// `deletion/tests/purge_tests.rs`'s `Harness`.
         fn new(name: &str) -> Self {
             let path = std::env::temp_dir().join(format!(
                 "anyharness-{name}-{}-{}",

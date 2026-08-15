@@ -1,74 +1,50 @@
-import { useState } from "react";
+import { AgentIdentityChip } from "#product/components/patterns/AgentIdentityChip";
+import { AgentIdentityGlyph } from "#product/components/patterns/AgentIdentityGlyph";
 import {
   BillingBalanceNotice,
   BillingGateState,
-  billingGateView,
 } from "#product/components/patterns/BillingGateState";
-import { ModelTable } from "#product/components/patterns/ModelTable";
+import { billingGateView } from "#product/lib/domain/billing/billing-gate-presentation";
+import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 import { PrStatusDot } from "#product/components/patterns/PrStatusBadge";
-import { ProductPageShell } from "#product/components/patterns/ProductPageShell";
-import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
-import { SettingsEyebrow } from "#product/components/patterns/SettingsEyebrow";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
-import { SettingsRow } from "#product/components/patterns/SettingsRow";
-import { SettingsSaveFooter } from "#product/components/patterns/SettingsSaveFooter";
-import { SettingsScopeTabs } from "#product/components/patterns/SettingsScopeTabs";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
 import { SecretManagementPanel } from "#product/components/patterns/secrets/SecretManagementPanel";
-import { Switch } from "#product/primitives/Switch";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
 import type { LibraryEntry, LibraryTier } from "./types";
 
-function ModelTableDemo() {
+const DEMO_AGENT_IDENTITY = buildDelegatedAgentIdentity({
+  id: "library-agent-link",
+  title: "Explore dotfiles",
+  workspaceId: "library-workspace",
+  sessionId: "library-agent-session",
+  sessionLinkId: "library-agent-link",
+});
+
+// Hover target for the clamped message preview: far past the preview ceiling,
+// the way a real subagent brief is.
+const DEMO_LONG_MESSAGE =
+  "Investigate the retry behavior end to end, trace the actual mechanism until you can explain why it occurs, and report back with a mental model plus concrete fix options. "
+    .repeat(20);
+
+function AgentIdentityChipDemo() {
   return (
-    <ModelTable
-      models={[{
-        id: "claude-sonnet",
-        displayName: "Claude Sonnet",
-        provider: "anthropic",
-        enabled: true,
-      }]}
-      onToggle={noop}
-    />
+    <div className="flex flex-col items-start gap-2">
+      <AgentIdentityChip identity={DEMO_AGENT_IDENTITY} onOpen={noop} />
+      <AgentIdentityChip identity={DEMO_AGENT_IDENTITY} closed />
+      <AgentIdentityChip
+        identity={DEMO_AGENT_IDENTITY}
+        exactMessage={DEMO_LONG_MESSAGE}
+        onOpen={noop}
+      />
+    </div>
   );
 }
 
-function SettingsRowDemo() {
-  const [checked, setChecked] = useState(true);
+function AgentIdentityGlyphDemo() {
   return (
-    <SettingsRow label="Setting label" description="Setting description">
-      <Switch checked={checked} onChange={setChecked} />
-    </SettingsRow>
-  );
-}
-
-function SettingsSectionDemo() {
-  return (
-    <SettingsSection title="Section title" description="Section description">
-      <SettingsRow label="Row label">
-        <Switch checked onChange={noop} />
-      </SettingsRow>
-    </SettingsSection>
-  );
-}
-
-function SettingsScopeTabsDemo() {
-  const [value, setValue] = useState("user");
-  return (
-    <SettingsScopeTabs
-      items={[{ id: "user", label: "User" }, { id: "org", label: "Org" }]}
-      value={value}
-      onChange={setValue}
-    />
-  );
-}
-
-function ProductPageShellDemo() {
-  return (
-    <div className="h-32 overflow-hidden rounded-md border border-border">
-      <ProductPageShell title="Page title" description="Page description">
-        <p className="text-ui-sm text-muted-foreground">Shell body.</p>
-      </ProductPageShell>
+    <div className="flex items-center gap-2">
+      <AgentIdentityGlyph identity={DEMO_AGENT_IDENTITY} dimension={16} />
+      <AgentIdentityGlyph identity={DEMO_AGENT_IDENTITY} dimension={18} />
+      <AgentIdentityGlyph identity={DEMO_AGENT_IDENTITY} dimension={20} closed />
     </div>
   );
 }
@@ -116,27 +92,12 @@ function BillingGateStateDemo() {
 }
 
 export const PRODUCT_PATTERNS_ENTRIES: LibraryEntry[] = [
+  { name: "AgentIdentityChip", subpath: "#product/components/patterns/AgentIdentityChip", render: AgentIdentityChipDemo },
+  { name: "AgentIdentityGlyph", subpath: "#product/components/patterns/AgentIdentityGlyph", render: AgentIdentityGlyphDemo },
   { name: "BillingGateState", subpath: "#product/components/patterns/BillingGateState", render: BillingGateStateDemo },
-  { name: "ModelTable", subpath: "#product/components/patterns/ModelTable", render: ModelTableDemo },
   { name: "PrStatusBadge", subpath: "#product/components/patterns/PrStatusBadge", render: () => (
     <PrStatusDot status={{ kind: "open", number: 42 }} />
   ) },
-  { name: "ProductPageShell", subpath: "#product/components/patterns/ProductPageShell", render: ProductPageShellDemo },
-  { name: "SettingsEmptyState", subpath: "#product/components/patterns/SettingsEmptyState", render: () => (
-    <SettingsEmptyState title="No results" description="Nothing to show yet." size="compact" />
-  ) },
-  { name: "SettingsEyebrow", subpath: "#product/components/patterns/SettingsEyebrow", render: () => (
-    <SettingsEyebrow>Section</SettingsEyebrow>
-  ) },
-  { name: "SettingsPageHeader", subpath: "#product/components/patterns/SettingsPageHeader", render: () => (
-    <SettingsPageHeader title="Settings" description="Page description" />
-  ) },
-  { name: "SettingsRow", subpath: "#product/components/patterns/SettingsRow", render: SettingsRowDemo },
-  { name: "SettingsSaveFooter", subpath: "#product/components/patterns/SettingsSaveFooter", render: () => (
-    <SettingsSaveFooter onSave={noop} onRevert={noop} />
-  ) },
-  { name: "SettingsScopeTabs", subpath: "#product/components/patterns/SettingsScopeTabs", render: SettingsScopeTabsDemo },
-  { name: "SettingsSection", subpath: "#product/components/patterns/SettingsSection", render: SettingsSectionDemo },
   { name: "secrets/SecretManagementPanel", subpath: "#product/components/patterns/secrets/SecretManagementPanel", render: SecretManagementPanelDemo },
 ];
 

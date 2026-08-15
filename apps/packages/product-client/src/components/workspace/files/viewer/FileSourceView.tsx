@@ -184,6 +184,10 @@ export function FileSourceView({
           data-file-source-virtualized
           data-overflow="scroll"
           tabIndex={0}
+          // C4: token-referencing family bracket — the diff/source viewer's
+          // monospace stack lives in a CSS custom property so the
+          // virtualization layer and the diff viewer share one font
+          // without either importing the other's stylesheet.
           className="m-0 min-h-full min-w-full p-0 font-[family:var(--diffs-font-family)] text-readable-code outline-none"
         >
           <code
@@ -282,6 +286,14 @@ const SourceLine = forwardRef<HTMLSpanElement, SourceLineProps>(function SourceL
   return (
     <span
       ref={ref}
+      // C4: all three token-referencing brackets are virtualization/grid
+      // math, not decorative geometry — `min-h-[var(--diffs-line-height)]`
+      // keeps each virtual row's measured height in lockstep with the
+      // diff viewer's row height token, and the two `grid-cols-[...]`
+      // variants size the line-number gutter from
+      // `--diffs-column-number-width` (set from the measured
+      // `lineNumberGutterWidth` above) against either a wrapping or
+      // non-wrapping content column.
       className={`group/line grid min-h-[var(--diffs-line-height)] gap-x-(--file-source-content-gap) text-(--diffs-fg) hover:bg-(--file-source-row-hover) ${
         wordWrap
           ? "grid-cols-[var(--diffs-column-number-width)_minmax(0,1fr)]"

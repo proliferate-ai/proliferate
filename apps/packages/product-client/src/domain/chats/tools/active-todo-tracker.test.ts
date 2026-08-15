@@ -25,7 +25,55 @@ describe("active todo tracker derivation", () => {
     });
   });
 
-  it("returns null for Claude mode-switch plans (they render in the transcript, not as a todo tracker)", () => {
+  // The canonical-plan derivation excludes Claude's TodoWrite as "internal
+  // task tracking" — which is exactly what the pill exists to surface, so the
+  // tracker must include it.
+  it("returns Claude TodoWrite plans", () => {
+    const transcript = transcriptWithItems({
+      "plan-1": {
+        kind: "plan",
+        sourceAgentKind: "claude",
+        status: "in_progress",
+        startedSeq: 3,
+        entries: [
+          { content: "Draft the haiku", status: "in_progress" },
+          { content: "Count syllables", status: "pending" },
+        ],
+      },
+    });
+
+    expect(deriveActiveTodoTracker(transcript)).toEqual({
+      entries: [
+        { content: "Draft the haiku", status: "in_progress" },
+        { content: "Count syllables", status: "pending" },
+      ],
+    });
+  });
+
+  it("tracks the latest plan item when several exist", () => {
+    const transcript = transcriptWithItems({
+      "plan-1": {
+        kind: "plan",
+        sourceAgentKind: "claude",
+        status: "completed",
+        startedSeq: 3,
+        entries: [{ content: "Old plan step", status: "completed" }],
+      },
+      "plan-2": {
+        kind: "plan",
+        sourceAgentKind: "claude",
+        status: "in_progress",
+        startedSeq: 9,
+        entries: [{ content: "New plan step", status: "in_progress" }],
+      },
+    });
+
+    expect(deriveActiveTodoTracker(transcript)).toEqual({
+      entries: [{ content: "New plan step", status: "in_progress" }],
+    });
+  });
+
+  it("ignores mode-switch tool calls — only plan items feed the tracker", () => {
     const transcript = transcriptWithItems({
       "tool-1": {
         kind: "tool_call",

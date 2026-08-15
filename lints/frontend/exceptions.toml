@@ -89,30 +89,6 @@ reason = "playground component owns query cache shape"
 
 [[exception]]
 rule = "FE-CACHE-1"
-path = "apps/packages/product-client/src/components/workspace/repo-setup/CloudRepoActionDialogHost.tsx"
-site = "useQueryClient"
-reason = "connected component owns query invalidation"
-
-[[exception]]
-rule = "FE-CACHE-1"
-path = "apps/packages/product-client/src/components/workspace/repo-setup/CloudRepoActionDialogHost.tsx"
-site = "const queryClient::useQueryClient"
-reason = "connected component owns query invalidation"
-
-[[exception]]
-rule = "FE-CACHE-1"
-path = "apps/packages/product-client/src/components/workspace/repo-setup/CloudRepoActionDialogHost.tsx"
-site = "const refetchOnReturn::queryClient.invalidateQueries("
-reason = "connected component owns query invalidation"
-
-[[exception]]
-rule = "FE-CACHE-1"
-path = "apps/packages/product-client/src/components/workspace/repo-setup/CloudRepoActionDialogHost.tsx"
-site = "const refetchOnReturn::queryClient.invalidateQueries(#2"
-reason = "connected component owns query invalidation"
-
-[[exception]]
-rule = "FE-CACHE-1"
 path = "apps/packages/product-client/src/hooks/agents/lifecycle/use-local-auth-state-sync.ts"
 site = "useQueryClient"
 reason = "lifecycle hook owns query invalidation"
@@ -176,24 +152,6 @@ rule = "FE-COMPONENT-1"
 path = "apps/packages/product-client/src/components/settings/panes/AccountPane.tsx"
 site = "type AccountPasswordCredentialSubmit::#product/lib/access/cloud/auth-probes"
 reason = "component imports raw auth probe"
-
-[[exception]]
-rule = "FE-PC-6"
-path = "apps/packages/product-client/src/hooks/chat/ui/use-composer-dock-slots.tsx"
-site = "#product/components/workspace/chat/surface/CloudRuntimeAttachedPanel"
-reason = "JSX-returning hook imports connected components"
-
-[[exception]]
-rule = "FE-PC-6"
-path = "apps/packages/product-client/src/hooks/chat/ui/use-composer-dock-slots.tsx"
-site = "#product/components/workspace/chat/surface/WorkspaceArrivalAttachedPanel"
-reason = "JSX-returning hook imports connected components"
-
-[[exception]]
-rule = "FE-PC-6"
-path = "apps/packages/product-client/src/hooks/chat/ui/use-composer-dock-slots.tsx"
-site = "#product/components/workspace/chat/input/TodoTrackerPanel"
-reason = "JSX-returning hook imports connected components"
 
 [[exception]]
 rule = "FE-PC-6"
@@ -348,61 +306,19 @@ reason = "lifecycle hook mutates imported workspace UI store"
 [[exception]]
 rule = "FE-STORE-3"
 path = "apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap.ts"
-site = "function bootstrapHarnessRuntime::useHarnessConnectionStore.setState"
-reason = "runtime bootstrap mutates imported connection store"
-
-[[exception]]
-rule = "FE-STORE-3"
-path = "apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap.ts"
-site = "function restartHarnessRuntime::useHarnessConnectionStore.setState"
-reason = "runtime bootstrap mutates imported connection store"
-
-[[exception]]
-rule = "FE-STORE-3"
-path = "apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap.ts"
-site = "function connectToRuntime::useHarnessConnectionStore.setState"
-reason = "runtime bootstrap mutates imported connection store"
-
-[[exception]]
-rule = "FE-STORE-3"
-path = "apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap.ts"
-site = "const runtimeReady::useHarnessConnectionStore.setState"
-reason = "runtime bootstrap mutates imported connection store"
-
-[[exception]]
-rule = "FE-STORE-3"
-path = "apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap.ts"
-site = "const runtimeReady::useHarnessConnectionStore.setState#2"
-reason = "runtime bootstrap mutates imported connection store"
-
-[[exception]]
-rule = "FE-STORE-3"
-path = "apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap.ts"
 site = "const runtimeSnapshot::useHarnessConnectionStore.setState"
 reason = "runtime bootstrap mutates imported connection store"
 
 [[exception]]
 rule = "FE-STORE-3"
 path = "apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap.ts"
-site = "const runtimeReady::useHarnessConnectionStore.setState#3"
+site = "const previous::useHarnessConnectionStore.setState"
 reason = "runtime bootstrap mutates imported connection store"
 
 [[exception]]
 rule = "FE-STORE-3"
 path = "apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap.ts"
-site = "const runtimeReady::useHarnessConnectionStore.setState#4"
-reason = "runtime bootstrap mutates imported connection store"
-
-[[exception]]
-rule = "FE-STORE-3"
-path = "apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap.ts"
-site = "const runtimeReady::useHarnessConnectionStore.setState#5"
-reason = "runtime bootstrap mutates imported connection store"
-
-[[exception]]
-rule = "FE-STORE-3"
-path = "apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap.ts"
-site = "function setRuntimeUrlIfChanged::useHarnessConnectionStore.setState"
+site = "const state::useHarnessConnectionStore.setState"
 reason = "runtime bootstrap mutates imported connection store"
 
 [[exception]]

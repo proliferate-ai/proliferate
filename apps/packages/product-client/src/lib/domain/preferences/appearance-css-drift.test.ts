@@ -15,6 +15,7 @@ import {
   DEFAULT_UI_GLYPH_SCALE_CSS_VARIABLES,
   DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES,
   READABLE_CODE_FONT_SCALES,
+  resolveReadableCodeFontScale,
   UI_FONT_SCALES,
 } from "#product/lib/domain/preferences/appearance";
 
@@ -250,7 +251,7 @@ describe("generated design-package semantic text tokens", () => {
     for (const step of generatedIconButtonSteps) {
       // A consumer override must WIN over a component's own box, not coexist
       // with it and lose on generated-CSS source order (which is what
-      // ChromeWorkspaceTab's 20px close button did: Button's `h-7 w-7`
+      // ChromeTab's 20px close button did: Button's `h-7 w-7`
       // survived the merge and kept it at 28px).
       expect(twMerge(`h-7 w-7 rounded-full px-0 size-icon-button-${step}`)).toBe(
         `rounded-full px-0 size-icon-button-${step}`,
@@ -408,15 +409,15 @@ describe("dot-cell activity motion", () => {
  * a future edit could quietly restore the opaque composer card or drop the new
  * transcript measure tokens and every existing test would still pass.
  */
-// Composer opaque-surface literals, expressed as RGB channels rather than a
-// hex string in source: the design-token authority (tokens.ts) owns the
-// literal spelling, and this drift lock derives its expectation from the
-// rendered channels instead of restating a second raw-hex literal here.
+// Composer opaque-surface literals as RGB channels, not hex strings: tokens.ts
+// owns the literal spelling, so this lock derives rather than restates it.
 function rgbToHex(channels: readonly [number, number, number]): string {
   return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }
 const COMPOSER_DARK_HEX = rgbToHex([0x2d, 0x2d, 0x2d]);
-const COMPOSER_LIGHT_HEX = rgbToHex([0xff, 0xff, 0xff]);
+// The sanctioned rail plane, not the page's #ffffff: with borderless chrome
+// the fill alone separates the composer from the light page.
+const COMPOSER_LIGHT_HEX = rgbToHex([0xf6, 0xf6, 0xf6]);
 
 describe("chat retune tokens", () => {
   it("makes the composer surface fully opaque in both modes", () => {
@@ -436,6 +437,8 @@ describe("chat retune tokens", () => {
     const composerSurfaceRule = readRule(productCss, /\.chat-composer-surface\s*\{([\s\S]*?)\}/);
     expect(composerSurfaceRule).toContain("background-color: var(--color-composer-background);");
     expect(composerSurfaceRule).toContain("var(--color-composer-backdrop-filter)");
+    // Fill only: the 0.5px shadow-stroke and elevation stack were replaced.
+    expect(composerSurfaceRule).not.toContain("box-shadow");
   });
 
   it("declares the adopted transcript measure and turn-rhythm tokens", () => {
@@ -444,12 +447,11 @@ describe("chat retune tokens", () => {
     expect(themeDeclarations["--spacing-transcript-turn"]).toBe("1rem");
   });
 
-  it("rounds the composer to the reference ramp's 20px radius", () => {
-    // Round-2 retune: adopts the reference multiline-surface radius
-    // (--radius-3xl-base 1.25rem × --corner-radius-scale 1 = 20px) instead of
-    // the earlier 12px [RAD-04] deviation. The composer keeps a SEPARATE
-    // token name from --radius-xl so the two can diverge again later.
-    expect(themeDeclarations["--radius-composer"]).toBe("1.25rem");
+  it("rounds the composer to the 28px chrome radius", () => {
+    // Composer-cleanup retune: the borderless composer carries its shape in
+    // the radius alone, so 20px becomes 28px. It keeps a SEPARATE token name
+    // from --radius-xl so the two can diverge again later.
+    expect(themeDeclarations["--radius-composer"]).toBe("1.75rem");
   });
 });
 
@@ -513,8 +515,8 @@ describe("tab and sidebar status tokens across modes", () => {
 });
 
 describe("appearance scaling CSS defaults", () => {
-  const defaultCodeScale = READABLE_CODE_FONT_SCALES[DEFAULT_APPEARANCE_SIZE_ID];
-
+  // Coupled default (one px under UI default), not the raw per-rung table.
+  const defaultCodeScale = resolveReadableCodeFontScale(DEFAULT_APPEARANCE_SIZE_ID, DEFAULT_APPEARANCE_SIZE_ID);
   it("keeps default code CSS aligned with the readable-code ladder", () => {
     expect(themeDeclarations["--diffs-font-size"]).toBe(defaultCodeScale.diffsFontSize);
     expect(themeDeclarations["--readable-code-font-size"]).toBe(defaultCodeScale.codeFontSize);
@@ -581,15 +583,14 @@ describe("appearance scaling CSS defaults", () => {
     expect(bodyRule).toContain("line-height: var(--text-ui--line-height);");
   });
 
-  it("shares semantic caret and selection colors across text-entry renderers", () => {
+  it("shares semantic caret and selection colors across text-entry renderers while transcripts keep native selection paint", () => {
     expect(themeDeclarations["--color-text-caret"]).toBe("var(--color-foreground)");
     expect(themeDeclarations["--color-text-selection"]).toBe(
       "var(--color-highlight, var(--color-input))",
     );
     expect(productCss).toContain("caret-color: var(--color-text-caret);");
     expect(productCss).toContain("background-color: var(--color-text-selection);");
-    expect(productCss).toContain(".chat-selection-root ::selection");
-    expect(productCss).toContain("background-color: var(--color-text-selection);");
+    expect(productCss).not.toContain(".chat-selection-root ::selection");
   });
 
   it("keeps the spinner inline box stationary while its SVG owns motion", () => {

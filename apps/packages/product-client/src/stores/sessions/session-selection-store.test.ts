@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HotPaintGate } from "#product/lib/domain/sessions/hot-paint-gate";
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
+import {
+  EMPTY_PENDING_WORKSPACE_REGISTRY,
+  upsertPendingWorkspaceEntry,
+} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 describe("session selection store invariants", () => {
   beforeEach(() => {
     useSessionSelectionStore.setState({
       _hydrated: false,
-      pendingWorkspaceEntry: null,
+      pendingWorkspaces: EMPTY_PENDING_WORKSPACE_REGISTRY,
       selectedLogicalWorkspaceId: null,
       selectedWorkspaceId: null,
       workspaceSelectionNonce: 0,
@@ -56,7 +60,7 @@ describe("session selection store invariants", () => {
     unsubscribe();
     expect(listener).toHaveBeenCalledTimes(1);
     expect(useSessionSelectionStore.getState()).toMatchObject({
-      pendingWorkspaceEntry: pendingWorkspaceEntry(),
+      pendingWorkspaces: registryOf(pendingWorkspaceEntry()),
       selectedLogicalWorkspaceId: "pending-workspace:attempt-a",
       selectedWorkspaceId: null,
       workspaceSelectionNonce: 1,
@@ -69,10 +73,11 @@ describe("session selection store invariants", () => {
 
   it("activates workspace, session, arrival, and hot gate fields atomically", () => {
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: pendingWorkspaceEntry(),
+      pendingWorkspaces: registryOf(pendingWorkspaceEntry()),
       workspaceArrivalEvent: {
         workspaceId: "workspace-a",
         source: "local-created",
+        receiptClientSessionId: "session-old",
         createdAt: 100,
       },
       activeSessionId: "session-old",
@@ -96,13 +101,15 @@ describe("session selection store invariants", () => {
     unsubscribe();
     expect(listener).toHaveBeenCalledTimes(1);
     expect(useSessionSelectionStore.getState()).toMatchObject({
-      pendingWorkspaceEntry: null,
+      // Selection is a camera: switching does not end the attempt (PRO-230).
+      pendingWorkspaces: registryOf(pendingWorkspaceEntry()),
       selectedLogicalWorkspaceId: "logical-a",
       selectedWorkspaceId: "workspace-a",
       workspaceSelectionNonce: 1,
       workspaceArrivalEvent: {
         workspaceId: "workspace-a",
         source: "local-created",
+        receiptClientSessionId: "session-old",
         createdAt: 100,
       },
       activeSessionId: "session-a",
@@ -113,13 +120,14 @@ describe("session selection store invariants", () => {
 
   it("deselects workspace shell state without clearing cached session metadata", () => {
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: pendingWorkspaceEntry(),
+      pendingWorkspaces: registryOf(pendingWorkspaceEntry()),
       selectedLogicalWorkspaceId: "logical-a",
       selectedWorkspaceId: "workspace-a",
       workspaceSelectionNonce: 4,
       workspaceArrivalEvent: {
         workspaceId: "workspace-a",
         source: "local-created",
+        receiptClientSessionId: "session-a",
         createdAt: 100,
       },
       activeSessionId: "session-a",
@@ -131,7 +139,7 @@ describe("session selection store invariants", () => {
     useSessionSelectionStore.getState().deselectWorkspacePreservingSessions();
 
     expect(useSessionSelectionStore.getState()).toMatchObject({
-      pendingWorkspaceEntry: null,
+      pendingWorkspaces: registryOf(pendingWorkspaceEntry()),
       selectedLogicalWorkspaceId: null,
       selectedWorkspaceId: null,
       workspaceSelectionNonce: 5,
@@ -179,6 +187,55 @@ describe("session selection store invariants", () => {
     expect(useSessionSelectionStore.getState().hotPaintGate).toBeNull();
   });
 
+  it("keeps one attempt per id and clears only the attempt asked for", () => {
+    const store = useSessionSelectionStore.getState();
+    store.setPendingWorkspaceEntry(pendingWorkspaceEntry("attempt-a"));
+    store.setPendingWorkspaceEntry(pendingWorkspaceEntry("attempt-b"));
+
+    expect(useSessionSelectionStore.getState().pendingWorkspaces.attemptOrder)
+      .toEqual(["attempt-a", "attempt-b"]);
+
+    useSessionSelectionStore.getState().clearPendingWorkspaceEntry("attempt-a");
+
+    expect(useSessionSelectionStore.getState().pendingWorkspaces)
+      .toEqual(registryOf(pendingWorkspaceEntry("attempt-b")));
+  });
+
+  it("drops every attempt on a full selection reset", () => {
+    useSessionSelectionStore.setState({
+      pendingWorkspaces: registryOf(
+        pendingWorkspaceEntry("attempt-a"),
+        pendingWorkspaceEntry("attempt-b"),
+      ),
+    });
+
+    useSessionSelectionStore.getState().clearSelection();
+
+    expect(useSessionSelectionStore.getState().pendingWorkspaces)
+      .toBe(EMPTY_PENDING_WORKSPACE_REGISTRY);
+  });
+
+  it("keeps every attempt when the reset is scoped to one workspace", () => {
+    // Retiring a workspace, or dismissing one attempt, routes through
+    // `clearSelection` to deselect. Dropping the registry there would abort
+    // every other launch in flight (PRO-230).
+    const registry = registryOf(
+      pendingWorkspaceEntry("attempt-a"),
+      pendingWorkspaceEntry("attempt-b"),
+    );
+    useSessionSelectionStore.setState({
+      pendingWorkspaces: registry,
+      selectedWorkspaceId: "workspace-a",
+      selectedLogicalWorkspaceId: "logical-a",
+    });
+
+    useSessionSelectionStore.getState().clearSelection({ preservePendingWorkspaces: true });
+
+    expect(useSessionSelectionStore.getState().pendingWorkspaces).toBe(registry);
+    expect(useSessionSelectionStore.getState().selectedWorkspaceId).toBeNull();
+    expect(useSessionSelectionStore.getState().selectedLogicalWorkspaceId).toBeNull();
+  });
+
   it("keeps inline recovery when the retained shell is reactivated", () => {
     useSessionSelectionStore.setState({
       workspaceSessionRecovery: {
@@ -200,6 +257,10 @@ describe("session selection store invariants", () => {
   });
 });
 
+function registryOf(...entries: PendingWorkspaceEntry[]) {
+  return entries.reduce(upsertPendingWorkspaceEntry, EMPTY_PENDING_WORKSPACE_REGISTRY);
+}
+
 function hotGate(overrides: Partial<HotPaintGate> = {}): HotPaintGate {
   return {
     kind: "workspace_hot_reopen",
@@ -211,9 +272,9 @@ function hotGate(overrides: Partial<HotPaintGate> = {}): HotPaintGate {
   };
 }
 
-function pendingWorkspaceEntry(): PendingWorkspaceEntry {
+function pendingWorkspaceEntry(attemptId = "attempt-a"): PendingWorkspaceEntry {
   return {
-    attemptId: "attempt-a",
+    attemptId,
     source: "local-created",
     stage: "submitting",
     displayName: "Workspace A",

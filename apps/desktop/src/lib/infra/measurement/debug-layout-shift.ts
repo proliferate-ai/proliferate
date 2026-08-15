@@ -1,4 +1,8 @@
 import { isLatencyDebugLoggingEnabled } from "./debug-latency";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "@proliferate/product-client/internal/lib/infra/diagnostics/renderer-diagnostics-port";
 
 interface LayoutShiftAttribution {
   node: Node | null;
@@ -38,6 +42,24 @@ export function startLayoutShiftObserver(): () => void {
       const label = node instanceof Element
         ? `${node.tagName.toLowerCase()}${node.className && typeof node.className === "string" ? `.${node.className.split(" ")[0]}` : ""}`
         : "unknown";
+      recordRendererDiagnostic({
+        name: "renderer.measurement.layout_shift",
+        severity: "debug",
+        kind: "progress",
+        privacy: "sensitive",
+        fields: {
+          score: diagnosticField(Number(entry.value.toFixed(4)), "operational"),
+          element: diagnosticField(label, "sensitive"),
+          from: diagnosticField(
+            source ? rectSummary(source.previousRect) : "unknown",
+            "operational",
+          ),
+          to: diagnosticField(
+            source ? rectSummary(source.currentRect) : "unknown",
+            "operational",
+          ),
+        },
+      });
       console.info("[layout-shift]", {
         score: Number(entry.value.toFixed(4)),
         element: label,

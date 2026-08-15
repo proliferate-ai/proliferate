@@ -68,7 +68,7 @@ describe("planBatchedStreamSideEffects", () => {
     ]);
   });
 
-  it("plans startup refreshes from available command updates", () => {
+  it("plans startup refreshes and catalog recording from available command updates", () => {
     const plan = planBatchedStreamSideEffects({
       ...baseInput(),
       envelopes: [
@@ -83,6 +83,16 @@ describe("planBatchedStreamSideEffects", () => {
         delayMs: 0,
       },
     ]);
+    expect(plan.recordAvailableCommandsCatalog).toBe(true);
+  });
+
+  it("does not plan catalog recording without an available command update", () => {
+    const plan = planBatchedStreamSideEffects({
+      ...baseInput(),
+      envelopes: [turnStarted(2)],
+    });
+
+    expect(plan.recordAvailableCommandsCatalog).toBe(false);
   });
 
   it("plans subagent relationship, mount, and cache invalidation commands", () => {
@@ -154,77 +164,6 @@ describe("planBatchedStreamSideEffects", () => {
     expect(plan.reviewParentSessionIds).toEqual(["parent-1", "parent-2"]);
     // review_run_updated is a mid-turn tick and does not bump activity
     expect(plan.lastActivityTimestamp).toBe(null);
-  });
-
-  it("plans subagent effects from completed MCP tool calls", () => {
-    const transcript = createTranscriptState("session-1");
-    transcript.itemsById["tool-1"] = toolCallItem({
-      itemId: "tool-1",
-      nativeToolName: "mcp__subagents__create_subagent",
-      status: "completed",
-      title: "create_subagent",
-      rawInput: {
-        label: "repo-reviewer",
-      },
-      rawOutput: {
-        childSessionId: "child-session",
-        sessionLinkId: "link-1",
-      },
-    });
-
-    const plan = planBatchedStreamSideEffects({
-      ...baseInput({ transcript }),
-      envelopes: [
-        itemCompleted(2, "tool-1"),
-      ],
-    });
-
-    expect(plan.invalidateSessionSubagents).toBe(true);
-    expect(plan.eventEffects).toEqual([
-      {
-        kind: "record_session_relationship_hint",
-        sessionId: "child-session",
-        relationship: {
-          kind: "subagent_child",
-          parentSessionId: "session-1",
-          sessionLinkId: "link-1",
-          relation: "subagent",
-          workspaceId: "workspace-1",
-        },
-      },
-      {
-        kind: "mount_subagent_child_session",
-        childSessionId: "child-session",
-        label: "repo-reviewer",
-        workspaceId: "workspace-1",
-        parentSessionId: "session-1",
-        sessionLinkId: "link-1",
-      },
-    ]);
-  });
-
-  it("invalidates subagent state for non-create MCP mutations without mounting", () => {
-    const transcript = createTranscriptState("session-1");
-    transcript.itemsById["tool-1"] = toolCallItem({
-      itemId: "tool-1",
-      nativeToolName: "mcp__subagents__schedule_subagent_wake",
-      status: "completed",
-      title: "schedule_subagent_wake",
-      rawOutput: {
-        childSessionId: "child-session",
-        sessionLinkId: "link-1",
-      },
-    });
-
-    const plan = planBatchedStreamSideEffects({
-      ...baseInput({ transcript }),
-      envelopes: [
-        itemCompleted(2, "tool-1"),
-      ],
-    });
-
-    expect(plan.invalidateSessionSubagents).toBe(true);
-    expect(plan.eventEffects).toEqual([]);
   });
 
   it("plans cowork invalidation from completed MCP tool calls", () => {

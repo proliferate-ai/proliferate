@@ -10,7 +10,7 @@ import {
 } from "#product/lib/domain/chat/models/model-display";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
-import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
+import { useShellLaunchIntent } from "#product/hooks/chat/derived/use-shell-launch-intent";
 import { useActiveSessionLaunchState } from "#product/hooks/chat/derived/use-active-session-config-state";
 import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
 import { useChatLaunchActions } from "#product/hooks/chat/workflows/use-chat-launch-actions";
@@ -23,6 +23,7 @@ import { workspaceDisplayName } from "#product/lib/domain/workspaces/display/wor
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 
 // Facade for the composer model selector: derived catalog/readiness state plus
 // the workflow callbacks needed by selector items and launch controls.
@@ -43,7 +44,7 @@ export function useChatModelSelectorState(options?: {
   const scopedLaunchIdentity = suppressActiveSessionState ? null : currentLaunchIdentity;
   const scopedPendingConfigChanges = suppressActiveSessionState ? null : pendingConfigChanges;
   const scopedModelControl = suppressActiveSessionState ? null : modelControl;
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
@@ -54,7 +55,7 @@ export function useChatModelSelectorState(options?: {
   const selectedWorkspaceLabel = selectedWorkspace
     ? workspaceDisplayName(selectedWorkspace)
     : null;
-  const activeLaunchIntent = useChatLaunchIntentStore((state) => state.activeIntent);
+  const activeLaunchIntent = useShellLaunchIntent();
   const launchIntentIdentity = useMemo(() => (
     !suppressActiveSessionState
     && !scopedActiveSessionId

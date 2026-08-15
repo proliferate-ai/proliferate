@@ -20,6 +20,9 @@ import {
 } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import {
+  EMPTY_PENDING_WORKSPACE_REGISTRY,
+} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 
 describe("session records facade invariants", () => {
   beforeEach(() => {
@@ -28,7 +31,7 @@ describe("session records facade invariants", () => {
     useSessionTranscriptStore.getState().clearEntries();
     useSessionIngestStore.getState().clear();
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: null,
+      pendingWorkspaces: EMPTY_PENDING_WORKSPACE_REGISTRY,
       selectedLogicalWorkspaceId: "workspace-stable",
       selectedWorkspaceId: "workspace-stable",
       workspaceSelectionNonce: 7,

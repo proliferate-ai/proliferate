@@ -1,6 +1,6 @@
 import { ExternalLink } from "#product/primitives/icons/core";
-import { useWorkspaceShellActions } from "#product/components/workspace/shell/providers/WorkspaceShellActionsContext";
-import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { useWorkspaceShellActions } from "#product/hooks/workspaces/workflows/use-workspace-shell-actions";
+import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
 
 export function WorkspaceOpenInWebFooterControl() {
   const shellActions = useWorkspaceShellActions();

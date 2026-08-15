@@ -5,6 +5,7 @@ import {
 } from "@proliferate/cloud-sdk-react";
 import { KeyRound, Trash } from "#product/primitives/icons/core";
 import { Button } from "#product/primitives/Button";
+import { Card } from "#product/primitives/patterns/Card";
 import { IconButton } from "#product/primitives/IconButton";
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
@@ -118,6 +119,11 @@ export function ApiKeyDetails({
     const boundKey = apiKeys.find((key) => key.id === boundRow.apiKeyId);
     const label = getApiKeyBindingLabel(boundRow.envVarName, boundRow.providerHint);
     return (
+      // Bound-key field frame: not a Card site (this is an input-shaped
+      // affordance, not a content container). h-[38px] is a stray 2px over
+      // Input's own h-9 (36px) — not on the space scale — because the frame
+      // must fit both the redacted-hint/dots trailing text and the trailing
+      // IconButton without clipping either; deferred, no adoption target.
       <div
         className="flex h-[38px] max-w-md items-center gap-2 rounded-md border border-input bg-surface-control pl-3 pr-2"
         data-api-key-saved={boundRow.providerHint ?? undefined}
@@ -132,6 +138,9 @@ export function ApiKeyDetails({
             {boundKey.redactedHint}
           </span>
         ) : (
+          // tracking-[0.1em] is not a type-scale token — it exists only to
+          // even out the bullet glyphs' own uneven advance width in the
+          // masked-dots display, not to set prose rhythm.
           <span
             aria-hidden
             className="shrink-0 font-mono text-ui tracking-[0.1em] text-muted-foreground/85"
@@ -211,38 +220,44 @@ export function ApiKeyDetails({
 
       {path === "saved" ? (
         savedKeyPool.length > 0 ? (
-          <ul className="max-w-md divide-y divide-border overflow-hidden rounded-lg border border-border">
-            {savedKeyPool.map((key) => (
-              <li key={key.id}>
-                <Button
-                  variant="unstyled"
-                  size="unstyled"
-                  type="button"
-                  disabled={editor.busy}
-                  className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-hover"
-                  onClick={() => handleSavedKeySelect(key.id)}
-                >
-                  <span
-                    aria-hidden
-                    className="flex size-6 shrink-0 items-center justify-center rounded-md bg-surface-control text-muted-foreground"
+          // Card, surface="opaque": closest match to the original border+
+          // no-fill list shell. Adopting it adds the card's own bg-card fill
+          // (the original had none) — a documented delta, not a regression:
+          // "opaque" is the only Card variant that carries a border at all.
+          <Card surface="opaque" as="section" className="max-w-md">
+            <ul className="divide-y divide-border">
+              {savedKeyPool.map((key) => (
+                <li key={key.id}>
+                  <Button
+                    variant="unstyled"
+                    size="unstyled"
+                    type="button"
+                    disabled={editor.busy}
+                    className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-hover"
+                    onClick={() => handleSavedKeySelect(key.id)}
                   >
-                    <KeyRound className="icon-compact" />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-ui font-medium text-foreground">
-                    {key.title}
-                  </span>
-                  {key.redactedHint ? (
-                    <span className="shrink-0 font-mono text-ui-sm text-muted-foreground/65">
-                      {key.redactedHint}
+                    <span
+                      aria-hidden
+                      className="flex size-6 shrink-0 items-center justify-center rounded-md bg-surface-control text-muted-foreground"
+                    >
+                      <KeyRound className="icon-compact" />
                     </span>
-                  ) : null}
-                  <span className="shrink-0 text-ui-sm text-muted-foreground">
-                    {HARNESS_PANE_COPY.savedKeyUse}
-                  </span>
-                </Button>
-              </li>
-            ))}
-          </ul>
+                    <span className="min-w-0 flex-1 truncate text-ui font-medium text-foreground">
+                      {key.title}
+                    </span>
+                    {key.redactedHint ? (
+                      <span className="shrink-0 font-mono text-ui-sm text-muted-foreground/65">
+                        {key.redactedHint}
+                      </span>
+                    ) : null}
+                    <span className="shrink-0 text-ui-sm text-muted-foreground">
+                      {HARNESS_PANE_COPY.savedKeyUse}
+                    </span>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </Card>
         ) : (
           <p className="text-ui-sm text-muted-foreground">
             {HARNESS_PANE_COPY.savedKeysEmpty}
@@ -291,7 +306,12 @@ function ProviderConfigPanel({ kind, busy }: { kind: ProviderConfigKind; busy: b
     .every((field) => (values[field.key] ?? "").trim().length > 0);
 
   return (
-    <div className="max-w-md space-y-3 rounded-lg border border-border bg-surface-elevated-secondary p-3.5">
+    // Card, surface="tint": fill matches the original bg-surface-elevated-
+    // secondary exactly. The original also drew border-border on top of that
+    // fill, but Card's own doc rules that combination out ("giving [tint] a
+    // border too produces a third look nobody asked for") — the border is
+    // dropped here rather than carried over as a className override.
+    <Card surface="tint" className="max-w-md space-y-3 p-3.5">
       <div className="grid grid-cols-2 gap-2.5">
         {spec.fields.map((field) => (
           <Label key={field.key} className="mb-0 space-y-1 text-ui-sm text-muted-foreground">
@@ -318,6 +338,6 @@ function ProviderConfigPanel({ kind, busy }: { kind: ProviderConfigKind; busy: b
           Save
         </Button>
       </div>
-    </div>
+    </Card>
   );
 }

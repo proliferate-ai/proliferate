@@ -10,6 +10,11 @@ import {
 } from "#product/stores/sessions/session-records";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import {
+  EMPTY_PENDING_WORKSPACE_REGISTRY,
+  upsertPendingWorkspaceEntry,
+} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 import {
   usePendingWorkspaceSessionMaterialization,
   useReadyWorkspaceProjectedSessionMaterialization,
@@ -40,6 +45,11 @@ describe("usePendingWorkspaceSessionMaterialization", () => {
     mocks.createEmptySessionWithResolvedConfig.mockClear();
     useSessionDirectoryStore.getState().clearEntries();
     useSessionTranscriptStore.getState().clearEntries();
+    useSessionSelectionStore.setState({
+      pendingWorkspaces: EMPTY_PENDING_WORKSPACE_REGISTRY,
+      selectedLogicalWorkspaceId: null,
+      selectedWorkspaceId: null,
+    });
   });
 
   it("remaps projected pending-workspace sessions and starts real runtime sessions", async () => {
@@ -70,6 +80,8 @@ describe("usePendingWorkspaceSessionMaterialization", () => {
       projectedSessionIds: ["client-session:codex:1"],
     });
     expect(getSessionRecord("client-session:codex:1")?.workspaceId).toBe("workspace-real");
+    // Nothing selected, so this attempt is unattended: it still materializes,
+    // it just must not activate the new session or claim the visible shell.
     expect(mocks.createEmptySessionWithResolvedConfig).toHaveBeenCalledWith({
       clientSessionId: "client-session:codex:1",
       workspaceId: "workspace-real",
@@ -78,7 +90,36 @@ describe("usePendingWorkspaceSessionMaterialization", () => {
       modeId: "full-access",
       reuseInFlightEmptySession: false,
       preserveProjectedSessionOnCreateFailure: true,
+      activateOnCreate: false,
+      targetWorkspaceUiKey: "workspace-real",
     });
+  });
+
+  it("activates the created session when the user is attending the attempt", async () => {
+    const entry = buildSubmittingPendingWorkspaceEntry({
+      attemptId: "attempt-attended",
+      selectedWorkspaceId: null,
+      source: "worktree-created",
+      displayName: "feature-branch",
+      request: { kind: "local", sourceRoot: "/tmp/workspace-1" },
+    });
+    putSessionRecord(createEmptySessionRecord("client-session:codex:2", "codex", {
+      workspaceId: buildPendingWorkspaceUiKey(entry),
+      materializedSessionId: null,
+      modelId: "gpt-5.5",
+      modeId: "full-access",
+    }));
+    useSessionSelectionStore.setState({
+      pendingWorkspaces: upsertPendingWorkspaceEntry(EMPTY_PENDING_WORKSPACE_REGISTRY, entry),
+      selectedLogicalWorkspaceId: buildPendingWorkspaceUiKey(entry),
+    });
+
+    usePendingWorkspaceSessionMaterialization()(entry, "workspace-real", { eventPrefix: "test" });
+    await Promise.resolve();
+
+    expect(mocks.createEmptySessionWithResolvedConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ activateOnCreate: true, targetWorkspaceUiKey: null }),
+    );
   });
 
   it("retries projected sessions that are already attached to a ready workspace", async () => {
@@ -112,6 +153,8 @@ describe("usePendingWorkspaceSessionMaterialization", () => {
       modeId: "default",
       reuseInFlightEmptySession: false,
       preserveProjectedSessionOnCreateFailure: true,
+      activateOnCreate: undefined,
+      targetWorkspaceUiKey: undefined,
     });
   });
 });

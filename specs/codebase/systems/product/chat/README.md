@@ -7,6 +7,7 @@ Start with the product task you intend to change:
 | Create, update, or replace a visible chat | [Chat lifecycle](lifecycle.md) |
 | Change input, controls, picker presentation, panels, or badges | [Composer](composer.md) |
 | Change messages, streaming, replay, rows, or long-history behavior | [Transcript](transcript.md) |
+| Change contextual actions for selected assistant text | [Transcript](transcript.md) and [Composer](composer.md) |
 | Change tab ordering, restoration, or projected-shell mechanics | [Workspaces](../workspaces/README.md) |
 | Change model identity, availability, or selection action classification | [Model Catalog](../../../../FEATURE_DOCS/MODELS.md) |
 | Change session actors, live config, process retirement, or relaunch | [AnyHarness sessions](../../../../anyharness/sessions.md) |

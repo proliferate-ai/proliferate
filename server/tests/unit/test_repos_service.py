@@ -340,6 +340,8 @@ class TestListCloudRepositories:
                 default_branch="main",
                 setup_script="",
                 run_command="",
+                archive_script="",
+                rerun_setup_on_unarchive=True,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
             ),

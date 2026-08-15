@@ -19,11 +19,13 @@ import { WorkspaceCommandPalette } from "#product/components/workspace/shell/com
 import { WorkspaceShellRightRail } from "#product/components/workspace/shell/screen/WorkspaceShellRightRail";
 import { WorkspaceShellRightPanelToggle } from "#product/components/workspace/shell/screen/WorkspaceShellRightPanelToggle";
 import { WorkspaceShellSidebar } from "#product/components/workspace/shell/sidebar/WorkspaceShellSidebar";
+import { ContentSearchPill } from "#product/components/workspace/search/ContentSearchPill";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { OfflineIndicator } from "#product/components/app/OfflineIndicator";
 import { useMainScreenState } from "#product/hooks/main/facade/use-main-screen-state";
 import { useMainScreenShortcuts } from "#product/hooks/main/lifecycle/use-main-screen-shortcuts";
 import { useMainScreenActions } from "#product/hooks/main/workflows/use-main-screen-actions";
+import { useGlassChromeCanvas } from "#product/hooks/theme/derived/use-glass-chrome-canvas";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useHasMacWindowControls } from "#product/hooks/ui/layout/use-mac-window-controls";
@@ -39,6 +41,7 @@ import {
 import { WorkspacePathProvider } from "#product/providers/WorkspacePathProvider";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import {
   buildSettingsHref,
   resolveWorkspaceRepoSettingsHref,
@@ -55,7 +58,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   // acknowledgement intentionally stays in ChatView because errors are
   // transcript-scoped and need the chat surface for context.
   useWorkspaceActivityAcknowledgement({ enabled: visible });
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const pendingWorkspacePath = resolvePendingWorkspacePath(pendingWorkspaceEntry);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
@@ -84,6 +87,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   const {
     sidebarOpen,
     sidebarWidth,
+    sidebarResizing,
     rightPanelOpen,
     rightPanelState,
     rightPanelWidth,
@@ -97,12 +101,13 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   } = layout;
   const transparentChromeEnabled = useTransparentChromeEnabled();
   const hasMacWindowControls = useHasMacWindowControls();
+  useGlassChromeCanvas(transparentChromeEnabled && hasMacWindowControls);
   const workspaceGeometry = useWorkspaceShellGeometry({
     leftWidth: sidebarOpen ? sidebarWidth : 0,
     rightWidth: hasWorkspaceShell && !hasLaunchIntentOnlyShell && rightPanelOpen
       ? rightPanelWidth
       : 0,
-    snapRight: rightPanelResizing,
+    snapLeft: sidebarResizing,
     onToggleLeft: actions.onToggleSidebar,
   });
   const chromeClasses = useMemo(
@@ -222,7 +227,6 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
               <WorkspaceShellShortcuts enabled={visible} />
             ) : null}
             <div
-              ref={workspaceGeometry.rootRef}
               // relative: the collapsed sidebar's hover peek is an overlay
               // anchored to this shell box, so it never displaces content.
               className={`standard-workspace-shell relative h-screen flex overflow-hidden ${chromeClasses.root}`}
@@ -235,9 +239,6 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
               } as CSSProperties}
               data-snap-left-geometry={workspaceGeometry.snapLeft ? "true" : "false"}
               data-snap-right-geometry={rightPanelResizing ? "true" : "false"}
-              data-manual-workspace-geometry={
-                workspaceGeometry.usesManualInterpolation ? "true" : "false"
-              }
               data-workspace-shell
               data-workspace-ui-key={selectedLogicalWorkspaceId ?? selectedWorkspaceId ?? ""}
               data-workspace-session-id={activeSessionId ?? ""}
@@ -248,6 +249,10 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
               <WorkspaceShellSidebar
                 open={sidebarOpen}
                 width={sidebarWidth}
+                // Vibrancy only exists behind the window on macOS Desktop
+                // (apply_vibrancy in src-tauri/src/lib.rs); elsewhere a
+                // translucent sidebar would expose the bare window fill.
+                glassBackground={transparentChromeEnabled && hasMacWindowControls}
                 showAnimatedDivider={transparentChromeEnabled}
                 snapGeometry={workspaceGeometry.snapLeft}
                 onToggleSidebar={workspaceGeometry.toggleLeft}
@@ -372,6 +377,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                 />
               </div>
 
+              {hasWorkspaceShell && !hasLaunchIntentOnlyShell ? <ContentSearchPill /> : null}
             </div>
           </WorkspaceHeaderTabsViewModelProvider>
         </WorkspacePathProvider>

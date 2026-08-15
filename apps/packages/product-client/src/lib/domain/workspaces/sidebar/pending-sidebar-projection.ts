@@ -77,8 +77,18 @@ export function buildPendingSidebarProjection(args: {
       subtitle: active ? args.activeSessionTitle : null,
       active,
       archived: false,
+      pinnedIds: [],
       variant,
-      statusIndicator: null,
+      // A failed attempt the user is not attending has no visible shell to
+      // carry its error, so the row carries it: clicking through lands on the
+      // creation receipt with retry/back (Invariant 8).
+      statusIndicator: entry.stage === "failed"
+        ? {
+          kind: "error",
+          tooltip: entry.errorMessage ?? "Couldn't create workspace",
+          action: { kind: "open_workspace", workspaceId: pendingWorkspaceUiKey },
+        }
+        : null,
       lastInteracted: createdAt,
       needsReview: false,
       workspaceLocationCopyLabel: null,

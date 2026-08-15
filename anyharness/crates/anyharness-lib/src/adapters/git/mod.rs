@@ -15,4 +15,14 @@ mod diff_tests;
 #[cfg(test)]
 mod service_tests;
 #[cfg(test)]
+mod snapshot_gc_tests;
+#[cfg(test)]
+mod snapshot_refusal_tests;
+#[cfg(test)]
+mod snapshot_repair_tests;
+#[cfg(test)]
+mod snapshot_tests;
+#[cfg(test)]
+mod worktree_hardening_tests;
+#[cfg(test)]
 mod worktrees_tests;

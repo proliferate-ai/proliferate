@@ -62,7 +62,6 @@ export function makeWorkspace(args: {
     executionSummary,
     availability,
     lifecycleState: "active",
-    cleanupState: "none",
     createdAt: updatedAt,
     updatedAt,
   };
@@ -131,6 +130,8 @@ export function makeRepoEnvironment(
     defaultBranch: "main",
     setupScript: "",
     runCommand: "",
+    archiveScript: "",
+    rerunSetupOnUnarchive: true,
     ...overrides,
   };
 }
@@ -274,6 +275,7 @@ export function makeCloudLogicalWorkspace(args: {
   branch?: string;
   origin?: SidebarCloudWorkspaceSummary["origin"];
   creatorContext?: SidebarCloudWorkspaceSummary["creatorContext"];
+  productLifecycle?: SidebarCloudWorkspaceSummary["productLifecycle"];
   updatedAt?: string;
 }): LogicalWorkspace {
   const {
@@ -284,6 +286,7 @@ export function makeCloudLogicalWorkspace(args: {
     branch = "main",
     origin,
     creatorContext,
+    productLifecycle,
     updatedAt = DEFAULT_UPDATED_AT,
   } = args;
   const cloudWorkspace = makeCloudWorkspace({
@@ -292,6 +295,7 @@ export function makeCloudLogicalWorkspace(args: {
     branch,
     origin,
     creatorContext,
+    productLifecycle,
     updatedAt,
   });
 
@@ -321,11 +325,11 @@ export function buildGroups(args: {
   repoConfigs?: readonly RepoConfigResponse[];
   workspaceTypes?: SidebarWorkspaceVariant[];
   showArchived?: boolean;
-  archivedIds?: string[];
+  pinnedIds?: string[];
   hiddenRepoRootIds?: string[];
   selectedLogicalWorkspaceId?: string | null;
   selectedWorkspaceId?: string | null;
-  pendingWorkspaceEntry?: PendingWorkspaceEntry | null;
+  pendingWorkspaceEntries?: readonly PendingWorkspaceEntry[];
   workspaceActivities?: Record<string, SidebarSessionActivityState>;
   pendingPromptCounts?: Record<string, number>;
   lastViewedAt?: Record<string, string>;
@@ -342,11 +346,11 @@ export function buildGroups(args: {
     logicalWorkspaces: args.logicalWorkspaces,
     showArchived: args.showArchived ?? false,
     workspaceTypes: args.workspaceTypes ?? DEFAULT_SIDEBAR_WORKSPACE_TYPES,
-    archivedSet: new Set(args.archivedIds ?? []),
+    pinnedSet: new Set(args.pinnedIds ?? []),
     hiddenRepoRootIds: new Set(args.hiddenRepoRootIds ?? []),
     selectedLogicalWorkspaceId: args.selectedLogicalWorkspaceId ?? null,
     selectedWorkspaceId: args.selectedWorkspaceId ?? null,
-    pendingWorkspaceEntry: args.pendingWorkspaceEntry ?? null,
+    pendingWorkspaceEntries: args.pendingWorkspaceEntries ?? [],
     workspaceActivities: args.workspaceActivities ?? {},
     pendingPromptCounts: args.pendingPromptCounts,
     gitStatus: undefined,

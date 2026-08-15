@@ -34,7 +34,6 @@ import {
   setDesktopSentryTag,
   setDesktopSentryUser,
 } from "./sentry";
-import { initializeDesktopNativeDiagnostics } from "./native-diagnostics";
 
 let desktopTelemetryRuntimeState: DesktopTelemetryRoutingState | null = null;
 
@@ -77,8 +76,6 @@ export function initializeDesktopTelemetry(): void {
   const config = getDesktopTelemetryConfig();
   const runtimeState = resolveRuntimeState();
   desktopTelemetryRuntimeState = runtimeState;
-  initializeDesktopNativeDiagnostics();
-
   if (!runtimeState.vendorEnabled) {
     return;
   }

@@ -1,11 +1,13 @@
-import { Cloud, Folder, Plus } from "lucide-react";
+import { Folder } from "#product/primitives/icons/workspace";
+import { CloudIcon } from "#product/primitives/icons/platform";
+import { Plus } from "#product/primitives/icons/core";
 
-import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
-import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
-import { SettingsRow } from "#product/components/patterns/SettingsRow";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
+import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 
 export interface CloudEnvironmentListItemView {
   id: string;
@@ -40,12 +42,14 @@ export function CloudEnvironmentList({
   const hasItems = cloudEnvironments.length > 0;
   const unavailableRow = cloudUnavailableReason ? (
     <SettingsRow
+      key="unavailable"
       label="Cloud environments unavailable"
       description={cloudUnavailableReason}
     />
   ) : null;
   const errorRow = !cloudUnavailableReason && cloudErrorMessage ? (
     <SettingsRow
+      key="error"
       label="Couldn't load cloud environments"
       description={cloudErrorMessage}
     >
@@ -57,41 +61,36 @@ export function CloudEnvironmentList({
     </SettingsRow>
   ) : null;
 
+  const showAddButton = hasItems && Boolean(onAddCloudEnvironment) && !cloudUnavailableReason;
+  const usingEmptyState = !hasItems && !unavailableRow && !errorRow;
+
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader title={title} description={description} />
+    <SettingsPageBody>
+      <PageHeader variant="flat" title={title} description={description} />
 
       <SettingsSection
         title="Repositories"
         description="GitHub repositories configured for Proliferate Cloud."
+        surface={usingEmptyState ? "plain" : "group"}
       >
         {hasItems ? (
-          <>
-            {cloudEnvironments.map((environment) => (
+          // Direct array of children, not a fragment: SettingsGroup dividers
+          // key off Children.toArray(children), which treats a single
+          // fragment as one child and drops dividers between rows inside it.
+          [
+            ...cloudEnvironments.map((environment) => (
               <EnvironmentRow
                 key={environment.id}
                 environment={environment}
                 onSelectCloudEnvironment={onSelectCloudEnvironment}
               />
-            ))}
-            {unavailableRow}
-            {errorRow}
-            {loadingCloudEnvironments ? (
-              <SettingsRow label="Cloud environments" description="Loading…" />
-            ) : null}
-            {onAddCloudEnvironment && !cloudUnavailableReason ? (
-              <Button
-                type="button"
-                variant="unstyled"
-                size="unstyled"
-                onClick={onAddCloudEnvironment}
-                className="mt-1 flex w-full items-center gap-2 rounded-md border border-dashed border-border px-2.5 py-2 text-ui-sm font-medium text-muted-foreground transition-colors hover:bg-hover hover:text-foreground active:bg-active"
-              >
-                <Plus className="icon-paired" />
-                Add cloud environment
-              </Button>
-            ) : null}
-          </>
+            )),
+            unavailableRow,
+            errorRow,
+            loadingCloudEnvironments ? (
+              <SettingsRow key="loading" label="Cloud environments" description="Loading…" />
+            ) : null,
+          ].filter(Boolean)
         ) : unavailableRow ? (
           unavailableRow
         ) : errorRow ? (
@@ -113,7 +112,20 @@ export function CloudEnvironmentList({
           />
         )}
       </SettingsSection>
-    </section>
+
+      {showAddButton ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="unstyled"
+          onClick={onAddCloudEnvironment}
+          className="mt-2 flex w-full items-center gap-2 rounded-md border border-dashed border-border px-2.5 py-2 text-ui-sm font-medium"
+        >
+          <Plus className="icon-paired" />
+          Add cloud environment
+        </Button>
+      ) : null}
+    </SettingsPageBody>
   );
 }
 
@@ -128,18 +140,18 @@ function EnvironmentRow({
     <SettingsRow
       label={(
         <span className="flex min-w-0 items-center gap-2">
-          <Cloud className="icon-paired shrink-0 text-muted-foreground" />
+          <CloudIcon className="icon-paired shrink-0 text-muted-foreground" />
           <span className="truncate">{environment.fullName}</span>
         </span>
       )}
       description={environment.description}
     >
-      <Badge tone="neutral">Cloud</Badge>
+      <span className="text-ui-sm text-muted-foreground">Cloud</span>
       {environment.cloudStatus === "error" ? (
-        <Badge tone="destructive">Setup failed</Badge>
+        <span className="text-ui-sm text-muted-foreground">Setup failed</span>
       ) : null}
       {environment.cloudStatus === "pending" || environment.cloudStatus === "running" ? (
-        <Badge tone="info">Setting up</Badge>
+        <span className="text-ui-sm text-muted-foreground">Setting up</span>
       ) : null}
       <Button
         type="button"

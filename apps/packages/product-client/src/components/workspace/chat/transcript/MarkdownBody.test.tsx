@@ -88,6 +88,22 @@ describe("MarkdownBody presentation", () => {
     expect(highlightedHtml).toContain('data-markdown-code-content="true"');
   });
 
+  it("renders an unlabeled single-line fence as a code block", () => {
+    const html = renderMarkdown("```\nconst ready = true;\n```");
+
+    expect(html).toContain('data-markdown-code-block="true"');
+    expect(html).toContain("const ready = true;");
+    expect(html).not.toContain('data-markdown-inline-code="true"');
+  });
+
+  it("keeps an empty fence distinct from inline code", () => {
+    const html = renderMarkdown("```\n```");
+
+    expect(html).toContain('data-markdown-code-block="true"');
+    expect(html).not.toContain('data-markdown-inline-code="true"');
+    expect(html).not.toContain("undefined");
+  });
+
   it("preserves injected workspace links while stabilizing only the render copy", () => {
     const source = "Open [config](/tmp/project/config";
     const renderLink = vi.fn(({ href }: MarkdownLinkRenderInput) => (

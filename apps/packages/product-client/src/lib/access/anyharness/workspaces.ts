@@ -1,8 +1,11 @@
 import type {
   AnyHarnessRequestOptions,
+  ArchiveWorkspaceRequest,
   CreateWorkspaceRequest,
   CreateWorktreeWorkspaceRequest,
+  UnarchiveWorkspaceRequest,
   UpdateWorkspaceDisplayNameRequest,
+  WorkspaceLifecycleFilter,
 } from "@anyharness/sdk";
 import {
   getAnyHarnessClient,
@@ -12,11 +15,35 @@ import {
 
 type WorkspaceConnection = AnyHarnessClientConnection | AnyHarnessResolvedConnection;
 
+/**
+ * The workspace list. Omit `lifecycle` for the route's `active` default (the
+ * collections query's universe); the archived page passes `"archived"`
+ * explicitly. The lifecycle filter is a positional SDK parameter, not part of
+ * `AnyHarnessRequestOptions` — keeping it a separate argument here (rather
+ * than folding it into `request`) matches the generated client's shape.
+ */
 export function listRuntimeWorkspaces(
   connection: AnyHarnessClientConnection,
+  lifecycle?: WorkspaceLifecycleFilter,
   request?: AnyHarnessRequestOptions,
 ) {
-  return getAnyHarnessClient(connection).workspaces.list(request);
+  return getAnyHarnessClient(connection).workspaces.list(lifecycle, request);
+}
+
+export function archiveWorkspace(
+  connection: WorkspaceConnection,
+  workspaceId: string,
+  request?: ArchiveWorkspaceRequest,
+) {
+  return getAnyHarnessClient(connection).workspaces.archive(workspaceId, request);
+}
+
+export function unarchiveWorkspace(
+  connection: WorkspaceConnection,
+  workspaceId: string,
+  request?: UnarchiveWorkspaceRequest,
+) {
+  return getAnyHarnessClient(connection).workspaces.unarchive(workspaceId, request);
 }
 
 export function listRepoRoots(
@@ -84,29 +111,6 @@ export function updateWorkspaceDisplayName(
   );
 }
 
-export function retireWorkspace(connection: WorkspaceConnection, workspaceId: string) {
-  return getAnyHarnessClient(connection).workspaces.retire(workspaceId);
-}
-
-export function getWorkspaceRetirePreflight(
-  connection: WorkspaceConnection,
-  workspaceId: string,
-  options?: AnyHarnessRequestOptions,
-) {
-  return getAnyHarnessClient(connection).workspaces.retirePreflight(workspaceId, options);
-}
-
-export function retryRetireWorkspaceCleanup(
-  connection: WorkspaceConnection,
-  workspaceId: string,
-) {
-  return getAnyHarnessClient(connection).workspaces.retryRetireCleanup(workspaceId);
-}
-
 export function purgeWorkspace(connection: WorkspaceConnection, workspaceId: string) {
   return getAnyHarnessClient(connection).workspaces.purge(workspaceId);
-}
-
-export function retryPurgeWorkspace(connection: WorkspaceConnection, workspaceId: string) {
-  return getAnyHarnessClient(connection).workspaces.retryPurge(workspaceId);
 }

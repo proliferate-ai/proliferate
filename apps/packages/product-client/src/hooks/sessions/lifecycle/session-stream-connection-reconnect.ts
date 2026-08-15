@@ -1,9 +1,11 @@
 import {
   clearSessionReconnectTimer,
+  currentSessionReconnectAttempt,
   nextSessionReconnectDelayMs,
   registerOfflineSessionReconnect,
   scheduleSessionReconnectTimer,
 } from "#product/lib/workflows/sessions/session-reconnect-state";
+import { recordSessionStreamReconnectScheduled } from "#product/lib/infra/diagnostics/renderer-diagnostics-connection";
 import { isConnectivityOnline } from "#product/stores/infra/connectivity-store";
 import { shouldReconnectStream } from "#product/hooks/sessions/lifecycle/session-runtime-helpers";
 import type {
@@ -32,11 +34,19 @@ export function scheduleSessionStreamReconnect({
   isStillCurrent,
 }: ScheduleSessionStreamReconnectInput): void {
   clearSessionReconnectTimer(sessionId);
-  if (!isStillCurrent() || !shouldReconnectStream(sessionId)) {
+  if (!isStillCurrent()) {
     return;
   }
+  // External owners (e.g. the Agents pane) decide their own reconnect policy
+  // and must be notified even for a session the shared working/needs_input
+  // gate below would otherwise treat as not worth auto-reconnecting (an idle
+  // child waiting on a parent message never satisfies that gate). Internal
+  // callers keep the existing gated auto-reconnect behavior unchanged.
   if (options?.reconnectOwner === "external") {
     options.onReconnectNeeded?.();
+    return;
+  }
+  if (!shouldReconnectStream(sessionId)) {
     return;
   }
 
@@ -66,5 +76,12 @@ export function scheduleSessionStreamReconnect({
   }
 
   const backoffDelay = nextSessionReconnectDelayMs(sessionId, delayMs);
+  recordSessionStreamReconnectScheduled({
+    sessionId,
+    // nextSessionReconnectDelayMs has already counted this attempt, so the
+    // post-increment value is the 1-based number of the reconnect being armed.
+    attempt: currentSessionReconnectAttempt(sessionId),
+    delayMs: backoffDelay,
+  });
   scheduleSessionReconnectTimer(sessionId, runner, backoffDelay);
 }

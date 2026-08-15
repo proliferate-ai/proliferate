@@ -13,6 +13,11 @@ import {
   TERMINAL_LINE_HEIGHT,
 } from "#product/lib/domain/terminals/terminal-grid";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
+import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 
 interface UseXtermSurfaceInput {
   visible: boolean;
@@ -30,15 +35,70 @@ export const XTERM_CURSOR_OPTIONS = {
   cursorWidth: 1,
 } as const;
 
+export const XTERM_RESIZE_REPORT_SETTLE_MS = 200;
+
+/**
+ * Coalesces the grid-size stream a live separator drag produces into one
+ * report per settled size. The surface itself refits on every container
+ * resize so columns track the pointer, but each report crosses to the
+ * runtime PTY (an HTTP resize call plus a SIGWINCH-driven redraw of whatever
+ * runs in the terminal) — streaming one per column change is what made
+ * right-panel drags heavy.
+ */
+export function createSettledResizeReporter(
+  report: (size: { cols: number; rows: number }) => void,
+  settleMs = XTERM_RESIZE_REPORT_SETTLE_MS,
+): {
+  observe: (size: { cols: number; rows: number }) => void;
+  cancel: () => void;
+} {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return {
+    observe(size) {
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
+      timer = setTimeout(() => {
+        timer = null;
+        report(size);
+      }, settleMs);
+    },
+    cancel() {
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
+      timer = null;
+    },
+  };
+}
+
 export function resolveXtermSurfaceTypography(
   readableCodeFontSizeId: unknown,
   overrides: Pick<UseXtermSurfaceInput, "fontSize" | "lineHeight"> = {},
+  uiFontSizeId?: unknown,
 ): { fontSize: number; lineHeight: number } {
-  const scale = resolveReadableCodeFontScale(readableCodeFontSizeId);
+  const scale = resolveReadableCodeFontScale(readableCodeFontSizeId, uiFontSizeId);
   return {
     fontSize: overrides.fontSize ?? scale.monacoFontSize,
     lineHeight: overrides.lineHeight ?? TERMINAL_LINE_HEIGHT,
   };
+}
+
+export function recordXtermInitializationFailure(
+  logPrefix: string,
+  error: unknown,
+): void {
+  recordRendererDiagnostic({
+    name: "renderer.terminal.xterm_init_failed",
+    severity: "error",
+    kind: "message",
+    privacy: "operational",
+    fields: {
+      surface: diagnosticField(logPrefix, "operational"),
+      error_name: diagnosticField(safeRendererErrorName(error), "operational"),
+    },
+    errorClassification: "xterm_init_failed",
+  });
 }
 
 export function useXtermSurface({
@@ -59,10 +119,11 @@ export function useXtermSurface({
   const [isReady, setIsReady] = useState(false);
   const [hasBeenVisible, setHasBeenVisible] = useState(visible);
   const readableCodeFontSizeId = useUserPreferencesStore((state) => state.readableCodeFontSizeId);
+  const uiFontSizeId = useUserPreferencesStore((state) => state.uiFontSizeId);
   const terminalTypography = resolveXtermSurfaceTypography(readableCodeFontSizeId, {
     fontSize,
     lineHeight,
-  });
+  }, uiFontSizeId);
   const terminalFontSize = terminalTypography.fontSize;
   const terminalLineHeight = terminalTypography.lineHeight;
   const terminalFontSizeRef = useRef(terminalFontSize);
@@ -105,6 +166,7 @@ export function useXtermSurface({
     setIsReady(false);
     let cancelled = false;
     let resizeObserver: ResizeObserver | null = null;
+    let settledResizeReporter: ReturnType<typeof createSettledResizeReporter> | null = null;
     let unsubscribeTheme = () => {};
 
     void (async () => {
@@ -141,6 +203,7 @@ export function useXtermSurface({
         term.open(containerRef.current);
         fitAddon.fit();
       } catch (err) {
+        recordXtermInitializationFailure(logPrefix, err);
         console.warn(`[${logPrefix}] xterm init error (likely disposal race):`, err);
         return;
       }
@@ -161,8 +224,11 @@ export function useXtermSurface({
         onDataRef.current?.(data);
       });
 
-      term.onResize((size) => {
+      settledResizeReporter = createSettledResizeReporter((size) => {
         onResizeRef.current?.(size);
+      });
+      term.onResize((size) => {
+        settledResizeReporter?.observe(size);
       });
 
       resizeObserver = new ResizeObserver(() => {
@@ -175,6 +241,7 @@ export function useXtermSurface({
     return () => {
       cancelled = true;
       resizeObserver?.disconnect();
+      settledResizeReporter?.cancel();
       unsubscribeTheme();
       terminalRef.current?.dispose();
       terminalRef.current = null;

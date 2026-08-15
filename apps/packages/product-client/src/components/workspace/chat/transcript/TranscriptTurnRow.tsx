@@ -7,6 +7,7 @@ import { useRevertGitPatchesMutation } from "@anyharness/sdk-react";
 import { TurnDiffPanel } from "#product/components/workspace/chat/transcript/TurnDiffPanel";
 import { TranscriptPatchTurnDiffPanel } from "#product/components/workspace/chat/transcript/TranscriptPatchTurnDiffPanel";
 import {
+  ASSISTANT_ACTION_SLOT_HEIGHT,
   TurnAssistantActionRow,
   TURN_ITEM_GAP_CLASS,
   TurnGoalMetMarker,
@@ -16,6 +17,7 @@ import {
 import { goalMetMarkerLabel } from "#product/domain/activity/goal";
 import { useSessionGoal } from "#product/hooks/activity/derived/use-session-goal";
 import { TurnItemSequence } from "#product/components/workspace/chat/transcript/TurnItemSequence";
+import { hostsSynthesizedReceiptDisclosure } from "#product/components/workspace/chat/transcript/TurnWorkspaceReceiptSlot";
 import {
   findTailAssistantProseRootId,
   getAssistantProseContent,
@@ -34,6 +36,13 @@ import {
 import {
   resolveTurnStoppedNotice,
 } from "#product/domain/chats/transcript/turn-stopped-presentation";
+import {
+  resolveTranscriptTurnDiffPanelKind,
+  resolveTurnAssistantFooterMode,
+  resolveTurnFrontierStatusMode,
+  shouldRenderAssistantEndResource,
+  shouldRenderStandaloneStoppedNotice,
+} from "#product/domain/chats/transcript/turn-row-presentation";
 import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import type { TurnDisplayBlock } from "#product/domain/chats/transcript/transcript-presentation";
 import type { PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
@@ -61,6 +70,7 @@ export function TranscriptTurnRow({
   onOpenTurnChanges,
   onOpenArtifact,
   onHandOffPlanToNewSession,
+  workspaceReceipt = null,
 }: {
   row: Extract<TranscriptVirtualRow, { kind: "turn" }>;
   rowIndex: number;
@@ -77,6 +87,8 @@ export function TranscriptTurnRow({
   onOpenTurnChanges?: () => void;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
+  /** The workspace-creation receipt, when this row hosts it (see `hostsWorkspaceReceipt`). */
+  workspaceReceipt?: ReactNode;
 }) {
   const isLatestTurn = row.turnId === latestTurnId;
   const isLatestTurnInProgress = isLatestTurn && !turn.completedAt;
@@ -171,6 +183,12 @@ export function TranscriptTurnRow({
     hasAssistantCopyContent: !!tailAssistantCopyContent,
     assistantRevealComplete,
   });
+  const frontierStatusMode = resolveTurnFrontierStatusMode({
+    hasTrailingStatus: trailingStatus !== null && trailingStatus !== undefined,
+    rowIsLastTurnRow: row.isLastTurnRow,
+    isLatestTurnInProgress,
+    assistantRevealComplete,
+  });
   const revertPatchesMutation = useRevertGitPatchesMutation({ workspaceId: selectedWorkspaceId });
   const showToast = useToastStore((state) => state.show);
   const [undoneTurnIds, setUndoneTurnIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -225,8 +243,17 @@ export function TranscriptTurnRow({
   ]);
 
   const stoppedNotice = row.isLastTurnRow ? resolveTurnStoppedNotice(turn) : null;
+  // A hosted workspace-creation receipt on a turn with no history of its own
+  // still surfaces as a "Worked for Ns" disclosure (TurnItemSequence's
+  // synthetic case) — that counts as owning the disclosure too, so the
+  // standalone stopped-notice line below doesn't duplicate its label.
   const hasCompletedHistoryDisclosure = row.isLastTurnRow
-    && renderPresentation.completedHistorySummary !== null;
+    && (renderPresentation.completedHistorySummary !== null
+      || hostsSynthesizedReceiptDisclosure({
+        hasWorkspaceReceipt: !!workspaceReceipt,
+        completedHistorySummary: renderPresentation.completedHistorySummary,
+        turnCompletedAt: turn.completedAt,
+      }));
 
   return (
     <TurnShell isFirst={rowIndex === 0}>
@@ -248,6 +275,7 @@ export function TranscriptTurnRow({
           workspaceId={selectedWorkspaceId}
           onOpenArtifact={onOpenArtifact}
           onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+          workspaceReceipt={workspaceReceipt}
         />
         {shouldRenderAssistantEndResource({
           rowIsLastTurnRow: row.isLastTurnRow,
@@ -256,8 +284,13 @@ export function TranscriptTurnRow({
         }) && assistantEndResource && (
           <TurnDocumentReferenceCard resource={assistantEndResource} />
         )}
-        {assistantRevealComplete && trailingStatus && (
-          <div data-turn-frontier-status>{trailingStatus}</div>
+        {frontierStatusMode !== "hidden" && (
+          <div
+            data-turn-frontier-status
+            className={frontierStatusMode === "reserved" ? ASSISTANT_ACTION_SLOT_HEIGHT : undefined}
+          >
+            {trailingStatus}
+          </div>
         )}
         {assistantRevealComplete
           && shouldRenderStandaloneStoppedNotice(stoppedNotice, hasCompletedHistoryDisclosure) && (
@@ -289,69 +322,16 @@ export function TranscriptTurnRow({
           showCopyButton={assistantFooterMode === "copy"}
           reserveSlot={assistantFooterMode === "reserved"}
           timestampLabel={tailAssistantActionTime}
+          // The permanent copy button is the "session is done" marker
+          // (PRO-119): only the transcript's final completed message carries
+          // it, and it yields back to hover-only the moment a newer turn
+          // takes the frontier.
+          alwaysVisible={isFinalCompletedTurn && isLatestTurn}
           metMarker={metMarker}
         />
       </div>
     </TurnShell>
   );
-}
-
-export function shouldRenderAssistantEndResource({
-  rowIsLastTurnRow,
-  visualTurnCompleted,
-  hasResource,
-}: {
-  rowIsLastTurnRow: boolean;
-  visualTurnCompleted: boolean;
-  hasResource: boolean;
-}): boolean {
-  return rowIsLastTurnRow && visualTurnCompleted && hasResource;
-}
-
-export function resolveTurnAssistantFooterMode({
-  rowIsLastTurnRow,
-  turnCompleted,
-  hasAssistantCopyContent,
-  assistantRevealComplete,
-}: {
-  rowIsLastTurnRow: boolean;
-  turnCompleted: boolean;
-  hasAssistantCopyContent: boolean;
-  assistantRevealComplete: boolean;
-}): "none" | "reserved" | "copy" {
-  if (!rowIsLastTurnRow) {
-    return "none";
-  }
-  if (turnCompleted && hasAssistantCopyContent && assistantRevealComplete) {
-    return "copy";
-  }
-  return "reserved";
-}
-
-export function shouldRenderStandaloneStoppedNotice(
-  stoppedNotice: string | null,
-  hasCompletedHistoryDisclosure: boolean,
-): boolean {
-  return stoppedNotice !== null && !hasCompletedHistoryDisclosure;
-}
-
-export function resolveTranscriptTurnDiffPanelKind({
-  rowIsLastTurnRow,
-  turnCompleted,
-  turnId,
-  latestCompletedTurnId,
-  hasFileBadges,
-}: {
-  rowIsLastTurnRow: boolean;
-  turnCompleted: boolean;
-  turnId: string;
-  latestCompletedTurnId: string | null;
-  hasFileBadges: boolean;
-}): "current" | "transcript" | null {
-  if (!rowIsLastTurnRow || !turnCompleted || !hasFileBadges) {
-    return null;
-  }
-  return turnId === latestCompletedTurnId ? "current" : "transcript";
 }
 
 function formatUndoError(error: unknown): string {

@@ -61,6 +61,65 @@ describe("describeReadinessBlocker", () => {
     expect(onSignIn).toHaveBeenCalledTimes(1);
   });
 
+  it("carries the 3-step GitHub checklist on every gate a user can act out of", () => {
+    const actionable: RepositoryReadiness[] = [
+      { gate: 4, action: "retry" },
+      { gate: 5, action: "authorize_user" },
+      { gate: 5, action: "reauthorize_user" },
+      { gate: 6, action: "install_app" },
+      { gate: 6, action: "copy_admin_request" },
+      { gate: 7, action: "grant_repo_access" },
+      { gate: 8, action: "none" },
+    ];
+
+    for (const readiness of actionable) {
+      const blocker = describeReadinessBlocker(inputs(readiness));
+      expect(blocker?.steps?.map((step) => step.label), readiness.action).toEqual([
+        "Authorize your GitHub identity",
+        "Install for repository access",
+        "Choose a repository",
+      ]);
+      // Exactly one current step, so the checklist always names one next move.
+      expect(
+        blocker?.steps?.filter((step) => step.status === "current").length,
+        readiness.action,
+      ).toBe(1);
+    }
+  });
+
+  it("advances the checklist with the gate: authorize is current at gate 5 and complete at gate 6", () => {
+    const atAuthorize = describeReadinessBlocker(inputs({ gate: 5, action: "authorize_user" }));
+    expect(atAuthorize?.steps?.map((step) => step.status)).toEqual([
+      "current",
+      "upcoming",
+      "upcoming",
+    ]);
+
+    const atInstall = describeReadinessBlocker(inputs({ gate: 6, action: "install_app" }));
+    expect(atInstall?.steps?.map((step) => step.status)).toEqual([
+      "complete",
+      "current",
+      "upcoming",
+    ]);
+
+    const atPicker = describeReadinessBlocker(inputs({ gate: 8, action: "none" }));
+    expect(atPicker?.steps?.map((step) => step.status)).toEqual([
+      "complete",
+      "complete",
+      "current",
+    ]);
+  });
+
+  it("tells a non-admin that an admin owns step 2", () => {
+    const blocker = describeReadinessBlocker(inputs({ gate: 6, action: "copy_admin_request" }));
+    expect(blocker?.steps?.[1]?.description).toBe("An organization admin needs to grant access.");
+  });
+
+  it("leaves the out-of-scope operator and sign-in gates without a checklist", () => {
+    expect(describeReadinessBlocker(inputs({ gate: 1, action: "none" }))?.steps).toBeUndefined();
+    expect(describeReadinessBlocker(inputs({ gate: 2, action: "sign_in" }))?.steps).toBeUndefined();
+  });
+
   it("wires the gate-4 Retry CTA to the authority refetch (S3)", () => {
     const onRetryAuthority = vi.fn();
     const blocker = describeReadinessBlocker(inputs({ gate: 4, action: "retry" }, { onRetryAuthority }));

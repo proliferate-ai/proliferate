@@ -3,11 +3,29 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[path = "src/diagnostics_collector/build_packaging.rs"]
+mod diagnostics_collector_packaging;
+use diagnostics_collector_packaging::{
+    register_diagnostics_collector_rerun_inputs, stage_dependency_placeholders,
+    stage_diagnostics_collector_binary, validate_staged_sidecars,
+};
+#[path = "src/diagnostics_collector/packaging_contract.rs"]
+mod packaging_contract;
+use packaging_contract::should_stage_real_binaries;
+
+const EXTERNAL_BINARY_ENV_KEYS: [&str; 4] = [
+    "ANYHARNESS_BIN",
+    "PROLIFERATE_WORKER_BIN",
+    "PROLIFERATE_DEBUG_BIN",
+    "PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN",
+];
+
 fn main() {
     println!("cargo:rerun-if-changed=tauri.conf.json");
     println!("cargo:rerun-if-env-changed=ANYHARNESS_BIN");
     println!("cargo:rerun-if-env-changed=PROLIFERATE_WORKER_BIN");
     println!("cargo:rerun-if-env-changed=PROLIFERATE_DEBUG_BIN");
+    println!("cargo:rerun-if-env-changed=PROLIFERATE_DIAGNOSTICS_COLLECTOR_BIN");
     println!("cargo:rerun-if-env-changed=CARGO_PRIMARY_PACKAGE");
     println!("cargo:rerun-if-env-changed=TAURI_ENV_TARGET_TRIPLE");
     println!("cargo:rerun-if-env-changed=TARGET");
@@ -16,12 +34,20 @@ fn main() {
     register_anyharness_rerun_inputs();
     register_proliferate_worker_rerun_inputs();
     register_proliferate_debug_rerun_inputs();
+    register_diagnostics_collector_rerun_inputs();
 
     if let Err(err) = stage_dependency_placeholders() {
         panic!("failed to stage dependency placeholders: {err}");
     }
 
-    if building_primary_package() {
+    let explicit_inputs = EXTERNAL_BINARY_ENV_KEYS.map(|key| env::var_os(key).is_some());
+    let release_profile = env::var("PROFILE").as_deref() == Ok("release");
+    // A release dependency build still runs this script while the outer Cargo process owns the
+    // target directory. Only packaging's complete explicit input set (or a primary-package build)
+    // may resolve real sidecars; release mode alone must not launch nested Cargo builds.
+    let stage_real =
+        should_stage_real_binaries(building_primary_package(), explicit_inputs, release_profile);
+    if stage_real {
         if let Err(err) = stage_anyharness_binary() {
             panic!("failed to stage AnyHarness sidecar binary: {err}");
         }
@@ -30,6 +56,18 @@ fn main() {
         }
         if let Err(err) = stage_proliferate_debug_binary() {
             panic!("failed to stage Proliferate debug helper binary: {err}");
+        }
+        if let Err(err) = stage_diagnostics_collector_binary() {
+            panic!("failed to stage diagnostics collector binary: {err}");
+        }
+        if release_profile {
+            if let Err(err) = validate_staged_sidecars() {
+                panic!("failed to validate staged Desktop external binaries: {err}");
+            }
+        }
+    } else if explicit_inputs[3] {
+        if let Err(err) = stage_diagnostics_collector_binary() {
+            panic!("failed to stage diagnostics collector debug override: {err}");
         }
     }
 
@@ -74,43 +112,6 @@ fn stage_proliferate_debug_binary() -> Result<(), String> {
         source.display()
     );
     println!("cargo:warning=helper resource path {}", dest.display());
-    Ok(())
-}
-
-fn stage_dependency_placeholders() -> Result<(), String> {
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").map_err(|e| e.to_string())?);
-    let target = env::var("TAURI_ENV_TARGET_TRIPLE")
-        .or_else(|_| env::var("TARGET"))
-        .map_err(|e| e.to_string())?;
-    let binaries_dir = manifest_dir.join("binaries");
-    fs::create_dir_all(&binaries_dir).map_err(|e| e.to_string())?;
-
-    let helper_dest = if target.contains("windows") {
-        binaries_dir.join(format!("proliferate-debug-{target}.exe"))
-    } else {
-        binaries_dir.join(format!("proliferate-debug-{target}"))
-    };
-    let anyharness_dest = if target.contains("windows") {
-        binaries_dir.join(format!("anyharness-{target}.exe"))
-    } else {
-        binaries_dir.join(format!("anyharness-{target}"))
-    };
-    let worker_dest = if target.contains("windows") {
-        binaries_dir.join(format!("proliferate-worker-{target}.exe"))
-    } else {
-        binaries_dir.join(format!("proliferate-worker-{target}"))
-    };
-
-    if !helper_dest.exists() {
-        write_placeholder_sidecar(&helper_dest, &target)?;
-    }
-    if !anyharness_dest.exists() {
-        write_placeholder_sidecar(&anyharness_dest, &target)?;
-    }
-    if !worker_dest.exists() {
-        write_placeholder_sidecar(&worker_dest, &target)?;
-    }
-
     Ok(())
 }
 
@@ -224,6 +225,7 @@ fn resolve_anyharness_binary(
         if path.is_file() {
             return Ok(path);
         }
+        return Err(format!("ANYHARNESS_BIN does not name a file for {target}"));
     }
 
     let repo_candidates = proliferate_worker_repo_candidates(manifest_dir);
@@ -281,6 +283,9 @@ fn resolve_proliferate_worker_binary(
         if path.is_file() {
             return Ok(path);
         }
+        return Err(format!(
+            "PROLIFERATE_WORKER_BIN does not name a file for {target}"
+        ));
     }
 
     let repo_candidates = anyharness_repo_candidates(manifest_dir);
@@ -463,6 +468,9 @@ fn resolve_proliferate_debug_binary(
         if path.is_file() {
             return Ok(path);
         }
+        return Err(format!(
+            "PROLIFERATE_DEBUG_BIN does not name a file for {target}"
+        ));
     }
 
     let helper_dir = proliferate_debug_repo_candidate(manifest_dir);

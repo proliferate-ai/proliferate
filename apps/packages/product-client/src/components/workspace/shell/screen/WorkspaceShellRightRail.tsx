@@ -2,7 +2,10 @@ import type { ComponentProps, MouseEventHandler } from "react";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { RightPanel } from "#product/components/workspace/shell/right-panel/RightPanel";
 import { WorkspaceResizeSeparator } from "#product/components/workspace/shell/screen/WorkspaceResizeSeparator";
-import { RIGHT_PANEL_MIN_WIDTH } from "#product/lib/domain/workspaces/shell/right-panel-model";
+import {
+  MAIN_PANE_MIN_WIDTH,
+  RIGHT_PANEL_MIN_WIDTH,
+} from "#product/lib/domain/workspaces/shell/right-panel-model";
 
 interface WorkspaceShellRightRailProps
   extends Omit<ComponentProps<typeof RightPanel>, "isOpen"> {
@@ -44,9 +47,13 @@ export function WorkspaceShellRightRail({
         // rather than a disappearance: the same panel duration that animates an
         // explicit toggle animates the collapse the drag triggered, and
         // `prefers-reduced-motion` zeroes `--duration-panel` so the panel snaps
-        // shut instead.
-        className="relative isolate shrink-0 overflow-hidden bg-sidebar-background"
-        style={{ width: "var(--workspace-right-width)" }}
+        // shut instead. Live drags zero the geometry duration instead of
+        // easing, so the edge lands on the cursor every frame.
+        // The min() clamp keeps MAIN_PANE_MIN_WIDTH of this flex row for the
+        // chat pane: the rail yields before the composer collapses. 100%
+        // resolves against the row.
+        className="relative isolate shrink-0 overflow-hidden bg-sidebar-background transition-[width] ease-out-cubic [transition-duration:var(--workspace-right-geometry-duration)]"
+        style={{ width: `min(var(--workspace-right-width), calc(100% - ${MAIN_PANE_MIN_WIDTH}px))` }}
         data-right-panel-rail
       >
         <DebugProfiler id="workspace-right-panel">

@@ -241,6 +241,39 @@ describe("shortcut dispatch policy", () => {
     } as KeyboardEvent)).toBe(true);
   });
 
+  it("yields the left-sidebar toggle to the composer's bold chord only over highlighted text", () => {
+    // The policy's only closest() query is the highlighted-composer selector.
+    const composerTarget = (highlighted: boolean) =>
+      ({ closest: () => (highlighted ? {} : null) }) as unknown as EventTarget;
+    const boldChordEvent = {
+      key: "b",
+      code: "KeyB",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: false,
+    };
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, {
+      ...boldChordEvent,
+      target: composerTarget(true),
+    } as KeyboardEvent)).toBe(false);
+
+    // The right-panel toggle (⌘⌥B) is not a formatting chord and stays global.
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleRightPanel, {
+      ...boldChordEvent,
+      altKey: true,
+      target: composerTarget(true),
+    } as KeyboardEvent)).toBe(true);
+
+    // A collapsed caret has nothing to unformat; the sidebar keeps the key.
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, {
+      ...boldChordEvent,
+      target: composerTarget(false),
+    } as KeyboardEvent)).toBe(true);
+  });
+
   it("allows right-panel toggle from text-entry and terminal focus targets", () => {
     expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleRightPanel, {
       key: "b",

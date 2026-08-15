@@ -31,12 +31,33 @@ function DropdownMenuTrigger({
   );
 }
 
+type DropdownMenuContentProps = React.ComponentProps<
+  typeof DropdownMenuPrimitive.Content
+> & {
+  /**
+   * Radix's menu content honors this, but `DropdownMenu.Content` omits it from
+   * its public type because it normally owns open-focus itself. It is exposed
+   * here for the one case that must keep focus where it is: the chat
+   * transcript's selection menu, which loses the window text selection the
+   * moment focus moves into the menu.
+   */
+  onOpenAutoFocus?: (event: Event) => void;
+};
+
 function DropdownMenuContent({
   className,
   sideOffset = 4,
   ref,
+  onOpenAutoFocus,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+}: DropdownMenuContentProps) {
+  // Radix spreads whatever it does not recognize straight through to its
+  // `Menu.Content`, which does implement `onOpenAutoFocus`; the cast crosses
+  // the type gap in one place instead of at every call site.
+  const openAutoFocus = (
+    onOpenAutoFocus ? { onOpenAutoFocus } : {}
+  ) as React.ComponentProps<typeof DropdownMenuPrimitive.Content>;
+
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
@@ -62,9 +83,10 @@ function DropdownMenuContent({
           }
         }}
         className={cn(
-          `z-50 min-w-[220px] overflow-hidden p-1 ${POPOVER_FRAME_CLASS} animate-popover-in [transform-origin:var(--radix-dropdown-menu-content-transform-origin)]`,
+          `z-50 min-w-[220px] overflow-hidden p-1 ${POPOVER_FRAME_CLASS} data-[state=open]:animate-popover-in [transform-origin:var(--radix-dropdown-menu-content-transform-origin)]`,
           className,
         )}
+        {...openAutoFocus}
         {...props}
       />
     </DropdownMenuPrimitive.Portal>
@@ -254,7 +276,7 @@ function DropdownMenuSubContent({
       <DropdownMenuPrimitive.SubContent
         data-slot="dropdown-menu-sub-content"
         className={cn(
-          `z-50 min-w-[220px] overflow-hidden p-1 ${POPOVER_FRAME_CLASS} animate-popover-in [transform-origin:var(--radix-dropdown-menu-content-transform-origin)]`,
+          `z-50 min-w-[220px] overflow-hidden p-1 ${POPOVER_FRAME_CLASS} data-[state=open]:animate-popover-in [transform-origin:var(--radix-dropdown-menu-content-transform-origin)]`,
           className,
         )}
         {...props}

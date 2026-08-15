@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import type { WorkspacePurgeResponse, WorkspaceRetireResponse } from "@anyharness/sdk";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { APP_ROUTES } from "#product/config/app-routes";
@@ -13,7 +12,7 @@ import {
   failLatencyFlow,
   startLatencyFlow,
 } from "#product/lib/infra/measurement/measurement-port";
-import { useWorkspaceRetireActions } from "#product/hooks/workspaces/workflows/use-workspace-retire-actions";
+import { useWorkspacePurgeActions } from "#product/hooks/workspaces/workflows/use-workspace-purge-actions";
 import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 import { useHomeNextTargetSelectionState } from "#product/hooks/home/ui/use-home-next-target-selection-state";
 import { focusChatInput } from "#product/lib/domain/focus-zone";
@@ -38,7 +37,7 @@ export function useWorkspaceSidebarActions() {
   const openAddRepoFlow = useAddRepoFlowStore((state) => state.openFlow);
   const showToast = useToastStore((state) => state.show);
   const showErrorToast = useToastStore((state) => state.showError);
-  const { markDone, retryCleanup } = useWorkspaceRetireActions();
+  const { markDone } = useWorkspacePurgeActions();
   const { openExternal } = useProductHost().links;
 
   const focusNewChatComposer = useCallback(() => {
@@ -61,6 +60,16 @@ export function useWorkspaceSidebarActions() {
       destination: "repository",
       repositorySelection: { kind: "repository", sourceRoot },
       baseBranchOverride: null,
+    });
+    goToTopLevelRoute(APP_ROUTES.home);
+    focusNewChatComposer();
+  }, [focusNewChatComposer, goToTopLevelRoute, patchTargetSelection]);
+
+  const handleStartWorktreeWorkspaceCreation = useCallback(() => {
+    patchTargetSelection({
+      destination: "repository",
+      repoLaunchKind: "worktree",
+      selectedSshTargetId: null,
     });
     goToTopLevelRoute(APP_ROUTES.home);
     focusNewChatComposer();
@@ -121,17 +130,16 @@ export function useWorkspaceSidebarActions() {
     showErrorToast,
   ]);
 
+  // Deleting a workspace now has exactly two outcomes on the wire:
+  // `{ outcome: "deleted", alreadyDeleted }` or a thrown ProblemDetails. The
+  // retire-era `blocked` / `cleanup_failed` results are gone with the
+  // preflight and the tombstone, so every failure arrives through the catch
+  // path — there is no success-shaped failure left to branch on.
   const handleMarkWorkspaceDone = useCallback(function handleMarkWorkspaceDone(
     workspaceId: string,
     logicalWorkspaceId: string,
   ) {
-    void markDone(workspaceId, { logicalWorkspaceId }).then((result) => {
-      if (result.outcome === "blocked") {
-        showToast(workspaceRetireBlockedMessage(result));
-      } else if (result.outcome === "cleanup_failed") {
-        showToast("Workspace delete started, but cleanup needs attention.");
-      }
-    }).catch((error) => {
+    void markDone(workspaceId, { logicalWorkspaceId }).catch((error) => {
       showErrorToast({
         headline: "Workspace not deleted",
         consequence: "It is still in your sidebar with its files intact.",
@@ -139,26 +147,8 @@ export function useWorkspaceSidebarActions() {
         retry: () => handleMarkWorkspaceDone(workspaceId, logicalWorkspaceId),
       });
     });
-  }, [markDone, showErrorToast, showToast]);
+  }, [markDone, showErrorToast]);
 
-  const handleRetryWorkspaceCleanup = useCallback(function handleRetryWorkspaceCleanup(
-    workspaceId: string,
-  ) {
-    void retryCleanup(workspaceId).then((result) => {
-      if (result.outcome === "blocked") {
-        showToast(workspaceRetireBlockedMessage(result));
-      } else if (result.outcome === "cleanup_failed") {
-        showToast("Cleanup still needs attention.");
-      }
-    }).catch((error) => {
-      showErrorToast({
-        headline: "Cleanup not retried",
-        consequence: "The workspace still needs attention.",
-        cause: errorMessage(error),
-        retry: () => handleRetryWorkspaceCleanup(workspaceId),
-      });
-    });
-  }, [retryCleanup, showErrorToast, showToast]);
 
   const handleCreateLocalWorkspace = useCallback((
     sourceRoot: string | null,
@@ -230,12 +220,12 @@ export function useWorkspaceSidebarActions() {
     handleAddRepo,
     handleGoHome,
     handleGoHomeForRepository,
+    handleStartWorktreeWorkspaceCreation,
     handleGoWorkflows,
     handleGoWorkspaces,
     handleSidebarIndicatorAction,
     handleOpenPullRequest,
     handleMarkWorkspaceDone,
-    handleRetryWorkspaceCleanup,
     handleSelectWorkspace,
     handleCreateLocalWorkspace,
     handleCreateWorktreeWorkspace,
@@ -245,16 +235,4 @@ export function useWorkspaceSidebarActions() {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-export function workspaceRetireBlockedMessage(result: WorkspaceRetireResponse | WorkspacePurgeResponse): string {
-  const blocker = result.preflight?.blockers[0];
-  if (blocker) {
-    const extraCount = (result.preflight?.blockers.length ?? 0) - 1;
-    return extraCount > 0
-      ? `${blocker.message} (+${extraCount} more)`
-      : blocker.message;
-  }
-
-  return result.cleanupMessage?.trim() || "Workspace is not ready to delete.";
 }

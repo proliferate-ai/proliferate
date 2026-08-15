@@ -50,8 +50,8 @@ export function useSupportReportSnapshot({
       location: "local" as const,
       path: workspace.path,
       branch: workspaceCurrentBranchName(workspace),
-      status: workspace.lifecycleState,
-      updatedAt: workspace.updatedAt,
+      ...(workspace.lifecycleState != null ? { status: workspace.lifecycleState } : {}),
+      ...(workspace.updatedAt != null ? { updatedAt: workspace.updatedAt } : {}),
       sessionIds: sessionIdsForWorkspace({
         activeSessionId,
         directorySessionIds: sessionIdsByWorkspaceId[workspace.id] ?? [],
@@ -149,7 +149,7 @@ function cloudWorkspaceOption(
     location: "cloud",
     path: workspace.repo ? `${workspace.repo.owner}/${workspace.repo.name}` : "",
     branch,
-    status: workspace.status,
+    ...(workspace.status != null ? { status: workspace.status } : {}),
     updatedAt: workspace.updatedAt ?? workspace.readyAt ?? workspace.createdAt ?? null,
     cloudWorkspaceId: workspace.id,
     cloudTargetId: targetId,
@@ -158,7 +158,7 @@ function cloudWorkspaceOption(
       ?? null,
     exposureId: workspace.cloudAccess?.exposureId ?? null,
     materializationId: workspace.selectedMaterializationId ?? materialization?.id ?? null,
-    visibility: workspace.visibility,
+    ...(workspace.visibility != null ? { visibility: workspace.visibility } : {}),
     sandboxType: workspace.sandboxType ?? null,
   };
 }
@@ -209,10 +209,12 @@ function buildSupportReportContext({
     source,
     intent: "general",
     pathname,
-    workspaceId: workspace?.id,
-    workspaceName: workspace?.label,
-    workspaceLocation: workspace
-      ? isCloudWorkspaceId(workspace.id) ? "cloud" : workspace.location
-      : undefined,
+    ...(workspace
+      ? {
+          workspaceId: workspace.id,
+          workspaceName: workspace.label,
+          workspaceLocation: isCloudWorkspaceId(workspace.id) ? "cloud" as const : workspace.location,
+        }
+      : {}),
   };
 }

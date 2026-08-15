@@ -4,6 +4,12 @@ import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creat
 import {
   buildPendingWorkspaceUiKey,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
+import {
+  EMPTY_PENDING_WORKSPACE_REGISTRY,
+  type PendingWorkspaceRegistry,
+  removePendingWorkspaceEntry,
+  upsertPendingWorkspaceEntry,
+} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 import type { WorkspaceArrivalEvent } from "#product/lib/domain/workspaces/creation/arrival";
 import type {
   WorkspaceSessionRecovery,
@@ -13,7 +19,6 @@ interface ActivateWorkspaceOptions {
   logicalWorkspaceId: string | null;
   workspaceId: string;
   initialActiveSessionId?: string | null;
-  clearPending?: boolean;
   hotPaintGate?: HotPaintGate | null;
 }
 
@@ -26,9 +31,14 @@ interface EnterPendingWorkspaceShellOptions {
   initialActiveSessionId?: string | null;
 }
 
+export interface ClearSelectionOptions {
+  /** Keep every live attempt: the caller is clearing one workspace, not the app. */
+  preservePendingWorkspaces?: boolean;
+}
+
 interface SessionSelectionState {
   _hydrated: boolean;
-  pendingWorkspaceEntry: PendingWorkspaceEntry | null;
+  pendingWorkspaces: PendingWorkspaceRegistry;
   selectedLogicalWorkspaceId: string | null;
   selectedWorkspaceId: string | null;
   workspaceSelectionNonce: number;
@@ -43,13 +53,14 @@ interface SessionSelectionState {
     entry: PendingWorkspaceEntry,
     options?: EnterPendingWorkspaceShellOptions,
   ) => void;
-  setPendingWorkspaceEntry: (entry: PendingWorkspaceEntry | null) => void;
+  setPendingWorkspaceEntry: (entry: PendingWorkspaceEntry) => void;
+  clearPendingWorkspaceEntry: (attemptId: string) => void;
   setWorkspaceArrivalEvent: (event: WorkspaceArrivalEvent | null) => void;
   setWorkspaceSessionRecovery: (recovery: WorkspaceSessionRecovery | null) => void;
   activateWorkspace: (options: ActivateWorkspaceOptions) => void;
   activateHotWorkspace: (options: ActivateWorkspaceOptions) => void;
   deselectWorkspacePreservingSessions: () => void;
-  clearSelection: () => void;
+  clearSelection: (options?: ClearSelectionOptions) => void;
   setActiveSessionId: (sessionId: string | null) => void;
   activateHotSession: (options: ActivateSessionOptions) => void;
   bumpSessionActivationIntentEpoch: (workspaceId: string) => number;
@@ -59,7 +70,7 @@ interface SessionSelectionState {
 
 export const useSessionSelectionStore = create<SessionSelectionState>((set, get) => ({
   _hydrated: false,
-  pendingWorkspaceEntry: null,
+  pendingWorkspaces: EMPTY_PENDING_WORKSPACE_REGISTRY,
   selectedLogicalWorkspaceId: null,
   selectedWorkspaceId: null,
   workspaceSelectionNonce: 0,
@@ -74,11 +85,11 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
     set({ selectedLogicalWorkspaceId });
   },
 
-  enterPendingWorkspaceShell: (pendingWorkspaceEntry, options) => set((state) => {
+  enterPendingWorkspaceShell: (entry, options) => set((state) => {
     const activeSessionId = options?.initialActiveSessionId ?? null;
     return {
-      pendingWorkspaceEntry,
-      selectedLogicalWorkspaceId: buildPendingWorkspaceUiKey(pendingWorkspaceEntry),
+      pendingWorkspaces: upsertPendingWorkspaceEntry(state.pendingWorkspaces, entry),
+      selectedLogicalWorkspaceId: buildPendingWorkspaceUiKey(entry),
       selectedWorkspaceId: null,
       workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
       workspaceArrivalEvent: null,
@@ -93,8 +104,16 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
     };
   }),
 
-  setPendingWorkspaceEntry: (pendingWorkspaceEntry) => {
-    set({ pendingWorkspaceEntry });
+  setPendingWorkspaceEntry: (entry) => {
+    set((state) => ({
+      pendingWorkspaces: upsertPendingWorkspaceEntry(state.pendingWorkspaces, entry),
+    }));
+  },
+
+  clearPendingWorkspaceEntry: (attemptId) => {
+    set((state) => ({
+      pendingWorkspaces: removePendingWorkspaceEntry(state.pendingWorkspaces, attemptId),
+    }));
   },
 
   setWorkspaceArrivalEvent: (workspaceArrivalEvent) => {
@@ -105,11 +124,10 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
     set({ workspaceSessionRecovery });
   },
 
+  // Switching workspaces moves the camera only: pending attempts stay in the
+  // registry so an unattended launch runs to completion.
   activateWorkspace: (options) => {
     set((state) => ({
-      pendingWorkspaceEntry: options.clearPending === false
-        ? state.pendingWorkspaceEntry
-        : null,
       selectedLogicalWorkspaceId: options.logicalWorkspaceId,
       selectedWorkspaceId: options.workspaceId,
       workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
@@ -129,9 +147,6 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
 
   activateHotWorkspace: (options) => {
     set((state) => ({
-      pendingWorkspaceEntry: options.clearPending === false
-        ? state.pendingWorkspaceEntry
-        : null,
       selectedLogicalWorkspaceId: options.logicalWorkspaceId,
       selectedWorkspaceId: options.workspaceId,
       workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
@@ -159,7 +174,6 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
 
   deselectWorkspacePreservingSessions: () => set((state) => {
     return {
-      pendingWorkspaceEntry: null,
       selectedLogicalWorkspaceId: null,
       selectedWorkspaceId: null,
       workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
@@ -175,9 +189,15 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
     };
   }),
 
-  clearSelection: () => set((state) => {
+  clearSelection: (options) => set((state) => {
     return {
-      pendingWorkspaceEntry: null,
+      // Emptying the registry aborts every launch in flight, which is right
+      // for an app-level reset (sign-out) and wrong for anything scoped to one
+      // workspace: retiring a workspace or dismissing one attempt must leave
+      // the other launches running (PRO-230).
+      pendingWorkspaces: options?.preservePendingWorkspaces
+        ? state.pendingWorkspaces
+        : EMPTY_PENDING_WORKSPACE_REGISTRY,
       selectedLogicalWorkspaceId: null,
       selectedWorkspaceId: null,
       workspaceSelectionNonce: state.workspaceSelectionNonce + 1,

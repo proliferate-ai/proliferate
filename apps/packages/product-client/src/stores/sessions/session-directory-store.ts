@@ -13,9 +13,11 @@ import {
 import {
   applyPendingRelationshipHint,
   putDirectoryEntry,
+  markDirectorySessionPromoted,
   recordDirectoryRelationshipHint,
   removeDirectoryEntry,
   removeWorkspaceDirectoryEntries,
+  reconcileDirectoryRootRelationship,
   setDirectoryEntryRelationship,
 } from "#product/lib/domain/sessions/directory/directory-reducer";
 import type {
@@ -28,6 +30,8 @@ interface SessionDirectoryState {
   clientSessionIdByMaterializedSessionId: Record<string, string>;
   sessionIdsByWorkspaceId: Record<string, readonly string[]>;
   relationshipHintsBySessionId: Record<string, SessionChildRelationship>;
+  promotedRootSessionIds: ReadonlySet<string>;
+  promotedRootWorkspaceIdBySessionId: Readonly<Record<string, string | null>>;
   putEntry: (entry: SessionDirectoryEntry) => void;
   upsertEntry: (input: DirectoryEntryInput) => void;
   patchEntry: (sessionId: string, patch: DirectoryEntryPatch) => void;
@@ -37,6 +41,8 @@ interface SessionDirectoryState {
   clearEntries: () => void;
   recordRelationshipHint: (sessionId: string, relationship: SessionChildRelationship) => void;
   setSessionRelationship: (sessionId: string, relationship: SessionRelationship) => void;
+  reconcileRootRelationship: (sessionId: string) => void;
+  markSessionPromoted: (sessionIds: readonly string[], workspaceId?: string | null) => void;
 }
 
 export const useSessionDirectoryStore = create<SessionDirectoryState>((set) => ({
@@ -44,17 +50,26 @@ export const useSessionDirectoryStore = create<SessionDirectoryState>((set) => (
   clientSessionIdByMaterializedSessionId: {},
   sessionIdsByWorkspaceId: {},
   relationshipHintsBySessionId: {},
+  promotedRootSessionIds: new Set(),
+  promotedRootWorkspaceIdBySessionId: {},
 
   putEntry: (entry) => set((state) => {
     const hint = state.relationshipHintsBySessionId[entry.sessionId];
-    const nextEntry = applyPendingRelationshipHint(entry, hint);
+    const nextEntry = applyPendingRelationshipHint(entry, hint, state.promotedRootSessionIds);
     return putDirectoryEntry(state, nextEntry);
   }),
 
   upsertEntry: (input) => set((state) => {
     const existing = state.entriesById[input.sessionId];
     const hint = state.relationshipHintsBySessionId[input.sessionId];
-    const entry = normalizeDirectoryEntryInput(input, existing, hint);
+    const entry = normalizeDirectoryEntryInput(
+      input,
+      existing,
+      state.promotedRootSessionIds.has(input.sessionId)
+        || state.promotedRootSessionIds.has(input.materializedSessionId ?? "")
+        ? undefined
+        : hint,
+    );
     return putDirectoryEntry(state, entry);
   }),
 
@@ -107,6 +122,8 @@ export const useSessionDirectoryStore = create<SessionDirectoryState>((set) => (
     clientSessionIdByMaterializedSessionId: {},
     sessionIdsByWorkspaceId: {},
     relationshipHintsBySessionId: {},
+    promotedRootSessionIds: new Set(),
+    promotedRootWorkspaceIdBySessionId: {},
   }),
 
   recordRelationshipHint: (sessionId, relationship) => set((state) =>
@@ -115,5 +132,13 @@ export const useSessionDirectoryStore = create<SessionDirectoryState>((set) => (
 
   setSessionRelationship: (sessionId, relationship) => set((state) =>
     setDirectoryEntryRelationship(state, sessionId, relationship)
+  ),
+
+  reconcileRootRelationship: (sessionId) => set((state) =>
+    reconcileDirectoryRootRelationship(state, sessionId)
+  ),
+
+  markSessionPromoted: (sessionIds, workspaceId = null) => set((state) =>
+    markDirectorySessionPromoted(state, sessionIds, workspaceId)
   ),
 }));

@@ -49,6 +49,36 @@ pub(super) fn seeded_store() -> SessionStore {
     store
 }
 
+pub(super) fn seeded_subagent_store() -> (Db, SessionStore) {
+    let db = Db::open_in_memory().expect("open db");
+    test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace");
+    db.with_conn(|conn| {
+        for id in ["parent-1", "session-1"] {
+            conn.execute(
+                "INSERT INTO sessions (
+                    id, workspace_id, agent_kind, status, created_at, updated_at,
+                    native_session_id, subagents_enabled
+                 ) VALUES (?1, 'workspace-1', 'claude', 'idle', ?2, ?2, ?3, 1)",
+                rusqlite::params![id, "2026-08-11T00:00:00Z", format!("native-{id}")],
+            )?;
+        }
+        conn.execute(
+            "INSERT INTO session_links (
+                id, public_id, relation, parent_session_id, child_session_id,
+                workspace_relation, label, created_at
+             ) VALUES (
+                'link-1', 'subagent-1', 'subagent', 'parent-1', 'session-1',
+                'same_workspace', 'Researcher', '2026-08-11T00:00:00Z'
+             )",
+            [],
+        )?;
+        Ok(())
+    })
+    .expect("seed subagent session");
+    let store = SessionStore::new(db.clone());
+    (db, store)
+}
+
 pub(super) fn drain_events(
     rx: &mut broadcast::Receiver<SessionEventEnvelope>,
 ) -> Vec<SessionEventEnvelope> {

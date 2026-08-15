@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  droppedPathsMatchFiles,
   formatPromptFileSize,
+  partitionDroppedPathCandidates,
+  PROMPT_IMAGE_MAX_BYTES,
+  promptUploadKind,
   shouldCreatePasteAttachment,
 } from "./prompt-attachment-rules";
+
+const allCapabilities = { canAttachImages: true, canAttachEmbeddedContext: true };
 
 describe("prompt attachment rules", () => {
   it("formats prompt file sizes using compact binary units", () => {
@@ -17,6 +23,110 @@ describe("prompt attachment rules", () => {
     expect(shouldCreatePasteAttachment("short paste")).toBe(false);
     expect(shouldCreatePasteAttachment("x".repeat(2_000))).toBe(true);
     expect(shouldCreatePasteAttachment(Array.from({ length: 25 }, () => "line").join("\n")))
+      .toBe(true);
+  });
+
+  it("classifies upload kinds by type, capability, and size limits", () => {
+    const png = { type: "image/png", name: "shot.png", size: 10 };
+    expect(promptUploadKind(png, allCapabilities)).toBe("image");
+    expect(promptUploadKind(png, { ...allCapabilities, canAttachImages: false })).toBeNull();
+    expect(promptUploadKind({ ...png, size: PROMPT_IMAGE_MAX_BYTES + 1 }, allCapabilities))
+      .toBeNull();
+    expect(promptUploadKind({ type: "", name: "notes.md", size: 10 }, allCapabilities))
+      .toBe("text_resource");
+    expect(promptUploadKind({ type: "", name: "archive.zip", size: 10 }, allCapabilities))
+      .toBeNull();
+    expect(promptUploadKind({ type: "application/pdf", name: "doc.pdf", size: 10 }, allCapabilities))
+      .toBeNull();
+  });
+
+  it("partitions dropped paths into byte uploads and local references", () => {
+    const image = new File(["png"], "shot.png", { type: "image/png" });
+    const archive = new File(["zip-bytes"], "archive.zip", { type: "application/zip" });
+    const { uploadFiles, localRefs } = partitionDroppedPathCandidates(
+      [
+        { path: "/tmp/drop/shot.png", name: "shot.png", isDirectory: false, size: image.size },
+        { path: "/tmp/drop/archive.zip", name: "archive.zip", isDirectory: false, size: archive.size },
+        { path: "/tmp/drop/logo", name: "logo", isDirectory: true, size: null },
+      ],
+      [image, archive],
+      allCapabilities,
+    );
+
+    expect(uploadFiles).toEqual([image]);
+    expect(localRefs).toEqual([
+      { path: "/tmp/drop/archive.zip", name: "archive.zip", pathKind: "file", size: archive.size },
+      { path: "/tmp/drop/logo", name: "logo", pathKind: "directory", size: null },
+    ]);
+  });
+
+  it("falls back to a local reference when no dropped File matches the path", () => {
+    const { uploadFiles, localRefs } = partitionDroppedPathCandidates(
+      [{ path: "/tmp/drop/shot.png", name: "shot.png", isDirectory: false, size: 3 }],
+      [],
+      allCapabilities,
+    );
+
+    expect(uploadFiles).toEqual([]);
+    expect(localRefs).toEqual([
+      { path: "/tmp/drop/shot.png", name: "shot.png", pathKind: "file", size: 3 },
+    ]);
+  });
+
+  it("attaches upload-ineligible images by reference instead of dropping them", () => {
+    const image = new File(["png"], "shot.png", { type: "image/png" });
+    const { uploadFiles, localRefs } = partitionDroppedPathCandidates(
+      [{ path: "/tmp/drop/shot.png", name: "shot.png", isDirectory: false, size: image.size }],
+      [image],
+      { ...allCapabilities, canAttachImages: false },
+    );
+
+    expect(uploadFiles).toEqual([]);
+    expect(localRefs).toEqual([
+      { path: "/tmp/drop/shot.png", name: "shot.png", pathKind: "file", size: image.size },
+    ]);
+  });
+
+  it("keeps unmatched files on the byte path and discards directory FileList entries", () => {
+    const promiseDragged = new File(["png"], "elsewhere.png", { type: "image/png" });
+    const folderEntry = new File([], "logo", { type: "" });
+    const { uploadFiles, localRefs } = partitionDroppedPathCandidates(
+      [{ path: "/tmp/drop/logo", name: "logo", isDirectory: true, size: null }],
+      [promiseDragged, folderEntry],
+      allCapabilities,
+    );
+
+    expect(uploadFiles).toEqual([promiseDragged]);
+    expect(localRefs).toEqual([
+      { path: "/tmp/drop/logo", name: "logo", pathKind: "directory", size: null },
+    ]);
+  });
+
+  it("detects when pasteboard paths belong to a different drag", () => {
+    const fileCandidate = { path: "/tmp/drop/a.zip", name: "a.zip", isDirectory: false, size: 5 };
+    const dirCandidate = { path: "/tmp/drop/logo", name: "logo", isDirectory: true, size: null };
+    const zip = { name: "a.zip", type: "", size: 5 };
+
+    // Every dropped File must consume a matching candidate.
+    expect(droppedPathsMatchFiles([fileCandidate], [zip])).toBe(true);
+    expect(droppedPathsMatchFiles([fileCandidate], [{ ...zip, name: "b.png" }])).toBe(false);
+    expect(droppedPathsMatchFiles([fileCandidate], [{ ...zip, size: 6 }])).toBe(false);
+
+    // Leftover candidates are acceptable only when they are directories,
+    // which WebKit may omit from the FileList.
+    expect(droppedPathsMatchFiles([fileCandidate, dirCandidate], [zip])).toBe(true);
+    expect(droppedPathsMatchFiles(
+      [fileCandidate, { ...fileCandidate, name: "extra.pdf", path: "/tmp/drop/extra.pdf" }],
+      [zip],
+    )).toBe(false);
+
+    // An empty FileList only describes a folder-only drop.
+    expect(droppedPathsMatchFiles([dirCandidate], [])).toBe(true);
+    expect(droppedPathsMatchFiles([fileCandidate], [])).toBe(false);
+
+    // Directory candidates match their FileList entry by name; WebKit's size
+    // for a directory File is unreliable.
+    expect(droppedPathsMatchFiles([dirCandidate], [{ name: "logo", type: "", size: 128 }]))
       .toBe(true);
   });
 });

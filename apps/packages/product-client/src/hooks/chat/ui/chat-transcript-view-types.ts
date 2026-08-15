@@ -18,6 +18,8 @@ export interface ChatTranscriptOutboxActions {
 
 export interface ChatTranscriptPendingPromptRenderInput {
   activeSessionId: string;
+  transcript: TranscriptState;
+  selectedWorkspaceId: string | null;
   row: Extract<TranscriptVirtualRow, { kind: "pending_prompt" | "outbox_prompt" }>;
   rowIndex: number;
   prompt: PendingPromptEntry;

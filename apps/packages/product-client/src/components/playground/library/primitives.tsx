@@ -1,4 +1,5 @@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "#product/primitives/AlertDialog";
+import { AnchoredCommandPopover } from "#product/primitives/AnchoredCommandPopover";
 import { AnimatedCollapsibleContent } from "#product/primitives/AnimatedCollapsibleContent";
 import { AnimatedSwapText } from "#product/primitives/AnimatedSwapText";
 import { Badge } from "#product/primitives/Badge";
@@ -20,7 +21,6 @@ import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import { PopoverSearchField } from "#product/primitives/PopoverSearchField";
 import { ProgressBar } from "#product/primitives/ProgressBar";
 import { RadioCardGroup } from "#product/primitives/RadioCardGroup";
-import { RangeSlider } from "#product/primitives/RangeSlider";
 import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
 import { SegmentedControl } from "#product/primitives/SegmentedControl";
 import { Select } from "#product/primitives/Select";
@@ -36,6 +36,10 @@ import { UserAvatar } from "#product/primitives/UserAvatar";
 import { Trash } from "#product/primitives/icons/core";
 import { useState } from "react";
 import { noop } from "#product/components/playground/PlaygroundComposerActions";
+// Demos with more than a one-liner's worth of fixture live beside the tier in
+// `entries/` so several authors can add vocabulary without editing this file.
+import { ICON_TILE_LIBRARY_ENTRY } from "./entries/icon-tile";
+import { STATUS_DOT_ENTRY } from "./entries/status-dot";
 import type { LibraryEntry, LibraryTier } from "./types";
 
 function CheckboxDemo() {
@@ -65,10 +69,6 @@ function SelectDemo() {
       <option value="b">Option B</option>
     </Select>
   );
-}
-
-function RangeSliderDemo() {
-  return <RangeSlider defaultValue={40} min={0} max={100} onChange={noop} />;
 }
 
 function RadioCardGroupDemo() {
@@ -173,6 +173,26 @@ function PopoverDemo() {
   );
 }
 
+function AnchoredCommandPopoverDemo() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+        Raise command surface
+      </Button>
+      <AnchoredCommandPopover
+        open={open}
+        onOpenChange={setOpen}
+        aria-label="Command surface"
+      >
+        <div className="p-1">
+          <PopoverMenuItem label="Menu item" onClick={() => setOpen(false)} />
+        </div>
+      </AnchoredCommandPopover>
+    </>
+  );
+}
+
 function PopoverButtonDemo() {
   return (
     <PopoverButton trigger={<Button variant="secondary" size="sm">Open menu</Button>}>
@@ -243,9 +263,16 @@ function TooltipPrimitiveDemo() {
 
 export const PRIMITIVES_ENTRIES: LibraryEntry[] = [
   { name: "AlertDialog", subpath: "#product/primitives/AlertDialog", render: AlertDialogDemo },
+  { name: "AnchoredCommandPopover", subpath: "#product/primitives/AnchoredCommandPopover", render: AnchoredCommandPopoverDemo },
   { name: "AnimatedCollapsibleContent", subpath: "#product/primitives/AnimatedCollapsibleContent", render: AnimatedCollapsibleContentDemo },
   { name: "AnimatedSwapText", subpath: "#product/primitives/AnimatedSwapText", render: AnimatedSwapTextDemo },
-  { name: "Badge", subpath: "#product/primitives/Badge", render: () => <Badge tone="info">Badge</Badge> },
+  { name: "Badge", subpath: "#product/primitives/Badge", render: () => (
+    <span className="flex items-center gap-2">
+      <Badge tone="info">Badge</Badge>
+      <Badge size="micro">12</Badge>
+      <Badge size="micro" tone="warning">emulated</Badge>
+    </span>
+  ) },
   { name: "Button", subpath: "#product/primitives/Button", render: () => <Button size="sm">Button</Button> },
   { name: "Checkbox", subpath: "#product/primitives/Checkbox", render: CheckboxDemo },
   { name: "checkbox-primitive", subpath: "#product/primitives/checkbox-primitive", render: () => <CheckboxPrimitive defaultChecked /> },
@@ -271,6 +298,7 @@ export const PRIMITIVES_ENTRIES: LibraryEntry[] = [
   { name: "IconButton", subpath: "#product/primitives/IconButton", render: () => (
     <IconButton title="Delete" onClick={noop}><Trash className="icon-paired" /></IconButton>
   ) },
+  ICON_TILE_LIBRARY_ENTRY,
   { name: "Input", subpath: "#product/primitives/Input", render: () => <Input placeholder="Input" defaultValue="" /> },
   { name: "Label", subpath: "#product/primitives/Label", render: () => <Label>Label</Label> },
   { name: "PaneIconButton", subpath: "#product/primitives/PaneIconButton", render: () => (
@@ -284,7 +312,6 @@ export const PRIMITIVES_ENTRIES: LibraryEntry[] = [
     <ProgressBar value={60} className="h-2 w-40 overflow-hidden rounded-full bg-input" indicatorClassName="h-full bg-primary" />
   ) },
   { name: "RadioCardGroup", subpath: "#product/primitives/RadioCardGroup", render: RadioCardGroupDemo },
-  { name: "RangeSlider", subpath: "#product/primitives/RangeSlider", render: RangeSliderDemo },
   { name: "RowActionIconButton", subpath: "#product/primitives/RowActionIconButton", render: () => (
     <RowActionIconButton label="Delete" visibility="always" onClick={noop}><Trash /></RowActionIconButton>
   ) },
@@ -296,6 +323,7 @@ export const PRIMITIVES_ENTRIES: LibraryEntry[] = [
     <Button variant="secondary" size="sm" onClick={noop}>Toast trigger (see app toaster)</Button>
   ) },
   { name: "Spinner", subpath: "#product/primitives/Spinner", render: () => <Spinner className="icon-paired" /> },
+  STATUS_DOT_ENTRY,
   { name: "Switch", subpath: "#product/primitives/Switch", render: SwitchDemo },
   { name: "Textarea", subpath: "#product/primitives/Textarea", render: () => <Textarea placeholder="Textarea" defaultValue="" /> },
   { name: "Tooltip", subpath: "#product/primitives/Tooltip", render: () => (

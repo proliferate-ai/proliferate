@@ -10,23 +10,18 @@ reason = "existing AnyHarness contract oversized file"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-contract/src/v1/sessions.rs"
-max_lines = 779
-reason = "existing AnyHarness contract oversized file (+caller-selected idempotent create id)"
-
-[[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs"
-max_lines = 664
-reason = "workspace purge handlers (+2b fail-closed all-session admission, PR1227-WORKSPACE-FENCE-01/02 admitted-set carry + under-exclusive-lease re-check, test-only purge proof seam module)"
+max_lines = 696
+reason = "existing AnyHarness contract oversized file (+caller-selected idempotent create id; stale fingerprint reduced after legacy public subagent response removal)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/api/openapi.rs"
-max_lines = 692
-reason = "existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1) + workflow-runs + local materialization operations + workflow-run-workspaces paths/schemas + agent install progress schemas + worktree restore path/schemas + WorktreeBaseFetch + RuntimeDiskPressure schemas (central OpenAPI registry; per-route path/schema registration only)"
+max_lines = 695
+reason = "existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1) + workflow-runs + local materialization operations + workflow-run-workspaces paths/schemas + agent install progress schemas + worktree restore path/schemas + WorktreeBaseFetch + RuntimeDiskPressure schemas (subagent registrations extracted to their owned OpenAPI document) ; -10: R1 archiving deletes the three retire path registrations, the three worktree-retention path registrations and the three WorkspaceRetire* schema registrations ; +22: R4 archiving registers the two lifecycle paths and the fourteen lifecycle schemas ; -4: R5 deletes the purge-preflight/retry path registrations and the WorkspaceCleanupOperation/WorkspacePurgePreflightResponse schema registrations"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/api/router.rs"
-max_lines = 640
-reason = "AnyHarness router (+goals/loops/activity/feed routes, +gateway catalog version route, +workflow-runs/cancel + local materialization operations + workflow-run-workspaces routes + worktree restore route)"
+max_lines = 611
+reason = "AnyHarness router (+goals/loops/activity/feed routes, +gateway catalog version route, +workflow-runs/cancel + local materialization operations + workflow-run-workspaces routes + worktree restore route; subagent routes composed from their HTTP owner) ; -21: R1 archiving deletes the three retire routes and the two worktree-retention routes ; +8: R4 archiving adds the archive and unarchive routes and their import ; -8: R5 deletes the purge-preflight and purge-retry routes"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/api/router_tests.rs"
@@ -34,19 +29,19 @@ max_lines = 1898
 reason = "existing AnyHarness oversized test file (+hosting PR-status route tests, +catalog version tests, +managed default-placement route test, +model-snapshot status route shape/auth tests, +agent-auth/install poke contract tests, +agent-auth/install poke-suppression proofs against the automatic_poke_engine seam (F-036 cycle-2 review item 1); the catalog-push handler tests are gone with the heartbeat transport)"
 
 [[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/api/session_admission_tests.rs"
-max_lines = 650
-reason = "2b admission conflict-matrix + fail-closed purge/retire/mobility-export/destroy-source proofs + LOCK-01 permit-before-lease deadlock/source-order guards (+idempotent create); -24: the retire LOCK-01 anchor split into two composing halves when grid PR 9 moved the state machine into domains/workspaces/retire.rs, the per-handler anchor rows collapsed into one table, and the 25-field SessionRecord fixture folded into the shared app/test_support helper"
-
-[[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/api/workflow_runs_tests.rs"
-max_lines = 2790
-reason = "workflow-runs HTTP + runtime/extension crossing suite (run-control PROOF-01 battery + 2b admission races: reservation/create/bind window, terminal release, PR1227-WORKSPACE-FENCE-01 purge/retire destruction-vs-late-bind proofs, and FENCE-02 bind->terminalize->destruction race proofs over the real executor)"
+max_lines = 2472
+reason = "workflow-runs HTTP + runtime/extension crossing suite (run-control PROOF-01 battery + 2b admission races: reservation/create/bind window, terminal release, PR1227-WORKSPACE-FENCE-01 purge/retire destruction-vs-late-bind proofs, and FENCE-02 bind->terminalize->destruction race proofs over the real executor) ; -313: R1 archiving deletes the two retire-barrier FENCE proofs with retire_barriers.rs (the purge-side FENCE-01/02 proofs keep their teeth) ; -5: R5's purge rewrite trims the purge fence proofs' fixture plumbing"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/app/mod.rs"
-max_lines = 691
-reason = "AnyHarness app wiring (+gateway model planner wiring; the gateway model resolver + probe-engine store wiring is gone with the old-chain deletion, A9) (+session mutation admission purge/retention wiring, +goal/loop/activity/feed services, +two-phase workflow-run and workflow-workspace wiring, +worktree restore runtime wiring; local materialization service wiring is now the materialization runtime valve, moved to app/materialization.rs per grid PR 7; -3: WorkspaceService construction/pass-through deleted, grid PR 8; net 0 in grid PR 9: WorkspaceRetireService joins AppState while the preflight-checker/purge/retire constructions move to the app/workspaces.rs wiring family); 691 = 690 + a rustfmt wrap of the materialization wiring head (module-qualified deps struct exceeds max_width by 3; collapsing needs a sub-4-char name or a convention-breaking unqualified import that nets the same — documented in PR #1673)"
+max_lines = 658
+reason = "AnyHarness app wiring (+gateway model planner wiring; the gateway model resolver + probe-engine store wiring is gone with the old-chain deletion, A9) (+session mutation admission purge/retention wiring, +goal/loop/activity/feed services, +two-phase workflow-run and workflow-workspace wiring, +worktree restore runtime wiring; local materialization service wiring is now the materialization runtime valve, moved to app/materialization.rs per grid PR 7; -3: WorkspaceService construction/pass-through deleted, grid PR 8; net 0 in grid PR 9: WorkspaceRetireService joins AppState while the preflight-checker/purge/retire constructions move to the app/workspaces.rs wiring family); PR #1753 extracts process/runtime configuration helpers to app/config.rs while adding Workspace MCP composition; PR #3 moves Agent Operations graph construction to app/agent_operations.rs; PR10 removes legacy Subagents MCP wiring while adding live product-context composition ; -24: R1 archiving unwires WorkspaceRetireService and WorkspaceRetentionService (fields, constructions, the retention startup pass and the WorktreeRetentionPolicyStore import) ; +12: R4 archiving wires WorkspaceArchiveService (import, field, deps pass-through, construction, and the cfg(not(test)) sweep boot pass) ; +7 net: R5 wires QuiescePlanes and the deletion-family purge construction while the clippy fix drops the dead session_delete_workflow argument"
+
+[[max_lines]]
+path = "anyharness/crates/anyharness-lib/src/domains/agent_operations/runtime/error.rs"
+max_lines = 618
+reason = "agent-operations error mapping + outcome classifier (+18: #1849 review fixes classify WORKSPACE_ARCHIVED / SUBAGENT_FANOUT_LIMIT / WORKSPACE_SINGLE_SESSION as denied and extend the classifier test)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/agents/auth/context_tests.rs"
@@ -95,13 +90,8 @@ reason = "goal service regression tests for pending_op idempotency"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs"
-max_lines = 867
-reason = "loops runtime — native write path + emulated Codex scheduler (+2b derived-safe classification comment at the fire seam)"
-
-[[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/domains/mobility/service.rs"
-max_lines = 851
-reason = "existing AnyHarness oversized file (shrunk from 1520: the live-reaching use cases moved to domains/mobility/runtime/, grid PR 6a)"
+max_lines = 802
+reason = "loops runtime — native write path + emulated Codex scheduler (+2b derived-safe classification comment at the fire seam; fire executor moved to its owning module in PR5)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/plans/service.rs"
@@ -112,11 +102,6 @@ reason = "existing AnyHarness oversized file; shrank from 628 after folding plan
 path = "anyharness/crates/anyharness-lib/src/domains/reviews/service/service_tests.rs"
 max_lines = 1510
 reason = "existing AnyHarness oversized test file"
-
-[[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/startup.rs"
-max_lines = 637
-reason = "session-startup runtime (+A9 Scope C: resolve_launch_agent status check at the common live-start seam, mirroring create_session's readiness gate, plus its three error-mapper arms; +review-fix cycle 1: the route-auth selection pre-check now runs before that status check, matching create_session's order)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs"
@@ -134,24 +119,14 @@ max_lines = 1320
 reason = "workflow-runs merge-gated domain suite (+2b partial-uniqueness contract on nonterminal session binding)"
 
 [[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs"
-max_lines = 641
-reason = "runtime pressure worktree inventory joins and tests (test repo-root seed folded into the shared repo_roots test_support helper)"
-
-[[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/domains/workspaces/retention.rs"
-max_lines = 823
-reason = "worktree retention sweep (+PR1227-RETENTION-FENCE-01 permit/lease fencing + test proof seam, +Workflow creator-context exclusion until an explicit cleanup policy exists)"
-
-[[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs"
-max_lines = 613
-reason = "existing AnyHarness oversized file"
-
-[[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs"
-max_lines = 642
-reason = "session startup (+goal/loop capability parsing, roster reconcile-on-attach)"
+max_lines = 645
+reason = "session startup (+goal/loop capability parsing, roster reconcile-on-attach); R3: +1 line initializing the new pending_stop_response field on SessionActor construction; observability PR9: +2 session.established record fields"
+
+[[max_lines]]
+path = "anyharness/crates/anyharness-lib/src/live/sessions/actor/tests/workspace_stop.rs"
+max_lines = 841
+reason = "R3 real-process stop suite; every case owns a real agent process and a real ACP duplex, so the per-case setup is genuinely irreducible. +130: the dropped-stop re-entry regression (a stop future abandoned mid-escalation must leave the session answerable)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/sessions/probe.rs"
@@ -159,26 +134,46 @@ max_lines = 679
 reason = "catalog probe with per-harness model-source fallbacks (+the three runtime-probe options: env removal, scratch workspace root, config-option-only switch suppression); shrank from 683 after the readiness resolve moved to the call boundary (grid plan PR 5c/7 — live never fetches)"
 
 [[max_lines]]
+path = "anyharness/crates/anyharness-lib/src/live/terminals/manager_tests.rs"
+max_lines = 730
+reason = "R3 workspace-stop terminal suite: +615 lines of stop_all_for_workspace coverage (kill census, setup-process reaping, wedged-terminal escalation) sharing one real-PTY manager harness per case"
+
+[[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/persistence/custom_migrations.rs"
-max_lines = 1126
-reason = "custom migration with legacy schema coverage (+0063 partial unique controller index, ordered after the 0062 rebuild)"
+max_lines = 1308
+reason = "custom migration with legacy schema coverage (+0063 partial unique controller index, ordered after the 0062 rebuild) ; +110: R1 archiving adds the 0067_workspace_archived_lifecycle FK-off full-table rebuild ; +72: R5 adds the 0068_workspace_drop_cleanup_columns FK-off full-table rebuild"
+
+[[max_lines]]
+path = "anyharness/crates/proliferate-diagnostics-client/src/fallback/tests.rs"
+max_lines = 736
+reason = "Fallback writer suite: every test drives one writer through the same rotation and live-authority harness (injected write errno, short writes, rotation, retirement, consecutive-failure retirement), so the shared harness is the reason it is one file and the tests themselves are independent. Split into fallback/tests/{write,rotation,authority}.rs when the next injection seam lands."
+
+[[max_lines]]
+path = "anyharness/crates/proliferate-diagnostics-client/src/fallback/unix.rs"
+max_lines = 651
+reason = "Unix fallback writer: segment rotation, live-authority validation, partial-line rollback, and bounded interrupt-retrying writes all mutate the same file handle and byte counters under one lock, so the retry path cannot move without exporting that state. The cross-platform swap primitive already moved out to fallback/swap.rs; split the authority validation out next when a second platform needs it."
+
+[[max_lines]]
+path = "anyharness/crates/proliferate-diagnostics-collector/src/bin/proliferate-diagnostics-rss-profile.rs"
+max_lines = 1099
+reason = "RSS-ceiling proof harness for the collector: one sequential measurement run whose phases (spawn, warmup health, saturating ingest, tail handshake, RSS sampling, binary/profile hashing) share 62 interdependent locals and converge on a single Evidence record that is hashed and published as the proof artifact. Splitting it means inventing a phase-state struct, and the result can only be re-verified by a release build on a macOS runner, so it is pinned at its landed size rather than restructured blind. Split into src/bin/proliferate-diagnostics-rss-profile/ (main + child + evidence + phases) when a second measurement phase lands."
+
+[[max_lines]]
+path = "anyharness/crates/proliferate-diagnostics-collector/tests/collector_process.rs"
+max_lines = 1988
+reason = "collector process-boundary suite: 17 tests that each spawn a real collector child over one shared harness (child lifecycle, loopback auth, oversized-body refusal, wire admission, graceful shutdown, RSS ceiling, deterministic query order, golden export, lifecycle retry/orphan exactness, producer cardinality, runtime slots, eviction/tail lag, boundary caps and restart loss, inherited capability, saturated-lifecycle degradation, saturated-lifecycle shutdown terminal, stalled-body permit release). The harness is the reason it is one file; the tests are independent. Split into tests/collector_support/mod.rs + per-topic test binaries when the next process-boundary test lands."
 
 [[max_lines]]
 path = "anyharness/sdk-react/src/hooks/sessions.ts"
-max_lines = 723
-reason = "existing SDK React oversized file"
-
-[[max_lines]]
-path = "anyharness/sdk/src/client/core.ts"
-max_lines = 603
-reason = "AnyHarness TS client core (+preserved FastAPI detail body on AnyHarnessError for gateway billing-block classification, C8)"
+max_lines = 675
+reason = "existing SDK React oversized file (subagent queries and lifecycle mutations extracted to their owned hook module)"
 
 [[max_lines]]
 path = "anyharness/sdk/src/reducer/__tests__/transcript.test.ts"
-max_lines = 1817
-reason = "existing SDK oversized test file"
+max_lines = 1721
+reason = "existing SDK oversized test file; legacy Subagents MCP reducer coverage removed in PR10"
 
 [[max_lines]]
 path = "anyharness/sdk/src/reducer/transcript.ts"
-max_lines = 1528
-reason = "existing SDK oversized file"
+max_lines = 1515
+reason = "existing SDK oversized file; legacy Subagents MCP reducer branch removed in PR10"

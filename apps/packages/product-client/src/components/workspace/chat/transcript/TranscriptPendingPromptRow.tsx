@@ -3,9 +3,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { PendingPromptEntry } from "@anyharness/sdk";
+import type { PendingPromptEntry, TranscriptState } from "@anyharness/sdk";
 import { Button } from "#product/primitives/Button";
-import { SubagentWakeBadge } from "#product/components/workspace/chat/transcript/SubagentWakeBadge";
+import { AgentOriginPromptReceipt } from "#product/components/workspace/chat/transcript/AgentOriginPromptReceipt";
 import { UserMessage } from "#product/components/workspace/chat/transcript/UserMessage";
 import {
   TURN_ITEM_GAP_CLASS,
@@ -13,6 +13,7 @@ import {
   TurnShell,
 } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
 import {
+  isAgentSessionProvenance,
   isSubagentWakeProvenance,
 } from "#product/domain/chats/subagents/provenance";
 import {
@@ -21,6 +22,8 @@ import {
 import {
   resolvePendingPromptTrailingStatus,
 } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
+import { isReceiptPendingEntry } from "#product/lib/domain/workspaces/creation/creation-receipt";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import type { PromptOutboxEntry } from "#product/domain/sessions/intents/session-intent-model";
 
 const OUTBOX_ACCEPTED_RUNNING_ECHO_GRACE_MS = 15_000;
@@ -32,19 +35,41 @@ interface OutboxActionHandlers {
 
 export function TranscriptPendingPromptRow({
   activeSessionId,
+  transcript,
+  workspaceId,
   rowIndex,
   prompt,
   outboxEntry,
   optimisticTrailingStatus,
   outboxActions,
+  workspaceReceipt = null,
 }: {
   activeSessionId: string;
+  transcript: TranscriptState;
+  workspaceId: string | null;
   rowIndex: number;
   prompt: PendingPromptEntry;
   outboxEntry: PromptOutboxEntry | null;
   optimisticTrailingStatus: ReactNode;
   outboxActions: OutboxActionHandlers;
+  /**
+   * The workspace-creation receipt, when this row hosts it (no turn exists
+   * yet to host it inline — see `hostsWorkspaceReceipt` on the row model).
+   * While the workspace is still being created, "Thinking"/"Sending…" are
+   * false claims (no session exists yet to think or send), so the receipt —
+   * with its own spinner and failure states — owns the frontier slot alone.
+   * Once creation settles, the working status renders below the receipt: a
+   * session now exists and the prompt is genuinely in flight.
+   */
+  workspaceReceipt?: ReactNode;
 }) {
+  // While the creation itself is in flight the receipt (with its own spinner)
+  // is the only honest frontier content. Once the workspace materializes the
+  // receipt settles into a static "Worktree created" line, yet it keeps this
+  // frontier slot until the first turn lands — through worktree setup, agent
+  // boot, and prompt dispatch. Without the working status below it, that
+  // whole window reads as a dead session (PRO-119).
+  const creationInFlight = isReceiptPendingEntry(useAttendedPendingWorkspaceEntry());
   if (outboxEntry?.deliveryState === "failed_before_dispatch") {
     return (
       <TurnShell isFirst={rowIndex === 0}>
@@ -56,9 +81,17 @@ export function TranscriptPendingPromptRow({
     );
   }
 
-  const trailingStatus = outboxEntry
+  const workingStatus = outboxEntry
     ? <OutboxPromptTrailingStatus entry={outboxEntry} />
     : optimisticTrailingStatus;
+  const trailingStatus = workspaceReceipt
+    ? (
+      <>
+        {workspaceReceipt}
+        {!creationInFlight && workingStatus}
+      </>
+    )
+    : workingStatus;
   const outboxControls = outboxEntry
     ? renderOutboxPromptControls(outboxEntry, outboxActions)
     : null;
@@ -71,6 +104,8 @@ export function TranscriptPendingPromptRow({
         <PendingPromptBody
           activeSessionId={activeSessionId}
           prompt={prompt}
+          transcript={transcript}
+          workspaceId={workspaceId}
         />
         {/* Recovery controls are completion-adjacent UI. Keep them above the
             frontier so their disappearance cannot move the frontier/footer. */}
@@ -90,17 +125,26 @@ export function TranscriptPendingPromptRow({
 function PendingPromptBody({
   activeSessionId,
   prompt,
+  transcript,
+  workspaceId,
 }: {
   activeSessionId: string;
   prompt: PendingPromptEntry;
+  transcript: TranscriptState;
+  workspaceId: string | null;
 }) {
-  if (isSubagentWakeProvenance(prompt.promptProvenance)) {
+  if (
+    isSubagentWakeProvenance(prompt.promptProvenance)
+    || isAgentSessionProvenance(prompt.promptProvenance)
+  ) {
     return (
-      <div className="flex justify-end">
-        <SubagentWakeBadge
-          label={prompt.promptProvenance.label ?? null}
-        />
-      </div>
+      <AgentOriginPromptReceipt
+        provenance={prompt.promptProvenance}
+        exactMessage={prompt.text}
+        transcript={transcript}
+        parentSessionId={activeSessionId}
+        workspaceId={workspaceId}
+      />
     );
   }
   return (

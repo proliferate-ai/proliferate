@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { isWorkspaceDirectoryMissingError } from "#product/lib/domain/sessions/creation/create-session-error";
 import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
 import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
@@ -13,6 +13,7 @@ import { useSessionSelectionActions } from "#product/hooks/sessions/facade/use-s
 import { useChatInputStore } from "#product/stores/chat/chat-input-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { useActiveSessionLaunchState } from "#product/hooks/chat/derived/use-active-session-config-state";
 import { useActiveSessionSurfaceSnapshot } from "#product/hooks/chat/derived/use-active-session-transcript-state";
 import { useChatAvailabilityState } from "#product/hooks/chat/derived/use-chat-availability-state";
@@ -44,6 +45,7 @@ import { useGitPromptSnapshotEffects } from "#product/hooks/workspaces/workflows
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { completeChatPromptSubmitSideEffects } from "#product/lib/workflows/chat/complete-chat-prompt-submit-side-effects";
+import { CHAT_PROMPT_FEEDBACK } from "#product/copy/chat/chat-copy";
 
 export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   const forceNewSession = options?.forceNewSession ?? false;
@@ -52,7 +54,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const { getCachedWorkspaceSetupStatus } = useWorkspaceSetupStatusCache();
   const { cancelActiveSession } = useSessionCancelActions();
   const { createSessionWithResolvedConfig } = useSessionCreationActions();
@@ -72,11 +74,40 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     currentLaunchIdentity,
   } = useActiveSessionLaunchState();
   const { hasSlot } = useActiveSessionSurfaceSnapshot();
-  const { isDisabled, sendBlockedReason } = useChatAvailabilityState({
-    activeSessionId: forceNewSession ? null : activeSessionId,
-  });
-  const scopedLaunchIdentity = forceNewSession ? null : currentLaunchIdentity;
+  const scopedLaunchIdentity = currentLaunchIdentity;
   const configuredLaunch = useConfiguredLaunchReadiness(scopedLaunchIdentity);
+  const requireCurrentLaunch = forceNewSession && scopedLaunchIdentity !== null;
+  const newSessionLaunchSelection = useMemo(() => resolveAvailableLaunchSelection(
+    configuredLaunch.launchCatalog.launchAgents,
+    scopedLaunchIdentity,
+    configuredLaunch.selection,
+    { requirePreferredSelection: requireCurrentLaunch },
+  ), [
+    configuredLaunch.launchCatalog.launchAgents,
+    configuredLaunch.selection,
+    requireCurrentLaunch,
+    scopedLaunchIdentity,
+  ]);
+  const hasLaunchReadinessError = Boolean(
+    configuredLaunch.launchCatalog.error
+    || configuredLaunch.launchCatalog.targetReadinessError,
+  );
+  const currentLaunchReadiness = requireCurrentLaunch
+    ? {
+      isLoading: configuredLaunch.isLoading,
+      isReady: !hasLaunchReadinessError && newSessionLaunchSelection !== null,
+      disabledReason: hasLaunchReadinessError
+        ? configuredLaunch.disabledReason
+        : newSessionLaunchSelection
+          ? null
+          : CHAT_PROMPT_FEEDBACK.currentModelUnavailable,
+    }
+    : undefined;
+  const { disabledReason, isDisabled, sendBlockedReason } = useChatAvailabilityState({
+    activeSessionId: forceNewSession ? null : activeSessionId,
+    activeLaunchSelection: forceNewSession ? scopedLaunchIdentity : null,
+    launchReadiness: currentLaunchReadiness,
+  });
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const { invalidateWorkspaceCollectionsForRuntime } = useWorkspaceCollectionsInvalidationActions();
   const gitPromptEffects = useGitPromptSnapshotEffects();
@@ -88,6 +119,8 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     attachmentSnapshots?: PromptAttachmentSnapshot[];
     optimisticContentParts?: ContentPart[];
     measurementOperationId?: MeasurementOperationId | null;
+    preserveDraft?: boolean;
+    onSubmitted?: () => void;
   }): Promise<boolean> {
     const pendingWorkspaceUiKey = pendingWorkspaceEntry
       ? buildPendingWorkspaceUiKey(pendingWorkspaceEntry)
@@ -106,6 +139,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     const text = input?.text.trim() ?? serializeChatDraftToPrompt(currentDraft).trim();
     const blocks = input?.blocks ?? [{ type: "text" as const, text }];
     const attachmentSnapshots = input?.attachmentSnapshots ?? [];
+    const preserveDraft = input?.preserveDraft ?? false;
     if (
       (!hasPromptContent(text, blocks) && attachmentSnapshots.length === 0)
       || isDisabled
@@ -114,11 +148,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
       return false;
     }
 
-    const launchSelection = resolveAvailableLaunchSelection(
-      configuredLaunch.launchCatalog.launchAgents,
-      scopedLaunchIdentity,
-      configuredLaunch.selection,
-    );
+    const launchSelection = newSessionLaunchSelection;
     const targetSessionId = !forceNewSession && hasSlot ? activeSessionId : null;
     const promptId = createPromptId();
     const latencyFlowId = targetSessionId
@@ -132,7 +162,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
       : null;
 
     const clearDraftIfNeeded = () => {
-      if (!draftKey) {
+      if (!draftKey || preserveDraft) {
         return;
       }
       clearDraft(draftKey);
@@ -230,19 +260,19 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
         showToast("Choose a ready model before sending a message.");
         return false;
       }
-      if (!selectedWorkspaceId) {
-        return true;
+      if (selectedWorkspaceId) {
+        completeChatPromptSubmitSideEffects({
+          workspaceId: selectedWorkspaceId,
+          logicalWorkspaceId: selectedLogicalWorkspaceId,
+          repoRootId: gitPromptEffects.repoRootIdForLogicalWorkspace(selectedLogicalWorkspaceId),
+          getWorkspaceArrivalEvent: () => useSessionSelectionStore.getState().workspaceArrivalEvent,
+          getCachedWorkspaceSetupStatus,
+          agentKind: launchSelection?.kind ?? "unknown",
+          reuseSession: targetSessionId !== null,
+          setWorkspaceArrivalEvent,
+        }, { trackProductEvent: telemetry.track, ...gitPromptEffects.promptSubmitDeps });
       }
-      completeChatPromptSubmitSideEffects({
-        workspaceId: selectedWorkspaceId,
-        logicalWorkspaceId: selectedLogicalWorkspaceId,
-        repoRootId: gitPromptEffects.repoRootIdForLogicalWorkspace(selectedLogicalWorkspaceId),
-        getWorkspaceArrivalEvent: () => useSessionSelectionStore.getState().workspaceArrivalEvent,
-        getCachedWorkspaceSetupStatus,
-        agentKind: launchSelection?.kind ?? "unknown",
-        reuseSession: targetSessionId !== null,
-        setWorkspaceArrivalEvent,
-      }, { trackProductEvent: telemetry.track, ...gitPromptEffects.promptSubmitDeps });
+      input?.onSubmitted?.();
       return true;
     } catch (error) {
       if (latencyFlowId) {
@@ -280,6 +310,8 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
             ...(input?.optimisticContentParts
               ? { optimisticContentParts: input.optimisticContentParts }
               : {}),
+            preserveDraft,
+            onSubmitted: input?.onSubmitted,
           }),
         });
       }
@@ -288,8 +320,6 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   }, [
     activeSessionId,
     clearDraft,
-    configuredLaunch.launchCatalog.launchAgents,
-    configuredLaunch.selection,
     createSessionWithResolvedConfig,
     findOrCreateSession,
     getCachedWorkspaceSetupStatus,
@@ -298,6 +328,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     forceNewSession,
     invalidateWorkspaceCollectionsForRuntime,
     isDisabled,
+    newSessionLaunchSelection,
     pendingWorkspaceEntry,
     promptActiveSession,
     promptSession,
@@ -308,7 +339,6 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     setWorkspaceArrivalEvent,
     showErrorToast,
     showToast,
-    scopedLaunchIdentity,
     telemetry,
   ]);
 
@@ -330,5 +360,6 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   return {
     handleSubmit,
     handleCancel,
+    submitDisabledReason: sendBlockedReason ?? (isDisabled ? disabledReason : null),
   };
 }

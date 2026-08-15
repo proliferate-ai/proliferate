@@ -37,7 +37,7 @@ In scope:
 - Reusable UI primitives every feature spec consumes:
   `CredentialPicker`, `AgentRunConfigSelector`, `RuntimeReadinessPanel`,
   `PublicCapabilityList`, `WhereUsedDrawer`. Existing primitives
-  (`SettingsPageHeader`, `SettingsSection`, `SettingsRow`) are
+  (`PageHeader` with `variant="flat"`, `SettingsSection`, `SettingsRow`) are
   preserved.
 - Shared product vocabulary: workspace type, origin, exposure, access,
   sandbox type. Every spec that mentions these uses the same names.
@@ -89,9 +89,9 @@ Three rules every settings page follows:
    No raw client construction inside settings panes.
    (frontend/guides/access.md)
 
-3. Page chrome uses SettingsPageHeader + SettingsSection + SettingsRow
-   (from #product/components/patterns). New pages do not invent
-   new wrappers.
+3. Page chrome uses `PageHeader` (`variant="flat"`) + SettingsSection +
+   SettingsRow (PageHeader from #product/primitives/patterns, the rest from
+   the settings kit). New pages do not invent new wrappers.
 
 4. The Agents `Local` surface remains useful without a Cloud session. Its
    model list comes directly from the local AnyHarness launch catalog; Cloud
@@ -201,6 +201,13 @@ Repo      environments, compute ("Personal compute")
 Agents    agent-defaults, agent-authentication
 ```
 
+> Shipped correction: `worktrees` ("Pruning") was removed from the User
+> scope — cleanup no longer has a dedicated pane. `archived-workspaces`
+> ("Archived workspaces") took its slot instead: the real list of archived
+> workspaces, backed by the runtime's `lifecycle=archived` filter, superseding
+> the speculative `archived-chats` (tbr) row above, which was never built.
+> ([navigation-presentation.ts](../../../../../apps/packages/product-client/src/lib/domain/settings/navigation-presentation.ts)).
+
 > Shipped correction: the Agents scope is per-harness pages plus the key
 > pool — `agent-claude`, `agent-codex`, `agent-opencode`, `agent-grok`,
 > `agent-api-keys`
@@ -230,8 +237,11 @@ SETTINGS_CONTENT_SECTIONS = [
 > ([config/settings.ts](../../../../../apps/packages/product-client/src/config/settings.ts))
 > carries `agent-claude`/`agent-codex`/`agent-opencode`/`agent-grok`/
 > `agent-api-keys` instead of `agent-authentication`/`agent-defaults`,
-> plus `integrations`, `repo-actions`, and `repo-environment`; `keyboard`,
-> `archived-chats`, and `compute` were removed.
+> plus `integrations`, `repo-actions`, `repo-environment`, and
+> `archived-workspaces`; `keyboard`, `worktrees`, `archived-chats`, and
+> `compute` were removed. `archived-workspaces` is the real archived-list
+> page (§3 in the archiving-workspaces train's R7 delivery spec), not the
+> speculative `archived-chats` row it replaced.
 
 **Shortcuts**: Cmd-digit section shortcuts are per-scope.
 `SETTINGS_SHORTCUT_SECTION_ORDER` is filtered to the sections visible in
@@ -280,24 +290,31 @@ subfolders:
 > selection/vault contracts owned by
 > [`AGENT_AUTH.md`](../../../../FEATURE_DOCS/AGENT_AUTH.md).
 
-**Existing shared primitives**: page chrome lives in
-`apps/packages/product-client/src/components/patterns/`:
+**Existing shared primitives**: page chrome lives in the settings kit at
+`apps/packages/product-client/src/primitives/patterns/settings/`, plus
+`PageHeader.tsx` (`variant="flat"`) in
+`apps/packages/product-client/src/primitives/patterns/`:
 
 ```text
-SettingsPageHeader.tsx    title + description + action slot
-SettingsSection.tsx       grouped rows with heading
-SettingsRow.tsx           label + control row
-SettingsEyebrow.tsx       group heading style (sidebar + panes)
+PageHeader.tsx            title + description + action slot (variant="flat")
+SettingsSection.tsx       muted label (or emphasized title) over a wash card of rows
+SettingsRow.tsx           in-card label + control row, no self-divider
 SettingsScopeTabs.tsx     horizontal underline scope switcher
 SettingsEmptyState.tsx
 ```
+
+> Shipped correction: `SettingsEyebrow.tsx` (group heading style) was
+> deleted; `SettingsSection` renders its own label now. The wash card itself
+> is `SettingsGroup.tsx`, a separate component one tier down at
+> `apps/packages/product-client/src/primitives/patterns/settings/SettingsGroup.tsx`
+> (it is domain-unaware, so it lives outside this directory).
 
 ProductClient's `src/components/settings/shared/`
 keeps `AdminOnlyPlaceholder`, `AgentHarnessConfigComposer`, and
 `RunCommandHelp`.
 Layout helpers use concrete ProductClient pattern imports
 (`#product/primitives/patterns/AutoHideScrollArea` and
-`#product/primitives/patterns/SidebarNavRow`); general controls use concrete
+`#product/primitives/patterns/sidebar/SidebarNavRow`); general controls use concrete
 root imports such as `#product/primitives/Button`,
 `#product/primitives/Input`, and `#product/primitives/Switch`.
 
@@ -528,6 +545,11 @@ User
   worktrees                WorktreesPane                  "Pruning" — all-environment
                                                            worktree cleanup
   archived-chats           ArchivedChatsPane              hidden chats (tbr)
+  (shipped: `worktrees`/`WorktreesPane` removed; `archived-workspaces` /
+   `ArchivedWorkspacesPane` took the slot — the real archived-workspaces
+   list, sort, search, per-row unarchive/delete, and Delete all, backed by
+   the runtime's `lifecycle=archived` filter. It supersedes the speculative
+   `archived-chats` row above, which was never built.)
 
 Org (all adminOnly)
   organization             OrganizationPane               org profile
@@ -590,8 +612,9 @@ SETTINGS_CONTENT_SECTIONS = [
 > ([config/settings.ts](../../../../../apps/packages/product-client/src/config/settings.ts))
 > carries `agent-claude`/`agent-codex`/`agent-opencode`/`agent-grok`/
 > `agent-api-keys` instead of `agent-authentication`/`agent-defaults`,
-> plus `integrations`, `repo-actions`, and `repo-environment`; `keyboard`,
-> `archived-chats`, and `compute` were removed.
+> plus `integrations`, `repo-actions`, `repo-environment`, and
+> `archived-workspaces`; `keyboard`, `worktrees`, `archived-chats`, and
+> `compute` were removed.
 
 Renamed ids:
 
@@ -614,12 +637,17 @@ Legacy id:
 > per-harness panes plus the `agent-api-keys` pool; the `cloud` redirect is
 > focus-dependent (repo focus → `environments`, billing focus → `billing`).
 
-Preserved id:
+Preserved id (superseded):
 
 ```text
 "worktrees"     Remains a top-level Workspaces section because cleanup spans
                 all environments.
 ```
+
+> Shipped correction: `worktrees` did not stay preserved. The runtime's
+> `lifecycle` filter replaced client-side worktree cleanup as the truth
+> about which workspaces exist, so the dedicated "Pruning" pane had nothing
+> left to own and was removed; `archived-workspaces` took its nav slot.
 
 The `?section=<id>` URL scheme is preserved. Old urls that point at
 `?section=repo` or `?section=cloudRepo` redirect to
@@ -649,6 +677,8 @@ User
   worktrees                 spec 03   "Pruning" — all-environment worktree
                                        cleanup
   archived-chats            spec 03   hidden chats (tbr)
+  (shipped: `worktrees` removed; `archived-workspaces` — the archiving-
+   workspaces train's R7 delivery spec — took the slot instead)
 
 Org
   organization              spec 03 + 05  org profile, billing cross-link
@@ -837,12 +867,22 @@ in copy/settings/vocabulary-copy.ts keys.
 Existing (kept; no changes):
 
 ```text
-SettingsPageHeader          apps/packages/product-client/src/components/patterns/SettingsPageHeader.tsx
-SettingsSection             apps/packages/product-client/src/components/patterns/SettingsSection.tsx
-SettingsRow                 apps/packages/product-client/src/components/patterns/SettingsRow.tsx
-SettingsEyebrow / SettingsScopeTabs / SettingsEmptyState
-                            same directory
+PageHeader                  apps/packages/product-client/src/primitives/patterns/PageHeader.tsx
+SettingsSection             apps/packages/product-client/src/primitives/patterns/settings/SettingsSection.tsx
+SettingsRow                 apps/packages/product-client/src/primitives/patterns/settings/SettingsRow.tsx
+SettingsScopeTabs / SettingsEmptyState
+                            same directory as SettingsSection / SettingsRow
 ```
+
+> Shipped correction: `SettingsEyebrow.tsx` was deleted by the settings
+> "wash" restyle. `SettingsSection` now renders its own sentence-case muted
+> label directly (or a `titleWeight="emphasized"` variant) over a new
+> `SettingsGroup` wash card
+> (`apps/packages/product-client/src/primitives/patterns/settings/SettingsGroup.tsx`),
+> which owns the inset hairline divider between rows; `SettingsRow` no
+> longer draws its own border. `SettingsSection` and `SettingsRow` above are
+> restyled by the same change; their contracts (props, ownership) are
+> unchanged.
 
 New (spec 03 introduces; feature specs consume):
 
@@ -1111,7 +1151,7 @@ apps/packages/product-client/src/lib/domain/settings/navigation-presentation.ts
     scope<->section mapping, PARKED_SECTION_SCOPES
   - adminOnly metadata on Org-scope rows
 
-apps/packages/product-client/src/components/patterns/SettingsScopeTabs.tsx
+apps/packages/product-client/src/primitives/patterns/settings/SettingsScopeTabs.tsx
   - horizontal underline scope switcher consumed by SettingsScreen
 
 apps/packages/product-client/src/components/settings/sidebar/SettingsSidebar.tsx
@@ -1166,6 +1206,8 @@ apps/packages/product-client/src/lib/domain/telemetry/events.ts
 2. `SETTINGS_CONTENT_SECTIONS` is the new id list. Old ids `repo`,
    `cloud`, and `cloudRepo` keep redirecting to their supported homes.
    `worktrees` remains a first-class User section ("Pruning").
+   (shipped: `worktrees` was removed instead; `archived-workspaces`
+   ("Archived workspaces") is the first-class User section that replaced it.)
 3. `SettingsScaffoldPane.tsx` renders the scaffolded pages listed in §4.2.
    Scaffolded pages establish route, placement, title, and ownership copy only.
 4. Admin rows are marked `adminOnly`; non-admin users do not see those rows.
@@ -1211,6 +1253,8 @@ apps/packages/product-client/src/components/settings/screen/SettingsScreen.test.
   - ?section=cloud redirects to ?section=agent-authentication
     (shipped: focus-dependent, see 5.7 correction)
   - ?section=worktrees resolves to Pruning (User scope)
+    (shipped: `worktrees` no longer resolves anywhere; `?section=archived-workspaces`
+    resolves to "Archived workspaces" (User scope) instead)
 
 apps/packages/product-client/src/hooks/access/cloud/organizations/use-is-admin.test.ts
   - returns role from useOrganizationMembers

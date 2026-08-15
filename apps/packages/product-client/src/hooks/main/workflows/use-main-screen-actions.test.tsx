@@ -247,6 +247,7 @@ function mainScreenLayout(overrides: Partial<MainScreenLayoutState> = {}): {
       setSidebarOpen: vi.fn(),
       sidebarWidth: 280,
       setSidebarWidth: vi.fn(),
+      sidebarResizing: false,
       rightPanelOpen: false,
       setRightPanelOpen,
       rightPanelFocusRequestToken: 0,

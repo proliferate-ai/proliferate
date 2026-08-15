@@ -4,9 +4,8 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 
-const routerMocks = vi.hoisted(() => ({
-  navigate: vi.fn(),
-  location: { pathname: "/" },
+const navigateMocks = vi.hoisted(() => ({
+  navigateApp: vi.fn(),
 }));
 
 const harnessMocks = vi.hoisted(() => ({
@@ -47,14 +46,17 @@ const latencyMocks = vi.hoisted(() => ({
   startLatencyFlow: vi.fn(() => "flow-1"),
 }));
 
-vi.mock("react-router-dom", () => ({
-  useLocation: () => routerMocks.location,
-  useNavigate: () => routerMocks.navigate,
+vi.mock("#product/lib/workflows/app/app-navigate-handoff", () => ({
+  navigateApp: navigateMocks.navigateApp,
 }));
 
 vi.mock("#product/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (selector: (state: typeof harnessMocks.state) => unknown) =>
     selector(harnessMocks.state),
+}));
+
+vi.mock("#product/hooks/workspaces/derived/use-pending-workspace-entries", () => ({
+  useAttendedPendingWorkspaceEntry: () => harnessMocks.state.pendingWorkspaceEntry,
 }));
 
 vi.mock("#product/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
@@ -106,7 +108,7 @@ vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  routerMocks.location.pathname = "/";
+  window.history.replaceState(null, "", "/");
   harnessMocks.state.pendingWorkspaceEntry = null;
   harnessMocks.state.selectedLogicalWorkspaceId = null;
   harnessMocks.state.selectedWorkspaceId = null;
@@ -125,7 +127,7 @@ describe("useWorkspaceNavigationWorkflow", () => {
 
     expect(harnessMocks.state.deselectWorkspacePreservingSessions).toHaveBeenCalledTimes(1);
     expect(editorMocks.resetWorkspaceEditorState).toHaveBeenCalledTimes(1);
-    expect(routerMocks.navigate).toHaveBeenCalledWith("/");
+    expect(navigateMocks.navigateApp).toHaveBeenCalledWith("/");
   });
 
   it("deselects pending workspace state before top-level navigation", () => {
@@ -136,7 +138,7 @@ describe("useWorkspaceNavigationWorkflow", () => {
 
     expect(harnessMocks.state.deselectWorkspacePreservingSessions).toHaveBeenCalledTimes(1);
     expect(editorMocks.resetWorkspaceEditorState).toHaveBeenCalledTimes(1);
-    expect(routerMocks.navigate).toHaveBeenCalledWith("/");
+    expect(navigateMocks.navigateApp).toHaveBeenCalledWith("/");
   });
 
   it("deselects logical-only workspace state before top-level navigation", () => {
@@ -147,17 +149,17 @@ describe("useWorkspaceNavigationWorkflow", () => {
 
     expect(harnessMocks.state.deselectWorkspacePreservingSessions).toHaveBeenCalledTimes(1);
     expect(editorMocks.resetWorkspaceEditorState).toHaveBeenCalledTimes(1);
-    expect(routerMocks.navigate).toHaveBeenCalledWith("/");
+    expect(navigateMocks.navigateApp).toHaveBeenCalledWith("/");
   });
 
   it("selects workspaces through the shared latency and viewed-state workflow", () => {
-    routerMocks.location.pathname = "/settings";
+    window.history.replaceState(null, "", "/settings");
     harnessMocks.state.selectedLogicalWorkspaceId = "logical-current";
     const { result } = renderHook(() => useWorkspaceNavigationWorkflow());
 
     act(() => result.current.selectWorkspaceFromSurface("logical-current", "shortcut"));
 
-    expect(routerMocks.navigate).toHaveBeenCalledWith("/");
+    expect(navigateMocks.navigateApp).toHaveBeenCalledWith("/");
     expect(workspaceUiMocks.markWorkspaceViewed).toHaveBeenCalledWith("logical-current");
     expect(latencyMocks.startLatencyFlow).toHaveBeenCalledWith({
       flowKind: "workspace_switch",
@@ -187,7 +189,7 @@ describe("useWorkspaceNavigationWorkflow", () => {
       "https://web.proliferate.com/cloud/workspaces/cloud-unclaimed-1",
     );
     expect(selectionMocks.selectWorkspace).not.toHaveBeenCalled();
-    expect(routerMocks.navigate).not.toHaveBeenCalled();
+    expect(navigateMocks.navigateApp).not.toHaveBeenCalled();
   });
 
   it("falls through to normal in-desktop selection when this deployment has no web app", () => {

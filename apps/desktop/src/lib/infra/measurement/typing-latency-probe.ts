@@ -8,6 +8,10 @@ import {
 } from "./debug-measurement";
 import { isMainThreadMeasurementEnabled } from "./debug-measurement-env";
 import { round } from "./debug-measurement-utils";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "@proliferate/product-client/internal/lib/infra/diagnostics/renderer-diagnostics-port";
 
 // Keystroke → paint latency probe.
 //
@@ -131,6 +135,24 @@ function printTypingLatencySummary(
 ): void {
   const toPaint = percentiles(bucket.toPaintMs);
   const inputDelay = percentiles(bucket.inputDelayMs);
+  recordRendererDiagnostic({
+    name: "renderer.measurement.typing_summary",
+    severity: "debug",
+    kind: "progress",
+    privacy: "operational",
+    correlation: { operationId },
+    fields: {
+      surface: diagnosticField(bucket.surface, "operational"),
+      reason: diagnosticField(reason, "operational"),
+      sample_count: diagnosticField(bucket.toPaintMs.length, "operational"),
+      to_paint_p50_ms: diagnosticField(toPaint.p50, "operational"),
+      to_paint_p95_ms: diagnosticField(toPaint.p95, "operational"),
+      to_paint_max_ms: diagnosticField(toPaint.max, "operational"),
+      input_delay_p50_ms: diagnosticField(inputDelay.p50, "operational"),
+      input_delay_p95_ms: diagnosticField(inputDelay.p95, "operational"),
+      input_delay_max_ms: diagnosticField(inputDelay.max, "operational"),
+    },
+  });
   console.info(
     `[typing-latency] ${bucket.surface} n=${bucket.toPaintMs.length}`
     + ` | keystroke→paint p50=${toPaint.p50}ms p95=${toPaint.p95}ms max=${toPaint.max}ms`

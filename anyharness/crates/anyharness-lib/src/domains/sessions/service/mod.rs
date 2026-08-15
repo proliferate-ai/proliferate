@@ -16,6 +16,7 @@ mod create_tests;
 mod history;
 mod launch_options;
 mod mobility;
+pub(crate) mod support_windows;
 mod title;
 
 pub struct SessionService {
@@ -153,6 +154,14 @@ impl SessionService {
 
     pub fn attachment_storage(&self) -> &PromptAttachmentStorage {
         &self.attachment_storage
+    }
+
+    pub fn find_last_dismissed_in_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<Option<SessionRecord>> {
+        self.session_store
+            .find_last_dismissed_in_workspace(workspace_id)
     }
 
     /// Look up a single prompt attachment's record (not its bytes — see

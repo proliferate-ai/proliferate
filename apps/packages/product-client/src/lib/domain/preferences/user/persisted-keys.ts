@@ -21,6 +21,7 @@ const USER_PREFERENCE_KEYS = [
   "coworkWorkspaceDelegationEnabled",
   "worktreeAutoDeleteLimit",
   "pasteAttachmentsEnabled",
+  "deleteBranchOnArchive",
   "autoUpdateEnabled",
   "reviewDefaultsByKind",
   "reviewPersonalitiesByKind",

@@ -105,6 +105,41 @@ async fn finalize_dismiss_exit_cancels_pending_permission_without_terminal_event
 }
 
 #[tokio::test]
+async fn finalize_unload_exit_is_nonterminal_and_preserves_native_identity() {
+    let (store, event_sink, interaction_broker, handle) =
+        actor_exit_test_context(Some(pending_interaction_summary())).await;
+
+    finalize_established_actor_exit(
+        &handle,
+        &event_sink,
+        &interaction_broker,
+        &store,
+        "session-1",
+        ActorExitDisposition::Unload,
+    )
+    .await;
+
+    let events = store.list_events("session-1").expect("list events");
+    let event_types = events
+        .iter()
+        .map(|event| event.event_type.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(event_types, vec!["interaction_resolved"]);
+
+    let snapshot = handle.execution_snapshot().await;
+    assert_eq!(snapshot.phase, SessionExecutionPhase::Idle);
+    assert!(snapshot.pending_interactions.is_empty());
+    let record = store
+        .find_by_id("session-1")
+        .expect("fetch session")
+        .expect("session exists");
+    assert_eq!(record.status, "idle");
+    assert_eq!(record.native_session_id.as_deref(), Some("native-1"));
+    assert!(record.closed_at.is_none());
+    assert!(record.dismissed_at.is_none());
+}
+
+#[tokio::test]
 async fn finalize_exit_without_pending_interaction_skips_interaction_resolved_event() {
     let (store, event_sink, interaction_broker, handle) = actor_exit_test_context(None).await;
 

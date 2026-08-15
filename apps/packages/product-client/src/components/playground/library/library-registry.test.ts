@@ -10,17 +10,24 @@ import { LIBRARY_TIERS } from "./index";
 
 type ModuleInventory = Record<string, unknown>;
 
+/**
+ * Derive canonical subpaths from the tier-relative path, not the basename:
+ * `patterns/` holds area-kit subdirectories (`composer/`, `toast/`,
+ * `sidebar/`, `settings/`, `panel/`, `tabs/`), so a nested member's subpath
+ * keeps its kit segment.
+ */
 function inventorySubpaths(
   modules: ModuleInventory,
   canonicalPrefix: string,
+  tierGlobPrefix: string,
 ): Set<string> {
   return new Set(
     Object.keys(modules).map((modulePath) => {
-      const match = /\/([^/]+)\.tsx$/.exec(modulePath);
-      if (!match) {
+      if (!modulePath.startsWith(tierGlobPrefix) || !modulePath.endsWith(".tsx")) {
         throw new Error(`unexpected library inventory path: ${modulePath}`);
       }
-      return `${canonicalPrefix}/${match[1]}`;
+      const tierRelative = modulePath.slice(tierGlobPrefix.length, -".tsx".length);
+      return `${canonicalPrefix}/${tierRelative}`;
     }),
   );
 }
@@ -30,10 +37,10 @@ const primitiveModules = import.meta.glob([
   "!../../../primitives/*.test.tsx",
 ]);
 const patternModules = import.meta.glob([
-  "../../../primitives/patterns/*.tsx",
-  "!../../../primitives/patterns/*.test.tsx",
-  "!../../../primitives/patterns/ToastBody.tsx",
-  "!../../../primitives/patterns/ToastExpansion.tsx",
+  "../../../primitives/patterns/**/*.tsx",
+  "!../../../primitives/patterns/**/*.test.tsx",
+  "!../../../primitives/patterns/toast/ToastBody.tsx",
+  "!../../../primitives/patterns/toast/ToastExpansion.tsx",
 ]);
 const iconModules = import.meta.glob("../../../primitives/icons/*.tsx");
 const productPatternModules = import.meta.glob([
@@ -45,20 +52,22 @@ const productPatternModules = import.meta.glob([
 const EXPECTED_PRIMITIVE_SUBPATHS = inventorySubpaths(
   primitiveModules,
   "#product/primitives",
+  "../../../primitives/",
 );
 const EXPECTED_PATTERN_SUBPATHS = inventorySubpaths(
   patternModules,
   "#product/primitives/patterns",
+  "../../../primitives/patterns/",
 );
 const EXPECTED_ICON_SUBPATHS = inventorySubpaths(
   iconModules,
   "#product/primitives/icons",
+  "../../../primitives/icons/",
 );
-const EXPECTED_PRODUCT_PATTERN_SUBPATHS = new Set(
-  Object.keys(productPatternModules).map((modulePath) =>
-    `#product/components/patterns/${modulePath
-      .replace(/^\.\.\/\.\.\/patterns\//, "")
-      .replace(/\.tsx$/, "")}`),
+const EXPECTED_PRODUCT_PATTERN_SUBPATHS = inventorySubpaths(
+  productPatternModules,
+  "#product/components/patterns",
+  "../../patterns/",
 );
 const EXPECTED_SUBPATHS = new Set([
   ...EXPECTED_PRIMITIVE_SUBPATHS,
@@ -86,7 +95,7 @@ describe("library registry parity", () => {
         EXPECTED_PRIMITIVE_SUBPATHS.size
         + EXPECTED_PATTERN_SUBPATHS.size
         + EXPECTED_ICON_SUBPATHS.size,
-    }).toEqual({ primitives: 36, patterns: 23, icons: 10, total: 69 });
+    }).toEqual({ primitives: 38, patterns: 36, icons: 10, total: 84 });
   });
 
   it("covers exactly the physical primitive surface and ProductClient pattern owners", () => {

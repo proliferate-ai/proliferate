@@ -82,11 +82,6 @@ export const themeTokens = {
     light: motion.cssMs(motion.activity.streamRevealFadeMs),
     provenance: "[SHIPPED:motion/authority]",
   },
-  "--activity-level-bar-step": {
-    dark: motion.cssMs(motion.activity.levelBarStepMs),
-    light: motion.cssMs(motion.activity.levelBarStepMs),
-    provenance: "[RETUNE:motion/level-bar-cadence]",
-  },
   "--animate-popover-in": {
     dark: "popover-in var(--duration-enter) var(--ease-out-quint)",
     light: "popover-in var(--duration-enter) var(--ease-out-quint)",
@@ -189,8 +184,15 @@ export const themeTokens = {
    */
   "--color-composer-background": {
     dark: "#2d2d2d",
-    light: "#ffffff",
-    provenance: "[RETUNE:light/independent-scale]",
+    // Light was pure white when the composer still drew a 0.5px stroke +
+    // elevation; borderless chrome (composer-input cleanup) means the fill IS
+    // the surface, so white-on-white would make the composer invisible. It
+    // reuses the sanctioned rail plane #f6f6f6 (--color-surface-under /
+    // --color-sidebar) rather than adding a fourth opaque light plane — light
+    // has exactly three, and the rail is already the step off the page that
+    // dark spells #181818 → #2d2d2d.
+    light: "#f6f6f6",
+    provenance: "[RETUNE:surface/composer-fill]",
   },
   "--color-composer-control-active-foreground": {
     dark: "var(--color-foreground)",
@@ -216,11 +218,6 @@ export const themeTokens = {
     dark: "var(--color-background)",
     light: "var(--color-primary-foreground)",
     provenance: "[SHIPPED]",
-  },
-  "--color-composer-shadow": {
-    dark: "var(--shadow-subtle)",
-    light: "0 0 0 0.5px rgba(26, 28, 31, 0.06), 0 1px 3px rgba(26, 28, 31, 0.08), 0 4px 12px rgba(26, 28, 31, 0.06)",
-    provenance: "[RETUNE:light/ink-tinted-elevation]",
   },
   "--color-compute-target-amber": {
     dark: "#b59a3a",
@@ -831,8 +828,7 @@ export const themeTokens = {
    * already separates the bubble and a border would be surplus chrome. In light
    * the card is #ffffff on a #ffffff pane, so the fill separates nothing and the
    * edge is the only thing carrying the shape. Same component, opposite needs —
-   * so the difference lives in a token rather than a `dark:` variant, matching
-   * `--color-composer-shadow` right above.
+   * so the difference lives in a token rather than a `dark:` variant.
    */
   "--color-user-message-border": {
     dark: "transparent",
@@ -961,13 +957,15 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   "--diffs-font-size": {
-    dark: "14px",
-    light: "14px",
+    // Coupled to the "Reading & code" default: follows the 14px UI-text
+    // default minus 1px for mono optics (ui-foundation appearance ruling).
+    dark: "13px",
+    light: "13px",
     provenance: "[SHIPPED]",
   },
   "--diffs-line-height": {
-    dark: "calc(var(--diffs-font-size, 14px) * 1.8)",
-    light: "calc(var(--diffs-font-size, 14px) * 1.8)",
+    dark: "calc(var(--diffs-font-size, 13px) * 1.8)",
+    light: "calc(var(--diffs-font-size, 13px) * 1.8)",
     provenance: "[SHIPPED]",
   },
   "--diffs-min-number-column-width": {
@@ -983,6 +981,11 @@ export const themeTokens = {
   "--duration-disclosure": {
     dark: motion.cssMs(motion.duration.disclosureMs),
     light: motion.cssMs(motion.duration.disclosureMs),
+    provenance: "[RETUNE:motion/roles]",
+  },
+  "--duration-dissolve": {
+    dark: motion.cssMs(motion.duration.dissolveMs),
+    light: motion.cssMs(motion.duration.dissolveMs),
     provenance: "[RETUNE:motion/roles]",
   },
   "--duration-emphasized": {
@@ -1010,6 +1013,11 @@ export const themeTokens = {
     light: motion.cssMs(motion.duration.panelMs),
     provenance: "[RETUNE:motion/roles]",
   },
+  "--duration-pop": {
+    dark: motion.cssMs(motion.duration.popMs),
+    light: motion.cssMs(motion.duration.popMs),
+    provenance: "[AGENT-OPERATIONS:spawn-receipt-motion]",
+  },
   "--ease-linear": {
     dark: motion.ease.linear,
     light: motion.ease.linear,
@@ -1024,6 +1032,11 @@ export const themeTokens = {
     dark: motion.ease.outQuint,
     light: motion.ease.outQuint,
     provenance: "[RETUNE:motion/roles]",
+  },
+  "--ease-pop": {
+    dark: motion.ease.pop,
+    light: motion.ease.pop,
+    provenance: "[AGENT-OPERATIONS:spawn-receipt-motion]",
   },
   "--ease-spring": {
     dark: motion.ease.spring,
@@ -1159,9 +1172,9 @@ export const themeTokens = {
     provenance: "[RETUNE:radii/soft-scale]",
   },
   "--radius-composer": {
-    dark: "1.25rem",
-    light: "1.25rem",
-    provenance: "[RETUNE:radii/soft-scale]",
+    dark: "1.75rem",
+    light: "1.75rem",
+    provenance: "[RETUNE:radii/composer-soft]",
   },
   "--radius-full": {
     dark: "9999px",
@@ -1189,8 +1202,10 @@ export const themeTokens = {
     provenance: "[SHIPPED]",
   },
   "--readable-code-font-size": {
-    dark: "14px",
-    light: "14px",
+    // Coupled to the "Reading & code" default: follows the 14px UI-text
+    // default minus 1px for mono optics (ui-foundation appearance ruling).
+    dark: "13px",
+    light: "13px",
     provenance: "[SHIPPED]",
   },
   "--readable-code-line-height": {

@@ -15,6 +15,7 @@ import {
   trackSessionInteraction,
   trackWorkspaceInteraction,
 } from "#product/stores/preferences/workspace-ui-store";
+import { useSlashCommandCatalogStore } from "#product/stores/chat/slash-command-catalog-store";
 import {
   notifyTurnEnd,
   notifyUserFacingTurnEnd,
@@ -46,7 +47,10 @@ const streamSessionInteractionThrottle = createLatestTimestampThrottle({
 
 export function applyBatchedStreamSideEffects(input: {
   sessionStreamCache: SessionStreamCache;
+  /** ProductClient session key used by local activity/transcript stores. */
   sessionId: string;
+  /** Durable runtime parent ID used by roster APIs and relationship provenance. */
+  materializedSessionId: string;
   runtimeUrl: string;
   workspaceId: string | null;
   agentKind: string | null;
@@ -66,6 +70,11 @@ export function applyBatchedStreamSideEffects(input: {
   recordSessionRelationshipHint: (
     sessionId: string,
     relationship: SessionChildRelationship,
+  ) => void;
+  resolveClientSessionId: (materializedSessionId: string) => string | null;
+  markSessionPromoted: (
+    sessionIds: readonly string[],
+    workspaceId: string | null,
   ) => void;
   getSessionRelationship: (sessionId: string) => SessionRelationship | null;
   acknowledgeWorkspaceActivity?: (workspaceId: string, timestamp: string) => void;
@@ -93,7 +102,7 @@ export function applyBatchedStreamSideEffects(input: {
   ) => void;
 }) {
   const plan = planBatchedStreamSideEffects({
-    sessionId: input.sessionId,
+    sessionId: input.materializedSessionId,
     workspaceId: input.workspaceId,
     envelopes: input.envelopes,
     transcript: input.transcript,
@@ -107,11 +116,15 @@ export function applyBatchedStreamSideEffects(input: {
         input.scheduleStartupReadyRefresh(effect.reason, effect.delayMs);
         break;
       case "record_session_relationship_hint":
-        input.recordSessionRelationshipHint(effect.sessionId, effect.relationship);
+        input.recordSessionRelationshipHint(
+          input.resolveClientSessionId(effect.sessionId) ?? effect.sessionId,
+          effect.relationship,
+        );
         break;
-      case "mount_subagent_child_session":
+      case "mount_subagent_child_session": {
+        const clientSessionId = input.resolveClientSessionId(effect.childSessionId);
         void input.mountSubagentChildSession({
-          childSessionId: effect.childSessionId,
+          childSessionId: clientSessionId ?? effect.childSessionId,
           label: effect.label,
           workspaceId: effect.workspaceId,
           parentSessionId: effect.parentSessionId,
@@ -119,7 +132,24 @@ export function applyBatchedStreamSideEffects(input: {
           requestHeaders: input.requestHeaders,
         });
         break;
+      }
+      case "mark_session_promoted": {
+        const clientSessionId = input.resolveClientSessionId(effect.durableSessionId)
+          ?? effect.durableSessionId;
+        input.markSessionPromoted(
+          [...new Set([effect.durableSessionId, clientSessionId])],
+          effect.workspaceId,
+        );
+        break;
+      }
     }
+  }
+
+  if (plan.recordAvailableCommandsCatalog && input.agentKind) {
+    useSlashCommandCatalogStore.getState().recordCatalog(
+      input.agentKind,
+      input.transcript.availableCommands,
+    );
   }
 
   for (const intent of plan.persistReconciledControlPreferences) {
@@ -144,7 +174,7 @@ export function applyBatchedStreamSideEffects(input: {
   if (plan.invalidateSessionSubagents) {
     input.sessionStreamCache.invalidateSessionSubagents({
       workspaceId: input.workspaceId,
-      sessionId: input.sessionId,
+      sessionId: input.materializedSessionId,
     });
   }
   if (plan.invalidateCowork) {

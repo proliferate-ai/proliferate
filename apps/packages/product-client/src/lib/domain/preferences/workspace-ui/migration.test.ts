@@ -18,7 +18,6 @@ describe("workspace UI state migration", () => {
     const result = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
       migrationVersion: 1,
-      archivedWorkspaceIds: ["archived-workspace"],
       lastViewedAt: { "workspace-1": "2026-04-04T00:00:00Z" },
       lastViewedSessionByWorkspace: { "workspace-1": "session-1" },
       workspaceLastInteracted: { "workspace-1": "2026-04-04T00:00:00Z" },
@@ -33,7 +32,6 @@ describe("workspace UI state migration", () => {
 
     expect(result.didMigrate).toBe(true);
     expect(result.state.migrationVersion).toBe(WORKSPACE_UI_MIGRATION_VERSION);
-    expect(result.state.archivedWorkspaceIds).toEqual([]);
     expect(result.state.lastViewedAt).toEqual({});
     expect(result.state.lastViewedSessionByWorkspace).toEqual({});
     expect(result.state.workspaceLastInteracted).toEqual({});
@@ -43,16 +41,18 @@ describe("workspace UI state migration", () => {
     expect(result.state.sidebarWidth).toBe(WORKSPACE_SIDEBAR_MAX_WIDTH);
   });
 
-  it("migrates archived workspaces from v7 preference blobs", () => {
-    const { state, didMigrate } = migrateWorkspaceUiState({
+  it("drops the legacy client-side archivedWorkspaceIds hide-set from pre-v14 blobs", () => {
+    const legacyInput = {
       ...WORKSPACE_UI_DEFAULTS,
       migrationVersion: 7,
       archivedWorkspaceIds: ["workspace-a"],
-    });
+    } as PersistedWorkspaceUiState & { archivedWorkspaceIds?: string[] };
+    const { state, didMigrate } = migrateWorkspaceUiState(legacyInput);
 
     expect(didMigrate).toBe(true);
     expect(state.migrationVersion).toBe(WORKSPACE_UI_MIGRATION_VERSION);
-    expect(state.archivedWorkspaceIds).toEqual(["workspace-a"]);
+    expect((state as PersistedWorkspaceUiState & { archivedWorkspaceIds?: unknown }).archivedWorkspaceIds)
+      .toBeUndefined();
   });
 
   it("defaults missing visible tab fields during migration", () => {
@@ -298,10 +298,13 @@ describe("workspace UI state migration", () => {
     } as never);
 
     expect(didMigrate).toBe(true);
+    // 900 survives migration: there is no fixed panel maximum — a width
+    // chosen on a larger window restores intact, and the rail's rendered
+    // clamp bounds what actually paints on the current window.
     expect(state.rightPanelDurableByWorkspace).toEqual({
       w1: {
         open: false,
-        width: 700,
+        width: 900,
       },
     });
     expect(state.rightPanelMaterializedByWorkspace).toEqual({
@@ -310,6 +313,7 @@ describe("workspace UI state migration", () => {
         headerOrder: [
           "tool:scratch",
           "tool:git",
+          "tool:agents",
           "terminal:t1",
           "terminal:t2",
         ],
@@ -348,6 +352,7 @@ describe("workspace UI state migration", () => {
         "terminal:terminal-b",
         "terminal:terminal-a",
         "tool:scratch",
+        "tool:agents",
       ],
     });
   });
@@ -384,6 +389,7 @@ describe("workspace UI state migration", () => {
         "terminal:t1",
         "tool:git",
         "tool:scratch",
+        "tool:agents",
       ],
     });
     expect(state.rightPanelDurableByWorkspace.w1).not.toHaveProperty("toolOrder");

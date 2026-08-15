@@ -31,6 +31,16 @@ export function FileSearchResultsTree({
 
   const results = searchQuery.data?.results ?? [];
   const groups = useMemo(() => buildFileSearchTree(results), [results]);
+  // Contradiction, recorded rather than re-derived (same ruling as
+  // FileTreeRow.tsx's chevron): spec section 2.6 lists this collapse-group
+  // state machine as adopting `Disclosure`, but the group header below is a
+  // `FileTreeRow` (`role="treeitem"`, `kind="directory"`) inside a
+  // `role="tree"` — the same WAI-ARIA treeitem/tree pattern
+  // `FileTreeDirectory` uses for real directories, driven by an
+  // application-level collapsed-set exactly like `GitPanel.tsx`'s
+  // `collapsedFiles` (which 2.6 itself rules "is application state, not a
+  // shape, and stays"). Wrapping the group header in `Disclosure` would
+  // fight the treeitem contract this file deliberately mirrors. Left as-is.
 
   if (results.length === 0) {
     const message = !workspaceId

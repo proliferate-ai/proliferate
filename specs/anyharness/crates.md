@@ -12,6 +12,15 @@ anyharness-contract/
 anyharness-credential-discovery/
   shared provider credential discovery and portable auth normalization
 
+proliferate-diagnostics-protocol/
+  provider-neutral Desktop diagnostics wire contract and pure validation
+
+proliferate-diagnostics-client/
+  bounded local producer adapter for Desktop-owned Rust children
+
+proliferate-diagnostics-collector/
+  standalone loopback diagnostics collector process and bounded memory state
+
 anyharness-lib/
   runtime implementation
 ```
@@ -104,3 +113,51 @@ This crate owns the runtime:
 - protocol/vendor integrations
 
 Use [README.md](README.md) for the internal runtime structure.
+
+## `proliferate-diagnostics-protocol`
+
+This crate owns schema-versioned diagnostics envelopes, API shapes, closed
+vocabularies, hard bounds, and pure record/lifecycle validation shared across
+Desktop-owned producers and the standalone collector. It is separate from
+`anyharness-contract`, whose audience is the AnyHarness public transport API.
+
+It must not own collector runtime state, transport handlers, files, processes,
+exporters, producer queues, or product orchestration. Cross-language meaning is
+pinned by `fixtures/contracts/rust-observability-v1/`.
+
+## `proliferate-diagnostics-client`
+
+This crate owns the bounded local diagnostics adapter linked into the two
+Desktop-owned Rust producers — the bundled `anyharness serve` child and
+`proliferate-worker`:
+
+- one global `tracing` layer per process with structural secret filtering
+- the bounded admission queue, batching, receipts, and loss accounting
+- activation purely by possession of the two reserved Desktop bridge and
+  shutdown descriptors: `Disabled`, `Bundled`, or `BundledDegraded`, never a
+  product-launch failure
+- each component's fixed bounded fallback file family
+
+It consumes `proliferate-diagnostics-protocol` as its only wire-contract
+authority. It must not own collector runtime state, Desktop/Tauri wiring,
+Sentry/PostHog policy, product behavior, persistent queues, or replay.
+
+## `proliferate-diagnostics-collector`
+
+This crate owns the standalone, memory-only Desktop diagnostics collector:
+
+- capability-authenticated loopback HTTP transport
+- bounded ingest, lifecycle validation, query, tail, export, and health state
+- inherited capability and control file-descriptor process seams
+- deterministic resource profiling for the standalone process
+- the internal/dogfood OTLP export adapter behind the non-default
+  `internal-dogfood-export` feature
+
+It consumes `proliferate-diagnostics-protocol` as its only wire-contract
+authority. It must not own Desktop/Tauri wiring, producer queues, AnyHarness
+runtime behavior, Worker behavior, server/cloud integration, or durable storage.
+The export adapter it does own is provider-neutral OTLP over HTTP; the
+destination URL and its request headers arrive as environment values, so no
+provider identity or credential is part of any contract this crate holds. Its
+process, transport, and export surfaces are documented in
+`proliferate-diagnostics-collector/README.md`.

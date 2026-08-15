@@ -36,9 +36,6 @@ export function worktreeRowSearchText(row: WorktreeInventoryRow): string {
       workspace.displayName,
       workspace.branch,
       workspace.kind,
-      workspace.lifecycleState,
-      workspace.cleanupState,
-      workspace.cleanupOperation,
     ]),
   ].filter(Boolean).join(" ").toLowerCase();
 }

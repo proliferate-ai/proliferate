@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRepositories, useUpdateRepoConfig } from "@proliferate/cloud-sdk-react";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { Button } from "#product/primitives/Button";
 import { Textarea } from "#product/primitives/Textarea";
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
@@ -49,7 +49,7 @@ export function RepoCommitInstructionsSection({
 
   return (
     <SettingsSection title="Commit messages">
-      <div className="space-y-2 pt-2">
+      <div className="space-y-2 px-3.5 py-4">
         <Textarea
           aria-label="Commit message instructions"
           rows={3}

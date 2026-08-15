@@ -1,26 +1,18 @@
 /* Authenticated-only interaction styles stay behind the lazy product boundary
  * so chat affordances do not consume the public login shell's CSS budget. */
 
-@property --workspace-left-width {
-  syntax: "<length>";
-  inherits: true;
-  initial-value: 0px;
-}
-
-@property --workspace-right-width {
-  syntax: "<length>";
-  inherits: true;
-  initial-value: 0px;
-}
-
+/* --workspace-left-width/--workspace-right-width stay unregistered on
+   purpose: WebKit applies page zoom to a registered <length> custom property
+   once when it computes and again at the consumer, so a zoomed window renders
+   the panes at width·zoom² (PRO-166). Each consumer eases its own concrete
+   property against these shared durations instead. */
 .standard-workspace-shell {
   --workspace-left-geometry-duration: var(--duration-panel);
   --workspace-right-geometry-duration: var(--duration-panel);
-  transition-property: --workspace-left-width, --workspace-right-width;
-  transition-duration: var(--workspace-left-geometry-duration), var(--workspace-right-geometry-duration);
-  transition-timing-function: var(--ease-out-cubic), var(--ease-out-cubic);
 }
 
+/* A live left-separator drag and the explicitly snapped toggle path both
+   publish exact geometry; ordinary open/close changes keep panel easing. */
 .standard-workspace-shell[data-snap-left-geometry="true"] {
   --workspace-left-geometry-duration: 0ms;
 }
@@ -31,10 +23,6 @@
    the collapse a drag past the threshold triggers, which clears this flag. */
 .standard-workspace-shell[data-snap-right-geometry="true"] {
   --workspace-right-geometry-duration: 0ms;
-}
-
-.standard-workspace-shell[data-manual-workspace-geometry="true"] {
-  transition: none;
 }
 
 /* Transcript Markdown owns one scoped semantic type contract. The body scale
@@ -255,4 +243,242 @@
 
 .turn-document-reference-trigger:is(:hover, :focus-visible) .turn-document-open-label {
   opacity: 1;
+}
+
+/* Moved from the eager product.css (login runtime JS/CSS budget,
+   scripts/measure-login-runtime-budget.mjs): thread/diff virtualization
+   and the composer/sidebar/git-review diff line treatment only ever
+   render inside authenticated chat, file-viewer, and git-review
+   surfaces -- none of it is reachable pre-auth. */
+/* ---- Chat diffs ---- */
+.thread-diff-virtualized {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 36px;
+}
+
+/*
+ * Row-level virtualization for LARGE sidebar review diffs (opted in per card
+ * via data-diff-row-virtualization when the patch exceeds
+ * DIFF_ROW_VIRTUALIZATION_LINE_THRESHOLD). Every diff row cell — gutter and
+ * content are separate grid children in all three viewers — skips layout and
+ * paint while outside its scrollport, so scrolling one multi-thousand-row
+ * diff no longer keeps every row painted. `auto` in contain-intrinsic-size
+ * remembers each cell's real rendered height, so wrapped lines and per-gap
+ * context expanders don't make the scrollbar jump after first paint; the
+ * one-line-height fallback matches the min-height every unwrapped row has,
+ * keeping subgrid track sizing stable for cells that were never rendered.
+ */
+[data-diff-row-virtualization] .diff-gutter-cell,
+[data-diff-row-virtualization] .diff-content-cell {
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--diffs-line-height);
+}
+
+/*
+ * Block-level virtualization for the file viewer's rendered-document preview.
+ * A large Markdown file re-wraps every block whenever the pane width changes —
+ * which during a separator drag is every frame — so top-level blocks outside
+ * the scrollport skip layout and paint instead, and a resize (or scroll) only
+ * pays for the visible slice. `auto` in contain-intrinsic-size remembers each
+ * block's real rendered height after first paint; the fallback approximates
+ * one prose line for blocks that have never rendered.
+ */
+.file-preview-virtualized > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 24px;
+}
+
+.composer-diff-simple-line {
+  --diff-view-surface: var(--color-diff-main-surface);
+  --diff-view-header-surface: var(--diff-view-surface);
+  --diff-view-empty-surface: color-mix(in srgb, var(--diff-view-surface) 96%, var(--color-foreground));
+  --diffs-bg: var(--diff-view-surface);
+  background-color: var(--color-diff-code-surface);
+  scrollbar-color: var(--color-scrollbar-thumb) transparent;
+}
+
+.composer-diff-simple-line:hover {
+  scrollbar-color: var(--color-scrollbar-thumb-active) transparent;
+}
+
+[data-diff-surface="chat"] .composer-diff-simple-line,
+[data-diff-surface="sidebar"] .composer-diff-simple-line {
+  --diff-view-surface: var(--color-diff-main-surface);
+  --diff-view-context-surface: transparent;
+  --diff-view-context-number: transparent;
+  --diff-view-empty-surface: transparent;
+  --diff-view-separator-surface: transparent;
+  --diffs-bg-context-override: transparent;
+  --diffs-bg-separator-override: transparent;
+  background-color: var(--color-diff-code-surface);
+}
+
+.composer-diff-simple-line [data-diff] {
+  background-color: var(--diffs-bg);
+  color: var(--diffs-fg);
+}
+
+.composer-diff-simple-line [data-code] {
+  background-color: var(--diffs-bg);
+}
+
+.composer-diff-simple-line [data-line-type="context"] {
+  background-color: var(--diffs-bg-context-override);
+}
+
+/* -- Git review document (sidebar Changes pane) --
+   Flat review treatment: unchanged lines sit on the plain pane background
+   (only +/- rows carry a tint), and hunk-gap separators render as a slim
+   strip inset from the pane edges with rounded ends instead of a full-width
+   band. Scoped to the review scroll container so chat-transcript diffs keep
+   their own treatment. */
+[data-git-review-document] {
+  --diffs-bg-context-override: var(--color-background);
+  --diff-view-context-number: var(--color-background);
+  /* Separator cells draw their strip via ::before below; the cell itself must
+     stay transparent or the strip reads as a full-width band. This var feeds
+     the later .composer-diff-simple-line [data-separator] background rule. */
+  --diffs-bg-separator-override: transparent;
+}
+
+[data-git-review-document] [data-separator] {
+  background: transparent;
+  position: relative;
+}
+
+[data-git-review-document] [data-separator]::before {
+  content: "";
+  position: absolute;
+  inset: 3px 0;
+  background: var(--diff-view-separator-surface);
+  pointer-events: none;
+}
+
+/* Gutter cells cap the left end of the strip; content cells (gap-expander,
+   gap-info, collapsed-context rows) cap the right end. Between them the two
+   ::before segments meet edge-to-edge, so the strip reads as one slim pill
+   inset from the pane edges — a [data-separator='line-info'] look. */
+[data-git-review-document] .diff-gutter-cell[data-separator]::before {
+  left: 6px;
+  border-radius: 6px 0 0 6px;
+}
+
+[data-git-review-document] .diff-content-cell[data-separator]::before,
+[data-git-review-document] [data-separator="gap-expander"]::before,
+[data-git-review-document] [data-separator="gap-info"]::before {
+  right: 6px;
+  border-radius: 0 6px 6px 0;
+}
+
+/* Keep separator labels and expand controls above the ::before strip. */
+[data-git-review-document] [data-separator] > * {
+  position: relative;
+}
+
+.composer-diff-simple-line [data-line-type="change-addition"] {
+  background-color: var(--diffs-bg-addition-override);
+}
+
+.composer-diff-simple-line [data-line-type="change-deletion"] {
+  background-color: var(--diffs-bg-deletion-override);
+}
+
+.composer-diff-simple-line [data-line-type="change-addition"]:hover,
+.composer-diff-simple-line [data-line-type="change-addition"]:hover > .diff-gutter-cell {
+  background-color: var(--diffs-bg-addition-hover-override);
+}
+
+.composer-diff-simple-line [data-line-type="change-deletion"]:hover,
+.composer-diff-simple-line [data-line-type="change-deletion"]:hover > .diff-gutter-cell {
+  background-color: var(--diffs-bg-deletion-hover-override);
+}
+
+.composer-diff-simple-line .diff-gutter-cell[data-line-type="context"],
+.composer-diff-simple-line .diff-content-cell[data-line-type="context"] {
+  color: color-mix(in srgb, var(--diffs-fg) 30%, transparent);
+}
+
+.composer-diff-simple-line .diff-content-cell[data-line-type="change-addition"] {
+  color: var(--color-diff-added);
+}
+
+.composer-diff-simple-line .diff-content-cell[data-line-type="change-deletion"] {
+  color: var(--color-diff-deleted);
+}
+
+.composer-diff-simple-line [data-separator] {
+  background-color: var(--diffs-bg-separator-override);
+}
+
+.composer-diff-simple-line .diff-content-cell[data-empty-side] {
+  background-color: var(--diff-view-empty-surface);
+}
+
+.composer-diff-simple-line .diff-gutter-cell[data-empty-side] {
+  background-color: var(--diff-view-context-number);
+}
+
+.composer-diff-simple-line .diff-gutter-cell {
+  border-inline-end: 1px solid var(--color-diff-code-surface);
+}
+
+.composer-diff-simple-line .diff-gutter-cell[data-line-type="context"] {
+  background-color: var(--diff-view-context-number);
+  color: color-mix(in srgb, var(--diffs-fg) 35%, transparent);
+}
+
+.composer-diff-simple-line .diff-gutter-cell[data-line-type="change-addition"] {
+  background-color: var(--diffs-bg-addition-number-override);
+  color: var(--color-diff-added);
+}
+
+.composer-diff-simple-line .diff-gutter-cell[data-line-type="change-deletion"] {
+  background-color: var(--diffs-bg-deletion-number-override);
+  color: var(--color-diff-deleted);
+}
+
+.composer-diff-simple-line .diff-gutter-cell[data-line-type="change-addition"],
+.composer-diff-simple-line .diff-gutter-cell[data-line-type="change-deletion"] {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 10;
+}
+
+.composer-diff-simple-line [data-line-number-content] {
+  position: relative;
+  z-index: 1;
+}
+
+.composer-diff-simple-line .diff-gutter-cell[data-line-type="change-addition"]::before,
+.composer-diff-simple-line .diff-gutter-cell[data-line-type="change-deletion"]::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 3px;
+}
+
+.composer-diff-simple-line .diff-gutter-cell[data-line-type="change-addition"]::before {
+  background-color: var(--diffs-addition-color-override);
+}
+
+.composer-diff-simple-line .diff-gutter-cell[data-line-type="change-deletion"]::before {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--diffs-deletion-color-override) 0 1px,
+    transparent 1px 3px
+  );
+}
+
+.composer-diff-simple-line [data-separator]:empty {
+  display: flex;
+  align-items: center;
+  background-color: transparent;
+}
+
+.composer-diff-simple-line [data-content] [data-separator]:empty::after {
+  content: "";
+  flex: 1;
+  margin-inline: 1ch;
+  border-top: 1px solid color-mix(in srgb, var(--diffs-fg) 18%, transparent);
 }

@@ -132,8 +132,19 @@ pub enum SessionMutationKind {
     SubagentWake,
     ReplayAdvance,
     WorkspacePurge,
-    WorkspaceRetire,
-    Mobility,
+    /// Read-consistency fence for a mobility archive snapshot.
+    MobilitySnapshot,
+    /// Destructive source teardown after a mobility handoff.
+    MobilityTeardown,
+    /// Reversible relationship close; allowed to repeat while already Closed.
+    SubagentClose,
+    /// The sole ordinary mutation admitted while a subagent is Closed.
+    SubagentOpen,
+    /// Relationship deletion/promotion; Closed targets are rejected.
+    SubagentPromote,
+    /// Creation of a child relationship; admitted on the parent session so a
+    /// terminal parent transition cannot race the atomic child+link insert.
+    SubagentCreate,
     /// The owning workflow's terminal run+step CAS (completion, failure,
     /// cancellation) — always a trusted source; named so conflict logs and
     /// the ratchet classify it.
@@ -160,8 +171,12 @@ impl SessionMutationKind {
             Self::SubagentWake => "subagent_wake",
             Self::ReplayAdvance => "replay_advance",
             Self::WorkspacePurge => "workspace_purge",
-            Self::WorkspaceRetire => "workspace_retire",
-            Self::Mobility => "mobility",
+            Self::MobilitySnapshot => "mobility_snapshot",
+            Self::MobilityTeardown => "mobility_teardown",
+            Self::SubagentClose => "subagent_close",
+            Self::SubagentOpen => "subagent_open",
+            Self::SubagentPromote => "subagent_promote",
+            Self::SubagentCreate => "subagent_create",
             Self::WorkflowTerminal => "workflow_terminal",
         }
     }
@@ -176,9 +191,27 @@ pub trait SessionControllerPolicy: Send + Sync {
     fn controlling_run_id(&self, session_id: &str) -> anyhow::Result<Option<String>>;
 }
 
-/// A policy admitting everything — the app default until workflow wiring
-/// installs the real controller lookup, and the fixture for ordinary-session
-/// tests.
+/// Dynamic relationship-state lookup for the same keyed mutation gate. The
+/// implementation is injected by composition so admission does not import a
+/// relationship store.
+pub trait SessionOperabilityPolicy: Send + Sync {
+    fn is_reversibly_closed_subagent(&self, session_id: &str) -> anyhow::Result<bool>;
+}
+
+/// Test-only fixture. Production construction must inject a real durable
+/// operability lookup; there is deliberately no permissive app default.
+#[cfg(test)]
+pub struct AllSessionsOperable;
+
+#[cfg(test)]
+impl SessionOperabilityPolicy for AllSessionsOperable {
+    fn is_reversibly_closed_subagent(&self, _session_id: &str) -> anyhow::Result<bool> {
+        Ok(false)
+    }
+}
+
+/// A policy admitting everything for controller ownership. Production app
+/// wiring replaces it with the workflows-owned durable lookup.
 pub struct NoControllerPolicy;
 
 impl SessionControllerPolicy for NoControllerPolicy {
@@ -193,6 +226,10 @@ pub enum SessionMutationConflict {
     /// A nonterminal workflow controls this session; carries its run id for
     /// logging (never for the wire body).
     ControlledByWorkflow { run_id: String },
+    /// The target is a current subagent whose reversible operability marker is
+    /// Closed. Only Open, repeated subagent Close, and workspace teardown may
+    /// cross this gate.
+    SubagentOpenRequired,
     /// Policy lookup infrastructure failed; callers surface their generic
     /// storage error, never a fabricated admission.
     Internal(anyhow::Error),
@@ -212,13 +249,18 @@ pub struct SessionMutationPermit {
 pub struct SessionMutationAdmission {
     slots: StdMutex<HashMap<String, Weak<AsyncMutex<()>>>>,
     policy: Arc<dyn SessionControllerPolicy>,
+    operability_policy: Arc<dyn SessionOperabilityPolicy>,
 }
 
 impl SessionMutationAdmission {
-    pub fn new(policy: Arc<dyn SessionControllerPolicy>) -> Self {
+    pub fn new(
+        policy: Arc<dyn SessionControllerPolicy>,
+        operability_policy: Arc<dyn SessionOperabilityPolicy>,
+    ) -> Self {
         Self {
             slots: StdMutex::new(HashMap::new()),
             policy,
+            operability_policy,
         }
     }
 
@@ -253,28 +295,55 @@ impl SessionMutationAdmission {
         let guard = gate.lock_owned().await;
 
         let policy = self.policy.clone();
+        let operability_policy = self.operability_policy.clone();
         let lookup_session_id = session_id.to_string();
-        let controlling =
-            tokio::task::spawn_blocking(move || policy.controlling_run_id(&lookup_session_id))
-                .await
-                .map_err(|error| SessionMutationConflict::Internal(error.into()))?
-                .map_err(SessionMutationConflict::Internal)?;
+        let (controlling, reversibly_closed) = tokio::task::spawn_blocking(move || {
+            Ok::<_, anyhow::Error>((
+                policy.controlling_run_id(&lookup_session_id)?,
+                operability_policy.is_reversibly_closed_subagent(&lookup_session_id)?,
+            ))
+        })
+        .await
+        .map_err(|error| SessionMutationConflict::Internal(error.into()))?
+        .map_err(SessionMutationConflict::Internal)?;
 
         match controlling {
-            None => Ok(SessionMutationPermit { _guard: guard }),
+            None => {}
             Some(run_id) => {
                 if source.run_id() == Some(run_id.as_str()) {
-                    return Ok(SessionMutationPermit { _guard: guard });
+                    // Continue to the independent relationship operability
+                    // policy; controller ownership does not open a subagent.
+                } else {
+                    tracing::info!(
+                        session_id = %session_id,
+                        mutation_kind = kind.as_str(),
+                        controlling_run_id = %run_id,
+                        "session mutation rejected: session is controlled by a workflow"
+                    );
+                    return Err(SessionMutationConflict::ControlledByWorkflow { run_id });
                 }
-                tracing::info!(
-                    session_id = %session_id,
-                    mutation_kind = kind.as_str(),
-                    controlling_run_id = %run_id,
-                    "session mutation rejected: session is controlled by a workflow"
-                );
-                Err(SessionMutationConflict::ControlledByWorkflow { run_id })
             }
         }
+
+        if reversibly_closed
+            && !matches!(
+                kind,
+                SessionMutationKind::SubagentOpen
+                    | SessionMutationKind::SubagentClose
+                    | SessionMutationKind::WorkspacePurge
+                    | SessionMutationKind::MobilitySnapshot
+                    | SessionMutationKind::MobilityTeardown
+            )
+        {
+            tracing::info!(
+                session_id = %session_id,
+                mutation_kind = kind.as_str(),
+                "session mutation rejected: subagent must be opened"
+            );
+            return Err(SessionMutationConflict::SubagentOpenRequired);
+        }
+
+        Ok(SessionMutationPermit { _guard: guard })
     }
 
     /// PR1227-WORKSPACE-FENCE-01: the workspace-destruction re-check. Given the

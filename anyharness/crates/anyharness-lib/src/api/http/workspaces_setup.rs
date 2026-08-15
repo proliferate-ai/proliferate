@@ -6,7 +6,7 @@ use axum::{
     Json,
 };
 
-use super::access::{assert_workspace_not_retired, map_access_error};
+use super::access::{assert_workspace_active, assert_workspace_exists, map_access_error};
 use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::workspaces_contract::{detection_result_to_contract, setup_command_run_to_contract};
@@ -32,7 +32,7 @@ pub async fn detect_project_setup(
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
         .await;
-    assert_workspace_not_retired(&state, &workspace_id)?;
+    assert_workspace_exists(&state, &workspace_id)?;
     let workspace_runtime = state.workspace_runtime.clone();
     let result = run_blocking("detect-setup", move || {
         workspace_runtime.detect_setup(&workspace_id)
@@ -91,6 +91,9 @@ pub async fn rerun_setup(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
 ) -> Result<Json<GetSetupStatusResponse>, ApiError> {
+    // Setup spawns a process in the worktree, so it is a mutation in every sense
+    // that matters here even though it writes no row.
+    assert_workspace_active(&state, &workspace_id)?;
     let run = state
         .workspace_setup_runtime
         .rerun_setup(workspace_id)
@@ -116,6 +119,7 @@ pub async fn start_setup(
     Path(workspace_id): Path<String>,
     Json(req): Json<StartWorkspaceSetupRequest>,
 ) -> Result<Json<GetSetupStatusResponse>, ApiError> {
+    assert_workspace_active(&state, &workspace_id)?;
     let run = state
         .workspace_setup_runtime
         .start_setup(StartWorkspaceSetupInput {

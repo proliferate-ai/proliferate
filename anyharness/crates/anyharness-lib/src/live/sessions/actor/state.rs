@@ -67,6 +67,14 @@ pub(in crate::live::sessions::actor) struct SessionActor {
     pub(in crate::live::sessions::actor) _acp_shutdown: oneshot::Sender<()>,
     /// The agent process guard; dropped last when the actor exits.
     pub(in crate::live::sessions::actor) child: tokio::process::Child,
+    /// Set by the `Stop` command (`stop_and_await`'s workspace-wide kill
+    /// path). When present, `run()`'s exit sequence runs the process-group
+    /// TERM/KILL escalation and reap in place of the plain `drop(self.child)`
+    /// and fires this responder with the confirmed `(total, git)` census
+    /// AFTER death, never at command-accept time — dismiss proves nothing
+    /// about process death, only this does.
+    pub(in crate::live::sessions::actor) pending_stop_response:
+        Option<oneshot::Sender<anyhow::Result<(usize, usize)>>>,
 }
 
 #[derive(Debug, Clone)]

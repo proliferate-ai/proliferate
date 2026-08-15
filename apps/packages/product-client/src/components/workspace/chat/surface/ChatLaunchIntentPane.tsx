@@ -13,9 +13,12 @@ import {
   CHAT_COLUMN_CLASSNAME,
   CHAT_SURFACE_GUTTER_CLASSNAME,
 } from "#product/config/chat-layout";
+import { WorkspaceCreationReceipt } from "#product/components/workspace/chat/transcript/WorkspaceCreationReceipt";
 import { useChatLaunchIntentActions } from "#product/hooks/chat/workflows/use-chat-launch-intent-actions";
 import { resolveChatLaunchIntentView } from "#product/lib/domain/chat/launch/launch-intent";
-import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
+import { isReceiptPendingEntry } from "#product/lib/domain/workspaces/creation/creation-receipt";
+import { useShellLaunchIntent } from "#product/hooks/chat/derived/use-shell-launch-intent";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { formatTranscriptActionTime } from "#product/domain/chats/transcript/transcript-action-time";
 
 interface ChatLaunchIntentPaneProps {
@@ -27,13 +30,19 @@ export function ChatLaunchIntentPane({
   bottomInsetPx,
   nonDisplacingBottomInsetPx,
 }: ChatLaunchIntentPaneProps) {
-  const activeIntent = useChatLaunchIntentStore((state) => state.activeIntent);
+  const activeIntent = useShellLaunchIntent();
   const {
     dismiss,
     isRetrying,
     retry,
     returnHome,
   } = useChatLaunchIntentActions();
+  // Same precedence rule as TranscriptPendingPromptRow's `workspaceReceipt`:
+  // while a local/worktree creation is in flight, "Thinking" is a false claim
+  // (no session exists yet to think), so the creation receipt replaces it in
+  // the frontier slot. The pending prompt row inherits the receipt at the
+  // same position when the queued prompt lands and the transcript takes over.
+  const hostsWorkspaceReceipt = isReceiptPendingEntry(useAttendedPendingWorkspaceEntry());
 
   if (!activeIntent) {
     return null;
@@ -130,11 +139,13 @@ export function ChatLaunchIntentPane({
                 {isPending && (
                   <>
                     <div data-chat-launch-intent-frontier>
-                      {resolvePendingPromptTrailingStatus(
-                        new Date(activeIntent.createdAt).toISOString(),
-                        "working",
-                        true,
-                      )}
+                      {hostsWorkspaceReceipt
+                        ? <WorkspaceCreationReceipt pendingOnly />
+                        : resolvePendingPromptTrailingStatus(
+                          new Date(activeIntent.createdAt).toISOString(),
+                          "working",
+                          true,
+                        )}
                     </div>
                     <TurnAssistantActionRow content={null} reserveSlot />
                   </>

@@ -1,4 +1,9 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
+import { safeRendererErrorMessage } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 
 export class TerminalErrorBoundary extends Component<
   { children: ReactNode },
@@ -11,7 +16,19 @@ export class TerminalErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.warn("[TerminalErrorBoundary] xterm render error caught:", error.message, info.componentStack);
+    const errorMessage = safeRendererErrorMessage(error);
+    recordRendererDiagnostic({
+      name: "renderer.terminal.render_failed",
+      severity: "error",
+      kind: "message",
+      privacy: "sensitive",
+      fields: {
+        message: diagnosticField(errorMessage, "sensitive"),
+        component_stack: diagnosticField(info.componentStack ?? "[none]", "sensitive"),
+      },
+      errorClassification: "terminal_render_failed",
+    });
+    console.warn("[TerminalErrorBoundary] xterm render error caught:", errorMessage, info.componentStack);
   }
 
   render() {

@@ -1,11 +1,9 @@
 import { useId, useState, type FormEvent } from "react";
 
-import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
-
-import { ProviderBrandIcon } from "#product/components/auth/ProviderBrandIcon";
+import { RosterRow } from "#product/primitives/patterns/RosterRow";
 
 export interface AccountPasswordCredentialSubmit {
   currentPassword?: string;
@@ -80,12 +78,6 @@ export function AccountPasswordCredentialRow({
     }
   }
 
-  const statusLabel = credential.loading
-    ? "Checking"
-    : credential.enabled
-      ? "Enabled"
-      : "Not set";
-
   const detailText = credential.enabled
     ? "Email sign-in is enabled for this account."
     : credential.loading
@@ -93,45 +85,36 @@ export function AccountPasswordCredentialRow({
       : "Add a password to sign in with email";
 
   return (
-    <div className="border-t border-border-light py-3 first:border-t-0">
-      <div className="flex min-h-[2.75rem] flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <ProviderBrandIcon provider="password" className="icon-control shrink-0 text-muted-foreground" />
-          <div className="min-w-0 space-y-0.5">
-            <div className="text-ui font-medium text-foreground">Email &amp; password</div>
-            <div className="truncate text-ui-sm text-muted-foreground">{detailText}</div>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Badge tone="neutral" className="shrink-0 whitespace-nowrap">
-            {statusLabel}
-          </Badge>
-          {credential.onSubmit ? (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={actionDisabled || submitting}
-              onClick={() => {
-                setError(null);
-                if (editing) {
-                  setCurrentPassword("");
-                  setNewPassword("");
-                  setConfirmPassword("");
-                  setEditing(false);
-                } else {
-                  setEditing(true);
-                }
-              }}
-            >
-              {editing ? "Cancel" : credential.enabled ? "Change password" : "Set password"}
-            </Button>
-          ) : null}
-        </div>
-      </div>
+    <div>
+      <RosterRow
+        density="comfortable"
+        title="Email & password"
+        secondary={detailText}
+        trailing={credential.onSubmit ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={actionDisabled || submitting}
+            onClick={() => {
+              setError(null);
+              if (editing) {
+                setCurrentPassword("");
+                setNewPassword("");
+                setConfirmPassword("");
+                setEditing(false);
+              } else {
+                setEditing(true);
+              }
+            }}
+          >
+            {editing ? "Cancel" : credential.enabled ? "Change password" : "Set password"}
+          </Button>
+        ) : null}
+      />
 
       {editing ? (
-        <form className="mt-3 grid gap-3 sm:max-w-md" onSubmit={submit}>
+        <form className="grid gap-3 px-3.5 pb-3.5 sm:max-w-md" onSubmit={submit}>
           {needsCurrentPassword ? (
             <div className="space-y-1.5">
               <Label htmlFor={currentPasswordId}>Current password</Label>
@@ -208,16 +191,4 @@ export function AccountPasswordCredentialRow({
       ) : null}
     </div>
   );
-}
-
-/**
- * Legacy standalone card export — kept for API compatibility.
- * The pane now uses AccountPasswordCredentialRow inline.
- */
-export function AccountPasswordCredentialCard({
-  credential,
-}: {
-  credential: AccountPasswordCredentialView;
-}) {
-  return <AccountPasswordCredentialRow credential={credential} />;
 }

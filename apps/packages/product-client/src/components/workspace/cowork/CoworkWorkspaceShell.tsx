@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type MouseEvent } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ChatView } from "#product/components/workspace/chat/ChatView";
 import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
@@ -6,6 +6,7 @@ import { IconButton } from "#product/primitives/IconButton";
 import { SplitPanelLeft } from "#product/primitives/icons/app-shell";
 import { CoworkArtifactsPanel } from "#product/components/workspace/cowork/CoworkArtifactsPanel";
 import { CoworkWorkspaceHeader } from "#product/components/workspace/cowork/CoworkWorkspaceHeader";
+import { useWorkspaceSidebarResize } from "#product/hooks/preferences/ui/use-workspace-sidebar-resize";
 import { useResize } from "#product/hooks/ui/layout/use-resize";
 import { useMacWindowControlsInsetClass } from "#product/hooks/ui/layout/use-mac-window-controls";
 import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
@@ -15,10 +16,6 @@ import {
   resolveMainSidebarEdgeClassName,
 } from "#product/lib/domain/preferences/workspace-chrome";
 import { useProductHost } from "#product/host/ProductHostProvider";
-import {
-  WORKSPACE_SIDEBAR_MAX_WIDTH,
-  WORKSPACE_SIDEBAR_MIN_WIDTH,
-} from "#product/lib/domain/preferences/workspace-ui/sidebar";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useCoworkUiStore } from "#product/stores/cowork/cowork-ui-store";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
@@ -44,14 +41,15 @@ export function CoworkWorkspaceShell({
   const {
     sidebarOpen,
     setSidebarOpen,
-    sidebarWidth,
-    setSidebarWidth,
   } = useWorkspaceUiStore(useShallow((state) => ({
     sidebarOpen: state.sidebarOpen,
     setSidebarOpen: state.setSidebarOpen,
-    sidebarWidth: state.sidebarWidth,
-    setSidebarWidth: state.setSidebarWidth,
   })));
+  const {
+    sidebarWidth,
+    sidebarResizing,
+    onSidebarSeparatorDown: onLeftSeparatorDown,
+  } = useWorkspaceSidebarResize();
   const canShowArtifactPanel = workspaceId !== null;
   const rightPanelOpen = useCoworkUiStore(
     (state) => (workspaceId ? state.artifactPanelOpenByWorkspaceId[workspaceId] === true : false),
@@ -74,21 +72,20 @@ export function CoworkWorkspaceShell({
   const activeSlot = useSessionDirectoryStore((state) =>
     activeSessionId ? state.entriesById[activeSessionId] ?? null : null
   );
-  const onLeftSeparatorDown = useResize({
-    direction: "horizontal",
-    size: sidebarWidth,
-    onResize: setSidebarWidth,
-    min: WORKSPACE_SIDEBAR_MIN_WIDTH,
-    max: WORKSPACE_SIDEBAR_MAX_WIDTH,
-  });
-  const onRightSeparatorDown = useResize({
+  const [rightPanelResizing, setRightPanelResizing] = useState(false);
+  const beginRightSeparatorDrag = useResize({
     direction: "horizontal",
     size: rightPanelWidth,
     onResize: setRightPanelWidth,
+    onResizeEnd: () => setRightPanelResizing(false),
     reverse: true,
     min: 280,
     max: 760,
   });
+  const onRightSeparatorDown = useCallback((event: MouseEvent) => {
+    setRightPanelResizing(true);
+    beginRightSeparatorDrag(event);
+  }, [beginRightSeparatorDrag]);
 
   const headerTitle = useMemo(() => {
     if (workspaceId && activeSessionId && activeSlot?.workspaceId === workspaceId && activeSlot.title?.trim()) {
@@ -124,7 +121,11 @@ export function CoworkWorkspaceShell({
       >
         <div
           id="cowork-sidebar"
-          className={`flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-panel ease-in-out ${resolveMainSidebarEdgeClassName({
+          className={`flex shrink-0 flex-col overflow-hidden bg-sidebar ${
+            sidebarResizing
+              ? "transition-none"
+              : "transition-[width] duration-panel ease-in-out"
+          } ${resolveMainSidebarEdgeClassName({
             desktop: desktopHost,
             transparent: transparentChromeEnabled,
           })}`}
@@ -208,8 +209,13 @@ export function CoworkWorkspaceShell({
             )}
 
             <div
-              className="shrink-0 overflow-hidden transition-[width] duration-panel ease-in-out"
+              className={`shrink-0 overflow-hidden ${
+                rightPanelResizing
+                  ? "transition-none"
+                  : "transition-[width] duration-panel ease-in-out"
+              }`}
               style={{ width: canShowArtifactPanel && rightPanelOpen ? rightPanelWidth : 0 }}
+              data-cowork-artifact-pane
             >
               <div className="h-full" style={{ minWidth: 320 }}>
                 {workspaceId ? <CoworkArtifactsPanel workspaceId={workspaceId} /> : null}

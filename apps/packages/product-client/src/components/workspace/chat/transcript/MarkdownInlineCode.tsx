@@ -11,6 +11,11 @@ import {
  * so the inline-code presentation (chip surface plus the hex-colour swatch
  * below) has one owner and MarkdownBody keeps only the component map.
  */
+// Recorded cause (DESIGN_SYSTEM.md § UI-conformance review, check 4): a
+// two-argument CSS fallback. `--color-code-block-background` is an optional
+// per-theme override that falls back to the muted token when a theme does not
+// set it, and no token utility can express a fallback chain, so the bracket
+// stays.
 export const MARKDOWN_INLINE_CODE_CLASS =
   "rounded-sm bg-[var(--color-code-block-background,var(--color-muted))] px-1 align-baseline font-mono text-foreground";
 

@@ -98,8 +98,11 @@ describe("Workflow run UI", () => {
       />,
     );
 
-    const details = screen.getByText("Inputs (1)").closest("details");
-    expect(details?.hasAttribute("open")).toBe(false);
+    // The inputs block moved from a native <details> to the `Disclosure`
+    // pattern (DESIGN_SYSTEM.md check 1/3): collapsed state now reads from
+    // `aria-expanded` on the toggle button rather than the `open` attribute.
+    const toggle = screen.getByText("Inputs (1)").closest("button");
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
     expect(container.querySelector("[data-telemetry-mask]")?.textContent).toContain("PROL-123");
     expect(screen.queryByRole("button", { name: "Open session" })).toBeNull();
     expect(screen.getByText("Scratch workspace")).toBeTruthy();

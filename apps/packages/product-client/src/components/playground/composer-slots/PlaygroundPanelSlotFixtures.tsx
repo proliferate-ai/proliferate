@@ -1,26 +1,11 @@
 import type { ReactNode } from "react";
 import { ApprovalCard } from "#product/components/workspace/chat/input/ApprovalCard";
 import { McpElicitationCard } from "#product/components/workspace/chat/input/McpElicitationCard";
-import {
-  TodoTrackerPanel,
-  TodoTrackerStrip,
-} from "#product/components/workspace/chat/input/TodoTrackerPanel";
 import { UserInputCard } from "#product/components/workspace/chat/input/UserInputCard";
 import { PlaygroundInteractionMotionFixture } from "#product/components/playground/composer-slots/PlaygroundInteractionMotionFixture";
-import { CloudRuntimeAttachedPanelView } from "#product/components/workspace/chat/surface/CloudRuntimeAttachedPanel";
-import { WorkspaceArrivalAttachedPanelView } from "#product/components/workspace/chat/surface/WorkspaceArrivalAttachedPanel";
-import { WorkspaceArrivalCloudPanel } from "#product/components/workspace/chat/surface/WorkspaceArrivalCloudPanel";
+import { WorkspaceCreationReceiptView } from "#product/components/workspace/chat/transcript/WorkspaceCreationReceipt";
+import { presentWorkspaceCreationReceipt } from "#product/lib/domain/workspaces/creation/creation-receipt";
 import type { ScenarioKey } from "#product/config/playground";
-import {
-  CLOUD_RUNTIME_RECONNECT_ERROR,
-  CLOUD_RUNTIME_RECONNECTING,
-  CLOUD_STATUS_APPLYING_FILES,
-  CLOUD_STATUS_BLOCKED,
-  CLOUD_STATUS_ERROR,
-  CLOUD_STATUS_FIRST_RUNTIME,
-  CLOUD_STATUS_PROVISIONING,
-  WORKSPACE_ARRIVAL_CREATED,
-} from "#product/lib/domain/chat/__fixtures__/playground/panel-cloud-fixtures";
 import {
   EDIT_OPTIONS,
   EXECUTE_OPTIONS,
@@ -36,11 +21,6 @@ import {
   USER_INPUT_SINGLE_FREEFORM,
   USER_INPUT_SINGLE_OPTION,
 } from "#product/lib/domain/chat/__fixtures__/playground/panel-interaction-fixtures";
-import {
-  TODOS_LONG,
-  TODOS_MID,
-  TODOS_SHORT,
-} from "#product/lib/domain/chat/__fixtures__/playground/panel-todo-fixtures";
 import { noop, noopAsync, revealExampleUrl } from "#product/components/playground/PlaygroundComposerActions";
 
 export function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null {
@@ -54,28 +34,6 @@ export function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null 
     case "subagents-queued-wake":
     case "subagent-wake-card":
       return null;
-    case "todos-short":
-      return <TodoTrackerPanel entries={TODOS_SHORT} />;
-    case "todos-mid":
-      return <TodoTrackerPanel entries={TODOS_MID} />;
-    case "todos-long":
-      return <TodoTrackerPanel entries={TODOS_LONG} />;
-    // Mirrors the production active-slot composition (use-composer-dock-slots):
-    // while an interaction holds the slot, plan progress collapses to the slim
-    // one-line strip directly below the card instead of being evicted.
-    case "todo-strip-with-approval":
-      return (
-        <>
-          <ApprovalCard
-            title="pnpm exec vitest run --reporter=dot"
-            actions={EXECUTE_OPTIONS}
-            onSelectOption={noop}
-            onAllow={noop}
-            onDeny={noop}
-          />
-          <TodoTrackerStrip entries={TODOS_MID} />
-        </>
-      );
     // Auto-cycling pending→resolved loop for the dock-card mount/exit motion.
     case "interaction-motion":
       return <PlaygroundInteractionMotionFixture />;
@@ -149,70 +107,57 @@ export function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null 
           onDeny={noop}
         />
       );
-    case "workspace-arrival-created":
+    case "workspace-receipt-setup-succeeded":
       return (
-        <WorkspaceArrivalAttachedPanelView
-          viewModel={WORKSPACE_ARRIVAL_CREATED}
+        <WorkspaceCreationReceiptView
+          presentation={presentWorkspaceCreationReceipt({
+            phase: "created",
+            noun: "worktree",
+            workspacePath: "/Users/pablo/.proliferate/worktrees/proliferate/prism",
+            materializedWorkspaceId: "workspace-receipt-setup-succeeded",
+            setup: {
+              command: "pnpm install",
+              status: "succeeded",
+              failureSummary: null,
+              terminalId: null,
+            },
+          })}
+          expanded={false}
+          onToggleExpanded={noop}
+        />
+      );
+    case "workspace-receipt-setup-failed":
+      return (
+        <WorkspaceCreationReceiptView
+          presentation={presentWorkspaceCreationReceipt({
+            phase: "created",
+            noun: "worktree",
+            workspacePath: "/Users/pablo/.proliferate/worktrees/proliferate/prism",
+            materializedWorkspaceId: "workspace-receipt-setup-failed",
+            setup: {
+              command: "pnpm install",
+              status: "failed",
+              failureSummary: "Setup failed with exit code 1: pnpm ERR! ENOENT",
+              terminalId: "terminal-playground",
+            },
+          })}
           expanded
           onToggleExpanded={noop}
-          onDismiss={noop}
-          onSetupAction={noop}
+          showSeeTerminal
+          onSeeTerminal={noop}
+          onRerun={noop}
         />
       );
+    // Cloud provisioning/runtime scenarios now render via the composer
+    // takeover (renderComposerBlockedSurface), not an attached panel.
     case "cloud-first-runtime":
-      return (
-        <WorkspaceArrivalCloudPanel
-          model={CLOUD_STATUS_FIRST_RUNTIME}
-          isPrimaryActionPending={false}
-          onPrimaryAction={noop}
-        />
-      );
     case "cloud-provisioning":
-      return (
-        <WorkspaceArrivalCloudPanel
-          model={CLOUD_STATUS_PROVISIONING}
-          isPrimaryActionPending={false}
-          onPrimaryAction={noop}
-        />
-      );
     case "cloud-applying-files":
-      return (
-        <WorkspaceArrivalCloudPanel
-          model={CLOUD_STATUS_APPLYING_FILES}
-          isPrimaryActionPending={false}
-          onPrimaryAction={noop}
-        />
-      );
     case "cloud-blocked":
-      return (
-        <WorkspaceArrivalCloudPanel
-          model={CLOUD_STATUS_BLOCKED}
-          isPrimaryActionPending={false}
-          onPrimaryAction={noop}
-        />
-      );
     case "cloud-error":
-      return (
-        <WorkspaceArrivalCloudPanel
-          model={CLOUD_STATUS_ERROR}
-          isPrimaryActionPending={false}
-          onPrimaryAction={noop}
-        />
-      );
     case "cloud-reconnecting":
-      return (
-        <CloudRuntimeAttachedPanelView
-          state={CLOUD_RUNTIME_RECONNECTING}
-          retry={noop}
-        />
-      );
     case "cloud-reconnect-error":
-      return (
-        <CloudRuntimeAttachedPanelView
-          state={CLOUD_RUNTIME_RECONNECT_ERROR}
-          retry={noop}
-        />
-      );
+      return null;
     case "user-input-single-option":
       return (
         <UserInputCard

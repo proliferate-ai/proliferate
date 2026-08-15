@@ -10,6 +10,11 @@ import { useWorkspaceCollectionsCache } from "#product/hooks/workspaces/cache/us
 import { useProductAuthUserId } from "#product/hooks/auth/facade/use-product-auth";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import {
+  recordWorkspaceSyncFetchFailed,
+  recordWorkspaceSyncMerged,
+} from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+import { classifyRendererErrorClass } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
+import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
@@ -161,6 +166,7 @@ export function useWorkspaces(options?: UseWorkspacesOptions) {
           fallbackOnNonAbort(
             listRuntimeWorkspaces(
               connection,
+              undefined,
               requestOptionsWithSignal(
                 getMeasurementRequestOptions({ operationId, category: "workspace.list" })
                   ?? undefined,
@@ -198,6 +204,7 @@ export function useWorkspaces(options?: UseWorkspacesOptions) {
           startedAt: buildStartedAt,
           count: collections.workspaces.length,
         });
+        const collectionsElapsedMs = elapsedMs(startedAt);
         logLatency("workspace.collections.fetch.success", {
           runtimeUrl,
           hasLocalRuntime,
@@ -205,7 +212,13 @@ export function useWorkspaces(options?: UseWorkspacesOptions) {
           localCount: collections.localWorkspaces.length,
           cloudCount: collections.cloudWorkspaces.length,
           mergedCount: collections.workspaces.length,
-          elapsedMs: elapsedMs(startedAt),
+          elapsedMs: collectionsElapsedMs,
+        });
+        recordWorkspaceSyncMerged({
+          localCount: collections.localWorkspaces.length,
+          cloudCount: collections.cloudWorkspaces.length,
+          mergedCount: collections.workspaces.length,
+          elapsedMs: collectionsElapsedMs,
         });
         if (operationId) {
           finishMeasurementOperation(operationId, "completed");
@@ -216,6 +229,11 @@ export function useWorkspaces(options?: UseWorkspacesOptions) {
           operationId,
           isAbortError(error) ? "aborted" : "error_sanitized",
         );
+        if (!isAbortError(error)) {
+          recordWorkspaceSyncFetchFailed({
+            errorClass: classifyRendererErrorClass(error),
+          });
+        }
         throw error;
       } finally {
         unbind();

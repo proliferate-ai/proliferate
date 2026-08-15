@@ -37,6 +37,14 @@ export function PlanReferencePreviewDialog({
               Plan attachment
             </div>
           </div>
+          {/*
+            Recorded exclusion (DESIGN_SYSTEM.md § UI-conformance review,
+            check 1): the translucent `bg-card/85` over the dialog scrim is what
+            keeps this preview reading as a sheet inside a sheet. `Card`'s two
+            fills are the opaque `bg-card` and the borderless tint, and neither
+            carries an alpha. Shares the shape with CollapsiblePlanCard's shell;
+            both land together once `Card` can express it.
+          */}
           <div className="rounded-lg border border-border/70 bg-card/85 px-4 py-3">
             <PlanMarkdownBody
               content={plan.bodyMarkdown}

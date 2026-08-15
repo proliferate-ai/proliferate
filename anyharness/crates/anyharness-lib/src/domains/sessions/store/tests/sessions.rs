@@ -98,6 +98,31 @@ fn update_title_persists_session_title() {
 }
 
 #[test]
+fn update_title_if_absent_never_replaces_an_assigned_title() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+
+    let store = SessionStore::new(db);
+    let mut record = session_record();
+    record.title = None;
+    store.insert(&record).expect("insert session");
+
+    assert!(store
+        .update_title_if_absent("session-1", "Harness title", "2026-03-25T01:00:00Z")
+        .expect("set title on untitled session"));
+    assert!(!store
+        .update_title_if_absent("session-1", "Later harness title", "2026-03-25T02:00:00Z")
+        .expect("skip titled session"));
+
+    let stored = store
+        .find_by_id("session-1")
+        .expect("find session")
+        .expect("session record");
+    assert_eq!(stored.title.as_deref(), Some("Harness title"));
+    assert_eq!(stored.updated_at, "2026-03-25T01:00:00Z");
+}
+
+#[test]
 fn visible_session_lists_exclude_dismissed_and_closed_sessions() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);
@@ -246,7 +271,7 @@ fn pop_last_dismissed_restores_latest_session_atomically() {
         .expect("dismiss second session");
 
     let restored = store
-        .pop_last_dismissed_in_workspace("workspace-1", "2026-03-25T04:00:00Z")
+        .pop_last_dismissed_in_workspace("workspace-1", None, "2026-03-25T04:00:00Z")
         .expect("pop dismissed session")
         .expect("restored session exists");
     assert_eq!(restored.id, "session-2");
@@ -254,14 +279,14 @@ fn pop_last_dismissed_restores_latest_session_atomically() {
     assert_eq!(restored.updated_at, "2026-03-25T04:00:00Z");
 
     let next = store
-        .pop_last_dismissed_in_workspace("workspace-1", "2026-03-25T05:00:00Z")
+        .pop_last_dismissed_in_workspace("workspace-1", None, "2026-03-25T05:00:00Z")
         .expect("pop next dismissed session")
         .expect("next restored session exists");
     assert_eq!(next.id, "session-1");
     assert_eq!(next.dismissed_at, None);
 
     let none = store
-        .pop_last_dismissed_in_workspace("workspace-1", "2026-03-25T06:00:00Z")
+        .pop_last_dismissed_in_workspace("workspace-1", None, "2026-03-25T06:00:00Z")
         .expect("pop empty dismissed stack");
     assert!(none.is_none());
 }

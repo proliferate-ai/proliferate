@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CreditCard, Keyboard, LogOut, Settings } from "lucide-react";
-import { Check } from "#product/primitives/icons/core";
-import { Mail } from "#product/primitives/icons/platform";
+import { Check, Keyboard, LogOut, Settings } from "#product/primitives/icons/core";
+import { CreditCard, Mail } from "#product/primitives/icons/platform";
 import { Button } from "#product/primitives/Button";
 import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
 import {

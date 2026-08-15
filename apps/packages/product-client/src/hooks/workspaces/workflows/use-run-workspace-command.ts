@@ -1,19 +1,22 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useTerminalsQuery } from "@anyharness/sdk-react";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { useTerminalActions } from "#product/hooks/terminals/workflows/use-terminal-actions";
 import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
-import { findReusableRunTerminalId } from "#product/lib/domain/terminals/run-terminal";
-import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
-  buildCloudRepoSettingsHref,
-  buildSettingsHref,
-} from "#product/lib/domain/settings/navigation";
+  findLiveSetupTerminalId,
+  findReusableRunTerminalId,
+} from "#product/lib/domain/terminals/run-terminal";
+import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
+import { buildSettingsHref } from "#product/lib/domain/settings/navigation";
+import { navigateApp } from "#product/lib/workflows/app/app-navigate-handoff";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
+import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { isWorkspaceArchivedRefusal } from "#product/lib/domain/workspaces/archived/workspace-archived-refusal";
 
 interface UseRunWorkspaceCommandArgs {
   selectedWorkspaceId: string | null;
@@ -33,12 +36,15 @@ export function useRunWorkspaceCommand({
   openTerminalPanel,
 }: UseRunWorkspaceCommandArgs) {
   // Owns the workspace Run command action exposed by the shell chrome. Terminal
-  // record creation remains delegated to terminal workflow hooks.
-  const navigate = useNavigate();
+  // record creation remains delegated to terminal workflow hooks. Navigation
+  // goes through navigateApp: useNavigate would subscribe the shell body to
+  // every location change (PRO-170).
   const showToast = useToastStore((state) => state.show);
   const showErrorToast = useToastStore((state) => state.showError);
   const { createRunTab } = useTerminalActions();
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
   const [isLaunching, setIsLaunching] = useState(false);
   // Ref guards same-tick re-entry; state drives the header button spinner.
   const isLaunchingRef = useRef(false);
@@ -55,15 +61,15 @@ export function useRunWorkspaceCommand({
     workspaceId,
     enabled: Boolean(workspaceId && isRuntimeReady),
   });
-  const activeRunTerminalId = useMemo(() => {
+  const { activeRunTerminalId, liveSetupTerminalId } = useMemo(() => {
     if (!workspaceId) {
-      return null;
+      return { activeRunTerminalId: null, liveSetupTerminalId: null };
     }
-    const records = terminalsQuery.data ?? [];
-    return findReusableRunTerminalId(
-      records.map((record) => ({ ...record, workspaceId })),
-      workspaceId,
-    );
+    const candidates = (terminalsQuery.data ?? []).map((record) => ({ ...record, workspaceId }));
+    return {
+      activeRunTerminalId: findReusableRunTerminalId(candidates, workspaceId),
+      liveSetupTerminalId: findLiveSetupTerminalId(candidates, workspaceId),
+    };
   }, [terminalsQuery.data, workspaceId]);
   const localSourceRoot = selectedRepoRoot?.path?.trim()
     || selectedWorkspace?.path?.trim()
@@ -84,16 +90,28 @@ export function useRunWorkspaceCommand({
   const runCommand = isCloudWorkspace
     ? cloudEnvironment?.runCommand ?? ""
     : localRunCommand;
+  // The run command is unknown while the cloud repo config is in flight, so
+  // the label must not claim a Show target it may have to retract.
+  const runCommandSettled = !isCloudWorkspace
+    || (!repoConfigsQuery.isLoading && !repoConfigsQuery.error);
+  // A live run terminal always wins; the setup terminal stands in only when
+  // no run command is configured, so "Run" can still launch one that is.
+  const revealTerminalId = activeRunTerminalId
+    ?? (runCommandSettled && !runCommand.trim() ? liveSetupTerminalId : null);
   const runtimeBlockedReason = workspaceId
     ? getWorkspaceRuntimeBlockReason(workspaceId)
     : null;
 
-  const configureHref = useMemo(() => {
+  // The run command is edited on the repo Actions pane, not the Configure pane.
+  const runCommandSettingsHref = useMemo(() => {
     if (isCloudWorkspace && gitOwner && gitRepoName) {
-      return buildCloudRepoSettingsHref(gitOwner, gitRepoName);
+      return buildSettingsHref({
+        section: "repo-actions",
+        focus: { cloudRepoOwner: gitOwner, cloudRepoName: gitRepoName },
+      });
     }
     return buildSettingsHref({
-      section: "repo",
+      section: "repo-actions",
       repo: localSourceRoot || null,
     });
   }, [gitOwner, gitRepoName, isCloudWorkspace, localSourceRoot]);
@@ -104,6 +122,14 @@ export function useRunWorkspaceCommand({
     }
 
     if (!workspaceId) {
+      return;
+    }
+
+    // Revealing an existing terminal is synchronous. Routing it through the
+    // launch path would re-list terminals for an id we already hold and flash
+    // the header button through a ~30ms loading state on every click.
+    if (revealTerminalId) {
+      openTerminalPanel(revealTerminalId);
       return;
     }
 
@@ -135,7 +161,7 @@ export function useRunWorkspaceCommand({
 
     if (!runCommand.trim()) {
       showToast("Configure a Run command for this repository first.");
-      navigate(configureHref);
+      navigateApp(runCommandSettingsHref);
       return;
     }
 
@@ -145,6 +171,12 @@ export function useRunWorkspaceCommand({
       const terminalId = await createRunTab(workspaceId, runCommand);
       openTerminalPanel(terminalId);
     } catch (error) {
+      // WORKSPACE_ARCHIVED (§3.11): the server is correct, only the client
+      // was stale — refresh the listing and raise no failure toast.
+      if (isWorkspaceArchivedRefusal(error)) {
+        void invalidateWorkspaceCollections();
+        return;
+      }
       // Names the command that did not run: it comes from repo settings, so the
       // user may not have it memorized, and knowing which one failed is what
       // tells them whether to fix the config or just try again.
@@ -159,16 +191,17 @@ export function useRunWorkspaceCommand({
       setIsLaunching(false);
     }
   }, [
-    configureHref,
     createRunTab,
     getWorkspaceRuntimeBlockReason,
+    invalidateWorkspaceCollections,
     isCloudWorkspace,
     isRuntimeReady,
-    navigate,
     openTerminalPanel,
     repoConfigsQuery.error,
     repoConfigsQuery.isLoading,
+    revealTerminalId,
     runCommand,
+    runCommandSettingsHref,
     selectedCloudWorkspace,
     showErrorToast,
     showToast,
@@ -207,8 +240,12 @@ export function useRunWorkspaceCommand({
     canRun,
     disabledReason,
     isLaunching,
-    runLabel: activeRunTerminalId ? "Show Run" : "Run",
-    runTitle: activeRunTerminalId ? "Show active Run terminal" : "Run workspace command",
+    runLabel: revealTerminalId ? "Show Run" : "Run",
+    runTitle: activeRunTerminalId
+      ? "Show active Run terminal"
+      : revealTerminalId
+        ? "Show setup terminal"
+        : "Run workspace command",
     onRun: handleRun,
   };
 }

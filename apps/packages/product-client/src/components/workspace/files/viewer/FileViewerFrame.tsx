@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useState,
   type ReactNode,
   type Ref,
@@ -16,20 +17,20 @@ import {
 } from "#product/primitives/icons/core";
 import { FolderTree } from "#product/primitives/icons/workspace";
 import { PaneIconButton } from "#product/primitives/PaneIconButton";
-import { PaneOptionsMenuItem } from "#product/primitives/patterns/PaneOptionsMenuItem";
+import { PaneOptionsMenuItem } from "#product/primitives/patterns/panel/PaneOptionsMenuItem";
 import {
   POPOVER_FRAME_CLASS,
   POPOVER_SURFACE_CLASS,
   PopoverButton,
 } from "#product/primitives/PopoverButton";
 import { PaneOptionsMenuSeparator } from "#product/components/workspace/pane/PaneOptionsMenu";
-import { SessionContentSearchOverlay } from "#product/components/workspace/chat/surface/SessionContentSearchOverlay";
 import {
   useFileViewerNativeContextMenu,
   useFileViewerNativeMenu,
   type FileViewerNativeMenuActions,
 } from "#product/hooks/workspaces/ui/files/use-file-viewer-native-menu";
 import { useWorkspacePath } from "#product/providers/WorkspacePathProvider";
+import { useContentSearchStore } from "#product/stores/search/content-search-store";
 
 export function FileViewerFrame({
   rootRef,
@@ -70,6 +71,12 @@ export function FileViewerFrame({
   onBrowsePath: (path: string) => void;
   children: ReactNode;
 }) {
+  const setSurfaceAvailability = useContentSearchStore((state) => state.setSurfaceAvailability);
+  useEffect(() => {
+    setSurfaceAvailability("file", true);
+    return () => setSurfaceAvailability("file", false);
+  }, [setSurfaceAvailability]);
+
   return (
     <div
       ref={rootRef}
@@ -117,7 +124,6 @@ export function FileViewerFrame({
           </FileViewerToolbarButton>
         </div>
       </div>
-      <SessionContentSearchOverlay enabled surface="file" />
       <FileViewerContentContextMenu
         canRenderRichPreview={canRenderRichPreview}
         richPreviewEnabled={richPreviewEnabled}
@@ -148,6 +154,10 @@ function FileViewerContentContextMenu({
   return (
     <PopoverButton
       triggerMode="contextMenu"
+      // C4: a fixed width tuned for this menu's longest item ("Rich
+      // preview" + trailing "On"/"Off"); narrower than
+      // `POPOVER_SURFACE_CLASS`'s own `min-w-[240px]` deliberately, this is
+      // a compact DOM-fallback context menu, not a popover surface.
       className={`${POPOVER_FRAME_CLASS} flex w-[220px] select-none flex-col overflow-y-auto p-1`}
       trigger={
         <div
@@ -340,6 +350,10 @@ function FileViewerOptionsMenu(actions: FileViewerNativeMenuActions) {
       externalOpen={fallbackOpen}
       onOpenChange={handleOpenChange}
       align="end"
+      // C4: this toolbar menu's own content is narrower than
+      // `POPOVER_SURFACE_CLASS`'s baseline `min-w-[240px]`; the override
+      // matches the same 220px the DOM-fallback context menu above uses for
+      // the identical item list.
       className={twMerge(POPOVER_SURFACE_CLASS, "min-w-[220px]")}
       trigger={(
         <PaneIconButton

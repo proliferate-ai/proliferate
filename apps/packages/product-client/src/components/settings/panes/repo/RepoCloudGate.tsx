@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Cloud } from "lucide-react";
-import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
+import { CloudIcon } from "#product/primitives/icons/platform";
+import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
 import { Button } from "#product/primitives/Button";
 import { resolveRepositoryReadiness } from "#product/domain/repos/repo-readiness";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
@@ -29,7 +29,7 @@ function CloudGateState({
 }) {
   return (
     <SettingsEmptyState
-      icon={<Cloud aria-hidden="true" />}
+      icon={<CloudIcon aria-hidden="true" />}
       title={title}
       description={description}
     />
@@ -121,7 +121,7 @@ export function RepoCloudGate({
     }
     return (
       <SettingsEmptyState
-        icon={<Cloud aria-hidden="true" />}
+        icon={<CloudIcon aria-hidden="true" />}
         title="Sign in to use Cloud"
         description="Sign in to configure this repository's cloud environment."
         action={(
@@ -145,7 +145,7 @@ export function RepoCloudGate({
   if (readiness.gate === 4) {
     return (
       <SettingsEmptyState
-        icon={<Cloud aria-hidden="true" />}
+        icon={<CloudIcon aria-hidden="true" />}
         title="Could not check access"
         description="GitHub App access is unavailable for this repository."
         action={(
@@ -180,7 +180,7 @@ export function RepoCloudGate({
   if (readiness.gate === 9) {
     return (
       <SettingsEmptyState
-        icon={<Cloud aria-hidden="true" />}
+        icon={<CloudIcon aria-hidden="true" />}
         title="Set up a Cloud environment"
         description="Create a remote environment for agents to run this repository."
         action={

@@ -11,7 +11,10 @@ import {
   resolveVisibleOptimisticPrompt,
   shouldShowPendingPromptActivity,
 } from "#product/domain/chats/pending-prompts/pending-prompts";
-import { renderableOutboxEntriesForTranscript } from "#product/domain/sessions/intents/session-intent-selectors";
+import {
+  lastPromptSubmittedAtMs as resolveLastPromptSubmittedAtMs,
+  renderableOutboxEntriesForTranscript,
+} from "#product/domain/sessions/intents/session-intent-selectors";
 import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import type { TurnDisplayBlock } from "#product/domain/chats/transcript/transcript-presentation";
 import type { GoalTranscriptEvent } from "#product/domain/activity/goal-transcript-events";
@@ -45,6 +48,7 @@ export interface ChatTranscriptViewModel {
   gutterClassName: string | undefined;
   visibleOptimisticPrompt: PendingPromptEntry | null;
   optimisticPromptTrailingStatus: ReactNode;
+  lastPromptSubmittedAtMs: number | null;
   visibleOutboxEntries: readonly PromptOutboxEntry[];
   outboxStartedAtByPromptId: ReadonlyMap<string, string>;
   virtualRows: readonly TranscriptVirtualRow[];
@@ -74,6 +78,7 @@ export function useChatTranscriptViewModel({
     history,
     layout,
     goalEvents = EMPTY_GOAL_EVENTS,
+    workspaceReceiptKey = null,
   } = state;
   const hasOlderHistory = history?.hasOlderHistory ?? false;
   const isLoadingOlderHistory = history?.isLoadingOlderHistory ?? false;
@@ -134,6 +139,13 @@ export function useChatTranscriptViewModel({
     () => buildOutboxStartedAtByPromptId(outboxEntries),
     [outboxEntries],
   );
+  // Derived from the raw outbox (not the transcript-visible subset): the
+  // submit re-pin keys on the act of sending, which exists even for entries
+  // the transcript never renders (queue placement, instant echo).
+  const lastPromptSubmittedAtMs = useMemo(
+    () => resolveLastPromptSubmittedAtMs(outboxEntries, optimisticPrompt),
+    [optimisticPrompt, outboxEntries],
+  );
   const virtualRows = useSharedTranscriptRowModel({
     activeSessionId,
     transcript,
@@ -142,6 +154,10 @@ export function useChatTranscriptViewModel({
     latestTurnId,
     latestTurnHasAssistantRenderableContent,
     goalEvents,
+    // The receipt pins to the absolute top of history; while older pages
+    // remain unloaded the top of the loaded window isn't the top of the
+    // transcript, so the row must not render there.
+    workspaceReceiptKey: hasOlderHistory ? null : workspaceReceiptKey,
   });
   const visibleTurnIds = useMemo(
     () => collectVisibleTurnIds(virtualRows),
@@ -175,6 +191,7 @@ export function useChatTranscriptViewModel({
     gutterClassName,
     visibleOptimisticPrompt,
     optimisticPromptTrailingStatus,
+    lastPromptSubmittedAtMs,
     visibleOutboxEntries,
     outboxStartedAtByPromptId,
     virtualRows,

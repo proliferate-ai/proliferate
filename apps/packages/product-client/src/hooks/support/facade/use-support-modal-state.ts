@@ -12,11 +12,17 @@ import { useProductHost } from "@proliferate/product-client/host/ProductHostProv
 import type {
   SupportReportAttachmentPayload,
   SupportReportJob,
+  SupportReportSnapshotIntent,
 } from "#product/lib/domain/support/report-types";
 import { useSupportReportSnapshot } from "#product/hooks/support/derived/use-support-report-snapshot";
+import { useSupportSnapshotConsent } from "#product/hooks/support/workflows/use-support-snapshot-consent";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import type { SupportModalKind } from "#product/stores/support/support-modal-store";
 import { enqueueSupportReportJob } from "#product/lib/access/browser/support-report-job-events";
+import {
+  diagnosticField,
+  recordRendererDiagnostic,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 
 export interface StagedAttachment extends SupportReportAttachmentPayload {
   id: string;
@@ -38,7 +44,6 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
   const [creditName, setCreditName] = useState("");
   const [urgent, setUrgent] = useState(false);
   const [notifyMe, setNotifyMe] = useState(false);
-  const [includeLogs, setIncludeLogs] = useState(true);
   const [attachments, setAttachments] = useState<StagedAttachment[]>([]);
 
   function setCreditConsent(next: boolean) {
@@ -52,15 +57,27 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
   const submittingRef = useRef(false);
   const jobIdRef = useRef(crypto.randomUUID());
   const openedAtRef = useRef(new Date().toISOString());
+  // Per-report snapshot consent. It starts unchecked on every open and stages
+  // nothing until an explicit Send or Save a copy… while consent is true.
+  const snapshotConsent = useSupportSnapshotConsent({
+    clientJobId: jobIdRef.current,
+    reportOpenedAt: openedAtRef.current,
+  });
 
-  // Write marker line into native log on mount so the log tail can be
-  // bisected around the report. Owns the marker (the store stays pure state).
+  // Record a local marker on mount so diagnostics can be bisected around the
+  // report. The store stays pure state.
   useEffect(() => {
-    void diagnostics?.logEvent({
-      source: "support_report",
-      message: `support-report-opened kind=${kind} jobId=${jobIdRef.current}`,
-    }).catch(() => {});
-  }, [diagnostics, kind]);
+    recordRendererDiagnostic({
+      name: "renderer.support.report_opened",
+      severity: "info",
+      kind: "milestone",
+      privacy: "operational",
+      fields: {
+        kind: diagnosticField(kind, "operational"),
+        job_id: diagnosticField(jobIdRef.current, "operational"),
+      },
+    });
+  }, [kind]);
 
   const stageFiles = useCallback(async (files: FileList | File[]) => {
     const nextFiles = Array.from(files);
@@ -124,10 +141,12 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
     }
   }
 
+  // A Save a copy… preparation already owns the single admission slot, so Send
+  // waits for it rather than racing a second preparation on the same epoch.
   const canSend = (
     message.trim().length > 0
     || attachments.length > 0
-  ) && !isSubmitting;
+  ) && !isSubmitting && !snapshotConsent.isPreparing;
 
   async function handleSend() {
     if (!canSend || submittingRef.current) {
@@ -135,6 +154,19 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
     }
     submittingRef.current = true;
     setIsSubmitting(true);
+
+    // Consent is read live at Send. A fatal preparation failure keeps the modal
+    // open with the draft intact so the user can retry or clear the box and
+    // send without a snapshot; intent is never downgraded silently.
+    let supportSnapshot: SupportReportSnapshotIntent = { kind: "none" };
+    const prepared = await snapshotConsent.prepare();
+    if (prepared.state === "prepared") {
+      supportSnapshot = prepared.intent;
+    } else if (prepared.state !== "none") {
+      submittingRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
 
     // Determine scope: use active workspace if available, else app_only.
     const defaultWorkspaceId = snapshot.defaultWorkspaceId ?? null;
@@ -156,16 +188,17 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
       // `urgent` is a bug-only signal; prompt submissions never mark urgent.
       urgent: kind === "bug" ? urgent : false,
       notifyMe,
-      // App-log inclusion is a bug-modal toggle; prompt submissions always
-      // include diagnostics (there is no toggle on that surface).
-      includeLogs: kind === "bug" ? includeLogs : true,
+      // Immutable diagnostics intent. Without live consent it is explicitly
+      // no-snapshot; with consent it carries the exact staged artifact the
+      // consent epoch produced. The legacy includeLogs flag never grants it.
+      supportSnapshot,
       snapshot: {
         ...snapshot,
         openedAt: openedAtRef.current,
       },
       attachments: attachments.map(({ id: _id, previewUrl: _preview, ...attachment }) => attachment),
-      activeWorkspaceId: defaultWorkspaceId ?? undefined,
-      activeSessionId: activeSessionId ?? undefined,
+      ...(defaultWorkspaceId ? { activeWorkspaceId: defaultWorkspaceId } : {}),
+      ...(activeSessionId ? { activeSessionId } : {}),
       reportOpenedAt: openedAtRef.current,
     };
 
@@ -174,7 +207,7 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
       // listener is the single owner of persistence + draining. Persisting
       // here too would make the listener's persist dedupe and silently skip
       // draining, so the report would never upload until the next app launch.
-      enqueueSupportReportJob(job);
+      void enqueueSupportReportJob(job);
       onClose();
     } catch (error) {
       submittingRef.current = false;
@@ -184,6 +217,9 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
   }
 
   function handleCancel() {
+    // Supersede the consent epoch so any in-flight preparation is cancelled and
+    // a late result can never enqueue.
+    snapshotConsent.cancel();
     // Clean up staged files.
     for (const attachment of attachments) {
       if (attachment.previewUrl) {
@@ -212,12 +248,11 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
     removeAttachment,
     setCreditConsent,
     setCreditName,
-    setIncludeLogs,
     setMessage,
     setNotifyMe,
     setUrgent,
-    includeLogs,
     notifyMe,
+    snapshotConsent,
     urgent,
     stagingError,
   };
@@ -253,8 +288,7 @@ async function stageAttachment(
     fileName: scopeFallbackFileName(file),
     contentType: file.type || "application/octet-stream",
     sizeBytes: file.size,
-    dataBase64: stagedPath ? undefined : dataBase64,
-    stagedPath,
+    ...(stagedPath ? { stagedPath } : { dataBase64, stagedPath: null }),
     previewUrl,
   };
 }

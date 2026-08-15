@@ -5,9 +5,9 @@ import {
   useRef,
   useState,
   type ChangeEvent,
-  type ClipboardEvent,
   type MouseEvent,
 } from "react";
+import { CHAT_INPUT_ATTACHMENT_ACCEPT } from "#product/config/chat";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import {
   useActiveSessionId,
@@ -15,6 +15,7 @@ import {
   useActiveSessionRunningState,
 } from "#product/hooks/chat/derived/use-active-session-identity";
 import { useChatAvailabilityState } from "#product/hooks/chat/derived/use-chat-availability-state";
+import { useComposerBlockedState } from "#product/hooks/chat/derived/use-composer-blocked-state";
 import { useChatComposerKeyboard } from "#product/hooks/chat/ui/use-chat-composer-keyboard";
 import { useChatDraftControls } from "#product/hooks/chat/ui/use-chat-draft-state";
 import { useChatModelSelectorState } from "#product/hooks/chat/facade/use-chat-model-selector-state";
@@ -29,7 +30,8 @@ import {
 } from "#product/hooks/chat/ui/use-queued-prompt-edit";
 import { focusChatInput } from "#product/lib/domain/focus-zone";
 import { serializeChatDraftToPrompt } from "#product/lib/domain/chat/composer/file-mention-draft-model";
-import { promptAttachmentSnapshotsToContentParts } from "#product/domain/chats/composer/prompt-attachment-snapshot";
+import { promptAttachmentSnapshotsToContentParts } from "#product/domain/chats/composer/prompt-attachment-content-parts";
+import { buildPromptWithSelectedResponseContexts } from "#product/domain/chats/transcript/selected-response-context";
 import { useChatInputStore } from "#product/stores/chat/chat-input-store";
 import { mergeSessionConfigControlDescriptors } from "#product/lib/domain/chat/session-controls/session-controls";
 import { buildComposerSessionControlGroups } from "#product/lib/domain/chat/session-controls/composer-control-groups";
@@ -45,28 +47,33 @@ import {
 } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { ChatInputControlRow } from "./ChatInputControlRow";
-import { ConnectedWorkspaceStatusComposerControl } from "./workspace-status/ConnectedWorkspaceStatusComposerControl";
 import { ChatInputDraftArea } from "./ChatInputDraftArea";
+import { ComposerBlockedStatusLine } from "./ComposerBlockedStatusLine";
+import { ComposerBlockedControlRow } from "./ComposerBlockedControlRow";
 import { ChatComposerSurface } from "#product/components/workspace/chat/composer/ChatComposerSurface";
+import { ComposerTextareaFrame } from "#product/primitives/patterns/composer/ComposerTextareaFrame";
 import { Input } from "#product/primitives/Input";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows/use-prompt-attachment-preview-actions";
-import { handlePromptAttachmentPaste } from "#product/lib/domain/chat/composer/prompt-attachment-paste";
+import { useChatInputPaste } from "#product/hooks/chat/ui/use-chat-input-paste";
+import { useChatComposerFocusRequest } from "#product/hooks/chat/ui/use-chat-composer-focus-request";
 import type { PromptAttachmentPreviewHandler } from "#product/components/workspace/chat/content/PromptContentRenderer";
-
-const CHAT_INPUT_ATTACHMENT_ACCEPT =
-  "image/*,text/*,.md,.json,.ts,.tsx,.js,.jsx,.py,.rs,.go,.java,.css,.html,.xml,.yaml,.yml,.toml,.sql,.sh";
 
 export function ChatInput({
   attachments,
   suppressActiveSessionState = false,
   suppressAutoFocus = false,
+  suppressWorkspaceTakeover = false,
   replacementSessionId = null,
   hasSessionTurns = false,
 }: {
   attachments: PromptAttachmentController;
   suppressActiveSessionState?: boolean;
   suppressAutoFocus?: boolean;
+  /** Cowork threads suppress the composer takeover (see ChatView's
+   * `showWorkspaceStatusPanels`) the same way they used to suppress the
+   * ambient workspace-status panel. */
+  suppressWorkspaceTakeover?: boolean;
   replacementSessionId?: string | null;
   /** Flips the placeholder to the follow-up variant once the transcript has turns. */
   hasSessionTurns?: boolean;
@@ -85,11 +92,21 @@ export function ChatInput({
   // PERF: no draft-content subscription here — a keystroke must not re-render
   // the whole composer dock. The draft area subscribes to the live draft
   // itself; this component only needs the isEmpty gate + a submit-time reader.
-  const { workspaceUiKey, materializedWorkspaceId, getDraft, setDraft, isEmpty } =
-    useChatDraftControls();
+  const {
+    workspaceUiKey,
+    materializedWorkspaceId,
+    getDraft,
+    getSelectedResponseContexts,
+    setDraft,
+    removeSelectedResponseContext,
+    clearSelectedResponseContexts,
+    isEmpty,
+    hasSelectedResponseContexts,
+  } = useChatDraftControls();
   const { isDisabled, sendBlockedReason, areRuntimeControlsDisabled } = useChatAvailabilityState({
     activeSessionId: activeSessionIdForUi,
   });
+  const blockedPresentation = useComposerBlockedState({ suppress: suppressWorkspaceTakeover });
   const modelSelectorProps = useChatModelSelectorState({
     suppressActiveSessionState,
     replacementSessionId,
@@ -131,15 +148,20 @@ export function ChatInput({
     attachments.hasSupportedAttachments || planAttachments.hasPlans;
   const effectiveIsEmpty = effectiveIsEditingQueuedPrompt
     ? editDraft.trim().length === 0
-    : isEmpty && !hasSubmittableDraftAttachments;
+    : isEmpty && !hasSubmittableDraftAttachments && !hasSelectedResponseContexts;
   const canSubmit =
     !effectiveIsEmpty && !isDisabled && !sendBlockedReason && !isSubmitting;
   const canAcceptPastedAttachments =
     !effectiveIsEditingQueuedPrompt
+    && !blockedPresentation
     && !isDisabled
     && !areRuntimeControlsDisabled
     && !isSubmitting
     && attachments.canAttachFiles;
+  const { handleFilePasteCapture, handlePaste } = useChatInputPaste({
+    attachments,
+    canAcceptPastedAttachments,
+  });
   const onSubmit = useCallback(async () => {
     // End the typing burst NOW so the transcript renders urgently: the
     // composer clearing and the sent message appearing must be one frame.
@@ -157,11 +179,15 @@ export function ChatInput({
       // Serialized at submit time (imperative read) so typing keystrokes never
       // re-render this component just to keep promptText fresh.
       const promptText = serializeChatDraftToPrompt(getDraft());
-      const trimmedPromptText = promptText.trim();
+      const selectedResponseContexts = [...getSelectedResponseContexts()];
+      const contextualPrompt = buildPromptWithSelectedResponseContexts(
+        promptText,
+        selectedResponseContexts,
+      );
       const blockPrepareStartedAt = performance.now();
       const attachmentSnapshots = attachments.snapshotForSubmit();
       const blocks = [
-        ...(trimmedPromptText ? [{ type: "text" as const, text: trimmedPromptText }] : []),
+        ...contextualPrompt.blocks,
         ...planAttachments.blocks,
       ];
       recordMeasurementWorkflowStep({
@@ -172,16 +198,21 @@ export function ChatInput({
         count: blocks.length + attachmentSnapshots.length,
       });
       const optimisticContentParts = [
-        ...(trimmedPromptText ? [{ type: "text" as const, text: trimmedPromptText }] : []),
+        ...contextualPrompt.optimisticContentParts,
         ...promptAttachmentSnapshotsToContentParts(attachmentSnapshots),
         ...planAttachments.contentParts,
       ];
       const submitted = await handleSubmit({
-        text: promptText,
+        text: contextualPrompt.text,
         blocks,
         attachmentSnapshots,
         optimisticContentParts,
         measurementOperationId,
+        onSubmitted: () => {
+          clearSelectedResponseContexts(
+            selectedResponseContexts.map((context) => context.id),
+          );
+        },
       });
       if (!submitted) {
         finishOrCancelMeasurementOperation(measurementOperationId, "aborted");
@@ -197,7 +228,9 @@ export function ChatInput({
     attachments,
     commitEdit,
     effectiveIsEditingQueuedPrompt,
+    clearSelectedResponseContexts,
     getDraft,
+    getSelectedResponseContexts,
     handleSubmit,
     planAttachments,
     runSubmit,
@@ -250,23 +283,6 @@ export function ChatInput({
     [openAttachmentPreview],
   );
 
-  const handlePaste = useCallback((event: ClipboardEvent<HTMLDivElement>) => {
-    // The editor owns formatted Markdown paste first. Once it has imported a
-    // list or link, do not reinterpret the same clipboard text as an
-    // attachment at the composer surface.
-    const shouldPreventDefault = handlePromptAttachmentPaste({
-      defaultPrevented: event.defaultPrevented,
-      canAcceptAttachments: canAcceptPastedAttachments,
-      fileCount: event.clipboardData.files.length,
-      plainText: event.clipboardData.getData("text/plain"),
-      addFiles: () => attachments.addFiles(event.clipboardData.files),
-      addTextPaste: attachments.addTextPaste,
-    });
-    if (shouldPreventDefault) {
-      event.preventDefault();
-    }
-  }, [attachments, canAcceptPastedAttachments]);
-
   const handleComposerSurfaceClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
     // Portal-rendered popovers (model picker, etc.) bubble clicks through the
     // React tree even though their DOM lives outside the surface — those
@@ -292,33 +308,22 @@ export function ChatInput({
     return () => window.clearTimeout(timer);
   }, [activeSessionIdForUi, focusComposer, suppressAutoFocus, workspaceUiKey, workspaceSelectionNonce]);
 
+  // The takeover unmounts the textarea; when the blocking condition clears
+  // and it remounts, put the caret back rather than leaving focus on body.
+  const wasBlockedRef = useRef(false);
   useEffect(() => {
-    if (focusRequestNonce === 0) {
-      return;
+    const isBlocked = !!blockedPresentation;
+    if (wasBlockedRef.current && !isBlocked && !suppressAutoFocus) {
+      const timer = window.setTimeout(() => {
+        focusComposer();
+      }, 0);
+      wasBlockedRef.current = isBlocked;
+      return () => window.clearTimeout(timer);
     }
+    wasBlockedRef.current = isBlocked;
+  }, [blockedPresentation, focusComposer, suppressAutoFocus]);
 
-    let timer: number | null = null;
-    let attempts = 0;
-    let cancelled = false;
-    const attemptFocus = () => {
-      if (cancelled) {
-        return;
-      }
-      attempts += 1;
-      if (focusComposer() || attempts >= 8) {
-        return;
-      }
-      timer = window.setTimeout(attemptFocus, 25);
-    };
-
-    timer = window.setTimeout(attemptFocus, 0);
-    return () => {
-      cancelled = true;
-      if (timer !== null) {
-        window.clearTimeout(timer);
-      }
-    };
-  }, [focusComposer, focusRequestNonce]);
+  useChatComposerFocusRequest({ focusRequestNonce, focusComposer });
 
   return (
     <DebugProfiler id="chat-composer">
@@ -327,6 +332,7 @@ export function ChatInput({
         <ChatComposerSurface
           overflowMode="clip"
           onClick={handleComposerSurfaceClick}
+          onPasteCapture={handleFilePasteCapture}
           onPaste={handlePaste}
         >
           <form className="relative flex flex-col">
@@ -339,55 +345,70 @@ export function ChatInput({
               onChange={handleFileInputChange}
               accept={CHAT_INPUT_ATTACHMENT_ACCEPT}
             />
-            <ChatInputDraftArea
-              hasSessionTurns={hasSessionTurns}
-              isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
-              editingQueueSeq={effectiveIsEditingQueuedPrompt ? editingSeq : null}
-              editDraft={editDraft}
-              onEditDraftChange={setEditDraftText}
-              textareaRef={textareaRef}
-              workspaceUiKey={workspaceUiKey}
-              onDraftChange={setDraft}
-              canSubmit={canSubmit}
-              isDisabled={isDisabled}
-              onSubmit={onSubmit}
-              onKeyDown={handleKeyDown}
-              hasDraftAttachments={hasDraftAttachments}
-              draftAttachments={[...attachments.attachments, ...planAttachments.attachments]}
-              onRemoveDraftAttachment={handleRemoveDraftAttachment}
-              onOpenDraftAttachment={handleOpenDraftAttachment}
-              overlayHostElement={composerOverlayHost}
-              onCancelEdit={cancelEdit}
-            />
-            <ChatInputControlRow
-              runtimeControlsDisabled={areRuntimeControlsDisabled}
-              modelSelectorProps={modelSelectorProps}
-              agentKind={effectiveAgentKind}
-              sessionConfigControls={effectiveSessionConfigControls}
-              isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
-              chatDisabled={isDisabled}
-              sendBlockedReason={sendBlockedReason}
-              isSubmitting={isSubmitting}
-              supportsAttachments={attachments.supportsAttachments}
-              canAttachFiles={attachments.canAttachFiles}
-              activeSessionId={activeSessionIdForUi}
-              onAttachFile={() => fileInputRef.current?.click()}
-              isRunning={isRunningForUi}
-              isEmpty={effectiveIsEmpty}
-              onSubmit={onSubmit}
-              onCancel={onCancel}
-              statusControl={suppressActiveSessionState
-                ? undefined
-                : (
-                  <ConnectedWorkspaceStatusComposerControl
-                    advancedControls={
-                      buildComposerSessionControlGroups(effectiveSessionConfigControls)
-                        .overflowControls
-                    }
-                    agentKind={effectiveAgentKind}
+            {blockedPresentation
+              ? (
+                <>
+                  <ComposerTextareaFrame topInset="standard">
+                    <ComposerBlockedStatusLine
+                      icon={blockedPresentation.icon}
+                      tone={blockedPresentation.tone}
+                      message={blockedPresentation.message}
+                    />
+                  </ComposerTextareaFrame>
+                  <ComposerBlockedControlRow
+                    actions={blockedPresentation.actions}
+                    disabledReason={blockedPresentation.message}
+                    isRunning={isRunningForUi}
+                    isEmpty={effectiveIsEmpty}
+                    isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
+                    onSubmit={onSubmit}
+                    onCancel={onCancel}
                   />
-                )}
-            />
+                </>
+              )
+              : (
+                <>
+                  <ChatInputDraftArea
+                    hasSessionTurns={hasSessionTurns}
+                    isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
+                    editingQueueSeq={effectiveIsEditingQueuedPrompt ? editingSeq : null}
+                    editDraft={editDraft}
+                    onEditDraftChange={setEditDraftText}
+                    textareaRef={textareaRef}
+                    workspaceUiKey={workspaceUiKey}
+                    onDraftChange={setDraft}
+                    canSubmit={canSubmit}
+                    isDisabled={isDisabled}
+                    onSubmit={onSubmit}
+                    onKeyDown={handleKeyDown}
+                    hasDraftAttachments={hasDraftAttachments}
+                    draftAttachments={[...attachments.attachments, ...planAttachments.attachments]}
+                    onRemoveDraftAttachment={handleRemoveDraftAttachment}
+                    onOpenDraftAttachment={handleOpenDraftAttachment}
+                    onRemoveSelectedResponseContext={removeSelectedResponseContext}
+                    overlayHostElement={composerOverlayHost}
+                    onCancelEdit={cancelEdit}
+                  />
+                  <ChatInputControlRow
+                    runtimeControlsDisabled={areRuntimeControlsDisabled}
+                    modelSelectorProps={modelSelectorProps}
+                    agentKind={effectiveAgentKind}
+                    sessionConfigControls={effectiveSessionConfigControls}
+                    isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
+                    chatDisabled={isDisabled}
+                    sendBlockedReason={sendBlockedReason}
+                    isSubmitting={isSubmitting}
+                    supportsAttachments={attachments.supportsAttachments}
+                    canAttachFiles={attachments.canAttachFiles}
+                    activeSessionId={activeSessionIdForUi}
+                    onAttachFile={() => fileInputRef.current?.click()}
+                    isRunning={isRunningForUi}
+                    isEmpty={effectiveIsEmpty}
+                    onSubmit={onSubmit}
+                    onCancel={onCancel}
+                  />
+                </>
+              )}
           </form>
         </ChatComposerSurface>
       </div>

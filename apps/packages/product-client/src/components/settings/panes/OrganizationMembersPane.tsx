@@ -2,9 +2,10 @@ import { useState } from "react";
 import { Button } from "#product/primitives/Button";
 import { OrganizationInvitationsSection } from "#product/components/settings/panes/organization/OrganizationInvitationsSection";
 import { OrganizationMembersSection } from "#product/components/settings/panes/organization/OrganizationMembersSection";
-import { SettingsEmptyState } from "#product/components/patterns/SettingsEmptyState";
-import { SettingsSection } from "#product/components/patterns/SettingsSection";
-import { SettingsPageHeader } from "#product/components/patterns/SettingsPageHeader";
+import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
+import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
+import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
 import { useOrganizationActions } from "#product/hooks/access/cloud/organizations/use-organization-actions";
@@ -88,14 +89,15 @@ export function OrganizationMembersPane() {
     && organizations.length === 0;
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader
+    <SettingsPageBody>
+      <PageHeader
+        variant="flat"
         title="Members"
         description="Invite teammates, copy the organization join link, and manage access."
       />
 
       {shouldShowSignInState ? (
-        <SettingsSection title="Members" description="Organization access is tied to your signed-in account.">
+        <SettingsSection title="Members" description="Organization access is tied to your signed-in account." surface="plain">
           <SettingsEmptyState size="compact" title="Sign in to view organization members" />
         </SettingsSection>
       ) : null}
@@ -105,7 +107,7 @@ export function OrganizationMembersPane() {
       ) : null}
 
       {shouldShowErrorState ? (
-        <SettingsSection title="Members">
+        <SettingsSection title="Members" surface="plain">
           <SettingsEmptyState
             size="compact"
             title="Could not load organization members"
@@ -125,7 +127,7 @@ export function OrganizationMembersPane() {
       ) : null}
 
       {shouldShowEmptyState ? (
-        <SettingsSection title="Members">
+        <SettingsSection title="Members" surface="plain">
           <SettingsEmptyState
             size="compact"
             title="No organization yet"
@@ -168,6 +170,6 @@ export function OrganizationMembersPane() {
           />
         </>
       ) : null}
-    </section>
+    </SettingsPageBody>
   );
 }

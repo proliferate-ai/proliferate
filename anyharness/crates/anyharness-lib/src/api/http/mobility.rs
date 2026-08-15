@@ -13,7 +13,7 @@ use axum::{
 };
 use std::time::Instant;
 
-use super::access::assert_workspace_not_retired;
+use super::access::assert_workspace_active;
 use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::mobility_archive_contract::from_contract_archive;
@@ -59,7 +59,7 @@ pub async fn preflight_workspace_mobility(
             .workspace_operation_gate
             .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
             .await;
-        assert_workspace_not_retired(&state, &workspace_id)?;
+        assert_workspace_active(&state, &workspace_id)?;
         let result = state
             .mobility_runtime
             .preflight_workspace(&workspace_id, &[])
@@ -101,7 +101,7 @@ pub async fn update_workspace_mobility_runtime_state(
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::MobilityWrite)
         .await;
-    assert_workspace_not_retired(&state, &workspace_id)?;
+    assert_workspace_active(&state, &workspace_id)?;
     let record = state
         .workspace_access_gate
         .set_runtime_state(
@@ -134,7 +134,8 @@ pub async fn export_workspace_mobility_archive(
     // admitted-set re-check applies only to the exclusive-lease destruction
     // paths (purge/retire), so the mobility export just retains the permits.
     let _admission =
-        admit_all_workspace_sessions(&state, &workspace_id, SessionMutationKind::Mobility).await?;
+        admit_all_workspace_sessions(&state, &workspace_id, SessionMutationKind::MobilitySnapshot)
+            .await?;
     let _operation = state
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::MobilityWrite)
@@ -268,7 +269,8 @@ pub async fn destroy_workspace_mobility_source(
     // whole operation) BEFORE the operation lease, preserving the canonical
     // `permit -> operation lease` order.
     let admission =
-        admit_all_workspace_sessions(&state, &workspace_id, SessionMutationKind::Mobility).await?;
+        admit_all_workspace_sessions(&state, &workspace_id, SessionMutationKind::MobilityTeardown)
+            .await?;
     // PR1227-WORKSPACE-FENCE-02: carry the admitted id set into the under-lease
     // re-check; the permits are held until this handler returns.
     let admitted_session_ids = admission.session_ids.clone();
@@ -399,9 +401,9 @@ fn map_access_error(error: WorkspaceAccessError) -> ApiError {
             ),
             "WORKSPACE_LIVE_SESSION_BLOCKED",
         ),
-        WorkspaceAccessError::WorkspaceRetired(workspace_id) => ApiError::conflict(
-            format!("workspace {workspace_id} is retired"),
-            "WORKSPACE_RETIRED",
+        WorkspaceAccessError::WorkspaceArchived(workspace_id) => ApiError::conflict(
+            format!("workspace {workspace_id} is archived"),
+            "WORKSPACE_ARCHIVED",
         ),
         WorkspaceAccessError::Unexpected(error) => ApiError::internal(format!(
             "workspace access state could not be verified: {error}"
@@ -415,7 +417,7 @@ fn assert_workspace_mode(
     expected_mode: WorkspaceAccessMode,
     expected_handoff_op_id: Option<&str>,
 ) -> Result<(), ApiError> {
-    assert_workspace_not_retired(state, workspace_id)?;
+    assert_workspace_active(state, workspace_id)?;
     let runtime_state = state
         .workspace_access_gate
         .runtime_state(workspace_id)

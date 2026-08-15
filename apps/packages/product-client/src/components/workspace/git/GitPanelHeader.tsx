@@ -60,6 +60,10 @@ export function GitPanelHeader({
 
   return (
     <div
+      // C4: names an inline-size container so descendants (this header's own
+      // future responsive chrome) can query the review pane's width directly
+      // instead of the viewport — no Tailwind container-query variant covers
+      // naming a container, only querying one.
       className="z-20 flex shrink-0 flex-col [container-name:review-header] [container-type:inline-size] border-b border-border/70 bg-sidebar-background px-2 py-1 text-sidebar-muted-foreground"
     >
       <div className="flex min-h-7 min-w-0 items-center gap-1">

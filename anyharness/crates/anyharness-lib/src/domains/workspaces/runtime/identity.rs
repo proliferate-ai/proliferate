@@ -6,7 +6,9 @@ use super::{WorkspaceResolution, WorkspaceRuntime};
 use crate::adapters::git::GitService;
 use crate::domains::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
-use crate::domains::workspaces::model::{ResolvedGitContext, WorkspaceKind, WorkspaceSurface};
+use crate::domains::workspaces::model::{
+    ResolvedGitContext, WorkspaceKind, WorkspaceRecord, WorkspaceSurface,
+};
 use crate::domains::workspaces::resolver;
 use crate::domains::workspaces::types::ResolveRepoRootError;
 use crate::origin::OriginContext;
@@ -52,6 +54,20 @@ impl WorkspaceRuntime {
         creator_context: Option<WorkspaceCreatorContext>,
     ) -> anyhow::Result<WorkspaceResolution> {
         self.resolve_or_create_workspace(path, false, origin, creator_context)
+    }
+
+    /// Return the active local workspace already registered at `path`, if any.
+    /// Higher layers (the agent-facing options runtime) use this to reject a
+    /// second local workspace at a checkout a session already owns, instead of
+    /// silently inserting a duplicate record that shares one working directory.
+    /// Direct runtime callers intentionally retain distinct-local semantics.
+    pub fn find_active_local_workspace(
+        &self,
+        path: &str,
+    ) -> anyhow::Result<Option<WorkspaceRecord>> {
+        let ctx = resolver::resolve_git_context(path)?;
+        self.store
+            .find_active_by_path_and_kind(&ctx.repo_root, WorkspaceKind::Local)
     }
 
     pub fn resolve_repo_root_from_path(
@@ -100,13 +116,13 @@ impl WorkspaceRuntime {
                 anyhow::bail!("a workspace record already exists for path: {workspace_path}");
             }
         }
-        if let Some(retired) = self
+        if let Some(archived) = self
             .store
-            .find_retired_incomplete_cleanup_by_path_and_kind(&workspace_path, workspace_kind)?
+            .find_archived_by_path_and_kind(&workspace_path, workspace_kind)?
         {
             anyhow::bail!(
-                "workspace path still has pending cleanup from retired workspace {}: {}",
-                retired.id,
+                "workspace path is reserved by archived workspace {}: {}",
+                archived.id,
                 workspace_path
             );
         }

@@ -63,6 +63,9 @@ impl SessionRuntime {
                         "{SESSION_RESTART_REQUIRED_DETAIL}"
                     ))
                 }
+                StartSessionError::WorkspaceMcpAttachmentFailed(error) => {
+                    SetSessionConfigOptionError::Internal(anyhow::Error::new(error))
+                }
                 StartSessionError::RouteAuth(error) => {
                     SetSessionConfigOptionError::Rejected(error.to_string())
                 }

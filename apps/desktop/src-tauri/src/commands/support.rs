@@ -55,8 +55,11 @@ pub fn stage_support_report_attachment(
         .map_err(|error| format!("Failed to resolve support attachment directory: {error}"))?;
     // Resolve + contain the write path so a crafted client_file_id / file_name can
     // never escape the staging directory (path traversal -> arbitrary overwrite).
-    let path =
-        resolve_staged_attachment_write_path(&canonical_root, &input.client_file_id, &input.file_name)?;
+    let path = resolve_staged_attachment_write_path(
+        &canonical_root,
+        &input.client_file_id,
+        &input.file_name,
+    )?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("Failed to create {}: {error}", parent.display()))?;
@@ -93,7 +96,7 @@ pub fn delete_staged_support_report_attachment(
     Ok(SupportCommandResult { ok: true })
 }
 
-fn support_attachment_dir() -> Result<PathBuf, String> {
+pub(crate) fn support_attachment_dir() -> Result<PathBuf, String> {
     Ok(app_dir_path()?.join("support-report-attachments"))
 }
 
@@ -228,7 +231,10 @@ mod tests {
         let root = PathBuf::from("/home/user/.app/support-report-attachments");
         // Belt-and-suspenders: even a raw "../secret" (which the sanitizer would
         // never produce) is caught by the containment guard.
-        assert!(!is_within(&root, &root.join("..").join("auth-session.json")));
+        assert!(!is_within(
+            &root,
+            &root.join("..").join("auth-session.json")
+        ));
         assert!(!is_within(&root, &root.join("..").join("..").join("etc")));
         assert!(is_within(&root, &root.join("client-1").join("file.txt")));
     }

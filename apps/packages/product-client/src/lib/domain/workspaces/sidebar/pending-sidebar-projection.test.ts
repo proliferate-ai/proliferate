@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPendingWorkspaceUiKey,
   buildSubmittingPendingWorkspaceEntry,
+  type PendingWorkspaceEntry,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 import { buildPendingSidebarProjection } from "#product/lib/domain/workspaces/sidebar/pending-sidebar-projection";
 import {
@@ -38,7 +39,7 @@ describe("pending sidebar projection", () => {
 
     expect(buildGroups({
       logicalWorkspaces: [],
-      pendingWorkspaceEntry,
+      pendingWorkspaceEntries: [pendingWorkspaceEntry],
       selectedLogicalWorkspaceId: buildPendingWorkspaceUiKey(pendingWorkspaceEntry),
     })).toEqual([]);
   });
@@ -72,7 +73,7 @@ describe("pending sidebar projection", () => {
           sourceRoot: "/tmp/landing",
         }),
       ],
-      pendingWorkspaceEntry,
+      pendingWorkspaceEntries: [pendingWorkspaceEntry],
       selectedLogicalWorkspaceId: pendingWorkspaceUiKey,
     });
 
@@ -112,7 +113,7 @@ describe("pending sidebar projection", () => {
     const groups = buildGroups({
       logicalWorkspaces: [],
       repoRoots: [repoRoot],
-      pendingWorkspaceEntry,
+      pendingWorkspaceEntries: [pendingWorkspaceEntry],
       selectedLogicalWorkspaceId: pendingWorkspaceUiKey,
     });
 
@@ -161,7 +162,7 @@ describe("pending sidebar projection", () => {
         }),
       ],
       repoRoots: [repoRoot],
-      pendingWorkspaceEntry,
+      pendingWorkspaceEntries: [pendingWorkspaceEntry],
       selectedWorkspaceId: "workspace-real",
       selectedLogicalWorkspaceId: "real-logical",
     });
@@ -263,7 +264,7 @@ describe("pending sidebar projection", () => {
           sourceRoot: "/tmp/landing",
         }),
       ],
-      pendingWorkspaceEntry,
+      pendingWorkspaceEntries: [pendingWorkspaceEntry],
       workspaceLastInteracted: {
         "repo-a-workspace": "2026-04-13T11:00:00.000Z",
       },
@@ -317,7 +318,7 @@ describe("pending sidebar projection", () => {
     const pendingGroups = buildGroups({
       logicalWorkspaces: otherLogicalWorkspaces,
       repoRoots,
-      pendingWorkspaceEntry,
+      pendingWorkspaceEntries: [pendingWorkspaceEntry],
       workspaceLastInteracted: {
         "repo-a-workspace": "2026-04-13T11:00:00.000Z",
       },
@@ -336,7 +337,7 @@ describe("pending sidebar projection", () => {
         ...otherLogicalWorkspaces,
       ],
       repoRoots,
-      pendingWorkspaceEntry: null,
+      pendingWorkspaceEntries: [],
       workspaceLastInteracted: {
         "workspace-gulch": "2026-04-13T12:00:01.000Z",
         "repo-a-workspace": "2026-04-13T11:00:00.000Z",
@@ -389,7 +390,7 @@ describe("pending sidebar projection", () => {
           sourceRoot: "/tmp/landing",
         }),
       ],
-      pendingWorkspaceEntry,
+      pendingWorkspaceEntries: [pendingWorkspaceEntry],
       selectedWorkspaceId: "workspace-real",
       selectedLogicalWorkspaceId: "real-logical",
     });
@@ -436,7 +437,7 @@ describe("pending sidebar projection", () => {
           branch: "feature-branch",
         }),
       ],
-      pendingWorkspaceEntry,
+      pendingWorkspaceEntries: [pendingWorkspaceEntry],
       selectedWorkspaceId: "cloud:cloud-1",
       selectedLogicalWorkspaceId: null,
     });

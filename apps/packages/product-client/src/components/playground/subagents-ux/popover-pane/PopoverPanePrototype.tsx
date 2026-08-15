@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "#product/primitives/Button";
 import { Textarea } from "#product/primitives/Textarea";
-import { ComposerControlButton } from "#product/primitives/patterns/ComposerControlButton";
+import { ComposerControlButton } from "#product/primitives/patterns/composer/ComposerControlButton";
 import { ArrowUp, ChevronDown } from "#product/primitives/icons/core";
 import { ChatComposerSurface } from "#product/components/workspace/chat/composer/ChatComposerSurface";
 import {

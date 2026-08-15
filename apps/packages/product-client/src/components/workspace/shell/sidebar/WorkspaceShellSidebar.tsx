@@ -3,10 +3,12 @@ import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
 import { WorkspaceSidebarHeaderControls } from "#product/components/workspace/shell/sidebar/WorkspaceSidebarHeaderControls";
 import { useWorkspaceSidebarPeek } from "#product/hooks/workspaces/ui/use-workspace-sidebar-peek";
+import { SIDEBAR_GLASS_CLASS } from "#product/lib/domain/preferences/workspace-chrome";
 
 interface WorkspaceShellSidebarProps {
   open: boolean;
   width: number;
+  glassBackground?: boolean;
   showAnimatedDivider?: boolean;
   snapGeometry?: boolean;
   onToggleSidebar: (options?: { snapGeometry?: boolean }) => void;
@@ -15,6 +17,7 @@ interface WorkspaceShellSidebarProps {
 export function WorkspaceShellSidebar({
   open,
   width,
+  glassBackground = false,
   showAnimatedDivider = false,
   snapGeometry = false,
   onToggleSidebar,
@@ -37,11 +40,18 @@ export function WorkspaceShellSidebar({
       <div className="flex h-full min-h-0 flex-col">
         <div className="h-[46px] shrink-0" data-tauri-drag-region="true" />
         <div className="flex-1 min-h-0 overflow-hidden">
-          <MainSidebar showRightBorder={false} />
+          <MainSidebar showRightBorder={false} glassBackground={glassBackground} />
         </div>
       </div>
     </DebugProfiler>
   );
+
+  // Glass only while docked: the collapsed-hover peek floats the same panel
+  // over the content pane, where a translucent fill would bleed chat content
+  // through instead of window vibrancy.
+  const panelBackgroundClass = glassBackground && (open || toggleClosing)
+    ? SIDEBAR_GLASS_CLASS
+    : "bg-sidebar";
 
   const panelStateClass = open
     ? `pointer-events-auto translate-x-0 opacity-100 ${
@@ -77,7 +87,7 @@ export function WorkspaceShellSidebar({
       </div>
 
       <div
-        className={`relative shrink-0 ${
+        className={`relative shrink-0 transition-[width] ease-out-cubic [transition-duration:var(--workspace-left-geometry-duration)] ${
           open || toggleClosing
             ? "isolate overflow-hidden"
             : "pointer-events-none z-overlay"
@@ -86,7 +96,7 @@ export function WorkspaceShellSidebar({
       >
         <div
           id="main-sidebar"
-          className={`absolute inset-y-0 left-0 flex flex-col overflow-hidden bg-sidebar will-change-[opacity,translate] ${panelStateClass}`}
+          className={`absolute inset-y-0 left-0 flex flex-col overflow-hidden ${panelBackgroundClass} will-change-[opacity,translate] ${panelStateClass}`}
           style={{ width }}
           inert={!open && !peekVisible}
           data-sidebar-peek={peekState}
@@ -119,7 +129,7 @@ export function WorkspaceShellSidebar({
       {showAnimatedDivider ? (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 z-raised w-px bg-border"
+          className="pointer-events-none absolute inset-y-0 z-raised w-px bg-border transition-[left] ease-out-cubic [transition-duration:var(--workspace-left-geometry-duration)]"
           style={{ left: "max(-1px, calc(var(--workspace-left-width) - 1px))" }}
           data-workspace-left-divider
         />

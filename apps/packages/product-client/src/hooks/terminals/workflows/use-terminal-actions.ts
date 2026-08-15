@@ -68,8 +68,8 @@ export function useTerminalActions() {
   const resolveCreateGrid = useCallback(async (
     workspaceId: string,
   ): Promise<TerminalGrid> => {
-    const { readableCodeFontSizeId } = useUserPreferencesStore.getState();
-    const fontSize = resolveReadableCodeFontScale(readableCodeFontSizeId).monacoFontSize;
+    const { readableCodeFontSizeId, uiFontSizeId } = useUserPreferencesStore.getState();
+    const fontSize = resolveReadableCodeFontScale(readableCodeFontSizeId, uiFontSizeId).monacoFontSize;
     const measured = await measureWorkspaceTerminalGrid(workspaceId, {
       fontSize,
       lineHeight: TERMINAL_LINE_HEIGHT,

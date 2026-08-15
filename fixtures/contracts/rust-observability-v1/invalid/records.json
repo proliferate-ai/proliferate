@@ -1,0 +1,359 @@
+{
+  "cases": [
+    {
+      "name": "both_payload_classes",
+      "reason": "invalid_shape",
+      "input": {
+        "schema_version": { "major": 1, "minor": 1 },
+        "source_timestamp": "2026-08-10T15:00:00.000Z",
+        "producer_sequence": 1,
+        "producer_boot_id": "boot-invalid-01",
+        "component": "desktop_renderer",
+        "source": "renderer",
+        "release": "2026.08.10",
+        "environment": "test",
+        "operation_id": "op-invalid-01",
+        "name": "desktop.prompt.submit",
+        "severity": "info",
+        "arguments": [],
+        "record_class": "lifecycle",
+        "privacy": "operational",
+        "redaction": "none",
+        "detailed": { "kind": "log", "message": "not exclusive" },
+        "lifecycle": { "phase": "started", "finalizer": "producer" }
+      }
+    },
+    {
+      "name": "missing_payload",
+      "reason": "invalid_shape",
+      "input": {
+        "schema_version": { "major": 1, "minor": 1 },
+        "source_timestamp": "2026-08-10T15:00:00.000Z",
+        "producer_sequence": 1,
+        "producer_boot_id": "boot-invalid-02",
+        "component": "desktop_renderer",
+        "source": "renderer",
+        "release": "2026.08.10",
+        "environment": "test",
+        "operation_id": "op-invalid-02",
+        "name": "renderer.missing.payload",
+        "severity": "info",
+        "arguments": [],
+        "record_class": "detailed",
+        "privacy": "operational",
+        "redaction": "none"
+      }
+    },
+    {
+      "name": "unsupported_major",
+      "reason": "unsupported_major",
+      "input": {
+        "schema_version": { "major": 2, "minor": 0 },
+        "source_timestamp": "2026-08-10T15:00:00.000Z",
+        "producer_sequence": 1,
+        "producer_boot_id": "boot-invalid-03",
+        "component": "desktop_renderer",
+        "source": "renderer",
+        "release": "2026.08.10",
+        "environment": "test",
+        "operation_id": "op-invalid-03",
+        "name": "renderer.version.future",
+        "severity": "info",
+        "arguments": [],
+        "record_class": "detailed",
+        "privacy": "operational",
+        "redaction": "none",
+        "detailed": { "kind": "log" }
+      }
+    },
+    {
+      "name": "unsupported_minor",
+      "reason": "unsupported_minor",
+      "input": {
+        "schema_version": { "major": 1, "minor": 2 },
+        "source_timestamp": "2026-08-10T15:00:00.000Z",
+        "producer_sequence": 1,
+        "producer_boot_id": "boot-invalid-04",
+        "component": "desktop_renderer",
+        "source": "renderer",
+        "release": "2026.08.10",
+        "environment": "test",
+        "operation_id": "op-invalid-04",
+        "name": "renderer.version.future_minor",
+        "severity": "info",
+        "arguments": [],
+        "record_class": "detailed",
+        "privacy": "operational",
+        "redaction": "none",
+        "detailed": { "kind": "log" }
+      }
+    },
+    {
+      "name": "secret_privacy",
+      "reason": "prohibited_secret",
+      "input": {
+        "schema_version": { "major": 1, "minor": 1 },
+        "source_timestamp": "2026-08-10T15:00:00.000Z",
+        "producer_sequence": 1,
+        "producer_boot_id": "boot-invalid-05",
+        "component": "desktop_renderer",
+        "source": "renderer",
+        "release": "2026.08.10",
+        "environment": "test",
+        "operation_id": "op-invalid-05",
+        "name": "renderer.secret.field",
+        "severity": "info",
+        "arguments": [],
+        "record_class": "detailed",
+        "privacy": "secret",
+        "redaction": "structural",
+        "detailed": { "kind": "log" }
+      }
+    },
+    {
+      "name": "unknown_authorization_field",
+      "reason": "prohibited_secret",
+      "input": {
+        "schema_version": { "major": 1, "minor": 1 },
+        "source_timestamp": "2026-08-10T15:00:00.000Z",
+        "producer_sequence": 1,
+        "producer_boot_id": "boot-invalid-06",
+        "component": "desktop_renderer",
+        "source": "renderer",
+        "release": "2026.08.10",
+        "environment": "test",
+        "operation_id": "op-invalid-06",
+        "name": "renderer.secret.unknown",
+        "severity": "info",
+        "arguments": [],
+        "record_class": "detailed",
+        "privacy": "operational",
+        "redaction": "structural",
+        "detailed": { "kind": "log" },
+        "authorization": "Bearer synthetic-secret"
+      }
+    },
+    {
+      "name": "forbidden_model_prompt",
+      "reason": "prohibited_metadata",
+      "input": {
+        "schema_version": { "major": 1, "minor": 1 },
+        "source_timestamp": "2026-08-10T15:00:00.000Z",
+        "producer_sequence": 1,
+        "producer_boot_id": "boot-invalid-07",
+        "component": "anyharness",
+        "source": "anyharness",
+        "release": "2026.08.10",
+        "environment": "test",
+        "operation_id": "op-invalid-07",
+        "name": "anyharness.model.request",
+        "severity": "info",
+        "arguments": [],
+        "record_class": "lifecycle",
+        "privacy": "operational",
+        "redaction": "none",
+        "lifecycle": {
+          "phase": "terminal",
+          "outcome": "succeeded",
+          "finalizer": "producer",
+          "model": {
+            "model_id": "model-safe-01",
+            "prompt": "forbidden model content"
+          }
+        }
+      }
+    },
+    {
+      "name": "forbidden_plugin_arguments",
+      "reason": "prohibited_metadata",
+      "input": {
+        "schema_version": { "major": 1, "minor": 1 },
+        "source_timestamp": "2026-08-10T15:00:00.000Z",
+        "producer_sequence": 1,
+        "producer_boot_id": "boot-invalid-08",
+        "component": "anyharness",
+        "source": "anyharness",
+        "release": "2026.08.10",
+        "environment": "test",
+        "operation_id": "op-invalid-08",
+        "name": "anyharness.plugin.invoke",
+        "severity": "info",
+        "arguments": [],
+        "record_class": "lifecycle",
+        "privacy": "operational",
+        "redaction": "none",
+        "lifecycle": {
+          "phase": "terminal",
+          "outcome": "succeeded",
+          "finalizer": "producer",
+          "plugin": {
+            "plugin_id": "plugin-safe-01",
+            "arguments": { "path": "forbidden" }
+          }
+        }
+      }
+    },
+    {
+      "name": "terminal_without_outcome",
+      "reason": "invalid_shape",
+      "input": {
+        "schema_version": { "major": 1, "minor": 1 },
+        "source_timestamp": "2026-08-10T15:00:00.000Z",
+        "producer_sequence": 1,
+        "producer_boot_id": "boot-invalid-09",
+        "component": "desktop_tauri",
+        "source": "tauri",
+        "release": "2026.08.10",
+        "environment": "test",
+        "operation_id": "op-invalid-09",
+        "name": "desktop.collector.start",
+        "severity": "info",
+        "arguments": [],
+        "record_class": "lifecycle",
+        "privacy": "operational",
+        "redaction": "none",
+        "lifecycle": { "phase": "terminal", "finalizer": "producer" }
+      }
+    },
+    {
+      "name": "unknown_lifecycle_operation",
+      "reason": "invalid_shape",
+      "input": {
+        "schema_version": { "major": 1, "minor": 1 },
+        "source_timestamp": "2026-08-10T15:00:00.000Z",
+        "producer_sequence": 1,
+        "producer_boot_id": "boot-invalid-10",
+        "component": "desktop_tauri",
+        "source": "tauri",
+        "release": "2026.08.10",
+        "environment": "test",
+        "operation_id": "op-invalid-10",
+        "name": "desktop.unapproved.operation",
+        "severity": "info",
+        "arguments": [],
+        "record_class": "lifecycle",
+        "privacy": "operational",
+        "redaction": "none",
+        "lifecycle": { "phase": "started", "finalizer": "producer" }
+      }
+    },
+    {
+      "name": "failed_without_classification",
+      "reason": "invalid_shape",
+      "input": {
+        "schema_version": { "major": 1, "minor": 1 },
+        "source_timestamp": "2026-08-10T15:00:00.000Z",
+        "producer_sequence": 1,
+        "producer_boot_id": "boot-invalid-11",
+        "component": "desktop_tauri",
+        "source": "tauri",
+        "release": "2026.08.10",
+        "environment": "test",
+        "operation_id": "op-invalid-11",
+        "name": "desktop.collector.start",
+        "severity": "error",
+        "arguments": [],
+        "record_class": "lifecycle",
+        "privacy": "operational",
+        "redaction": "none",
+        "lifecycle": {
+          "phase": "terminal",
+          "outcome": "failed",
+          "finalizer": "producer"
+        }
+      }
+    },
+    {
+      "name": "collector_finalized_success",
+      "reason": "invalid_shape",
+      "input": {
+        "schema_version": { "major": 1, "minor": 1 },
+        "source_timestamp": "2026-08-10T15:00:00.000Z",
+        "producer_sequence": 1,
+        "producer_boot_id": "boot-invalid-12",
+        "component": "anyharness",
+        "source": "anyharness",
+        "release": "2026.08.10",
+        "environment": "test",
+        "operation_id": "op-invalid-12",
+        "name": "anyharness.turn.execute",
+        "severity": "info",
+        "arguments": [],
+        "record_class": "lifecycle",
+        "privacy": "operational",
+        "redaction": "none",
+        "lifecycle": {
+          "phase": "terminal",
+          "outcome": "succeeded",
+          "finalizer": "collector"
+        }
+      }
+    },
+    {
+      "name": "malformed_timestamp",
+      "reason": "invalid_shape",
+      "input": {
+        "schema_version": { "major": 1, "minor": 1 },
+        "source_timestamp": "xxxx-xx-xxTxx:xx:xxZ",
+        "producer_sequence": 1,
+        "producer_boot_id": "boot-invalid-13",
+        "component": "desktop_renderer",
+        "source": "renderer",
+        "release": "2026.08.10",
+        "environment": "test",
+        "operation_id": "op-invalid-13",
+        "name": "renderer.timestamp.invalid",
+        "severity": "info",
+        "arguments": [],
+        "record_class": "detailed",
+        "privacy": "operational",
+        "redaction": "none",
+        "detailed": { "kind": "log" }
+      }
+    },
+    {
+      "name": "unsafe_json_integer",
+      "reason": "limit_exceeded",
+      "input": {
+        "schema_version": { "major": 1, "minor": 1 },
+        "source_timestamp": "2026-08-10T15:00:00.000Z",
+        "producer_sequence": 9007199254740992,
+        "producer_boot_id": "boot-invalid-14",
+        "component": "desktop_renderer",
+        "source": "renderer",
+        "release": "2026.08.10",
+        "environment": "test",
+        "operation_id": "op-invalid-14",
+        "name": "renderer.integer.invalid",
+        "severity": "info",
+        "arguments": [],
+        "record_class": "detailed",
+        "privacy": "operational",
+        "redaction": "none",
+        "detailed": { "kind": "log" }
+      }
+    },
+    {
+      "name": "unicode_timestamp_digits",
+      "reason": "invalid_shape",
+      "input": {
+        "schema_version": { "major": 1, "minor": 1 },
+        "source_timestamp": "٢٠٢٦-٠٨-١٠T١٣:٠٠:٠٠Z",
+        "producer_sequence": 1,
+        "producer_boot_id": "boot-invalid-15",
+        "component": "desktop_renderer",
+        "source": "renderer",
+        "release": "2026.08.10",
+        "environment": "test",
+        "operation_id": "op-invalid-15",
+        "name": "renderer.timestamp.unicode",
+        "severity": "info",
+        "arguments": [],
+        "record_class": "detailed",
+        "privacy": "operational",
+        "redaction": "none",
+        "detailed": { "kind": "log" }
+      }
+    }
+  ]
+}
