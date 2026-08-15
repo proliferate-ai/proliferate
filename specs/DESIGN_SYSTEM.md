@@ -518,7 +518,8 @@ spelling fails `ARBITRARY_RADIUS_RE`.
 ## Motion
 
 Motion has two scales that are deliberately *not* aliased to each other, plus a
-set of choreography delays. All three live in
+set of choreography delays and a small feedback scale for confirmation
+affordances. All four live in
 [motion.ts](../apps/packages/design/src/motion.ts) and are projected
 into CSS custom properties by the generator, so no component authors a
 millisecond or a bezier.
@@ -581,6 +582,25 @@ scrollbar lingers before hiding, how long a hover card tolerates the pointer
 leaving, how far apart stepped level bars fire. They live with motion because
 they are perceived as part of the same choreography, and JS consumers that must
 stay in lockstep with CSS import them and format through `motion.cssMs()`.
+
+The same delay scale also owns the todo progress pill's choreography
+(`delay.todoPillStepLingerMs: 3400`, `delay.todoPillStepHideMs: 4000`,
+`delay.todoPillHoverLingerMs: 1200`, `delay.todoPillHoverHideMs: 1800`: how
+long the pill lingers after a step advance or after the pointer leaves before
+its fade starts and finishes), a ghost tab row's collapse window
+(`delay.ghostRowFinalizeMs: 280`: covers `duration.disclosureMs` plus
+timer-scheduling slack so a deleted row's disclosure transition finishes
+before it is torn down), and the bound on an optimistic archive/unarchive
+POST's outcome (`delay.optimisticSettleTimeoutMs: 12_000`: past this the
+outcome is treated as genuinely unknown rather than a false failure).
+
+### Feedback affordances
+
+`motion.feedback` is a third, smaller scale for a control flipping to a
+confirmation label and then reverting — not an animation and not a
+choreography wait. `feedback.copiedResetMs: 2_000` is how long a control reads
+"Copied" before reverting to its resting label; every copy-to-clipboard
+control shares this one token rather than each owning its own reset literal.
 
 > **Raw time literals are illegal in the design CSS.** `check-theme.mjs`'s
 > `checkRawMotionAuthority` walks `product.css` and the generated
