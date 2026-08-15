@@ -680,29 +680,33 @@ test.describe("transcript scroll physics", () => {
   );
 
   // Rung 5 (PRO-187): composition-derived virtualizer estimates +
-  // per-row-key measured-height persistence. A collapsed tool-ledger row (30
-  // small tool calls folded into ONE `collapsed_actions` display block, see
-  // appendCollapsedToolLedgerTurn) renders as a compact disclosure — its REAL
-  // height is nowhere near the old flat 360px-per-row guess used for every
-  // other non-special-cased row.
+  // per-row-key measured-height persistence + per-session per-bucket
+  // calibration. seedConversationWithToolLedger seeds a collapsed tool-ledger
+  // turn under many tall finalized filler turns, all buried OFF-SCREEN below
+  // the pinned-bottom viewport + overscan window. With the fixture now
+  // hydrating those finalized turns inert (turn_ended, matching production),
+  // each filler turn renders at its full tall height rather than the shorter
+  // mid-reveal height the old reveal-inflated fixture happened to show. Against
+  // honest tall heights the STATIC composition estimate undershoots a plain
+  // multi-block turn badly (measured ~430px vs a ~220px static guess), so the
+  // all-static initial total is far below the real swept total.
   //
-  // seedConversationWithToolLedger seeds the ledger turn INTO THE FIRST
-  // commit, buried under enough finalized filler turns that it starts
-  // virtualized OFF-SCREEN (well outside the pinned-bottom viewport +
-  // overscan window). At that moment the virtualizer's TOTAL content size —
-  // the scrollbar geometry the reader sees before ever touching that row —
-  // is built entirely from ESTIMATES, not real measurements.
-  // sweepEveryRowIntoView then steps through the WHOLE transcript so every
-  // row mounts and is measured for real at least once, giving a ground-truth
-  // total. The gap between the all-estimated initial total and the
-  // all-real-measured total is the virtualizer's literal "correction
-  // budget": how far off the guess was, and therefore how large a correction
-  // the frame pipeline has to absorb as those rows come into view.
+  // Per-session per-bucket calibration closes that: as the first on-screen
+  // filler turns measure for real, their heights feed a running average keyed
+  // by composition bucket (transcript-row-height-calibration.ts), and every
+  // never-measured filler of the same shape borrows that average instead of the
+  // static default. sweepEveryRowIntoView then steps through the WHOLE
+  // transcript so every row mounts and is measured for real at least once,
+  // giving a ground-truth total. The gap between the calibrated estimated total
+  // and the all-real-measured total is the virtualizer's literal "correction
+  // budget": how far off the settled guess was.
   //
-  // Negative control (see PR body for the literal run): temporarily forcing
-  // `estimateTurnRowHeight` in transcript-row-height-estimate.ts back to the
-  // OLD flat 360px-per-row guess makes this same gap ~2.5-3x larger and
-  // fails the bound below.
+  // Negative control (proven deterministically in the colocated unit tests,
+  // use-transcript-virtual-measurement-model.test.ts): with calibration removed
+  // from estimateSize, a never-measured filler falls back to the static
+  // composition estimate (~220px), which undershoots the honest ~430px height
+  // by ~210px per row and blows this gap well past the 1400px bound below. The
+  // calibrated estimate is therefore load-bearing, not decorative.
   test("estimate accuracy: an off-screen collapsed tool-ledger row's estimate tracks its real measured height", async ({
     page,
   }) => {
@@ -710,6 +714,10 @@ test.describe("transcript scroll physics", () => {
     await drive(page, "reset");
     await drive(page, "seedConversationWithToolLedger", 2, 40, 30);
     await waitForViewport(page);
+    // Let the first on-screen measurement pass populate the per-bucket
+    // calibration so the off-screen filler estimates settle to this session's
+    // observed heights before the estimated total is read.
+    await settle(page);
 
     const estimated = await metrics(page);
     expect(estimated.found).toBe(true);

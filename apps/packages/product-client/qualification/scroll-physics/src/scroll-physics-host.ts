@@ -243,6 +243,7 @@ function collapsedToolLedgerTurn(
   envelopes.push(
     assistantCompleted(sessionId, turnId, assistantItemId, "Done reading through the files."),
   );
+  envelopes.push(turnEnded(sessionId, turnId));
   return envelopes;
 }
 
@@ -522,6 +523,7 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
       const assistantItemId = `${turnId}-assistant`;
       batch.push(userMessage(id, turnId, `Prompt ${t}: please continue.`));
       batch.push(assistantCompleted(id, turnId, assistantItemId, tallText(`Reply ${t}`)));
+      batch.push(turnEnded(id, turnId));
     }
     batch.push(...collapsedToolLedgerTurn(id, `${id}-ledger`, toolCallCount));
     for (let t = 0; t < trailingTurns; t += 1) {
@@ -529,6 +531,7 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
       const assistantItemId = `${turnId}-assistant`;
       batch.push(userMessage(id, turnId, `Prompt trail ${t}: please continue.`));
       batch.push(assistantCompleted(id, turnId, assistantItemId, tallText(`Trail ${t}`)));
+      batch.push(turnEnded(id, turnId));
     }
     state = reduceEventBatch(state, batch);
     commit({
