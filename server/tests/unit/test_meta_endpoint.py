@@ -32,6 +32,7 @@ _PIN_ENV_VARS = (
     "RUNTIME_VERSION",
     "WORKER_VERSION",
     "MIN_DESKTOP_VERSION",
+    "ENFORCE_MIN_DESKTOP_VERSION",
     "DESKTOP_DOWNLOADS_BASE_URL",
 )
 
@@ -67,6 +68,8 @@ def test_meta_reports_stamped_pins(monkeypatch) -> None:  # type: ignore[no-unty
     }
     # The capability contract rides alongside the version pins.
     assert isinstance(body["capabilities"], dict)
+    # Unset by default: enforcement is opt-in, not implied by a min-version pin.
+    assert body["minDesktopVersionEnforced"] is False
 
 
 def test_meta_shape_and_types_without_env(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -74,10 +77,42 @@ def test_meta_shape_and_types_without_env(monkeypatch) -> None:  # type: ignore[
 
     body = _client().get("/meta").json()
 
-    assert set(body) == set(_VERSION_FIELDS) | {"capabilities"}
+    assert set(body) == set(_VERSION_FIELDS) | {"capabilities", "minDesktopVersionEnforced"}
     for field in _VERSION_FIELDS:
         assert isinstance(body[field], str) and body[field]
     assert isinstance(body["capabilities"], dict)
+    assert isinstance(body["minDesktopVersionEnforced"], bool)
+
+
+def test_meta_enforce_min_desktop_version_opt_in(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    _clear_pin_env(monkeypatch)
+    monkeypatch.setenv("ENFORCE_MIN_DESKTOP_VERSION", "true")
+
+    body = _client().get("/meta").json()
+
+    assert body["minDesktopVersionEnforced"] is True
+
+
+def test_meta_enforce_min_desktop_version_default_permissive(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # Even with an explicit MIN_DESKTOP_VERSION floor stamped, enforcement stays
+    # off unless the operator explicitly opts in — the pin alone must never
+    # start blocking clients.
+    _clear_pin_env(monkeypatch)
+    monkeypatch.setenv("MIN_DESKTOP_VERSION", "9.9.9")
+
+    body = _client().get("/meta").json()
+
+    assert body["minDesktopVersion"] == "9.9.9"
+    assert body["minDesktopVersionEnforced"] is False
+
+
+def test_meta_enforce_min_desktop_version_garbage_is_permissive(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    _clear_pin_env(monkeypatch)
+    monkeypatch.setenv("ENFORCE_MIN_DESKTOP_VERSION", "not-a-bool")
+
+    body = _client().get("/meta").json()
+
+    assert body["minDesktopVersionEnforced"] is False
 
 
 # T1-SH-3 (specs/TESTING/self-hosting.md): the /meta wire contract.
@@ -94,6 +129,7 @@ _META_GOLDEN_FIELDS = [
     "runtimeVersion",
     "workerVersion",
     "minDesktopVersion",
+    "minDesktopVersionEnforced",
     "capabilities",
 ]
 
