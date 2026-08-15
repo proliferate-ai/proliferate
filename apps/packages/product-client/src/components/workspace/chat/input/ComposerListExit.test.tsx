@@ -96,6 +96,47 @@ describe("composer list exit", () => {
     expect(lastMarkdown(onChange)).toBe("- a\n\nb\n\n- c");
   });
 
+  it("keeps ordered numbering continuous when a middle item exits", async () => {
+    const onChange = vi.fn();
+    const harness = renderEditor({ onChange });
+    await harness.ready();
+    act(() => resetEditor(harness.editor));
+    act(() => { fireEvent(harness.root, pasteEvent("1. a\n2. b\n3. c")); });
+    await waitFor(() => expect(harness.root.querySelectorAll("ol li")).toHaveLength(3));
+
+    act(() => {
+      selectEndOfText(harness.editor, "b");
+      harness.editor.dispatchCommand(KEY_TAB_COMMAND, keyEvent("Tab", { shiftKey: true }));
+    });
+
+    await waitFor(() => expect(harness.root.querySelectorAll("ol")).toHaveLength(2));
+    const lists = harness.root.querySelectorAll("ol");
+    expect(lists[1]?.getAttribute("start")).toBe("3");
+    expect(lastMarkdown(onChange)).toBe("1. a\n\nb\n\n3. c");
+  });
+
+  it("promotes an orphaned sublist when its parent item exits", async () => {
+    const harness = renderEditor();
+    await harness.ready();
+    act(() => resetEditor(harness.editor));
+    act(() => { fireEvent(harness.root, pasteEvent("- parent\n- child")); });
+    await waitFor(() => expect(harness.root.querySelectorAll("ul li")).toHaveLength(2));
+    act(() => {
+      selectEndOfText(harness.editor, "child");
+      harness.editor.dispatchCommand(KEY_TAB_COMMAND, keyEvent("Tab"));
+    });
+    await waitFor(() => expect(harness.root.querySelector("ul ul")).toBeTruthy());
+
+    act(() => {
+      selectEndOfText(harness.editor, "parent");
+      harness.editor.dispatchCommand(KEY_TAB_COMMAND, keyEvent("Tab", { shiftKey: true }));
+    });
+
+    await waitFor(() => expect(harness.root.querySelector("ul ul")).toBeNull());
+    expect(harness.root.querySelector("p")?.textContent).toBe("parent");
+    expect(harness.root.querySelector("ul li")?.textContent).toBe("child");
+  });
+
   it("still un-nests nested items through Lexical's own outdent on Shift+Tab", async () => {
     const harness = renderEditor();
     await harness.ready();

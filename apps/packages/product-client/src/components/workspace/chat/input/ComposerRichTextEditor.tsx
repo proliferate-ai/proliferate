@@ -1,6 +1,5 @@
 import { useEffect, useRef, type MutableRefObject, type Ref } from "react";
 import {
-  $copyNode,
   $createParagraphNode,
   $getRoot,
   $getSelection,
@@ -12,9 +11,9 @@ import {
   KEY_ENTER_COMMAND,
   KEY_TAB_COMMAND,
   OUTDENT_CONTENT_COMMAND,
-  type ElementNode,
   type LexicalEditor,
   type LexicalNode,
+  type ParagraphNode,
 } from "lexical";
 import { $isListItemNode, $isListNode, type ListItemNode } from "@lexical/list";
 import {
@@ -416,36 +415,56 @@ function $exitListForShiftEnter(editor: LexicalEditor): boolean {
   if (!caretOnEmptyTrailingLine) return false;
   item.getLastChild()?.remove();
   const list = item.getParentOrThrow();
-  $splitListAfterItem(item, list);
+  const trailingStart = $orderedStartAfter(item);
+  const nextItem = item.getNextSibling();
   const paragraph = $createParagraphNode();
-  list.insertAfter(paragraph);
+  item.insertAfter(paragraph);
+  $healTrailingList(paragraph, nextItem, trailingStart);
   if (item.getChildrenSize() === 0) {
     item.remove();
-    if (list.getChildrenSize() === 0) list.remove();
+    if (list.isAttached() && list.getChildrenSize() === 0) list.remove();
   }
   paragraph.selectEnd();
   return true;
 }
 
 function $convertListItemToParagraph(item: ListItemNode): void {
-  const selection = $getSelection();
-  const caretWasOnItem = $isRangeSelection(selection)
-    && selection.anchor.type === "element"
-    && selection.anchor.getNode().is(item);
-  const list = item.getParentOrThrow();
-  const paragraph = $createParagraphNode();
-  paragraph.append(...item.getChildren());
-  $splitListAfterItem(item, list);
-  list.insertAfter(paragraph);
-  item.remove();
-  if (list.getChildrenSize() === 0) list.remove();
-  if (caretWasOnItem || paragraph.isEmpty()) paragraph.selectEnd();
+  const trailingStart = $orderedStartAfter(item);
+  const nextItem = item.getNextSibling();
+  // ListItemNode.replace splits the list around the item, transfers its
+  // children, remaps an element-anchored caret, and prunes the emptied list.
+  const paragraph = item.replace($createParagraphNode(), true);
+  $healTrailingList(paragraph, nextItem, trailingStart);
 }
 
-function $splitListAfterItem(item: ListItemNode, list: ElementNode): void {
-  const trailing = item.getNextSiblings();
-  if (trailing.length === 0) return;
-  const trailingList = $copyNode(list);
-  trailingList.append(...trailing);
-  list.insertAfter(trailingList);
+// Visible number the items after `item` should keep once a paragraph lands
+// before them, or null for unordered lists.
+function $orderedStartAfter(item: ListItemNode): number | null {
+  const list = item.getParent();
+  if (!$isListNode(list) || list.getListType() !== "number") return null;
+  return list.getStart() + item.getIndexWithinParent() + 1;
+}
+
+// After a paragraph lands between the halves of a split list, the trailing
+// half restarts ordered numbering at the head's start, and when the exited
+// item owned a nested sublist, that sublist's wrapper now leads the trailing
+// half as an indented bullet with no parent. Repair both.
+function $healTrailingList(
+  paragraph: ParagraphNode,
+  firstTrailingItem: LexicalNode | null,
+  orderedStart: number | null,
+): void {
+  if (!$isListItemNode(firstTrailingItem)) return;
+  const trailingList = firstTrailingItem.getParent();
+  if (!$isListNode(trailingList) || trailingList.getPreviousSibling() !== paragraph) return;
+  if (orderedStart !== null && trailingList.getListType() === "number") {
+    trailingList.setStart(orderedStart);
+  }
+  const first = trailingList.getFirstChild();
+  if (!$isListItemNode(first)) return;
+  const children = first.getChildren();
+  const orphanedSublist = children.length === 1 ? children[0] : null;
+  if (!$isListNode(orphanedSublist)) return;
+  for (const promoted of orphanedSublist.getChildren()) first.insertBefore(promoted);
+  first.remove();
 }
