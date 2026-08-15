@@ -309,10 +309,11 @@ async fn run_reconcile_job(
         let agent_progress = progress.clone();
         let progress_kind = kind.clone();
         let result = match tokio::task::spawn_blocking(move || {
-            // Should this pass touch this agent at all? Two carve-outs (a user's
-            // own PATH binary, cursor in cloud) plus the installed-only scope,
-            // decided by one named predicate rather than inferred from a boolean —
-            // see `installer::auto_install` for why that distinction matters.
+            // Should this pass touch this agent at all? One carve-out (cursor in
+            // cloud) plus the installed-only scope and the always-managed escape
+            // hatch (R2.0: a user's PATH copy no longer skips), decided by one
+            // named predicate rather than inferred from a boolean — see
+            // `installer::auto_install` for why that distinction matters.
             //
             // Resolution is side-effect-free, and unrouted because this reads
             // ARTIFACTS only: an enrolled agent-auth route cannot change whether a

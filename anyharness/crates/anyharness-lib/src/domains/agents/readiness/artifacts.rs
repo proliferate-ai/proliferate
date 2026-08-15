@@ -283,16 +283,23 @@ fn uses_registry_binary_hint(install: &AgentProcessInstallSpec) -> bool {
 /// maintains a managed copy alongside a user's own) does, and a managed hit
 /// short-circuits before ever looking at PATH.
 pub(super) fn agent_process_has_path_artifact(descriptor: &AgentDescriptor) -> bool {
-    if let AgentProcessInstallSpec::RegistryBacked {
-        fallback: AgentProcessFallback::BinaryHint { candidate_binaries, .. },
-        ..
-    } = &descriptor.agent_process.install
-    {
-        return candidate_binaries
+    match &descriptor.agent_process.install {
+        AgentProcessInstallSpec::RegistryBacked {
+            fallback: AgentProcessFallback::BinaryHint { candidate_binaries, .. },
+            ..
+        } => candidate_binaries
             .iter()
-            .any(|binary| find_real_binary_in_path(binary).is_some());
+            .any(|binary| find_real_binary_in_path(binary).is_some()),
+        // Probe the same name resolution's own PATH fallback uses, so the
+        // detection bit can never disagree with what resolution would pick.
+        AgentProcessInstallSpec::ManagedNpmPackage {
+            executable_relpath, ..
+        } => executable_relpath
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|binary| find_real_binary_in_path(binary).is_some()),
+        _ => find_real_binary_in_path(&descriptor.launch.executable_name).is_some(),
     }
-    find_real_binary_in_path(&descriptor.launch.executable_name).is_some()
 }
 
 fn resolve_path_only(
