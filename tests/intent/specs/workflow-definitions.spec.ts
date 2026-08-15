@@ -132,7 +132,7 @@ test("creates, reloads, reopens, edits, and deletes a durable gen-2 definition",
   // Node 2 (step-2, human_in_loop): references @doc:findings, which is not
   // declared yet — this is the negative control.
   await page.getByRole("button", { name: "Add step", exact: true }).click();
-  await stepCard(page, 2).getByRole("radio", { name: "Human", exact: true }).click();
+  await page.locator("#workflow-builder-node-step-2-approval").click();
   await page.locator("#workflow-builder-node-step-2-title").fill(NODE2_TITLE);
   await page.locator("#workflow-builder-node-step-2-prompt").fill(STAGE2_PROMPT);
 
@@ -368,16 +368,6 @@ async function signInThroughUi(page: Page): Promise<void> {
   await expect(page.getByLabel("Password")).toHaveCount(0, { timeout: 30_000 });
 }
 
-/** Scopes to the specific node card's own `<section>` (WorkflowBuilderNodeCard),
- * not the outer "Steps" `<section>` that also contains the "Step N" text — the
- * SegmentedControl's item labels ("Agent"/"Human") repeat once per node card,
- * so the step-type radio must be queried within the right card. */
-function stepCard(page: Page, position: number) {
-  return page
-    .getByRole("heading", { name: `Step ${position}`, exact: true, level: 3 })
-    .locator("xpath=ancestor::section[1]");
-}
-
 async function pageAccessToken(page: Page): Promise<string> {
   const token = await page.evaluate(() => {
     const raw = window.localStorage.getItem("proliferate.auth.session");
@@ -452,12 +442,14 @@ async function expectBuilderState(
   for (const [index, node] of expected.nodes.entries()) {
     await expect(page.locator(`#workflow-builder-node-${node.id}-title`)).toHaveValue(node.title);
     await expect(page.locator(`#workflow-builder-node-${node.id}-prompt`)).toHaveValue(node.prompt);
-    await expect(
-      stepCard(page, index + 1).getByRole("radio", {
-        name: node.type === "human_in_loop" ? "Human" : "Agent",
-        exact: true,
-      }),
-    ).toHaveAttribute("aria-checked", "true");
+    // The "Requires approval" Switch (role="switch") replaced the old
+    // Agent/Human SegmentedControl; human_in_loop is now "approval on".
+    // Asserting both states (not just the checked one) keeps this
+    // non-vacuous for agent nodes.
+    await expect(page.locator(`#workflow-builder-node-${node.id}-approval`)).toHaveAttribute(
+      "aria-checked",
+      node.type === "human_in_loop" ? "true" : "false",
+    );
   }
   await expect(page.locator(`#workflow-builder-node-step-${expected.nodes.length + 1}-title`)).toHaveCount(0);
 
