@@ -37,6 +37,14 @@ export function HarnessProvidersSection({
   editor: HarnessAuthEditorApi;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
+  // The Configure trigger, not the modal, is the Class B loading treatment
+  // (UX Latency + Transitions ADR §4.3, Rung 3): the modal chunk carries the
+  // 170+-mark provider-logo asset map, so opening it cold can outlive the
+  // show-delay. Rather than let `Suspense fallback={null}` pop the modal in
+  // blank once the chunk lands, the trigger button shows a Spinner while the
+  // import resolves and only flips `modalOpen` once the modal can paint
+  // immediately.
+  const [modalLoading, setModalLoading] = useState(false);
   // The summary tiles show the real models.dev marks. The generated URL map is
   // dynamic-imported (same budget rule as the modal: it must never land in the
   // login-path chunk); until it resolves the tiles fall back to mono letters.
@@ -211,8 +219,17 @@ export function HarnessProvidersSection({
             type="button"
             variant="secondary"
             size="sm"
-            disabled={editor.busy}
-            onClick={() => setModalOpen(true)}
+            disabled={editor.busy || modalLoading}
+            loading={modalLoading}
+            onClick={() => {
+              setModalLoading(true);
+              void import(
+                "#product/components/settings/panes/agents/harness/ProviderPickerModal"
+              ).then(() => {
+                setModalLoading(false);
+                setModalOpen(true);
+              });
+            }}
           >
             {HARNESS_PANE_COPY.providersConfigure}
           </Button>

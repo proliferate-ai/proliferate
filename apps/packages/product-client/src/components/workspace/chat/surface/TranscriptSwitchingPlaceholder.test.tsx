@@ -25,19 +25,22 @@ function advance(ms: number) {
 }
 
 describe("TranscriptSwitchingPlaceholder", () => {
-  it("keeps the status region present but withholds the loader inside the show delay", () => {
+  it("keeps the status region present but withholds the living mark inside the show delay", () => {
     render(<TranscriptSwitchingPlaceholder label="Switching chat" />);
 
     const gutter = screen.getByRole("status", { name: "Switching chat" });
     // The accessible status region mounts immediately; the treatment does not.
+    expect(gutter.querySelector("[data-brand-mark]")).toBeNull();
     expect(gutter.querySelector("[data-dot-cell-loader]")).toBeNull();
 
     advance(motion.loading.showDelayMs);
 
-    expect(gutter.querySelector("[data-dot-cell-loader]")).not.toBeNull();
+    expect(gutter.querySelector("[data-brand-mark]")).not.toBeNull();
+    // Negative control: DotCellLoader is retired from this surface entirely.
+    expect(gutter.querySelector("[data-dot-cell-loader]")).toBeNull();
   });
 
-  it("uses the same column and gutter order once the loader mounts", () => {
+  it("uses the same column and gutter order once the living mark mounts", () => {
     render(<TranscriptSwitchingPlaceholder />);
     advance(motion.loading.showDelayMs);
 
@@ -48,12 +51,12 @@ describe("TranscriptSwitchingPlaceholder", () => {
     expect(gutter.firstElementChild?.className).toContain("animate-content-fade-in");
   });
 
-  it("shows a clean loader with its label instead of message skeletons (PRO-182)", () => {
+  it("shows the Class A living mark with its label instead of message skeletons (PRO-182)", () => {
     render(<TranscriptSwitchingPlaceholder label="Switching chat" />);
     advance(motion.loading.showDelayMs);
 
     const gutter = screen.getByRole("status", { name: "Switching chat" });
-    expect(gutter.querySelector("[data-dot-cell-loader]")).not.toBeNull();
+    expect(gutter.querySelector("[data-brand-mark]")).not.toBeNull();
     expect(gutter.textContent).toContain("Switching chat");
   });
 });

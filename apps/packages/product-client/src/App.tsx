@@ -3,6 +3,8 @@ import { Navigate, Route } from "react-router-dom"
 import { BootstrappedRoute, PublicOnlyRoute } from "#product/components/auth/AuthGate"
 import { UserPreferencesGate } from "#product/components/app/UserPreferencesGate"
 import { ToastHost } from "#product/primitives/patterns/toast/ToastHost"
+import { DelayedMount } from "#product/primitives/DelayedMount"
+import { ProliferateLivingMark } from "#product/components/brand/ProliferateLivingMark"
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
 import { MacWindowControlsSafeArea } from "#product/components/app/chrome/MacWindowControlsSafeArea"
 import { SupportModalHost } from "#product/components/support/SupportModalHost"
@@ -141,7 +143,21 @@ export function App({ RoutesComponent }: AppProps) {
               <Route
                 path="*"
                 element={
-                  <Suspense fallback={null}>
+                  // App-root cold-chunk boundary (UX Latency + Transitions ADR
+                  // §4.3, Rung 3): the fallback is the Class A living mark, but
+                  // `Suspense` swaps its whole subtree on resolve rather than
+                  // handing `LoadingBoundary` a `pending -> ready` transition,
+                  // so `DelayedMount` reproduces the show-delay half of that
+                  // contract instead (see DelayedMount.tsx).
+                  <Suspense
+                    fallback={
+                      <DelayedMount>
+                        <div className="flex min-h-screen items-center justify-center bg-background">
+                          <ProliferateLivingMark />
+                        </div>
+                      </DelayedMount>
+                    }
+                  >
                     <AuthenticatedProductClient />
                   </Suspense>
                 }

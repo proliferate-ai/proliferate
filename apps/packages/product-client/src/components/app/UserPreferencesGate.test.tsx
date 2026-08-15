@@ -1,10 +1,28 @@
-import { renderToStaticMarkup } from "react-dom/server"
+// @vitest-environment jsdom
+
+import { act, cleanup, render, screen } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
-import { describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { motion } from "@proliferate/design/motion"
 import { UserPreferencesGateView } from "#product/components/app/UserPreferencesGate"
 
+beforeEach(() => {
+  vi.useFakeTimers()
+})
+
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
+
+function advance(ms: number) {
+  act(() => {
+    vi.advanceTimersByTime(ms)
+  })
+}
+
 function renderGate(preferencesHydrated: boolean) {
-  return renderToStaticMarkup(
+  return render(
     <MemoryRouter initialEntries={["/"]}>
       <Routes>
         <Route element={<UserPreferencesGateView preferencesHydrated={preferencesHydrated} />}>
@@ -16,18 +34,23 @@ function renderGate(preferencesHydrated: boolean) {
 }
 
 describe("UserPreferencesGate", () => {
-  it("blocks product routes until user preferences hydrate", () => {
-    const html = renderGate(false)
+  it("blocks product routes until user preferences hydrate, and shows the Class A living mark past the show delay", () => {
+    renderGate(false)
 
-    expect(html).toContain("Restoring your setup")
-    expect(html).not.toContain("data-testid=\"product\"")
-    expect(html).not.toContain("data-jank-canary=\"braille\"")
+    expect(screen.queryByTestId("product")).toBeNull()
+    // Inside the show-delay window the gate withholds the treatment entirely.
+    expect(document.querySelector("[data-brand-mark]")).toBeNull()
+
+    advance(motion.loading.showDelayMs)
+
+    expect(document.querySelector("[data-brand-mark]")).not.toBeNull()
+    expect(screen.queryByTestId("product")).toBeNull()
   })
 
   it("renders product routes after user preferences hydrate", () => {
-    const html = renderGate(true)
+    renderGate(true)
 
-    expect(html).toContain("data-testid=\"product\"")
-    expect(html).not.toContain("Restoring your setup")
+    expect(screen.getByTestId("product")).not.toBeNull()
+    expect(document.querySelector("[data-brand-mark]")).toBeNull()
   })
 })
