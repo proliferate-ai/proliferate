@@ -262,6 +262,7 @@ export function FullTranscriptRowList({
       <AutoHideScrollArea
         className="h-full"
         ref={scrollRef}
+        stableScrollAnchor
         onUserScrollIntent={notifyUserScrollIntent}
         onViewportScroll={handleViewportScroll}
         contentClassName={`${gutterClassName} relative flex min-h-full flex-col`}

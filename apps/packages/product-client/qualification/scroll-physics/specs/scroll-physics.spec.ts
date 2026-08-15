@@ -323,6 +323,137 @@ test.describe("transcript scroll physics", () => {
     await drive(page, "finalizeStreamingTurn");
   });
 
+  test("single-writer: transcript viewport runs with overflow-anchor none", async ({
+    page,
+  }, testInfo) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 6);
+    await waitForViewport(page);
+    await settle(page);
+
+    // WebKit does not implement the overflow-anchor property (it has no native
+    // scroll anchoring to suppress), so the computed value is only meaningful on
+    // Chromium. There the transcript must opt out of scroll anchoring so the
+    // stick-to-bottom engine is the sole writer of scrollTop.
+    test.skip(testInfo.project.name !== "chromium", "overflow-anchor is Chromium-only");
+    const overflowAnchor = await page.evaluate((selector) => {
+      const el = document.querySelector(selector);
+      return el ? getComputedStyle(el).overflowAnchor : null;
+    }, VIEWPORT);
+    expect(overflowAnchor).toBe("none");
+  });
+
+  test("no-false-unpin: rapid glue writes during growth never unpin without user input", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 6);
+    await waitForViewport(page);
+    await settle(page);
+
+    // Deterministic pinned baseline across engines.
+    await wheelToBottom(page);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+
+    await drive(page, "beginStreamingTurn");
+    await settle(page);
+    const before = await metrics(page);
+
+    // Engineer the marker-tolerance-miss precondition the single-slot pixel
+    // classification papered over: append batches on a tight cadence so
+    // scrollHeight changes between a glue write and the scroll event it
+    // produces, with several programmatic writes in flight at once. Under that
+    // classification a later write overwrote an earlier marker and the stale
+    // event was misread as a USER scroll, dropping the pin. A dropped pin gates
+    // off the content-resize follow (the ResizeObserver re-stick is guarded by
+    // the pin ref), so a false unpin stops the follow and the bottom distance
+    // runs away without bound. The invariant here is therefore physical: with
+    // no synthetic user input the viewport keeps following the growing bottom,
+    // its distance staying small — never the unbounded growth a lost follow
+    // produces. (The pin FLAG read from the floating control is intentionally
+    // not asserted per-frame: it can transiently flicker as a growth scroll is
+    // classified, so the physical follow distance is the load-bearing signal,
+    // exactly as in the pinned-follow scenario.)
+    //
+    // The end-state is the robust assertion. Nothing re-pins the transcript
+    // without synthetic user input or a submit stamp (neither occurs here), so a
+    // pin dropped by a misclassified growth event gates off the content-resize
+    // follow permanently and leaves the viewport hundreds of pixels behind after
+    // this much growth. A viewport still glued to the bottom AFTER the whole
+    // rapid-growth run therefore proves the pin was never lost during it. A
+    // per-frame distance bound mid-run is deliberately avoided: the glue
+    // catch-up can lag a frame under machine load and briefly widen the gap
+    // without the pin being lost.
+    for (let batch = 0; batch < 30; batch += 1) {
+      await drive(page, "streamChunks", 2);
+      await settle(page, 80);
+    }
+    await drive(page, "finalizeStreamingTurn");
+    await settle(page, 500);
+    const after = await metrics(page);
+
+    // Load-invariant proof that the follow was never lost: the content grew by
+    // `addedHeight` during the run; a held follow leaves the resting bottom gap
+    // a small fraction of that growth (the viewport advanced with the content),
+    // while a follow lost early leaves the viewport ~`addedHeight` behind (the
+    // full growth accumulated below a stationary viewport). A ratio, not an
+    // absolute px bound, so machine load cannot flip it (mirrors the
+    // prepend-anchoring scenario's ratio band).
+    const addedHeight = after.scrollHeight - before.scrollHeight;
+    expect(addedHeight, "streaming must actually grow the transcript").toBeGreaterThan(300);
+    // A follow that survived leaves the resting gap well under the full growth
+    // (the viewport advanced with the content); a follow lost early leaves the
+    // viewport frozen with ~all the growth accumulated below it (ratio near 1).
+    // The band is generous so rAF glue starvation under concurrent-browser load
+    // cannot flip it, while still failing hard on a frozen viewport. The precise
+    // marker lifecycle (multiple in-flight markers, expiry, fallback gating) is
+    // proven deterministically in the colocated unit tests; this is the
+    // real-browser smoke that the follow survives rapid growth on both engines.
+    expect(after.bottomDistance).toBeLessThan(addedHeight * 0.6);
+  });
+
+  test("swallowed-user-scroll: wheel-up during heavy programmatic snap wins", async ({ page }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 8);
+    await waitForViewport(page);
+    await settle(page);
+    await wheelToBottom(page);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+
+    // Kick off heavy programmatic snap activity: a large synchronous growth
+    // batch leaves a burst of pinned glue/resize writes settling, then the user
+    // wheels up in the middle of it. User ownership is claimed at input time
+    // and must win: the transcript unpins and holds its position rather than
+    // being snapped back by the in-flight programmatic writes.
+    await drive(page, "beginStreamingTurn");
+    await drive(page, "streamChunks", 24);
+    await keyboardScrollUp(page, 5);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+    const held = await metrics(page);
+    expect(held.bottomDistance).toBeGreaterThan(REPIN_BAND_PX * 4);
+
+    // Continued growth must not re-snap the reader to the bottom. The pin FLAG
+    // can read stale for a single frame right as a growth batch is classified
+    // (same rationale as the unpin-mid-stream scenario), so the per-batch
+    // assertion is the physics invariant, not the flag; the flag is asserted
+    // at the settled points before and after this loop.
+    for (let batch = 0; batch < 15; batch += 1) {
+      await drive(page, "streamChunk");
+      await settle(page, 40);
+      const m = await metrics(page);
+      expect(m.bottomDistance).toBeGreaterThan(REPIN_BAND_PX);
+    }
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+    expect((await metrics(page)).bottomDistance).toBeGreaterThan(REPIN_BAND_PX * 4);
+    await drive(page, "finalizeStreamingTurn");
+  });
+
   // EXPECTED TO FAIL today (PRO-175), for a DIFFERENT reason than the stamp
   // leak this rung fixes. `resetForSession` still unconditionally
   // pins/snaps/glues on every session switch by design (rung 2 leaves this

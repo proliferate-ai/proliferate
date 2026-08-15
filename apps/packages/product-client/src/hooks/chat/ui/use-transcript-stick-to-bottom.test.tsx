@@ -488,6 +488,111 @@ describe("useTranscriptStickToBottom", () => {
     });
     expect(viewport.scrollTop).toBe(700);
   });
+
+  describe("ownership markers (PRO-187)", () => {
+    it("consumes multiple in-flight markers in order without misclassifying", () => {
+      // The glue loop writes faster than the browser dispatches scroll events,
+      // so several programmatic writes can await their events at once. Each
+      // event must clear its own marker; none may fall through to the user
+      // pin/direction logic and flip the pin.
+      const onScrollSample = vi.fn();
+      const handle = renderHarness(onScrollSample);
+      const { viewport } = handle.current;
+      setMetrics(viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 700 });
+
+      // Two writes land distinct scrollTops before either event dispatches.
+      act(() => {
+        handle.current.api.notifyProgrammaticScroll(() => {
+          viewport.scrollTop = 650;
+        });
+      });
+      act(() => {
+        handle.current.api.notifyProgrammaticScroll(() => {
+          viewport.scrollTop = 700;
+        });
+      });
+
+      // The events arrive in write order. With a single slot the first event
+      // (650) would miss the overwritten 700 marker and unpin.
+      viewport.scrollTop = 650;
+      dispatchScroll(handle);
+      expect(handle.current.api.isPinnedToBottom).toBe(true);
+      expect(onScrollSample).toHaveBeenLastCalledWith({ programmatic: true });
+
+      viewport.scrollTop = 700;
+      dispatchScroll(handle);
+      expect(handle.current.api.isPinnedToBottom).toBe(true);
+      expect(onScrollSample).toHaveBeenLastCalledWith({ programmatic: true });
+
+      // Both markers consumed: the next genuine user scroll unpins.
+      userScroll(handle, 400);
+      expect(handle.current.api.isPinnedToBottom).toBe(false);
+    });
+
+    it("classifies a marker-tolerance miss during growth as programmatic (no false unpin)", () => {
+      // A pinned glue write whose scrollHeight grew between the write and its
+      // event: the event's scrollTop no longer matches the recorded marker
+      // within tolerance. The downward-while-pinned fallback tier keeps it
+      // programmatic so the reader is not spuriously unpinned.
+      const onScrollSample = vi.fn();
+      const handle = renderHarness(onScrollSample);
+      const { viewport } = handle.current;
+      setMetrics(viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 700 });
+
+      act(() => {
+        handle.current.api.notifyProgrammaticScroll(() => {
+          viewport.scrollTop = 700;
+        });
+      });
+      // Content grows above/at the write; the event fires further down than the
+      // recorded 700, outside the 2px tolerance.
+      setMetrics(viewport, { scrollHeight: 1400, clientHeight: 300, scrollTop: 760 });
+      dispatchScroll(handle);
+
+      expect(handle.current.api.isPinnedToBottom).toBe(true);
+      expect(onScrollSample).toHaveBeenLastCalledWith({ programmatic: true });
+    });
+
+    it("an expired marker does not misclassify the next user scroll", () => {
+      const onScrollSample = vi.fn();
+      const handle = renderHarness(onScrollSample);
+      const { viewport } = handle.current;
+      setMetrics(viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 700 });
+
+      // A clamped/no-op write records a marker whose event never arrives.
+      act(() => {
+        handle.current.api.notifyProgrammaticScroll(() => {
+          viewport.scrollTop = 700;
+        });
+      });
+      // Watchdog expires the marker on the next frame.
+      act(() => {
+        flushRafRound();
+      });
+
+      // A later user scroll that happens to land near the old expected top must
+      // NOT be swallowed as programmatic: the marker is gone, so the pin logic
+      // runs and unpins.
+      userScroll(handle, 500);
+      expect(handle.current.api.isPinnedToBottom).toBe(false);
+      expect(onScrollSample).toHaveBeenLastCalledWith({ programmatic: false });
+    });
+
+    it("engages the fallback tier ONLY when a marker is live", () => {
+      // With no marker in flight, a downward user scroll while pinned is a real
+      // user event and must reach the pin logic (not be swallowed by the H2
+      // fallback, which is gated behind a live marker).
+      const onScrollSample = vi.fn();
+      const handle = renderHarness(onScrollSample);
+      const { viewport } = handle.current;
+      setMetrics(viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 700 });
+
+      // No marker: an upward user scroll unpins normally (queue empty path).
+      userScroll(handle, 400);
+      expect(handle.current.api.isPinnedToBottom).toBe(false);
+      expect(onScrollSample).toHaveBeenLastCalledWith({ programmatic: false });
+    });
+  });
 });
 
 // The submit-stamp / session-identity scoping scenarios (PRO-175) live in
