@@ -163,6 +163,57 @@ test("registry-backed archives use the registry's published checksum", async () 
   }
 });
 
+test("direct_archive pins resolve onto the catalog archive source", async () => {
+  const root = mkdtempSync(join(tmpdir(), "resolve-direct-archive-"));
+  const checksum = "c".repeat(64);
+  const catalogPath = join(root, "catalog.json");
+  const registryPath = join(root, "registry.json");
+  writeFileSync(catalogPath, JSON.stringify({
+    agents: [{ kind: "cursor", harness: { agentProcess: { version: "1.2.3" } } }],
+  }));
+  writeFileSync(registryPath, JSON.stringify({
+    agents: [{
+      kind: "cursor",
+      agentProcess: {
+        install: {
+          kind: "direct_archive",
+          platforms: {
+            macos_arm64: {
+              // A published 64-hex checksum is trusted as-is: no download.
+              url: "https://downloads.test/cursor-macos-arm64.tar.gz",
+              sha256: checksum,
+              expectedBinary: "pkg/cursor-agent",
+              size: 5_000_000,
+            },
+          },
+          args: ["acp"],
+        },
+      },
+    }],
+  }));
+
+  const result = await run(process.execPath, [
+    resolver,
+    "--agent", "cursor",
+    "--platforms", "macos_arm64",
+    "--catalog", catalogPath,
+    "--registry", registryPath,
+  ]);
+  try {
+    assert.equal(result.code, 0, result.stderr);
+    const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
+    const source = catalog.agents[0].harness.agentProcess.source;
+    assert.equal(source.kind, "archive");
+    assert.equal(source.targets.macos_arm64.sha256, checksum);
+    assert.equal(source.targets.macos_arm64.expectedBinary, "pkg/cursor-agent");
+    assert.equal(source.targets.macos_arm64.downloadSizeBytes, 5_000_000);
+    assert.deepEqual(source.args, ["acp"]);
+    assert.equal(catalog.agents[0].harness.agentProcess.version, "1.2.3");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 function run(command, args, extraEnv = {}) {
   return new Promise((resolve) => {
     const child = spawn(command, args, {

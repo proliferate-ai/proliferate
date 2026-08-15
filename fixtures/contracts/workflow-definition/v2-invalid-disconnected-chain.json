@@ -1,0 +1,48 @@
+{
+  "rejectedBy": "structure",
+  "expectedIssuePath": "edges",
+  "note": "Correct arity and degrees, but the walk from the single head cannot reach every node; this is the fixture that genuinely exercises reachability (and with it, cycles hanging off the path).",
+  "definition": {
+    "schemaVersion": 2,
+    "nodes": [
+      {
+        "id": "n_a",
+        "type": "agent",
+        "title": "Step n_a",
+        "prompt": "Run step n_a."
+      },
+      {
+        "id": "n_b",
+        "type": "agent",
+        "title": "Step n_b",
+        "prompt": "Run step n_b."
+      },
+      {
+        "id": "n_c",
+        "type": "agent",
+        "title": "Step n_c",
+        "prompt": "Run step n_c."
+      },
+      {
+        "id": "n_d",
+        "type": "agent",
+        "title": "Step n_d",
+        "prompt": "Run step n_d."
+      }
+    ],
+    "edges": [
+      {
+        "from": "n_a",
+        "to": "n_b"
+      },
+      {
+        "from": "n_c",
+        "to": "n_d"
+      },
+      {
+        "from": "n_d",
+        "to": "n_c"
+      }
+    ]
+  }
+}

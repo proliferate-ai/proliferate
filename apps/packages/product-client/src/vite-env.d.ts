@@ -19,6 +19,7 @@ interface ImportMetaEnv {
   readonly VITE_PROLIFERATE_ACTIVITY_FIXTURE?: string;
   readonly VITE_PLAYGROUND_REPLAY_WORKSPACE_PATH?: string;
   readonly VITE_ANYHARNESS_DEV_URL?: string;
+  readonly VITE_WORKFLOWS_V2?: string;
 }
 
 interface ImportMeta {

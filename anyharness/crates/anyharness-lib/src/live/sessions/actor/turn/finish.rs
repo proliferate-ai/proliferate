@@ -121,7 +121,11 @@ impl SessionActor {
                 turn_id: committed.turn_id,
                 prompt_id: prompt_diagnostics.prompt_id.clone(),
                 outcome: SessionTurnOutcome::Cancelled,
-                stop_reason: Some(StopReason::Cancelled.to_string()),
+                // Hook-only marker: the durable row above keeps the plain
+                // Cancelled stop, but extensions must be able to tell a
+                // platform unload from a user cancel (the workflow engine
+                // parks these as app_shutdown, not user_cancel).
+                stop_reason: Some("forced_unload".to_string()),
                 last_event_seq: committed.last_event_seq,
                 error_details: None,
             });

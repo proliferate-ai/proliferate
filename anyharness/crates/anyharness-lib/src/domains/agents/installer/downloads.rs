@@ -356,6 +356,26 @@ pub(super) fn download_and_extract_archive_tree_verified(
     ArchiveTreeActivation::activate_tree(dest_dir, &staging_dir, launcher_path)
 }
 
+/// Swap an already-built local `staging_dir` into `dest_dir` with the same
+/// recover-then-activate discipline as the archive path, but without any
+/// download/extract. Used by the managed-npm/git/source-build adapter path so
+/// it never installs over a live tree: the caller builds the complete tree in
+/// `staging_dir`, then promotes it whole. The caller owns launcher staging +
+/// `commit()`/`rollback_after()` on the returned activation, exactly like the
+/// archive adapter arm in `pinned.rs`.
+pub(in crate::domains::agents::installer) fn activate_local_tree(
+    dest_dir: &Path,
+    staging_dir: &Path,
+    launcher_path: Option<&Path>,
+) -> Result<ArchiveTreeActivation, InstallError> {
+    let parent = dest_dir.parent().ok_or_else(|| {
+        InstallError::InvalidInstallSpec("managed adapter destination has no parent".into())
+    })?;
+    std::fs::create_dir_all(parent)?;
+    ArchiveTreeActivation::recover(dest_dir, launcher_path)?;
+    ArchiveTreeActivation::activate_tree(dest_dir, staging_dir, launcher_path)
+}
+
 #[cfg(test)]
 #[path = "downloads_tests.rs"]
 mod tests;

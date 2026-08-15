@@ -12,7 +12,14 @@ const DEV_UPDATER_MOCK_DOWNLOAD_TOTAL_BYTES = 125_000_000;
 
 type DevUpdaterMockPhase = Extract<
   UpdaterPhase,
-  "current" | "available" | "downloading" | "stalled" | "ready" | "error"
+  | "current"
+  | "available"
+  | "downloading"
+  | "stalled"
+  | "verifying"
+  | "reusingStaged"
+  | "ready"
+  | "error"
 >;
 
 export interface DevUpdaterMockState {
@@ -54,7 +61,7 @@ export function isDevUpdaterMockSupported(): boolean {
 let envSeedApplied = false;
 
 // Dev convenience: boot straight into a forced updater phase via
-// `VITE_PROLIFERATE_UPDATER_MOCK=current|available|downloading|stalled|ready|error` (e.g. when
+// `VITE_PROLIFERATE_UPDATER_MOCK=current|available|downloading|stalled|verifying|reusingStaged|ready|error` (e.g. when
 // running `pdev`), so the real pill / toast / confirm can be exercised without the
 // playground. Runs once and never clobbers an existing mock (e.g. one the playground set).
 export function seedDevUpdaterMockFromEnv(): void {
@@ -193,6 +200,8 @@ function isDevUpdaterMockPhase(value: unknown): value is DevUpdaterMockPhase {
     value === "available" ||
     value === "downloading" ||
     value === "stalled" ||
+    value === "verifying" ||
+    value === "reusingStaged" ||
     value === "ready" ||
     value === "error"
   );
@@ -237,8 +246,12 @@ function normalizeDevUpdaterMock(raw: unknown): DevUpdaterMockState | null {
   // A stall keeps the figures it stalled at — "stalled at 38%" is the whole
   // point of naming the phase — so both phases carry progress here. A stall
   // with no total is the no-progress-bar shape, and stays null.
+  // `verifying` keeps the download figures too: the surface shows a full bar
+  // with "verifying" copy, so its inputs must survive normalization.
   const isDownloading =
-    candidate.phase === "downloading" || candidate.phase === "stalled";
+    candidate.phase === "downloading" ||
+    candidate.phase === "stalled" ||
+    candidate.phase === "verifying";
   const downloadTotalBytes = isDownloading
     ? candidate.downloadTotalBytes === null
       ? null
