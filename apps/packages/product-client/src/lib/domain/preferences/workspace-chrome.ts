@@ -25,6 +25,13 @@ const TERMINAL_GLASS_TABLIST_RAIL_CLASS =
 const TERMINAL_SOLID_TABLIST_RAIL_CLASS =
   "relative flex shrink-0 items-center gap-1 overflow-hidden pr-1";
 
+// The main sidebar is the one surface that goes translucent while docked
+// under transparent chrome (WorkspaceShellSidebar, MainSidebarPageShell). No
+// backdrop-blur here: unlike the header/tablist bands above, the sidebar
+// relies on the macOS window's native vibrancy showing through, not a CSS
+// blur over page content.
+export const SIDEBAR_GLASS_CLASS = "bg-sidebar/60";
+
 export interface StandardWorkspaceChromeClasses {
   root: string;
   contentShell: string;
@@ -81,10 +88,13 @@ export function resolveStandardWorkspaceChromeClasses({
 
   return {
     root: transparent ? "bg-transparent" : "bg-sidebar",
-    // The content shell always paints opaque. The sidebar and chat center are
-    // opaque regardless of chrome mode, so a transparent shell only ever
-    // exposed window vibrancy through the header/footer/right-panel bands —
-    // rendering them as off-shade stripes on every theme.
+    // The content shell always paints opaque. The main sidebar is the
+    // exception (see SIDEBAR_GLASS_CLASS) — it renders translucent glass
+    // while docked under transparent chrome. Everywhere else (the chat
+    // center) stays opaque regardless of chrome mode, so a transparent shell
+    // otherwise only ever exposed window vibrancy through the
+    // header/footer/right-panel bands — rendering them as off-shade stripes
+    // on every theme.
     contentShell: transparent
       ? "bg-background"
       : [

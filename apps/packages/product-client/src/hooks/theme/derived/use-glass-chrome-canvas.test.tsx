@@ -28,6 +28,20 @@ describe("useGlassChromeCanvas", () => {
     expect(document.documentElement.style.backgroundColor).toBe("rgb(20, 20, 20)");
   });
 
+  it("keeps the canvas transparent while any concurrent mount is still active", () => {
+    document.documentElement.style.backgroundColor = "rgb(20, 20, 20)";
+
+    const first = renderHook(() => useGlassChromeCanvas(true));
+    const second = renderHook(() => useGlassChromeCanvas(true));
+    expect(document.documentElement.style.backgroundColor).toBe("transparent");
+
+    first.unmount();
+    expect(document.documentElement.style.backgroundColor).toBe("transparent");
+
+    second.unmount();
+    expect(document.documentElement.style.backgroundColor).toBe("rgb(20, 20, 20)");
+  });
+
   it("leaves the canvas untouched while inactive", () => {
     document.documentElement.style.backgroundColor = "rgb(20, 20, 20)";
 

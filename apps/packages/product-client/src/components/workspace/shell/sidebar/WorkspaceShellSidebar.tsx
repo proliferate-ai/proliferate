@@ -3,6 +3,7 @@ import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
 import { WorkspaceSidebarHeaderControls } from "#product/components/workspace/shell/sidebar/WorkspaceSidebarHeaderControls";
 import { useWorkspaceSidebarPeek } from "#product/hooks/workspaces/ui/use-workspace-sidebar-peek";
+import { SIDEBAR_GLASS_CLASS } from "#product/lib/domain/preferences/workspace-chrome";
 
 interface WorkspaceShellSidebarProps {
   open: boolean;
@@ -49,7 +50,7 @@ export function WorkspaceShellSidebar({
   // over the content pane, where a translucent fill would bleed chat content
   // through instead of window vibrancy.
   const panelBackgroundClass = glassBackground && (open || toggleClosing)
-    ? "bg-sidebar/60"
+    ? SIDEBAR_GLASS_CLASS
     : "bg-sidebar";
 
   const panelStateClass = open

@@ -8,17 +8,34 @@ import { useEffect } from "react";
  * below it is, so while glass chrome is active the shell overrides the canvas
  * with an inline style (which outranks any stylesheet rule) and restores the
  * stylesheet value when glass turns off or the shell unmounts.
+ *
+ * AuthenticatedAppHost can keep StandardWorkspaceShell mounted-but-hidden
+ * while MainSidebarPageShell is shown (and vice versa), so this hook can be
+ * mounted twice concurrently; a module-level refcount ensures only the first
+ * active mount saves the pre-existing inline background and only the last
+ * active mount to unmount restores it, instead of each instance racing to
+ * save/restore independently and leaving "transparent" stuck.
  */
+let activeCount = 0;
+let savedBackground: string | null = null;
+
 export function useGlassChromeCanvas(active: boolean): void {
   useEffect(() => {
     if (!active) {
       return;
     }
     const root = document.documentElement;
-    const previous = root.style.backgroundColor;
+    if (activeCount === 0) {
+      savedBackground = root.style.backgroundColor;
+    }
+    activeCount += 1;
     root.style.backgroundColor = "transparent";
     return () => {
-      root.style.backgroundColor = previous;
+      activeCount -= 1;
+      if (activeCount === 0) {
+        root.style.backgroundColor = savedBackground ?? "";
+        savedBackground = null;
+      }
     };
   }, [active]);
 }
