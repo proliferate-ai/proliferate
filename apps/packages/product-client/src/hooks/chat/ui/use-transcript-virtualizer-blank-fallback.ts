@@ -5,6 +5,13 @@ import {
 } from "#product/lib/infra/measurement/measurement-port";
 import { recordTranscriptVirtualizerBlank } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
 
+// Bounded window (ms) after an older-history prepend during which the
+// blank-viewport fallback is suppressed while the freshly mounted rows correct
+// estimate -> measured height. A generous upper bound on that reconciliation
+// even on a slow/loaded runner; the anchored scrollTop legitimately sits ahead
+// of the still estimate-coordinate mounted range for that span and must not be
+// misread as a broken virtualizer (a remount resets scrollTop to 0).
+export const PREPEND_BLANK_FALLBACK_GRACE_MS = 3_000;
 const BLANK_VIEWPORT_MIN_SCROLLABLE_PX = 32;
 const BLANK_VIEWPORT_LOGICAL_CONFIRMATION_FRAMES = 2;
 const BLANK_VIEWPORT_DOM_CONFIRMATION_FRAMES = 2;
@@ -23,6 +30,7 @@ export function useTranscriptVirtualizerBlankFallback({
   lastVirtualItem,
   lastBlankReportSignatureRef,
   onFallback,
+  prependSettleUntilRef,
   renderableRowCount,
   rowCount,
   scrollRef,
@@ -37,6 +45,13 @@ export function useTranscriptVirtualizerBlankFallback({
   lastVirtualItem: TranscriptVirtualItemSnapshot | null;
   lastBlankReportSignatureRef: RefObject<string | null>;
   onFallback: (reason: string) => void;
+  /**
+   * Interaction-clock (performance.now) deadline until which a just-applied
+   * older-history prepend is still reconciling its freshly-mounted rows from
+   * estimate to measured height. Blank detection is suppressed until it lapses
+   * (see inspect). 0 (or absent) means no prepend is settling.
+   */
+  prependSettleUntilRef?: RefObject<number>;
   renderableRowCount: number;
   rowCount: number;
   scrollRef: RefObject<HTMLDivElement | null>;
@@ -62,6 +77,29 @@ export function useTranscriptVirtualizerBlankFallback({
       const viewport = scrollRef.current;
       if (!viewport) {
         suspicionRef.current = null;
+        return;
+      }
+
+      // While a just-applied older-history prepend is still reconciling its
+      // freshly-mounted rows from estimate to measured height, the engine
+      // deliberately holds scrollTop at an anchored position that can briefly
+      // sit ahead of the mounted virtual range (the range is in estimate
+      // coordinates until the taller real heights measure in — more pronounced
+      // on a slow/loaded runner and on WebKit, whose measurement delivery lags
+      // the anchor write further). That transient non-overlap is normal prepend
+      // settling, not a broken virtualizer, so it must never trip the blank
+      // remount: the remount unmounts the virtualized list and mounts a fresh
+      // full-DOM list whose new scroll container starts at scrollTop 0, with no
+      // pending anchor to restore — a full loss of the reading position (the CI
+      // webkit prepend "scrollTop 0"). Suppress detection until the bounded
+      // settle window lapses; genuine blankness re-arms the instant it does.
+      // (The reserved-slot / transient-block invariant that would make this a
+      // structural guarantee is rung 10; this is the minimal correct guard for
+      // the prepend anchor path.)
+      const nowMs = typeof performance === "undefined" ? Date.now() : performance.now();
+      if (nowMs < (prependSettleUntilRef?.current ?? 0)) {
+        suspicionRef.current = null;
+        frame = window.requestAnimationFrame(inspect);
         return;
       }
 
@@ -199,6 +237,7 @@ export function useTranscriptVirtualizerBlankFallback({
     lastVirtualItem,
     lastBlankReportSignatureRef,
     onFallback,
+    prependSettleUntilRef,
     renderableRowCount,
     rowCount,
     scrollRef,
