@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod auth_state;
 pub mod catalog;
 pub mod installer;
 pub mod model;
