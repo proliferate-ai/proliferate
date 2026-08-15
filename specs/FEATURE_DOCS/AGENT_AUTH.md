@@ -92,6 +92,35 @@ Selection laws:
   a vault entry; it names an `env_var_name` when that entry is a bare
   key and must not when the entry is typed (the typed kind carries its
   own env mapping) — enforced in the store, since it spans tables.
+
+### Registry is the allow-list authority (FR-4)
+
+[registry.json](../../catalogs/agents/registry.json) is the single
+declared authority for three allow-lists: the harness-kind set, the
+gateway-capable set (a harness is gateway-capable exactly when its
+`auth.slots[]` contains a slot with id `gateway`; cursor has none), and the
+single-vs-multi cardinality (an explicit per-agent `authCardinality` field,
+`single` or `multi`, because deriving multiplicity from slot count is fragile).
+Every other plane mirrors those sets rather than re-deriving them:
+
+- The Python constants (`AGENT_AUTH_HARNESS_KINDS`,
+  `AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS`,
+  `SINGLE_SOURCE_HARNESSES`, `MULTI_SOURCE_HARNESSES`) stay literals so
+  `constants/` keeps no runtime registry read and the store to server import
+  boundary is untouched, but a drift test
+  ([test_agent_registry_mirror_drift.py](../../server/tests/unit/test_agent_registry_mirror_drift.py))
+  fails CI the moment a literal and its registry derivation disagree. The
+  LiteLLM access-group contract test is anchored to the same registry
+  derivation, not just the Python constant.
+- The Rust `AgentKind` enum stays a type, but
+  [schema_tests.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/schema_tests.rs)
+  asserts `AgentKind::all()` equals the registry kind set and that the
+  registry gateway-slot derivation matches `render.rs`'s
+  gateway/`UnsupportedRoute` split (cursor is the only non-gateway kind).
+- The TypeScript client derives the same three sets from the bundled registry
+  copy (`bundled-agent-registry.ts`) instead of re-literalling them, and the
+  harness settings pane reads its per-harness toggles from the bundled catalog
+  copy rather than a hand-copied table.
 - **Org policy gates writes, not launches.**
   `PUT …/selections/{harness}` runs every org the user belongs to
   through `_enforce_org_selection_policy`
