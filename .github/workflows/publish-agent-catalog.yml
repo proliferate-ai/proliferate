@@ -1,0 +1,137 @@
+name: Publish Agent Catalog
+
+# Update Flow ADR, FR-1 (publisher lane): publishes a signed, versioned
+# catalog+registry artifact to S3 for the runtime's boot-only fetch
+# (anyharness-lib domains/agents/catalog/artifact.rs). This does NOT change
+# what any running process serves — the bundled `catalog.json` stays the
+# floor, and every already-running runtime keeps whatever it activated at its
+# own boot. Only a FUTURE boot can pick up what this job publishes.
+#
+# Rollback (see the runbook in specs/codebase/platforms/product/agent-
+# distribution.md): every version this job publishes is immutable and stays
+# in S3 forever, so rollback is a manual `aws s3 cp` of an OLDER version's
+# `manifest.json` back onto the rolling `catalogs/agents/stable/manifest.json`
+# pointer plus a CloudFront invalidation — this job is not involved in a
+# rollback and does not re-run old commits.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "catalogs/agents/catalog.json"
+      - "catalogs/agents/registry.json"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  publish:
+    name: Validate, sign, and publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      - name: Validate catalog + registry documents
+        run: node scripts/validate-agent-catalog.mjs
+
+      - name: Generate publisher manifest
+        run: |
+          node scripts/generate-agent-catalog-manifest.mjs \
+            --catalog catalogs/agents/catalog.json \
+            --registry catalogs/agents/registry.json \
+            --output manifest.json
+          echo "CATALOG_VERSION=$(node -pe 'JSON.parse(require("fs").readFileSync("manifest.json")).catalogVersion')" >> "$GITHUB_ENV"
+
+      - name: Install minisign
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/minisign.tar.gz \
+            https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz
+          tar -xzf /tmp/minisign.tar.gz -C /tmp
+          sudo install /tmp/minisign-linux/x86_64/minisign /usr/local/bin/minisign
+
+      - name: Sign catalog + registry documents
+        env:
+          AGENT_CATALOG_SIGNING_PRIVATE_KEY: ${{ secrets.AGENT_CATALOG_SIGNING_PRIVATE_KEY }}
+          AGENT_CATALOG_SIGNING_PASSWORD: ${{ secrets.AGENT_CATALOG_SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${AGENT_CATALOG_SIGNING_PRIVATE_KEY:-}" || -z "${AGENT_CATALOG_SIGNING_PASSWORD:-}" ]]; then
+            echo "::error::AGENT_CATALOG_SIGNING_PRIVATE_KEY / AGENT_CATALOG_SIGNING_PASSWORD are not provisioned yet."
+            echo "::error::The publisher lane stays inert until an operator provisions these secrets (see PR founder question #3);"
+            echo "::error::runtimes keep serving the compiled-in floor catalog either way. Failing this job on purpose rather than publishing unsigned."
+            exit 1
+          fi
+          printf '%s' "$AGENT_CATALOG_SIGNING_PRIVATE_KEY" > /tmp/agent-catalog.key
+          # minisign reads the password on stdin; -x names the .minisig output.
+          printf '%s\n' "$AGENT_CATALOG_SIGNING_PASSWORD" | \
+            minisign -S -s /tmp/agent-catalog.key -m catalogs/agents/catalog.json -x catalog.json.minisig
+          printf '%s\n' "$AGENT_CATALOG_SIGNING_PASSWORD" | \
+            minisign -S -s /tmp/agent-catalog.key -m catalogs/agents/registry.json -x registry.json.minisig
+          shred -u /tmp/agent-catalog.key || rm -f /tmp/agent-catalog.key
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_DESKTOP_RELEASE_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Refuse an existing immutable version
+        run: |
+          set -euo pipefail
+          BUCKET="${{ vars.AGENT_CATALOG_S3_BUCKET || vars.DESKTOP_DOWNLOADS_S3_BUCKET }}"
+          : "${CATALOG_VERSION:?Missing catalog version.}"
+          VERSIONED_KEY="catalogs/agents/${CATALOG_VERSION}/manifest.json"
+
+          if head_error="$(aws s3api head-object --bucket "${BUCKET}" --key "${VERSIONED_KEY}" 2>&1)"; then
+            echo "::error::s3://${BUCKET}/${VERSIONED_KEY} already exists. Same-version publishes are refused before any artifact or the rolling pointer changes."
+            exit 1
+          fi
+          if [[ "$head_error" != *"(404)"* ]]; then
+            echo "$head_error" >&2
+            echo "::error::Could not prove that s3://${BUCKET}/${VERSIONED_KEY} is absent; refusing to publish."
+            exit 1
+          fi
+
+      - name: Upload the versioned, immutable artifact
+        run: |
+          set -euo pipefail
+          BUCKET="${{ vars.AGENT_CATALOG_S3_BUCKET || vars.DESKTOP_DOWNLOADS_S3_BUCKET }}"
+          : "${CATALOG_VERSION:?Missing catalog version.}"
+          PREFIX="catalogs/agents/${CATALOG_VERSION}"
+          for file in catalogs/agents/catalog.json catalogs/agents/registry.json catalog.json.minisig registry.json.minisig manifest.json; do
+            aws s3api put-object \
+              --bucket "${BUCKET}" \
+              --key "${PREFIX}/$(basename "$file")" \
+              --body "$file" \
+              --content-type "application/json" \
+              --cache-control "max-age=31536000, immutable" \
+              --if-none-match "*"
+          done
+
+      - name: Publish rolling pointer
+        run: |
+          set -euo pipefail
+          BUCKET="${{ vars.AGENT_CATALOG_S3_BUCKET || vars.DESKTOP_DOWNLOADS_S3_BUCKET }}"
+          CHANNEL="stable"
+          aws s3 cp manifest.json \
+            "s3://${BUCKET}/catalogs/agents/${CHANNEL}/manifest.json" \
+            --content-type "application/json" \
+            --cache-control "max-age=300"
+
+      - name: Invalidate CloudFront cache (rolling pointer only)
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.AGENT_CATALOG_CLOUDFRONT_DISTRIBUTION_ID || vars.DESKTOP_CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths "/catalogs/agents/stable/manifest.json"
