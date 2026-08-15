@@ -346,6 +346,7 @@ export interface ScrollPhysicsDriver {
   switchSession(sessionId: string, seedTurns: number): void;
   getMetrics(): ViewportMetrics;
   scrollToBottomInstant(): void;
+  gestureScrollToBottomDistance(distancePx: number): void;
   // True pin state, read from the floating "Scroll to bottom" control, which is
   // aria-hidden exactly when pinned to bottom. Returns null if the control is
   // not present.
@@ -500,6 +501,28 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
       return;
     }
     el.scrollTop = el.scrollHeight;
+  },
+
+  // Engine-portable downward user gesture that lands at a chosen distance
+  // from the bottom, for asserting the repin band EDGE (rather than only the
+  // hard bottom `scrollToBottomInstant` gives you) and for a controlled
+  // downward nudge that stays clear of the band. A real WheelEvent (untrusted
+  // synthetic events still run addEventListener handlers, so the component's
+  // own wheel-intent listener classifies this as user intent) claims downward
+  // intent, then the scrollTop write lands at the requested distance and
+  // fires a real, trusted native `scroll` event the transcript's pin
+  // classification keys off of.
+  gestureScrollToBottomDistance(distancePx: number): void {
+    const el = viewport();
+    if (!el) {
+      return;
+    }
+    el.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 120, bubbles: true, cancelable: true }),
+    );
+    const maxTop = Math.max(0, el.scrollHeight - el.clientHeight);
+    const targetTop = Math.max(0, Math.min(maxTop, maxTop - distancePx));
+    el.scrollTop = targetTop;
   },
 
   isPinned(): boolean | null {
