@@ -140,8 +140,21 @@ export function useTranscriptFramePipelineLifecycle({
       );
     }
     const effectiveScrollHeight = floor.maxScrollHeight;
+    const target = anchor.scrollTop + (effectiveScrollHeight - anchor.scrollHeight);
     notifyProgrammaticScroll(() => {
-      viewport.scrollTop = anchor.scrollTop + (effectiveScrollHeight - anchor.scrollHeight);
+      // Above-change compensation only ever absorbs growth ABOVE the reader, so
+      // the anchored scrollTop moves DOWN (increases) or holds as those rows
+      // measure taller; it must never travel back UP toward the freshly inserted
+      // top. On webkit the rung-5 measured-height swap can momentarily report the
+      // total at (or below) its pre-insert value between the anchor install and
+      // the real-height delivery; a frame pass sampled during that dip computes a
+      // ~0 delta and, without this forward clamp, jumps the reader to scrollTop 0
+      // (the r5 CI webkit prepend regression: scrollTop Received 0 while the
+      // content had already grown). Clamp forward so the correct initial anchor
+      // placement is only ever raised further, never undone.
+      if (target > viewport.scrollTop) {
+        viewport.scrollTop = target;
+      }
     });
   }, [
     compensationAnchorRef,
