@@ -9,25 +9,12 @@ import {
   TRANSCRIPT_USER_SCROLL_SETTLE_MS,
   type TranscriptScrollSample,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
+import { TranscriptScrollOwnershipMarkers } from "#product/hooks/chat/ui/transcript-scroll-ownership";
 import { useTranscriptSubmitStampRepin } from "#product/hooks/chat/ui/use-transcript-submit-stamp-repin";
 import { useTranscriptUserScrollIntent } from "#product/hooks/chat/ui/use-transcript-user-scroll-intent";
 
 function interactionNow(): number {
   return typeof performance === "undefined" ? Date.now() : performance.now();
-}
-
-/**
- * A record of one programmatic write, awaiting the scroll event it produces.
- * `expectedTop` is the scrollTop the browser actually settled on after the
- * write (post-clamp), so the resulting event matches within a subpixel
- * tolerance. `frame` is the watchdog rAF that expires the marker if its event
- * never arrives (a clamped or no-op write), so a stale marker cannot leak into
- * the next user scroll. `id` is a monotonic sequence for identity.
- */
-interface ProgrammaticMarker {
-  id: number;
-  expectedTop: number;
-  frame: number;
 }
 
 export interface UseTranscriptStickToBottomOptions {
@@ -101,16 +88,10 @@ export function useTranscriptStickToBottom({
   const pinnedRef = useRef(true);
   const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
   const lastScrollTopRef = useRef(0);
-  // Ownership markers: the PRIMARY classification signal. Every programmatic
-  // write records a marker carrying the scrollTop it produced; the scroll event
-  // that matches a live marker is our own write, not the user. A queue (not a
-  // single slot) is required because the glue loop writes faster than the
-  // browser dispatches scroll events, so several writes can be in flight at
-  // once — a single slot would let a later write overwrite an earlier marker
-  // before its event arrived, misclassifying that event as a user scroll (the
-  // false-unpin the pixel-tolerance fallback used to paper over).
-  const pendingMarkersRef = useRef<ProgrammaticMarker[]>([]);
-  const markerSeqRef = useRef(0);
+  // Ownership markers: the PRIMARY classification signal telling our own
+  // writes apart from a user scroll. See transcript-scroll-ownership.ts.
+  // `useRef`'s initializer only takes effect on the first render.
+  const ownershipMarkersRef = useRef(new TranscriptScrollOwnershipMarkers());
   const glueFrameRef = useRef<number | null>(null);
   const autoFollowBottomInsetRef = useRef(Math.max(0, autoFollowBottomInsetPx));
   const consumedAutoFollowBottomInsetRef = useRef(0);
@@ -124,48 +105,16 @@ export function useTranscriptStickToBottom({
     setIsPinnedToBottom(next);
   }, []);
 
-  const removeMarker = useCallback((marker: ProgrammaticMarker) => {
-    const queue = pendingMarkersRef.current;
-    const index = queue.indexOf(marker);
-    if (index !== -1) {
-      queue.splice(index, 1);
-    }
-    if (marker.frame !== 0) {
-      cancelAnimationFrame(marker.frame);
-      marker.frame = 0;
-    }
-  }, []);
-
   const clearAllMarkers = useCallback(() => {
-    for (const marker of pendingMarkersRef.current) {
-      if (marker.frame !== 0) {
-        cancelAnimationFrame(marker.frame);
-      }
-    }
-    pendingMarkersRef.current = [];
+    ownershipMarkersRef.current.clear();
   }, []);
 
   const markNonUserScrollPosition = useCallback((viewport: HTMLDivElement) => {
     const expectedTop = viewport.scrollTop;
     // Record ownership without disturbing markers already in flight: several
-    // programmatic writes can await their events at once (see the queue note).
-    const marker: ProgrammaticMarker = {
-      id: (markerSeqRef.current += 1),
-      expectedTop,
-      frame: 0,
-    };
-    pendingMarkersRef.current.push(marker);
-    // Watchdog: a write that changes nothing (or a browser clamp whose event
-    // never arrives) must not leak its marker into the next user scroll. Expire
-    // the marker on the next frame if its event has not consumed it by then.
-    marker.frame = requestAnimationFrame(() => {
-      marker.frame = 0;
-      const queue = pendingMarkersRef.current;
-      const index = queue.indexOf(marker);
-      if (index !== -1) {
-        queue.splice(index, 1);
-      }
-    });
+    // programmatic writes can await their events at once (see
+    // transcript-scroll-ownership.ts).
+    ownershipMarkersRef.current.record(expectedTop);
     lastScrollTopRef.current = expectedTop;
   }, []);
 
@@ -270,31 +219,20 @@ export function useTranscriptStickToBottom({
     // Classification ladder. PRIMARY: ownership markers. A live marker recorded
     // by one of our own writes owns this event — clear it and never touch pin
     // state or direction. Because markers are queued, a burst of glue writes no
-    // longer loses attribution to a single overwritten slot.
-    const queue = pendingMarkersRef.current;
-    if (queue.length > 0) {
-      const matchIndex = queue.findIndex(
-        (marker) => Math.abs(top - marker.expectedTop) <= PROGRAMMATIC_MATCH_TOL_PX,
-      );
-      if (matchIndex !== -1) {
-        removeMarker(queue[matchIndex]);
-        onScrollSample({ programmatic: true });
-        return;
-      }
+    // longer loses attribution to a single overwritten slot. See
+    // transcript-scroll-ownership.ts for the queue implementation.
+    if (ownershipMarkersRef.current.matchByValue(top)) {
+      onScrollSample({ programmatic: true });
+      return;
+    }
 
-      // FALLBACK tier (last resort, engaged only while a marker is live): the
-      // tolerance missed because scrollHeight changed between our write and this
-      // event. The surviving 2px tolerance above and this H2 downward-while-
-      // pinned rule are the pre-marker heuristics, retained ONLY for the case a
-      // marker exists but its exact landing could not be matched. While pinned,
-      // a downward-or-flat move is our own snap catching up, never a user
-      // scroll; unpinning here would be a false positive.
-      const latest = queue[queue.length - 1];
-      if (pinnedRef.current && top >= latest.expectedTop - PROGRAMMATIC_MATCH_TOL_PX) {
-        removeMarker(latest);
-        onScrollSample({ programmatic: true });
-        return;
-      }
+    // FALLBACK tier (last resort, engaged only while a marker is live): the
+    // tolerance missed because scrollHeight changed between our write and this
+    // event. While pinned, a downward-or-flat move is our own snap catching
+    // up, never a user scroll; unpinning here would be a false positive.
+    if (pinnedRef.current && ownershipMarkersRef.current.matchDownwardWhilePinned(top)) {
+      onScrollSample({ programmatic: true });
+      return;
     }
 
     // No live marker owns this event: it is a user scroll (intent-attributed
@@ -327,7 +265,7 @@ export function useTranscriptStickToBottom({
         ? { programmatic: false, userInitiated: true }
         : { programmatic: false },
     );
-  }, [onScrollSample, pinnedRef, removeMarker, repinThresholdPx, setPinned]);
+  }, [onScrollSample, pinnedRef, repinThresholdPx, setPinned]);
 
   const startGlueLoop = useCallback(() => {
     if (typeof window === "undefined") {
