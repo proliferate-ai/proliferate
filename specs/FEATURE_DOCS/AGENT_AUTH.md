@@ -368,8 +368,31 @@ pushes into its embedded runtime
   gateway for harnesses without native logins, then this sync loop — is
   what delivers the first `state.json`, and a home-screen onboarding card
   ("Setting up your agents…") awaits the runtime's ack with a short grace
-  window (~20s) before auto-advancing — degrading to a visible pending
+  window (~20s) before auto-advancing, degrading to a visible pending
   badge and letting the user proceed. It never blocks.
+- **Under `agentAuthEvidencePanes` the card is state-bound, not timed.**
+  With the same flag that drives the evidence panes ON, the timer card is
+  replaced by per-agent badges bound to the REAL states each adopted agent
+  moves through: install progress (the agents projection's `installState`),
+  the `state.json` selection ack, and the derived `authState` (display,
+  next action, probe lifecycle). The card completes when every adopted agent
+  reaches a launchable or actionable terminal state (usable, authenticated,
+  or installed with a next action), never on a timer. Every terminal badge
+  the card shows carries a next-action affordance routing to the right pane
+  (from `authState.nextAction`, with an "open agent settings" fallback so no
+  state is a dead end), and a stuck probe shows its backoff and next-attempt
+  countdown rather than an eternal spinner. With the flag OFF the timer card
+  above is untouched.
+  ([auth-setup-badges.ts](../../apps/packages/product-client/src/lib/domain/agents/auth-setup-badges.ts),
+  [use-auth-setup-onboarding-evidence.ts](../../apps/packages/product-client/src/hooks/agents/lifecycle/use-auth-setup-onboarding-evidence.ts))
+- **Acceptance (FR-1).** The flag-ON onboarding coherence (sign-in,
+  auto-install or adopt, default auth source resolution, state ack, probe,
+  picker populated, first session) is covered by the badge-derivation domain
+  tests and the card component tests that assert each real state renders its
+  badge and affordance and that completion requires terminal states rather
+  than a timer. The end-to-end live pass on a fresh profile was not run in
+  the rung-7 change; see that PR's description for the exact blocker and the
+  static evidence delivered in its place.
 - **The loop.** `GET /v1/cloud/agent-auth/state?surface=local` (the same
   renderer as the cloud materializer, scoped to the `local`-surface
   selections) → fingerprint-compare against the last pushed document →
