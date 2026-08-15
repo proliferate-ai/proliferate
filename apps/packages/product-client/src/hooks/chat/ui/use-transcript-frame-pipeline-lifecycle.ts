@@ -8,8 +8,16 @@ export interface UseTranscriptFramePipelineLifecycleOptions {
   scrollRef: RefObject<HTMLDivElement | null>;
   /** Live pin state. */
   pinnedRef: RefObject<boolean>;
-  /** Active above-change compensation anchor, applied while unpinned + gluing. */
+  /** Active above-change compensation anchor, applied while unpinned + within deadline. */
   compensationAnchorRef: RefObject<ContentHeightScrollAnchor | null>;
+  /**
+   * Deadline (interactionNow ms) past which the compensation anchor is stale.
+   * The single frame pass compensates every measurement correction that arrives
+   * before it — whether the eager glue window is still open or a later, isolated
+   * ResizeObserver growth drives the pass — and clears the anchor once the
+   * deadline passes so ordinary below-the-viewport growth can move the reader.
+   */
+  compensationDeadlineRef: RefObject<number>;
   /** Snap to the active follow target (the pinned write). */
   scrollToBottom: () => void;
   /** Wrap a scrollTop write so its event is excluded from pin/direction. */
@@ -24,7 +32,8 @@ export interface UseTranscriptFramePipelineLifecycleOptions {
  * Wire the frame pipeline's single writer and its lifecycle. The writer is the
  * one snap/compensation pass the pipeline drives each frame: snap to the follow
  * target while pinned; apply the above-change compensation delta while unpinned
- * inside a glue window; otherwise do nothing. Every write still flows through
+ * with a live anchor (until its deadline lapses); otherwise do nothing. Every
+ * write still flows through
  * the rung-3 ownership markers (WHO wrote) — the pipeline owns only WHEN.
  *
  * Also owns the tab/window resume glue (re-show while pinned collapses the
@@ -35,6 +44,7 @@ export function useTranscriptFramePipelineLifecycle({
   scrollRef,
   pinnedRef,
   compensationAnchorRef,
+  compensationDeadlineRef,
   scrollToBottom,
   notifyProgrammaticScroll,
   clearAllMarkers,
@@ -50,12 +60,32 @@ export function useTranscriptFramePipelineLifecycle({
       return;
     }
     const anchor = compensationAnchorRef.current;
-    if (anchor && pipelineRef.current.isGluing) {
-      notifyProgrammaticScroll(() => {
-        viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
-      });
+    if (!anchor) {
+      return;
     }
-  }, [compensationAnchorRef, notifyProgrammaticScroll, pinnedRef, pipelineRef, scrollRef, scrollToBottom]);
+    // Compensate every measurement correction until the deadline, whichever pass
+    // (eager glue tick or a later isolated ResizeObserver growth) drives it. The
+    // freshly-mounted older rows keep correcting their estimated heights taller
+    // for several frames after a prepend — more, and more spread out, on a slow
+    // runner — often past the forced-glue window's quiet-frame end. Gating on the
+    // deadline instead of `isGluing` keeps this single writer absorbing the full
+    // added-above height so the reading row stays fixed on every engine.
+    const now = typeof performance === "undefined" ? Date.now() : performance.now();
+    if (now >= compensationDeadlineRef.current) {
+      compensationAnchorRef.current = null;
+      return;
+    }
+    notifyProgrammaticScroll(() => {
+      viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
+    });
+  }, [
+    compensationAnchorRef,
+    compensationDeadlineRef,
+    notifyProgrammaticScroll,
+    pinnedRef,
+    scrollRef,
+    scrollToBottom,
+  ]);
 
   useLayoutEffect(() => {
     const pipeline = pipelineRef.current;

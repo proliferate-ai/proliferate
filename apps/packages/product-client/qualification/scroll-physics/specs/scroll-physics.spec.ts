@@ -530,8 +530,23 @@ test.describe("transcript scroll physics", () => {
     },
   );
 
-  test("prepend anchoring: older-history prepend keeps the reading row fixed", async ({ page }) => {
+  test("prepend anchoring: older-history prepend keeps the reading row fixed", async ({
+    page,
+  }, testInfo) => {
     await ready(page);
+    // Slow the main thread so the freshly-mounted older rows' estimate-to-measured
+    // height corrections land over several spread-out frames, exactly as they do
+    // on a loaded CI runner. Unthrottled this scenario settles inside a frame or
+    // two and passes even with a compensation window that ends a frame early; the
+    // throttle is what turns that early-end into the ~39px under-absorption CI
+    // caught (chromium 550 vs > 589.2). CPU throttling is a Chromium/CDP-only
+    // capability; WebKit runs unthrottled and still exercises the same anchor
+    // path. This is the negative control: revert the deadline-gated compensation
+    // in use-transcript-frame-pipeline-lifecycle.ts and this arm fails on chromium.
+    if (testInfo.project.name === "chromium") {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 6 });
+    }
     await drive(page, "reset");
     await drive(page, "seedFinalizedConversation", 12);
     // Exactly one prepend's worth of reservoir, so the anchor event is single
