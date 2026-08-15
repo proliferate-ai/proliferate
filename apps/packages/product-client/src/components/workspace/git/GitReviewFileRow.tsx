@@ -142,9 +142,16 @@ export function GitReviewFileRow({
     ...(diffTimingOptions ?? {}),
   });
   const diffErrorMessage = diffQuery.isError ? formatDiffErrorMessage(diffQuery.error) : null;
-  const additions = diffQuery.data?.additions ?? currentDiff?.additions ?? file.touched?.recordedAdditions ?? 0;
-  const deletions = diffQuery.data?.deletions ?? currentDiff?.deletions ?? file.touched?.recordedDeletions ?? 0;
-  const patch = diffQuery.data?.patch ?? null;
+  // Once the file has no current diff, ignore the disabled query's cached
+  // data — otherwise a previously fetched, since-reverted file labels the
+  // recorded transcript patch with stale current-diff stats.
+  const additions = currentDiff
+    ? diffQuery.data?.additions ?? currentDiff.additions
+    : file.touched?.recordedAdditions ?? 0;
+  const deletions = currentDiff
+    ? diffQuery.data?.deletions ?? currentDiff.deletions
+    : file.touched?.recordedDeletions ?? 0;
+  const patch = currentDiff ? diffQuery.data?.patch ?? null : null;
   // Transcript-recorded fallback for last-turn files git can no longer diff
   // against the base (reverted, or written outside the repo). Hunk actions and
   // gap expansion stay off — the recorded patch may not apply to the worktree.
@@ -243,7 +250,7 @@ export function GitReviewFileRow({
         file={file}
         additions={additions}
         deletions={deletions}
-        binary={Boolean(diffQuery.data?.binary || currentDiff?.binary)}
+        binary={Boolean(currentDiff && (diffQuery.data?.binary || currentDiff.binary))}
         showStagedChip={showStagedChip}
         collapsed={collapsed}
         onToggleCollapsed={onToggleCollapsed}

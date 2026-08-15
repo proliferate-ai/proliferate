@@ -83,8 +83,8 @@ export function TurnDiffFileCard({
         patch: recordedPatch,
       })
     : null;
-  const displayAdditions = currentDiff || diffQuery.data ? additions : fallbackAdditions;
-  const displayDeletions = currentDiff || diffQuery.data ? deletions : fallbackDeletions;
+  const displayAdditions = currentDiff ? additions : fallbackAdditions;
+  const displayDeletions = currentDiff ? deletions : fallbackDeletions;
 
   return (
     <TurnDiffFileRow
