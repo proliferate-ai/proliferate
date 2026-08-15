@@ -123,17 +123,6 @@ export function VirtualizedTranscriptRowList({
     // proven measurement cadence; the owned content ResizeObserver still routes
     // every growth through the one frame pipeline at zero RO-loop cost.
     useAnimationFrameWithResizeObserver: true,
-    // Rung 5 (PRO-187): the estimate-to-measured swap changes getTotalSize via
-    // TanStack's own animation-frame RO, one frame after the content-RO snap, so
-    // the painted frame is short by that delta (the r5 pinned-follow spike,
-    // bottomDistance 132 > 120). Route every virtualizer state change back
-    // through the single frame pipeline while pinned so the same frame re-snaps;
-    // it coalesces to one write and no-ops on stable geometry (no RO loop).
-    onChange: () => {
-      if (pinnedRef.current) {
-        notifyContentResize();
-      }
-    },
   });
   const pendingAnchorRef = useTranscriptVirtualAnchorCapture({
     getVirtualItems: () => virtualizer.getVirtualItems(),
