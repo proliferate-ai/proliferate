@@ -36,7 +36,6 @@ vi.mock("#product/hooks/agents/lifecycle/use-first-run-auth-adoption", () => ({ 
 vi.mock("#product/hooks/agents/lifecycle/use-local-auth-state-sync", () => ({ useLocalAuthStateSync: vi.fn() }));
 vi.mock("#product/hooks/automations/lifecycle/use-local-automation-executor", () => ({ useLocalAutomationExecutor: vi.fn() }));
 vi.mock("#product/hooks/home/lifecycle/use-home-deferred-launch-runner", () => ({ useHomeDeferredLaunchRunner: vi.fn() }));
-vi.mock("#product/hooks/workspaces/lifecycle/use-cloud-workspace-polling", () => ({ useCloudWorkspacePolling: vi.fn() }));
 vi.mock("#product/hooks/preferences/lifecycle/use-appearance-preference-lifecycle", () => ({ useAppearancePreferenceLifecycle: vi.fn() }));
 vi.mock("#product/hooks/preferences/lifecycle/use-repo-preferences-lifecycle", () => ({ useRepoPreferencesLifecycle: vi.fn() }));
 vi.mock("#product/hooks/preferences/lifecycle/use-user-preferences-lifecycle", () => ({ useUserPreferencesLifecycle: vi.fn() }));
@@ -104,7 +103,6 @@ vi.mock("#product/providers/DesktopProductLifecycleRoot", () => ({
 
 import { ProductLifecycleRoot } from "#product/providers/ProductLifecycleRoot";
 import { useAppCommandActionsContext } from "#product/providers/AppCommandActionsProvider";
-import { useCloudWorkspacePolling } from "#product/hooks/workspaces/lifecycle/use-cloud-workspace-polling";
 import { useHomeDeferredLaunchRunner } from "#product/hooks/home/lifecycle/use-home-deferred-launch-runner";
 
 function CommandContextProbe() {
@@ -287,13 +285,11 @@ describe("ProductLifecycleRoot", () => {
 
     expect(screen.getByTestId("app-tree")).toBeTruthy();
     expect(useHomeDeferredLaunchRunner).not.toHaveBeenCalled();
-    expect(useCloudWorkspacePolling).not.toHaveBeenCalled();
 
     authStatus.value = "authenticated";
     rerender(tree());
 
     await waitFor(() => expect(useHomeDeferredLaunchRunner).toHaveBeenCalled());
-    expect(useCloudWorkspacePolling).toHaveBeenCalled();
   });
 
   it("keeps a single Desktop lifecycle mount under StrictMode", () => {
