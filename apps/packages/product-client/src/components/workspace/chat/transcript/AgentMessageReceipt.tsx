@@ -2,6 +2,7 @@ import { AgentIdentityChip } from "#product/components/patterns/AgentIdentityChi
 import { Button } from "#product/primitives/Button";
 import { Tooltip } from "#product/primitives/Tooltip";
 import type { DelegatedAgentIdentity } from "#product/lib/domain/delegated-work/model";
+import { clampAgentMessagePreview } from "#product/lib/domain/delegated-work/presentation";
 
 export type AgentMessageReceiptDirection = "outgoing" | "incoming";
 
@@ -35,7 +36,10 @@ export function AgentMessageReceipt({
       className={direction === "outgoing" ? "me-1.5" : "ms-1.5"}
     />
   ) : exactMessage ? (
-    <Tooltip content={exactMessage} className="inline-flex min-w-0 max-w-full align-middle">
+    <Tooltip
+      content={clampAgentMessagePreview(exactMessage)}
+      className="inline-flex min-w-0 max-w-full align-middle"
+    >
       <span
         data-agent-message-fallback
         className={`inline-block min-w-0 max-w-72 shrink truncate font-medium text-foreground/80 ${
