@@ -428,7 +428,6 @@ function ReviewFileSection({
               patch={file.patch}
               filePath={file.path}
               variant="chat"
-              chainVerticalWheel
             />
           ) : (
             <p className="px-3 py-2 text-ui text-sidebar-muted-foreground">

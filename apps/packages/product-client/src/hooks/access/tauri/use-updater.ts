@@ -1,35 +1,41 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useUpdaterStore } from "#product/stores/updater/updater-store";
 import type { UpdaterErrorSource, UpdaterPhase } from "#product/stores/updater/updater-store";
 import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
 import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
 import {
-  clearDevUpdaterMockDownload,
   DEV_UPDATER_MOCK_EVENT,
   isDevUpdaterMockSupported,
   readDevUpdaterMock,
   seedDevUpdaterMockFromEnv,
-  startDevUpdaterMockDownload,
-  updateDevUpdaterMock,
-  writeDevUpdaterMock,
   type DevUpdaterMockState,
 } from "./updater-dev-mock";
-import { runDownloadAndPrepareRestart } from "./updater-download";
 import {
   attachAutoCheckScheduler,
-  runUpdateCheck,
   type UpdaterSchedulerDeps,
 } from "./updater-check";
+import { useUpdaterActions } from "./use-updater-actions";
 import { isDownloadStalled } from "#product/lib/domain/updates/download-stall";
+import { isOfficialHostedApiBaseUrl } from "#product/lib/infra/proliferate-api";
 
 /** How often the stall clock is read. Well under the 8s threshold it tests. */
 const STALL_POLL_INTERVAL_MS = 1_000;
 
 export function useUpdater() {
-  const updater = useProductHost().desktop?.updater ?? null;
+  const host = useProductHost();
+  const updater = host.desktop?.updater ?? null;
   const telemetry = useProductTelemetry();
   const storageContext = useProductStorageContext();
+  const apiBaseUrl = host.deployment?.apiBaseUrl ?? null;
+  // The owned check's endpoint-override candidate: a connected non-official
+  // server's redirect manifest. Only consumed when the redirect flag is ON.
+  const serverUpdaterEndpoint = useMemo<string | null>(() => {
+    if (!apiBaseUrl || isOfficialHostedApiBaseUrl(apiBaseUrl)) {
+      return null;
+    }
+    return `${apiBaseUrl.replace(/\/$/, "")}/desktop/updater/latest.json`;
+  }, [apiBaseUrl]);
   // Arm the module-level scheduler's host facades (ruling G1). Held in a ref so
   // the auto-check effect and the action callbacks keep their existing
   // dependency arrays (host is a stable per-mount snapshot, so deps never
@@ -40,8 +46,9 @@ export function useUpdater() {
       captureException: (error, context) =>
         telemetry.captureException(error, context),
       storage: storageContext,
+      serverUpdaterEndpoint,
     }),
-    [telemetry, storageContext],
+    [telemetry, storageContext, serverUpdaterEndpoint],
   );
   const depsRef = useRef(deps);
   depsRef.current = deps;
@@ -128,52 +135,19 @@ export function useUpdater() {
     };
   }, []);
 
-  const checkNow = useCallback(async () => {
-    if (devMock) {
-      const timestamp = new Date().toISOString();
-      const completedAt = Date.now();
-      updateDevUpdaterMock((current) =>
-        current
-          ? {
-              ...current,
-              lastCheckedAt: timestamp,
-              // Mirror the real flow: a manual check that finds no update raises
-              // the one-shot "up to date" signal.
-              manualCheckCompletedAt:
-                current.phase === "current" ? completedAt : current.manualCheckCompletedAt,
-            }
-          : current,
-      );
-      return;
-    }
-
-    if (!isPackaged || updater === null) {
-      return;
-    }
-    await runUpdateCheck(updater, depsRef.current, { userInitiated: true });
-  }, [devMock, isPackaged, updater]);
-
-  const clearManualCheckCompleted = useCallback(() => {
-    if (devMock) {
-      updateDevUpdaterMock((current) =>
-        current ? { ...current, manualCheckCompletedAt: null } : current,
-      );
-      return;
-    }
-    useUpdaterStore.getState().clearManualCheckCompleted();
-  }, [devMock]);
-
-  const downloadUpdate = useCallback(async () => {
-    if (devMock) {
-      startDevUpdaterMockDownload();
-      return;
-    }
-
-    if (!isPackaged || updater === null) {
-      return;
-    }
-    await runDownloadAndPrepareRestart(updater, depsRef.current);
-  }, [devMock, isPackaged, updater]);
+  const {
+    checkNow,
+    clearManualCheckCompleted,
+    downloadUpdate,
+    retryDownload,
+    cancelUpdate,
+    skipVersion,
+    openRestartPrompt,
+    closeRestartPrompt,
+    scheduleRestartWhenIdle,
+    cancelRestartCountdown,
+    restartNow,
+  } = useUpdaterActions({ devMock, isPackaged, updater, depsRef, availableVersion });
 
   /**
    * Stall detection: while a download is in flight, poll the byte clock and
@@ -199,112 +173,6 @@ export function useUpdater() {
       window.clearInterval(interval);
     };
   }, [devMock, phase]);
-
-  const retryDownload = useCallback(async () => {
-    if (devMock) {
-      // "Retry now" is the stalled toast's commit button, so it has to do
-      // something under the mock too — otherwise the one recovery path out of
-      // the stall can't be exercised on the surface built to review it. Restart
-      // the forced download and re-arm the stall clock, mirroring the real
-      // store's `retryDownload`.
-      updateDevUpdaterMock((current) =>
-        current
-          ? {
-              ...current,
-              phase: "downloading",
-              downloadRetryCount: current.downloadRetryCount + 1,
-              lastProgressAt: Date.now(),
-              downloadStartedAt: Date.now(),
-            }
-          : current,
-      );
-      startDevUpdaterMockDownload();
-      return;
-    }
-
-    if (!isPackaged || updater === null) {
-      return;
-    }
-    useUpdaterStore.getState().retryDownload();
-    await runDownloadAndPrepareRestart(updater, depsRef.current);
-  }, [devMock, isPackaged, updater]);
-
-  /** Abandon this update entirely; the pill and any toast go away. */
-  const cancelUpdate = useCallback(() => {
-    if (devMock) {
-      writeDevUpdaterMock(null);
-      return;
-    }
-    useUpdaterStore.getState().reset();
-  }, [devMock]);
-
-  const skipVersion = useCallback(() => {
-    const version = availableVersion;
-    if (devMock || version === null) {
-      return;
-    }
-    useUpdaterStore.getState().skipVersion(version);
-  }, [availableVersion, devMock]);
-
-  const cancelRestartCountdown = useCallback(() => {
-    if (devMock) {
-      // "Not now" has to actually stop the countdown under the mock too, or the
-      // one cancellable state in the flow can't be exercised.
-      updateDevUpdaterMock((current) =>
-        current
-          ? { ...current, restartCountdownStartedAt: null, restartWhenIdle: false }
-          : current,
-      );
-      return;
-    }
-    useUpdaterStore.getState().cancelRestartCountdown();
-  }, [devMock]);
-
-  const openRestartPrompt = useCallback(() => {
-    if (devMock) {
-      updateDevUpdaterMock((current) =>
-        current ? { ...current, restartPromptOpen: true } : current,
-      );
-      return;
-    }
-    useUpdaterStore.getState().setRestartPromptOpen(true);
-  }, [devMock]);
-
-  const closeRestartPrompt = useCallback(() => {
-    if (devMock) {
-      updateDevUpdaterMock((current) =>
-        current ? { ...current, restartPromptOpen: false } : current,
-      );
-      return;
-    }
-    useUpdaterStore.getState().setRestartPromptOpen(false);
-  }, [devMock]);
-
-  const scheduleRestartWhenIdle = useCallback(() => {
-    if (devMock) {
-      updateDevUpdaterMock((current) =>
-        current ? { ...current, restartWhenIdle: true, restartPromptOpen: false } : current,
-      );
-      return;
-    }
-    const store = useUpdaterStore.getState();
-    store.setRestartWhenIdle(true);
-    store.setRestartPromptOpen(false);
-  }, [devMock]);
-
-  const restartNow = useCallback(async () => {
-    if (devMock) {
-      clearDevUpdaterMockDownload();
-      writeDevUpdaterMock(null);
-      return;
-    }
-
-    if (!isPackaged || updater === null) {
-      return;
-    }
-    useUpdaterStore.getState().setRestartPromptOpen(false);
-    await updater.relaunch();
-  }, [devMock, isPackaged, updater]);
 
   useEffect(() => {
     if (!isPackaged || updater === null) {

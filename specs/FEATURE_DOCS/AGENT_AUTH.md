@@ -557,6 +557,81 @@ every other harness uses, and read surfaces (settings' active-methods list,
 composer launch options) derive opencode's method state from the same
 selections.
 
+### The canonical evidence model
+
+Readiness above is the ladder a UI renders today. Underneath it, the runtime
+also computes ONE canonical per-harness agent-auth state as a struct of
+orthogonal facts plus one shared derivation
+([auth_state.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/auth_state.rs)).
+This is current runtime behavior for the derivation and its wire projection. It
+runs ALONGSIDE `credentialState`/`readiness`/`cliAuthState` and changes none of
+them, and the settings panes still render the legacy ladder until the UI rung
+adopts it. Its reason to exist is one invariant the legacy ladder cannot state:
+a harness reads green ONLY on dated evidence that the credential works, never on
+bare file or keychain presence.
+
+The facts are surface-agnostic and each answers one orthogonal question:
+
+- **installed**: the harness's artifacts resolved as present (the
+  `resolve_agent_unrouted` artifact question).
+- **credential**: which source fills the slot (gateway virtual key, `api_key`
+  BYOK, or native login) and the STRONGEST evidence held for it. That evidence
+  is a probe observation, a tier-1 trial (a cheap key-scoped gateway check, the
+  placeholder strength wired in the probe-tiers rung), an acknowledged applied
+  route, or bare presence marked UNVERIFIED. Bare presence is the one that must
+  never go green.
+- **selection**: the `state.json` route for this scope, carrying whether the
+  target runtime acknowledged it (monotonic revision) and whether it is
+  satisfiable.
+- **probe**: the lifecycle `{Idle, Queued, Running, Backoff}` with the
+  last-success age, last-failure detail, and `next_attempt_at`, sourced from the
+  model snapshot status ([MODELS.md](MODELS.md)).
+- **gateway**: a health slot filled by the gateway-verification rung, modeled
+  now as an `Option` so the derivation's `Unavailable` arm exists.
+- **handoff**: the browser-login handoff state
+  `{initiated, awaiting-browser, completed, cancelled, timed-out}`, an `Option`
+  whose adapters arrive later.
+
+`derive_agent_auth_state(facts)` folds those into a `DerivedState` carrying a
+`display`, a single `next_action`, and (when the display is green or an
+acknowledged `selected`) an `evidence_ref` and its `evidence_age`. The display
+vocabulary is a fixed precedence, first match wins, two structural pre-ladder
+terminals first:
+
+1. **NotInstalled**: artifact absent; next is install.
+2. **Unsupported**: the render layer refuses the route (for example cursor
+   gateway); next is none.
+3. **Misconfigured**: a control-plane delta or probe config mismatch; next is
+   fix config.
+4. **Expired**: a payload expiry passed or a tier-1 auth check failed; next is
+   log in or paste a key.
+5. **Unavailable**: a gateway-sourced slot whose gateway is unreachable or out
+   of budget; next is top up, retry, or wait.
+6. **Probing**: a probe is `Running` or `Queued`; next is wait.
+7. **Usable**: a fresh non-empty probe observation; next is none, launchable.
+8. **Authenticated**: a tier-1 trial is green with no full probe yet; next is
+   wait for the probe.
+9. **Selected**: an acknowledged, satisfiable route with no trial or probe yet;
+   next is wait.
+10. **Installed**: installed with no chosen source and no verified credential;
+    next is log in, paste a key, or choose a source.
+
+The invariant, enforced by a fact-permutation sweep in the module's tests: a
+display in `{Authenticated, Usable}` is reachable ONLY when `evidence_ref` names
+a probe observation, a key-scoped gateway check, or an acknowledged applied
+route, each with a non-null `evidence_age`. Bare file or keychain presence never
+yields green, so a locally-detected credential lands at `Installed` or
+`Selected` rather than a launchable terminal until a probe or trial confirms it.
+
+The derived state and the facts it derived from serialize additively onto the
+agents projection at `GET /v1/agents` as `AgentSummary.authState`, beside the
+untouched `credentialState`, `readiness`, and `credentialsFromRoute` fields
+([agents.rs](../../anyharness/crates/anyharness-contract/src/v1/agents.rs)).
+The rung-2 fact adapter fills only what the readiness projection already carries.
+The probe, gateway, and handoff slots stay at their empty defaults until the
+rungs that own those inputs wire them, so no path through the current adapter can
+yield a green display.
+
 ## The settings surface
 
 Everything above is the machinery. This section is the surface a user

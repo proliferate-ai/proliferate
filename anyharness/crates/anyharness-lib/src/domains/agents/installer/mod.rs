@@ -20,5 +20,5 @@ pub use lock::AgentInstallLock;
 pub(crate) use service::regenerate_seeded_agent_launchers;
 pub use service::{
     install_agent, install_agent_with_pins, install_agent_with_pins_and_progress, InstallError,
-    InstallOptions, InstalledArtifactResult,
+    InstallErrorKind, InstallOptions, InstalledArtifactResult,
 };

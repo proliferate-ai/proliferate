@@ -89,6 +89,170 @@ pub struct AgentSummary {
     pub message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cli_auth_state: Option<AgentCliAuthState>,
+    /// True when the user has their own copy of this agent on PATH,
+    /// regardless of whether a managed copy also exists and wins resolution
+    /// (R2.0, always-managed: a managed copy never displaces a PATH one).
+    /// Drives the settings-pane one-time notice explaining the managed copy
+    /// when both exist. Additive and tolerant: absent on runtimes that
+    /// predate R2.0, so old readers simply see no notice.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub user_path_copy_detected: bool,
+    /// The canonical agent-auth evidence model (ADR FR-1), computed ALONGSIDE the
+    /// legacy `credentialState`/`readiness` ladders and never replacing them. A
+    /// client still renders the legacy ladder until the UI rung; this field is
+    /// the additive canonical projection. Absent on runtimes predating it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth_state: Option<AgentAuthStateSummary>,
+}
+
+// --- Canonical agent-auth evidence model (FR-1) ---
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentAuthDisplay {
+    NotInstalled,
+    Unsupported,
+    Misconfigured,
+    Expired,
+    Unavailable,
+    Probing,
+    Usable,
+    Authenticated,
+    Selected,
+    Installed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentAuthNextAction {
+    Install,
+    None,
+    FixConfig,
+    LogInOrPasteKey,
+    TopUpOrRetry,
+    Wait,
+    WaitForProbe,
+    ChooseSource,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentAuthEvidenceRef {
+    ProbeObservation,
+    GatewayKeyCheck,
+    AcknowledgedRoute,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentAuthCredentialSource {
+    Gateway,
+    ApiKeyByok,
+    NativeLogin,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentAuthEvidenceStrength {
+    BarePresence,
+    AcknowledgedRoute,
+    Tier1Trial,
+    ProbeObservation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentAuthProbePhase {
+    Idle,
+    Queued,
+    Running,
+    Backoff,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentAuthGatewayHealth {
+    Reachable,
+    Unreachable,
+    BudgetExhausted,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentAuthLoginHandoff {
+    Initiated,
+    AwaitingBrowser,
+    Completed,
+    Cancelled,
+    TimedOut,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentAuthCredentialEvidence {
+    pub source: AgentAuthCredentialSource,
+    pub strength: AgentAuthEvidenceStrength,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub evidence_age_seconds: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentAuthSelectionFact {
+    pub acknowledged: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revision: Option<i64>,
+    pub satisfiable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acknowledged_age_seconds: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentAuthProbeLifecycle {
+    pub phase: AgentAuthProbePhase,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_success_age_seconds: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_failure_detail: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_attempt_at: Option<String>,
+    pub observation_nonempty: bool,
+}
+
+/// The orthogonal facts that fed the derivation, serialized alongside it so a
+/// client can see WHY a display was chosen without re-deriving.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentAuthFactsSummary {
+    pub installed: bool,
+    pub unsupported_route: bool,
+    pub misconfigured: bool,
+    pub expired: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub credential: Option<AgentAuthCredentialEvidence>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selection: Option<AgentAuthSelectionFact>,
+    pub probe: AgentAuthProbeLifecycle,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gateway: Option<AgentAuthGatewayHealth>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub handoff: Option<AgentAuthLoginHandoff>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentAuthStateSummary {
+    pub display: AgentAuthDisplay,
+    pub next_action: AgentAuthNextAction,
+    /// Present exactly when the display is green (`usable`/`authenticated`) or an
+    /// acknowledged `selected`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub evidence_ref: Option<AgentAuthEvidenceRef>,
+    /// Age of that evidence in seconds. Present whenever the display is green.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub evidence_age_seconds: Option<i64>,
+    pub facts: AgentAuthFactsSummary,
 }
 
 // --- Launch options ---
@@ -327,6 +491,12 @@ pub struct ReconcileAgentResult {
     pub outcome: ReconcileOutcome,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    /// Typed classification of a terminal failure: one of `network`,
+    /// `checksum`, `in_use`, `disk`, `other`. Additive and tolerant: absent on
+    /// success/skip and on runtimes that predate typed failures, so old readers
+    /// simply ignore it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_kind: Option<String>,
     pub installed_artifacts: Vec<ArtifactStatus>,
 }
 

@@ -214,6 +214,33 @@ async function resolveAgentProcess(kind, install, currentVersion) {
     }
     throw new Error(`${kind}: ACP entry '${install.registryId}' has no npx/binary distribution`);
   }
+  if (install.kind === "direct_archive") {
+    // First-party per-platform tarball pins (no ACP registry, no npm): resolve
+    // straight onto the catalog's archive source so the runtime installs it
+    // through the existing sha256-verified archive-tree path.
+    const targets = {};
+    let sawPlatform = false;
+    for (const [ourKey, target] of Object.entries(install.platforms ?? {})) {
+      if (!platforms.has(ourKey)) continue; // a platform we do not ship
+      sawPlatform = true;
+      targets[ourKey] = withDownloadSize(
+        {
+          url: target.url,
+          sha256: await shaForPublished(target.url, target.sha256),
+          expectedBinary: target.expectedBinary,
+        },
+        target.url,
+        target.size,
+      );
+    }
+    if (!sawPlatform) {
+      throw new Error(`${kind}: direct_archive has no platform we ship`);
+    }
+    return {
+      version: currentVersion,
+      source: { kind: "archive", targets, args: install.args ?? [] },
+    };
+  }
   throw new Error(`${kind}: agentProcess install kind '${install.kind}' is not resolvable`);
 }
 

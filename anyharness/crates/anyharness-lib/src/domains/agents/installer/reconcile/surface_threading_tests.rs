@@ -31,14 +31,12 @@ use super::*;
 /// setup yielding `Skipped` for every agent.
 ///
 /// A managed launcher is seeded for every agent first, and that is what makes the
-/// test hermetic rather than developer-machine-dependent. The PATH carve-out
-/// deliberately OUTRANKS scope and surface, so on a machine where claude/codex/
-/// cursor/grok are on PATH (i.e. any developer's) the pass would skip them as
-/// user-provided and prove nothing about scope. `has_managed_artifact` beats
-/// `has_path_artifact` by design — that precedence is itself the thing being
-/// relied on — so seeding managed artifacts removes the host dependency without
-/// touching process-global `PATH`, which other tests in this crate shell out
-/// through.
+/// test hermetic rather than developer-machine-dependent: with a managed artifact
+/// present, the drift planner sees every agent as already converged, so the pass
+/// is a no-op regardless of what the host happens to have on PATH (post-R2.0 a
+/// PATH copy no longer skips — it would trigger an install, which is exactly the
+/// host dependency the seeding avoids without touching process-global `PATH`,
+/// which other tests in this crate shell out through).
 #[tokio::test]
 async fn full_scope_pass_admits_every_absent_agent_instead_of_skipping_it() {
     let service = AgentReconcileService::new();
@@ -192,8 +190,8 @@ async fn the_cloud_surface_reaches_the_predicate_and_carves_out_only_cursor() {
 }
 
 /// Seed managed artifacts for every agent, so `has_managed_artifact` is true and
-/// the PATH carve-out — which outranks everything else in the predicate — cannot
-/// fire for an agent the host happens to have on PATH.
+/// the pass has nothing to install for an agent the host happens to have on PATH
+/// (post-R2.0 a PATH copy would otherwise trigger a real managed install here).
 ///
 /// Both roles are seeded: `<kind>-launcher` under `agent_process` (the name
 /// `managed_launcher_candidates` looks for) and `<kind>` under `native` (what

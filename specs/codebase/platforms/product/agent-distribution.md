@@ -123,6 +123,30 @@ specifier. Fail-closed rules, enforced in code
 - Installed adapters get a generated launcher script that `exec`s the
   resolved binary with the pin's baked ACP args; per-session flags are
   applied by the runtime at spawn, never baked into the launcher.
+- Every LIVE launcher write is staged-then-atomically-renamed, never written
+  in place. `generate_launcher_script_atomic`
+  ([`integrations/agent_cli/launcher.rs`](../../../../anyharness/crates/anyharness-lib/src/integrations/agent_cli/launcher.rs))
+  writes a `.{name}.next` sibling, makes it executable, then renames it over
+  the live launcher, keeping a transient `.{name}.previous` so a failed
+  promotion leaves the prior launcher in place. A managed session already
+  running keeps its old inode open (POSIX rename semantics) — no kills, no
+  waiting. The archive-adapter path stages the same way through
+  `ArchiveTreeActivation::activate_launcher`
+  ([`installer/downloads/activation.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/downloads/activation.rs)).
+- The launcher's env is data-driven from the registry's per-harness
+  `selfUpdateNeutralization` record (`managed_launcher_env` in
+  [`installer/agent_process.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/agent_process.rs)):
+  an `env` mechanism injects each declared var (claude disables its own
+  auto-updater with `DISABLE_AUTOUPDATER=1`); `none_found`/`not_applicable`
+  inject nothing and exist to record the static-analysis finding honestly, so
+  the managed lane stays the single version authority.
+- A terminal install failure carries a typed classification, not just a
+  string. `InstallError::kind()`
+  ([`installer/service.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/service.rs))
+  maps to `InstallErrorKind` `{ network, checksum, in_use, disk, other }`,
+  threaded additively through `AgentReconcileResult.failure_kind` → the
+  contract's `ReconcileAgentResult.failureKind` → the terminal-failure toast,
+  so the UI names WHY a reinstall failed.
 
 Installation is automatic. Every harness supported on a surface converges
 with no user action: absent means install, drifted means reinstall, and
@@ -134,18 +158,20 @@ triggered by the startup pass on every runtime boot
 walks the supported set and installs whatever the drift planner
 ([`installer/install_policy.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/install_policy.rs))
 says is absent or stale. A user
-authenticates harnesses; they never install them. The two carve-outs below
-are one named predicate
+authenticates harnesses; they never install them. Proliferate always
+maintains its own managed copy (R2.0, RULED): a user's own copy on PATH is
+detection-only now and no longer blocks the managed install — resolution
+already prefers the managed copy when both exist
+([`readiness/artifacts.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/artifacts.rs),
+`resolve_native_artifact`/`resolve_agent_process_artifact`), so nothing
+displaces the user's binary, but nothing defers to it either. The one
+remaining carve-out is one named predicate
 ([`installer/auto_install.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/auto_install.rs)),
-deliberately not a side effect of the pass's scope: PATH protection must
-outrank every other rule, so it cannot be something a scope change can
-silently remove. Completed installs
+deliberately not a side effect of the pass's scope. Completed installs
 poke the model-snapshot reconciler ([MODELS.md](../../../FEATURE_DOCS/MODELS.md))
 so a newly converged harness re-probes its models without extra wiring.
-Two carve-outs:
+The one carve-out:
 
-- An agent the user already provides on PATH is left alone: it is usable
-  through readiness as-is, and a managed install would shadow their copy.
 - Cursor never installs in cloud. Its readiness resolves through a headless
   credential path — an enabled `api_key` selection (agent-auth.md's
   `CURSOR_API_KEY` slot) upgrades `CredentialsRequired` to `Ready` the same
@@ -160,6 +186,19 @@ Two carve-outs:
   surface can interactively seed. For the same keychain reason it is
   excluded from unattended model probing and refreshed only on request
   (model-catalog.md's probe engine).
+
+When a managed copy lands alongside a harness the user already had on
+PATH, the settings pane (`HarnessPane.tsx`) shows a one-time, dismissible
+notice explaining that Proliferate now maintains its own copy and the
+user's own install is untouched; dismissal persists per harness under
+`proliferate.harnessManagedNotice.v1`. The signal is an additive,
+tolerant `AgentSummary.userPathCopyDetected` bit (anyharness-contract), read
+independently of which artifact resolution picked — a managed hit
+short-circuits before ever checking PATH, so the resolved artifact alone
+cannot express "both exist". An escape hatch,
+`ANYHARNESS_ALWAYS_MANAGED_INSTALL=off`, restores the pre-R2.0 PATH
+carve-out for operators who need to revert without a code change; it
+defaults on (the ruling).
 
 Install topology per surface is then only about who pays the first
 download:
@@ -192,8 +231,8 @@ unchanged is a no-op for X. Drift is also directionless (`!=`, not
 path as upgrading.
 
 The reconcile runs from two pokes, both covering the full supported set
-for the surface (PATH-provided agents excluded, cursor excluded in
-cloud):
+for the surface (cursor excluded in cloud; a PATH-provided agent is no
+longer excluded — R2.0 installs a managed copy alongside it):
 
 - the startup pass (`spawn_startup_pass` in
   [`runtime.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs))

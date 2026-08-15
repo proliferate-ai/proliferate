@@ -455,6 +455,83 @@ mod tests {
         let _ = std::fs::remove_dir_all(&scratch);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn staged_npm_swap_replaces_whole_tree_and_old_inode_survives() {
+        // The managed npm/git adapter install must never touch the live tree:
+        // it builds in a sibling staging dir and swaps whole. A running session
+        // holding the old tree keeps its inode (POSIX) across the swap.
+        use std::io::Read;
+
+        let scratch = temp_dir("npm-staged-swap");
+        let pkg = scratch.join("pkg");
+        std::fs::create_dir_all(pkg.join("bin")).expect("bin dir");
+        std::fs::write(
+            pkg.join("package.json"),
+            "{\"name\":\"fake-acp-agent\",\"version\":\"0.0.1\",\
+             \"bin\":{\"fake-acp-agent\":\"bin/cli.js\"},\"files\":[\"bin\"]}",
+        )
+        .expect("package.json");
+        std::fs::write(pkg.join("bin/cli.js"), "#!/usr/bin/env node\n").expect("cli");
+
+        let home = scratch.join("home");
+        let managed = artifact_root(&home, &AgentKind::Grok, &ArtifactRole::AgentProcess);
+        std::fs::create_dir_all(&managed).expect("managed dir");
+        // Pre-existing live tree with a sentinel a running session holds open.
+        let sentinel = managed.join("OLD_TREE_SENTINEL");
+        std::fs::write(&sentinel, b"old tree bytes").expect("sentinel");
+        let mut held = std::fs::File::open(&sentinel).expect("hold sentinel fd");
+
+        let source = ResolvedPinSource::Npm {
+            package: format!("file:{}", pkg.display()),
+            sha256: None,
+            args: vec!["--acp".to_string()],
+        };
+        let result = install_agent_process_from_pin(
+            &source,
+            Some("0.1.0"),
+            &AgentKind::Grok,
+            "fake-acp-agent",
+            &home,
+            true,
+            None,
+        )
+        .expect("adapter install")
+        .expect("installed launcher");
+
+        // New tree is live: exec + launcher present.
+        assert!(
+            managed.join("node_modules/.bin/fake-acp-agent").exists(),
+            "new adapter exec must be live after swap"
+        );
+        assert!(result.path.exists(), "launcher present");
+        // Whole-dir swap: the OLD sentinel is gone from the live tree (a merge
+        // would have kept it).
+        assert!(
+            !sentinel.exists(),
+            "whole-tree swap must replace, not merge, the live dir"
+        );
+        // The running session's held fd still reads the OLD bytes — the old
+        // inode survived the swap (no kill, no wait).
+        let mut old = String::new();
+        held.read_to_string(&mut old).expect("read held fd");
+        assert!(
+            old.contains("old tree bytes"),
+            "old inode content must survive the swap"
+        );
+        // No staging/previous residue after commit.
+        let parent = managed.parent().expect("parent");
+        assert!(
+            !parent.join(".agent_process.staging").exists(),
+            "no staging residue"
+        );
+        assert!(
+            !parent.join(".agent_process.previous").exists(),
+            "no previous-tree residue"
+        );
+        let _ = std::fs::remove_dir_all(&scratch);
+    }
+
     #[test]
     fn unusable_archive_adapter_restores_previous_tree() {
         let scratch = temp_dir("archive-adapter-rollback");
