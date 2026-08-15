@@ -5,6 +5,9 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 
 use self::state::{PlanItemState, StreamingItemState, ToolItemState};
+use crate::domains::sessions::extensions::{
+    SessionInteractionRequestedContext, SessionInteractionResolvedContext,
+};
 use crate::live::sessions::model::{EventPersist, TerminalTurnOutcome};
 use crate::observability::transcript_phase::TranscriptPhaseDebugState;
 use anyharness_contract::v1::{GoalStatus, SessionEvent, SessionEventEnvelope};
@@ -67,6 +70,9 @@ pub struct SessionEventSink {
     staged_terminal: Option<StagedTerminalTurn>,
     engine_terminal_outcome: Option<TerminalTurnOutcome>,
     transcript_phase_debug: TranscriptPhaseDebugState,
+    on_interaction_requested:
+        Option<Arc<dyn Fn(SessionInteractionRequestedContext) + Send + Sync>>,
+    on_interaction_resolved: Option<Arc<dyn Fn(SessionInteractionResolvedContext) + Send + Sync>>,
 }
 
 impl SessionEventSink {
@@ -95,6 +101,8 @@ impl SessionEventSink {
             staged_terminal: None,
             engine_terminal_outcome: None,
             transcript_phase_debug: TranscriptPhaseDebugState::default(),
+            on_interaction_requested: None,
+            on_interaction_resolved: None,
         }
     }
 
@@ -124,6 +132,8 @@ impl SessionEventSink {
             staged_terminal: None,
             engine_terminal_outcome: None,
             transcript_phase_debug: TranscriptPhaseDebugState::default(),
+            on_interaction_requested: None,
+            on_interaction_resolved: None,
         }
     }
 

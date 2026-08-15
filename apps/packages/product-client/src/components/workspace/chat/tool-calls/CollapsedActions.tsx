@@ -12,6 +12,7 @@ import {
   summarizeCollapsedActions,
 } from "#product/domain/chats/transcript/transcript-collapsed-actions";
 import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
+import { useChainedVerticalWheel } from "#product/primitives/utils/use-chained-vertical-wheel";
 import { CollapsedActionIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionIcon";
 import { CollapsedActionRows } from "#product/components/workspace/chat/tool-calls/CollapsedActionRows";
 
@@ -121,17 +122,19 @@ function CollapsedActionsLedger({
   isLive,
   containsEdits,
 }: Pick<CollapsedActionsProps, "itemIds" | "transcript"> & { isLive: boolean; containsEdits: boolean }) {
+  const handleLedgerWheel = useChainedVerticalWheel();
   return (
     <div>
       <div
         data-collapsed-actions-ledger
         data-live={isLive ? "true" : undefined}
+        onWheel={containsEdits ? undefined : handleLedgerWheel}
         style={containsEdits
           ? undefined
           : { "--edge-fade-distance": "3rem" } as CSSProperties}
         className={containsEdits
           ? "pr-2.5"
-          : "vertical-scroll-fade-mask max-h-56 overflow-y-auto overflow-x-hidden pr-2.5"}
+          : "vertical-scroll-fade-mask max-h-56 overscroll-none overflow-y-auto overflow-x-hidden pr-2.5"}
       >
         <div className="flex flex-col gap-1">
           {itemIds.map((itemId) => {

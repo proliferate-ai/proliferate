@@ -100,6 +100,7 @@ async def create_workflow_invocation(
     creation_request_json: dict[str, object],
     invocation_json: dict[str, object],
     created_at: datetime,
+    schema_version: int = 1,
 ) -> WorkflowInvocationSnapshot:
     row = WorkflowInvocation(
         id=invocation_id,
@@ -108,7 +109,7 @@ async def create_workflow_invocation(
         definition_revision=definition_revision,
         title_snapshot=title_snapshot,
         description_snapshot=description_snapshot,
-        schema_version=1,
+        schema_version=schema_version,
         creation_request_json=deepcopy(creation_request_json),
         invocation_json=deepcopy(invocation_json),
         created_at=created_at,

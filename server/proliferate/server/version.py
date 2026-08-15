@@ -107,3 +107,18 @@ def min_desktop_version() -> str:
     release CI can stamp an explicit lower floor via ``MIN_DESKTOP_VERSION``.
     """
     return _env("MIN_DESKTOP_VERSION") or desktop_version()
+
+
+def min_desktop_version_enforced() -> bool:
+    """Whether the desktop should hard-block clients below ``min_desktop_version``.
+
+    ``min_desktop_version()`` defaults to this server's own stamped desktop
+    version, so treating its mere presence as a block signal would lock out
+    every client that is even slightly behind the moment this ships. Blocking
+    is therefore a separate, explicit opt-in: operators or release CI set
+    ``ENFORCE_MIN_DESKTOP_VERSION=true`` to turn the existing (unblocking)
+    warning into a full-screen gate. Default false — permissive, matching the
+    ADR gate that skew enforcement must default to non-blocking.
+    """
+    value = _env("ENFORCE_MIN_DESKTOP_VERSION")
+    return value is not None and value.strip().lower() in {"1", "true", "yes", "on"}

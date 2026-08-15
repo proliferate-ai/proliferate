@@ -1,6 +1,7 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type { RepoConfigResponse, RepoEnvironmentResponse } from "@proliferate/cloud-sdk";
 import { canonicalRepoKey } from "#product/domain/repos/repo-id";
+import { isCulledCloudOnlyRepository } from "#product/lib/domain/workspaces/cloud/cloud-culling";
 
 export type RepositoryAvailability = "local" | "local_cloud" | "cloud";
 
@@ -114,7 +115,12 @@ export function buildSettingsRepositoryEntries(
     } satisfies SettingsRepositoryEntry];
   });
 
-  const repos = [...localRepos, ...cloudOnlyRepos].sort((a, b) => {
+  // Cloud culling (PRO-10, FR-2): cloud-only repositories are a cloud surface,
+  // so they are hidden from every client list entirely — never presented as
+  // "local, not yet set up". Local and local+cloud repos are unaffected.
+  const repos = [...localRepos, ...cloudOnlyRepos]
+    .filter((repo) => !isCulledCloudOnlyRepository(repo.availability))
+    .sort((a, b) => {
     const byName = a.name.localeCompare(b.name);
     return byName !== 0 ? byName : a.sourceRoot.localeCompare(b.sourceRoot);
   });

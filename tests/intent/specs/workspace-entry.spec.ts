@@ -41,8 +41,15 @@
 // What IS testable in desktop-web, and is tested below: the Add-Repo flow's
 // entry step is host-truthful. AddRepoFlowHost derives its entry options from
 // the host's file access (`host.desktop?.files`) — the Desktop host offers
-// "Add an existing folder" + "Set up in Cloud"; the genuine Web host offers
+// "Add an existing folder" + "Clone from GitHub"; the genuine Web host offers
 // only "Set up in Cloud".
+//
+// POST-CULL UPDATE (PRO-10, Cloud Culling): cloud workspace creation is removed
+// from the Desktop host entirely. use-add-repo-flow-controller.ts now computes
+// `options === (files ? ["add-existing-folder", "clone-from-github"] : ["cloud"])`
+// — Desktop NEVER offers "Set up in Cloud" any more, and Web still offers only
+// "cloud" (Web has no local file bridge). "Set up in Cloud" is asserted absent
+// below as this cull's negative control.
 //
 // CRITICAL — which host this suite actually boots: stack/boot.ts serves
 // `apps/desktop` over a Vite web port ("desktop web build"), NOT `apps/web`.
@@ -51,29 +58,35 @@
 // `host.desktop = desktopBridge`. `desktopBridge.files` is a static,
 // always-present adapter (apps/desktop/src/lib/access/tauri/desktop-bridge.ts),
 // so `host.desktop?.files` is truthy and AddRepoFlowHost computes
-// `options === ["add-existing-folder", "cloud"]` — BOTH options render. Only
-// the real Web bundle (apps/web/src/web-host.ts) sets `desktop: null` and
-// collapses to `["cloud"]`; that bundle is not what this suite boots, and its
-// cloud-only contract is pinned by unit tests instead
+// `options === ["add-existing-folder", "clone-from-github"]` — both LOCAL
+// options render, and cloud does not. Only the real Web bundle
+// (apps/web/src/web-host.ts) sets `desktop: null` and collapses to `["cloud"]`;
+// that bundle is not what this suite boots, and its cloud-only contract is
+// pinned by unit tests instead
 // (apps/packages/product-client/src/components/workspace/repo-setup/AddRepoFlow.test.tsx "offers only Set up in
 // Cloud on Web", apps/web/src/web-host.test.tsx "surface web and desktop null").
 //
-// So the host-truthful assertion for THIS booted client is: both the local and
-// the cloud entry options are present, because the client is the Desktop host
-// served over HTTP. The concrete "desktop-web limits apply" behavior the
-// scenario names is a *runtime* limit, not an option-visibility one: the local
-// "Add an existing folder" option renders, but its native folder picker
-// (pickFolder -> Tauri `invoke("pick_folder")`, shell.ts) is unavailable over a
-// plain browser. The Desktop bridge reports that unavailable transport
-// separately from a normal user cancellation, so clicking it explains that
-// the native Desktop app is required rather than silently doing nothing.
-// Picking the cloud option navigates to a real render branch that, on this
-// operator-incomplete deployment (boot.ts seeds no
-// GITHUB_APP_* config, so /meta serves both cloud capabilities "disabled" per
-// capability-contract.spec.ts's T2-SH-5), surfaces the truthful
-// operator-configuration blocker via AddRepoFlowHost's shared-resolver
-// preflight (PR2-GATING-01) — NOT the older "Authorize GitHub App" user-auth
-// CTA a user could never act on when the operator never configured the App.
+// So the host-truthful assertion for THIS booted client is: both local entry
+// options are present and "Set up in Cloud" is absent, because the client is
+// the Desktop host served over HTTP and Desktop never offers cloud creation
+// post-cull. The concrete "desktop-web limits apply" behavior the scenario
+// names is a *runtime* limit on the local options, not an option-visibility
+// one: the local "Add an existing folder" option renders, but its native
+// folder picker (pickFolder -> Tauri `invoke("pick_folder")`, shell.ts) is
+// unavailable over a plain browser. The Desktop bridge reports that
+// unavailable transport separately from a normal user cancellation, so
+// clicking it explains that the native Desktop app is required rather than
+// silently doing nothing. Picking "Clone from GitHub" navigates to a real
+// render branch that reuses the exact same GitHub-App gating/blockers as the
+// old cloud picker (use-add-repo-flow-controller.ts: "Clone reuses the
+// accessible-repos catalog + GitHub-App gating from the cloud picker") — on
+// this operator-incomplete deployment (boot.ts seeds no GITHUB_APP_* config,
+// so /meta serves both cloud capabilities "disabled" per
+// capability-contract.spec.ts's T2-SH-5), the clone branch surfaces the
+// truthful operator-configuration blocker via AddRepoFlowHost's
+// shared-resolver preflight (PR2-GATING-01) — NOT the older "Authorize GitHub
+// App" user-auth CTA a user could never act on when the operator never
+// configured the App.
 
 import { expect, test, type Page } from "@playwright/test";
 import { ADMIN_EMAIL, ADMIN_PASSWORD, ensureInstanceClaimed, webBaseUrl } from "../stack/seed.ts";
@@ -206,12 +219,16 @@ async function expectEntryStepVisible(page: Page): Promise<void> {
   // lives on the role="dialog" surface itself (aria-label), not a heading row.
   await expect(page.getByRole("dialog", { name: "Add a repository" })).toBeVisible();
   // This suite boots the Desktop host (apps/desktop) over a web port, so
-  // `host.desktop?.files` is truthy and AddRepoFlowHost offers BOTH options
-  // (options === ["add-existing-folder", "cloud"]). Assert both are present:
-  // that is the host-truthful contract for the Desktop client. (The genuine
-  // Web bundle's cloud-only contract is pinned by unit tests — see the header.)
-  await expect(page.getByRole("button", { name: "Set up in Cloud" })).toBeVisible();
+  // `host.desktop?.files` is truthy and AddRepoFlowHost offers ONLY the local
+  // options post-cull (options === ["add-existing-folder", "clone-from-github"]).
+  // Assert both are present: that is the host-truthful contract for the
+  // Desktop client. (The genuine Web bundle's cloud-only contract is pinned by
+  // unit tests — see the header.)
   await expect(page.getByRole("button", { name: "Add an existing folder" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Clone from GitHub" })).toBeVisible();
+  // Negative control for the cull (PRO-10): cloud workspace creation is
+  // removed from the Desktop host, so "Set up in Cloud" must never render here.
+  await expect(page.getByRole("button", { name: "Set up in Cloud" })).toHaveCount(0);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -228,7 +245,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("T2-WS-2: local + worktree create (desktop-web limits apply)", () => {
-  test("Add-Repo entry step is host-truthful: the Desktop host (this suite's client) offers both local and cloud", async ({ page }) => {
+  test("Add-Repo entry step is host-truthful: the Desktop host (this suite's client) offers local options only — cloud creation is culled from Desktop (PRO-10)", async ({ page }) => {
     await openAddRepoFlow(page);
     await expectEntryStepVisible(page);
   });
@@ -252,19 +269,24 @@ test.describe("T2-WS-2: local + worktree create (desktop-web limits apply)", () 
     // No crash: the entry step is still mounted and interactable after the
     // unavailable-picker result (the dialog did not tear itself down or throw).
     await expect(page.getByRole("dialog", { name: "Add a repository" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Set up in Cloud" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Clone from GitHub" })).toBeVisible();
   });
 
-  test("cloud branch shows the truthful operator-configuration blocker (PR2-GATING-01), never a user-auth CTA the operator gap makes unactionable", async ({ page }) => {
+  test("clone branch shows the truthful operator-configuration blocker (PR2-GATING-01), never a user-auth CTA the operator gap makes unactionable", async ({ page }) => {
     // This suite's t2intent stack seeds NO GitHub App runtime config — boot.ts
     // sets no GITHUB_APP_* env, so this self-managed deployment's /meta serves
     // githubRepositoryAccess.status="disabled" and managedCloud.status="disabled"
     // (capability-contract.spec.ts T2-SH-5 pins exactly this "add-ons off"
     // contract). The deployment is therefore operator-INCOMPLETE.
     //
-    // Before PR2-GATING-01 the cloud step still offered "Authorize GitHub App"
-    // — the exact misleading CTA (a user cannot repair a deployment the
-    // operator never configured) this PR exists to eliminate. AddRepoFlowHost's
+    // Post-cull (PRO-10), "Set up in Cloud" no longer exists on Desktop — the
+    // cloud picker's GitHub-App gating moved wholesale onto "Clone from
+    // GitHub" (use-add-repo-flow-controller.ts: "Clone reuses the
+    // accessible-repos catalog + GitHub-App gating from the cloud picker",
+    // requirement `github_repository_access` in add-repo-preflight-blockers.ts).
+    // Before PR2-GATING-01 this step still offered "Authorize GitHub App" — the
+    // exact misleading CTA (a user cannot repair a deployment the operator
+    // never configured) this PR exists to eliminate. AddRepoFlowHost's
     // shared-resolver preflight now stops at gate 1 (operator capability
     // disabled) and replaces that CTA with the truthful operator explanation,
     // which carries NO action button (describeReadinessBlocker returns
@@ -272,21 +294,26 @@ test.describe("T2-WS-2: local + worktree create (desktop-web limits apply)", () 
     await openAddRepoFlow(page);
     await expectEntryStepVisible(page);
 
-    await page.getByRole("button", { name: "Set up in Cloud" }).click();
+    await page.getByRole("button", { name: "Clone from GitHub" }).click();
     // StepHeader renders the step name as a plain <span>, not a heading (only
     // CloudRepoPickerBlocker's blocker.title below is a real <h3>), so assert
-    // on the text directly rather than a heading role.
-    await expect(page.getByText("Add a cloud repo", { exact: true })).toBeVisible();
+    // on the text directly rather than a heading role. AddRepositoryPopover
+    // hard-codes this step's title to "Clone from GitHub" (same string as the
+    // entry option, since it doubles as this step's header).
+    await expect(page.getByText("Clone from GitHub", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Back" })).toBeVisible();
 
     // The truthful operator blocker (CloudRepoPickerBlocker renders blocker.title
     // as an <h3>). With no GitHub App slug configured, the null-displayName copy
-    // is used.
+    // for the `github_repository_access` requirement is used
+    // (describe-readiness-blocker.ts's operatorOrHumanBlocker, gate 1).
     await expect(
-      page.getByRole("heading", { name: "Cloud is not configured on this deployment" }),
+      page.getByRole("heading", { name: "GitHub repository access is not configured" }),
     ).toBeVisible({ timeout: 30_000 });
     await expect(
-      page.getByText(/Managed Cloud isn't fully configured on this deployment/),
+      page.getByText(
+        /GitHub repository access isn't configured on this deployment\. An operator must install and configure the GitHub App before repositories can be cloned\./,
+      ),
     ).toBeVisible();
 
     // The user must NEVER see the old user-auth CTA when the operator must
@@ -313,12 +340,15 @@ test.describe("T2-WS-2: local + worktree create (desktop-web limits apply)", () 
 //   fallback exists for the OS file dialog itself, regardless of the
 //   Tauri-only carve-out in scenarios.md (this is a different Tauri
 //   surface with the same "no web equivalent" property).
-// - The cloud branch's happy path past the readiness blocker (repo search,
-//   validate, save) — this operator-incomplete deployment stops at the gate-1
-//   operator-configuration blocker (no GITHUB_APP_* seeded), so the per-repo
-//   authorize/install/pick path is unreachable here; a deployment that seeds
-//   GitHub App runtime config (see capability-contract.spec.ts's hosted-mode
-//   boot) owns that path.
+// - The clone branch's happy path past the readiness blocker (repo search,
+//   validate, local clone) — this operator-incomplete deployment stops at the
+//   gate-1 operator-configuration blocker (no GITHUB_APP_* seeded), so the
+//   per-repo authorize/install/pick path is unreachable here; a deployment
+//   that seeds GitHub App runtime config (see capability-contract.spec.ts's
+//   hosted-mode boot) owns that path. "Set up in Cloud" itself no longer
+//   exists on this (Desktop) host post-cull (PRO-10), so there is no cloud
+//   branch left to test here at all — the genuine Web host still has one,
+//   pinned by unit tests, not this suite.
 // - The "Add an existing folder" option's native-folder-picker happy path —
 //   Tauri-only, no web fallback exists for the OS file dialog. This suite's
 //   Desktop-over-web client renders the option (verified above) but its picker
