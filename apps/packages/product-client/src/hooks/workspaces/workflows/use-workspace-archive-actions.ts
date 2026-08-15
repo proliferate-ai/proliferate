@@ -31,11 +31,10 @@ import { useUserPreferencesStore } from "#product/stores/preferences/user-prefer
 import { showToast } from "#product/primitives/utils/show-toast";
 
 /**
- * A settled POST is a definite outcome (success or a typed/generic failure).
- * Past this bound the outcome is genuinely unknown — a huge untracked
- * payload can push a real snapshot past any fixed timeout — so the row
- * stays hidden and the pending reconciler (`use-archive-pending-reconciler`)
- * becomes the decider instead of a false failure toast.
+ * A settled POST is a definite outcome (success or a typed/generic failure). Past
+ * this bound the outcome is genuinely unknown — a huge untracked payload can push
+ * a real snapshot past any fixed timeout — so the row stays hidden and the pending
+ * reconciler (`use-archive-pending-reconciler`) becomes the decider, not a false failure toast.
  */
 const ARCHIVE_SETTLE_TIMEOUT_MS = motion.delay.optimisticSettleTimeoutMs;
 
