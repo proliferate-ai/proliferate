@@ -79,6 +79,12 @@ export type OrderedStreamSideEffect =
 
 export interface BatchedStreamSideEffectPlan {
   eventEffects: PlannedStreamEventEffect[];
+  /**
+   * True when the batch carried an `available_commands_update`, so the
+   * applier records the session's post-batch command catalog for reuse by
+   * surfaces without a live session (the home composer, PRO-228).
+   */
+  recordAvailableCommandsCatalog: boolean;
   persistReconciledControlPreferences: ReconciledStreamConfigIntent[];
   invalidateWorkspaceCollections: boolean;
   invalidateGitStatus: boolean;
@@ -104,6 +110,7 @@ export function planBatchedStreamSideEffects(input: {
   let lastActivityTimestamp: string | null = null;
   let invalidateSessionSubagents = false;
   let invalidateCowork = false;
+  let recordAvailableCommandsCatalog = false;
   const reviewParentSessionIds = new Set<string>();
   const eventEffects: PlannedStreamEventEffect[] = [];
   const orderedEffects: OrderedStreamSideEffect[] = [];
@@ -111,6 +118,7 @@ export function planBatchedStreamSideEffects(input: {
   for (const envelope of input.envelopes) {
     const event = envelope.event;
     if (event.type === "available_commands_update") {
+      recordAvailableCommandsCatalog = true;
       eventEffects.push({
         kind: "schedule_startup_ready_refresh",
         reason: "available_commands",
@@ -274,6 +282,7 @@ export function planBatchedStreamSideEffects(input: {
 
   return {
     eventEffects,
+    recordAvailableCommandsCatalog,
     persistReconciledControlPreferences: input.reconciledIntents,
     invalidateWorkspaceCollections,
     invalidateGitStatus,

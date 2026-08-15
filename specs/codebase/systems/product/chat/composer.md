@@ -169,6 +169,16 @@ Discovery follows the current caret rather than the end of the document, and a
 selection replaces only the active slash-token range while preserving text and
 formatting around it.
 
+The Home composer offers the same slash menu before any session exists
+(`HomeComposerCommandEditor.tsx`). Its source is not a live transcript: each
+session's `available_commands_update` also records that harness's catalog into
+a persisted per-agent-kind store (`slash-command-catalog-store.ts`), and Home
+reads the catalog for the harness the composer is about to launch. The same
+desktop runnable-command policy applies, the tray anchors absolutely above the
+surface (the mid-screen composer must not shift as the menu opens), and file
+mentions are deliberately absent — there is no workspace to search before
+launch. Until a harness has streamed one session, its Home menu is empty.
+
 File-mention discovery keeps the runtime's full supported result page instead
 of applying a smaller presentation limit or discarding fuzzy matches with a
 stricter client-side filter. The shared inline-menu viewport stays visually
