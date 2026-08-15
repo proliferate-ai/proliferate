@@ -25,6 +25,9 @@ pub(crate) mod transport;
 mod worker;
 
 #[cfg(all(test, unix))]
+#[path = "tests_delivery_end.rs"]
+mod tests_delivery_end;
+#[cfg(all(test, unix))]
 #[path = "tests_fallback_deadline.rs"]
 mod tests_fallback_deadline;
 #[cfg(test)]
@@ -135,6 +138,33 @@ pub(crate) struct AdmissionState {
     pending_loss_total: u64,
     pending_loss_range: PendingLossRange,
     open_loss_snapshot: Option<LossSnapshot>,
+    delivery_end_warned_generation: Option<u64>,
+}
+
+impl AdmissionState {
+    /// One-shot per generation: several sites can observe the same dead
+    /// generation (a bridge notice, a boot-mismatched receipt, retries), but
+    /// the loud delivery-end warning fires once.
+    pub(crate) fn note_delivery_ended(&mut self, generation: u64) -> bool {
+        if self.delivery_end_warned_generation == Some(generation) {
+            return false;
+        }
+        self.delivery_end_warned_generation = Some(generation);
+        true
+    }
+}
+
+/// The 2026-08-15 outage counted loss for 10.5h without one line in the
+/// runtime's own log; every latch into `Unavailable` now says so out loud.
+/// WARN is re-ingested by the tracing layer, which is acceptable: the caller
+/// guards with `note_delivery_ended` and the pipe being described is already
+/// dead.
+pub(crate) fn warn_delivery_ended(generation: u64) {
+    tracing::warn!(
+        target: "anyharness.diagnostics.delivery",
+        generation,
+        "diagnostics delivery ended: collector generation gone; records count as loss until re-attach"
+    );
 }
 
 pub(crate) enum CollectorAvailability {
@@ -251,6 +281,7 @@ pub(crate) fn install(
             pending_loss_total: 0,
             pending_loss_range: PendingLossRange::Empty,
             open_loss_snapshot: None,
+            delivery_end_warned_generation: None,
         }),
         fallback: Arc::new(fallback_runtime::FallbackController::new(fallback)),
         notify: tokio::sync::Notify::new(),
@@ -410,8 +441,16 @@ impl ProducerInner {
         if !state.in_flight.is_empty() {
             state.delivery_fence_eligible = false;
         }
+        let generation_number = generation.generation;
         state.collector = CollectorAvailability::Ready(Arc::new(generation));
         drop(state);
+        // The canonical re-attach line, mirroring `warn_delivery_ended`; call
+        // sites must not log their own copy.
+        tracing::info!(
+            target: "anyharness.diagnostics.delivery",
+            generation = generation_number,
+            "diagnostics delivery re-attached: collector generation ready"
+        );
         self.notify.notify_one();
     }
 
@@ -436,7 +475,11 @@ impl ProducerInner {
         if !state.in_flight.is_empty() {
             state.delivery_fence_eligible = false;
         }
+        let warn = state.note_delivery_ended(generation);
         drop(state);
+        if warn {
+            warn_delivery_ended(generation);
+        }
         self.notify.notify_one();
     }
 
