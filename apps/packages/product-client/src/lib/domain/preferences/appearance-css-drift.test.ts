@@ -415,8 +415,7 @@ function rgbToHex(channels: readonly [number, number, number]): string {
   return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }
 const COMPOSER_DARK_HEX = rgbToHex([0x2d, 0x2d, 0x2d]);
-// The sanctioned rail plane, not the page's #ffffff: light keeps this opaque
-// fill beneath its border-role hairline.
+// The sanctioned rail fill beneath light's border-role hairline, not page white.
 const COMPOSER_LIGHT_HEX = rgbToHex([0xf6, 0xf6, 0xf6]);
 
 describe("chat retune tokens", () => {
@@ -437,16 +436,12 @@ describe("chat retune tokens", () => {
     const composerSurfaceRule = readRule(productCss, /\.chat-composer-surface\s*\{([\s\S]*?)\}/);
     expect(composerSurfaceRule).toContain("background-color: var(--color-composer-background);");
     expect(composerSurfaceRule).toContain("var(--color-composer-backdrop-filter)");
-    // The mode-independent rule stays shadowless so dark paint remains unchanged.
     expect(composerSurfaceRule).not.toContain("box-shadow");
-
     const lightComposerSurfaceRule = readRule(
       productCss,
       /:root\[data-mode="light"\]\s+\.chat-composer-surface\s*\{([\s\S]*?)\}/,
     );
-    expect(lightComposerSurfaceRule).toContain(
-      "box-shadow: 0 0 0 0.5px var(--color-border);",
-    );
+    expect(lightComposerSurfaceRule).toContain("box-shadow: 0 0 0 0.5px var(--color-border);");
   });
 
   it("declares the adopted transcript measure and turn-rhythm tokens", () => {
@@ -456,9 +451,6 @@ describe("chat retune tokens", () => {
   });
 
   it("rounds the composer to the 28px chrome radius", () => {
-    // Composer-cleanup retune: the composer keeps a dedicated 28px silhouette,
-    // including the light-only hairline that follows it. It stays SEPARATE from
-    // --radius-xl so the two can diverge again later.
     expect(themeDeclarations["--radius-composer"]).toBe("1.75rem");
   });
 });
