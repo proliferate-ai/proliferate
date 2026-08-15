@@ -6,6 +6,7 @@ pub mod diagnostics;
 pub mod diagnostics_collector;
 mod editors;
 mod quit_flow;
+mod runtime_version_assert;
 mod sidecar;
 mod state;
 mod telemetry;

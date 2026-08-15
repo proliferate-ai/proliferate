@@ -188,6 +188,20 @@ pub(super) async fn wait_healthy(sidecar: &SharedSidecar, require_child: bool) -
             Ok(resp) if resp.status().is_success() => {
                 let health = resp.json::<RuntimeHealthRecord>().await.ok();
                 tracing::info!(health_url = %url, "AnyHarness runtime is healthy");
+
+                // Boot-time version assert against the bundled runtime-version.json
+                // (see `crate::runtime_version_assert`). `block` mode surfaces this
+                // exactly like any other unhealthy-boot failure; `warn` (the
+                // default) and `off` fall through to the normal healthy path.
+                if crate::runtime_version_assert::check(health.as_ref().map(|h| h.version.as_str()))
+                    == crate::runtime_version_assert::VersionCheckOutcome::Blocked
+                {
+                    let mut guard = sidecar.lock().await;
+                    guard.info.status = RuntimeStatus::Failed;
+                    persist_runtime_info(&guard.info, health.as_ref());
+                    return BootOutcome::Failed("runtime_version_mismatch");
+                }
+
                 let mut guard = sidecar.lock().await;
                 guard.info.status = RuntimeStatus::Healthy;
                 persist_runtime_info(&guard.info, health.as_ref());
