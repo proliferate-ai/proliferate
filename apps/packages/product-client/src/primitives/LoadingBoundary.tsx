@@ -79,6 +79,16 @@ function round(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/**
+ * The shared loading primitive (UX Latency ADR, FR-1). Takes the resolved
+ * truth as `state` (`pending` | `empty` | `ready`) and owns the treatment
+ * choreography: nothing mounts before `loading.showDelayMs`, a mounted
+ * treatment holds at least `loading.minDisplayMs`, the empty slot renders
+ * only after resolve, and every reveal exits through the one sanctioned
+ * content fade-in. Emits `renderer.loading.*` diagnostics through the
+ * primitive-owned sink so the R1 renderer event family stays the single
+ * instrumentation layer.
+ */
 export function LoadingBoundary({
   state,
   treatment,
