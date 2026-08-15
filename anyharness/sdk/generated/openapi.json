@@ -8588,6 +8588,10 @@
           },
           "supportsLogin": {
             "type": "boolean"
+          },
+          "userPathCopyDetected": {
+            "type": "boolean",
+            "description": "True when the user has their own copy of this agent on PATH,\nregardless of whether a managed copy also exists and wins resolution\n(R2.0, always-managed: a managed copy never displaces a PATH one).\nDrives the settings-pane one-time notice explaining the managed copy\nwhen both exist. Additive and tolerant: absent on runtimes that\npredate R2.0, so old readers simply see no notice."
           }
         }
       },
