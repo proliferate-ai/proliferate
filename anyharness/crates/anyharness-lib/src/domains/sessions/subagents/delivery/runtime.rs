@@ -156,6 +156,26 @@ impl CompletionDeliveryWorker {
                 );
                 return Ok(());
             }
+            ClaimedDeliveryEnqueueOutcome::Suppressed { delivery, reason } => {
+                // The delivery is terminal without a parent prompt. The
+                // injected completion event is the only parent-transcript
+                // record, so it stays best effort with the same guarantees as
+                // the enqueue-path injection: the suppression is committed and
+                // never re-runs.
+                if let Some(session_runtime) = self.session_runtime.upgrade() {
+                    inject_completion_event(&session_runtime, &delivery).await;
+                }
+                tracing::info!(
+                    target: "anyharness.subagent.delivery_suppressed",
+                    delivery_id = %delivery.delivery_id,
+                    parent_session_id = %delivery.parent_session_id,
+                    child_session_id = %delivery.child_session_id,
+                    reason = reason.as_str(),
+                    result_class = "suppressed",
+                    "completion delivery resolved without a parent wake turn"
+                );
+                return Ok(());
+            }
             ClaimedDeliveryEnqueueOutcome::Stale => {
                 log_delivery_skipped(&delivery.delivery_id, &delivery.parent_session_id, "stale");
                 return Ok(());

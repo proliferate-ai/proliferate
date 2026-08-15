@@ -262,17 +262,36 @@ relationship, workspace, and target truth again.
 
 Delegated completion notification is durable session admission, not a
 one-shot MCP wake tool. Terminal persistence captures the child completion and
-delivery intent; the delivery worker admits one parent prompt with
+delivery intent; the delivery worker admits at most one parent prompt with
 `PromptProvenance::SubagentWake`, and restart/reconciliation preserves exactly
 once visibility. The terminal assistant message remains the completion payload
 relayed to the parent.
 
+A fresh completed-turn delivery may instead resolve without any parent prompt
+at enqueue time, in the same transaction that would have inserted the wake:
+
+- `redundant_child_message` — the child's own `agent_session` message for the
+  terminal turn already reached the parent (still queued since the child turn
+  started, or already executed as a parent transcript item), so the message is
+  the wake and a second turn would be redundant.
+- `coalesced` — an earlier wake for the same child is still queued and
+  unconsumed; that one drain-time wake covers the backlog.
+
+Suppression never applies to failed or cancelled turns, nor to a delivery that
+ever reached the parent queue (recreate/retry reconciliation keeps its legacy
+exactly-once path). A suppressed delivery is terminal `delivered` with no
+`parent_prompt_seq`/`parent_turn_id`; the completion ledger row and injected
+completion event keep the result durable and visible to delegated-work
+surfaces, and the worker records the decision under
+`anyharness.subagent.delivery_suppressed` with the reason.
+
 The worker also injects one `subagent_turn_completed` event into the parent
 transcript on the single Pending to Enqueued delivery transition, ahead of the
-wake turn admitted from the queued prompt. That event carries the completion
-metadata the transcript indexes for wake receipts and roster invalidation;
-injection is best effort because the delivery is already committed and the
-transition never repeats.
+wake turn admitted from the queued prompt — and likewise when a delivery is
+suppressed, where that event is the only parent-transcript record. That event
+carries the completion metadata the transcript indexes for wake receipts and
+roster invalidation; injection is best effort because the delivery is already
+committed and the transition never repeats.
 
 `session_link_wake_schedules` remains a shared persistence and mobility wire
 contract solely for Cowork. Delegated-agent relationships cannot create, read,
@@ -367,7 +386,9 @@ delivery id for deduplication. This is automatic for completed, failed, and
 cancelled turns, including reversible Close cancellation; it does not depend on
 the legacy one-shot wake schedule. The worker reconciles parent transcript and
 pending-queue state before inserting, and marks delivery complete only after the
-attributed parent transcript item is durable.
+attributed parent transcript item is durable — or after it suppresses a
+redundant or coalesced completed-turn wake as described under
+[Workspace MCP And Completion Delivery](#workspace-mcp-and-completion-delivery).
 
 The shared one-shot wake-schedule table remains only for Cowork session-link
 behavior. Delegated-agent relationships neither create nor read those rows,
