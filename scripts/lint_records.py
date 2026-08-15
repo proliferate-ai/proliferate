@@ -111,6 +111,14 @@ def _load_rules_file(path: Path) -> list[Rule]:
             _fail(path, f"rule {raw['id']}: status {raw['status']!r} not in {STATUSES}")
         if raw["mode"] not in MODES:
             _fail(path, f"rule {raw['id']}: mode {raw['mode']!r} not in {MODES}")
+        if raw["mode"] != "review" and not (REPO_ROOT / raw["enforced_by"]).is_file():
+            _fail(
+                path,
+                f"rule {raw['id']}: enforced_by {raw['enforced_by']!r} is not a "
+                f"file under {_display_path(REPO_ROOT)} — a mode other than "
+                f"'review' must point at a real checker (mode = 'review' rules "
+                f"use enforced_by = 'review'; see lints/README.md)",
+            )
         example = raw.get("example", {})
         rules.append(
             Rule(

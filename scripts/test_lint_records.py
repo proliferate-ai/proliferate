@@ -113,6 +113,37 @@ class LoaderTests(unittest.TestCase):
             )
         self.assertIn("unknown rule ids", str(ctx.exception))
 
+    def test_enforced_by_missing_file_fails(self) -> None:
+        # A rule that claims a checker but names no real file is a green light
+        # nobody can trust: `status = "law"` would pass with zero enforcement.
+        broken = VALID_RULE.replace(
+            'enforced_by = "scripts/check_server_boundaries.py"',
+            'enforced_by = "scripts/does_not_exist.py"',
+        )
+        with self.assertRaises(SystemExit) as ctx:
+            self._load_with("server", {"test.toml": broken})
+        message = str(ctx.exception)
+        self.assertIn("SRV-TEST-1", message)
+        self.assertIn("scripts/does_not_exist.py", message)
+        self.assertIn("is not a file", message)
+
+    def test_enforced_by_existing_script_loads(self) -> None:
+        ruleset = self._load_with("server", {"test.toml": VALID_RULE})
+        self.assertEqual(
+            ruleset.rule("SRV-TEST-1").enforced_by,
+            "scripts/check_server_boundaries.py",
+        )
+
+    def test_review_mode_exempts_enforced_by_from_the_file_check(self) -> None:
+        # `mode = "review"` is the documented escape hatch (lints/server/gaps.toml):
+        # no checker exists yet, so `enforced_by = "review"` is a sentinel, not
+        # a path, and must not be required to resolve to a file.
+        reviewed = VALID_RULE.replace(
+            'enforced_by = "scripts/check_server_boundaries.py"', 'enforced_by = "review"'
+        ).replace('mode = "lint"', 'mode = "review"')
+        ruleset = self._load_with("server", {"test.toml": reviewed})
+        self.assertEqual(ruleset.rule("SRV-TEST-1").enforced_by, "review")
+
     def test_unknown_rule_lookup_fails(self) -> None:
         ruleset = self._load_with("server", {"test.toml": VALID_RULE})
         with self.assertRaises(SystemExit):
