@@ -390,6 +390,7 @@ export const MainSidebar = memo(function MainSidebar({
   // in" tooltip they can't act on (PR2-GATING-01 class).
   const cloudComputeUnconfiguredForSignedInUser =
     cloudAuthStatus === "authenticated" && !cloudComputeEnabled;
+  const cloudWorkspaceEnabled = !cloudWorkspaceBlocked && cloudComputeEnabled;
   const cloudWorkspaceTooltip = cloudUnavailable
     ? CAPABILITY_COPY.cloudDisabledTooltip
     : cloudWorkspaceBlocked
@@ -478,7 +479,7 @@ export const MainSidebar = memo(function MainSidebar({
                 configuredCloudRepoKeys={configuredCloudRepoKeys}
                 cloudRepoConfigsInitialLoading={cloudRepoConfigsInitialLoading}
                 cloudConnected={cloudActive}
-                cloudWorkspaceEnabled={!cloudWorkspaceBlocked}
+                cloudWorkspaceEnabled={cloudWorkspaceEnabled}
                 cloudWorkspaceTooltip={cloudWorkspaceTooltip}
                 onCreateWorktreeWorkspace={actions.handleCreateWorktreeWorkspace}
                 onCreateLocalWorkspace={actions.handleCreateLocalWorkspace}

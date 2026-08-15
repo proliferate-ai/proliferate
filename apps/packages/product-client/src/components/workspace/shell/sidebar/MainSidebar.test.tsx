@@ -108,13 +108,14 @@ vi.mock("./SidebarWorkspaceVariantIcon", () => ({
 // real SidebarWorkspaceContent does — the id space crossing this boundary is
 // the thing under test.
 vi.mock("./SidebarWorkspaceContent", () => ({
-  SidebarWorkspaceContent: ({ groups, onNewChatForRepository, onArchiveWorkspace, onUnarchiveWorkspace }: {
+  SidebarWorkspaceContent: ({ groups, onNewChatForRepository, onArchiveWorkspace, onUnarchiveWorkspace, cloudWorkspaceEnabled }: {
     groups: Array<{ items: Array<{ id?: string; name?: string }> }>;
     onNewChatForRepository: (sourceRoot: string) => void;
     onArchiveWorkspace: (workspaceId: string) => void;
     onUnarchiveWorkspace: (workspaceId: string) => void;
+    cloudWorkspaceEnabled: boolean;
   }) => (
-    <div data-testid="sidebar-workspace-content">
+    <div data-testid="sidebar-workspace-content" data-cloud-workspace-enabled={String(cloudWorkspaceEnabled)}>
       <button type="button" onClick={() => onNewChatForRepository("/repo-a")}>
         New chat in Repo A
       </button>
@@ -175,8 +176,15 @@ vi.mock("#product/primitives/PopoverButton", () => ({
   ),
 }));
 
+const cloudAvailabilityState = vi.hoisted(() => ({
+  cloudActive: false,
+  cloudUnavailable: false,
+  authStatus: "authenticated" as string,
+  cloudComputeEnabled: true,
+}));
+
 vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
-  useCloudAvailabilityState: () => ({ cloudActive: false, cloudUnavailable: false }),
+  useCloudAvailabilityState: () => cloudAvailabilityState,
 }));
 
 vi.mock("#product/hooks/capabilities/derived/use-app-capabilities", () => ({
@@ -345,6 +353,10 @@ afterEach(() => {
   workspaceSidebarState.selectedLogicalWorkspaceId = null;
   workspaceArchiveActionsMock.optimisticallyArchivedIds = new Set<string>();
   workspaceArchiveActionsMock.scenario = null;
+  cloudAvailabilityState.cloudActive = false;
+  cloudAvailabilityState.cloudUnavailable = false;
+  cloudAvailabilityState.authStatus = "authenticated";
+  cloudAvailabilityState.cloudComputeEnabled = true;
 });
 
 function makePinnedItemState(overrides: Partial<SidebarWorkspaceItemState> = {}): SidebarWorkspaceItemState {
@@ -675,5 +687,29 @@ describe("MainSidebar archive workspace (§3.2/§5.6/§9)", () => {
 
     expect(workspaceArchiveActionsMock.unarchive)
       .toHaveBeenCalledWith(RUNTIME_ID, "Feature workspace");
+  });
+});
+
+describe("MainSidebar cloud workspace gating (PRO-10)", () => {
+  // A cloud-configured repo's "New Cloud Workspace" action must stay gated
+  // by capabilities.cloudComputeEnabled, not just billing — otherwise a
+  // compute-disabled deployment still lets users spawn cloud workspaces for
+  // repos already cloud-configured (cloudRepoAction.kind === "create").
+  it("disables the cloud workspace action when cloudComputeEnabled is false, even though billing allows it", () => {
+    cloudAvailabilityState.cloudComputeEnabled = false;
+
+    renderMainSidebar();
+
+    expect(screen.getByTestId("sidebar-workspace-content").dataset.cloudWorkspaceEnabled)
+      .toBe("false");
+  });
+
+  it("enables the cloud workspace action when cloudComputeEnabled is true and billing allows it", () => {
+    cloudAvailabilityState.cloudComputeEnabled = true;
+
+    renderMainSidebar();
+
+    expect(screen.getByTestId("sidebar-workspace-content").dataset.cloudWorkspaceEnabled)
+      .toBe("true");
   });
 });
