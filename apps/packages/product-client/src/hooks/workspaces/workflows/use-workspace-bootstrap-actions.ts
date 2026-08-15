@@ -113,8 +113,7 @@ export function useWorkspaceBootstrapActions() {
     startedAt,
     latencyFlowId,
     forceSessionDirectoryRefresh,
-    isCurrent,
-    signal,
+    isCurrent, signal,
   }: BootstrapWorkspaceInput): Promise<{ sessions: WorkspaceSession[] }> => {
     const measurementOperationId = startMeasurementOperation({
       kind: "workspace_open",
@@ -197,19 +196,11 @@ export function useWorkspaceBootstrapActions() {
         });
       }
       const requestHeaders = getLatencyFlowRequestHeaders(latencyFlowId) ?? undefined;
-      // Thread the selection abort signal onto the session-directory fetch so a
-      // superseded selection cancels this list request on the wire, not merely
-      // discards its result (UX Latency ADR §4.6, Rung 9 / Q11). The 8s bootstrap
-      // ceiling still applies: the fetch layer composes this signal with its own
-      // timeout controller rather than replacing it.
-      const sessionRequestOptions = {
-        ...getMeasurementRequestOptions({
-          operationId: measurementOperationId,
-          category: "session.list",
-          headers: requestHeaders,
-        }),
-        signal,
-      };
+      const sessionRequestOptions = getMeasurementRequestOptions({
+        operationId: measurementOperationId,
+        category: "session.list",
+        headers: requestHeaders,
+      });
       const emptyWorkspaceBootstrapDeps = {
         clearLastViewedSession,
         createEmptySessionWithResolvedConfig,
@@ -225,6 +216,7 @@ export function useWorkspaceBootstrapActions() {
         logicalWorkspaceId,
         measurementOperationId,
         requestOptions: sessionRequestOptions,
+        signal,
         forceInitialRefresh: forceSessionDirectoryRefresh,
         sessionsStartedAt,
         timeoutMs: WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS,
