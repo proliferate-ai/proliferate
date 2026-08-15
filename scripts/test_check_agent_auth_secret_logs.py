@@ -69,6 +69,20 @@ class SecretInLogRejected(unittest.TestCase):
     def test_rust_bare_macro(self) -> None:
         self.assertTrue(hit('error!("leaked {}", value_ciphertext);', suffix=".rs"))
 
+    def test_minted_key_attribute_access(self) -> None:
+        # The live secret flows as `minted.key` (MintedVirtualKey), not a
+        # `virtual_key` local — the checker must catch the attribute form.
+        self.assertTrue(hit('logger.info("minted gateway key %s", minted.key)'))
+
+    def test_secret_attribute_in_extra_dict(self) -> None:
+        self.assertTrue(hit('logger.info("done", extra={"vkey": minted.key})'))
+
+    def test_bare_api_key_binding(self) -> None:
+        self.assertTrue(hit('logger.info("provider api_key=%s", api_key)'))
+
+    def test_token_attribute_access(self) -> None:
+        self.assertTrue(hit('logger.info("delivering %s", credential.token)'))
+
 
 class SafeSitesAccepted(unittest.TestCase):
     def test_opaque_handle_is_safe(self) -> None:
@@ -88,6 +102,19 @@ class SafeSitesAccepted(unittest.TestCase):
     def test_paren_inside_string_does_not_truncate_the_call(self) -> None:
         # The `)` in the message must not close the call before the secret arg.
         self.assertTrue(hit('logger.info("done (ok) %s", virtual_key)'))
+
+    def test_keys_iteration_is_not_key_attribute(self) -> None:
+        # `.keys()` is a dict iteration, not a `.key` secret access — the tail
+        # word-boundary keeps it silent.
+        self.assertFalse(hit('logger.info("fields %s", list(payload.keys()))'))
+
+    def test_token_id_handle_is_safe(self) -> None:
+        # `.token_id` is the opaque handle, not the raw `.token`.
+        self.assertFalse(hit('logger.info("minted %s", minted.token_id)'))
+
+    def test_virtual_key_ciphertext_column_is_safe(self) -> None:
+        # The stored-ciphertext column name is not the raw `virtual_key`.
+        self.assertFalse(hit('logger.info("row %s", row.virtual_key_ciphertext)'))
 
 
 if __name__ == "__main__":

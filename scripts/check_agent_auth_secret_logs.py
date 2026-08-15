@@ -20,7 +20,24 @@ one:
     ``CURSOR_API_KEY``, ``OPENAI_API_KEY``) — logging the name is how the value
     next to it slips in;
   - the raw secret variable names ``virtual_key`` (the minted key itself, as
-    opposed to the safe ``virtual_key_id`` handle) and ``value_ciphertext``.
+    opposed to the safe ``virtual_key_id`` handle), ``value_ciphertext``, and the
+    bare ``api_key`` binding;
+  - ATTRIBUTE ACCESS of a secret field — ``<receiver>.key`` / ``.token`` /
+    ``.api_key`` — because the live minted key actually flows as
+    ``minted.key`` (``MintedVirtualKey``), not through a ``virtual_key`` local.
+    A word-boundary at the tail keeps this narrow and free of the obvious
+    false positives: ``.keys()`` iteration is NOT ``.key`` (the ``s`` blocks the
+    boundary), and the safe ``.token_id`` handle is NOT ``.token`` (the ``_``
+    blocks the boundary), exactly as ``virtual_key_id`` is safe from
+    ``virtual_key``. An audit of every ``.key``/``.token``/``.api_key`` access and
+    every log call under the scanned roots on both this branch and the live
+    ``r4-gateway-verification`` gateway code found ZERO legitimate secret-field
+    attribute access inside a log call, so no receiver-name allowlist is needed;
+    the only real ``minted.key`` sites are non-log ``upsert_enrollment_key``
+    keyword args. Bare ``token``/``value`` words are deliberately NOT matched —
+    they are far too common (``value.keys()``, plain ``token`` counters) to flag
+    without absurd noise; only the attribute form and the ``value_ciphertext``
+    binding are caught.
 
 An intentional, reviewed redaction site marks itself with an inline pragma
 ``agent-auth:allow-secret-log`` inside the call; that one call is exempt. The
@@ -51,9 +68,14 @@ OWNED_RULE_IDS = frozenset(
     rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER
 )
 
-# (root, suffixes) — Python cloud gateway surface, Rust render + snapshot planes.
+# (root, suffixes) — Python cloud gateway surface, the ciphertext/plaintext
+# custody planes (store + models + encryption, where ``value_ciphertext`` and
+# the decrypt paths actually live), and the Rust render + snapshot planes.
 SCANNED_ROOTS: list[tuple[str, frozenset[str]]] = [
     ("server/proliferate/server/cloud/agent_gateway", frozenset({".py"})),
+    ("server/proliferate/db/store/agent_gateway", frozenset({".py"})),
+    ("server/proliferate/db/models/cloud", frozenset({".py"})),
+    ("server/proliferate/lib/infra/encryption", frozenset({".py"})),
     (
         "anyharness/crates/anyharness-lib/src/domains/agents/route_auth",
         frozenset({".rs"}),
@@ -77,7 +99,9 @@ LOG_OPENER = re.compile(
 
 # The secret identifiers. `virtual_key_id` is a safe opaque handle, so the raw
 # `virtual_key` is matched on a word boundary alone — the boundary cannot fall
-# between `key` and `_id`, so the handle is never a hit.
+# between `key` and `_id`, so the handle is never a hit. The attribute form
+# `<receiver>.(key|token|api_key)` catches the live `minted.key` flow; the tail
+# `\b` keeps `.keys()` (the `s`) and the safe `.token_id` handle (the `_`) out.
 SECRET_IDENTIFIER = re.compile(
     r"(?:"
     r"PROLIFERATE_GATEWAY_KEY"
@@ -87,6 +111,8 @@ SECRET_IDENTIFIER = re.compile(
     r"|OPENAI_API_KEY"
     r"|\bvalue_ciphertext\b"
     r"|\bvirtual_key\b"
+    r"|\bapi_key\b"
+    r"|\b\w+\.(?:key|token|api_key)\b"
     r")"
 )
 

@@ -11,22 +11,27 @@ owner = "product"
 status = "law"
 enforced_by = "scripts/check_agent_auth_secret_logs.py"
 mode = "lint"
-scope = "server/proliferate/server/cloud/agent_gateway/**, anyharness/crates/anyharness-lib/src/domains/agents/route_auth/**, anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/**"
+scope = "server/proliferate/server/cloud/agent_gateway/**, server/proliferate/db/store/agent_gateway/**, server/proliferate/db/models/cloud/**, server/proliferate/lib/infra/encryption/**, anyharness/crates/anyharness-lib/src/domains/agents/route_auth/**, anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/**"
 
 rule = """A structured-log or tracing call in the agent-auth surfaces must not
-contain a live secret identifier — the provider env-var secret names
-(PROLIFERATE_GATEWAY_KEY, ANTHROPIC_AUTH_TOKEN, XAI_API_KEY, CURSOR_API_KEY,
-OPENAI_API_KEY) or the raw secret bindings `virtual_key` and
-`value_ciphertext`."""
-alternative = """Log the opaque handle (`virtual_key_id`), a redacted hint, or a
-boolean presence flag instead of the secret. A reviewed redaction site that must
-name the binding carries an inline `agent-auth:allow-secret-log` pragma inside
-the call."""
+contain a live secret identifier. Three shapes are banned: the provider env-var
+secret names (PROLIFERATE_GATEWAY_KEY, ANTHROPIC_AUTH_TOKEN, XAI_API_KEY,
+CURSOR_API_KEY, OPENAI_API_KEY); the raw secret bindings `virtual_key`,
+`value_ciphertext`, and `api_key`; and attribute access of a secret field —
+`<receiver>.key`, `.token`, or `.api_key` — which is how the minted key actually
+flows (`minted.key`)."""
+alternative = """Log the opaque handle (`virtual_key_id`, `.token_id`), a
+redacted hint, or a boolean presence flag instead of the secret. A reviewed
+redaction site that must name the binding carries an inline
+`agent-auth:allow-secret-log` pragma inside the call."""
 why = """These surfaces move minted gateway keys and decrypted provider
 credentials through their hot paths; a single credential written to a log ships
-to the collector and is leaked irreversibly the moment the line runs. `_id`
-handles and ciphertext references are safe; the raw key and plaintext are not.
-(Agent Auth ADR custody item B20.)"""
+to the collector and is leaked irreversibly the moment the line runs. The check
+is deliberately narrow: `_id`/`.token_id` handles, `virtual_key_ciphertext`
+column names, and `.keys()` iteration stay silent, and bare `token`/`value`
+words are not flagged — only the named secret bindings and the
+`.key`/`.token`/`.api_key` attribute form are. (Agent Auth ADR custody item
+B20.)"""
 
 [rule.example]
 bad = "logger.info(\"minted gateway key %s\", virtual_key)"
