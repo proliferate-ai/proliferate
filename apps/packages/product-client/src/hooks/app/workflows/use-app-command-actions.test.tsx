@@ -95,6 +95,13 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   }),
 }));
 
+// This suite doesn't otherwise exercise capability-gated behavior; keep cloud
+// compute enabled so the pre-existing cases here read as before rung 1's
+// CLOUD_COMPUTE_TEMPORARILY_DISABLED flip (PRO-10).
+vi.mock("#product/hooks/capabilities/derived/use-app-capabilities", () => ({
+  useAppCapabilities: () => ({ cloudComputeEnabled: true }),
+}));
+
 vi.mock("#product/hooks/cloud/workflows/use-create-cloud-workspace", () => ({
   useCreateCloudWorkspace: () => ({
     createCloudWorkspaceAndEnter: hookMocks.createCloudWorkspaceAndEnter,
