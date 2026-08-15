@@ -509,6 +509,10 @@ mod tests {
             "auth": {
                 "readinessPolicy": "none",
                 "slots": []
+            },
+            "selfUpdateNeutralization": {
+                "mechanism": "none_found",
+                "detail": "static analysis found no self-update path"
             }
         }))
         .expect("agent without providerConfig must parse");
