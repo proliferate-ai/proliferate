@@ -128,10 +128,9 @@ export async function openSessionStreamConnection({
         && isCurrentStreamHandle(materializedSessionId, handle);
     },
   });
-  const scheduleReconnect = (delayMs = 350) => {
+  const scheduleReconnect = () => {
     scheduleSessionStreamReconnect({
       sessionId,
-      delayMs,
       options,
       refreshSessionSlotMeta,
       ensureSessionStreamConnected,

@@ -15,7 +15,6 @@ import type {
 
 interface ScheduleSessionStreamReconnectInput {
   sessionId: string;
-  delayMs?: number;
   options: SessionStreamConnectOptions | undefined;
   refreshSessionSlotMeta: RefreshSessionSlotMeta;
   ensureSessionStreamConnected: (
@@ -27,7 +26,6 @@ interface ScheduleSessionStreamReconnectInput {
 
 export function scheduleSessionStreamReconnect({
   sessionId,
-  delayMs = 350,
   options,
   refreshSessionSlotMeta,
   ensureSessionStreamConnected,
@@ -75,7 +73,7 @@ export function scheduleSessionStreamReconnect({
     return;
   }
 
-  const backoffDelay = nextSessionReconnectDelayMs(sessionId, delayMs);
+  const backoffDelay = nextSessionReconnectDelayMs(sessionId);
   recordSessionStreamReconnectScheduled({
     sessionId,
     // nextSessionReconnectDelayMs has already counted this attempt, so the

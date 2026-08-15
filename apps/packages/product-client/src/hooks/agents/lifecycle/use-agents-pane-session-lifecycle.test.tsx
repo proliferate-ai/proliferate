@@ -244,6 +244,46 @@ describe("useAgentsPaneSessionLifecycle pane-owned reconnect", () => {
     expect(mocks.ensureSessionStreamConnected).toHaveBeenCalledTimes(2);
   });
 
+  it("T1: surfaces the shared reconnect-backoff curve (base 350ms, factor 2, cap 15s) on its own reconnectState, not the old 750ms/6s pane-local curve", async () => {
+    const handle = installChild("client-a", "child-a");
+    let capturedOnReconnectNeeded: (() => void) | undefined;
+    mocks.ensureSessionStreamConnected.mockImplementation(async (
+      sessionId: string,
+      options?: { onReconnectNeeded?: () => void },
+    ) => {
+      capturedOnReconnectNeeded = options?.onReconnectNeeded;
+      const record = getSessionRecord(sessionId);
+      if (record?.materializedSessionId) {
+        setSessionStreamHandle({
+          sessionId: record.materializedSessionId,
+          workspaceId: record.workspaceId,
+          handle,
+        });
+      }
+      patchSessionRecord(sessionId, { streamConnectionState: "open" });
+    });
+
+    const rendered = renderHook(() =>
+      useAgentsPaneSessionLifecycle(createInput("client-a", "child-a"))
+    );
+
+    await waitFor(() => {
+      expect(mocks.ensureSessionStreamConnected).toHaveBeenCalledTimes(1);
+    });
+    expect(capturedOnReconnectNeeded).toBeTypeOf("function");
+
+    act(() => {
+      capturedOnReconnectNeeded?.();
+    });
+
+    // First attempt: base delay is 350ms (the shared session-stream curve),
+    // not the pane's former independent 750ms base.
+    expect(rendered.result.current.reconnectState.attempt).toBe(1);
+    expect(rendered.result.current.reconnectState.nextDelayMs).toBeGreaterThanOrEqual(350);
+    expect(rendered.result.current.reconnectState.nextDelayMs).toBeLessThan(750);
+    expect(rendered.result.current.reconnectState.reconnecting).toBe(true);
+  });
+
   it("does not retry once the child becomes closed before the reconnect timer fires", async () => {
     const handle = installChild("client-a", "child-a");
     let capturedOnReconnectNeeded: (() => void) | undefined;
