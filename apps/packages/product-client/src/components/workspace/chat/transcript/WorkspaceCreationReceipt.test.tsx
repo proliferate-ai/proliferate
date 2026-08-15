@@ -64,23 +64,33 @@ describe("WorkspaceCreationReceiptView", () => {
       noun: "worktree",
       line: "Worktree created",
       showSpinner: false,
+      logLines: [{ text: "Worktree created at /repo/worktrees/prism", tone: "default" }],
     });
 
     expect(container.querySelector("[data-loading-spinner]")).toBeNull();
-    expect(container.querySelector("svg")).not.toBeNull();
+    // Fork glyph plus the log-disclosure chevron.
+    expect(container.querySelectorAll("button svg")).toHaveLength(2);
   });
 
   // The fork mark is a worktree-only signal (PRO-251). A plain local
   // workspace receipt settles with no leading glyph rather than borrowing it.
+  // A real created-phase receipt always carries log lines, so the disclosure
+  // chevron must not stand in for the glyph the assertion is about.
   it("settles a workspace receipt with no leading glyph", () => {
     const { container } = renderReceipt({
       noun: "workspace",
       line: "Workspace created",
       showSpinner: false,
+      logLines: [{ text: "Workspace created at /repo/checkout", tone: "default" }],
     });
 
     expect(container.querySelector("[data-loading-spinner]")).toBeNull();
-    expect(container.querySelector("svg")).toBeNull();
+    // Only the log-disclosure chevron remains; the leading slot is an empty
+    // same-size placeholder so the label keeps its x when the spinner clears.
+    expect(container.querySelectorAll("button svg")).toHaveLength(1);
+    const button = container.querySelector("button");
+    expect(button!.firstElementChild!.tagName).toBe("SPAN");
+    expect(button!.firstElementChild!.classList.contains("icon-compact")).toBe(true);
   });
 
   it("keeps the spinner while a workspace creation is in flight", () => {

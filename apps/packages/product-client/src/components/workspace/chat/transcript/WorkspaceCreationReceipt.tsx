@@ -96,12 +96,15 @@ export function WorkspaceCreationReceiptView({
             every time the phase changes the text ("Creating worktree" →
             "Worktree created · Setup running"). Settled, the fork mark is a
             worktree-only signal (PRO-251): a plain workspace receipt shows
-            no glyph rather than borrowing the worktree one. */}
+            no glyph rather than borrowing the worktree one, with a same-size
+            placeholder so the label holds its x when the spinner clears. */}
         {presentation.showSpinner ? (
           <Spinner className="icon-compact shrink-0 text-muted-foreground" />
         ) : presentation.noun === "worktree" ? (
           <Fork aria-hidden="true" className="icon-compact shrink-0 text-faint" />
-        ) : null}
+        ) : (
+          <span aria-hidden="true" className="icon-compact shrink-0" />
+        )}
         <span className="min-w-0 truncate">{presentation.line}</span>
         {presentation.busyLabel && (
           <span className="shrink-0 text-faint">· {presentation.busyLabel}</span>
