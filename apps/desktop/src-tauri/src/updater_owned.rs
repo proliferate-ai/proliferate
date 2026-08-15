@@ -1,12 +1,11 @@
 //! Owned desktop update download, staging, and verification.
 //!
-//! `tauri-plugin-updater` 2.10.1 keeps the whole download in memory, cannot
-//! abort or resume, persists nothing, and its Rust-only `Update::install(bytes)`
-//! seam performs NO signature verification (minisign runs only inside the
-//! plugin's own `download()`). So we own the transfer: stream to a staged file
-//! with resume, enforce a single live download via an abort token, and verify
-//! sha256 + minisign against the baked pubkey before install. See the Update
-//! Flow ADR (FR-2) and `specs/desktop-native.md`.
+//! `tauri-plugin-updater` 2.10.1 buffers the whole download in memory, cannot
+//! abort/resume, persists nothing, and its `Update::install(bytes)` seam does NO
+//! signature verification. So we own the transfer: stream to a staged file with
+//! resume, enforce a single live download via an abort token, and verify sha256
+//! + minisign against the baked pubkey before install. See Update Flow ADR
+//! (FR-2) and `specs/desktop-native.md`.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -22,15 +21,14 @@ use tauri_plugin_updater::{Update, UpdaterExt};
 use tokio::io::AsyncWriteExt as _;
 use tokio_util::sync::CancellationToken;
 
-/// Connect timeout for the owned reqwest client. The plugin has no default
-/// timeout at all, so a dead endpoint hangs "Starting download…" forever.
+/// Connect timeout for the owned reqwest client (plugin has none, so a dead endpoint hangs "Starting download…" forever).
 const CONNECT_TIMEOUT_SECS: u64 = 10;
-/// Per-read inactivity budget. If no bytes arrive within this window the read
-/// is treated as stalled and surfaced as `UPDATER_DOWNLOAD_STALLED`.
+/// Per-read inactivity budget; exceeding it surfaces `UPDATER_DOWNLOAD_STALLED`.
 const READ_INACTIVITY_SECS: u64 = 30;
+/// Bound on how long an aborter/fresh download waits for the prior transfer to release the staged file, so the JS abort ack never hangs on a wedged task.
+const ABORT_DRAIN_SECS: u64 = 10;
 
-/// Typed error surfaced to JS (serialized as `{ code, message }`). Names match
-/// the ADR §5 error vocabulary consumed by the TS state machine.
+/// Typed error surfaced to JS (`{ code, message }`); names match the ADR §5 error vocabulary consumed by the TS state machine.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OwnedUpdaterError {
@@ -66,11 +64,9 @@ impl OwnedUpdaterError {
         Self::new(OwnedUpdaterErrorCode::UpdaterArtifactHashMismatch, message)
     }
 
-    /// Classify a std::io error: a full/quota-exceeded disk is a distinct,
-    /// user-actionable failure from a generic install error.
+    /// Classify a std::io error: a full disk (ENOSPC) is user-actionable.
     fn from_io(err: &std::io::Error) -> Self {
         if err.raw_os_error() == Some(28) {
-            // ENOSPC: no space left on device.
             Self::new(OwnedUpdaterErrorCode::UpdaterDiskFull, err.to_string())
         } else {
             Self::install(err.to_string())
@@ -78,8 +74,7 @@ impl OwnedUpdaterError {
     }
 }
 
-/// What `updater_owned_check` returns to JS. `rid` is the resource handle for
-/// the stored `Update`, mirroring the plugin's `commands::check` pattern.
+/// What `updater_owned_check` returns to JS; `rid` is the stored `Update` handle.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckResult {
@@ -88,8 +83,7 @@ pub struct CheckResult {
     pub rid: ResourceId,
 }
 
-/// Sidecar written next to a fully staged artifact and returned by
-/// `updater_staged_status`. `sha256` + `signature` are the reuse proof.
+/// Sidecar next to a staged artifact; `sha256` + `signature` are the reuse proof.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct StagedInfo {
@@ -108,16 +102,14 @@ pub struct DownloadProgress {
     pub total_bytes: Option<u64>,
 }
 
-/// A live owned download's abort handle, tagged with a generation so a slow
-/// finisher only clears the slot if a newer download has not taken it over.
+/// A live download's abort handle, generation-tagged so a slow finisher only clears the slot if no newer download took it over. `done_rx` fires (sender dropped) when the future exits, so an aborter can await the release.
 struct LiveDownload {
     token: CancellationToken,
     generation: u64,
+    done_rx: tokio::sync::oneshot::Receiver<()>,
 }
 
-/// Managed abort token for the single in-flight owned download. The invariant
-/// "no stacked downloads ever" is enforced two ways: JS aborts-first before a
-/// retry, and starting a new download here cancels any token still present.
+/// Managed abort token for the single in-flight owned download. "No stacked downloads ever" is enforced two ways: JS aborts-first before a retry, and starting a new download here cancels any token still present.
 #[derive(Default)]
 pub struct OwnedUpdaterState {
     live: std::sync::Mutex<Option<LiveDownload>>,
@@ -125,17 +117,40 @@ pub struct OwnedUpdaterState {
 }
 
 impl OwnedUpdaterState {
-    fn install_fresh_token(&self) -> (CancellationToken, u64) {
+    /// Cancel + fully drain any prior download, then install a fresh token and completion channel. Returns the token, its generation, and the sender whose drop signals the future exited. Awaits the prior transfer's teardown (never holding the std mutex across the await) so the file is released.
+    async fn install_fresh_token(&self) -> (CancellationToken, u64, tokio::sync::oneshot::Sender<()>) {
+        self.cancel_and_drain_live().await;
+
         let generation = self
             .next_generation
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        let mut guard = self.live.lock().expect("owned updater token poisoned");
-        if let Some(existing) = guard.take() {
-            existing.token.cancel();
-        }
         let token = CancellationToken::new();
-        *guard = Some(LiveDownload { token: token.clone(), generation });
-        (token, generation)
+        let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+        {
+            let mut guard = self.live.lock().expect("owned updater token poisoned");
+            *guard = Some(LiveDownload { token: token.clone(), generation, done_rx });
+        }
+        (token, generation, done_tx)
+    }
+
+    /// Take the live download out, cancel it, await its bounded completion signal. Returns whether something was live.
+    async fn cancel_and_drain_live(&self) -> bool {
+        let previous = {
+            let mut guard = self.live.lock().expect("owned updater token poisoned");
+            guard.take()
+        };
+        match previous {
+            Some(previous) => {
+                previous.token.cancel();
+                let _ = tokio::time::timeout(
+                    std::time::Duration::from_secs(ABORT_DRAIN_SECS),
+                    previous.done_rx,
+                )
+                .await;
+                true
+            }
+            None => false,
+        }
     }
 
     fn clear_token(&self, generation: u64) {
@@ -145,15 +160,9 @@ impl OwnedUpdaterState {
         }
     }
 
-    fn abort(&self) -> bool {
-        let guard = self.live.lock().expect("owned updater token poisoned");
-        match guard.as_ref() {
-            Some(live) => {
-                live.token.cancel();
-                true
-            }
-            None => false,
-        }
+    /// Cancel the in-flight download and await its teardown, so the JS ack means the transfer released the file, not just that a cancel was requested.
+    async fn abort(&self) -> bool {
+        self.cancel_and_drain_live().await
     }
 }
 
@@ -162,10 +171,6 @@ pub type SharedOwnedUpdaterState = Arc<OwnedUpdaterState>;
 pub fn create_owned_updater_state() -> SharedOwnedUpdaterState {
     Arc::new(OwnedUpdaterState::default())
 }
-
-// ---------------------------------------------------------------------------
-// Pure, network-free helpers (unit-tested below).
-// ---------------------------------------------------------------------------
 
 /// Lowercase hex sha256 of `bytes`.
 pub fn sha256_hex(bytes: &[u8]) -> String {
@@ -179,10 +184,7 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     out
 }
 
-/// Replicates the plugin's minisign verification (updater.rs `verify_signature`)
-/// because `Update::install(bytes)` does not verify. `signature_b64` and
-/// `pubkey_b64` are the base64-wrapped minisign text blocks as they appear in
-/// the update JSON / tauri config.
+/// Replicates the plugin's minisign verification (`Update::install` does not verify). `signature_b64`/`pubkey_b64` are base64-wrapped minisign text blocks.
 pub fn verify_signature(
     bytes: &[u8],
     signature_b64: &str,
@@ -208,8 +210,7 @@ fn base64_to_utf8(value: &str) -> Result<String, String> {
     String::from_utf8(decoded).map_err(|e| e.to_string())
 }
 
-/// Full artifact verification: sha256 must match the sidecar, then minisign
-/// must verify. Ordered cheap-first.
+/// Full artifact verification: sha256 must match the sidecar, then minisign must verify. Ordered cheap-first.
 pub fn verify_artifact(
     bytes: &[u8],
     expected_sha256: &str,
@@ -225,23 +226,43 @@ pub fn verify_artifact(
     verify_signature(bytes, signature_b64, pubkey_b64)
 }
 
-/// Decision for a `.partial` resume: reuse existing bytes with a `Range`
-/// request only when the server honored the range (HTTP 206); a plain 200 means
-/// restart from zero.
+/// Decision for a `.partial` resume: reuse existing bytes with a `Range` request only when the server honored it (HTTP 206); a plain 200 restarts from zero.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResumeAction {
     ResumeFrom(u64),
     RestartFromZero,
 }
 
-/// Given the size of an existing `.partial` and whether the server returned a
-/// 206 Partial Content, decide how to proceed.
 pub fn resume_decision(partial_len: u64, server_honored_range: bool) -> ResumeAction {
     if partial_len > 0 && server_honored_range {
         ResumeAction::ResumeFrom(partial_len)
     } else {
         ResumeAction::RestartFromZero
     }
+}
+
+/// Reject any version that could escape the staged directory before it is interpolated into a filename: only `[A-Za-z0-9._-]+`, non-empty, ≤64 chars, and never the bare `.`/`..` tokens. Returns the version unchanged if accepted.
+fn validated_version(version: &str) -> Result<&str, OwnedUpdaterError> {
+    if version.is_empty() || version.len() > 64 {
+        return Err(OwnedUpdaterError::check(format!(
+            "rejected update version: length {} out of allowed range 1..=64",
+            version.len()
+        )));
+    }
+    if version == "." || version == ".." {
+        return Err(OwnedUpdaterError::check(
+            "rejected update version: path traversal token",
+        ));
+    }
+    if !version
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+    {
+        return Err(OwnedUpdaterError::check(
+            "rejected update version: only [A-Za-z0-9._-] permitted",
+        ));
+    }
+    Ok(version)
 }
 
 fn staged_dir(base: &Path) -> PathBuf {
@@ -260,15 +281,15 @@ fn staged_sidecar_path(base: &Path, version: &str) -> PathBuf {
     staged_dir(base).join(format!("{version}.staged.json"))
 }
 
-/// Read + validate a staged artifact for `version`: the file and sidecar must
-/// both exist, the bytes must re-hash to the sidecar sha256, and minisign must
-/// verify. On any mismatch the artifact and sidecar are deleted (so a corrupt
-/// stage never wedges the flow) and `None` is returned.
+/// Validate a staged artifact for `version`: file + sidecar must exist, bytes must re-hash to the sidecar sha256, and minisign must verify. On any mismatch the artifact and sidecar are deleted and `None` returned.
 pub fn validate_staged(
     base: &Path,
     version: &str,
     pubkey_b64: &str,
 ) -> Option<StagedInfo> {
+    if validated_version(version).is_err() {
+        return None;
+    }
     let artifact = staged_artifact_path(base, version);
     let sidecar_path = staged_sidecar_path(base, version);
 
@@ -302,18 +323,15 @@ pub fn validate_staged(
 
 /// Delete the staged artifact, partial, and sidecar for a version. Best-effort.
 pub fn cleanup_staged(base: &Path, version: &str) {
+    if validated_version(version).is_err() {
+        return;
+    }
     let _ = std::fs::remove_file(staged_artifact_path(base, version));
     let _ = std::fs::remove_file(staged_partial_path(base, version));
     let _ = std::fs::remove_file(staged_sidecar_path(base, version));
 }
 
-// ---------------------------------------------------------------------------
-// Config access.
-// ---------------------------------------------------------------------------
-
-/// The baked minisign pubkey from `tauri.conf.json` plugins.updater.pubkey. The
-/// owned path verifies against this regardless of which endpoint served the
-/// manifest, so an endpoint override can never weaken signature checks.
+/// The baked minisign pubkey from `tauri.conf.json` plugins.updater.pubkey. Verifying against this regardless of endpoint means an override can never weaken signature checks.
 fn baked_pubkey<R: Runtime>(app: &AppHandle<R>) -> Result<String, OwnedUpdaterError> {
     app.config()
         .plugins
@@ -330,10 +348,6 @@ fn app_data_base<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, OwnedUpdater
         .app_data_dir()
         .map_err(|e| OwnedUpdaterError::install(format!("app data dir unavailable: {e}")))
 }
-
-// ---------------------------------------------------------------------------
-// Tauri commands.
-// ---------------------------------------------------------------------------
 
 #[tauri::command]
 pub async fn updater_owned_check<R: Runtime>(
@@ -386,10 +400,12 @@ pub async fn updater_owned_download<R: Runtime>(
     let app = webview.app_handle().clone();
     let pubkey = baked_pubkey(&app)?;
     let base = app_data_base(&app)?;
-    let (token, generation) = state.install_fresh_token();
+    let (token, generation, done_tx) = state.install_fresh_token().await;
 
     let result = download_to_staged(&base, &update, &pubkey, &on_progress, &token).await;
     state.clear_token(generation);
+    // Drop the completion sender so an aborter awaiting release resolves.
+    drop(done_tx);
     result
 }
 
@@ -400,7 +416,7 @@ async fn download_to_staged(
     on_progress: &Channel<DownloadProgress>,
     token: &CancellationToken,
 ) -> Result<StagedInfo, OwnedUpdaterError> {
-    let version = update.version.clone();
+    let version = validated_version(&update.version)?.to_string();
     let dir = staged_dir(base);
     std::fs::create_dir_all(&dir).map_err(|e| OwnedUpdaterError::from_io(&e))?;
 
@@ -456,36 +472,44 @@ async fn download_to_staged(
 
     let mut stream = response.bytes_stream();
     loop {
-        if token.is_cancelled() {
-            return Err(OwnedUpdaterError::new(
-                OwnedUpdaterErrorCode::UpdaterDownloadAborted,
-                "download aborted",
-            ));
-        }
-
-        let next = tokio::time::timeout(
-            std::time::Duration::from_secs(READ_INACTIVITY_SECS),
-            stream.next(),
-        )
-        .await;
-
-        let chunk = match next {
-            Err(_) => {
-                tracing::warn!(version, counter = "updater.download.stall", "owned download stalled");
+        // Race cancellation against the timed read so an abort interrupts a
+        // slow read immediately, not after the inactivity budget.
+        let chunk = tokio::select! {
+            biased;
+            _ = token.cancelled() => {
                 return Err(OwnedUpdaterError::new(
-                    OwnedUpdaterErrorCode::UpdaterDownloadStalled,
-                    "download stalled: no bytes received",
+                    OwnedUpdaterErrorCode::UpdaterDownloadAborted,
+                    "download aborted",
                 ));
             }
-            Ok(None) => break,
-            Ok(Some(Ok(chunk))) => chunk,
-            Ok(Some(Err(e))) => return Err(OwnedUpdaterError::install(e.to_string())),
+            next = tokio::time::timeout(
+                std::time::Duration::from_secs(READ_INACTIVITY_SECS),
+                stream.next(),
+            ) => match next {
+                Err(_) => {
+                    tracing::warn!(version, counter = "updater.download.stall", "owned download stalled");
+                    return Err(OwnedUpdaterError::new(
+                        OwnedUpdaterErrorCode::UpdaterDownloadStalled,
+                        "download stalled: no bytes received",
+                    ));
+                }
+                Ok(None) => break,
+                Ok(Some(Ok(chunk))) => chunk,
+                Ok(Some(Err(e))) => return Err(OwnedUpdaterError::install(e.to_string())),
+            },
         };
 
         file.write_all(&chunk).await.map_err(|e| OwnedUpdaterError::from_io(&e))?;
         received += chunk.len() as u64;
         let _ = on_progress.send(DownloadProgress { received_bytes: received, total_bytes });
     }
+
+    // Terminal progress: with no Content-Length the TS layer never saw
+    // received == total. Emit total == received so it flips to "verifying".
+    let _ = on_progress.send(DownloadProgress {
+        received_bytes: received,
+        total_bytes: Some(received),
+    });
 
     file.flush().await.map_err(|e| OwnedUpdaterError::from_io(&e))?;
     drop(file);
@@ -515,7 +539,7 @@ async fn download_to_staged(
 pub async fn updater_owned_abort(
     state: State<'_, SharedOwnedUpdaterState>,
 ) -> Result<bool, OwnedUpdaterError> {
-    Ok(state.abort())
+    Ok(state.abort().await)
 }
 
 #[tauri::command]
@@ -523,6 +547,7 @@ pub async fn updater_staged_status<R: Runtime>(
     app: AppHandle<R>,
     version: String,
 ) -> Result<Option<StagedInfo>, OwnedUpdaterError> {
+    validated_version(&version)?;
     let pubkey = baked_pubkey(&app)?;
     let base = app_data_base(&app)?;
     Ok(validate_staged(&base, &version, &pubkey))
@@ -534,6 +559,7 @@ pub async fn updater_owned_install<R: Runtime>(
     rid: ResourceId,
     version: String,
 ) -> Result<(), OwnedUpdaterError> {
+    validated_version(&version)?;
     let app = webview.app_handle().clone();
     let pubkey = baked_pubkey(&app)?;
     let base = app_data_base(&app)?;
@@ -545,8 +571,8 @@ pub async fn updater_owned_install<R: Runtime>(
         .map_err(|e| OwnedUpdaterError::install(e.to_string()))?;
     let bytes = std::fs::read(&artifact).map_err(|e| OwnedUpdaterError::from_io(&e))?;
 
-    // Re-verify staged bytes immediately before install — the staged file may
-    // have been tampered with or truncated since it was written.
+    // Re-verify immediately before install: the file may have been tampered
+    // with or truncated since it was written.
     verify_artifact(&bytes, &sidecar.sha256, &sidecar.signature, &pubkey)?;
 
     let update = webview
@@ -563,83 +589,5 @@ pub async fn updater_owned_install<R: Runtime>(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    const PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZEMkRFQkU1RDRENDI4MkUKUldRdUtOVFU1ZXN0YlFBN2ZWUjZzcXpkMWpvL1VUdWpnNmF3Q1g4U0hHYnd4MVFmUTdvaERmY04K";
-
-    #[test]
-    fn sha256_matches_known_vector() {
-        // Known SHA-256 of "abc".
-        assert_eq!(
-            sha256_hex(b"abc"),
-            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-        );
-    }
-
-    #[test]
-    fn verify_artifact_accepts_matching_sha_but_rejects_flipped_byte() {
-        let data = b"the update payload bytes".to_vec();
-        let good_sha = sha256_hex(&data);
-
-        // Negative control: the good sha passes the sha256 gate (it then falls
-        // through to minisign, which fails for our fake signature — proving the
-        // sha gate itself accepted the bytes).
-        let via_good = verify_artifact(&data, &good_sha, "not-a-signature", PUBKEY);
-        assert!(matches!(
-            via_good.unwrap_err().code,
-            OwnedUpdaterErrorCode::UpdaterArtifactHashMismatch
-        ));
-
-        // Corrupt artifact: flip a byte; sha256 gate must reject before minisign.
-        let mut corrupt = data.clone();
-        corrupt[0] ^= 0xff;
-        let err = verify_artifact(&corrupt, &good_sha, "not-a-signature", PUBKEY).unwrap_err();
-        assert_eq!(err.code, OwnedUpdaterErrorCode::UpdaterArtifactHashMismatch);
-        assert!(err.message.contains("sha256 mismatch"), "{}", err.message);
-    }
-
-    #[test]
-    fn verify_signature_rejects_garbage() {
-        let err = verify_signature(b"data", "###not-base64###", PUBKEY).unwrap_err();
-        assert_eq!(err.code, OwnedUpdaterErrorCode::UpdaterArtifactHashMismatch);
-    }
-
-    #[test]
-    fn resume_decision_is_range_only_when_server_honors_it() {
-        assert_eq!(resume_decision(1024, true), ResumeAction::ResumeFrom(1024));
-        assert_eq!(resume_decision(1024, false), ResumeAction::RestartFromZero);
-        assert_eq!(resume_decision(0, true), ResumeAction::RestartFromZero);
-    }
-
-    #[test]
-    fn validate_staged_deletes_on_sha_mismatch() {
-        let dir = std::env::temp_dir().join(format!("owned-updater-test-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        let version = "9.9.9";
-        std::fs::create_dir_all(staged_dir(&dir)).unwrap();
-
-        let bytes = b"staged artifact".to_vec();
-        std::fs::write(staged_artifact_path(&dir, version), &bytes).unwrap();
-        // Sidecar claims a sha that will not match the bytes.
-        let info = StagedInfo {
-            version: version.to_string(),
-            sha256: "deadbeef".to_string(),
-            byte_length: bytes.len() as u64,
-            signature: "sig".to_string(),
-            staged_at: "2026-01-01T00:00:00Z".to_string(),
-        };
-        std::fs::write(
-            staged_sidecar_path(&dir, version),
-            serde_json::to_vec(&info).unwrap(),
-        )
-        .unwrap();
-
-        assert!(validate_staged(&dir, version, PUBKEY).is_none());
-        // Mismatch must have deleted both the artifact and the sidecar.
-        assert!(!staged_artifact_path(&dir, version).exists());
-        assert!(!staged_sidecar_path(&dir, version).exists());
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-}
+#[path = "updater_owned_tests.rs"]
+mod tests;
