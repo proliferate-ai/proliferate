@@ -51,6 +51,9 @@ describe("presentWorkspaceCreationReceipt", () => {
     });
 
     expect(presentation.line).toBe("Creating worktree");
+    // The noun rides the presentation so the view can key the settled
+    // leading glyph on it (fork = worktree-only, PRO-251).
+    expect(presentation.noun).toBe("worktree");
     expect(presentation.showSpinner).toBe(true);
     expect(presentation.busyLabel).toBeNull();
     expect(presentation.defaultExpanded).toBe(false);
@@ -110,6 +113,7 @@ describe("presentWorkspaceCreationReceipt", () => {
       errorMessage: null,
     });
 
+    expect(presentation.noun).toBe("workspace");
     expect(presentation.logLines).toEqual([
       { text: "Workspace creation failed.", tone: "destructive" },
     ]);

@@ -86,6 +86,12 @@ export interface WorkspaceCreationReceiptLogLine {
 }
 
 export interface WorkspaceCreationReceiptPresentation {
+  /**
+   * What was created. The view keys the settled leading glyph on this: the
+   * fork mark is a worktree-only signal (PRO-251), so plain workspace
+   * receipts settle with no icon.
+   */
+  noun: WorkspaceCreationReceiptNoun;
   /** The receipt sentence. Failure is carried by the words, never by color. */
   line: string;
   /** Trailing muted label while setup is in flight ("Setup running"). */
@@ -140,6 +146,7 @@ export function presentWorkspaceCreationReceipt(
       logLines.push({ text: `$ ${source.setupCommand}`, tone: "default" });
     }
     return {
+      noun: source.noun,
       line: labels.creating[source.noun],
       busyLabel: null,
       showSpinner: true,
@@ -165,6 +172,7 @@ export function presentWorkspaceCreationReceipt(
       tone: "destructive",
     });
     return {
+      noun: source.noun,
       line: labels.creationFailed[source.noun],
       busyLabel: null,
       showSpinner: false,
@@ -195,6 +203,7 @@ export function presentWorkspaceCreationReceipt(
 
   if (setup.status === "failed") {
     return {
+      noun,
       line: labels.createdSetupFailed[noun],
       busyLabel: null,
       showSpinner: false,
@@ -223,6 +232,7 @@ export function presentWorkspaceCreationReceipt(
         tone: "default",
       };
     return {
+      noun,
       line: createdLine,
       busyLabel: isQueued ? labels.setupQueuedStatus : labels.setupRunningStatus,
       showSpinner: true,
@@ -243,6 +253,7 @@ export function presentWorkspaceCreationReceipt(
   if (setup.status === "succeeded") {
     if (previousRunLine) {
       return {
+        noun,
         line: labels.createdSetupCompleted[noun],
         busyLabel: null,
         showSpinner: false,
@@ -264,6 +275,7 @@ export function presentWorkspaceCreationReceipt(
       };
     }
     return {
+      noun,
       line: createdLine,
       busyLabel: null,
       showSpinner: false,
@@ -286,6 +298,7 @@ export function presentWorkspaceCreationReceipt(
 
   // No setup run recorded — either no setup script, or status not yet known.
   return {
+    noun,
     line: createdLine,
     busyLabel: null,
     showSpinner: false,

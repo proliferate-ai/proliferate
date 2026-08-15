@@ -9,6 +9,7 @@ function presentation(
   overrides: Partial<WorkspaceCreationReceiptPresentation>,
 ): WorkspaceCreationReceiptPresentation {
   return {
+    noun: "worktree",
     line: "Creating worktree",
     busyLabel: null,
     showSpinner: false,
@@ -58,13 +59,37 @@ describe("WorkspaceCreationReceiptView", () => {
     ).toBeTruthy();
   });
 
-  it("shows the fork glyph and no spinner once work settles", () => {
+  it("shows the fork glyph and no spinner once a worktree receipt settles", () => {
     const { container } = renderReceipt({
+      noun: "worktree",
       line: "Worktree created",
       showSpinner: false,
     });
 
     expect(container.querySelector("[data-loading-spinner]")).toBeNull();
     expect(container.querySelector("svg")).not.toBeNull();
+  });
+
+  // The fork mark is a worktree-only signal (PRO-251). A plain local
+  // workspace receipt settles with no leading glyph rather than borrowing it.
+  it("settles a workspace receipt with no leading glyph", () => {
+    const { container } = renderReceipt({
+      noun: "workspace",
+      line: "Workspace created",
+      showSpinner: false,
+    });
+
+    expect(container.querySelector("[data-loading-spinner]")).toBeNull();
+    expect(container.querySelector("svg")).toBeNull();
+  });
+
+  it("keeps the spinner while a workspace creation is in flight", () => {
+    const { container } = renderReceipt({
+      noun: "workspace",
+      line: "Creating workspace",
+      showSpinner: true,
+    });
+
+    expect(container.querySelectorAll("[data-loading-spinner]")).toHaveLength(1);
   });
 });
