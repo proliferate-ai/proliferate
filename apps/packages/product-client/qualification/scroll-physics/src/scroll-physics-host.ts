@@ -11,6 +11,7 @@
 import {
   createTranscriptState,
   reduceEventBatch,
+  type SessionEvent,
   type SessionEventEnvelope,
   type TranscriptState,
 } from "@anyharness/sdk";
@@ -32,7 +33,7 @@ function envelope(
   sessionId: string,
   turnId: string,
   itemId: string | undefined,
-  event: unknown,
+  event: SessionEvent,
 ): SessionEventEnvelope {
   const seq = nextSeq();
   return {
@@ -42,7 +43,7 @@ function envelope(
     turnId,
     itemId,
     event,
-  } as unknown as SessionEventEnvelope;
+  };
 }
 
 // A block of prose tall enough that a handful of turns overflow the fixed
@@ -115,7 +116,7 @@ function assistantCompleted(
   });
 }
 
-// A tool invocation (bash) carrying a large output body — used to exercise a
+// A tool invocation (bash) carrying a large output body, used to exercise a
 // tall/nested tool-output region.
 function largeToolInvocation(sessionId: string, turnId: string): SessionEventEnvelope[] {
   const itemId = `${turnId}-tool`;
@@ -162,7 +163,7 @@ function largeToolInvocation(sessionId: string, turnId: string): SessionEventEnv
 }
 
 // A tall fenced code block inside assistant prose. This renders through the
-// real MarkdownCodeBlock, which owns its OWN inner `overflow-y-auto` region —
+// real MarkdownCodeBlock, which owns its OWN inner `overflow-y-auto` region,
 // the nested-scroll surface the chaining scenario needs.
 function codeBlockText(label: string): string {
   const lines: string[] = ["Here is the generated module:", "", "```ts"];
@@ -191,7 +192,7 @@ function buildFinalizedConversation(sessionId: string, turns: number): Transcrip
   return state;
 }
 
-// Merge older turns in FRONT of the current turn order — the shape a
+// Merge older turns in FRONT of the current turn order, the shape a
 // load-older-history prepend produces.
 function mergeOlderBefore(older: TranscriptState, current: TranscriptState): TranscriptState {
   return {

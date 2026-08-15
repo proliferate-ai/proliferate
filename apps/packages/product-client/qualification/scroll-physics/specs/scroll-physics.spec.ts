@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 // by the REAL @anyharness/sdk reducer through `window.__scrollPhysics`, is
 // measured in real Chromium and WebKit. Everything external is absent. Each
 // spec asserts an observable physics invariant from DOM probes and a per-frame
-// scrollTop trace — never internal state.
+// scrollTop trace, never internal state.
 //
 // The 24px repin band lives at REPIN_BOTTOM_THRESHOLD_PX in
 // hooks/chat/ui/transcript-row-list-model.ts.
@@ -248,7 +248,7 @@ test.describe("transcript scroll physics", () => {
 
   // EXPECTED TO FAIL today (PRO-175). resetForSession always re-pins and snaps
   // to bottom on every session switch, then runs a glue loop across the newly
-  // mounted rows — a revisit to a finalized session produces scrollTop motion
+  // mounted rows, a revisit to a finalized session produces scrollTop motion
   // frames instead of restoring its prior position with zero visible motion.
   // Rung 2 introduces restore-finalized placement; unfixme there.
   test.fixme(

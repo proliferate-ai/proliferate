@@ -139,9 +139,18 @@ documented in the Chat Scroll ADR are marked `test.fixme` with the rung that
 owns the fix.
 
 Lives in `apps/packages/product-client/qualification/scroll-physics/` (Vite
-fixture host plus `specs/`), alongside the browser-build fixture. Run locally:
-`pnpm --filter @proliferate/product-client test:scroll-physics` (builds the
-fixture, then Playwright at `workers=1`). CI runs it in the `scroll-physics`
+fixture host plus `specs/`), alongside the browser-build fixture. The fixture
+resolves the shipped renderer through `#product/*` -> `dist`, so `pnpm shared:build`
+must be run first (once, or whenever product-client/design source changes) to
+produce that `dist`. Run locally:
+
+```
+pnpm shared:build
+pnpm --filter @proliferate/product-client test:scroll-physics
+```
+
+(`test:scroll-physics` builds the Vite fixture itself, then runs Playwright at
+`workers=1`; it does not rebuild `dist`.) CI runs it in the `scroll-physics`
 job, which builds the shared packages and installs both browser engines.
 
 ## Tier 3 — live end-to-end
