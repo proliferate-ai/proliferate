@@ -82,9 +82,15 @@ export function HomeTargetPicker({
   const selectedRepositoryCloudAction: CloudRepoActionState = selectedRepository
     ? cloudActionBySourceRoot[selectedRepository.sourceRoot] ?? { kind: "hidden", label: null }
     : { kind: "hidden", label: null };
-  const effectiveRepoLaunchKind = desktopTargetsAvailable ? repoLaunchKind : "cloud";
+  // Cloud compute is culled from Desktop (PRO-10): the Desktop picker offers
+  // only local / worktree (+ SSH targets below), never cloud and never empty.
+  // Web keeps its cloud offering, gated by `desktopTargetsAvailable` (the host
+  // capability), not by a deleted branch.
+  const effectiveRepoLaunchKind = desktopTargetsAvailable
+    ? (repoLaunchKind === "cloud" ? "worktree" : repoLaunchKind)
+    : "cloud";
   const runtimeLaunchKinds: readonly HomeNextRepoLaunchKind[] = desktopTargetsAvailable
-    ? ["local", "worktree", "cloud"]
+    ? ["local", "worktree"]
     : ["cloud"];
   const selectedSshTarget = desktopTargetsAvailable
     ? sshTargetOptions.find((target) => target.id === selectedSshTargetId) ?? null
