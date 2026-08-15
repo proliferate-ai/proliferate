@@ -92,21 +92,22 @@ pub trait ArtifactFetchClient: Send + Sync {
     fn get_bytes(&self, url: &str) -> anyhow::Result<Vec<u8>>;
 }
 
-/// Blocking reqwest client bounded to a hard 3s total timeout — the fetch
+/// Blocking reqwest fetch bounded to a hard 3s total timeout — the fetch
 /// step is a best-effort boot nicety, never something worth blocking startup
 /// over.
-pub struct BoundedHttpFetchClient {
-    client: reqwest::blocking::Client,
-}
+///
+/// Stateless on purpose: `reqwest::blocking::Client` owns an internal tokio
+/// runtime, and constructing or dropping one inside an async context panics
+/// ("Cannot drop a runtime in a context where blocking is not allowed").
+/// Boot wiring runs under the server runtime, so every call builds, uses,
+/// and drops the blocking client on a dedicated OS thread instead. This is
+/// a boot-only lane fetching a handful of sub-megabyte documents; per-call
+/// client construction is noise.
+pub struct BoundedHttpFetchClient;
 
 impl BoundedHttpFetchClient {
     pub fn new() -> Self {
-        let client = reqwest::blocking::Client::builder()
-            .timeout(Duration::from_secs(3))
-            .connect_timeout(Duration::from_secs(3))
-            .build()
-            .expect("reqwest client build");
-        Self { client }
+        Self
     }
 }
 
@@ -125,8 +126,26 @@ const MAX_RESPONSE_BYTES: u64 = 4 * 1024 * 1024;
 
 impl ArtifactFetchClient for BoundedHttpFetchClient {
     fn get_bytes(&self, url: &str) -> anyhow::Result<Vec<u8>> {
-        use std::io::Read;
-        let response = self.client.get(url).send()?.error_for_status()?;
+        let url = url.to_string();
+        std::thread::Builder::new()
+            .name("catalog-artifact-fetch".into())
+            .spawn(move || fetch_bytes_blocking(&url))
+            .map_err(|e| anyhow::anyhow!("failed to spawn catalog fetch thread: {e}"))?
+            .join()
+            .map_err(|_| anyhow::anyhow!("catalog fetch thread panicked"))?
+    }
+}
+
+/// Runs on the dedicated fetch thread — the only place a
+/// `reqwest::blocking::Client` may live (see [`BoundedHttpFetchClient`]).
+fn fetch_bytes_blocking(url: &str) -> anyhow::Result<Vec<u8>> {
+    use std::io::Read;
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(3))
+        .connect_timeout(Duration::from_secs(3))
+        .build()?;
+    {
+        let response = client.get(url).send()?.error_for_status()?;
         let mut limited = response.take(MAX_RESPONSE_BYTES + 1);
         let mut buf = Vec::new();
         limited.read_to_end(&mut buf)?;
