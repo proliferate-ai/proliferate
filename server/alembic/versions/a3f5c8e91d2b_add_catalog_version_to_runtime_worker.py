@@ -1,7 +1,7 @@
 """add_catalog_version_to_runtime_worker
 
 Revision ID: a3f5c8e91d2b
-Revises: da8a01b4ad7a
+Revises: c7d9e1f3a5b7
 Create Date: 2026-08-15 00:00:00.000000
 
 """
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "a3f5c8e91d2b"
-down_revision: str | Sequence[str] | None = "da8a01b4ad7a"
+down_revision: str | Sequence[str] | None = "c7d9e1f3a5b7"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

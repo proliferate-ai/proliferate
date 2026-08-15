@@ -311,6 +311,11 @@ class MetaResponse(BaseModel):
     capabilities: ServerCapabilities
     # Additive: absent (``None``) unless the deployment configured an override.
     desktopUpdater: DesktopUpdaterCadence | None = None
+    # `None` (the default: no `AGENT_CATALOG_ARTIFACT_BASE_URL` configured)
+    # means this deployment's runtimes never fetch — the compiled-in floor
+    # is the whole story. Clients must tolerate this field being entirely
+    # absent (older servers) exactly like an explicit `None`.
+    agentCatalog: AgentCatalogChannel | None = None
 
 
 def _cadence_env_ms(name: str) -> int | None:
@@ -336,11 +341,6 @@ def _desktop_updater_cadence() -> DesktopUpdaterCadence | None:
         checkIntervalMs=check_interval,
         stallThresholdMs=stall_threshold,
     )
-    # `None` (the default: no `AGENT_CATALOG_ARTIFACT_BASE_URL` configured)
-    # means this deployment's runtimes never fetch — the compiled-in floor
-    # is the whole story. Clients must tolerate this field being entirely
-    # absent (older servers) exactly like an explicit `None`.
-    agentCatalog: AgentCatalogChannel | None = None
 
 
 def _agent_catalog_channel(config: Settings) -> AgentCatalogChannel | None:
