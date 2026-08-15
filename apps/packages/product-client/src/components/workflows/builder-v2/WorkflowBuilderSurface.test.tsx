@@ -86,7 +86,7 @@ afterEach(() => {
 });
 
 describe("WorkflowBuilderSurface", () => {
-  it("renders a template's chain as ordered step cards", () => {
+  it("draws the template's chain on the canvas and edits one step at a time", () => {
     render(
       <WorkflowBuilderSurface
         definitionId={null}
@@ -95,15 +95,38 @@ describe("WorkflowBuilderSurface", () => {
       />,
     );
 
+    // Both steps sit on the canvas as selectable cards; the inspector under
+    // it opens on the first step and edits exactly one at a time.
+    expect(screen.getByRole("button", { name: /Research/ })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Step 1" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Step 2" })).toBeTruthy();
-    // Step 1 heads the chain, so it cannot move up; step 2 tails it.
+    expect(screen.queryByRole("heading", { name: "Step 2" })).toBeNull();
+    // Step 1 heads the chain, so it cannot move up.
     expect(screen.getByRole("button", { name: "Move step 1 up" }))
-      .toHaveProperty("disabled", true);
-    expect(screen.getByRole("button", { name: "Move step 2 down" }))
       .toHaveProperty("disabled", true);
     expect(screen.getByRole("button", { name: "Move step 1 down" }))
       .toHaveProperty("disabled", false);
+
+    fireEvent.click(screen.getByRole("button", { name: /Review the findings/ }));
+
+    expect(screen.getByRole("heading", { name: "Step 2" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Step 1" })).toBeNull();
+    // Step 2 tails the chain, so it cannot move down.
+    expect(screen.getByRole("button", { name: "Move step 2 down" }))
+      .toHaveProperty("disabled", true);
+  });
+
+  it("selects a just-added step so its fields are ready to edit", () => {
+    render(
+      <WorkflowBuilderSurface
+        definitionId={null}
+        template={RESEARCH_AND_REVIEW}
+        authCacheScope="user-1"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add step" }));
+
+    expect(screen.getByRole("heading", { name: "Step 3" })).toBeTruthy();
   });
 
   it("gates Save on a title and creates through the access seam", async () => {

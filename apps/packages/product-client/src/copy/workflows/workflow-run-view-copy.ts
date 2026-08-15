@@ -38,8 +38,11 @@ export const WORKFLOW_RUN_VIEW_COPY = {
   errorDescription:
     "The runtime did not return this workflow run. It may still be starting up.",
 
-  /** Section labels inside the pane. */
-  graphSectionTitle: "Steps",
+  /** Accessible name of the pannable graph surface. */
+  graphCanvasLabel: "Run graph",
+  /** The docked inspector under the canvas, for the selected node. */
+  inspectorTitle: "Selected step",
+  inspectorCloseLabel: "Clear selection",
   docsSectionTitle: "Documents",
   /** The run exists and has produced no documents yet. */
   docsEmpty: "No documents yet. Nodes write them as they finish.",

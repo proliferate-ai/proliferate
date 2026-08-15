@@ -69,37 +69,38 @@ function chainSlot(chainIndex: number, title: string): WorkflowGraphSlotVM {
   };
 }
 
-function renderView(slots: WorkflowGraphSlotVM[]) {
-  const onFocusSession = vi.fn();
-  const onApprove = vi.fn();
-  const onFailRedo = vi.fn();
-  const onFlipType = vi.fn();
-  const onAddAdhoc = vi.fn();
+function renderView(
+  slots: WorkflowGraphSlotVM[],
+  options: { selectedNodeRowId?: string | null; needsInput?: ReadonlySet<string> } = {},
+) {
+  const onSelectNode = vi.fn();
   const { container } = render(
     <WorkflowGraphView
       slots={slots}
-      needsInputNodeRowIds={new Set()}
-      busy={false}
-      onFocusSession={onFocusSession}
-      onApprove={onApprove}
-      onFailRedo={onFailRedo}
-      onFlipType={onFlipType}
-      onAddAdhoc={onAddAdhoc}
+      needsInputNodeRowIds={options.needsInput ?? new Set()}
+      selectedNodeRowId={options.selectedNodeRowId ?? null}
+      onSelectNode={onSelectNode}
     />,
   );
-  return { container, onFocusSession, onApprove, onFailRedo, onFlipType, onAddAdhoc };
+  return { container, onSelectNode };
 }
 
-/**
- * The drawn edge's hairline. The graph is the only place in the view that
- * draws a `w-px` segment (the cards have none), so counting them counts
- * edges.
- */
-function edgesOf(container: HTMLElement): NodeListOf<Element> {
-  return container.querySelectorAll(".w-px.bg-border");
+/** The drawn edges: every stroked path in the canvas SVG (the arrow-marker path is filled, not stroked). */
+function edgesOf(container: HTMLElement): Element[] {
+  return [...container.querySelectorAll("path[stroke]")];
 }
 
 describe("WorkflowGraphView", () => {
+  it("draws every node as a selectable card on the canvas", () => {
+    const { onSelectNode } = renderView([
+      chainSlot(0, "Draft questions"),
+      chainSlot(1, "Answer them"),
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: /Answer them/ }));
+    expect(onSelectNode).toHaveBeenCalledWith("node-1");
+  });
+
   it("joins consecutive chain slots with drawn edges and draws none before the first", () => {
     const { container } = renderView([
       chainSlot(0, "Draft questions"),
@@ -108,9 +109,6 @@ describe("WorkflowGraphView", () => {
     ]);
 
     expect(edgesOf(container).length).toBe(2);
-    // Order: the first rendered element is a card, never an edge.
-    const first = container.firstElementChild?.firstElementChild;
-    expect(first?.getAttribute("aria-hidden")).toBeNull();
   });
 
   it("draws no edge around a single slot", () => {
@@ -118,10 +116,10 @@ describe("WorkflowGraphView", () => {
     expect(edgesOf(container).length).toBe(0);
   });
 
-  it("marks every drawn edge decorative", () => {
+  it("keeps the edge SVG decorative", () => {
     const { container } = renderView([chainSlot(0, "One"), chainSlot(1, "Two")]);
     for (const edge of edgesOf(container)) {
-      expect(edge.closest("[aria-hidden]")).not.toBeNull();
+      expect(edge.closest("svg[aria-hidden]")).not.toBeNull();
     }
   });
 
@@ -142,8 +140,8 @@ describe("WorkflowGraphView", () => {
     expect(edgesOf(container).length).toBe(0);
   });
 
-  it("hangs ad hoc side nodes off a branch rail under their anchor slot", () => {
-    renderView([
+  it("hangs an ad hoc side node off a dashed branch edge", () => {
+    const { container } = renderView([
       {
         chainIndex: 0,
         attempts: [buildVm({ id: "node-chain", chainIndex: 0, title: "Anchor" })],
@@ -159,42 +157,13 @@ describe("WorkflowGraphView", () => {
       },
     ]);
 
-    const sideTitle = screen.getByText("Side errand");
-    expect(sideTitle.closest(".border-l")).not.toBeNull();
-    const chainTitle = screen.getByText("Anchor");
-    expect(chainTitle.closest(".border-l")).toBeNull();
-  });
-
-  it("renders a side node under the attempt it anchors to, not after the last attempt", () => {
-    renderView([
-      {
-        chainIndex: 0,
-        attempts: [
-          buildVm({ id: "node-a", chainIndex: 0, title: "First attempt", status: "failed" }),
-          buildVm({ id: "node-b", chainIndex: 0, title: "Second attempt", kind: "replacement" }),
-        ],
-        adhoc: [
-          buildVm({
-            id: "node-side",
-            chainIndex: 0,
-            title: "Side errand",
-            kind: "adhoc",
-            anchorNodeRowId: "node-a",
-          }),
-        ],
-      },
-    ]);
-
-    const side = screen.getByText("Side errand");
-    const secondAttempt = screen.getByText("Second attempt");
-    expect(side.closest(".border-l")).not.toBeNull();
-    expect(
-      side.compareDocumentPosition(secondAttempt) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(screen.getByText("Side errand")).toBeTruthy();
+    const [edge] = edgesOf(container);
+    expect(edge.getAttribute("stroke-dasharray")).toBe("4 4");
   });
 
   it("still renders a side node whose anchor is not among the slot's attempts", () => {
-    renderView([
+    const { container } = renderView([
       {
         chainIndex: 0,
         attempts: [buildVm({ id: "node-chain", chainIndex: 0, title: "Anchor" })],
@@ -210,24 +179,34 @@ describe("WorkflowGraphView", () => {
       },
     ]);
 
-    expect(screen.getByText("Orphaned errand").closest(".border-l")).not.toBeNull();
+    expect(screen.getByText("Orphaned errand")).toBeTruthy();
+    // Its branch edge falls back to the rank's latest attempt.
+    expect(edgesOf(container).length).toBe(1);
   });
 
-  it("passes card callbacks through untouched", () => {
-    const { onApprove } = renderView([
-      {
-        chainIndex: 0,
-        attempts: [
-          buildVm(
-            { id: "node-gate", chainIndex: 0, title: "Approve the design", status: "awaiting_human" },
-            { approve: true },
-          ),
-        ],
-        adhoc: [],
-      },
-    ]);
+  it("presses the selected card and no other", () => {
+    renderView([chainSlot(0, "One"), chainSlot(1, "Two")], { selectedNodeRowId: "node-0" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
-    expect(onApprove).toHaveBeenCalledWith("node-gate");
+    expect(
+      screen.getByRole("button", { name: /One/ }).getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(
+      screen.getByRole("button", { name: /Two/ }).getAttribute("aria-pressed"),
+    ).toBe("false");
+  });
+
+  it("wears the needs-input badge instead of the prompt preview", () => {
+    renderView([chainSlot(0, "Waiting step")], { needsInput: new Set(["node-0"]) });
+
+    expect(screen.getByText("Needs input")).toBeTruthy();
+    expect(screen.queryByText("Original prompt")).toBeNull();
+  });
+
+  it("offers the zoom controls", () => {
+    renderView([chainSlot(0, "Only step")]);
+
+    expect(screen.getByRole("button", { name: "Zoom in" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Zoom out" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Fit graph" })).toBeTruthy();
   });
 });

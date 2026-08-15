@@ -50,6 +50,12 @@ export const WORKFLOW_BUILDER_COPY = {
   stepsHeading: "Steps",
   stepHeading: (position: number) => `Step ${position}`,
   addStepLabel: "Add step",
+  /** Accessible name of the pannable chain canvas. */
+  chainCanvasLabel: "Workflow chain",
+  /** A canvas card whose title is still blank. */
+  canvasUntitledStep: "Untitled step",
+  /** The destructive mark on a canvas card the validator has an issue on. */
+  canvasIssueMarkLabel: "This step has issues",
   removeStepLabel: (position: number) => `Remove step ${position}`,
   moveStepUpLabel: (position: number) => `Move step ${position} up`,
   moveStepDownLabel: (position: number) => `Move step ${position} down`,

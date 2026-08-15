@@ -1,13 +1,17 @@
+import { useMemo, useState } from "react";
 import type { WorkflowRunV2 } from "@anyharness/sdk";
 import { Button } from "#product/primitives/Button";
+import { IconButton } from "#product/primitives/IconButton";
 import { Spinner } from "#product/primitives/Spinner";
 import { StatusDot } from "#product/primitives/StatusDot";
+import { X } from "#product/primitives/icons/core";
 import { Workflow } from "#product/primitives/icons/product";
 import { EmptyState } from "#product/primitives/patterns/EmptyState";
 import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
 import { PaneHeader } from "#product/components/workspace/pane/PaneHeader";
 import { workflowRunStatusDotTone } from "#product/components/workflows/workflow-run-status-dot";
 import { WorkflowDocsList } from "#product/components/workflows/run-view/WorkflowDocsList";
+import { WorkflowGraphNodeCard } from "#product/components/workflows/run-view/WorkflowGraphNodeCard";
 import { WorkflowGraphView } from "#product/components/workflows/run-view/WorkflowGraphView";
 import { WORKFLOW_RUN_VIEW_COPY } from "#product/copy/workflows/workflow-run-view-copy";
 import { workflowRunStatusTone } from "#product/domain/workflows/run-view-model";
@@ -38,17 +42,33 @@ function WorkflowRunStatusChip({ run }: { run: WorkflowRunV2 | null }) {
 
 /**
  * The Workflows gen-2 run view, as the workspace's right-panel pane: the
- * resume banner when the run is parked, the chain of node cards (every
- * attempt visible, ad hoc side nodes subordinate to the slot they hang off),
- * and the documents the run has produced.
+ * resume banner when the run is parked, the chain drawn as a graph on the
+ * pannable canvas, a docked inspector for the selected node (the full card,
+ * controls and dialogs included), and the documents the run has produced.
  *
- * Every control on a card comes from `workflowNodeControls`, so this file
- * decides nothing about what is legal — it only routes the callbacks the
- * facade owns.
+ * Every control on the inspector card comes from `workflowNodeControls`, so
+ * this file decides nothing about what is legal — it only routes the
+ * callbacks the facade owns. Selection is presentation state and lives here:
+ * a node the projection no longer carries simply stops resolving, so a stale
+ * id closes the inspector rather than crashing it.
  */
 export function WorkflowPane({ workspaceId }: { workspaceId: string }) {
   const pane = useWorkflowPane({ workspaceId });
   const openDoc = useWorkflowDocOpen(workspaceId);
+  const [selectedNodeRowId, setSelectedNodeRowId] = useState<string | null>(null);
+  const selectedVm = useMemo(() => {
+    if (selectedNodeRowId === null) {
+      return null;
+    }
+    for (const slot of pane.slots) {
+      for (const vm of [...slot.attempts, ...slot.adhoc]) {
+        if (vm.node.id === selectedNodeRowId) {
+          return vm;
+        }
+      }
+    }
+    return null;
+  }, [pane.slots, selectedNodeRowId]);
 
   return (
     <section
@@ -68,7 +88,9 @@ export function WorkflowPane({ workspaceId }: { workspaceId: string }) {
         )}
         right={<WorkflowRunStatusChip run={pane.run} />}
       />
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      <div
+        className={`min-h-0 flex-1 px-3 py-3 ${pane.status === "ready" ? "flex flex-col" : "overflow-y-auto"}`}
+      >
         {pane.status === "loading" ? (
           <div
             role="status"
@@ -91,7 +113,7 @@ export function WorkflowPane({ workspaceId }: { workspaceId: string }) {
             description={WORKFLOW_RUN_VIEW_COPY.emptyDescription}
           />
         ) : (
-          <div className="flex flex-col gap-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
             {pane.interrupted ? (
               <NoticeBanner
                 tone="warning"
@@ -113,23 +135,43 @@ export function WorkflowPane({ workspaceId }: { workspaceId: string }) {
               </NoticeBanner>
             ) : null}
 
-            <section className="flex flex-col gap-2">
-              <h3 className="px-1 text-ui font-medium text-foreground">
-                {WORKFLOW_RUN_VIEW_COPY.graphSectionTitle}
-              </h3>
-              <WorkflowGraphView
-                slots={pane.slots}
-                needsInputNodeRowIds={pane.needsInputNodeRowIds}
-                busy={pane.busy}
-                onFocusSession={pane.actions.focusNodeSession}
-                onApprove={pane.actions.approve}
-                onFailRedo={pane.actions.failRedo}
-                onFlipType={pane.actions.flipType}
-                onAddAdhoc={pane.actions.addAdhocNode}
-              />
-            </section>
+            <WorkflowGraphView
+              className="min-h-48 flex-1"
+              slots={pane.slots}
+              needsInputNodeRowIds={pane.needsInputNodeRowIds}
+              selectedNodeRowId={selectedNodeRowId}
+              onSelectNode={setSelectedNodeRowId}
+            />
 
-            <section className="flex flex-col gap-2">
+            {selectedVm ? (
+              <section className="flex shrink-0 flex-col gap-1">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="text-ui font-medium text-foreground">
+                    {WORKFLOW_RUN_VIEW_COPY.inspectorTitle}
+                  </h3>
+                  <IconButton
+                    size="sm"
+                    aria-label={WORKFLOW_RUN_VIEW_COPY.inspectorCloseLabel}
+                    title={WORKFLOW_RUN_VIEW_COPY.inspectorCloseLabel}
+                    onClick={() => setSelectedNodeRowId(null)}
+                  >
+                    <X className="icon-compact" aria-hidden />
+                  </IconButton>
+                </div>
+                <WorkflowGraphNodeCard
+                  vm={selectedVm}
+                  needsInput={pane.needsInputNodeRowIds.has(selectedVm.node.id)}
+                  busy={pane.busy}
+                  onFocusSession={pane.actions.focusNodeSession}
+                  onApprove={pane.actions.approve}
+                  onFailRedo={pane.actions.failRedo}
+                  onFlipType={pane.actions.flipType}
+                  onAddAdhoc={pane.actions.addAdhocNode}
+                />
+              </section>
+            ) : null}
+
+            <section className="flex max-h-44 shrink-0 flex-col gap-2 overflow-y-auto">
               <h3 className="px-1 text-ui font-medium text-foreground">
                 {WORKFLOW_RUN_VIEW_COPY.docsSectionTitle}
               </h3>

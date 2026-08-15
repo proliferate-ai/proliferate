@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRepoRootsQuery } from "@anyharness/sdk-react";
 import type { WorkflowStarterTemplateV2 } from "#product/config/workflows/starter-templates";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
@@ -6,6 +6,7 @@ import { useCloudLaunchModelRegistries } from "#product/hooks/access/cloud/agent
 import { useWorkflowBuilder } from "#product/hooks/workflows/facade/use-workflow-builder";
 import { workflowBuilderHarnessOptions } from "#product/lib/domain/workflows/workflow-builder-authoring";
 import { workflowRepoRootOptions } from "#product/lib/domain/workflows/workflow-repo-root-options";
+import { WorkflowBuilderChainCanvas } from "#product/components/workflows/builder-v2/WorkflowBuilderChainCanvas";
 import { WorkflowBuilderDetailsCard } from "#product/components/workflows/builder-v2/WorkflowBuilderDetailsCard";
 import { WorkflowBuilderDocsPanel } from "#product/components/workflows/builder-v2/WorkflowBuilderDocsPanel";
 import { WorkflowBuilderInputsPanel } from "#product/components/workflows/builder-v2/WorkflowBuilderInputsPanel";
@@ -76,6 +77,28 @@ export function WorkflowBuilderSurface({
   const docSlugs = useMemo(
     () => new Set(draft.docTemplates.map((doc) => doc.slug)),
     [draft.docTemplates],
+  );
+
+  // Canvas selection is presentation state: the inspector under the canvas
+  // edits exactly one step. It falls back to the first step (a chain always
+  // reads top-down), and a just-added step selects itself so "Add step" lands
+  // the user in the fields they came for.
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const previousNodeCountRef = useRef(draft.nodes.length);
+  useEffect(() => {
+    if (draft.nodes.length > previousNodeCountRef.current) {
+      setSelectedNodeId(draft.nodes[draft.nodes.length - 1].id);
+    }
+    previousNodeCountRef.current = draft.nodes.length;
+  }, [draft.nodes]);
+  const selectedNode = draft.nodes.find((node) => node.id === selectedNodeId)
+    ?? draft.nodes[0]
+    ?? null;
+  const issueNodeIds = useMemo(
+    () => new Set(
+      issues.flatMap((issue) => (issue.nodeId ? [issue.nodeId] : [])),
+    ),
+    [issues],
   );
 
   if (builder.status !== "ready") {
@@ -164,36 +187,49 @@ export function WorkflowBuilderSurface({
         />
 
         <section className="space-y-3">
-          <h2 className="text-heading font-medium text-foreground">
-            {WORKFLOW_BUILDER_COPY.stepsHeading}
-          </h2>
-          {draft.nodes.map((node, index) => (
+          <div className="flex items-center justify-between">
+            <h2 className="text-heading font-medium text-foreground">
+              {WORKFLOW_BUILDER_COPY.stepsHeading}
+            </h2>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={builder.saving}
+              onClick={actions.addNode}
+            >
+              <Plus className="icon-paired" aria-hidden />
+              {WORKFLOW_BUILDER_COPY.addStepLabel}
+            </Button>
+          </div>
+
+          {draft.nodes.length > 0 ? (
+            <WorkflowBuilderChainCanvas
+              className="h-96"
+              nodes={draft.nodes}
+              selectedNodeId={selectedNode?.id ?? null}
+              issueNodeIds={issueNodeIds}
+              onSelectNode={setSelectedNodeId}
+            />
+          ) : null}
+
+          {selectedNode ? (
             <WorkflowBuilderNodeCard
-              key={node.id}
-              node={node}
-              position={index + 1}
+              key={selectedNode.id}
+              node={selectedNode}
+              position={draft.nodes.findIndex((node) => node.id === selectedNode.id) + 1}
               nodeCount={draft.nodes.length}
               harnesses={harnesses}
-              issues={issues.filter((issue) => issue.nodeId === node.id)}
+              issues={issues.filter((issue) => issue.nodeId === selectedNode.id)}
               inputNames={inputNames}
               docSlugs={docSlugs}
               disabled={builder.saving}
-              onChange={(patch) => actions.updateNode(node.id, patch)}
-              onRemove={() => actions.removeNode(node.id)}
-              onMoveUp={() => actions.moveNodeUp(node.id)}
-              onMoveDown={() => actions.moveNodeDown(node.id)}
+              onChange={(patch) => actions.updateNode(selectedNode.id, patch)}
+              onRemove={() => actions.removeNode(selectedNode.id)}
+              onMoveUp={() => actions.moveNodeUp(selectedNode.id)}
+              onMoveDown={() => actions.moveNodeDown(selectedNode.id)}
             />
-          ))}
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            disabled={builder.saving}
-            onClick={actions.addNode}
-          >
-            <Plus className="icon-paired" aria-hidden />
-            {WORKFLOW_BUILDER_COPY.addStepLabel}
-          </Button>
+          ) : null}
         </section>
 
         <WorkflowBuilderInputsPanel
