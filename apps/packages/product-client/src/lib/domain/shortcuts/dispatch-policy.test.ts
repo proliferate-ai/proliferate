@@ -242,14 +242,9 @@ describe("shortcut dispatch policy", () => {
   });
 
   it("yields the left-sidebar toggle to the composer's bold chord only over highlighted text", () => {
-    const composerTarget = (highlighted: boolean) => ({
-      closest: (selector: string) => {
-        if (selector === "[data-chat-composer-editor][data-chat-composer-highlight]") {
-          return highlighted ? {} : null;
-        }
-        return selector === "[data-chat-composer-editor]" ? {} : null;
-      },
-    }) as unknown as EventTarget;
+    // The policy's only closest() query is the highlighted-composer selector.
+    const composerTarget = (highlighted: boolean) =>
+      ({ closest: () => (highlighted ? {} : null) }) as unknown as EventTarget;
     const boldChordEvent = {
       key: "b",
       code: "KeyB",
