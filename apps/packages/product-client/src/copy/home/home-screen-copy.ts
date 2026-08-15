@@ -10,6 +10,14 @@ export const HOME_SCREEN_LABELS = {
   // ~20s grace window passes and the step auto-advances).
   authSetupTitle: "Setting up your agents…",
   authSetupDescription: "Connecting your agents to managed model access.",
+  // Evidence-bound onboarding card (agent-auth.md rung 7, flag
+  // agentAuthEvidencePanes): per-agent badges bound to the real install, ack,
+  // and probe states instead of a timer. Phase labels the badge shows before
+  // the runtime's derived `authState` names a display.
+  authSetupInstalling: "Installing",
+  authSetupPreparing: "Preparing",
+  authSetupNeedsInstall: "Not installed",
+  authSetupOpenAgents: "Open agent settings",
   modelProbeProbingTitle: "Processing your models…",
   modelProbeDoneDescription: "Check out which models you already have access to.",
   modelProbeNoneTitle: "Connect a provider to get started",

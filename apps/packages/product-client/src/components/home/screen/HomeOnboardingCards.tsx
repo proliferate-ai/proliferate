@@ -13,6 +13,11 @@ import type {
   HomeOnboardingIcon,
 } from "#product/lib/domain/home/home-screen";
 import type { AuthSetupStepState } from "#product/lib/domain/agents/auth-onboarding";
+import type {
+  AuthSetupEvidence,
+  OnboardingAgentBadge,
+} from "#product/lib/domain/agents/auth-setup-badges";
+import { Badge } from "#product/primitives/Badge";
 
 function resolveOnboardingIcon(icon: HomeOnboardingIcon) {
   switch (icon) {
@@ -130,6 +135,131 @@ function AuthSetupCard({ state }: { state: AuthSetupStepState }) {
   );
 }
 
+/** Coarse remaining-time label until an ISO `nextAttemptAt`, or null if past. */
+function formatProbeCountdown(nextAttemptAt: string, now: number): string | null {
+  const target = Date.parse(nextAttemptAt);
+  if (Number.isNaN(target)) return null;
+  const remaining = Math.round((target - now) / 1000);
+  if (remaining <= 0) return null;
+  if (remaining < 60) return `${remaining}s`;
+  return `${Math.round(remaining / 60)}m`;
+}
+
+/**
+ * One agent's onboarding row (agent-auth.md rung 7, flag agentAuthEvidencePanes).
+ * The badge label and tone are the runtime's derived state, verbatim. Every
+ * NON-launchable terminal state carries an affordance routing to the agent
+ * pane, so no state the card shows is a dead end; a stuck probe (backoff) shows
+ * its next-attempt countdown rather than an eternal spinner. Launchable
+ * (usable/authenticated) states need no action.
+ */
+function AuthSetupEvidenceRow({
+  badge,
+  onOpenAgents,
+  now,
+}: {
+  badge: OnboardingAgentBadge;
+  onOpenAgents: () => void;
+  now: number;
+}) {
+  const countdown =
+    badge.phase === "backoff" && badge.nextAttemptAt
+      ? formatProbeCountdown(badge.nextAttemptAt, now)
+      : null;
+  const affordanceLabel = badge.launchable
+    ? null
+    : badge.actionLabel ?? HOME_SCREEN_LABELS.authSetupOpenAgents;
+  return (
+    <div
+      className="flex min-w-0 items-center gap-2"
+      data-agent-onboarding-kind={badge.harnessKind}
+      data-agent-onboarding-phase={badge.phase}
+    >
+      <span className="flex size-5 shrink-0 items-center justify-center [&_svg]:icon-paired">
+        <ProviderIcon kind={badge.harnessKind} className="icon-paired" />
+      </span>
+      <span className="truncate text-ui-sm text-foreground">
+        {badge.displayName}
+      </span>
+      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+        {badge.pending ? (
+          <Spinner className="icon-paired text-muted-foreground" />
+        ) : null}
+        <Badge tone={badge.tone} size="micro" data-agent-onboarding-badge={badge.label}>
+          {badge.label}
+        </Badge>
+        {affordanceLabel ? (
+          <button
+            type="button"
+            className="z-20 text-ui-sm text-foreground underline underline-offset-2"
+            onClick={onOpenAgents}
+            data-agent-onboarding-affordance={badge.actionLabel ?? "open-agents"}
+          >
+            {affordanceLabel}
+          </button>
+        ) : null}
+      </span>
+      {countdown ? (
+        <span className="sr-only" data-agent-onboarding-next-attempt>
+          Next attempt in {countdown}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Evidence-bound "setting up" card (agent-auth.md rung 7): the flag-ON
+ * replacement for the timer card. It lists a per-agent badge bound to the real
+ * install/ack/probe states, and disappears once every adopted agent is
+ * terminal (state-bound completion, no timer). While shown, each terminal row
+ * carries its next-action affordance.
+ */
+function AuthSetupEvidenceCard({
+  evidence,
+  onOpenAgents,
+  now = Date.now(),
+}: {
+  evidence: AuthSetupEvidence;
+  onOpenAgents: () => void;
+  now?: number;
+}) {
+  if (evidence.badges.length === 0) {
+    return null;
+  }
+  const anyPending = evidence.badges.some((badge) => badge.pending);
+  return (
+    <div
+      className="group relative flex min-h-26 min-w-0 flex-col gap-2 rounded-composer bg-background px-4 py-3 text-left shadow-subtle ring-[0.5px] ring-border-heavy zoom-stable-hairline-frame"
+      data-agent-onboarding-evidence-card
+    >
+      <span className="flex items-center gap-1.5 text-muted-foreground [&_svg]:icon-control">
+        <Settings className="icon-paired" />
+        {anyPending ? (
+          <ThinkingText
+            text={HOME_SCREEN_LABELS.authSetupTitle}
+            className="text-ui font-medium text-foreground"
+          />
+        ) : (
+          <span className="text-ui font-medium text-foreground">
+            {HOME_SCREEN_LABELS.authSetupTitle}
+          </span>
+        )}
+      </span>
+      <div className="flex min-w-0 flex-col gap-1.5">
+        {evidence.badges.map((badge) => (
+          <AuthSetupEvidenceRow
+            key={badge.harnessKind}
+            badge={badge}
+            onOpenAgents={onOpenAgents}
+            now={now}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ModelProbeCard({
   state,
   onOpenAgents,
@@ -209,6 +339,7 @@ export function HomeOnboardingCards({
   isAddingRepo,
   onSelect,
   authSetup,
+  authSetupEvidence,
   modelProbe,
   onOpenAgents,
   onDismissModelProbe,
@@ -217,23 +348,35 @@ export function HomeOnboardingCards({
   isAddingRepo: boolean;
   onSelect: (card: HomeOnboardingCardModel) => void;
   authSetup?: AuthSetupStepState;
+  authSetupEvidence?: AuthSetupEvidence | null;
   modelProbe?: HomeModelProbeCardState;
   onOpenAgents?: () => void;
   onDismissModelProbe?: () => void;
 }) {
+  // The timer card (flag off) and the evidence card (flag on) are mutually
+  // exclusive: the dormant hook yields nothing, so only one is ever truthy.
   const hasAuthSetupCard = authSetup === "settingUp";
+  const hasEvidenceCard =
+    authSetupEvidence != null && authSetupEvidence.badges.length > 0;
   const hasProbeCard = modelProbe !== undefined && modelProbe.kind !== "hidden";
-  if (cards.length === 0 && !hasProbeCard && !hasAuthSetupCard) {
+  if (cards.length === 0 && !hasProbeCard && !hasAuthSetupCard && !hasEvidenceCard) {
     return null;
   }
 
   // Max 3 cards (spec §10): the transient auth-setup step leads, setup cards
   // take priority over the probe card, which fills last.
-  const reservedSlots = (hasAuthSetupCard ? 1 : 0) + (hasProbeCard ? 1 : 0);
+  const reservedSlots =
+    (hasAuthSetupCard || hasEvidenceCard ? 1 : 0) + (hasProbeCard ? 1 : 0);
   const visibleCards = cards.slice(0, 3 - reservedSlots);
 
   return (
     <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3 empty:hidden">
+      {hasEvidenceCard && authSetupEvidence ? (
+        <AuthSetupEvidenceCard
+          evidence={authSetupEvidence}
+          onOpenAgents={onOpenAgents ?? (() => {})}
+        />
+      ) : null}
       {hasAuthSetupCard && authSetup ? <AuthSetupCard state={authSetup} /> : null}
       {visibleCards.map((card) => (
         <OnboardingCard
