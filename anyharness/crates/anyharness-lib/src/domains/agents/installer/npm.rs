@@ -8,7 +8,7 @@ use super::managed_npm::{
 use super::{InstallError, InstalledArtifactResult};
 use crate::domains::agents::model::ArtifactRole;
 use crate::integrations::agent_cli::executable::make_executable;
-use crate::integrations::agent_cli::launcher::generate_launcher_script;
+use crate::integrations::agent_cli::launcher::generate_launcher_script_atomic;
 use uuid::Uuid;
 
 pub(super) fn install_managed_npm_package(
@@ -84,7 +84,7 @@ pub(super) fn install_managed_npm_package(
         return Err(InstallError::MissingManagedArtifact(exec_path));
     }
 
-    generate_launcher_script(
+    generate_launcher_script_atomic(
         launcher_path,
         &exec_path,
         launcher_args,
