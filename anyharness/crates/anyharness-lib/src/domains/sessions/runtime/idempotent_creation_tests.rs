@@ -15,7 +15,7 @@ use crate::persistence::Db;
 // actually exercises — otherwise every case here fails closed on
 // AgentNotReady before ever reaching the replay-join behavior under test.
 // The `ANYHARNESS_CLAUDE_AGENT_PROGRAM` override (like the scripted-agent
-// suite in `api/workflow_runs_scripted_tests.rs`) makes the agent-process
+// suite in `scripted-agent suites`) makes the agent-process
 // artifact resolve as installed without faking the managed npm install
 // layout; `test_state`'s `secrets/global.env` gives claude's required
 // anthropic slot a credential, so `credential_state` is `Ready` and the

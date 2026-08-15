@@ -17,6 +17,7 @@ import {
   RUNTIME_ID,
   sidebarActionMocks,
   toastShowMock,
+  workflowsGateState,
   workspaceArchiveActionsMock,
   workspaceSidebarState,
   workspaceUiState,
@@ -82,6 +83,7 @@ vi.mock("#product/primitives/PopoverButton", () => ({
   ),
 }));
 
+vi.mock("#product/lib/domain/capabilities/workflows-v2", () => ({ isWorkflowsV2Enabled: () => workflowsGateState.enabled }));
 vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({ useCloudAvailabilityState: () => cloudAvailabilityState }));
 vi.mock("#product/hooks/capabilities/derived/use-app-capabilities", () => ({ useAppCapabilities: () => ({ managedCloudStatus: "disabled" }) }));
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({ useProductHost: () => productHostState }));
@@ -191,6 +193,31 @@ describe("MainSidebar scroll boundary", () => {
       navRow("Support").compareDocumentPosition(repositories)
         & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+});
+
+describe("MainSidebar workflows gate", () => {
+  function workflowsRows(): HTMLElement[] {
+    return screen.queryAllByRole("button", { name: /^Workflows/ });
+  }
+
+  it("renders the Workflows row while the gate is on", () => {
+    workflowsGateState.enabled = true;
+
+    renderMainSidebar();
+
+    expect(workflowsRows()).toHaveLength(1);
+  });
+
+  it("omits the Workflows row entirely while the gate is off", () => {
+    workflowsGateState.enabled = false;
+
+    renderMainSidebar();
+
+    expect(workflowsRows()).toHaveLength(0);
+    // The neighbouring destinations are untouched: only the gen-2 row goes.
+    expect(screen.queryAllByRole("button", { name: /^Workspaces/ })).not.toHaveLength(0);
+    expect(screen.queryAllByRole("button", { name: /^Support/ })).not.toHaveLength(0);
   });
 });
 

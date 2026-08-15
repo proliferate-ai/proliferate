@@ -151,7 +151,7 @@ describe("workspace UI state persistence", () => {
     expect(selected.shellTabOrderByWorkspace).toEqual({ w1: [fileKey] });
     expect(selected.rightPanelMaterializedByWorkspace.w1).toEqual({
       activeEntryKey: "tool:scratch",
-      headerOrder: [fileKey, "tool:scratch", "tool:git", "tool:agents"],
+      headerOrder: [fileKey, "tool:scratch", "tool:git", "tool:agents", "tool:workflow"],
     });
   });
 });

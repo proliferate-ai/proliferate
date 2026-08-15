@@ -1,0 +1,27 @@
+{
+  "rejectedBy": "structure",
+  "expectedIssuePath": "docTemplates.1.slug",
+  "definition": {
+    "schemaVersion": 2,
+    "nodes": [
+      {
+        "id": "n_a",
+        "type": "agent",
+        "title": "Step n_a",
+        "prompt": "Run step n_a."
+      }
+    ],
+    "docTemplates": [
+      {
+        "slug": "findings",
+        "producingNodeId": "n_a",
+        "body": ""
+      },
+      {
+        "slug": "findings",
+        "producingNodeId": "n_a",
+        "body": ""
+      }
+    ]
+  }
+}
