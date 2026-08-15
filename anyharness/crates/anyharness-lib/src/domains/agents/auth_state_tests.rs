@@ -23,6 +23,83 @@ fn probe(phase: ProbePhase, age: Option<i64>, nonempty: bool) -> ProbeLifecycle 
     }
 }
 
+/// A resolved agent whose route supplies gateway credentials, installed and
+/// otherwise healthy. Built from the real registry + resolver, then the two
+/// route-derived fields the adapter reads are set, so the FR-2 runtime fold
+/// (`facts_from_resolved_with_runtime`) is exercised end to end.
+fn gateway_resolved() -> ResolvedAgent {
+    use crate::domains::agents::readiness::service::resolve_agent_unrouted;
+    use crate::domains::agents::registry::descriptor;
+    let home = std::env::temp_dir();
+    let desc = descriptor("claude").expect("claude descriptor");
+    let mut resolved = resolve_agent_unrouted(&desc, &home);
+    // Force the healthy, route-credentialed shape regardless of what a bare temp
+    // home resolved to.
+    resolved.status = ResolvedAgentStatus::Ready;
+    resolved.credentials_from_route = true;
+    resolved
+}
+
+#[test]
+fn runtime_fold_upgrades_a_gateway_credential_on_a_green_trial() {
+    let resolved = gateway_resolved();
+    let runtime = AuthRuntimeInputs {
+        probe: ProbeLifecycle::default(),
+        trial: Some(Tier1TrialFact::Green { age_seconds: 12 }),
+    };
+    let facts = facts_from_resolved_with_runtime(&resolved, &runtime);
+
+    let credential = facts.credential.as_ref().expect("gateway credential");
+    assert_eq!(credential.strength, CredentialEvidenceStrength::Tier1Trial);
+    assert_eq!(credential.evidence_age_seconds, Some(12));
+
+    let derived = derive_agent_auth_state(&facts);
+    assert_eq!(derived.display, AuthDisplay::Authenticated);
+    assert_eq!(derived.evidence_ref, Some(EvidenceRef::GatewayKeyCheck));
+    assert_eq!(derived.evidence_age_seconds, Some(12));
+}
+
+#[test]
+fn runtime_fold_marks_expired_on_an_expired_trial() {
+    let resolved = gateway_resolved();
+    let runtime = AuthRuntimeInputs {
+        probe: ProbeLifecycle::default(),
+        trial: Some(Tier1TrialFact::Expired),
+    };
+    let facts = facts_from_resolved_with_runtime(&resolved, &runtime);
+    assert!(facts.expired);
+    assert_eq!(derive_agent_auth_state(&facts).display, AuthDisplay::Expired);
+}
+
+#[test]
+fn runtime_fold_threads_the_real_probe_lifecycle() {
+    let resolved = gateway_resolved();
+    let runtime = AuthRuntimeInputs {
+        probe: ProbeLifecycle {
+            phase: ProbePhase::Backoff,
+            last_failure_detail: Some("spawn_failed: no executable path".into()),
+            next_attempt_at: Some("2026-08-15T00:00:00Z".into()),
+            ..ProbeLifecycle::default()
+        },
+        trial: None,
+    };
+    let facts = facts_from_resolved_with_runtime(&resolved, &runtime);
+    assert_eq!(facts.probe.phase, ProbePhase::Backoff);
+    assert_eq!(
+        facts.probe.next_attempt_at.as_deref(),
+        Some("2026-08-15T00:00:00Z")
+    );
+    assert_eq!(
+        facts.probe.last_failure_detail.as_deref(),
+        Some("spawn_failed: no executable path")
+    );
+    // No trial and no observation: the credential stays at its heuristic strength.
+    assert_eq!(
+        facts.credential.as_ref().map(|c| c.strength),
+        Some(CredentialEvidenceStrength::AcknowledgedRoute)
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Per-arm precedence tests
 // ---------------------------------------------------------------------------
