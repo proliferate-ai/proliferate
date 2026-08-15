@@ -200,4 +200,35 @@ describe("updater store", () => {
     expect(useUpdaterStore.getState().manualCheckCompletedAt).toBeNull();
     expect(useUpdaterStore.getState().restartWhenIdle).toBe(false);
   });
+
+  it("reaches the owned-path phases", () => {
+    useUpdaterStore.getState().setPhase("verifying");
+    expect(useUpdaterStore.getState().phase).toBe("verifying");
+
+    useUpdaterStore.getState().setPhase("reusingStaged");
+    expect(useUpdaterStore.getState().phase).toBe("reusingStaged");
+  });
+
+  it("hydrates the skip list additively, and skips survive a reset (relaunch)", () => {
+    // reset deliberately keeps skipped versions, so clear it explicitly first.
+    useUpdaterStore.setState({ skippedVersions: [] });
+    // A skip issued before hydration completes must not be lost.
+    useUpdaterStore.getState().skipVersion("0.3.0");
+    useUpdaterStore.getState().hydrateSkippedVersions(["0.2.0", "0.3.0", "0.4.0"]);
+
+    expect(useUpdaterStore.getState().skippedVersions).toEqual([
+      "0.3.0",
+      "0.2.0",
+      "0.4.0",
+    ]);
+
+    // reset keeps the skip list — resetting the flow is not the user changing
+    // their mind. This is what lets a persisted skip survive relaunch.
+    useUpdaterStore.getState().reset();
+    expect(useUpdaterStore.getState().skippedVersions).toEqual([
+      "0.3.0",
+      "0.2.0",
+      "0.4.0",
+    ]);
+  });
 });

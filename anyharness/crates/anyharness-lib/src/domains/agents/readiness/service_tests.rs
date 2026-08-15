@@ -591,3 +591,6 @@ fn resolve_launch_agent_never_masks_a_missing_binary() {
 
 #[path = "route_aware_read_tests.rs"]
 mod route_aware_read;
+
+#[path = "resolution_flip_tests.rs"]
+mod resolution_flip;

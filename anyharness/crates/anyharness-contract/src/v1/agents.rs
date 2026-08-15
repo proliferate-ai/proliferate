@@ -89,6 +89,14 @@ pub struct AgentSummary {
     pub message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cli_auth_state: Option<AgentCliAuthState>,
+    /// True when the user has their own copy of this agent on PATH,
+    /// regardless of whether a managed copy also exists and wins resolution
+    /// (R2.0, always-managed: a managed copy never displaces a PATH one).
+    /// Drives the settings-pane one-time notice explaining the managed copy
+    /// when both exist. Additive and tolerant: absent on runtimes that
+    /// predate R2.0, so old readers simply see no notice.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub user_path_copy_detected: bool,
     /// The canonical agent-auth evidence model (ADR FR-1), computed ALONGSIDE the
     /// legacy `credentialState`/`readiness` ladders and never replacing them. A
     /// client still renders the legacy ladder until the UI rung; this field is
@@ -485,6 +493,12 @@ pub struct ReconcileAgentResult {
     pub outcome: ReconcileOutcome,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    /// Typed classification of a terminal failure: one of `network`,
+    /// `checksum`, `in_use`, `disk`, `other`. Additive and tolerant: absent on
+    /// success/skip and on runtimes that predate typed failures, so old readers
+    /// simply ignore it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_kind: Option<String>,
     pub installed_artifacts: Vec<ArtifactStatus>,
 }
 

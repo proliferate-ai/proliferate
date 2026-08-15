@@ -5,10 +5,13 @@ use super::managed_npm::{
     apply_npm_version_override, installed_npm_package_version, managed_npm_install_issue,
     npm_package_version, source_build_install_issue, write_managed_npm_source_marker,
 };
+use super::downloads::activate_local_tree;
 use super::{InstallError, InstalledArtifactResult};
 use crate::domains::agents::model::ArtifactRole;
 use crate::integrations::agent_cli::executable::make_executable;
-use crate::integrations::agent_cli::launcher::generate_launcher_script;
+use crate::integrations::agent_cli::launcher::{
+    generate_launcher_script, generate_launcher_script_atomic,
+};
 use uuid::Uuid;
 
 pub(super) fn install_managed_npm_package(
@@ -26,27 +29,33 @@ pub(super) fn install_managed_npm_package(
     source: &str,
 ) -> Result<Option<InstalledArtifactResult>, InstallError> {
     let versioned_package = apply_npm_version_override(package, version_override);
-    let exec_path = if let Some(binary_name) = source_build_binary_name {
-        managed_dir.join(platform_binary_filename(binary_name))
-    } else {
-        managed_dir.join(executable_relpath)
-    };
-    std::fs::create_dir_all(managed_dir)?;
 
+    // Path (relative to a managed/staged tree root) of the executable the
+    // launcher points at. Source builds land at the tree root; npm/git installs
+    // land under node_modules.
+    let exec_relpath: PathBuf = if let Some(binary_name) = source_build_binary_name {
+        platform_binary_filename(binary_name)
+    } else {
+        executable_relpath.to_path_buf()
+    };
+    let active_exec = managed_dir.join(&exec_relpath);
+
+    // Staleness is judged against the ACTIVE (live) tree, never a staging tree.
     let package_issue = if source_build_binary_name.is_none() {
         managed_npm_install_issue(&versioned_package, managed_dir)
     } else {
         source_build_install_issue(&versioned_package, managed_dir)
     };
 
-    if force_reinstall || !exec_path.exists() || !launcher_path.exists() || package_issue.is_some()
-    {
+    let tree_needs_install = force_reinstall || !active_exec.exists() || package_issue.is_some();
+
+    if tree_needs_install {
         if let Some(issue) = package_issue.as_ref() {
             tracing::info!(
                 package = %versioned_package,
                 managed_dir = %managed_dir.display(),
                 issue = %issue,
-                "refreshing managed npm agent package"
+                "refreshing managed npm agent package (staged swap)"
             );
         }
         tracing::info!(
@@ -55,43 +64,38 @@ pub(super) fn install_managed_npm_package(
             source_build_binary_name = ?source_build_binary_name,
             managed_dir = %managed_dir.display(),
             launcher_path = %launcher_path.display(),
-            exec_path = %exec_path.display(),
-            "installing managed npm agent package"
+            "installing managed npm agent package into staging, then atomically swapping"
         );
-        if let Some(binary_name) = source_build_binary_name {
-            install_managed_source_build_binary(&versioned_package, managed_dir, binary_name)?;
-        } else if let Some(package_subdir) = package_subdir {
-            install_managed_npm_package_from_subdir(
-                &versioned_package,
-                package_subdir,
-                managed_dir,
-            )?;
-        } else {
-            install_npm_package_into_prefix(&versioned_package, managed_dir)?;
+        stage_and_swap_managed_npm_tree(
+            &versioned_package,
+            package_subdir,
+            source_build_binary_name,
+            &exec_relpath,
+            managed_dir,
+            launcher_path,
+            launcher_args,
+            path_prefixes,
+            launcher_env,
+        )?;
+    } else {
+        // The live tree is healthy — never reinstall over it. Keep the running
+        // inode and just refresh the launcher through the atomic promoter so
+        // env/arg changes still take effect.
+        std::fs::create_dir_all(managed_dir)?;
+        if !active_exec.exists() {
+            return Err(InstallError::MissingManagedArtifact(active_exec));
         }
+        generate_launcher_script_atomic(
+            launcher_path,
+            &active_exec,
+            launcher_args,
+            launcher_env,
+            path_prefixes,
+        )?;
     }
 
-    if !exec_path.exists() {
-        tracing::error!(
-            package = %apply_npm_version_override(package, version_override),
-            managed_dir = %managed_dir.display(),
-            launcher_path = %launcher_path.display(),
-            exec_path = %exec_path.display(),
-            available_bin_entries = ?read_dir_entry_names(&managed_dir.join("node_modules").join(".bin")),
-            available_node_modules = ?read_dir_entry_names(&managed_dir.join("node_modules")),
-            "managed npm install completed but expected executable was not created"
-        );
-        return Err(InstallError::MissingManagedArtifact(exec_path));
-    }
-
-    generate_launcher_script(
-        launcher_path,
-        &exec_path,
-        launcher_args,
-        launcher_env,
-        path_prefixes,
-    )?;
-
+    // Read the installed version from the ACTIVE tree; after a swap this is the
+    // newly promoted tree.
     let version = installed_npm_package_version(&versioned_package, managed_dir)
         .or_else(|| npm_package_version(&versioned_package));
 
@@ -105,6 +109,94 @@ pub(super) fn install_managed_npm_package(
         },
         version,
     }))
+}
+
+/// Build the complete managed adapter tree in a sibling `.{name}.staging`
+/// directory (never touching the live `node_modules`), then atomically swap it
+/// into `managed_dir` and promote the launcher through the same
+/// `ArchiveTreeActivation` used by the archive adapter arm. A running managed
+/// session keeps the old tree's inode until commit; a promotion failure rolls
+/// the whole tree and the previous launcher back (FR-3 / R2.5).
+#[allow(clippy::too_many_arguments)]
+fn stage_and_swap_managed_npm_tree(
+    versioned_package: &str,
+    package_subdir: Option<&Path>,
+    source_build_binary_name: Option<&str>,
+    exec_relpath: &Path,
+    managed_dir: &Path,
+    launcher_path: &Path,
+    launcher_args: &[String],
+    path_prefixes: &[PathBuf],
+    launcher_env: &std::collections::HashMap<String, String>,
+) -> Result<(), InstallError> {
+    let parent = managed_dir.parent().ok_or_else(|| {
+        InstallError::InvalidInstallSpec("managed adapter dir has no parent".into())
+    })?;
+    let name = managed_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("agent_process");
+    let staging_dir = parent.join(format!(".{name}.staging"));
+
+    // Build the full final tree in staging. Marker writes (subdir/source-build)
+    // land INSIDE the staged tree so post-swap staleness checks read them from
+    // the active tree.
+    let build = (|| -> Result<(), InstallError> {
+        let _ = std::fs::remove_dir_all(&staging_dir);
+        std::fs::create_dir_all(&staging_dir)?;
+        if let Some(binary_name) = source_build_binary_name {
+            install_managed_source_build_binary(versioned_package, &staging_dir, binary_name)?;
+        } else if let Some(package_subdir) = package_subdir {
+            install_managed_npm_package_from_subdir(versioned_package, package_subdir, &staging_dir)?;
+        } else {
+            install_npm_package_into_prefix(versioned_package, &staging_dir)?;
+        }
+        let staged_exec = staging_dir.join(exec_relpath);
+        if !staged_exec.exists() {
+            tracing::error!(
+                package = %versioned_package,
+                staging_dir = %staging_dir.display(),
+                staged_exec = %staged_exec.display(),
+                available_bin_entries = ?read_dir_entry_names(&staging_dir.join("node_modules").join(".bin")),
+                available_node_modules = ?read_dir_entry_names(&staging_dir.join("node_modules")),
+                "managed npm staging install completed but expected executable was not created"
+            );
+            return Err(InstallError::MissingManagedArtifact(staged_exec));
+        }
+        Ok(())
+    })();
+    if let Err(error) = build {
+        let _ = std::fs::remove_dir_all(&staging_dir);
+        return Err(error);
+    }
+
+    // Swap the whole staged tree into the live location, then promote the
+    // launcher within the same transaction.
+    let mut activation = activate_local_tree(managed_dir, &staging_dir, Some(launcher_path))?;
+    let prepared = (|| -> Result<(), InstallError> {
+        let final_exec = managed_dir.join(exec_relpath);
+        // The staged launcher lives OUTSIDE the swapped tree so the tree rename
+        // cannot move it; `activate_launcher` renames it into the live tree.
+        let staged_launcher = parent.join(format!(".{name}-launcher.next"));
+        let _ = std::fs::remove_file(&staged_launcher);
+        generate_launcher_script(
+            &staged_launcher,
+            &final_exec,
+            launcher_args,
+            launcher_env,
+            path_prefixes,
+        )?;
+        activation.activate_launcher(&staged_launcher)?;
+        Ok(())
+    })();
+
+    match prepared {
+        Ok(()) => {
+            activation.commit()?;
+            Ok(())
+        }
+        Err(error) => Err(activation.rollback_after(error)),
+    }
 }
 
 #[derive(Debug)]

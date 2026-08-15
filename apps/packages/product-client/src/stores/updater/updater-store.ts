@@ -16,6 +16,19 @@ export type UpdaterPhase =
    * "Starting download… forever" into a state with copy and a manual retry.
    */
   | "stalled"
+  /**
+   * The bytes are on disk and we are recomputing sha256 + re-checking minisign
+   * before we dare call it ready. Owned-download only: the plugin path installs
+   * blind, so it never enters this phase.
+   */
+  | "verifying"
+  /**
+   * A previously staged artifact for exactly this version was found and
+   * verified at check time, so there is nothing to download. A transient phase
+   * on the way to `ready` — it exists so the surface can say "already
+   * downloaded" instead of flashing a 0→100 progress bar.
+   */
+  | "reusingStaged"
   | "ready"
   | "error";
 
@@ -85,6 +98,12 @@ interface UpdaterState {
   startRestartCountdown: (startedAt: number) => void;
   cancelRestartCountdown: () => void;
   skipVersion: (version: string) => void;
+  /**
+   * Seed the skip list from persisted storage on store init. Merges rather than
+   * replaces so a skip issued before hydration completes is not lost. Skips
+   * must survive relaunch — that is the whole reason the list is persisted.
+   */
+  hydrateSkippedVersions: (versions: string[]) => void;
   reset: () => void;
 }
 
@@ -223,6 +242,17 @@ export const useUpdaterStore = create<UpdaterState>((set) => ({
         ? state.skippedVersions
         : [...state.skippedVersions, version],
     })),
+
+  hydrateSkippedVersions: (versions) =>
+    set((state) => {
+      const merged = [...state.skippedVersions];
+      for (const version of versions) {
+        if (!merged.includes(version)) {
+          merged.push(version);
+        }
+      }
+      return { skippedVersions: merged };
+    }),
 
   reset: () =>
     set({

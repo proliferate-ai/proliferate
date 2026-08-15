@@ -1,0 +1,26 @@
+{
+  "id": "10000000-0000-4000-8000-000000000004",
+  "userId": "20000000-0000-4000-8000-000000000002",
+  "title": "One step",
+  "description": "",
+  "schemaVersion": 2,
+  "revision": 1,
+  "defaultRepoConfigId": null,
+  "definition": {
+    "schemaVersion": 2,
+    "nodes": [
+      {
+        "id": "n_only",
+        "type": "agent",
+        "title": "Do the job",
+        "prompt": "Do the job."
+      }
+    ],
+    "edges": [],
+    "inputs": [],
+    "docTemplates": []
+  },
+  "createdAt": "2026-08-14T12:00:00Z",
+  "updatedAt": "2026-08-14T12:00:00Z",
+  "deletedAt": null
+}

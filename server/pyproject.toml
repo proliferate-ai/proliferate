@@ -108,6 +108,7 @@ module = [
     "proliferate.server.cloud.workspaces.models",
     "proliferate.server.catalogs.models",
     "proliferate.server.workflows.models",
+    "proliferate.server.workflows.models_v2",
     "proliferate.server.meta",
     "proliferate.server.cloud.repos.models",
     "proliferate.server.cloud.integrations.action_approvals.models",
