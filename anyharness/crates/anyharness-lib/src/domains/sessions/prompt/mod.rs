@@ -68,6 +68,24 @@ impl PromptPayload {
         }
     }
 
+    /// A multi-block text prompt: each string becomes one Text block, in
+    /// order, empties skipped. The workflow engine uses this to deliver a
+    /// node's already-wrapped system-instruction blocks in-band ahead of the
+    /// first message, which is always the LAST block (Ruling D).
+    pub fn text_blocks(texts: Vec<String>) -> Self {
+        let blocks: Vec<StoredPromptBlock> = texts
+            .into_iter()
+            .filter(|text| !text.is_empty())
+            .map(|text| StoredPromptBlock::Text { text })
+            .collect();
+        let text_summary = summarize_blocks(&blocks);
+        Self {
+            blocks,
+            text_summary,
+            provenance: None,
+        }
+    }
+
     pub fn from_persisted(
         blocks_json: Option<&str>,
         fallback_text: &str,

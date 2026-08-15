@@ -31,7 +31,6 @@ from proliferate.server.workflows.managed_models import (
 )
 from proliferate.server.workflows.models import (
     WorkflowDefinitionCreateRequest,
-    WorkflowDefinitionListResponse,
     WorkflowDefinitionResponse,
     WorkflowDefinitionUpdateRequest,
     WorkflowInvocationCreateRequest,
@@ -41,6 +40,17 @@ from proliferate.server.workflows.models import (
     workflow_definition_response,
     workflow_invocation_response,
 )
+from proliferate.server.workflows.models_v2 import (
+    WorkflowDefinitionCreateRequestV2,
+    WorkflowDefinitionListAnyResponse,
+    WorkflowDefinitionResponseV2,
+    WorkflowDefinitionUpdateRequestV2,
+    WorkflowInvocationCreateRequestV2,
+    WorkflowInvocationResponseV2,
+    workflow_definition_response_any,
+    workflow_definition_response_v2,
+    workflow_invocation_response_v2,
+)
 from proliferate.server.workflows.service import (
     create_workflow_definition,
     delete_workflow_definition,
@@ -49,6 +59,11 @@ from proliferate.server.workflows.service import (
     update_workflow_definition,
     workflow_run_eligibility,
 )
+from proliferate.server.workflows.service_v2 import (
+    create_workflow_definition_v2,
+    put_workflow_invocation_v2,
+    update_workflow_definition_v2,
+)
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 invocations_router = APIRouter(prefix="/workflow-invocations", tags=["workflow-invocations"])
@@ -56,30 +71,34 @@ invocations_router = APIRouter(prefix="/workflow-invocations", tags=["workflow-i
 
 @router.get(
     "",
-    response_model=WorkflowDefinitionListResponse,
+    response_model=WorkflowDefinitionListAnyResponse,
     response_model_exclude_unset=True,
 )
 async def list_workflow_definitions_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
-) -> WorkflowDefinitionListResponse:
+) -> WorkflowDefinitionListAnyResponse:
     values = await list_workflow_definitions(db, user_id=user.id)
-    return WorkflowDefinitionListResponse(
-        workflows=[workflow_definition_response(value) for value in values]
+    return WorkflowDefinitionListAnyResponse(
+        workflows=[workflow_definition_response_any(value) for value in values]
     )
 
 
 @router.post(
     "",
-    response_model=WorkflowDefinitionResponse,
+    response_model=WorkflowDefinitionResponse | WorkflowDefinitionResponseV2,
     response_model_exclude_unset=True,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_workflow_definition_endpoint(
-    body: WorkflowDefinitionCreateRequest,
+    body: WorkflowDefinitionCreateRequestV2 | WorkflowDefinitionCreateRequest,
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
-) -> WorkflowDefinitionResponse:
+) -> WorkflowDefinitionResponse | WorkflowDefinitionResponseV2:
+    if isinstance(body, WorkflowDefinitionCreateRequestV2):
+        return workflow_definition_response_v2(
+            await create_workflow_definition_v2(db, user_id=user.id, body=body)
+        )
     value = await create_workflow_definition(db, user_id=user.id, body=body)
     return workflow_definition_response(value)
 
@@ -92,6 +111,8 @@ async def get_workflow_run_eligibility_endpoint(
     definition: WorkflowDefinitionDependency,
     db: AsyncSession = Depends(get_async_session),
 ) -> WorkflowRunEligibilityResponse:
+    if definition.schema_version == 2:
+        return WorkflowRunEligibilityResponse(eligible=True, blockers=[])
     blockers = await workflow_run_eligibility(db, definition=definition)
     return WorkflowRunEligibilityResponse(
         eligible=not blockers,
@@ -108,25 +129,29 @@ async def get_workflow_run_eligibility_endpoint(
 
 @router.get(
     "/{workflow_definition_id}",
-    response_model=WorkflowDefinitionResponse,
+    response_model=WorkflowDefinitionResponse | WorkflowDefinitionResponseV2,
     response_model_exclude_unset=True,
 )
 async def get_workflow_definition_endpoint(
     definition: WorkflowDefinitionDependency,
-) -> WorkflowDefinitionResponse:
-    return workflow_definition_response(definition)
+) -> WorkflowDefinitionResponse | WorkflowDefinitionResponseV2:
+    return workflow_definition_response_any(definition)
 
 
 @router.put(
     "/{workflow_definition_id}",
-    response_model=WorkflowDefinitionResponse,
+    response_model=WorkflowDefinitionResponse | WorkflowDefinitionResponseV2,
     response_model_exclude_unset=True,
 )
 async def update_workflow_definition_endpoint(
-    body: WorkflowDefinitionUpdateRequest,
+    body: WorkflowDefinitionUpdateRequestV2 | WorkflowDefinitionUpdateRequest,
     definition: WorkflowDefinitionDependency,
     db: AsyncSession = Depends(get_async_session),
-) -> WorkflowDefinitionResponse:
+) -> WorkflowDefinitionResponse | WorkflowDefinitionResponseV2:
+    if isinstance(body, WorkflowDefinitionUpdateRequestV2):
+        return workflow_definition_response_v2(
+            await update_workflow_definition_v2(db, current=definition, body=body)
+        )
     value = await update_workflow_definition(db, current=definition, body=body)
     return workflow_definition_response(value)
 
@@ -147,19 +172,31 @@ async def delete_workflow_definition_endpoint(
 
 @invocations_router.put(
     "/{invocation_id}",
-    response_model=WorkflowInvocationResponse,
-    response_model_exclude_none=True,
     responses={
-        status.HTTP_200_OK: {"model": WorkflowInvocationResponse},
-        status.HTTP_201_CREATED: {"model": WorkflowInvocationResponse},
+        status.HTTP_200_OK: {"model": WorkflowInvocationResponse | WorkflowInvocationResponseV2},
+        status.HTTP_201_CREATED: {
+            "model": WorkflowInvocationResponse | WorkflowInvocationResponseV2
+        },
     },
 )
 async def put_workflow_invocation_endpoint(
     invocation_id: str,
-    body: WorkflowInvocationCreateRequest,
+    body: WorkflowInvocationCreateRequestV2 | WorkflowInvocationCreateRequest,
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> JSONResponse:
+    if isinstance(body, WorkflowInvocationCreateRequestV2):
+        result = await put_workflow_invocation_v2(
+            db,
+            invocation_id_text=invocation_id,
+            user_id=user.id,
+            body=body,
+        )
+        response_v2 = workflow_invocation_response_v2(result.value)
+        return JSONResponse(
+            status_code=status.HTTP_201_CREATED if result.created else status.HTTP_200_OK,
+            content=response_v2.model_dump(by_alias=True, mode="json", exclude_none=True),
+        )
     result = await put_workflow_invocation(
         db,
         invocation_id_text=invocation_id,
@@ -199,12 +236,17 @@ async def list_workflow_invocation_history_endpoint(
 
 @invocations_router.get(
     "/{invocation_id}",
-    response_model=ManagedWorkflowInvocationResponse,
+    response_model=ManagedWorkflowInvocationResponse | WorkflowInvocationResponseV2,
 )
 async def get_workflow_invocation_endpoint(
     invocation: WorkflowInvocationDependency,
     db: AsyncSession = Depends(get_async_session),
 ) -> JSONResponse:
+    if invocation.schema_version == 2:
+        frozen = workflow_invocation_response_v2(invocation)
+        return JSONResponse(
+            content=frozen.model_dump(by_alias=True, mode="json", exclude_none=True)
+        )
     value = await read_managed_workflow(db, invocation=invocation)
     response = managed_workflow_invocation_response(
         value.invocation,

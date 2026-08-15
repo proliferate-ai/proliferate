@@ -51,6 +51,11 @@ export interface BootOptions {
    * flip any posture — telemetry mode, billing mode, E2B config, debug —
    * for a dedicated ephemeral boot without duplicating this whole function. */
   extraServerEnv?: NodeJS.ProcessEnv;
+  /** Extra/overriding env for the desktop web (Vite) process, applied last —
+   * the seam for `VITE_*` frontend posture a scenario needs, including launch
+   * flags (`VITE_WORKFLOWS_V2`). Vite exposes prefixed vars from the process
+   * env, so these reach `import.meta.env` in the served bundle. */
+  extraDesktopEnv?: NodeJS.ProcessEnv;
 }
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -439,8 +444,20 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
       // These scenarios assert the real login/logout lifecycle, so force the
       // auth gate on and make sure no leaked dev bypass sneaks in.
       VITE_REQUIRE_AUTH: "true",
+      // Browser mode has no Tauri bridge to report the runtime URL, so the
+      // desktop web falls back to VITE_ANYHARNESS_DEV_URL (product-client
+      // config/runtime.ts DEFAULT_RUNTIME_URL). Point that fallback at THIS
+      // profile's runtime URL: specs that control runtime seams via
+      // page.route then intercept the same URL the app actually polls, and a
+      // developer's real runtime on the default port 8457 can never leak
+      // into a run (before this, a stray local runtime would silently
+      // satisfy the health poll and connect the suite to live state).
+      VITE_ANYHARNESS_DEV_URL: anyharnessBaseUrl,
     };
     delete desktopEnv.VITE_DEV_DISABLE_AUTH;
+    if (options.extraDesktopEnv) {
+      Object.assign(desktopEnv, options.extraDesktopEnv);
+    }
     spawnTracked(
       children,
       "pnpm",

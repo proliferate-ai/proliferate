@@ -56,6 +56,7 @@ use crate::domains::reviews::mcp::auth::ReviewMcpAuth;
 use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::domains::reviews::service::ReviewService;
 use crate::domains::reviews::store::{ReviewDeleteParticipant, ReviewStore};
+use crate::domains::sessions::admission::{NoControllerPolicy, SessionMutationAdmission};
 use crate::domains::sessions::deletion::SessionDeleteWorkflow;
 use crate::domains::sessions::links::completions::LinkCompletionStore;
 use crate::domains::sessions::links::service::SessionLinkService;
@@ -66,10 +67,11 @@ use crate::domains::sessions::mcp_bindings::product_registry::ProductMcpEndpoint
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::store::SessionStore;
+use crate::domains::workflows::session_extension::WorkflowSessionExtension;
+use crate::domains::workflows::store::WorkflowStore;
 use crate::domains::sessions::subagents::hooks::SubagentSessionHooks;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::terminals::store::TerminalStore;
-use crate::domains::workflows::runtime::WorkflowRunRuntime;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::archive::quiesce::QuiescePlanes;
 use crate::domains::workspaces::archive::WorkspaceArchiveService;
@@ -88,13 +90,14 @@ use crate::domains::workspaces::setup_runtime::WorkspaceSetupRuntime;
 use crate::domains::workspaces::store::{WorkspaceAccessStore, WorkspaceStore};
 use crate::domains::workspaces::worktree_runtime::WorkspaceWorktreeRuntime;
 use crate::live::sessions::LiveSessionManager;
+use crate::live::workflows::WorkflowManager;
 use crate::live::terminals::{AgentLoginTerminalService, TerminalService};
 use crate::persistence::Db;
 
+#[cfg(test)]
+use config::proliferate_home_dir_name;
 pub use config::{default_runtime_home, ensure_runtime_home};
-use config::{
-    load_bearer_token, load_runtime_target_id, proliferate_home_dir_name, runtime_identity,
-};
+use config::{load_bearer_token, load_runtime_target_id, runtime_identity};
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppStateInitError {
@@ -107,8 +110,6 @@ pub enum AppStateInitError {
     InvalidDataKey(String),
     #[error("Invalid product MCP endpoint registry: {0}")]
     InvalidProductMcpRegistry(#[source] anyhow::Error),
-    #[error("Failed to fence interrupted workflow runs during startup: {0}")]
-    WorkflowFencingFailed(#[source] anyhow::Error),
 }
 
 #[derive(Clone)]
@@ -172,9 +173,6 @@ pub struct AppState {
     pub plan_runtime: Arc<PlanRuntime>,
     pub goal_service: Arc<GoalService>,
     pub goal_runtime: Arc<GoalRuntime>,
-    pub workflow_run_runtime: Arc<WorkflowRunRuntime>,
-    pub workflow_workspace_runtime:
-        Arc<crate::domains::workflows::workspace_materialization::WorkflowWorkspaceRuntime>,
     pub session_admission: Arc<crate::domains::sessions::admission::SessionMutationAdmission>,
     pub loop_service: Arc<LoopService>,
     pub loop_runtime: Arc<LoopRuntime>,
@@ -184,6 +182,8 @@ pub struct AppState {
     pub acp_manager: LiveSessionManager,
     pub terminal_service: Arc<TerminalService>,
     pub agent_login_terminal_service: Arc<AgentLoginTerminalService>,
+    pub workflow_store: WorkflowStore,
+    pub workflow_manager: Arc<WorkflowManager>,
 }
 
 impl AppState {
@@ -398,10 +398,19 @@ impl AppState {
             workspace_access_gate.clone(),
         ));
         let goal_session_hooks = Arc::new(GoalSessionHooks::new(goal_runtime.clone()));
-        let workflow_wiring =
-            workflows::wire_workflows_before_sessions(&db, Arc::new(session_link_service.clone()))?;
-        let session_admission = workflow_wiring.admission.clone();
-        let workflow_run_session_extension = workflow_wiring.session_extension.clone();
+        // Session mutation admission: gen-2 workflows never gate session
+        // mutations (run sessions are ordinary chattable sessions), so the
+        // mutation-gate controller lookup is the permanent no-controller
+        // policy. Workspace DESTRUCTION still fences on non-terminal gen-2
+        // runs via the separate destruction policy. The operability policy
+        // stays the durable relationship lookup.
+        let session_admission = Arc::new(SessionMutationAdmission::with_destruction_policy(
+            Arc::new(NoControllerPolicy),
+            Arc::new(
+                crate::domains::workflows::policy::WorkflowSessionControllerPolicy::new(db.clone()),
+            ),
+            Arc::new(session_link_service.clone()),
+        ));
         let loop_fire_executor = Arc::new(SessionLoopFireExecutor::new(
             loop_service.clone(),
             acp_manager.clone(),
@@ -423,6 +432,13 @@ impl AppState {
             acp_manager.clone(),
         ));
         let activity_session_hooks = Arc::new(ActivitySessionHooks::new(activity_runtime.clone()));
+        // Workflows gen-2: the extension registers now (SessionRuntime consumes
+        // the list), the manager binds into it after the boot fence below.
+        let workflow_store = WorkflowStore::new(db.clone());
+        let workflow_session_extension = Arc::new(WorkflowSessionExtension::new(
+            SessionStore::new(db.clone()),
+            workflow_store.clone(),
+        ));
         let session_extensions: Vec<
             Arc<dyn crate::domains::sessions::extensions::SessionExtension>,
         > = vec![
@@ -433,7 +449,7 @@ impl AppState {
             goal_session_hooks,
             loop_session_hooks,
             activity_session_hooks,
-            workflow_run_session_extension,
+            workflow_session_extension.clone(),
         ];
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
@@ -453,16 +469,16 @@ impl AppState {
             activity_service.clone(),
         ));
         completion_delivery_wiring.spawn(&session_runtime);
-        // Workflow runs — phase 2 (after SessionRuntime): the async facades.
-        let workflow_phase_two = workflows::wire_workflow_runtime(
-            workflow_wiring,
+        // Workflows gen-2, in this order: fence first (no actor may accept a
+        // command against un-fenced rows), manager second, late-bind third.
+        let _fenced_workflow_runs = workflows::run_boot_fence(&workflow_store);
+        let workflow_manager = Arc::new(WorkflowManager::new(
+            workflow_store.clone(),
             session_runtime.clone(),
-            workspace_operation_gate.clone(),
-            workspace_access_gate.clone(),
-            workspace_runtime.clone(),
-        );
-        let workflow_run_runtime = workflow_phase_two.run_runtime;
-        let workflow_workspace_runtime = workflow_phase_two.workspace_runtime;
+            SessionStore::new(db.clone()),
+            WorkspaceStore::new(db.clone()),
+        ));
+        workflow_session_extension.bind_manager(&workflow_manager);
         // Destructive workspace family: the archive orchestrator and the
         // row-dies-last purge orchestrator, constructed directly here. There
         // is no wiring family struct left for this pair once the shared
@@ -637,8 +653,6 @@ impl AppState {
             plan_runtime,
             goal_service,
             goal_runtime,
-            workflow_run_runtime,
-            workflow_workspace_runtime,
             session_admission,
             loop_service,
             loop_runtime,
@@ -648,6 +662,8 @@ impl AppState {
             acp_manager,
             terminal_service,
             agent_login_terminal_service,
+            workflow_store,
+            workflow_manager,
         })
     }
 }
