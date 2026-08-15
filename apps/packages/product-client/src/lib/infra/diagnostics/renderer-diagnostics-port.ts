@@ -1,4 +1,8 @@
 import type { SeverityV1 } from "#product/domain/diagnostics/contract";
+import {
+  setLoadingDiagnosticsSink,
+  type LoadingDiagnosticEvent,
+} from "#product/primitives/utils/loading-diagnostics";
 
 export type RendererDiagnosticPrivacy =
   | "operational"
@@ -93,3 +97,51 @@ export function setRendererDiagnosticsSink(
 export function resetRendererDiagnosticsSinkForTest(): void {
   portState().sink = noopRendererDiagnosticsSink;
 }
+
+/**
+ * Map a lower-layer `LoadingBoundary` event into the identical
+ * `RendererDiagnosticInput` shape it used to build directly, before the
+ * primitives -> lib edge was inverted. Only the fields present on the event are
+ * emitted, matching the original per-mark field sets exactly.
+ */
+function loadingDiagnosticFields(
+  event: LoadingDiagnosticEvent,
+): Record<string, RendererDiagnosticField> {
+  const fields: Record<string, RendererDiagnosticField> = {
+    flow: diagnosticField(event.flow, "operational"),
+  };
+  if (event.resolution !== undefined) {
+    fields.resolution = diagnosticField(event.resolution, "operational");
+  }
+  if (event.heldMs !== undefined) {
+    fields.held_ms = diagnosticField(event.heldMs, "operational");
+  }
+  if (event.elapsedMs !== undefined) {
+    fields.elapsed_ms = diagnosticField(event.elapsedMs, "operational");
+  }
+  if (event.showDelayMs !== undefined) {
+    fields.show_delay_ms = diagnosticField(event.showDelayMs, "operational");
+  }
+  if (event.minDisplayMs !== undefined) {
+    fields.min_display_ms = diagnosticField(event.minDisplayMs, "operational");
+  }
+  return fields;
+}
+
+// Wire the primitives-layer loading seam into this port. `LoadingBoundary` may
+// not import lib (upward edge), so it emits through its own sink and this
+// module — legally importing downward into primitives — registers the
+// forwarder. Loading the port (as every renderer diagnostics consumer does)
+// activates it.
+setLoadingDiagnosticsSink({
+  record(event) {
+    recordRendererDiagnostic({
+      name: event.name,
+      severity: "debug",
+      kind: "progress",
+      privacy: "operational",
+      correlation: event.correlation,
+      fields: loadingDiagnosticFields(event),
+    });
+  },
+});

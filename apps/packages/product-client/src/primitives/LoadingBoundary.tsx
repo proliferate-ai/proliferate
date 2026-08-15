@@ -8,10 +8,9 @@ import {
 } from "react";
 import { motion } from "@proliferate/design/motion";
 import {
-  diagnosticField,
-  recordRendererDiagnostic,
-  type RendererDiagnosticCorrelation,
-} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
+  recordLoadingDiagnostic,
+  type LoadingDiagnosticsCorrelation,
+} from "#product/primitives/utils/loading-diagnostics";
 
 /**
  * The single loading-treatment gate (UX Latency + Transitions ADR §4.2, Rung 2,
@@ -68,7 +67,7 @@ export interface LoadingBoundaryProps
   /** Correlation + flow label for the `renderer.loading.*` diagnostic marks. */
   diagnostics?: {
     flow?: string;
-    correlation?: RendererDiagnosticCorrelation;
+    correlation?: LoadingDiagnosticsCorrelation;
   };
 }
 
@@ -126,17 +125,12 @@ export function LoadingBoundary({
     }
     const timer = window.setTimeout(() => {
       shownAtRef.current = nowMs();
-      recordRendererDiagnostic({
+      recordLoadingDiagnostic({
         name: "renderer.loading.treatment_shown",
-        severity: "debug",
-        kind: "progress",
-        privacy: "operational",
+        flow: flow ?? "unnamed",
         correlation,
-        fields: {
-          flow: diagnosticField(flow ?? "unnamed", "operational"),
-          show_delay_ms: diagnosticField(showDelayMs, "operational"),
-          min_display_ms: diagnosticField(minDisplayMs, "operational"),
-        },
+        showDelayMs,
+        minDisplayMs,
       });
       setPhase("treatment");
     }, showDelayMs);
@@ -152,18 +146,13 @@ export function LoadingBoundary({
       return;
     }
     if (phase === "waiting") {
-      recordRendererDiagnostic({
+      recordLoadingDiagnostic({
         name: "renderer.loading.treatment_suppressed",
-        severity: "debug",
-        kind: "progress",
-        privacy: "operational",
+        flow: flow ?? "unnamed",
         correlation,
-        fields: {
-          flow: diagnosticField(flow ?? "unnamed", "operational"),
-          resolution: diagnosticField(state, "operational"),
-          elapsed_ms: diagnosticField(round(nowMs() - startedAtRef.current), "operational"),
-          show_delay_ms: diagnosticField(showDelayMs, "operational"),
-        },
+        resolution: state,
+        elapsedMs: round(nowMs() - startedAtRef.current),
+        showDelayMs,
       });
       setPhase("resolved");
       return;
@@ -173,18 +162,13 @@ export function LoadingBoundary({
     const held = nowMs() - shownAt;
     const remaining = Math.max(0, minDisplayMs - held);
     const settle = () => {
-      recordRendererDiagnostic({
+      recordLoadingDiagnostic({
         name: "renderer.loading.settled",
-        severity: "debug",
-        kind: "progress",
-        privacy: "operational",
+        flow: flow ?? "unnamed",
         correlation,
-        fields: {
-          flow: diagnosticField(flow ?? "unnamed", "operational"),
-          resolution: diagnosticField(state, "operational"),
-          held_ms: diagnosticField(round(nowMs() - shownAt), "operational"),
-          min_display_ms: diagnosticField(minDisplayMs, "operational"),
-        },
+        resolution: state,
+        heldMs: round(nowMs() - shownAt),
+        minDisplayMs,
       });
       setPhase("resolved");
     };
