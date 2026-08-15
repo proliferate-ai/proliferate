@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { cadence } from "@proliferate/design/cadence";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useUpdaterStore } from "#product/stores/updater/updater-store";
 import type { UpdaterErrorSource, UpdaterPhase } from "#product/stores/updater/updater-store";
@@ -23,8 +24,13 @@ import {
 } from "./updater-check";
 import { isDownloadStalled } from "#product/lib/domain/updates/download-stall";
 
-/** How often the stall clock is read. Well under the 8s threshold it tests. */
-const STALL_POLL_INTERVAL_MS = 1_000;
+/**
+ * How often the stall clock is read. Well under the 8s threshold it tests.
+ * Was a raw 1_000ms literal; already exactly on-scale, so this is a rename
+ * onto `cadence.fastMs` rather than a value change (UX Latency + Transitions
+ * ADR §4.7, Rung 6, Q8).
+ */
+const STALL_POLL_INTERVAL_MS = cadence.fastMs;
 
 export function useUpdater() {
   const updater = useProductHost().desktop?.updater ?? null;

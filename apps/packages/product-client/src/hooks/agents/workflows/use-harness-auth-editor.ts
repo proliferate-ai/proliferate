@@ -27,6 +27,14 @@ import { useToastStore } from "#product/stores/toast/toast-store";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 
 // Poll cadence while a delivery ack is outstanding (pending → applied).
+//
+// Named exception (does not sit on the `cadence` scale): 3s falls strictly
+// between `cadence.fastMs` (1s) and `cadence.standardMs` (5s). This is the
+// harness auth pane's own delivery-ack watch, the counterpart the onboarding
+// step's `AUTH_SETUP_POLL_MS` is deliberately kept in lockstep with; snapping
+// down to fast would tighten (forbidden), and snapping up to standard would
+// visibly stretch how long a pending → applied row sits in the editor the
+// user has open (UX Latency + Transitions ADR §4.7, Rung 6, Q8).
 const DELIVERY_PENDING_POLL_MS = 3000;
 
 /**

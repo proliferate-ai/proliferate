@@ -395,7 +395,7 @@ describe("useCloudWorkspacePolling", () => {
       expect(mocks.refreshCloudWorkspace).toHaveBeenCalledTimes(1);
 
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(2600);
+        await vi.advanceTimersByTimeAsync(600);
       });
       expect(mocks.refreshCloudWorkspace).toHaveBeenCalledTimes(2);
     } finally {
@@ -434,7 +434,7 @@ describe("useCloudWorkspacePolling", () => {
       expect(mocks.refreshCloudWorkspace).toHaveBeenCalledTimes(1);
 
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(4600);
+        await vi.advanceTimersByTimeAsync(2600);
       });
       expect(mocks.refreshCloudWorkspace.mock.calls.map(([id]) => id)).toEqual([
         "cloud:cloud-1",

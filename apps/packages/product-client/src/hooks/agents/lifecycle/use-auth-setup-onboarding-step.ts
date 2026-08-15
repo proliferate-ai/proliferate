@@ -11,9 +11,20 @@ import {
 } from "#product/lib/domain/agents/auth-onboarding";
 import { useAuthSetupOnboardingStore } from "#product/stores/agents/auth-setup-onboarding-store";
 
-/** Poll cadence while the step awaits the delivery ack (matches the panes'
+/**
+ * Poll cadence while the step awaits the delivery ack (matches the panes'
  * DELIVERY_PENDING_POLL_MS — the acks land out-of-band, server- or
- * sync-hook-side, so there is no client mutation to invalidate on). */
+ * sync-hook-side, so there is no client mutation to invalidate on).
+ *
+ * Named exception (does not sit on the `cadence` scale): 3s falls strictly
+ * between `cadence.fastMs` (1s) and `cadence.standardMs` (5s). This is the
+ * onboarding "setting up" step the user is actively watching resolve;
+ * snapping down to fast would tighten (forbidden), and snapping up to
+ * standard would visibly stretch a step already racing an ~20s grace window
+ * before it auto-advances. Kept in lockstep with the harness panes'
+ * `DELIVERY_PENDING_POLL_MS` instead of force-fitting a token (UX Latency +
+ * Transitions ADR §4.7, Rung 6, Q8).
+ */
 const AUTH_SETUP_POLL_MS = 3000;
 
 /**

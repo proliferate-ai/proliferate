@@ -10,11 +10,16 @@ export function useGitChangedPaths(workspaceId: string | null): Set<string> | un
   const gitStatus = useGitStatusQuery({
     workspaceId: workspaceId ?? undefined,
     enabled: Boolean(workspaceId),
-    // Was a raw 10_000ms literal. Snapped up to `cadence.relaxedMs` (15s):
-    // this is a background visual change-indicator in the file tree, not a
-    // correctness-critical read, so the extra 5s is inconsequential; the ADR
-    // ruling forbids snapping down (tightening) to `cadence.standardMs`
-    // (UX Latency + Transitions ADR §4.7, Rung 6, Q8).
+    // Was a raw 10_000ms literal. Snapped up to `cadence.relaxedMs` (15s).
+    // The ADR's own inventory characterizes this as visible staleness — a
+    // file the user just edited elsewhere can sit unmarked in the tree for
+    // up to one interval — and this snap does add 5s to that window rather
+    // than remove it. It is accepted anyway because this indicator already
+    // tolerates that staleness class today at the pre-existing 10s value; the
+    // extra 5s is a loosening of an already-visible-staleness surface, not the
+    // introduction of one, and the ADR ruling forbids snapping down
+    // (tightening) to `cadence.standardMs` instead (UX Latency + Transitions
+    // ADR §4.7, Rung 6, Q8).
     refetchInterval: cadence.relaxedMs,
   });
 

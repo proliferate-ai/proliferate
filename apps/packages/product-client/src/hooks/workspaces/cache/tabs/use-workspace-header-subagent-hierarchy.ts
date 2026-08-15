@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
+import { cadence } from "@proliferate/design/cadence";
 import { useShallow } from "zustand/react/shallow";
 import {
   anyHarnessCoworkManagedWorkspacesKey,
@@ -45,6 +46,16 @@ import {
   type HeaderHierarchyQueryRow,
   type WorkspaceHeaderSubagentHierarchy,
 } from "#product/lib/domain/workspaces/tabs/workspace-header-subagent-hierarchy";
+
+// Was a raw 5_000ms literal; already exactly on-scale, so this is a rename
+// onto `cadence.standardMs` rather than a value change. Named exception (does
+// not sit on the `cadence` scale): the reviews staleTime is 2_500ms, strictly
+// between `cadence.fastMs` (1s) and `cadence.standardMs` (5s) — snapping down
+// tightens (forbidden), and snapping up would double how long a stale review
+// list can back the header tabs' subagent hierarchy after a review posts
+// elsewhere (UX Latency + Transitions ADR §4.7, Rung 6, Q8).
+const HEADER_SUBAGENT_HIERARCHY_STALE_MS = cadence.standardMs;
+const HEADER_SESSION_REVIEWS_STALE_MS = 2_500;
 
 export function useWorkspaceHeaderSubagentHierarchy(args: {
   prioritySessionIds?: string[];
@@ -109,7 +120,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
           );
           return getSessionSubagents(resolved.connection, materializedSessionId, { signal });
         },
-        staleTime: 5_000,
+        staleTime: HEADER_SUBAGENT_HIERARCHY_STALE_MS,
         retry: false,
       };
     }),
@@ -139,7 +150,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
           );
           return listSessionReviews(resolved.connection, materializedSessionId, { signal });
         },
-        staleTime: 2_500,
+        staleTime: HEADER_SESSION_REVIEWS_STALE_MS,
         retry: false,
       };
     }),
@@ -173,7 +184,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
             { signal },
           );
         },
-        staleTime: 5_000,
+        staleTime: HEADER_SUBAGENT_HIERARCHY_STALE_MS,
         retry: false,
       };
     }),

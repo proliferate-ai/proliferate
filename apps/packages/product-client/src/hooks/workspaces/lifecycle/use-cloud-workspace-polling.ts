@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { cadence } from "@proliferate/design/cadence";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { pendingWorkspaceEntries } from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
@@ -58,13 +57,20 @@ function useAwaitingCloudWorkspaceEntries(): readonly PendingWorkspaceEntry[] {
   }, [registry]);
 }
 
-// Was a raw 3000ms literal. Snapped up to `cadence.standardMs` (5s): a
-// parked cloud-workspace launch is a multi-second-to-minutes provisioning
-// operation batched across every parked attempt per tick, so 2s of extra
-// latency per tick is inconsequential, and the ADR ruling forbids snapping
-// down (tightening) to `cadence.fastMs` (UX Latency + Transitions ADR §4.7,
-// Rung 6, Q8).
-const CLOUD_WORKSPACE_POLL_INTERVAL_MS = cadence.standardMs;
+// Named exception (does not sit on the `cadence` scale): 3s falls strictly
+// between `cadence.fastMs` (1s) and `cadence.standardMs` (5s). This poll
+// backs the "Provisioning cloud workspace..." status panel shown while the
+// user is sitting in an active chat surface waiting for their queued first
+// prompt to send — round 1 review correctly flagged that framing against the
+// ADR's own "during active chat" characterization. Snapping down to fast
+// would tighten (forbidden). Snapping up to standard reads fine for the
+// batch-rotation edge case (many concurrent unattended launches), but for the
+// dominant single-attempt case it directly stretches how long the attended
+// user watches "Provisioning..." before their message sends — a 67% increase
+// in detection latency that is not inconsequential when it gates chat
+// availability. Kept as its own named constant instead of snapping (UX
+// Latency + Transitions ADR §4.7, Rung 6, Q8).
+const CLOUD_WORKSPACE_POLL_INTERVAL_MS = 3_000;
 /**
  * Per tick, not in total: the loop rotates through the parked attempts, so a
  * burst of launches cannot fan out into one refresh per launch per tick.
