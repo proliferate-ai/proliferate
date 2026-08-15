@@ -116,6 +116,23 @@ function assistantCompleted(
   });
 }
 
+// Closes a turn the way production hydration does: a real finalized turn always
+// carries a `turn_ended`, which is what stamps `completedAt` on the turn record.
+// The renderer reads `completedAt` to decide `wasLive` (use-assistant-reveal-
+// frontier.ts): a turn with a null `completedAt` counts as live and runs the
+// assistant typewriter reveal on mount. Seeded "finalized" turns that stop at
+// `item_completed` (no `turn_ended`) therefore hydrate with `completedAt == null`
+// and animate a reveal that production never shows for already-finalized history,
+// which inflates per-frame content growth and distorts every physics probe.
+// Emitting `turn_ended` here matches production hydration so seeded finalized
+// turns hydrate inert, exactly as they do in the real client.
+function turnEnded(sessionId: string, turnId: string): SessionEventEnvelope {
+  return envelope(sessionId, turnId, undefined, {
+    type: "turn_ended",
+    stopReason: "end_turn",
+  });
+}
+
 // A tool invocation (bash) carrying a large output body, used to exercise a
 // tall/nested tool-output region.
 function largeToolInvocation(sessionId: string, turnId: string): SessionEventEnvelope[] {
@@ -187,6 +204,7 @@ function buildFinalizedConversation(sessionId: string, turns: number): Transcrip
     batch.push(
       assistantCompleted(sessionId, turnId, assistantItemId, tallText(`Reply ${t}`)),
     );
+    batch.push(turnEnded(sessionId, turnId));
   }
   state = reduceEventBatch(state, batch);
   return state;
@@ -443,6 +461,7 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
     apply([
       userMessage(sessionId, turnId, "Run the build."),
       ...largeToolInvocation(sessionId, turnId),
+      turnEnded(sessionId, turnId),
     ]);
   },
 
@@ -453,6 +472,7 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
     apply([
       userMessage(sessionId, turnId, "Write the module."),
       assistantCompleted(sessionId, turnId, itemId, codeBlockText(`gen${nextSeq()}`)),
+      turnEnded(sessionId, turnId),
     ]);
   },
 
