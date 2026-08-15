@@ -10,17 +10,12 @@ import {
 import { Button } from "#product/primitives/Button";
 import { ProgressBar } from "#product/primitives/ProgressBar";
 import { Select } from "#product/primitives/Select";
-import {
-  SegmentedControl,
-} from "#product/primitives/SegmentedControl";
+import { SegmentedControl } from "#product/primitives/SegmentedControl";
 import { PageHeader } from "#product/primitives/patterns/PageHeader";
 import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { Card } from "#product/primitives/patterns/Card";
-import {
-  LoadingBoundary,
-  type LoadingBoundaryState,
-} from "#product/primitives/LoadingBoundary";
+import { LoadingBoundary, type LoadingBoundaryState } from "#product/primitives/LoadingBoundary";
 import { useOrganizationMembers } from "#product/hooks/access/cloud/organizations/use-organization-members";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 import type { OrganizationMemberRecord } from "#product/lib/domain/organizations/organization-records";
@@ -81,10 +76,7 @@ export function OrganizationBudgetsPane() {
     () => toChartPoints(userTimeseriesQuery.data?.buckets, granularity),
     [userTimeseriesQuery.data, granularity],
   );
-  const usageRows = useMemo(
-    () => buildOrgUsageRows(byUserQuery.data?.users),
-    [byUserQuery.data],
-  );
+  const usageRows = useMemo(() => buildOrgUsageRows(byUserQuery.data?.users), [byUserQuery.data]);
   const selectedRow = usageRows.find((row) => row.userId === selectedUserId) ?? null;
 
   return (
@@ -183,9 +175,8 @@ function BudgetBalanceCard({
   percentAvailable,
   loading,
 }: BudgetBalanceView & { loading?: boolean }) {
-  // Class C big-surface treatment (UX Latency + Transitions ADR §4 Rung 4,
-  // FR-1): retired the placeholder-line skeleton; the card shows nothing until
-  // the Class C show-delay elapses, then fades in.
+  // Class C big-surface treatment (UX Latency ADR §4 Rung 4, FR-1): skeleton
+  // retired; nothing shows until the Class C show-delay elapses, then fades in.
   if (loading) {
     return (
       <LoadingBoundary
@@ -226,9 +217,8 @@ function UsageBarChart({
   kind: UsageChartKind;
   loading: boolean;
 }) {
-  // Class C + Q19 empty split: while pending nothing renders (no skeleton);
-  // "No usage in this range." is a resolved outcome that may only appear once
-  // the usage query settles with zero points, never during the fetch.
+  // Class C + Q19 empty split: pending renders nothing; "No usage in this
+  // range." may only appear once the usage query settles with zero points.
   const chartState: LoadingBoundaryState = loading
     ? "pending"
     : points.length === 0
@@ -308,20 +298,9 @@ function OrgUsageTable({
   loading: boolean;
   onSelectUser: (userId: string) => void;
 }) {
-  return (
-    <SettingsSection title="Usage by member" description="Select a member to see their usage over time.">
-      {/* Class C + Q19 empty split: the placeholder-row skeleton is retired.
-          "No usage recorded in this range." may only render once the query
-          resolves with zero rows, never while it is still loading. */}
-      <LoadingBoundary
-        state={loading ? "pending" : rows.length === 0 ? "empty" : "ready"}
-        diagnostics={{ flow: "org_usage_table" }}
-        treatment={null}
-        emptyContent={
-          <div className="px-6 py-[30px] text-center text-ui text-muted-foreground">No usage recorded in this range.</div>
-        }
-      >
-        {rows.map((row) => (
+  // This member list predates this rung (unvirtualized on main); the skeleton
+  // retirement only rewrapped it. Virtualizing it stays a settings follow-up.
+  const memberRows = rows.map((row) => (
           <Button
             key={row.userId}
             type="button"
@@ -340,7 +319,20 @@ function OrgUsageTable({
               <UsageMiniStat label="LLM" value={row.llmCost} percent={row.llmPercent} />
             </div>
           </Button>
-        ))}
+  ));
+  return (
+    <SettingsSection title="Usage by member" description="Select a member to see their usage over time.">
+      {/* Class C + Q19 empty split: skeleton retired; the empty copy may only
+          render once the query resolves with zero rows, never mid-fetch. */}
+      <LoadingBoundary
+        state={loading ? "pending" : rows.length === 0 ? "empty" : "ready"}
+        diagnostics={{ flow: "org_usage_table" }}
+        treatment={null}
+        emptyContent={
+          <div className="px-6 py-[30px] text-center text-ui text-muted-foreground">No usage recorded in this range.</div>
+        }
+      >
+        {memberRows}
       </LoadingBoundary>
     </SettingsSection>
   );
