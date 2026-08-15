@@ -1,6 +1,3 @@
-use anyharness_contract::v1::{
-    PromptProvenance as PublicPromptProvenance, SessionEvent as PublicSessionEvent,
-};
 use rusqlite::{params, OptionalExtension};
 
 use super::super::canonical::{
@@ -189,18 +186,15 @@ fn child_message_executed_since(
     Ok(false)
 }
 
+/// Probe the persisted item payload for `agentSession` provenance from the
+/// child without importing wire contract types below the mapper boundary
+/// (same untyped-JSON approach as `persisted_stop_reason`).
 fn item_completed_from_agent_session(payload_json: &str, child_session_id: &str) -> bool {
-    let Ok(PublicSessionEvent::ItemCompleted(completed)) =
-        serde_json::from_str::<PublicSessionEvent>(payload_json)
-    else {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(payload_json) else {
         return false;
     };
-    matches!(
-        completed.item.prompt_provenance,
-        Some(PublicPromptProvenance::AgentSession {
-            source_session_id, ..
-        }) if source_session_id == child_session_id
-    )
+    let provenance = &value["item"]["promptProvenance"];
+    provenance["type"] == "agentSession" && provenance["sourceSessionId"] == child_session_id
 }
 
 fn parse_event_timestamp(value: &str) -> Option<chrono::DateTime<chrono::FixedOffset>> {
