@@ -1,0 +1,15 @@
+{
+  "rejectedBy": "structure",
+  "expectedIssuePath": "nodes.0.prompt",
+  "definition": {
+    "schemaVersion": 2,
+    "nodes": [
+      {
+        "id": "n_a",
+        "type": "agent",
+        "title": "Step",
+        "prompt": "Write into @doc:missing-doc."
+      }
+    ]
+  }
+}

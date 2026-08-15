@@ -1,0 +1,137 @@
+//! Envelope rendering: the one path that turns a node's prompt into the
+//! stored, re-creatable prompt unit `{instruction_blocks, first_message,
+//! system_prompt_append}`. Fail-and-redo, resume, and ad hoc re-running all
+//! reuse this function, so what the model was told is always reconstructable
+//! from the row.
+//!
+//! Delivery contract (Ruling D): each `instruction_blocks` string is stored
+//! ALREADY wrapped with the exact house sentinel ("System instruction from
+//! AnyHarness, not user content:"), baked in here at render time. The live
+//! engine delivers the blocks in-band, prepended to the first message
+//! payload, identically for every harness. The preamble never rides
+//! `system_prompt_append`; that field stays empty, reserved for DSL-authored
+//! appends.
+//!
+//! Forgery note (forward-looking): argument values are interpolated verbatim
+//! into `first_message`, so an argument containing the sentinel text lands in
+//! user content looking like an instruction block. Today arguments are typed
+//! by the triggering user; when untrusted trigger payloads (webhooks, cron)
+//! arrive, interpolation must neutralize the sentinel.
+
+use std::path::Path;
+
+use super::definition::{resolve_references, PromptReference, ResolveError, ResolveMode};
+use super::model::{RenderedEnvelope, WorkflowNodeType, WorkflowRunDocRecord};
+use crate::domains::sessions::prompt::render::SYSTEM_INSTRUCTION_WRAPPER;
+
+/// Workspace-relative home of a run's context docs.
+pub const CONTEXT_DIR_RELATIVE: &str = ".proliferate/context";
+
+#[derive(Debug, Clone)]
+pub struct RenderInputs<'a> {
+    pub node_type: WorkflowNodeType,
+    /// The node's prompt text (definition prompt, edited redo prompt, or the
+    /// ad hoc user prompt).
+    pub prompt: &'a str,
+    /// Strict for definition prompts (validation precedes); lenient for
+    /// redo-edited and ad hoc prompts (Ruling E — unresolvable references
+    /// pass through as the literal text the user typed).
+    pub mode: ResolveMode,
+    /// The frozen invocation arguments.
+    pub arguments: &'a serde_json::Map<String, serde_json::Value>,
+    /// The run's doc registry rows — resolution reads rows, never the
+    /// definition, so run-local registrations stay authoritative.
+    pub docs: &'a [WorkflowRunDocRecord],
+    /// Absolute path of the run workspace's context dir
+    /// (`<workspace>/.proliferate/context`).
+    pub context_dir: &'a Path,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum RenderEnvelopeError {
+    #[error("prompt references undeclared input @input:{0}")]
+    UnknownInput(String),
+    #[error("prompt references unknown doc @doc:{0}")]
+    UnknownDoc(String),
+    #[error("malformed prompt reference: {0}")]
+    Malformed(String),
+}
+
+impl From<ResolveError> for RenderEnvelopeError {
+    fn from(error: ResolveError) -> Self {
+        match error {
+            ResolveError::Malformed(error) => Self::Malformed(error.detail),
+            ResolveError::Unresolved(PromptReference::Input(name)) => Self::UnknownInput(name),
+            ResolveError::Unresolved(PromptReference::Doc(slug)) => Self::UnknownDoc(slug),
+        }
+    }
+}
+
+/// Render one node's envelope. Pure: no IO, no clock.
+pub fn render_envelope(inputs: &RenderInputs<'_>) -> Result<RenderedEnvelope, RenderEnvelopeError> {
+    let first_message = resolve_references(inputs.prompt, inputs.mode, |reference| {
+        match reference {
+            PromptReference::Input(name) => inputs.arguments.get(name).map(argument_text),
+            PromptReference::Doc(slug) => inputs
+                .docs
+                .iter()
+                .find(|doc| &doc.slug == slug)
+                .map(|doc| inputs.context_dir.join(&doc.filename).display().to_string()),
+        }
+    })?;
+
+    let preamble = preamble(inputs.node_type, inputs.context_dir, inputs.docs);
+    Ok(RenderedEnvelope {
+        // Ruling D: the wrapper is baked into the stored block, so delivery
+        // is a dumb prepend — no harness-side wrapping to forget.
+        instruction_blocks: vec![format!("{SYSTEM_INSTRUCTION_WRAPPER}{preamble}")],
+        first_message,
+        // Reserved for DSL-authored appends; the preamble never rides here.
+        system_prompt_append: Vec::new(),
+    })
+}
+
+/// Interpolated argument text: strings verbatim, everything else compact JSON.
+fn argument_text(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(text) => text.clone(),
+        other => other.to_string(),
+    }
+}
+
+/// The fixed context-doc preamble, varied only by node type (advance
+/// semantics differ). Logged per node via the stored envelope; keep changes
+/// deliberate — this text is what every workflow agent is told.
+fn preamble(node_type: WorkflowNodeType, context_dir: &Path, docs: &[WorkflowRunDocRecord]) -> String {
+    let mut text = String::new();
+    text.push_str(
+        "You are one node in a multi-step workflow. Shared context documents for this \
+         run live in one flat folder:\n",
+    );
+    text.push_str(&format!("  {}\n", context_dir.display()));
+    text.push_str(
+        "Files are named NN-slug.md, where NN is the position of the workflow step that \
+         produces the document. Read them freely for context and write to the ones your \
+         step produces. Keep documents legible plain markdown: someone who has never seen \
+         this workflow should understand what happened from the documents alone. Prefer \
+         evidence over prose. Do not add frontmatter or machine metadata.\n",
+    );
+    if !docs.is_empty() {
+        text.push_str("This run's documents:\n");
+        for doc in docs {
+            text.push_str(&format!("  - {}\n", context_dir.join(&doc.filename).display()));
+        }
+    }
+    match node_type {
+        WorkflowNodeType::Agent => text.push_str(
+            "Your step completes when this turn ends. Finish the job in this turn; never \
+             stop to ask questions. Do only this step's work — do not proceed into later \
+             steps' work.",
+        ),
+        WorkflowNodeType::HumanInLoop => text.push_str(
+            "A human reviews your work before the workflow advances. Ending with open \
+             questions or partial work is fine — surface what the reviewer should look at.",
+        ),
+    }
+    text
+}

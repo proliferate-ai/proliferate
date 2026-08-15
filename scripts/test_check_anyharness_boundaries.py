@@ -1221,23 +1221,22 @@ class ShippedAllowlistTest(unittest.TestCase):
         prefix = "anyharness/crates/anyharness-lib/src"
 
         for rule_id, path, lineno, why in [
-            # Multi-line embedded SQL: a format!-built SELECT head, FROM on the
-            # same interpolated line but still caught by the bare-SELECT-head
-            # pattern (not just the single-line SELECT...FROM pattern), so this
-            # anchor stays meaningful even though the head and FROM did not
-            # split across lines here. Repointed from
+            # Multi-line embedded SQL: a SELECT head with FROM on a later line,
+            # caught by the bare-SELECT-head pattern (not just the single-line
+            # SELECT...FROM pattern). Repointed twice: first from
             # sessions/links/completions.rs (grid plan PR 5b folded that file's
-            # SQL into domains/sessions/store/link_completions.rs, which is
-            # exempt as store code); this and the DROP TABLE anchor below are
-            # now the only two real DOMAIN_SQL_OUTSIDE_STORE offenders left in
-            # the repo, both engine-invisible cfg(test) boundaries later PRs
-            # still own.
-            # 159 -> 156: R5 dropped the now-dead SessionDeleteWorkflow argument
-            # from this fixture's WorkspaceDeleteWorkflow construction, which
-            # sits above the anchor. Same offender, same rule.
+            # SQL into domains/sessions/store/link_completions.rs, exempt as
+            # store code), then from workspace_materialization/test_support.rs
+            # :156 — workflows gen-2 (PR1) deleted the gen-1 workflows domain
+            # wholesale, and the nearest real offender is the gen-2
+            # destruction-controller policy's inline controlling-run lookup
+            # (allowlisted with a move-into-store target). Unlike the old
+            # test-fixture anchor this one is engine-visible debt. The anchor
+            # differs per rung if later rungs edit the file; each rung's branch
+            # pins its own value.
             ("DOMAIN_SQL_OUTSIDE_STORE",
-             "domains/workflows/workspace_materialization/test_support.rs", 156,
-             "format!-built SELECT COUNT(*) head"),
+             "domains/workflows/policy.rs", 34,
+             "bare SELECT head, FROM on the next line"),
             # A DROP TABLE line, inside a cfg(test) mod the engine cannot see
             # past — the checker still flags the line itself. Carried forward
             # 324 -> 332 as the archiving rungs grew the file above it (R1's
@@ -1255,9 +1254,13 @@ class ShippedAllowlistTest(unittest.TestCase):
             # An inline contract path with no use statement to declare it.
             ("DOMAIN_CONTRACT_IMPORT", "domains/sessions/store/events.rs", 75,
              "inline contract path"),
-            # A store-holding file named exactly policy.rs.
-            ("POLICY_PURITY", "domains/workflows/control/policy.rs", 8,
-             "bare policy.rs"),
+            # POLICY_PURITY's real-repo anchor (gen-1's store-holding
+            # workflows/control/policy.rs) was deleted with the gen-1 domain
+            # (workflows gen-2 PR1) and no real offender remains: the gen-2
+            # policy holds a raw Db handle, which the rule's store-segment
+            # import pattern deliberately does not match. The rule's
+            # calibration lives entirely in the fabricated-tree PolicyPurity
+            # tests above until the repo grows a real offender to pin.
         ]:
             with self.subTest(rule=rule_id, path=path, why=why):
                 self.assertIn((rule_id, f"{prefix}/{path}", lineno), flagged)

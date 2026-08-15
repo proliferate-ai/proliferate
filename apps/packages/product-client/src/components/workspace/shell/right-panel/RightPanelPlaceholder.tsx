@@ -10,6 +10,8 @@ export function RightPanelPlaceholder({ activeEntryKey }: { activeEntryKey: Righ
     ? "Scratch is getting ready"
     : kind === "agents"
       ? "Agents are getting ready"
+    : kind === "workflow"
+      ? "Workflow is getting ready"
     : kind === "terminal"
       ? "Terminals are getting ready"
       : "Git view is getting ready";
@@ -17,6 +19,8 @@ export function RightPanelPlaceholder({ activeEntryKey }: { activeEntryKey: Righ
     ? "Your workspace notes will appear here as soon as the workspace finishes loading."
     : kind === "agents"
       ? "Delegated agents will appear here as soon as the workspace finishes loading."
+    : kind === "workflow"
+      ? "This workspace's workflow run will appear here as soon as the workspace finishes loading."
     : kind === "terminal"
       ? "Terminals will connect once the workspace runtime is ready."
       : "Changes and diffs will appear here as soon as the workspace finishes loading.";

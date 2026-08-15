@@ -101,6 +101,9 @@ describe("useWorkspaceArchiveActions — archive success (T1)", () => {
     expect(toastInput.description).toBeUndefined();
     expect(toastInput.secondary.label).toBe("Undo");
     expect(toastInput.commit.label).toBe("View archived");
+    // T1 auto-dismisses — Undo is an expiring convenience, not a held-open
+    // decision, so the toast must carry a finite dwell.
+    expect(Number.isFinite(toastInput.duration)).toBe(true);
   });
 
   it("keeps the row hidden through the list refetch window: T1 fires at settle but the hide releases only when invalidation resolves", async () => {
@@ -403,6 +406,8 @@ describe("useWorkspaceArchiveActions — unarchive success (T2) and T11", () => 
     expect(toastInput.title).toBe('Unarchived "my-workspace"');
     expect(toastInput.description).toMatch(/no prior snapshot/i);
     expect(toastInput.commit.label).toBe("View now");
+    // T2 auto-dismisses like T1 — View now is an expiring convenience.
+    expect(Number.isFinite(toastInput.duration)).toBe(true);
   });
 
   it("raises the persistent T11 mismatch toast instead of T2 when head_mismatch is present", async () => {

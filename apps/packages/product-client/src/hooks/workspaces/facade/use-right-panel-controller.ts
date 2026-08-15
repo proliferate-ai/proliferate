@@ -5,7 +5,9 @@ import {
   type SetStateAction,
 } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
-import { useTerminalsQuery } from "@anyharness/sdk-react";
+import { useTerminalsQuery, useWorkflowRunsQuery } from "@anyharness/sdk-react";
+import { isWorkflowsV2Enabled } from "#product/lib/domain/capabilities/workflows-v2";
+import { useWorkflowAutoAdvanceWatch } from "#product/hooks/workflows/lifecycle/use-workflow-auto-advance-toast";
 import { useRightPanelHeaderEntries } from "#product/hooks/workspaces/derived/use-right-panel-header-entries";
 import {
   useRightPanelLifecycle,
@@ -16,7 +18,11 @@ import { useRightPanelRootFocus } from "#product/hooks/workspaces/ui/use-right-p
 import { useRightPanelShortcutRequests } from "#product/hooks/workspaces/ui/use-right-panel-shortcut-requests";
 import { useRightPanelStateUpdater } from "#product/hooks/workspaces/ui/use-right-panel-state-updater";
 import { useRightPanelEntryActions } from "#product/hooks/workspaces/workflows/right-panel/use-right-panel-entry-actions";
-import type { RightPanelWorkspaceState } from "#product/lib/domain/workspaces/shell/right-panel-model";
+import {
+  resolveWorkflowToolAvailability,
+  rightPanelToolHeaderKey,
+  type RightPanelWorkspaceState,
+} from "#product/lib/domain/workspaces/shell/right-panel-model";
 import { useWorkspaceFileBuffersStore } from "#product/stores/editor/workspace-file-buffers-store";
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
 import { useTerminalStore } from "#product/stores/terminal/terminal-store";
@@ -72,6 +78,27 @@ export function useRightPanelController({
     enabled: Boolean(workspaceId && shouldRenderContent),
   });
   const terminals = terminalsQuery.data ?? EMPTY_TERMINALS;
+  // The workflow tool is offered only where there is a run to show. The query
+  // never runs while the gen-2 gate is off, so a gated-off build asks the
+  // runtime nothing about workflows. Watched rather than read once: a run
+  // triggered into an already-panelled workspace has to raise the tab without
+  // the user reloading anything.
+  const workflowRunsQuery = useWorkflowRunsQuery(workspaceId, {
+    enabled: isWorkflowsV2Enabled() && Boolean(workspaceId && shouldRenderContent),
+    watchActiveRuns: true,
+  });
+  const workflowTool = resolveWorkflowToolAvailability({
+    // Error counts as settled: a list that failed with nothing cached is
+    // evidence the tool has nothing to show, not evidence to keep waiting.
+    runsSettled: workflowRunsQuery.isSuccess || workflowRunsQuery.isError,
+    hasRun: (workflowRunsQuery.data?.runs.length ?? 0) > 0,
+    isActiveTool: state.activeEntryKey === rightPanelToolHeaderKey("workflow"),
+  });
+  // Panel-independent: the undo offer on an auto-advance must appear whatever
+  // tool the panel shows and whether it is open, so the watcher hangs off this
+  // controller (mounted for as long as the workspace shell) rather than off the
+  // pane behind the tool switch.
+  useWorkflowAutoAdvanceWatch({ workspaceId, enabled: shouldRenderContent });
   const {
     activeTool,
     activeTerminalId,
@@ -84,6 +111,7 @@ export function useRightPanelController({
     terminals,
     openViewerTargets,
     isCloudWorkspaceSelected,
+    hasWorkflowRun: workflowTool.showTab,
   });
   const terminalActivationRequestToken = terminalActivationRequest?.workspaceId === workspaceId
     ? terminalActivationRequest.token
@@ -123,6 +151,7 @@ export function useRightPanelController({
     visibleTerminalCount: visibleTerminals.length,
     activeTerminalId,
     openViewerTargets,
+    hasWorkflowRun: workflowTool.activeEntryAvailability,
     terminalActivationRequest,
     updateState,
     setActiveTerminalForWorkspace,

@@ -1,0 +1,23 @@
+{
+  "rejectedBy": "structure",
+  "expectedIssuePath": "nodes.0.prompt",
+  "note": "Doc slugs are lowercase-only; a wrong-case reference to a declared slug is a malformed reference, not a silent non-match.",
+  "definition": {
+    "schemaVersion": 2,
+    "nodes": [
+      {
+        "id": "n_a",
+        "type": "agent",
+        "title": "Step",
+        "prompt": "Write findings into @doc:Research-Findings"
+      }
+    ],
+    "docTemplates": [
+      {
+        "slug": "research-findings",
+        "producingNodeId": "n_a",
+        "body": "# Findings\n"
+      }
+    ]
+  }
+}

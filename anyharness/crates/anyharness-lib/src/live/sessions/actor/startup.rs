@@ -75,7 +75,7 @@ impl SessionActor {
         let (notification_tx, notification_rx) =
             mpsc::unbounded_channel::<acp::schema::SessionNotification>();
 
-        let event_sink = Arc::new(Mutex::new(if startup_strategy.resumes_durable_history() {
+        let mut sink = if startup_strategy.resumes_durable_history() {
             SessionEventSink::resume_from_seq(
                 session_id.clone(),
                 source_agent_kind.clone(),
@@ -92,7 +92,12 @@ impl SessionActor {
                 config.event_tx.clone(),
                 config.caps.events.clone(),
             )
-        }));
+        };
+        sink.set_interaction_hooks(
+            config.hooks.on_interaction_requested.clone(),
+            config.hooks.on_interaction_resolved.clone(),
+        );
+        let event_sink = Arc::new(Mutex::new(sink));
         let (background_work_tx, background_work_rx) =
             mpsc::unbounded_channel::<BackgroundWorkUpdate>();
         let mut background_work_registry = BackgroundWorkRegistry::new(

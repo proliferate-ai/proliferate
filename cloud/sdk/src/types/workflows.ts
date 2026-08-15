@@ -9,7 +9,7 @@ export type WorkflowStageDefinition = Schema<"WorkflowStageDefinition">;
 type GeneratedWorkflowDefinitionCreateRequest = Schema<"WorkflowDefinitionCreateRequest">;
 type GeneratedWorkflowDefinitionUpdateRequest = Schema<"WorkflowDefinitionUpdateRequest">;
 type GeneratedWorkflowDefinitionResponse = Schema<"WorkflowDefinitionResponse">;
-type GeneratedWorkflowDefinitionListResponse = Schema<"WorkflowDefinitionListResponse">;
+type GeneratedWorkflowDefinitionListResponse = Schema<"WorkflowDefinitionListAnyResponse">;
 
 export type WorkflowDefinitionCreateRequest =
   Omit<GeneratedWorkflowDefinitionCreateRequest, "description">
@@ -23,9 +23,17 @@ export type WorkflowDefinitionResponse =
   Omit<GeneratedWorkflowDefinitionResponse, "inputs">
   & { inputs: WorkflowInputDefinition[] };
 
+export type WorkflowDefinitionResponseV2 = Schema<"WorkflowDefinitionResponseV2">;
+
+// The shared, unflagged list/detail endpoints are polymorphic: gen-2 rows
+// (schemaVersion 2, no stages) ride beside v1 rows the moment one exists.
+export type WorkflowDefinitionAnyResponse =
+  | WorkflowDefinitionResponse
+  | WorkflowDefinitionResponseV2;
+
 export type WorkflowDefinitionListResponse =
   Omit<GeneratedWorkflowDefinitionListResponse, "workflows">
-  & { workflows: WorkflowDefinitionResponse[] };
+  & { workflows: WorkflowDefinitionAnyResponse[] };
 
 export type WorkflowRunEligibilityBlocker = Schema<"WorkflowRunEligibilityBlocker">;
 export type WorkflowRunEligibilityResponse = Schema<"WorkflowRunEligibilityResponse">;

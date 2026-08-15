@@ -1,10 +1,13 @@
-//! Spec 2b merge-gated proofs over the admission surface: source semantics
-//! against the REAL controller policy and durable rows, the full fenced-route
-//! conflict matrix (before any side effect), read/cosmetic availability, and
-//! the fail-closed purge/mobility posture. The executor-ordering races live
-//! with the workflow suite (`workflow_runs_tests`).
+//! Spec 2b merge-gated proofs over the admission surface: source semantics,
+//! the full fenced-route conflict matrix (before any side effect),
+//! read/cosmetic availability, and the fail-closed purge/mobility posture.
+//! Gen-1 workflows (the durable controller producer) is superseded; production
+//! wiring injects `NoControllerPolicy`, so these proofs install a static test
+//! controller policy to exercise the sessions-owned conflict mechanics.
 
+use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::{
     body::{to_bytes, Body},
@@ -14,15 +17,43 @@ use serde_json::{json, Value};
 use tower::util::ServiceExt;
 
 use super::router::build_router;
-use super::workflow_runs_tests::test_state;
 use crate::app::{test_support, AppState};
+use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::sessions::admission::{
-    SessionMutationConflict, SessionMutationKind, SessionMutationSource,
+    AllSessionsOperable, SessionControllerPolicy, SessionMutationConflict, SessionMutationKind,
+    SessionMutationSource,
 };
-use crate::domains::workflows::service::WorkflowRunService;
-use crate::domains::workflows::store::WorkflowRunStore;
+use crate::persistence::Db;
 
 const WS: &str = "20000000-0000-4000-8000-000000000002";
+
+pub(super) fn test_state() -> AppState {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("unix timestamp")
+        .as_nanos();
+    AppState::new(
+        PathBuf::from(format!("/tmp/anyharness-admission-router-{unique}")),
+        "http://127.0.0.1:8457".to_string(),
+        Db::open_in_memory().expect("in-memory db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("app state")
+}
+
+/// A controller policy pinning exactly one session to one run id, standing in
+/// for gen-1's durable lookup so the admission mechanics stay proven.
+struct StaticControllerPolicy {
+    session_id: String,
+    run_id: String,
+}
+
+impl SessionControllerPolicy for StaticControllerPolicy {
+    fn controlling_run_id(&self, session_id: &str) -> anyhow::Result<Option<String>> {
+        Ok((session_id == self.session_id).then(|| self.run_id.clone()))
+    }
+}
 
 #[path = "session_admission_lock_order_tests.rs"]
 mod lock_order_tests;
@@ -42,21 +73,17 @@ fn insert_session_row(state: &AppState, workspace_id: &str) -> String {
     session_id
 }
 
-fn controlled_fixture(state: &AppState) -> (String, String) {
+fn controlled_fixture(state: &mut AppState) -> (String, String) {
     test_support::seed_workspace_with_repo_root(&state.db, WS, "local", "/tmp/admission-ws");
     let session_id = insert_session_row(state, WS);
-    let service = WorkflowRunService::new(WorkflowRunStore::new(state.db.clone()));
     let run_id = uuid::Uuid::new_v4().to_string();
-    service
-        .accept(
-            &run_id,
-            super::workflow_runs_tests::domain_input_for_workspace(WS),
-        )
-        .expect("accept");
-    assert!(service.begin_run(&run_id).expect("begin_run"));
-    assert!(service
-        .bind_session(&run_id, &session_id)
-        .expect("bind_session"));
+    state.session_admission = Arc::new(SessionMutationAdmission::new(
+        Arc::new(StaticControllerPolicy {
+            session_id: session_id.clone(),
+            run_id: run_id.clone(),
+        }),
+        Arc::new(AllSessionsOperable),
+    ));
     (run_id, session_id)
 }
 
@@ -95,8 +122,8 @@ async fn foreign_and_stale_workflow_sources_denied_owning_admitted() {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     let _guard = test_support::set_bearer_token_env(None);
-    let state = test_state();
-    let (run_id, session_id) = controlled_fixture(&state);
+    let mut state = test_state();
+    let (run_id, session_id) = controlled_fixture(&mut state);
 
     // External denied.
     match state
@@ -142,8 +169,8 @@ async fn every_fenced_route_conflicts_before_side_effects_and_reads_stay_availab
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     let _guard = test_support::set_bearer_token_env(None);
-    let state = test_state();
-    let (_run_id, sid) = controlled_fixture(&state);
+    let mut state = test_state();
+    let (_run_id, sid) = controlled_fixture(&mut state);
 
     let prompt_body = json!({"blocks": [{"type": "text", "text": "foreign"}]});
     let cases: Vec<(&str, String, Option<Value>)> = vec![
@@ -262,8 +289,8 @@ async fn purge_and_mobility_fail_closed_while_controlled() {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     let _guard = test_support::set_bearer_token_env(None);
-    let state = test_state();
-    let (_run_id, _sid) = controlled_fixture(&state);
+    let mut state = test_state();
+    let (_run_id, _sid) = controlled_fixture(&mut state);
 
     let (status, payload) = call(&state, "DELETE", format!("/v1/workspaces/{WS}"), None).await;
     assert_eq!(
@@ -301,8 +328,8 @@ async fn destroy_source_fails_closed_while_controlled() {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     let _guard = test_support::set_bearer_token_env(None);
-    let state = test_state();
-    let (_run_id, sid) = controlled_fixture(&state);
+    let mut state = test_state();
+    let (_run_id, sid) = controlled_fixture(&mut state);
 
     // destroy-source requires RemoteOwned mode; set it directly so the mode
     // assert would pass and only the session-admission fence stands in the way.
