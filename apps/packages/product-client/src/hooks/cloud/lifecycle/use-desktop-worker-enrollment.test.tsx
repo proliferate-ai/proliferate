@@ -297,7 +297,7 @@ describe("useDesktopWorkerEnrollment", () => {
         [
           expect.objectContaining({
             id: "desktop-worker-startup-failure",
-            headline: "Cloud integrations unavailable",
+            headline: "Integrations unavailable",
             consequence:
               "Proliferate will keep trying in the background. Retry now, or dismiss this notice.",
             cause: "worker exited: enrollment contract mismatch",
@@ -328,7 +328,7 @@ describe("useDesktopWorkerEnrollment", () => {
       expect(harness.getErrorToastCalls()).toEqual([
         [
           expect.objectContaining({
-            headline: "Cloud integrations unavailable",
+            headline: "Integrations unavailable",
             consequence:
               "An earlier Proliferate Worker is still running. Quit other Proliferate apps; if none are open, restart your computer, then retry.",
           }),

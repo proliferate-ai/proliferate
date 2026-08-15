@@ -304,6 +304,24 @@ anyharness serve --host 127.0.0.1 --port <port>
    or timed out.
 10. `runtime-info.json` is written under the desktop app dir with URL, port,
    status, runtime home, and runtime version.
+11. On a healthy response, `runtime_version_assert::check` compares the health
+   record's `version` against the version baked into the shell from
+   `apps/desktop/runtime-version.json` (`include_str!` at compile time — not a
+   runtime resource read). Release CI (`release-desktop.yml`) writes that file
+   from the `anyharness` crate's `Cargo.toml` version right before `pnpm tauri
+   build` compiles the shell, so the baked value matches whichever sidecar
+   binary actually shipped alongside it. Mode is
+   `PROLIFERATE_RUNTIME_VERSION_ASSERT` (`off` / `warn` / `block`, default
+   `warn`); `block` reuses the same `BootOutcome::Failed` unhealthy path as any
+   other boot failure. Every read on this boundary is tolerant — a
+   missing/garbage bundled file or a health record missing `version` only
+   warns, never blocks — and the `ANYHARNESS_DEV_URL` external-runtime bypass
+   always stays warn-only regardless of the configured mode. Caveat: the
+   `anyharness` crate version is a never-bumped `0.1.0` today, so
+   `expected == actual` trivially passes on every current build; the assert's
+   present value is catching a corrupted or mismatched bundle, not today's
+   version drift. A version-bump scheme is a release-pipeline decision left as
+   a follow-up.
 
 ## Runtime Home
 

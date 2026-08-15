@@ -33,7 +33,6 @@ export const SHORTCUT_GROUPS = [
       "newDefault",
       "newWorktree",
       "newLocal",
-      "newCloud",
       "addRepository",
       "copyWorkspacePath",
       "copyBranchName",

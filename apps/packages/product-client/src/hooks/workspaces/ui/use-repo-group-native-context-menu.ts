@@ -48,7 +48,9 @@ export interface RepoGroupCreationMenuModelInput {
   shortcuts: {
     local: { accelerator?: string; label: string };
     worktree: { accelerator?: string; label: string };
-    cloud: { accelerator?: string; label: string };
+    // Cloud creation has no Desktop shortcut after the cull (PRO-10); Web still
+    // offers the cloud action but carries no keyboard badge for it.
+    cloud?: { accelerator?: string; label: string };
   };
 }
 
@@ -76,8 +78,8 @@ export function buildRepoGroupCreationMenuModel(
     actions.push({
       id: "new-cloud-workspace",
       label: input.cloudWorkspaceLabel,
-      accelerator: input.shortcuts.cloud.accelerator,
-      shortcutLabel: input.shortcuts.cloud.label,
+      accelerator: input.shortcuts.cloud?.accelerator,
+      shortcutLabel: input.shortcuts.cloud?.label,
       disabled: !input.cloudWorkspaceEnabled,
       disabledReason: input.cloudWorkspaceTooltip,
     });

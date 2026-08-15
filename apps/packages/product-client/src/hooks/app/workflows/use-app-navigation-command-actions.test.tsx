@@ -21,6 +21,11 @@ const hookMocks = vi.hoisted(() => ({
     available: boolean;
     baseUrl: string | null;
   },
+  workflowsV2Enabled: true,
+}));
+
+vi.mock("#product/lib/domain/capabilities/workflows-v2", () => ({
+  isWorkflowsV2Enabled: () => hookMocks.workflowsV2Enabled,
 }));
 
 vi.mock("#product/hooks/support/derived/use-support-menu-action", () => ({
@@ -63,6 +68,7 @@ describe("useAppNavigationCommandActions support routing", () => {
     hookMocks.supportDisabledReason = null;
     hookMocks.openExternal.mockClear();
     hookMocks.goToTopLevelRoute.mockClear();
+    hookMocks.workflowsV2Enabled = true;
   });
 
   afterEach(() => {
@@ -133,5 +139,38 @@ describe("useAppNavigationCommandActions support routing", () => {
 
     expect(hookMocks.openBug).not.toHaveBeenCalled();
     expect(hookMocks.openExternal).not.toHaveBeenCalled();
+  });
+});
+
+// The workflows_v2 gate follows the same hidden-not-disabled rule: gen-2 ships
+// dark, so the palette/shortcut command must not be offered while it is off.
+describe("useAppNavigationCommandActions workflows gating", () => {
+  beforeEach(() => {
+    hookMocks.goToTopLevelRoute.mockClear();
+  });
+
+  afterEach(() => {
+    hookMocks.workflowsV2Enabled = true;
+    cleanup();
+  });
+
+  it("offers Go to Workflows when the gate is on", () => {
+    hookMocks.workflowsV2Enabled = true;
+    const { result } = renderHook(() => useAppNavigationCommandActions(), { wrapper });
+
+    expect(result.current.goWorkflows.hidden).toBe(false);
+
+    act(() => {
+      result.current.goWorkflows.execute("palette");
+    });
+
+    expect(hookMocks.goToTopLevelRoute).toHaveBeenCalledWith("/workflows");
+  });
+
+  it("hides Go to Workflows when the gate is off", () => {
+    hookMocks.workflowsV2Enabled = false;
+    const { result } = renderHook(() => useAppNavigationCommandActions(), { wrapper });
+
+    expect(result.current.goWorkflows.hidden).toBe(true);
   });
 });

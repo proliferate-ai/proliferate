@@ -1,4 +1,5 @@
 import type {
+  WorkflowDefinitionAnyResponse,
   WorkflowDefinitionCreateRequest,
   WorkflowDefinitionListResponse,
   WorkflowDefinitionResponse,
@@ -30,8 +31,8 @@ export async function getWorkflowDefinition(
   workflowDefinitionId: string,
   client: ProliferateCloudClient = getProliferateClient(),
   options: WorkflowRequestOptions = {},
-): Promise<WorkflowDefinitionResponse> {
-  return client.requestJson<WorkflowDefinitionResponse>({
+): Promise<WorkflowDefinitionAnyResponse> {
+  return client.requestJson<WorkflowDefinitionAnyResponse>({
     method: "GET",
     path: "/v1/workflows/{workflow_definition_id}",
     pathParams: { workflow_definition_id: workflowDefinitionId },

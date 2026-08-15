@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useToastStore } from "#product/stores/toast/toast-store";
 
-const DISABLED_REASON = "Cloud workspaces now open through the managed sandbox gateway.";
+const DISABLED_REASON = "Remote access now opens through the managed sandbox gateway.";
 
 export function useWorkspaceRemoteAccessActions() {
   const showToast = useToastStore((state) => state.show);
