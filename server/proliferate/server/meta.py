@@ -22,6 +22,7 @@ booleans and safe, user-facing destinations (support email, pricing/web URL).
 
 from __future__ import annotations
 
+import os
 from typing import Literal
 
 from fastapi import APIRouter, status
@@ -301,9 +302,23 @@ class MetaResponse(BaseModel):
     desktopUpdater: DesktopUpdaterCadence | None = None
 
 
-def _desktop_updater_cadence(config: Settings) -> DesktopUpdaterCadence | None:
-    check_interval = config.desktop_updater_check_interval_ms
-    stall_threshold = config.desktop_updater_stall_threshold_ms
+def _cadence_env_ms(name: str) -> int | None:
+    """Tolerant positive-int env read; unset, empty, or garbage means None."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+def _desktop_updater_cadence() -> DesktopUpdaterCadence | None:
+    """Env-driven like ``MIN_DESKTOP_VERSION`` (version.py): a deployment knob
+    on the version-identity surface, not a Settings field."""
+    check_interval = _cadence_env_ms("DESKTOP_UPDATER_CHECK_INTERVAL_MS")
+    stall_threshold = _cadence_env_ms("DESKTOP_UPDATER_STALL_THRESHOLD_MS")
     if check_interval is None and stall_threshold is None:
         return None
     return DesktopUpdaterCadence(
@@ -321,7 +336,7 @@ async def meta() -> MetaResponse:
         workerVersion=worker_version(),
         minDesktopVersion=min_desktop_version(),
         capabilities=build_server_capabilities(settings),
-        desktopUpdater=_desktop_updater_cadence(settings),
+        desktopUpdater=_desktop_updater_cadence(),
     )
 
 
