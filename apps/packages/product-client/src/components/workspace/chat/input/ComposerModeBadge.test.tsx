@@ -34,10 +34,9 @@ describe("ComposerModeBadge", () => {
     render(<ComposerModeBadge agentKind="claude" control={createModeControl("plan")} />);
 
     const badge = screen.getByRole("button", {
-      // jsdom's default navigator is non-Apple, so the appended hint reads
-      // "Ctrl click", not "⌘ click". The description's own trailing period is
-      // absorbed by appendSessionControlStepHint rather than doubling.
-      name: "Permissions: Plan — Plan without execution. Click to switch, Ctrl click to go back.",
+      // The hint lives only in the tooltip/title, never the accessible name —
+      // composer-row tests (and screen readers) address the badge by mode.
+      name: "Permissions: Plan — Plan without execution.",
     });
     expect(badge.querySelector("svg")).not.toBeNull();
     // Icon-only at every width: the badge paints no word at all, and the mode

@@ -61,14 +61,15 @@ export function ComposerModeBadge({
   // already spells the permissions control "Permissions" and the
   // collaboration control "Mode", so the descriptor's own word is the ruled
   // copy for the one and stays honest for the other.
-  const tooltip = appendSessionControlStepHint(
-    resolveSessionControlTooltip(
-      control.label,
-      shortLabel,
-      currentOption?.description ?? null,
-    ),
-    "switch",
+  // The accessible name carries the mode itself; the pointer hint is a mouse
+  // affordance, so it rides only the tooltip and title — same split as
+  // ComposerEffortStepper's aria-label.
+  const accessibleName = resolveSessionControlTooltip(
+    control.label,
+    shortLabel,
+    currentOption?.description ?? null,
   );
+  const tooltip = appendSessionControlStepHint(accessibleName, "switch");
 
   const badge = (
     <ComposerControlButton
@@ -86,7 +87,7 @@ export function ComposerModeBadge({
         </span>
       )}
       label={shortLabel}
-      aria-label={tooltip}
+      aria-label={accessibleName}
       title={tooltip}
       data-session-mode-trigger=""
       data-session-mode-selected={currentValue ?? ""}
