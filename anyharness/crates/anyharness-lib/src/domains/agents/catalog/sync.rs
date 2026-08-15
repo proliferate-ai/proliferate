@@ -21,13 +21,48 @@
 //! `source: "bundled" | "staged"`.
 
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
-use super::artifact::{load_staged_from_disk, StagedArtifactPair};
+use super::artifact::{
+    load_staged_from_disk, read_high_water_mark, write_high_water_mark, StagedArtifactPair,
+};
 use super::bundled::bundled_agent_catalog_document;
 use super::schema::AgentCatalogDocument;
 use crate::domains::agents::registry::bundled::bundled_agent_registry_document;
 use crate::domains::agents::registry::schema::AgentRegistryDocument;
+
+/// (m3) Process-wide handle to the ACTIVE registry document, set exactly once
+/// at [`CatalogSyncService`] construction (mirroring the immutable-active-
+/// catalog invariant this whole module protects). `auth::launch_facts`
+/// cannot reach the constructed `CatalogSyncService` without invasive
+/// plumbing through several call sites (`create_session`, `launch_options`,
+/// both several layers removed from `AppState`), so this documented global
+/// is the minimal-plumbing alternative: launch-facts collection reads
+/// THROUGH it instead of reaching for `bundled_agent_registry_document()`
+/// directly, so a staged registry that advertises a new agent yields
+/// consistent launch-facts. Set once, read many — never mutated after boot,
+/// same as the catalog itself.
+static ACTIVE_REGISTRY: OnceLock<Arc<AgentRegistryDocument>> = OnceLock::new();
+
+/// The active registry document for launch-facts collection and any other
+/// consumer that cannot reach [`CatalogSyncService`] directly. Falls back to
+/// the bundled floor if called before any `CatalogSyncService` has been
+/// constructed (e.g. in a unit test that never wires `AppState`) — the same
+/// safe default the service itself starts from.
+pub fn active_agent_registry() -> Arc<AgentRegistryDocument> {
+    ACTIVE_REGISTRY
+        .get()
+        .cloned()
+        .unwrap_or_else(|| Arc::new(bundled_agent_registry_document().clone()))
+}
+
+fn publish_active_registry(document: &Arc<AgentRegistryDocument>) {
+    // `OnceLock::set` losing a race just means an earlier construction in
+    // this process already published first; both are the correct decision
+    // for THIS process (there is exactly one `CatalogSyncService` per
+    // process — see `app/mod.rs`), so a lost race is inert, not a bug.
+    let _ = ACTIVE_REGISTRY.set(document.clone());
+}
 
 /// Where the active catalog came from. Reported on the read route so an
 /// operator can see the answer explicitly rather than infer it.
@@ -64,13 +99,15 @@ impl CatalogSyncService {
     pub fn from_bundled() -> Self {
         let document = bundled_agent_catalog_document().clone();
         let version = document.catalog_version.clone();
+        let active_registry = Arc::new(bundled_agent_registry_document().clone());
+        publish_active_registry(&active_registry);
         Self {
             active: AppliedCatalog {
                 document: Arc::new(document),
                 version,
                 source: CatalogSource::Bundled,
             },
-            active_registry: Arc::new(bundled_agent_registry_document().clone()),
+            active_registry,
         }
     }
 
@@ -95,20 +132,48 @@ impl CatalogSyncService {
     ) -> Self {
         let staged_dir = runtime_home.join("catalog").join("staged");
 
-        if let Some(base_url) = base_url {
+        // M2 (lane inertness): absent base_url OR no provisioned pubkey means
+        // the WHOLE staged lane is inert — not just the network fetch. The
+        // warm-cache disk load below must never even run in that case; a
+        // planted staged dir on disk (e.g. from a previous binary that DID
+        // have a pubkey provisioned) must not be able to activate on a build
+        // that doesn't.
+        let staged = if let (Some(base_url), false) = (base_url, pubkeys.is_empty()) {
             match super::artifact::fetch_and_stage(base_url, channel, &staged_dir, client, pubkeys) {
-                Ok(_) => {}
+                // M1(a): activate the in-memory, ALREADY-verified pair this
+                // boot just fetched directly. Do not round-trip it through
+                // disk and `load_staged_from_disk` — that would mean trusting
+                // a second, weaker read path for bytes we already hold
+                // verified in memory.
+                Ok(pair) => Some(pair),
                 Err(rejected) => {
                     tracing::info!(
                         reason = rejected.reason.as_str(),
                         "catalog artifact fetch did not produce a fresh staged pair; falling back to the existing staged pair or the bundled floor"
                     );
+                    // M1(b): the warm-cache path re-verifies minisign over the
+                    // exact staged bytes with the same baked pubkeys before
+                    // any schema/generated_at gate runs.
+                    load_staged_from_disk(&staged_dir, pubkeys)
                 }
+            }
+        } else {
+            None
+        };
+
+        let high_water_mark = read_high_water_mark(runtime_home);
+        let staged_generated_at = staged.as_ref().map(|pair| pair.generated_at);
+        let service = Self::from_bundled_and_staged_with_floor(staged, high_water_mark);
+
+        // M3: persist the high-water mark ONLY after a successful activation
+        // decision, and only when the staged pair actually won.
+        if service.active.source == CatalogSource::Staged {
+            if let Some(generated_at) = staged_generated_at {
+                write_high_water_mark(runtime_home, generated_at);
             }
         }
 
-        let staged = load_staged_from_disk(&staged_dir);
-        Self::from_bundled_and_staged(staged)
+        service
     }
 
     /// Production entrypoint: the ONE call `app/mod.rs` makes at wiring
@@ -145,36 +210,63 @@ impl CatalogSyncService {
     }
 
     /// Pure decision function extracted for testability: given whatever
-    /// staged pair (if any) is on disk, apply the ONE activation rule.
+    /// staged pair (if any) is on disk, apply the ONE activation rule against
+    /// the bundled floor only (no persisted high-water mark). Existing tests
+    /// exercise this directly; production boot goes through
+    /// [`Self::from_bundled_and_staged_with_floor`] via
+    /// [`Self::from_staged_or_bundled`], which additionally folds in the
+    /// persisted mark (M3).
+    #[cfg(test)]
     fn from_bundled_and_staged(staged: Option<StagedArtifactPair>) -> Self {
+        Self::from_bundled_and_staged_with_floor(staged, None)
+    }
+
+    /// Same activation rule, but the newer-than gate is
+    /// `max(bundled floor, high_water_mark)` rather than just the bundled
+    /// floor (M3, downgrade resistance): once this machine has activated a
+    /// given `generated_at`, no staged artifact at or before that instant —
+    /// even one that independently beats the bundled floor and carries a
+    /// valid signature — can ever win again.
+    fn from_bundled_and_staged_with_floor(
+        staged: Option<StagedArtifactPair>,
+        high_water_mark: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> Self {
         let bundled_document = bundled_agent_catalog_document().clone();
         let bundled_registry = bundled_agent_registry_document().clone();
         let bundled_generated_at =
             chrono::DateTime::parse_from_rfc3339(&bundled_document.generated_at)
                 .map(|dt| dt.with_timezone(&chrono::Utc))
                 .unwrap_or_else(|_| chrono::DateTime::<chrono::Utc>::MIN_UTC);
+        let floor = match high_water_mark {
+            Some(mark) => mark.max(bundled_generated_at),
+            None => bundled_generated_at,
+        };
 
         match staged {
-            Some(staged) if staged.generated_at > bundled_generated_at => {
+            Some(staged) if staged.generated_at > floor => {
                 let version = staged.catalog.catalog_version.clone();
+                let active_registry = Arc::new(staged.registry);
+                publish_active_registry(&active_registry);
                 Self {
                     active: AppliedCatalog {
                         document: Arc::new(staged.catalog),
                         version,
                         source: CatalogSource::Staged,
                     },
-                    active_registry: Arc::new(staged.registry),
+                    active_registry,
                 }
             }
             _ => {
                 let version = bundled_document.catalog_version.clone();
+                let active_registry = Arc::new(bundled_registry);
+                publish_active_registry(&active_registry);
                 Self {
                     active: AppliedCatalog {
                         document: Arc::new(bundled_document),
                         version,
                         source: CatalogSource::Bundled,
                     },
-                    active_registry: Arc::new(bundled_registry),
+                    active_registry,
                 }
             }
         }
@@ -299,5 +391,120 @@ mod tests {
         let second = service.active();
         assert!(Arc::ptr_eq(&first.document, &second.document));
         assert_eq!(first.source, second.source);
+    }
+
+    // --- M3: persisted monotonic high-water mark (downgrade resistance) ---
+
+    #[test]
+    fn high_water_mark_blocks_rollback_to_an_older_still_signed_still_newer_than_floor_artifact() {
+        let earlier = chrono::Utc::now() + chrono::Duration::days(10);
+        let later = chrono::Utc::now() + chrono::Duration::days(20);
+
+        // `earlier` beats the bundled floor on its own, but this machine has
+        // already activated `later` at some prior boot.
+        let service = CatalogSyncService::from_bundled_and_staged_with_floor(
+            Some(staged_pair_at(earlier)),
+            Some(later),
+        );
+
+        assert_eq!(
+            service.active().source,
+            CatalogSource::Bundled,
+            "an artifact older than the high-water mark must never win, even though it beats the bundled floor"
+        );
+    }
+
+    #[test]
+    fn high_water_mark_does_not_block_an_artifact_newer_than_the_mark() {
+        let mark = chrono::Utc::now() + chrono::Duration::days(10);
+        let newer = chrono::Utc::now() + chrono::Duration::days(20);
+
+        let service = CatalogSyncService::from_bundled_and_staged_with_floor(
+            Some(staged_pair_at(newer)),
+            Some(mark),
+        );
+
+        assert_eq!(service.active().source, CatalogSource::Staged);
+    }
+
+    // --- M2: lane inertness — absent gate must never load the disk cache ---
+
+    struct NeverCalledClient;
+    impl super::super::artifact::ArtifactFetchClient for NeverCalledClient {
+        fn get_bytes(&self, url: &str) -> anyhow::Result<Vec<u8>> {
+            panic!("the fetch client must never be invoked when the ADR gate is closed: {url}");
+        }
+    }
+
+    fn plant_staged_dir_with_future_generated_at(runtime_home: &std::path::Path) {
+        let staged_dir = runtime_home.join("catalog").join("staged");
+        std::fs::create_dir_all(&staged_dir).unwrap();
+        let future = chrono::Utc::now() + chrono::Duration::days(3650);
+        let mut catalog = bundled_agent_catalog_document().clone();
+        catalog.catalog_version = "planted-staged-version".to_string();
+        catalog.generated_at = future.to_rfc3339();
+        std::fs::write(
+            staged_dir.join("catalog.json"),
+            serde_json::to_vec(&catalog).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
+            staged_dir.join("registry.json"),
+            serde_json::to_vec(&bundled_agent_registry_document().clone()).unwrap(),
+        )
+        .unwrap();
+        // Deliberately no .minisig files planted: an unprovisioned lane
+        // never gets far enough to need them, but this also proves the
+        // absent-signature case can't accidentally activate.
+    }
+
+    fn scratch_runtime_home() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "anyharness-catalog-sync-test-{}-{}",
+            std::process::id(),
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn env_absent_with_planted_staged_dir_leaves_the_bundled_floor_active() {
+        let runtime_home = scratch_runtime_home();
+        plant_staged_dir_with_future_generated_at(&runtime_home);
+
+        let service = CatalogSyncService::from_staged_or_bundled(
+            &runtime_home,
+            None, // ADR gate closed: no base URL.
+            "stable",
+            &NeverCalledClient,
+            &[],
+        );
+
+        assert_eq!(
+            service.active().source,
+            CatalogSource::Bundled,
+            "a planted staged dir on disk must never activate when the env gate is closed"
+        );
+    }
+
+    #[test]
+    fn unprovisioned_pubkey_with_planted_staged_dir_leaves_the_bundled_floor_active() {
+        let runtime_home = scratch_runtime_home();
+        plant_staged_dir_with_future_generated_at(&runtime_home);
+
+        let service = CatalogSyncService::from_staged_or_bundled(
+            &runtime_home,
+            Some("https://example.test"),
+            "stable",
+            &NeverCalledClient,
+            &[], // no pubkeys provisioned
+        );
+
+        assert_eq!(
+            service.active().source,
+            CatalogSource::Bundled,
+            "a planted staged dir on disk must never activate when no signing pubkey is provisioned"
+        );
     }
 }
