@@ -246,13 +246,11 @@ impl super::SidecarProcess {
 /// . <path>` in the `make dev` recipe. Only the path is logged.
 ///
 /// Dev builds only, and only while the collector is Ready — the snippet is
-/// rewritten on every app boot, so a collector restart is picked up the next
-/// time the dev runtime is started.
+/// written at boot and re-published by `spawn_dev_diagnostics_env_republisher`
+/// whenever a collector restart brings up a new generation, so an already
+/// running dev runtime can re-read it and re-attach.
 #[cfg(all(debug_assertions, unix))]
 pub(super) fn publish_dev_diagnostics_env(supervisor: &Arc<DiagnosticsCollectorSupervisor>) {
-    use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
-
     let Ok(path) = crate::app_config::dev_diagnostics_env_path() else {
         return;
     };
@@ -266,28 +264,13 @@ pub(super) fn publish_dev_diagnostics_env(supervisor: &Arc<DiagnosticsCollectorS
             return;
         }
     };
-    let snippet = format!(
-        "{}={}\n{}={}\n{}={}\n",
-        proliferate_diagnostics_client::DEV_ENDPOINT_ENV,
-        collector.endpoint,
-        proliferate_diagnostics_client::DEV_CAPABILITY_ENV,
-        collector.capability,
-        proliferate_diagnostics_client::DEV_COLLECTOR_BOOT_ID_ENV,
-        collector.collector_boot_id,
+    let snippet = render_dev_diagnostics_env_snippet(
+        &path,
+        &collector.endpoint,
+        &collector.capability,
+        &collector.collector_boot_id,
     );
-    let written = path
-        .parent()
-        .map_or(Ok(()), std::fs::create_dir_all)
-        .and_then(|()| {
-            let mut file = std::fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .mode(0o600)
-                .open(&path)?;
-            file.write_all(snippet.as_bytes())
-        });
-    match written {
+    match write_dev_diagnostics_env(&path, &snippet) {
         Ok(()) => tracing::info!(
             dev_diagnostics_env = %path.display(),
             endpoint = %collector.endpoint,
@@ -298,5 +281,102 @@ pub(super) fn publish_dev_diagnostics_env(supervisor: &Arc<DiagnosticsCollectorS
             error = %error,
             "failed to publish dev diagnostics env"
         ),
+    }
+}
+
+/// The sourceable snippet body. The fourth line hands the producer the file's
+/// own path so it can re-read the snippet when the host re-publishes it for a
+/// new collector generation.
+#[cfg(all(debug_assertions, unix))]
+pub(super) fn render_dev_diagnostics_env_snippet(
+    path: &std::path::Path,
+    endpoint: &str,
+    capability: &str,
+    collector_boot_id: &str,
+) -> String {
+    format!(
+        "{}={}\n{}={}\n{}={}\n{}={}\n",
+        proliferate_diagnostics_client::DEV_ENDPOINT_ENV,
+        endpoint,
+        proliferate_diagnostics_client::DEV_CAPABILITY_ENV,
+        capability,
+        proliferate_diagnostics_client::DEV_COLLECTOR_BOOT_ID_ENV,
+        collector_boot_id,
+        proliferate_diagnostics_client::DEV_ENV_PATH_ENV,
+        path.display(),
+    )
+}
+
+#[cfg(all(debug_assertions, unix))]
+pub(super) fn write_dev_diagnostics_env(
+    path: &std::path::Path,
+    snippet: &str,
+) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+
+    path.parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| {
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(path)?;
+            file.write_all(snippet.as_bytes())
+        })
+}
+
+/// Keeps the published dev env current across collector restarts: the boot
+/// publish above is otherwise write-once, so an externally launched runtime
+/// stays pinned to a dead collector generation until its next restart.
+/// Idempotent — at most one watcher per process.
+#[cfg(all(debug_assertions, unix))]
+pub(super) fn spawn_dev_diagnostics_env_republisher(
+    supervisor: Arc<DiagnosticsCollectorSupervisor>,
+) {
+    static SPAWNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if SPAWNED.swap(true, std::sync::atomic::Ordering::AcqRel) {
+        return;
+    }
+    let state_rx = supervisor.subscribe_state();
+    tokio::spawn(dev_diagnostics_env_republish_loop(state_rx, move || {
+        publish_dev_diagnostics_env(&supervisor)
+    }));
+}
+
+/// Re-publishes exactly once per new `Ready` collector boot id. Keyed on the
+/// state watch rather than the generation counter: degraded publishes also
+/// bump the generation, and `dev_collector_env` warns when the collector is
+/// not Ready, so keying on Ready avoids warn spam. The current state seeds the
+/// last-published boot id because the boot-time publish already covered it.
+#[cfg(all(debug_assertions, unix))]
+pub(super) async fn dev_diagnostics_env_republish_loop(
+    mut state_rx: tokio::sync::watch::Receiver<
+        crate::diagnostics_collector::supervisor::DesktopDiagnosticsSupervisorStateV1,
+    >,
+    mut republish: impl FnMut(),
+) {
+    use crate::diagnostics_collector::supervisor::DesktopDiagnosticsSupervisorStateV1 as State;
+
+    let mut published_boot_id = match &*state_rx.borrow_and_update() {
+        State::Ready {
+            collector_boot_id, ..
+        } => Some(collector_boot_id.clone()),
+        _ => None,
+    };
+    while state_rx.changed().await.is_ok() {
+        let boot_id = match &*state_rx.borrow_and_update() {
+            State::Ready {
+                collector_boot_id, ..
+            } => collector_boot_id.clone(),
+            _ => continue,
+        };
+        if published_boot_id.as_deref() == Some(boot_id.as_str()) {
+            continue;
+        }
+        published_boot_id = Some(boot_id);
+        republish();
     }
 }

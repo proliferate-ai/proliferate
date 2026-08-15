@@ -33,7 +33,10 @@ pub(super) async fn boot_inner(
         }
         let _ = wait_healthy(sidecar, false).await;
         #[cfg(all(debug_assertions, unix))]
-        diagnostics::publish_dev_diagnostics_env(supervisor);
+        {
+            diagnostics::publish_dev_diagnostics_env(supervisor);
+            diagnostics::spawn_dev_diagnostics_env_republisher(Arc::clone(supervisor));
+        }
         return BootOutcome::External;
     }
 

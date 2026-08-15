@@ -237,3 +237,126 @@ async fn sole_sidecar_observer_reaps_natural_exit_after_healthy_startup() {
     assert!(guard.exit_observer.is_none());
     assert_eq!(guard.info.status, RuntimeStatus::Failed);
 }
+
+#[cfg(all(debug_assertions, unix))]
+mod dev_env_republish {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    use tokio::sync::watch;
+
+    use super::diagnostics::{
+        dev_diagnostics_env_republish_loop, render_dev_diagnostics_env_snippet,
+        write_dev_diagnostics_env,
+    };
+    use crate::diagnostics_collector::supervisor::DesktopDiagnosticsSupervisorStateV1 as State;
+
+    fn ready(collector_boot_id: &str, restart_count: u64) -> State {
+        State::Ready {
+            collector_boot_id: collector_boot_id.to_owned(),
+            schema_major: 1,
+            restart_count,
+        }
+    }
+
+    fn degraded() -> State {
+        State::Degraded {
+            classification: "collector_exited".to_owned(),
+            restart_count: 1,
+            retry_exhausted: false,
+        }
+    }
+
+    fn snippet_path(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!(
+            "proliferate-dev-env-test-{}-{name}.env",
+            std::process::id()
+        ))
+    }
+
+    #[test]
+    fn snippet_carries_all_four_lines_including_its_own_path() {
+        let path = std::path::Path::new("/tmp/app/diagnostics-dev.env");
+        let snippet =
+            render_dev_diagnostics_env_snippet(path, "http://127.0.0.1:53421/", "cap", "boot-a");
+        let lines: Vec<&str> = snippet.lines().collect();
+        assert_eq!(
+            lines,
+            vec![
+                "PROLIFERATE_DIAGNOSTICS_BRIDGE_ENDPOINT=http://127.0.0.1:53421/",
+                "PROLIFERATE_DIAGNOSTICS_BRIDGE_TOKEN=cap",
+                "PROLIFERATE_DIAGNOSTICS_BRIDGE_COLLECTOR_BOOT_ID=boot-a",
+                "PROLIFERATE_DIAGNOSTICS_DEV_ENV_PATH=/tmp/app/diagnostics-dev.env",
+            ]
+        );
+    }
+
+    /// Ready(a) → Degraded → Ready(b) rewrites the published file with the new
+    /// endpoint and boot id, exactly once per new Ready boot id — the seeding
+    /// Ready and a repeated Ready with the same boot id publish nothing.
+    #[tokio::test]
+    async fn new_ready_boot_id_republishes_exactly_once() {
+        let path = snippet_path("republish");
+        write_dev_diagnostics_env(
+            &path,
+            &render_dev_diagnostics_env_snippet(&path, "http://127.0.0.1:1111/", "cap-a", "boot-a"),
+        )
+        .expect("seed boot-time publish");
+
+        let (state_tx, state_rx) = watch::channel(ready("boot-a", 0));
+        let publishes = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&publishes);
+        let publish_path = path.clone();
+        let republisher = tokio::spawn(dev_diagnostics_env_republish_loop(state_rx, move || {
+            counter.fetch_add(1, Ordering::SeqCst);
+            write_dev_diagnostics_env(
+                &publish_path,
+                &render_dev_diagnostics_env_snippet(
+                    &publish_path,
+                    "http://127.0.0.1:2222/",
+                    "cap-b",
+                    "boot-b",
+                ),
+            )
+            .expect("republish");
+        }));
+        // Let the loop seed its last-published boot id from the current Ready
+        // before any transition is sent (current-thread runtime).
+        tokio::task::yield_now().await;
+
+        state_tx.send_replace(degraded());
+        state_tx.send_replace(ready("boot-b", 1));
+        // A repeated Ready for the same collector boot must not republish.
+        state_tx.send_replace(ready("boot-b", 2));
+        drop(state_tx);
+        republisher.await.expect("republish loop exits cleanly");
+
+        assert_eq!(publishes.load(Ordering::SeqCst), 1);
+        let content = std::fs::read_to_string(&path).expect("published file");
+        assert!(content.contains("PROLIFERATE_DIAGNOSTICS_BRIDGE_ENDPOINT=http://127.0.0.1:2222/"));
+        assert!(content.contains("PROLIFERATE_DIAGNOSTICS_BRIDGE_COLLECTOR_BOOT_ID=boot-b"));
+        assert!(!content.contains("boot-a"));
+        std::fs::remove_file(&path).ok();
+    }
+
+    /// Non-Ready transitions alone must never trigger a publish: keying on the
+    /// generation counter instead of Ready state would republish (and warn)
+    /// here.
+    #[tokio::test]
+    async fn degraded_transitions_do_not_republish() {
+        let (state_tx, state_rx) = watch::channel(ready("boot-a", 0));
+        let publishes = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&publishes);
+        let republisher = tokio::spawn(dev_diagnostics_env_republish_loop(state_rx, move || {
+            counter.fetch_add(1, Ordering::SeqCst);
+        }));
+        tokio::task::yield_now().await;
+
+        state_tx.send_replace(degraded());
+        state_tx.send_replace(State::Stopped { orderly: false });
+        drop(state_tx);
+        republisher.await.expect("republish loop exits cleanly");
+
+        assert_eq!(publishes.load(Ordering::SeqCst), 0);
+    }
+}
