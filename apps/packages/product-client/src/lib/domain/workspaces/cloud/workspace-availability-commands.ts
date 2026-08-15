@@ -55,6 +55,10 @@ export interface WorkspaceAvailabilityInput {
   /** A truthful blocker for an unsupported Git state (dirty, detached, mid-op,
    * unpublished). When set, the only command is the selectable blocker. */
   unsupportedGitBlocker?: string | null;
+  /** Whether Cloud compute is enabled on this deployment. When false, the
+   * `add-cloud-copy` command must not be offered — matches the gate applied to
+   * fresh-create paths (PRO-10). */
+  cloudComputeEnabled: boolean;
 }
 
 /**
@@ -104,6 +108,8 @@ export function deriveWorkspaceAvailabilityInput(args: {
   /** True when a heuristic same-repo/branch local+Cloud pair is a plausible,
    * not-yet-linked Link candidate. */
   linkCandidate?: boolean;
+  /** Whether Cloud compute is enabled on this deployment (PRO-10). */
+  cloudComputeEnabled: boolean;
 }): WorkspaceAvailabilityInput {
   const linkedLocal = localMaterializationForInstall(args.cloudWorkspace, args.desktopInstallId);
   const isExplicitlyLinked = linkedLocal !== null;
@@ -129,6 +135,7 @@ export function deriveWorkspaceAvailabilityInput(args: {
     linkCandidate: args.linkCandidate,
     localMaterializationNeedsRepair: localNeedsRepair,
     unsupportedGitBlocker,
+    cloudComputeEnabled: args.cloudComputeEnabled,
   };
 }
 
@@ -198,9 +205,13 @@ export function resolveWorkspaceAvailabilityCommands(
     return [{ kind: "open-on-this-mac", label: "Open on this Mac…" }];
   }
 
-  // Local only (no Cloud copy) → offer to add a managed-Cloud copy.
+  // Local only (no Cloud copy) → offer to add a managed-Cloud copy, unless
+  // Cloud compute is disabled on this deployment (PRO-10): no affordance to
+  // start a flow that would only fail.
   if (input.hasLocalWorkspace && !input.cloudWorkspace) {
-    return [{ kind: "add-cloud-copy", label: "Add Cloud copy…" }];
+    return input.cloudComputeEnabled
+      ? [{ kind: "add-cloud-copy", label: "Add Cloud copy…" }]
+      : [];
   }
 
   return [];

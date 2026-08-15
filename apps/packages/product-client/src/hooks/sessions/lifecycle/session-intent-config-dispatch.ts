@@ -44,13 +44,17 @@ export interface ConfigIntentDispatchDeps {
 }
 
 export async function dispatchConfigIntent(
-  intent: SessionUpdateConfigIntent,
+  selectedIntent: SessionUpdateConfigIntent,
   deps: ConfigIntentDispatchDeps,
 ): Promise<void> {
-  const current = useSessionIntentStore.getState().entriesById[intent.intentId];
+  const current = useSessionIntentStore.getState().entriesById[selectedIntent.intentId];
   if (!current || current.kind !== "update_config" || current.status !== "queued") {
     return;
   }
+  // Dispatch the store record, not the caller's snapshot: a queued intent can
+  // be superseded in place (tail coalescing) after the dispatcher selects it,
+  // and the wire payload must carry the superseding value.
+  const intent = current;
   const dispatchedAt = new Date().toISOString();
   useSessionIntentStore.getState().patchIntent(intent.intentId, {
     status: "dispatching",

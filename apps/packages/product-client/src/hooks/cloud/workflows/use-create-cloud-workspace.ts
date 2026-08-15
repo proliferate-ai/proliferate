@@ -33,6 +33,7 @@ import { ensureRepoGroupExpanded } from "#product/stores/preferences/workspace-u
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import type { AuthUser } from "#product/lib/domain/auth/auth-user";
 import { useProductAuthUser } from "#product/hooks/auth/facade/use-product-auth";
+import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
 import { useWorkspaceCollectionsCache } from "#product/hooks/workspaces/cache/use-workspace-collections-cache";
 import { useWorkspaceCollectionsMutationCache } from "#product/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
@@ -43,6 +44,9 @@ import {
 } from "#product/lib/infra/measurement/measurement-port";
 
 const MAX_CLOUD_CREATE_ATTEMPTS = 3;
+
+// Matches the command-surface gate message (use-app-new-workspace-command-actions.ts).
+const CLOUD_WORKSPACE_UNAVAILABLE_MESSAGE = "Cloud workspaces are temporarily unavailable.";
 
 interface CreateCloudWorkspaceAndEnterOptions {
   repoGroupKeyToExpand?: string | null;
@@ -73,9 +77,8 @@ export type CloudWorkspaceEntryResult =
   }
   | {
     status: "interrupted";
-    // Set only when the attempt failed with a server error (vs. being
-    // superseded by a newer attempt); carries the resolved server message so
-    // callers can surface it in a toast instead of a generic string.
+    // Set only on server-error failure (not superseded attempts); carries the
+    // resolved server message for caller toasts.
     failureMessage?: string;
   }
   // The user dismissed the pending workspace: nothing failed, so callers stop
@@ -115,6 +118,7 @@ export function useCreateCloudWorkspace() {
         : null,
     [hostAuthUser],
   );
+  const { cloudComputeEnabled } = useAppCapabilities();
   const { selectWorkspace } = useWorkspaceSelection();
   const { beginPendingWorkspace, failPendingEntry, finalizeSelection } = useWorkspaceEntryFlow();
   const invalidateCloudBillingState = useInvalidateCloudBillingState();
@@ -203,6 +207,17 @@ export function useCreateCloudWorkspace() {
         return { status: "dismissed" };
       }
       currentEntry = nextEntry;
+
+      // Defense in depth (PRO-10): callers like the receipt Retry path reach
+      // this flow without their own gate; fail like a server-rejected create
+      // before the mutation ever runs.
+      if (!cloudComputeEnabled) {
+        failPendingEntry(
+          getPendingWorkspaceEntry(attemptId) ?? currentEntry,
+          CLOUD_WORKSPACE_UNAVAILABLE_MESSAGE,
+        );
+        return { status: "interrupted", failureMessage: CLOUD_WORKSPACE_UNAVAILABLE_MESSAGE };
+      }
 
       try {
         const requestStartedAt = startLatencyTimer();
@@ -329,6 +344,7 @@ export function useCreateCloudWorkspace() {
     authUser,
     beginPendingWorkspace,
     branchPrefixType,
+    cloudComputeEnabled,
     createCloudWorkspaceMutation,
     failPendingEntry,
     finalizeSelection,
