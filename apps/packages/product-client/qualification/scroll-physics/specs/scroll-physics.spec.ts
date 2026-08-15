@@ -146,16 +146,33 @@ async function wheelToBottom(page: Page): Promise<void> {
 }
 
 test.describe("transcript scroll physics", () => {
-  // FIXME AT RUNG 3 ONLY (chat-scroll/r3-single-writer). CI proved that the r3
-  // single-writer pin decision cannot hold pinned-follow cadence on slow CI
-  // runners: pinned-follow lands at bottomDistance 132 (> 120) on both
-  // chromium and webkit. The rung-4 same-frame pipeline (PR #1945,
-  // chat-scroll/r4-frame-pipeline) performs a SYNCHRONOUS snap inside the
-  // ResizeObserver notify path, and CI proves that fix makes this exact test
-  // pass on both engines at r4. The threshold is NOT loosened; this scenario is
-  // un-fixme'd by r4's diff (it must be active on r4/r5). Un-fixme point: PR
-  // #1945.
-  test.fixme("pinned-follow: bottom distance stays ~0 across streaming growth", async ({ page }) => {
+  // Rung 4 (PRO-187): the one owned per-frame snap pass writes scrollTop exactly
+  // once per frame, so no snap/measure feedback can provoke the browser's
+  // "ResizeObserver loop completed with undelivered notifications" error. Every
+  // spec fails if any page error or that console error surfaces during the run.
+  let pageErrors: string[] = [];
+  test.beforeEach(({ page }) => {
+    pageErrors = [];
+    page.on("pageerror", (error) => {
+      pageErrors.push(String(error));
+    });
+    page.on("console", (message) => {
+      const text = message.text();
+      if (message.type() === "error" && /ResizeObserver loop/i.test(text)) {
+        pageErrors.push(text);
+      }
+    });
+  });
+  test.afterEach(() => {
+    expect(pageErrors, `unexpected page/ResizeObserver-loop errors:\n${pageErrors.join("\n")}`)
+      .toEqual([]);
+  });
+
+  // Rung 4 un-fixmes pinned-follow: PR #1938 (r3) marks it test.fixme because the
+  // single-writer pin decision alone cannot hold the follow cadence on slow CI
+  // runners (bottomDistance 132 > 120 on both engines). The synchronous
+  // ResizeObserver-notify snap this rung adds fixes it, proven green on CI here.
+  test("pinned-follow: bottom distance stays ~0 across streaming growth", async ({ page }) => {
     await ready(page);
     await drive(page, "reset");
     await drive(page, "seedFinalizedConversation", 6);

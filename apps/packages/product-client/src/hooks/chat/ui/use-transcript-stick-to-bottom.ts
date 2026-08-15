@@ -2,15 +2,15 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObje
 import { resolveVirtualBottomDistance } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import {
   DIRECTION_EPSILON_PX,
-  GLUE_MAX_FRAMES,
-  GLUE_STABLE_FRAMES,
   PROGRAMMATIC_MATCH_TOL_PX,
   REPIN_BOTTOM_THRESHOLD_PX,
   TRANSCRIPT_USER_SCROLL_SETTLE_MS,
+  type ContentHeightScrollAnchor,
   type TranscriptScrollSample,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
 import { decideTranscriptScrollPin } from "#product/hooks/chat/ui/transcript-scroll-pin-decision";
 import { resolveAutoFollowScrollTop } from "#product/hooks/chat/ui/transcript-auto-follow-target";
+import { TranscriptFramePipeline } from "#product/hooks/chat/ui/transcript-frame-pipeline";
 import { TranscriptScrollOwnershipMarkers } from "#product/hooks/chat/ui/transcript-scroll-ownership";
 import { useTranscriptSubmitStampRepin } from "#product/hooks/chat/ui/use-transcript-submit-stamp-repin";
 import { useTranscriptUserScrollIntent } from "#product/hooks/chat/ui/use-transcript-user-scroll-intent";
@@ -66,11 +66,28 @@ export interface TranscriptStickToBottom {
   handleScrollToBottomClick: () => void;
   /** Wrap ANY external scrollTop/scrollToOffset write so its scroll event is excluded from pin/direction. */
   notifyProgrammaticScroll: (write: () => void) => void;
-  userScrollUpIntentAtRef: RefObject<number>; // last UPWARD-intent `performance.now`; use-above-change-compensation cancels on it
   /** Force the pin state (history prepend / anchor restore intentionally unpin to hold the user's position). */
   setPinned: (pinned: boolean) => void;
   /** Reset all tracking and re-pin for a session/workspace switch. */
   resetForSession: () => void;
+  /**
+   * Mutation source for the single content ResizeObserver: request the one
+   * per-frame snap pass. Coalesces with every other source into ONE snap.
+   */
+  notifyContentResize: () => void;
+  /**
+   * Hold anchored content in place while a freshly-inserted row above it
+   * measures in, routed through the single frame pipeline instead of an
+   * independent rAF delta loop. Applies the measured scrollHeight delta each
+   * glued frame while unpinned; a no-op while pinned.
+   */
+  startAboveChangeCompensation: (anchor: ContentHeightScrollAnchor) => void;
+  /**
+   * Cancel the pending frame pass / glue window. Registered as the transcript's
+   * synchronous scroll-pause listener so a user scroll inside the input event's
+   * call stack pre-empts any queued programmatic snap.
+   */
+  cancelFramePipeline: () => void;
 }
 
 /**
@@ -101,11 +118,16 @@ export function useTranscriptStickToBottom({
   // writes apart from a user scroll. See transcript-scroll-ownership.ts.
   // `useRef`'s initializer only takes effect on the first render.
   const ownershipMarkersRef = useRef(new TranscriptScrollOwnershipMarkers());
-  const glueFrameRef = useRef<number | null>(null);
+  // One per-frame mutate-then-snap pipeline (rung 4 / PRO-187): replaces the
+  // session-entry / submit / tab-resume glue rAF loops and the above-change
+  // compensation rAF loop with a single owned scheduler and ONE snap writer.
+  const pipelineRef = useRef(new TranscriptFramePipeline());
+  // Active above-change compensation anchor, applied by the single frame writer
+  // while unpinned and gluing (was the standalone compensation rAF loop).
+  const compensationAnchorRef = useRef<ContentHeightScrollAnchor | null>(null);
   const autoFollowBottomInsetRef = useRef(Math.max(0, autoFollowBottomInsetPx));
   const consumedAutoFollowBottomInsetRef = useRef(0);
   const userScrollIntentUntilRef = useRef(0);
-  const userScrollUpIntentAtRef = useRef(0);
 
   const setPinned = useCallback((next: boolean) => {
     if (pinnedRef.current === next) {
@@ -144,7 +166,16 @@ export function useTranscriptStickToBottom({
   const notifyUserScrollIntent = useCallback((direction: -1 | 1) => {
     userScrollIntentUntilRef.current = interactionNow() + TRANSCRIPT_USER_SCROLL_SETTLE_MS;
     if (direction < 0) {
-      userScrollUpIntentAtRef.current = interactionNow();
+      // Genuine upward intent cancels an active above-viewport compensation:
+      // the reader scrolling up during a completed-turn split or a settling
+      // prepend must never be re-anchored per-frame; the gesture wins (CSS
+      // scroll anchoring likewise suppresses adjustments during user scroll).
+      // Clearing the ANCHOR THAT EXISTS NOW is exactly the ruling's nuance: a
+      // window armed LATER (the wheel-up that triggered a prepend, since
+      // stopped) has no anchor yet and is untouched. Downward intent and the
+      // programmatic snaps routed through notifyProgrammaticScroll never reach
+      // here, so neither can cancel.
+      compensationAnchorRef.current = null;
       setPinned(false);
     }
     // Claim the frame at input time so it can't race a stream/reveal animation frame.
@@ -285,40 +316,72 @@ export function useTranscriptStickToBottom({
     );
   }, [onScrollSample, pinnedRef, repinThresholdPx, setPinned]);
 
-  const startGlueLoop = useCallback(() => {
+  // The SINGLE snap/compensation writer the frame pipeline drives each frame.
+  // Snap to the follow target while pinned; apply the above-change compensation
+  // delta while unpinned inside a glue window; otherwise do nothing. Every write
+  // still flows through the rung-3 ownership markers (WHO wrote); the pipeline
+  // owns only WHEN. Registered once via the ref initializer's stable instance.
+  const runFramePass = useCallback(() => {
+    const viewport = scrollRef.current;
+    if (!viewport) {
+      return;
+    }
+    if (pinnedRef.current) {
+      scrollToBottom();
+      return;
+    }
+    const anchor = compensationAnchorRef.current;
+    if (anchor && pipelineRef.current.isGluing) {
+      notifyProgrammaticScroll(() => {
+        viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
+      });
+    }
+  }, [notifyProgrammaticScroll, scrollRef, scrollToBottom]);
+
+  useLayoutEffect(() => {
+    const pipeline = pipelineRef.current;
+    pipeline.setWriter({
+      runFramePass,
+      measureContentHeight: () => scrollRef.current?.scrollHeight ?? -1,
+      shouldContinueGlue: () => {
+        const viewport = scrollRef.current;
+        if (!viewport) {
+          return false;
+        }
+        // A pinned burst glues to the bottom; an unpinned burst glues an active
+        // above-change compensation anchor. Either way the user reclaiming
+        // control (unpin with no anchor) ends the window.
+        return pinnedRef.current || compensationAnchorRef.current != null;
+      },
+    });
+  }, [runFramePass, scrollRef]);
+
+  // Session re-entry / submit / tab-resume "glue": snap each frame while a
+  // freshly mounted or resumed measurement backlog lands, terminating when the
+  // content ResizeObserver goes quiet or the hard cap elapses.
+  const beginGlue = useCallback(() => {
     if (typeof window === "undefined") {
       return;
     }
-    if (glueFrameRef.current != null) {
-      cancelAnimationFrame(glueFrameRef.current);
-    }
-    let lastHeight = -1;
-    let stableFrames = 0;
-    let totalFrames = 0;
-    const tick = () => {
-      const viewport = scrollRef.current;
-      // Bail the moment the user reclaims control (an intent listener unpins).
-      if (!viewport || !pinnedRef.current) {
-        glueFrameRef.current = null;
-        return;
-      }
-      scrollToBottom();
-      const height = viewport.scrollHeight;
-      if (height === lastHeight) {
-        stableFrames += 1;
-      } else {
-        stableFrames = 0;
-        lastHeight = height;
-      }
-      totalFrames += 1;
-      if (stableFrames >= GLUE_STABLE_FRAMES || totalFrames >= GLUE_MAX_FRAMES) {
-        glueFrameRef.current = null;
-        return;
-      }
-      glueFrameRef.current = requestAnimationFrame(tick);
-    };
-    glueFrameRef.current = requestAnimationFrame(tick);
-  }, [scrollRef, scrollToBottom]);
+    pipelineRef.current.beginGlue();
+  }, []);
+
+  const notifyContentResize = useCallback(() => {
+    pipelineRef.current.requestFrame();
+  }, []);
+
+  const cancelFramePipeline = useCallback(() => {
+    pipelineRef.current.cancel();
+  }, []);
+
+  // Hold anchored content in place while a row inserted ABOVE it measures in.
+  // Sets the compensation anchor and starts a glue window; the single frame
+  // writer re-applies the measured scrollHeight delta each glued frame (so the
+  // anchor stays put as the estimate corrects) until the height settles.
+  const startAboveChangeCompensation = useCallback((anchor: ContentHeightScrollAnchor) => {
+    compensationAnchorRef.current = anchor;
+    beginGlue();
+  }, [beginGlue]);
 
   // A prompt submit is an explicit return-to-bottom intent (PRO-175 scopes it
   // to session identity so a session switch can't misfire it) — see
@@ -330,7 +393,7 @@ export function useTranscriptStickToBottom({
     sessionKey,
     setPinned,
     scrollToBottom,
-    startGlueLoop,
+    beginGlue,
   });
 
   // Session re-entry: snap instantly, then glue for a few frames so the
@@ -339,15 +402,15 @@ export function useTranscriptStickToBottom({
   // scroll from an old position to the bottom.
   const resetForSession = useCallback(() => {
     clearAllMarkers();
+    compensationAnchorRef.current = null;
     lastScrollTopRef.current = 0;
     lastContentHeightRef.current = 0;
     consumedAutoFollowBottomInsetRef.current = 0;
     userScrollIntentUntilRef.current = 0;
-    userScrollUpIntentAtRef.current = 0;
     setPinned(true);
     scrollToBottom();
-    startGlueLoop();
-  }, [clearAllMarkers, scrollToBottom, setPinned, startGlueLoop]);
+    beginGlue();
+  }, [beginGlue, clearAllMarkers, scrollToBottom, setPinned]);
 
   // Establish input ownership before the visibility lifecycle can resume the
   // pinned glue loop.
@@ -364,25 +427,23 @@ export function useTranscriptStickToBottom({
       if (document.visibilityState !== "visible" || !pinnedRef.current) {
         return;
       }
-      startGlueLoop();
+      beginGlue();
     };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
-      if (glueFrameRef.current != null) {
-        cancelAnimationFrame(glueFrameRef.current);
-        glueFrameRef.current = null;
-      }
+      pipelineRef.current.cancel();
     };
-  }, [startGlueLoop]);
+  }, [beginGlue]);
 
-  useEffect(() => () => {
-    clearAllMarkers();
-    if (glueFrameRef.current != null) {
-      cancelAnimationFrame(glueFrameRef.current);
-    }
+  useEffect(() => {
+    const pipeline = pipelineRef.current;
+    return () => {
+      clearAllMarkers();
+      pipeline.dispose();
+    };
   }, [clearAllMarkers]);
 
   return {
@@ -395,6 +456,8 @@ export function useTranscriptStickToBottom({
     notifyProgrammaticScroll,
     setPinned,
     resetForSession,
-    userScrollUpIntentAtRef,
+    notifyContentResize,
+    startAboveChangeCompensation,
+    cancelFramePipeline,
   };
 }
