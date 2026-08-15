@@ -377,23 +377,64 @@ pub fn derive_agent_auth_state(facts: &AgentAuthFacts) -> DerivedState {
 // Rung-2 fact adapter: build facts from the existing readiness projection
 // ---------------------------------------------------------------------------
 
+/// A tier-1 credential trial verdict, folded into the facts by
+/// [`facts_from_resolved_with_runtime`] (ADR FR-2). Kept in this
+/// dependency-free module so `model_snapshot` (which depends on this module)
+/// maps its own trial result onto this shape rather than the reverse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tier1TrialFact {
+    /// A key-scoped gateway check came back green, with the age of the check.
+    Green { age_seconds: i64 },
+    /// The key-scoped check saw a 401/403 — the credential is lapsed.
+    Expired,
+}
+
+/// The live runtime inputs a surface folds into the facts on top of the static
+/// readiness projection: the probe engine's real lifecycle (ADR FR-2 item 3) and
+/// an optional tier-1 trial verdict (ADR FR-2 item 1). Defaults reproduce the
+/// rung-2 behavior exactly — an `Idle` probe and no trial — so the plain
+/// [`facts_from_resolved`] stays a pure function of the resolved agent.
+#[derive(Debug, Clone, Default)]
+pub struct AuthRuntimeInputs {
+    pub probe: ProbeLifecycle,
+    pub trial: Option<Tier1TrialFact>,
+}
+
 /// Build [`AgentAuthFacts`] from a resolved agent, using ONLY the data the
-/// readiness projection already carries in this rung. The probe lifecycle,
-/// gateway health, and login handoff stay at their empty defaults until the
-/// rungs that own them wire real inputs.
+/// readiness projection already carries. The probe lifecycle stays `Idle` and no
+/// trial is folded; [`facts_from_resolved_with_runtime`] adds the live inputs.
 ///
 /// The mapping is intentionally conservative: nothing here fabricates a
 /// tier-1 trial or a probe observation, so no path through this adapter can
 /// yield a green display. That is the point — a locally-detected credential is
 /// bare presence, which the derivation refuses to call green.
 pub fn facts_from_resolved(resolved: &ResolvedAgent) -> AgentAuthFacts {
+    facts_from_resolved_with_runtime(resolved, &AuthRuntimeInputs::default())
+}
+
+/// [`facts_from_resolved`] plus the live runtime inputs: the real probe
+/// lifecycle and, when a tier-1 trial has a verdict, its fold onto the
+/// credential and the `expired` terminal.
+///
+/// A green trial upgrades the gateway-sourced credential's strength to
+/// [`CredentialEvidenceStrength::Tier1Trial`] with the check's age, which is the
+/// ONLY way `facts_from_resolved`'s output can reach a green
+/// [`AuthDisplay::Authenticated`] before a full probe lands. An expired trial
+/// sets the `expired` terminal directly. Neither can manufacture a probe
+/// observation, so the probe-first invariant is untouched.
+pub fn facts_from_resolved_with_runtime(
+    resolved: &ResolvedAgent,
+    runtime: &AuthRuntimeInputs,
+) -> AgentAuthFacts {
     let installed = !matches!(resolved.status, ResolvedAgentStatus::InstallRequired);
     let unsupported_route = matches!(resolved.status, ResolvedAgentStatus::Unsupported);
     // A resolution error is the closest current signal for an inconsistent
     // applied world; surface it as the config terminal rather than inventing a
     // new one.
     let misconfigured = matches!(resolved.status, ResolvedAgentStatus::Error);
-    let expired = matches!(resolved.cli_auth_state, Some(CliAuthState::Expired));
+    // A lapsed local credential OR a tier-1 trial that saw a 401/403 is expired.
+    let expired = matches!(resolved.cli_auth_state, Some(CliAuthState::Expired))
+        || matches!(runtime.trial, Some(Tier1TrialFact::Expired));
 
     let credential = if resolved.credentials_from_route {
         Some(CredentialEvidence {
@@ -417,6 +458,25 @@ pub fn facts_from_resolved(resolved: &ResolvedAgent) -> AgentAuthFacts {
         }
     };
 
+    // A green tier-1 trial upgrades the credential it verified to the trial
+    // strength with the check's age. Two guards keep this honest: only a
+    // credential that actually exists is upgraded (a trial cannot conjure evidence
+    // for a missing credential), and ONLY a GATEWAY-sourced credential is upgraded
+    // — the tier-1 trial verifies a gateway virtual key, so folding its green onto
+    // a native-login or pasted-key credential would attach `GatewayKeyCheck`
+    // evidence to a credential it never checked. A lingering stale gateway verdict
+    // therefore cannot promote a non-gateway credential.
+    let credential = match (credential, runtime.trial) {
+        (Some(mut evidence), Some(Tier1TrialFact::Green { age_seconds }))
+            if evidence.source == CredentialSource::Gateway =>
+        {
+            evidence.strength = CredentialEvidenceStrength::Tier1Trial;
+            evidence.evidence_age_seconds = Some(age_seconds);
+            Some(evidence)
+        }
+        (credential, _) => credential,
+    };
+
     let selection = if resolved.credentials_from_route {
         Some(SelectionFact {
             acknowledged: true,
@@ -435,7 +495,7 @@ pub fn facts_from_resolved(resolved: &ResolvedAgent) -> AgentAuthFacts {
         expired,
         credential,
         selection,
-        probe: ProbeLifecycle::default(),
+        probe: runtime.probe.clone(),
         gateway: None,
         handoff: None,
     }

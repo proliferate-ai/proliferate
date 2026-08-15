@@ -14,8 +14,9 @@ use anyharness_contract::v1::{
 };
 
 use crate::domains::agents::auth_state::{
-    self, AuthDisplay, CredentialEvidence, CredentialEvidenceStrength, CredentialSource, EvidenceRef,
-    GatewayHealth, LoginHandoff, NextAction, ProbeLifecycle, ProbePhase, SelectionFact,
+    self, AuthDisplay, AuthRuntimeInputs, CredentialEvidence, CredentialEvidenceStrength,
+    CredentialSource, EvidenceRef, GatewayHealth, LoginHandoff, NextAction, ProbeLifecycle,
+    ProbePhase, SelectionFact,
 };
 
 use crate::domains::agents::auth::login_terminal::{
@@ -193,6 +194,7 @@ fn reconcile_result_to_contract(result: &InternalAgentReconcileResult) -> Reconc
 pub(super) fn to_summary(
     resolved: &ResolvedAgent,
     reconcile_snapshot: Option<&AgentReconcileJobSnapshot>,
+    auth_runtime: &AuthRuntimeInputs,
 ) -> AgentSummary {
     let desc = &resolved.descriptor;
 
@@ -275,7 +277,7 @@ pub(super) fn to_summary(
         message,
         cli_auth_state,
         user_path_copy_detected: has_user_path_copy(desc),
-        auth_state: Some(to_auth_state_summary(resolved)),
+        auth_state: Some(to_auth_state_summary(resolved, auth_runtime)),
     }
 }
 
@@ -283,8 +285,11 @@ pub(super) fn to_summary(
 /// orthogonal facts from the resolved agent, folds them through the ONE shared
 /// derivation, and maps both onto the wire vocabulary. Additive: this never
 /// touches `credentialState`/`readiness` above.
-fn to_auth_state_summary(resolved: &ResolvedAgent) -> AgentAuthStateSummary {
-    let facts = auth_state::facts_from_resolved(resolved);
+fn to_auth_state_summary(
+    resolved: &ResolvedAgent,
+    auth_runtime: &AuthRuntimeInputs,
+) -> AgentAuthStateSummary {
+    let facts = auth_state::facts_from_resolved_with_runtime(resolved, auth_runtime);
     let derived = auth_state::derive_agent_auth_state(&facts);
     AgentAuthStateSummary {
         display: auth_display_to_contract(derived.display),
