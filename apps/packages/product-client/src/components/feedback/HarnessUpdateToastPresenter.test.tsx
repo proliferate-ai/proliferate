@@ -172,6 +172,28 @@ it("states what still works when the job fails", () => {
   });
 });
 
+it("names the harness and typed reason when the runtime reports failureKind", () => {
+  const { rerender } = render(<HarnessUpdateToastPresenter />);
+  vi.clearAllMocks();
+
+  state.localSnapshot = {
+    ...state.defaultLocalSnapshot,
+    status: "failed",
+    results: [
+      { kind: "codex", outcome: "failed", failureKind: "network", installedArtifacts: [] },
+    ],
+  };
+  rerender(<HarnessUpdateToastPresenter />);
+
+  expect(raisedWithId(HARNESS_UPDATE_TOAST_ID)).toMatchObject({
+    weight: "announcement",
+    tone: "warning",
+    title: "Some agent tools could not update",
+    description:
+      "This machine: Codex failed (a network error). The ones that updated are usable. Open agent settings to retry the rest.",
+  });
+});
+
 it("keeps a dismissed active job hidden until a different job starts", () => {
   const { rerender } = render(<HarnessUpdateToastPresenter />);
   const toastInput = toastMocks.showToast.mock.calls[0]?.[0] as unknown as {

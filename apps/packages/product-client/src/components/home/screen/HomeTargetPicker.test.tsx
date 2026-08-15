@@ -245,18 +245,28 @@ describe("HomeTargetPicker", () => {
     expect(screen.queryByRole("button", { name: /Work locally/i })).toBeNull();
   });
 
-  it("disables unavailable cloud runtime choices", () => {
+  // FM8 (PRO-10): cloud is culled from Desktop. The Desktop runtime picker must
+  // always offer local / worktree (+ SSH), never a cloud choice and never empty.
+  it("offers local and worktree on Desktop and never a cloud runtime choice", () => {
     const callbacks = renderPicker({
       cloudActionBySourceRoot: {
-        [keystoneRepository.sourceRoot]: { kind: "hidden", label: null },
+        [keystoneRepository.sourceRoot]: { kind: "create", label: "New cloud workspace" },
       },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Runtime: New worktree/i }));
-    const cloudButton = screen.getByRole("button", { name: /Cloud unavailable/i });
 
-    expect((cloudButton as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(cloudButton);
-    expect(callbacks.onSelectRuntime).not.toHaveBeenCalledWith("cloud");
+    expect(screen.getByRole("button", { name: "Work locally" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "New worktree" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Cloud/i })).toBeNull();
+    expect(callbacks.onConfigureCloud).not.toHaveBeenCalled();
+  });
+
+  it("coerces a stale cloud repoLaunchKind to worktree on Desktop", () => {
+    renderPicker({ repoLaunchKind: "cloud" });
+
+    // The trigger reflects the coerced worktree runtime, never "Cloud".
+    expect(screen.getByRole("button", { name: /Runtime: New worktree/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Runtime: Cloud/i })).toBeNull();
   });
 });

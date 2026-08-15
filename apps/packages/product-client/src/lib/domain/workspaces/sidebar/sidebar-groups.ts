@@ -97,6 +97,8 @@ export function buildSidebarGroupStates(args: {
   sessionLastViewedAt?: Record<string, string>;
   suppressActiveNeedsReview?: boolean;
   desktopInstallId?: string | null;
+  /** Whether Cloud compute is enabled on this deployment (PRO-10). */
+  cloudComputeEnabled: boolean;
 }): SidebarGroupState[] {
   const visibleWorkspaceTypes = new Set(resolveSidebarWorkspaceTypes(args.workspaceTypes));
   const repoRootsByKey = new Map(
@@ -199,6 +201,7 @@ export function buildSidebarGroupStates(args: {
         sessionLastViewedAt: args.sessionLastViewedAt,
         suppressActiveNeedsReview: args.suppressActiveNeedsReview,
         desktopInstallId: args.desktopInstallId,
+        cloudComputeEnabled: args.cloudComputeEnabled,
       });
       const items = pendingItems.length > 0
         ? [...pendingItems, ...workspaceItems]

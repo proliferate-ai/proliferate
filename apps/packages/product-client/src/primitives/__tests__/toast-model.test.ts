@@ -107,11 +107,11 @@ describe("resolveToastDuration", () => {
     ).toBe(ANNOUNCEMENT_TOAST_DURATION_MS);
   });
 
-  it("lets a caller shorten a dwell but not shorten a decision", () => {
+  it("lets a caller shorten a dwell but never expire an error", () => {
     expect(
       resolveToastDuration({ weight: "announcement", title: "Up to date", duration: 4_000 }),
     ).toBe(4_000);
-    // The same short duration is ignored once there is something to answer.
+    // The same short duration is ignored once there is a failure to face.
     expect(
       resolveToastDuration({
         weight: "announcement",
@@ -120,6 +120,18 @@ describe("resolveToastDuration", () => {
         isError: true,
       }),
     ).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it("lets an explicit duration expire an offer (Undo-style), overriding action persistence", () => {
+    expect(
+      resolveToastDuration({
+        weight: "announcement",
+        title: "Archived",
+        duration: 10_000,
+        secondary: { label: "Undo", onClick: noop },
+        commit: { label: "View archived", onClick: noop },
+      }),
+    ).toBe(10_000);
   });
 });
 

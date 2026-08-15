@@ -68,6 +68,7 @@ function sidebarSourceRootForWorkspace(
     activeSessionTitle: null,
     lastViewedAt: {},
     workspaceLastInteracted: {},
+    cloudComputeEnabled: true,
   });
   return groups[0]!.sourceRoot;
 }

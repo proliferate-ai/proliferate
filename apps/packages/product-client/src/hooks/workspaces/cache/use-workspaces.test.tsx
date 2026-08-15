@@ -142,7 +142,10 @@ describe("useWorkspaces", () => {
     expect(result.current.isSuccess).toBe(false);
   });
 
-  it("keeps seeded cloud workspace data available without a local runtime", () => {
+  // Cloud culling (PRO-10, FR-2): seeded cloud workspace rows are removed at
+  // the buildWorkspaceCollections seam, so the cache never surfaces them.
+  // (Pre-cull this asserted the seeded "cloud-1" row stayed available.)
+  it("culls seeded cloud workspace data even without a local runtime", () => {
     mocks.cloudActive = true;
     useHarnessConnectionStore.setState({
       runtimeUrl: "",
@@ -160,9 +163,7 @@ describe("useWorkspaces", () => {
     expect(mocks.workspacesList).not.toHaveBeenCalled();
     expect(mocks.repoRootsList).not.toHaveBeenCalled();
     expect(result.current.fetchStatus).toBe("idle");
-    expect(result.current.data?.cloudWorkspaces.map((workspace) => workspace.id)).toEqual([
-      "cloud-1",
-    ]);
+    expect(result.current.data?.cloudWorkspaces).toEqual([]);
   });
 
   it("continues loading local inventory when cloud is also active", async () => {

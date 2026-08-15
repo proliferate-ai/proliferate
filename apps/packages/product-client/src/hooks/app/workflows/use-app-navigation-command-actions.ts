@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { APP_ROUTES } from "#product/config/app-routes";
+import { isWorkflowsV2Enabled } from "#product/lib/domain/capabilities/workflows-v2";
 import { navigateApp } from "#product/lib/workflows/app/app-navigate-handoff";
 import {
   SETTINGS_NAV_FLOW_KEY,
@@ -55,6 +56,10 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
   const goWorkflows = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.workflows);
   }, [goToTopLevelRoute]);
+  // Same treatment as the sidebar row: while the workflows_v2 gate is off the
+  // command is not offered at all, rather than offered and landing on the
+  // deliberately unavailable page.
+  const workflowsHidden = !isWorkflowsV2Enabled();
   const webAppBaseUrl = webApp.baseUrl;
   const openWebApp = useCallback(() => {
     if (!webAppBaseUrl) {
@@ -117,6 +122,7 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
     goWorkflows: {
       execute: goWorkflows,
       disabledReason: null,
+      hidden: workflowsHidden,
     },
     openWebApp: {
       execute: openWebApp,
@@ -132,6 +138,7 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
     openSupportAction,
     openWebApp,
     webApp.available,
+    workflowsHidden,
     showKeyboardShortcuts,
   ]);
 }

@@ -48,6 +48,12 @@ pub enum ProbeError {
     Timeout,
     #[error("probe was cancelled")]
     Cancelled,
+    /// The harness process could not be spawned at all (missing executable, exec
+    /// error). Distinct from `Failed`/`Timeout` so a wedged or absent binary
+    /// FAST-FAILS with a named code (ADR FR-2, A5) instead of waiting out
+    /// `per_probe_timeout`: a spawn that never starts has nothing to time out on.
+    #[error("probe spawn failed: {detail}")]
+    Spawn { detail: String },
     #[error("probe failed: {detail}")]
     Failed { detail: String },
     /// The probe thread ended without sending an outcome — it panicked, or the
@@ -59,15 +65,37 @@ pub enum ProbeError {
 
 impl ProbeError {
     /// The `lastAttempt.detail` this failure records. Stable strings, because the
-    /// status surface and its tests read them.
+    /// status surface and its tests read them. A spawn failure carries the
+    /// [`Self::code`] prefix so a surface can name the fast-fail without parsing.
     pub fn detail(&self) -> String {
         match self {
             Self::Timeout => "timeout".to_string(),
             Self::Cancelled => "cancelled".to_string(),
             Self::RunnerVanished => "runner vanished".to_string(),
             Self::Materialize(error) => error.to_string(),
+            Self::Spawn { detail } => format!("{}: {detail}", Self::CODE_SPAWN),
             Self::Failed { detail } => detail.clone(),
         }
+    }
+
+    /// The stable machine code for this failure. `Spawn` is the one the fast-fail
+    /// path surfaces; the others keep their historical detail strings.
+    pub const CODE_SPAWN: &'static str = "spawn_failed";
+
+    /// True when a harness error string names a spawn/exec failure rather than an
+    /// in-session probe failure. Matched against the messages
+    /// `spawn_agent_process` raises when a binary is missing or will not exec, so
+    /// a broken install fast-fails as [`Self::Spawn`] instead of `Failed`.
+    ///
+    /// COUPLING: these substrings are the literal messages produced in
+    /// `live::sessions::driver::process::spawn_agent_process` (`no executable path
+    /// for agent`, `spawn agent subprocess: ...`). A `.context(...)` wrapper or a
+    /// reword there silently breaks this match — the matching comment on that side
+    /// says the same. The forward-safe fix is a typed spawn error; until then this
+    /// coupling is the seam to keep honest.
+    pub fn is_spawn_failure(message: &str) -> bool {
+        message.contains("spawn agent subprocess")
+            || message.contains("no executable path for agent")
     }
 }
 
@@ -82,8 +110,13 @@ pub struct ProbeRequest {
     pub plan: GatewayModelPlan,
     pub runtime_home: PathBuf,
     pub per_probe_timeout: Duration,
-    pub model_switch_timeout: Duration,
 }
+
+/// The model-switch wait handed to `probe_agent`. Runtime probes never switch
+/// models (`switch_models: false`), so nothing ever waits on this; it is a fixed
+/// nonzero placeholder rather than a tunable. The dead `model_switch_timeout`
+/// engine-config field that used to feed it was deleted with ADR FR-2.
+const PROBE_MODEL_SWITCH_TIMEOUT: Duration = Duration::from_secs(1);
 
 impl std::fmt::Debug for ProbeRequest {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -192,7 +225,7 @@ impl ProbeRunner for AcpProbeRunner {
                         // `probe_agent` resolves the INSTALL from.
                         runtime_home: request.runtime_home.clone(),
                         workspace_root: Some(materialized.scratch.workspace_root()),
-                        model_switch_timeout: request.model_switch_timeout,
+                        model_switch_timeout: PROBE_MODEL_SWITCH_TIMEOUT,
                         // The complete list: `max_models: Some(0)` would truncate
                         // to zero, which is not a way to skip switching.
                         max_models: None,
@@ -206,9 +239,19 @@ impl ProbeRunner for AcpProbeRunner {
                             probe_agent(options),
                         ) => match outcome {
                             Ok(Ok(snapshot)) => Ok(snapshot),
-                            Ok(Err(error)) => Err(ProbeError::Failed {
-                                detail: error.to_string(),
-                            }),
+                            Ok(Err(error)) => {
+                                // A spawn/exec failure fast-fails with a named
+                                // code rather than dressing up as a generic probe
+                                // failure (ADR FR-2). `spawn_agent_process`
+                                // returns immediately on a missing/broken binary,
+                                // so this never waited on the timeout.
+                                let message = error.to_string();
+                                if ProbeError::is_spawn_failure(&message) {
+                                    Err(ProbeError::Spawn { detail: message })
+                                } else {
+                                    Err(ProbeError::Failed { detail: message })
+                                }
+                            }
                             Err(_) => Err(ProbeError::Timeout),
                         },
                         _ = cancel.cancelled() => Err(ProbeError::Cancelled),

@@ -213,4 +213,12 @@ export interface DesktopProductEventMap {
   workspace_selected: {
     workspace_kind: DesktopWorkspaceKind;
   };
+  // Emitted when the version-skew gate blocks the desktop from a connected
+  // server whose operator opted into ENFORCE_MIN_DESKTOP_VERSION (see
+  // `desktop.minversion.block_rate` in the PR Observability notes for the
+  // server-side dashboard follow-up this feeds).
+  desktop_minversion_block: {
+    app_version: string;
+    min_desktop_version: string;
+  };
 }

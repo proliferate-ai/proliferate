@@ -3,11 +3,18 @@ import {
   parseServerCapabilities,
   type ServerCapabilityContract,
 } from "#product/lib/domain/capabilities/server-capability-contract";
+import { readMinDesktopVersionEnforced } from "#product/lib/domain/auth/connect-server";
 import {
   createExpectedControlPlaneProbeTimeoutError,
 } from "#product/domain/telemetry/control-plane-probe-timeout";
 
 const SERVER_CAPABILITIES_TIMEOUT_MS = 2_500;
+
+/** The connected server's version-skew gate, read from `GET /meta`. */
+export interface MinDesktopVersionGate {
+  minDesktopVersion: string;
+  minDesktopVersionEnforced: boolean;
+}
 
 /**
  * Fetch the connected control plane's capability contract from `GET /meta`.
@@ -37,6 +44,53 @@ export async function fetchServerCapabilities(
     const body: unknown = await response.json();
     if (typeof body !== "object" || body === null) return null;
     return parseServerCapabilities((body as Record<string, unknown>).capabilities);
+  } catch {
+    return null;
+  } finally {
+    if (timeoutId) {
+      globalThis.clearTimeout(timeoutId);
+    }
+  }
+}
+
+/**
+ * Fetch the connected control plane's version-skew gate from `GET /meta`
+ * (same endpoint `fetchServerCapabilities` reads; kept a separate request
+ * because the two are independent React Query caches with different consumers
+ * — the comparison logic they both feed, not the network call, is what's
+ * unified, in `version-compat.ts`'s `isDesktopVersionSupported`).
+ *
+ * Returns `null` when the server is unreachable or the body doesn't even
+ * structurally carry `minDesktopVersion`. `minDesktopVersionEnforced` reads
+ * tolerantly (absent/garbage -> `false`) so an older server, or a malformed
+ * response, can never imply blocking.
+ */
+export async function fetchMinDesktopVersionGate(
+  apiBaseUrl: string,
+): Promise<MinDesktopVersionGate | null> {
+  const abortController =
+    typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timeoutId = abortController
+    ? globalThis.setTimeout(
+        () => abortController.abort(createExpectedControlPlaneProbeTimeoutError()),
+        SERVER_CAPABILITIES_TIMEOUT_MS,
+      )
+    : null;
+
+  try {
+    const response = await fetch(buildProliferateApiUrl("/meta", apiBaseUrl), {
+      headers: { Accept: "application/json" },
+      signal: abortController?.signal,
+    });
+    if (!response.ok) return null;
+    const body: unknown = await response.json();
+    if (typeof body !== "object" || body === null) return null;
+    const record = body as Record<string, unknown>;
+    if (typeof record.minDesktopVersion !== "string") return null;
+    return {
+      minDesktopVersion: record.minDesktopVersion,
+      minDesktopVersionEnforced: readMinDesktopVersionEnforced(record),
+    };
   } catch {
     return null;
   } finally {

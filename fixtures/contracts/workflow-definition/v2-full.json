@@ -1,0 +1,74 @@
+{
+  "id": "10000000-0000-4000-8000-000000000003",
+  "userId": "20000000-0000-4000-8000-000000000002",
+  "title": "Research and propose",
+  "description": "Research a topic, synthesize a proposal, gate on human review.",
+  "schemaVersion": 2,
+  "revision": 1,
+  "defaultRepoConfigId": "40000000-0000-4000-8000-000000000001",
+  "definition": {
+    "schemaVersion": 2,
+    "nodes": [
+      {
+        "id": "n_research",
+        "type": "agent",
+        "title": "Research the topic",
+        "prompt": "Research @input:topic and write findings into @doc:research-findings.",
+        "model": {
+          "agentKind": "claude",
+          "modelId": "sonnet",
+          "modeId": "default"
+        }
+      },
+      {
+        "id": "n_synthesize",
+        "type": "agent",
+        "title": "Synthesize a proposal",
+        "prompt": "Read @doc:research-findings and write a proposal into @doc:proposal covering @input:topic."
+      },
+      {
+        "id": "n_review",
+        "type": "human_in_loop",
+        "title": "Review the proposal",
+        "prompt": "Summarize @doc:proposal for human review."
+      }
+    ],
+    "edges": [
+      {
+        "from": "n_research",
+        "to": "n_synthesize"
+      },
+      {
+        "from": "n_synthesize",
+        "to": "n_review"
+      }
+    ],
+    "inputs": [
+      {
+        "name": "topic",
+        "description": "What to research",
+        "required": true
+      },
+      {
+        "name": "depth",
+        "description": "Optional depth hint",
+        "required": false
+      }
+    ],
+    "docTemplates": [
+      {
+        "slug": "research-findings",
+        "producingNodeId": "n_research",
+        "body": "# Findings\n\n## Summary\n\n## Evidence\n\n## Open questions\n"
+      },
+      {
+        "slug": "proposal",
+        "producingNodeId": "n_synthesize",
+        "body": "# Proposal\n\n## Summary\n\n## For the next step\n"
+      }
+    ]
+  },
+  "createdAt": "2026-08-14T12:00:00Z",
+  "updatedAt": "2026-08-14T12:00:00Z",
+  "deletedAt": null
+}

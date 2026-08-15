@@ -40,6 +40,7 @@ pub mod lock;
 pub mod probe;
 pub mod status;
 pub mod targets;
+pub mod trial;
 pub mod universe;
 
 #[cfg(test)]
@@ -65,6 +66,7 @@ pub use config::{PokeReason, ProbeEngineConfig, ProbeEngineMode, RefreshError};
 use document::ModelSnapshotDocument;
 use probe::ProbeRunner;
 use targets::ProbeTargets;
+use trial::Tier1TrialEngine;
 
 /// The engine's live, in-memory view of one harness.
 ///
@@ -167,6 +169,9 @@ pub struct ModelSnapshotService {
     plan_producer: Arc<dyn GatewayModelResolve>,
     targets: Arc<dyn ProbeTargets>,
     runner: Arc<dyn ProbeRunner>,
+    /// The tier-1 credential trial engine (ADR FR-2). Fired off the same pokes as
+    /// the probe; a no-op unless `config.tier1_trial_enabled`.
+    trial: Arc<Tier1TrialEngine>,
     config: ProbeEngineConfig,
 }
 
@@ -193,6 +198,10 @@ impl ModelSnapshotService {
         config: ProbeEngineConfig,
     ) -> Self {
         let engine_lock = lock::ProbeEngineLock::try_acquire(&runtime_home);
+        let trial = Arc::new(Tier1TrialEngine::new(
+            config.tier1_trial_enabled,
+            runtime_home.clone(),
+        ));
         let service = Self {
             runtime_home,
             engine_lock,
@@ -203,6 +212,7 @@ impl ModelSnapshotService {
             plan_producer,
             targets,
             runner,
+            trial,
             config,
         };
         // The orphan sweep, live from the moment ownership is decided.
@@ -305,6 +315,10 @@ impl ModelSnapshotService {
             // there yet.
             return;
         }
+        // The tier-1 trial rides the SAME event, single-flight and gated by its
+        // own flag; it never spawns a harness, so it runs alongside the probe
+        // rather than instead of it.
+        self.trial.poke(harness_kind);
         let engine = self.clone();
         let harness = harness_kind.to_string();
         tokio::spawn(async move {
@@ -410,6 +424,9 @@ impl ModelSnapshotService {
         if !self.targets.is_installed(harness_kind) {
             return Err(RefreshError::NotInstalled(harness_kind.to_string()));
         }
+        // A manual refresh re-runs the tier-1 trial too, so a just-pasted or
+        // just-rotated credential's verdict refreshes with the model list.
+        self.trial.poke(harness_kind);
         let requested_at = Utc::now();
         // So pressing Refresh after adding a model on the gateway genuinely
         // re-asks `/v1/models` rather than reusing a memoized plan.
