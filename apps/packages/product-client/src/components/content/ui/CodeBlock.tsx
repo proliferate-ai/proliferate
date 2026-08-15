@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { motion } from "@proliferate/design/motion";
 import { Button } from "#product/primitives/Button";
 import { Check, Copy } from "#product/primitives/icons/core";
 import type { HighlightedToken } from "#product/lib/infra/editor/highlighting";
@@ -45,7 +46,7 @@ export function CodeBlock({
     void writeClipboardText(code).then((success) => {
       if (!success) return;
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
+      window.setTimeout(() => setCopied(false), motion.feedback.copiedResetMs);
     });
   }
 

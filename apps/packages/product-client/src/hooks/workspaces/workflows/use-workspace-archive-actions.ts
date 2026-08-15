@@ -4,6 +4,7 @@ import {
   type WorkspaceUnarchiveScenarioBody,
 } from "@anyharness/sdk";
 import { useCallback, useMemo, useRef, useState } from "react";
+import { motion } from "@proliferate/design/motion";
 import { useNavigate } from "react-router-dom";
 import { useArchivedWorkspacesInvalidation } from "#product/hooks/workspaces/cache/use-archived-workspaces-invalidation";
 import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
@@ -36,7 +37,7 @@ import { showToast } from "#product/primitives/utils/show-toast";
  * stays hidden and the pending reconciler (`use-archive-pending-reconciler`)
  * becomes the decider instead of a false failure toast.
  */
-const ARCHIVE_SETTLE_TIMEOUT_MS = 12_000;
+const ARCHIVE_SETTLE_TIMEOUT_MS = motion.delay.optimisticSettleTimeoutMs;
 
 /** T7 ("busy") auto-dismisses; every other failure toast here is persistent
  * (via `isError`) because it is one. */

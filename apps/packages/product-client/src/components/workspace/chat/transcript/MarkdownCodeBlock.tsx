@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { motion } from "@proliferate/design/motion";
 import { Button } from "#product/primitives/Button";
 import { Check, Copy } from "#product/primitives/icons/core";
 
@@ -26,7 +27,7 @@ export function MarkdownCodeBlockShell({
           return;
         }
         setCopied(true);
-        window.setTimeout(() => setCopied(false), 1600);
+        window.setTimeout(() => setCopied(false), motion.feedback.copiedResetMs);
       });
   }
 

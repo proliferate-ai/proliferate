@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { motion } from "@proliferate/design/motion";
 import { Button } from "#product/primitives/Button";
 import { Check, ChevronDown, Copy } from "#product/primitives/icons/core";
 import { PlanMarkdownBody } from "./PlanMarkdownBody";
@@ -77,7 +78,7 @@ export function CollapsiblePlanCard({
     if (!content) return;
     void navigator.clipboard.writeText(content).then(() => {
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
+      window.setTimeout(() => setCopied(false), motion.feedback.copiedResetMs);
     }).catch(() => {});
   };
 

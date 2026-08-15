@@ -5,6 +5,7 @@ import {
   useState,
 } from "react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { motion } from "@proliferate/design/motion";
 import {
   Check,
   Copy,
@@ -167,7 +168,7 @@ export function ScratchPadPanel({ workspaceKey }: ScratchPadPanelProps) {
   const handleCopyContent = useCallback(async () => {
     await clipboard.writeText(draft);
     setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
+    window.setTimeout(() => setCopied(false), motion.feedback.copiedResetMs);
   }, [clipboard, draft]);
 
   const handleBlur = useCallback(() => {

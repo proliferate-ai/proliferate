@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion } from "@proliferate/design/motion";
 import { Button } from "#product/primitives/Button";
 import { CodeBlockTokenContent } from "#product/components/content/ui/CodeBlockTokenContent";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
@@ -41,7 +42,7 @@ export function HighlightedCodeBlock({
   const handleCopy = () => {
     void writeText(code);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), motion.feedback.copiedResetMs);
   };
 
   return (

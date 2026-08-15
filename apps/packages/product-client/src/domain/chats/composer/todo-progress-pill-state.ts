@@ -6,7 +6,7 @@
  *
  * Timings straight from the design handoff
  * (`design_handoff_composer_dock/Todos.dc.html`, `_simulateStep`/`pillHoverOn`/
- * `pillHoverOff`):
+ * `pillHoverOff`), re-expressed as shared `motion.delay` tokens:
  *   - a step advancing shows the pill, fade starts at 3.4s, hidden by 4s
  *   - hovering pins the pill (cancels any fade) and reveals the checklist
  *   - mouse-leave restarts a short fade: starts at 1.2s, hidden by 1.8s
@@ -25,10 +25,12 @@
  * only be the most recent `hover_off`'s own timer — never a stale one.
  */
 
-export const TODO_PILL_STEP_FADE_START_MS = 3400;
-export const TODO_PILL_STEP_HIDE_MS = 4000;
-export const TODO_PILL_HOVER_FADE_START_MS = 1200;
-export const TODO_PILL_HOVER_HIDE_MS = 1800;
+import { motion } from "@proliferate/design/motion";
+
+export const TODO_PILL_STEP_FADE_START_MS = motion.delay.todoPillStepLingerMs;
+export const TODO_PILL_STEP_HIDE_MS = motion.delay.todoPillStepHideMs;
+export const TODO_PILL_HOVER_FADE_START_MS = motion.delay.todoPillHoverLingerMs;
+export const TODO_PILL_HOVER_HIDE_MS = motion.delay.todoPillHoverHideMs;
 
 export interface TodoPillState {
   /** Whether the pill is mounted at all. */
