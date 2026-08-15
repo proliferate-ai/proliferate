@@ -146,11 +146,15 @@ async function wheelToBottom(page: Page): Promise<void> {
 }
 
 test.describe("transcript scroll physics", () => {
-  // Intra-stack degradation window (PRO-187): MAIN's rAF-loop stick engine, driven by
-  // r1's honest turn_ended fixture, cannot hold the per-painted-frame follow cadence under
-  // the taller seeded turns on slow-CI WebKit (CI: [webkit] bottomDistance 132 > 120). The
-  // single-writer pin decision plus the synchronous ResizeObserver-notify snap that closes
-  // it land at r4 (#1945); un-fixme'd there. Chromium already passes here.
+  // FIXME AT RUNG 3 ONLY (chat-scroll/r3-single-writer). CI proved that the r3
+  // single-writer pin decision cannot hold pinned-follow cadence on slow CI
+  // runners: pinned-follow lands at bottomDistance 132 (> 120) on both
+  // chromium and webkit. The rung-4 same-frame pipeline (PR #1945,
+  // chat-scroll/r4-frame-pipeline) performs a SYNCHRONOUS snap inside the
+  // ResizeObserver notify path, and CI proves that fix makes this exact test
+  // pass on both engines at r4. The threshold is NOT loosened; this scenario is
+  // un-fixme'd by r4's diff (it must be active on r4/r5). Un-fixme point: PR
+  // #1945.
   test.fixme("pinned-follow: bottom distance stays ~0 across streaming growth", async ({ page }) => {
     await ready(page);
     await drive(page, "reset");
@@ -191,11 +195,11 @@ test.describe("transcript scroll physics", () => {
     expect((await metrics(page)).bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
   });
 
-  // Intra-stack degradation window (PRO-187): MAIN's single-slot pixel pin classification
-  // misreads a programmatic growth write as a user scroll on slow-CI WebKit and drops the
-  // pin (CI: [webkit] isPinned Received false). The marker-based ownership classification
-  // that fixes it lands at r3 (#1938); un-fixme'd there. Chromium already passes here.
-  test.fixme("unpin mid-stream: reading holds unpinned, no snap-back to bottom", async ({ page }) => {
+  // Un-fixme'd at rung 3 (#1938): the marker-based ownership classification this rung adds
+  // fixes the r1/r2 degradation window where MAIN's single-slot pixel classification misread
+  // a programmatic growth write as a user scroll on slow-CI WebKit and dropped the pin
+  // ([webkit] isPinned Received false). CI proves this test passes on both engines at r3.
+  test("unpin mid-stream: reading holds unpinned, no snap-back to bottom", async ({ page }) => {
     await ready(page);
     await drive(page, "reset");
     await drive(page, "seedFinalizedConversation", 8);
@@ -243,11 +247,15 @@ test.describe("transcript scroll physics", () => {
     await drive(page, "finalizeStreamingTurn");
   });
 
-  // Intra-stack degradation window (PRO-187): under the honest turn_ended fixture MAIN's
-  // pin classification cannot hold the post-repin follow cadence on slow-CI WebKit (CI:
-  // [webkit] re-pin isPinned Expected true / Received false). The single-writer pin
-  // decision plus the synchronous ResizeObserver-notify snap close it at r4 (#1945);
-  // un-fixme'd there. Chromium passes here.
+  // FIXME AT RUNG 3 ONLY (chat-scroll/r3-single-writer). CI proved that the r3
+  // single-writer pin decision cannot hold the post-repin follow cadence on
+  // slow CI runners: on webkit this scenario lands bottomDistance 332 (> 202,
+  // i.e. > PIN_FOLLOW_MAX_DISTANCE) after the repin-and-stream arm. The rung-4
+  // same-frame pipeline (PR #1945, chat-scroll/r4-frame-pipeline) synchronously
+  // snaps inside the ResizeObserver notify path, and CI proves that fix makes
+  // webkit repin PASS at r4. The threshold is NOT loosened; this scenario is
+  // un-fixme'd by r4's diff (it must be active on r4/r5). Un-fixme point: PR
+  // #1945.
   test.fixme("repin band edge: returning into the bottom band re-pins; staying above does not", async ({
     page,
   }) => {
