@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { resolveVirtualBottomDistance } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import {
   DIRECTION_EPSILON_PX,
@@ -11,6 +11,7 @@ import {
 import { decideTranscriptScrollPin } from "#product/hooks/chat/ui/transcript-scroll-pin-decision";
 import { resolveAutoFollowScrollTop } from "#product/hooks/chat/ui/transcript-auto-follow-target";
 import { TranscriptFramePipeline } from "#product/hooks/chat/ui/transcript-frame-pipeline";
+import { useTranscriptFramePipelineLifecycle } from "#product/hooks/chat/ui/use-transcript-frame-pipeline-lifecycle";
 import { TranscriptScrollOwnershipMarkers } from "#product/hooks/chat/ui/transcript-scroll-ownership";
 import { useTranscriptSubmitStampRepin } from "#product/hooks/chat/ui/use-transcript-submit-stamp-repin";
 import { useTranscriptUserScrollIntent } from "#product/hooks/chat/ui/use-transcript-user-scroll-intent";
@@ -316,46 +317,6 @@ export function useTranscriptStickToBottom({
     );
   }, [onScrollSample, pinnedRef, repinThresholdPx, setPinned]);
 
-  // The SINGLE snap/compensation writer the frame pipeline drives each frame.
-  // Snap to the follow target while pinned; apply the above-change compensation
-  // delta while unpinned inside a glue window; otherwise do nothing. Every write
-  // still flows through the rung-3 ownership markers (WHO wrote); the pipeline
-  // owns only WHEN. Registered once via the ref initializer's stable instance.
-  const runFramePass = useCallback(() => {
-    const viewport = scrollRef.current;
-    if (!viewport) {
-      return;
-    }
-    if (pinnedRef.current) {
-      scrollToBottom();
-      return;
-    }
-    const anchor = compensationAnchorRef.current;
-    if (anchor && pipelineRef.current.isGluing) {
-      notifyProgrammaticScroll(() => {
-        viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
-      });
-    }
-  }, [notifyProgrammaticScroll, scrollRef, scrollToBottom]);
-
-  useLayoutEffect(() => {
-    const pipeline = pipelineRef.current;
-    pipeline.setWriter({
-      runFramePass,
-      measureContentHeight: () => scrollRef.current?.scrollHeight ?? -1,
-      shouldContinueGlue: () => {
-        const viewport = scrollRef.current;
-        if (!viewport) {
-          return false;
-        }
-        // A pinned burst glues to the bottom; an unpinned burst glues an active
-        // above-change compensation anchor. Either way the user reclaiming
-        // control (unpin with no anchor) ends the window.
-        return pinnedRef.current || compensationAnchorRef.current != null;
-      },
-    });
-  }, [runFramePass, scrollRef]);
-
   // Session re-entry / submit / tab-resume "glue": snap each frame while a
   // freshly mounted or resumed measurement backlog lands, terminating when the
   // content ResizeObserver goes quiet or the hard cap elapses.
@@ -416,35 +377,18 @@ export function useTranscriptStickToBottom({
   // pinned glue loop.
   useTranscriptUserScrollIntent({ scrollRef, notifyUserScrollIntent });
 
-  // On tab/window re-show while pinned, glue to the bottom for a few frames so
-  // the suspended-then-resumed measurement backlog lands as one jump. Listen to
-  // both visibilitychange and focus (WKWebView may fire only the latter).
-  useEffect(() => {
-    if (typeof document === "undefined" || typeof window === "undefined") {
-      return;
-    }
-    const onVisible = () => {
-      if (document.visibilityState !== "visible" || !pinnedRef.current) {
-        return;
-      }
-      beginGlue();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onVisible);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onVisible);
-      pipelineRef.current.cancel();
-    };
-  }, [beginGlue]);
-
-  useEffect(() => {
-    const pipeline = pipelineRef.current;
-    return () => {
-      clearAllMarkers();
-      pipeline.dispose();
-    };
-  }, [clearAllMarkers]);
+  // The frame pipeline's single writer, its tab/window-resume glue, and its
+  // disposal. Registered after beginGlue so the resume path can trigger it.
+  useTranscriptFramePipelineLifecycle({
+    pipelineRef,
+    scrollRef,
+    pinnedRef,
+    compensationAnchorRef,
+    scrollToBottom,
+    notifyProgrammaticScroll,
+    clearAllMarkers,
+    beginGlue,
+  });
 
   return {
     isPinnedToBottom,
