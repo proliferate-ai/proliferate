@@ -37,7 +37,10 @@ one:
     keyword args. Bare ``token``/``value`` words are deliberately NOT matched —
     they are far too common (``value.keys()``, plain ``token`` counters) to flag
     without absurd noise; only the attribute form and the ``value_ciphertext``
-    binding are caught.
+    binding are caught. As a lexical guard it also stays silent on
+    non-idiomatic forms (``minted["key"]`` subscripts, ``getattr(minted,
+    "key")``, spaced or line-split attribute access); none appear in the real
+    code, and review remains the backstop for those shapes.
 
 An intentional, reviewed redaction site marks itself with an inline pragma
 ``agent-auth:allow-secret-log`` inside the call; that one call is exempt. The
