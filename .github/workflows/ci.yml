@@ -72,6 +72,9 @@ jobs:
       - name: Check frontend structure drift
         run: python3 scripts/report_frontend_structure.py --strict --summary-only
 
+      - name: Check transcript single scroll writer
+        run: python3 scripts/check_transcript_scroll_writer.py
+
       - name: Check component library conformance
         run: |
           python3 -m unittest scripts/test_check_component_library.py

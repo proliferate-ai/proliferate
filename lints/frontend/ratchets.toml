@@ -202,3 +202,59 @@ reason = "R7 lifecycle archive/unarchive orchestrator: verb posts, undo toasts, 
 path = "apps/packages/product-client/src/lib/infra/terminals/terminal-stream-registry.ts"
 max_lines = 417
 reason = "terminal/feed stream registry (+open/close/error records woven into the existing callbacks; no seam short of splitting the registry itself)"
+
+# FE-CHATSCROLL-1 sanctioned scroll-position writers, read by
+# scripts/check_transcript_scroll_writer.py. File-level allowlist: any non-test
+# product-client source that assigns .scrollTop, calls .scrollTo/.scrollIntoView,
+# or sets overflow-anchor must appear here or the checker fails it as a net-new
+# writer. Shrink-only: an entry whose file no longer writes scroll (or is gone)
+# is stale and must be deleted in the same change. Seeded from current reality;
+# no net-new writers.
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/hooks/chat/ui/use-transcript-stick-to-bottom.ts"
+reason = "the stick-to-bottom engine — FR-1's sole sanctioned transcript-viewport scrollTop writer"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/hooks/chat/ui/use-above-change-compensation.ts"
+reason = "transcript engine sibling: above-change scroll compensation, part of the stick-to-bottom writer surface"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/components/workspace/chat/transcript/FullTranscriptRowList.tsx"
+reason = "transcript row list: engine-owned virtual-anchor scrollTop restore across height changes"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/components/workspace/chat/transcript/VirtualizedTranscriptRowList.tsx"
+reason = "virtualized transcript row list: engine-owned virtual-anchor scrollTop restore across height changes"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/primitives/patterns/AutoHideScrollArea.tsx"
+reason = "the scroll-area primitive that owns the viewport scrollTop write and the overflow-anchor treatment"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/components/playground/GitReviewV2Playground.tsx"
+reason = "pre-existing non-transcript scroller: git-review playground scrollIntoView; held so no net-new writer is added"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/components/workspace/git/GitPanel.tsx"
+reason = "pre-existing non-transcript scroller: git panel diff-entry scrollIntoView; held so no net-new writer is added"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/components/workspace/search/ContentSearchPill.tsx"
+reason = "pre-existing non-transcript scroller: content-search match scrollIntoView; held so no net-new writer is added"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/components/workspace/shell/topbar/HeaderTabs.tsx"
+reason = "pre-existing non-transcript scroller: topbar tab-strip scrollTo; held so no net-new writer is added"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/hooks/chat/ui/use-composer-menu-navigation.ts"
+reason = "pre-existing non-transcript scroller: composer menu keyboard-nav scrollTo/scrollIntoView; held so no net-new writer is added"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/hooks/chat/ui/use-model-picker-keyboard-nav.ts"
+reason = "pre-existing non-transcript scroller: model-picker keyboard-nav scrollIntoView; held so no net-new writer is added"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/lib/domain/content-search/chat-row-match-jump.ts"
+reason = "pre-existing non-transcript scroller: content-search row-match jump scrollIntoView; held so no net-new writer is added"
