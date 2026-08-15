@@ -59,6 +59,23 @@ good = "route calls service; service owns the transaction"
 - "Status: target" does not exist as a category. A rule is falsifiable or it
   is named debt.
 
+## Rule ID allocation
+
+An id is "citable forever; never renumbered," so two efforts minting ids in
+parallel — on branches that cannot see each other — must not collide. The
+loader's only cross-file invariant on `id` is exact-match uniqueness (`load`
+fails on any duplicate); it does not parse or constrain the id's internal
+shape, so the convention below needs no loader change to hold.
+
+Each feature effort reserves its own family segment — the middle token
+between the owner prefix and the number — and numbers sequentially within
+it: one effort mints `FE-SCROLL-001`, `FE-SCROLL-002`, ...; another mints
+`FE-LOAD-001+`; a cross-owner effort mints `PROD-AUTH-001+`. Distinct family
+segments cannot collide by construction. Two efforts extending the same
+existing family (for example, both adding to `SRV-STORE-*`) must coordinate
+the next number by hand, or one of them should reserve a fresh family
+segment instead.
+
 ## The exception ledger
 
 ```toml
@@ -83,6 +100,16 @@ Those are ratchets, not rules-with-exceptions: a measured baseline that may
 only shrink. Ratchet config lives in the owner's `ratchets.toml`; the checker
 fails on any growth and expects the baseline updated in the same PR as any
 shrink.
+
+**`ratchets.toml` carries no schema validation.** `lint_records.load()` skips
+`ratchets.toml` outright — it is read only by `load_ratchets()`, as a raw
+dict, with no shape check. A ratchet table enforces nothing by itself: it
+only does anything once some checker script reads that table and compares
+the current measurement against it. Adding rows to `ratchets.toml` with no
+checker wired to read them is silent — the rule record still needs a
+covering rule whose `enforced_by` names the checker that reads the ratchet,
+so the `enforced_by`-exists validation above at least confirms that checker
+file is real.
 
 ## Generated diagnostics
 
