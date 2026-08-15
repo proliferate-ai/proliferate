@@ -222,17 +222,15 @@ describe("useAppShortcuts", () => {
     expect(document.activeElement).toBe(composer);
   });
 
-  it("keeps the explicit local, worktree, and cloud creation shortcuts", () => {
+  it("keeps the explicit local and worktree creation shortcuts", () => {
     const actions = commandActions();
     renderHook(() => useAppShortcuts(actions));
 
     expect(runShortcutHandler("workspace.new-local", { source: "keyboard" })).toBe(true);
     expect(runShortcutHandler("workspace.new-worktree", { source: "keyboard" })).toBe(true);
-    expect(runShortcutHandler("workspace.new-cloud", { source: "keyboard" })).toBe(true);
 
     expect(actions.newLocalWorkspace.execute).toHaveBeenCalledWith("shortcut");
     expect(actions.newWorktreeWorkspace.execute).toHaveBeenCalledWith("shortcut");
-    expect(actions.newCloudWorkspace.execute).toHaveBeenCalledWith("shortcut");
   });
 
   describe("app.open-support gating", () => {
@@ -329,7 +327,6 @@ function commandActions(): AppCommandActions {
     addRepository: action(),
     newLocalWorkspace: action(),
     newWorktreeWorkspace: action(),
-    newCloudWorkspace: action(),
     copyWorkspacePath: action(),
     copyBranchName: action(),
   };

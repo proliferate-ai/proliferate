@@ -150,10 +150,6 @@ export function useAppShortcuts(actions: AppCommandActions): void {
     actions.newWorktreeWorkspace.execute("shortcut");
   });
 
-  useShortcutHandler("workspace.new-cloud", () => {
-    actions.newCloudWorkspace.execute("shortcut");
-  });
-
   useShortcutHandler("workspace.add-repository", () => {
     actions.addRepository.execute("shortcut");
   });

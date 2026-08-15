@@ -291,16 +291,6 @@ export function buildWorkspaceCommandPaletteEntries(args: {
       disabledReason: args.appActions.newWorktreeWorkspace.disabledReason,
       execute: () => args.appActions.newWorktreeWorkspace.execute("palette"),
     },
-    {
-      id: "workspace.new-cloud",
-      value: commandPaletteCommandValue("workspace.new-cloud"),
-      group: "app",
-      label: "New Cloud Workspace",
-      icon: "cloud-plus",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.newCloud),
-      disabledReason: args.appActions.newCloudWorkspace.disabledReason,
-      execute: () => args.appActions.newCloudWorkspace.execute("palette"),
-    },
   ];
 
   // Mirrors the sidebar hiding its support action under `support.kind ===

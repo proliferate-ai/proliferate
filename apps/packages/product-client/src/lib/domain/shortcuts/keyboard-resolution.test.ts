@@ -16,7 +16,7 @@ describe("resolveKeyboardShortcut", () => {
     vi.unstubAllGlobals();
   });
 
-  it("keeps non-mac new cloud distinct from new local", () => {
+  it("keeps non-mac new worktree distinct from new local, and no longer binds new cloud", () => {
     expect(resolveKeyboardShortcut({
       key: "n",
       code: "KeyN",
@@ -43,6 +43,8 @@ describe("resolveKeyboardShortcut", () => {
       trigger: expect.objectContaining({ source: "keyboard" }),
     });
 
+    // Cloud is culled (PRO-10): the old Ctrl+Alt+N new-cloud binding no longer
+    // resolves to any shortcut.
     expect(resolveKeyboardShortcut({
       key: "n",
       code: "KeyN",
@@ -50,11 +52,7 @@ describe("resolveKeyboardShortcut", () => {
       ctrlKey: true,
       shiftKey: false,
       altKey: true,
-    } as KeyboardEvent)).toEqual({
-      id: "workspace.new-cloud",
-      shortcut: expect.objectContaining({ id: "workspace.new-cloud" }),
-      trigger: expect.objectContaining({ source: "keyboard" }),
-    });
+    } as KeyboardEvent)).toBeNull();
 
     // Plain Ctrl+N is the "Open new chat" default binding (workspace.new-default).
     expect(resolveKeyboardShortcut({
@@ -264,6 +262,8 @@ describe("resolveKeyboardShortcut", () => {
       trigger: expect.objectContaining({ source: "keyboard" }),
     });
 
+    // Cloud is culled (PRO-10): the old Cmd+Ctrl+N new-cloud binding no longer
+    // resolves, even by physical KeyN.
     expect(resolveKeyboardShortcut({
       key: "Unexpected",
       code: "KeyN",
@@ -271,11 +271,7 @@ describe("resolveKeyboardShortcut", () => {
       ctrlKey: true,
       shiftKey: false,
       altKey: false,
-    } as KeyboardEvent)).toEqual({
-      id: "workspace.new-cloud",
-      shortcut: expect.objectContaining({ id: "workspace.new-cloud" }),
-      trigger: expect.objectContaining({ source: "keyboard" }),
-    });
+    } as KeyboardEvent)).toBeNull();
   });
 
   it("resolves command-option workspace and tab shortcuts on mac", () => {
