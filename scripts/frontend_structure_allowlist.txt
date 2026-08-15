@@ -41,6 +41,4 @@ apps/packages/design/src/tokens.ts 2143 single token authority: one entry per to
 apps/packages/product-client/src/hooks/agents/workflows/use-harness-auth-editor.ts 410 harness auth editor grew with v2 single-PUT replace semantics + provider-hint rows; split pending
 apps/packages/product-client/src/primitives/icons/core.tsx 483 existing consolidated icon module pending split
 apps/packages/product-client/src/lib/infra/terminals/terminal-stream-registry.ts 417 terminal/feed stream registry (+open/close/error records woven into the existing callbacks; no seam short of splitting the registry itself)
-apps/packages/product-client/src/components/workspace/chat/transcript/VirtualizedTranscriptRowList.tsx 421 already over threshold on r4 (419 lines) before rung 5; +2 lines wiring the measurement model's recording measureElement through to useVirtualizer (PRO-187 rung 5); split pending
-apps/packages/product-client/src/hooks/chat/ui/use-transcript-stick-to-bottom.ts 488 pre-existing r4 debt, untouched by rung 5 (PRO-187); split pending
 
