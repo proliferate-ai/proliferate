@@ -2172,6 +2172,70 @@ export interface components {
         AdvanceReplaySessionResponse: {
             advanced: boolean;
         };
+        AgentAuthCredentialEvidence: {
+            /** Format: int64 */
+            evidenceAgeSeconds?: number | null;
+            source: components["schemas"]["AgentAuthCredentialSource"];
+            strength: components["schemas"]["AgentAuthEvidenceStrength"];
+        };
+        /** @enum {string} */
+        AgentAuthCredentialSource: "gateway" | "api_key_byok" | "native_login";
+        /** @enum {string} */
+        AgentAuthDisplay: "not_installed" | "unsupported" | "misconfigured" | "expired" | "unavailable" | "probing" | "usable" | "authenticated" | "selected" | "installed";
+        /** @enum {string} */
+        AgentAuthEvidenceRef: "probe_observation" | "gateway_key_check" | "acknowledged_route";
+        /** @enum {string} */
+        AgentAuthEvidenceStrength: "bare_presence" | "acknowledged_route" | "tier1_trial" | "probe_observation";
+        /**
+         * @description The orthogonal facts that fed the derivation, serialized alongside it so a
+         *     client can see WHY a display was chosen without re-deriving.
+         */
+        AgentAuthFactsSummary: {
+            credential?: null | components["schemas"]["AgentAuthCredentialEvidence"];
+            expired: boolean;
+            gateway?: null | components["schemas"]["AgentAuthGatewayHealth"];
+            handoff?: null | components["schemas"]["AgentAuthLoginHandoff"];
+            installed: boolean;
+            misconfigured: boolean;
+            probe: components["schemas"]["AgentAuthProbeLifecycle"];
+            selection?: null | components["schemas"]["AgentAuthSelectionFact"];
+            unsupportedRoute: boolean;
+        };
+        /** @enum {string} */
+        AgentAuthGatewayHealth: "reachable" | "unreachable" | "budget_exhausted";
+        /** @enum {string} */
+        AgentAuthLoginHandoff: "initiated" | "awaiting_browser" | "completed" | "cancelled" | "timed_out";
+        /** @enum {string} */
+        AgentAuthNextAction: "install" | "none" | "fix_config" | "log_in_or_paste_key" | "top_up_or_retry" | "wait" | "wait_for_probe" | "choose_source";
+        AgentAuthProbeLifecycle: {
+            lastFailureDetail?: string | null;
+            /** Format: int64 */
+            lastSuccessAgeSeconds?: number | null;
+            nextAttemptAt?: string | null;
+            observationNonempty: boolean;
+            phase: components["schemas"]["AgentAuthProbePhase"];
+        };
+        /** @enum {string} */
+        AgentAuthProbePhase: "idle" | "queued" | "running" | "backoff";
+        AgentAuthSelectionFact: {
+            acknowledged: boolean;
+            /** Format: int64 */
+            acknowledgedAgeSeconds?: number | null;
+            /** Format: int64 */
+            revision?: number | null;
+            satisfiable: boolean;
+        };
+        AgentAuthStateSummary: {
+            display: components["schemas"]["AgentAuthDisplay"];
+            /**
+             * Format: int64
+             * @description Age of that evidence in seconds. Present whenever the display is green.
+             */
+            evidenceAgeSeconds?: number | null;
+            evidenceRef?: null | components["schemas"]["AgentAuthEvidenceRef"];
+            facts: components["schemas"]["AgentAuthFactsSummary"];
+            nextAction: components["schemas"]["AgentAuthNextAction"];
+        };
         /**
          * @description The runtime's active agent catalog version and its provenance. Read-only:
          *     the runtime binary is the only catalog transport, so there is no apply
@@ -2352,6 +2416,7 @@ export interface components {
         AgentSeedStatus: "not_configured_dev" | "missing_bundled_seed" | "hydrating" | "ready" | "partial" | "failed";
         AgentSummary: {
             agentProcess: components["schemas"]["ArtifactStatus"];
+            authState?: null | components["schemas"]["AgentAuthStateSummary"];
             cliAuthState?: null | components["schemas"]["AgentCliAuthState"];
             credentialState: components["schemas"]["AgentCredentialState"];
             /**

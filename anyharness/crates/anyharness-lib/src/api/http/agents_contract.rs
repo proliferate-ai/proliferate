@@ -2,12 +2,20 @@
 //! no IO. The only file that sees both vocabularies for the agents family.
 
 use anyharness_contract::v1::{
-    AgentCliAuthState, AgentCredentialState, AgentInstallProgress, AgentInstallProgressComponent,
-    AgentInstallProgressPhase, AgentInstallState, AgentLaunchModelOption, AgentLaunchOption,
-    AgentLaunchOptionsResponse, AgentLoginTerminalRecord, AgentLoginTerminalStatus,
-    AgentReadinessState, AgentReconcileSummary, AgentSummary, ArtifactStatus, InstallAgentRequest,
-    ModelCatalogStatus, ModelEffort, ReconcileAgentResult, ReconcileAgentsResponse,
-    ReconcileJobStatus, ReconcileOutcome,
+    AgentAuthCredentialEvidence, AgentAuthCredentialSource, AgentAuthDisplay,
+    AgentAuthEvidenceRef, AgentAuthEvidenceStrength, AgentAuthFactsSummary, AgentAuthGatewayHealth,
+    AgentAuthLoginHandoff, AgentAuthNextAction, AgentAuthProbeLifecycle, AgentAuthProbePhase,
+    AgentAuthSelectionFact, AgentAuthStateSummary, AgentCliAuthState, AgentCredentialState,
+    AgentInstallProgress, AgentInstallProgressComponent, AgentInstallProgressPhase,
+    AgentInstallState, AgentLaunchModelOption, AgentLaunchOption, AgentLaunchOptionsResponse,
+    AgentLoginTerminalRecord, AgentLoginTerminalStatus, AgentReadinessState, AgentReconcileSummary,
+    AgentSummary, ArtifactStatus, InstallAgentRequest, ModelCatalogStatus, ModelEffort,
+    ReconcileAgentResult, ReconcileAgentsResponse, ReconcileJobStatus, ReconcileOutcome,
+};
+
+use crate::domains::agents::auth_state::{
+    self, AuthDisplay, CredentialEvidence, CredentialEvidenceStrength, CredentialSource, EvidenceRef,
+    GatewayHealth, LoginHandoff, NextAction, ProbeLifecycle, ProbePhase, SelectionFact,
 };
 
 use crate::domains::agents::auth::login_terminal::{
@@ -267,6 +275,136 @@ pub(super) fn to_summary(
         message,
         cli_auth_state,
         user_path_copy_detected: has_user_path_copy(desc),
+        auth_state: Some(to_auth_state_summary(resolved)),
+    }
+}
+
+/// Compute the canonical agent-auth evidence model for the wire. Builds the
+/// orthogonal facts from the resolved agent, folds them through the ONE shared
+/// derivation, and maps both onto the wire vocabulary. Additive: this never
+/// touches `credentialState`/`readiness` above.
+fn to_auth_state_summary(resolved: &ResolvedAgent) -> AgentAuthStateSummary {
+    let facts = auth_state::facts_from_resolved(resolved);
+    let derived = auth_state::derive_agent_auth_state(&facts);
+    AgentAuthStateSummary {
+        display: auth_display_to_contract(derived.display),
+        next_action: auth_next_action_to_contract(derived.next_action),
+        evidence_ref: derived.evidence_ref.map(auth_evidence_ref_to_contract),
+        evidence_age_seconds: derived.evidence_age_seconds,
+        facts: auth_facts_to_contract(&facts),
+    }
+}
+
+fn auth_display_to_contract(display: AuthDisplay) -> AgentAuthDisplay {
+    match display {
+        AuthDisplay::NotInstalled => AgentAuthDisplay::NotInstalled,
+        AuthDisplay::Unsupported => AgentAuthDisplay::Unsupported,
+        AuthDisplay::Misconfigured => AgentAuthDisplay::Misconfigured,
+        AuthDisplay::Expired => AgentAuthDisplay::Expired,
+        AuthDisplay::Unavailable => AgentAuthDisplay::Unavailable,
+        AuthDisplay::Probing => AgentAuthDisplay::Probing,
+        AuthDisplay::Usable => AgentAuthDisplay::Usable,
+        AuthDisplay::Authenticated => AgentAuthDisplay::Authenticated,
+        AuthDisplay::Selected => AgentAuthDisplay::Selected,
+        AuthDisplay::Installed => AgentAuthDisplay::Installed,
+    }
+}
+
+fn auth_next_action_to_contract(action: NextAction) -> AgentAuthNextAction {
+    match action {
+        NextAction::Install => AgentAuthNextAction::Install,
+        NextAction::None => AgentAuthNextAction::None,
+        NextAction::FixConfig => AgentAuthNextAction::FixConfig,
+        NextAction::LogInOrPasteKey => AgentAuthNextAction::LogInOrPasteKey,
+        NextAction::TopUpOrRetry => AgentAuthNextAction::TopUpOrRetry,
+        NextAction::Wait => AgentAuthNextAction::Wait,
+        NextAction::WaitForProbe => AgentAuthNextAction::WaitForProbe,
+        NextAction::ChooseSource => AgentAuthNextAction::ChooseSource,
+    }
+}
+
+fn auth_evidence_ref_to_contract(evidence: EvidenceRef) -> AgentAuthEvidenceRef {
+    match evidence {
+        EvidenceRef::ProbeObservation => AgentAuthEvidenceRef::ProbeObservation,
+        EvidenceRef::GatewayKeyCheck => AgentAuthEvidenceRef::GatewayKeyCheck,
+        EvidenceRef::AcknowledgedRoute => AgentAuthEvidenceRef::AcknowledgedRoute,
+    }
+}
+
+fn auth_facts_to_contract(facts: &auth_state::AgentAuthFacts) -> AgentAuthFactsSummary {
+    AgentAuthFactsSummary {
+        installed: facts.installed,
+        unsupported_route: facts.unsupported_route,
+        misconfigured: facts.misconfigured,
+        expired: facts.expired,
+        credential: facts.credential.as_ref().map(auth_credential_to_contract),
+        selection: facts.selection.as_ref().map(auth_selection_to_contract),
+        probe: auth_probe_to_contract(&facts.probe),
+        gateway: facts.gateway.map(auth_gateway_to_contract),
+        handoff: facts.handoff.map(auth_handoff_to_contract),
+    }
+}
+
+fn auth_credential_to_contract(credential: &CredentialEvidence) -> AgentAuthCredentialEvidence {
+    AgentAuthCredentialEvidence {
+        source: match credential.source {
+            CredentialSource::Gateway => AgentAuthCredentialSource::Gateway,
+            CredentialSource::ApiKeyByok => AgentAuthCredentialSource::ApiKeyByok,
+            CredentialSource::NativeLogin => AgentAuthCredentialSource::NativeLogin,
+        },
+        strength: match credential.strength {
+            CredentialEvidenceStrength::BarePresence => AgentAuthEvidenceStrength::BarePresence,
+            CredentialEvidenceStrength::AcknowledgedRoute => {
+                AgentAuthEvidenceStrength::AcknowledgedRoute
+            }
+            CredentialEvidenceStrength::Tier1Trial => AgentAuthEvidenceStrength::Tier1Trial,
+            CredentialEvidenceStrength::ProbeObservation => {
+                AgentAuthEvidenceStrength::ProbeObservation
+            }
+        },
+        evidence_age_seconds: credential.evidence_age_seconds,
+    }
+}
+
+fn auth_selection_to_contract(selection: &SelectionFact) -> AgentAuthSelectionFact {
+    AgentAuthSelectionFact {
+        acknowledged: selection.acknowledged,
+        revision: selection.revision,
+        satisfiable: selection.satisfiable,
+        acknowledged_age_seconds: selection.acknowledged_age_seconds,
+    }
+}
+
+fn auth_probe_to_contract(probe: &ProbeLifecycle) -> AgentAuthProbeLifecycle {
+    AgentAuthProbeLifecycle {
+        phase: match probe.phase {
+            ProbePhase::Idle => AgentAuthProbePhase::Idle,
+            ProbePhase::Queued => AgentAuthProbePhase::Queued,
+            ProbePhase::Running => AgentAuthProbePhase::Running,
+            ProbePhase::Backoff => AgentAuthProbePhase::Backoff,
+        },
+        last_success_age_seconds: probe.last_success_age_seconds,
+        last_failure_detail: probe.last_failure_detail.clone(),
+        next_attempt_at: probe.next_attempt_at.clone(),
+        observation_nonempty: probe.observation_nonempty,
+    }
+}
+
+fn auth_gateway_to_contract(gateway: GatewayHealth) -> AgentAuthGatewayHealth {
+    match gateway {
+        GatewayHealth::Reachable => AgentAuthGatewayHealth::Reachable,
+        GatewayHealth::Unreachable => AgentAuthGatewayHealth::Unreachable,
+        GatewayHealth::BudgetExhausted => AgentAuthGatewayHealth::BudgetExhausted,
+    }
+}
+
+fn auth_handoff_to_contract(handoff: LoginHandoff) -> AgentAuthLoginHandoff {
+    match handoff {
+        LoginHandoff::Initiated => AgentAuthLoginHandoff::Initiated,
+        LoginHandoff::AwaitingBrowser => AgentAuthLoginHandoff::AwaitingBrowser,
+        LoginHandoff::Completed => AgentAuthLoginHandoff::Completed,
+        LoginHandoff::Cancelled => AgentAuthLoginHandoff::Cancelled,
+        LoginHandoff::TimedOut => AgentAuthLoginHandoff::TimedOut,
     }
 }
 
