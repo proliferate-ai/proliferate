@@ -190,6 +190,20 @@ export function delegatedWorkSummaryPriority(
   }
 }
 
+/**
+ * Ceiling for the message preview an agent-message tooltip shows. The tooltip
+ * is a peek, not the reading surface — the full text lives in the subagent's
+ * own transcript — and an unclamped multi-thousand-character prompt wraps
+ * into a tooltip taller than the viewport.
+ */
+export const AGENT_MESSAGE_PREVIEW_MAX_CHARS = 500;
+
+export function clampAgentMessagePreview(text: string): string {
+  return text.length <= AGENT_MESSAGE_PREVIEW_MAX_CHARS
+    ? text
+    : `${text.slice(0, AGENT_MESSAGE_PREVIEW_MAX_CHARS - 1).trimEnd()}…`;
+}
+
 function normalizeStatus(status: string | null | undefined): string {
   return status
     ?.replace(/[_-]+/gu, " ")

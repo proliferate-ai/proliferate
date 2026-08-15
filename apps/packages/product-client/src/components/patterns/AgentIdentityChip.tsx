@@ -2,6 +2,7 @@ import { Button } from "#product/primitives/Button";
 import { Tooltip } from "#product/primitives/Tooltip";
 import { AgentIdentityGlyph } from "#product/components/patterns/AgentIdentityGlyph";
 import type { DelegatedAgentIdentity } from "#product/lib/domain/delegated-work/model";
+import { clampAgentMessagePreview } from "#product/lib/domain/delegated-work/presentation";
 
 /**
  * Durable agent-identity chip: the Solid Seal glyph and the agent's title in a
@@ -26,7 +27,9 @@ export function AgentIdentityChip({
     return null;
   }
 
-  const tooltip = exactMessage?.length ? exactMessage : identity.displayName;
+  const tooltip = exactMessage?.length
+    ? clampAgentMessagePreview(exactMessage)
+    : identity.displayName;
   const content = (
     <>
       <AgentIdentityGlyph

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  AGENT_MESSAGE_PREVIEW_MAX_CHARS,
   buildDelegatedWorkTabIdentity,
+  clampAgentMessagePreview,
   delegatedWorkKindFromSource,
   delegatedWorkStatusCategoryFromLabel,
   reviewRunStatusCategory,
@@ -100,5 +102,20 @@ describe("buildDelegatedWorkTabIdentity", () => {
     expect(tabIdentity.originLabel).toBe("Plan review");
     expect(tabIdentity.identity.displayName).toContain("Architecture Review");
     expect(tabIdentity.hoverTitle).toContain("Parent: Main chat");
+  });
+});
+
+describe("clampAgentMessagePreview", () => {
+  it("returns messages at or under the ceiling untouched", () => {
+    expect(clampAgentMessagePreview("short message")).toBe("short message");
+    const exact = "x".repeat(AGENT_MESSAGE_PREVIEW_MAX_CHARS);
+    expect(clampAgentMessagePreview(exact)).toBe(exact);
+  });
+
+  it("clamps long messages to the ceiling with an ellipsis near a word boundary", () => {
+    const clamped = clampAgentMessagePreview("word ".repeat(200));
+    expect(clamped.length).toBeLessThanOrEqual(AGENT_MESSAGE_PREVIEW_MAX_CHARS);
+    expect(clamped.endsWith("…")).toBe(true);
+    expect(clamped.at(-2)).not.toBe(" ");
   });
 });
