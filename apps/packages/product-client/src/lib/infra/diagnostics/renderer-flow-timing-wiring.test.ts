@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -77,17 +77,59 @@ describe("renderer flow timing wiring", () => {
     },
   );
 
-  it("keeps renderer-flow-timing.ts the only emitter of renderer.flow.* events", () => {
-    // Every renderer.flow.* diagnostic name must originate in the flow-timing
-    // module. A second producer would be a parallel layer, which R1 forbids.
-    const flowModule = read(
-      "src/lib/infra/diagnostics/renderer-flow-timing.ts",
-    );
+  it("keeps renderer-flow-timing.ts the only source that emits renderer.flow.* records", () => {
+    // Real source-tree scan (not a tautological single-file read): walk the whole
+    // package src and assert no file other than the flow-timing module emits a
+    // `name: "renderer.flow.*"` diagnostic record. A second producer would be the
+    // parallel layer R1 forbids; test-wiring references (this file, unit tests)
+    // are allowed because they never call recordRendererDiagnostic.
+    const srcRoot = fileURLToPath(new URL("../../../../src", import.meta.url));
+    const OWNER = "lib/infra/diagnostics/renderer-flow-timing.ts";
+    // Matches a diagnostic record's own name key, e.g. name: "renderer.flow.intent"
+    const emitPattern = /name:\s*["'`]renderer\.flow\./;
+
+    function walk(dir: string): string[] {
+      const out: string[] = [];
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = `${dir}/${entry.name}`;
+        if (entry.isDirectory()) {
+          out.push(...walk(full));
+        } else if (/\.(ts|tsx)$/.test(entry.name)) {
+          out.push(full);
+        }
+      }
+      return out;
+    }
+
+    const offenders: string[] = [];
+    for (const file of walk(srcRoot)) {
+      const rel = file.slice(srcRoot.length + 1);
+      if (rel === "lib/infra/diagnostics/renderer-flow-timing.ts") {
+        continue;
+      }
+      // Tests reference the names but never emit records; skip them.
+      if (/\.test\.(ts|tsx)$/.test(rel)) {
+        continue;
+      }
+      if (emitPattern.test(readFileSync(file, "utf8"))) {
+        offenders.push(rel);
+      }
+    }
+
+    expect(
+      offenders,
+      `only ${OWNER} may emit renderer.flow.* records; offenders: ${offenders.join(", ")}`,
+    ).toEqual([]);
+
+    // Sanity: the owner really does emit every stage (guards a rename that would
+    // make the scan vacuously pass).
+    const flowModule = read(`src/${OWNER}`);
     for (const stage of [
       "renderer.flow.intent",
       "renderer.flow.shell_committed",
       "renderer.flow.data_ready",
       "renderer.flow.content_stable",
+      "renderer.flow.abandoned",
     ]) {
       expect(flowModule).toContain(stage);
     }

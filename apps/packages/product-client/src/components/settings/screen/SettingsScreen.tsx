@@ -111,6 +111,11 @@ export function SettingsScreen({
       correlationKey: SETTINGS_NAV_FLOW_KEY,
     });
   }, []);
+  // COVERAGE LIMIT (honest): when admin/org access is already resolved at mount
+  // (adminAccessLoading === false on the first pass — the common warm case), the
+  // shell/data/stable marks fire back-to-back in the same tick, so
+  // shell_to_data_ms and data_to_stable_ms collapse to ~0. The non-trivial
+  // signal only appears on a cold open where useIsAdmin is still loading.
   useEffect(() => {
     if (adminAccessLoading || settingsFlowSettledRef.current) {
       return;

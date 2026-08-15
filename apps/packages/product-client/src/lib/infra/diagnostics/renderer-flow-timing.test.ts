@@ -107,21 +107,65 @@ describe("renderer flow timing", () => {
     ).toHaveLength(1);
   });
 
-  it("records -1 sentinels when marks are skipped before stable", () => {
+  it("omits skipped stage timings and reports stages_completed instead of -1 sentinels", () => {
     beginRendererFlow({ kind: "terminal_attach", correlationKey: "t1" });
     nowValue = 40;
     finishRendererFlow({ kind: "terminal_attach", correlationKey: "t1" });
     const stable = fieldsOf("renderer.flow.content_stable");
-    expect(stable.intent_to_shell_ms).toBe(-1);
-    expect(stable.shell_to_data_ms).toBe(-1);
+    // Skipped stages are OMITTED, never encoded as a -1 magic number that would
+    // poison later aggregation.
+    expect("intent_to_shell_ms" in stable).toBe(false);
+    expect("shell_to_data_ms" in stable).toBe(false);
+    expect(stable.stages_completed).toBe(0);
     expect(stable.data_to_stable_ms).toBe(40);
   });
 
-  it("drops abandoned flows without emitting content_stable", () => {
+  it("reports stages_completed for a partial (shell-only) flow", () => {
+    beginRendererFlow({ kind: "workspace_open", correlationKey: "p1" });
+    nowValue = 12;
+    markRendererFlowShellCommitted({ kind: "workspace_open", correlationKey: "p1" });
+    nowValue = 30;
+    finishRendererFlow({ kind: "workspace_open", correlationKey: "p1" });
+    const stable = fieldsOf("renderer.flow.content_stable");
+    expect(stable.intent_to_shell_ms).toBe(12);
+    expect("shell_to_data_ms" in stable).toBe(false);
+    expect(stable.stages_completed).toBe(1);
+  });
+
+  it("drops abandoned flows without emitting content_stable and records the reason", () => {
     beginRendererFlow({ kind: "settings_nav", correlationKey: "n1" });
-    abandonRendererFlow({ kind: "settings_nav", correlationKey: "n1" });
+    abandonRendererFlow({
+      kind: "settings_nav",
+      correlationKey: "n1",
+      reason: "workspace_selection_stale",
+    });
     finishRendererFlow({ kind: "settings_nav", correlationKey: "n1" });
     expect(emitted.some((e) => e.name === "renderer.flow.content_stable")).toBe(false);
+    const abandoned = fieldsOf("renderer.flow.abandoned");
+    expect(abandoned.reason).toBe("workspace_selection_stale");
+    expect(abandoned.stages_completed).toBe(0);
+  });
+
+  it("carries detail fields through data_ready and content_stable", () => {
+    beginRendererFlow({ kind: "session_open", correlationKey: "d1" });
+    markRendererFlowShellCommitted({ kind: "session_open", correlationKey: "d1" });
+    markRendererFlowDataReady({
+      kind: "session_open",
+      correlationKey: "d1",
+      detail: { event_count: 7 },
+    });
+    finishRendererFlow({
+      kind: "session_open",
+      correlationKey: "d1",
+      detail: { replay_ms: 3 },
+    });
+    expect(fieldsOf("renderer.flow.data_ready").event_count).toBe(7);
+    expect(fieldsOf("renderer.flow.content_stable").replay_ms).toBe(3);
+  });
+
+  it("does not emit renderer.flow.abandoned for an unknown flow", () => {
+    abandonRendererFlow({ kind: "workspace_open", correlationKey: "missing", reason: "x" });
+    expect(emitted).toHaveLength(0);
   });
 
   it("ignores marks and finishes for unknown flows", () => {

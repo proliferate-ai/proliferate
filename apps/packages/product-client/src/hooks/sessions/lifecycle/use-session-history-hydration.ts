@@ -88,14 +88,29 @@ export function useSessionHistoryHydration() {
           correlation: { sessionId },
         });
         // The transcript slot already exists, so the shell is committed by the
-        // time a full hydration begins.
-        markRendererFlowShellCommitted({ kind: "session_open", correlationKey: sessionId });
+        // time a full hydration begins. NOTE: intent_to_shell_ms is ~0 by
+        // construction for session_open (intent and shell fire back to back);
+        // the meaningful timings are shell_to_data (the history fetch) and
+        // data_to_stable (replay + store + mount).
       }
-      standaloneMeasurementOperationId = startMeasurementOperation({
-        kind: resolveHistoryApplyOperationKind({ afterSeq, beforeSeq }),
-        surfaces: SESSION_APPLY_MEASUREMENT_SURFACES,
-        maxDurationMs: SESSION_HISTORY_APPLY_MAX_DURATION_MS,
-      });
+      // UX-latency R1 (Q17): the full-hydration path is the session_open flow and
+      // emits ONLY through the renderer flow-timing family. The
+      // `session_history_initial_hydrate` measurement operation and the
+      // `logLatency("session.history.rehydrate.success")` emit that used to run
+      // here were the parallel layer the ADR gate forbids, so they are skipped on
+      // this path; their phase timings are rerouted onto the renderer marks
+      // (event_count on data_ready, replay/store/mount deltas on content_stable).
+      // Incremental append/prepend hydrations are out of scope and keep the
+      // finer-grained history-apply measurement operation.
+      if (isSessionOpenFlow) {
+        markRendererFlowShellCommitted({ kind: "session_open", correlationKey: sessionId });
+      } else {
+        standaloneMeasurementOperationId = startMeasurementOperation({
+          kind: resolveHistoryApplyOperationKind({ afterSeq, beforeSeq }),
+          surfaces: SESSION_APPLY_MEASUREMENT_SURFACES,
+          maxDurationMs: SESSION_HISTORY_APPLY_MAX_DURATION_MS,
+        });
+      }
       const requestMeasurementOperationId =
         options?.measurementOperationId ?? standaloneMeasurementOperationId;
       const historyApplyOperationIds = uniqueMeasurementOperationIds([
@@ -152,13 +167,21 @@ export function useSessionHistoryHydration() {
         });
       }
       if (isSessionOpenFlow) {
-        markRendererFlowDataReady({ kind: "session_open", correlationKey: sessionId });
+        markRendererFlowDataReady({
+          kind: "session_open",
+          correlationKey: sessionId,
+          detail: { event_count: events.length },
+        });
       }
       const currentSlot = getSessionRecord(sessionId);
       if (!currentSlot || (options?.isCurrent && !options.isCurrent())) {
         finishStandaloneApplyOperation(standaloneMeasurementOperationId, "aborted");
         if (isSessionOpenFlow) {
-          abandonRendererFlow({ kind: "session_open", correlationKey: sessionId });
+          abandonRendererFlow({
+            kind: "session_open",
+            correlationKey: sessionId,
+            reason: "session_slot_changed",
+          });
         }
         return false;
       }
@@ -349,6 +372,13 @@ export function useSessionHistoryHydration() {
         isCurrent: options?.isCurrent,
       })) {
         finishStandaloneApplyOperation(standaloneMeasurementOperationId, "aborted");
+        if (isSessionOpenFlow) {
+          abandonRendererFlow({
+            kind: "session_open",
+            correlationKey: sessionId,
+            reason: "session_slot_changed",
+          });
+        }
         return false;
       }
       recordHistoryApplyStepMetrics(historyApplyOperationIds, {
@@ -356,18 +386,27 @@ export function useSessionHistoryHydration() {
         startedAt: mountStartedAt,
       });
       finishStandaloneApplyOperation(standaloneMeasurementOperationId, "completed", true);
-      logLatency("session.history.rehydrate.success", {
-        sessionId,
-        eventCount: replacementEvents.length,
-        appended: false,
-        elapsedMs: Math.round(performance.now() - startedAt),
-      });
       if (isSessionOpenFlow) {
-        finishRendererFlow({ kind: "session_open", correlationKey: sessionId });
+        // Phase timings rerouted from the removed measurement operation onto the
+        // canonical content_stable mark.
+        finishRendererFlow({
+          kind: "session_open",
+          correlationKey: sessionId,
+          detail: {
+            event_count: replacementEvents.length,
+            replay_ms: Math.round(storeStartedAt - replayStartedAt),
+            store_ms: Math.round(mountStartedAt - storeStartedAt),
+            mount_ms: Math.round(performance.now() - mountStartedAt),
+          },
+        });
       }
       return true;
     } catch (error) {
-      abandonRendererFlow({ kind: "session_open", correlationKey: sessionId });
+      abandonRendererFlow({
+        kind: "session_open",
+        correlationKey: sessionId,
+        reason: "session_history_rehydrate_failed",
+      });
       reportSessionHistoryRehydrateFailure({
         error,
         sessionId,

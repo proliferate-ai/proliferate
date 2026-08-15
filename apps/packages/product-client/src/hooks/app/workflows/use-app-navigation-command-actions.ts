@@ -37,6 +37,11 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
   const openSettings = useCallback(() => {
     // UX-latency R1: intent mark for the settings_nav flow. The shell/data/
     // stable marks are emitted by SettingsScreen once it mounts and settles.
+    // COVERAGE LIMIT (honest): only THIS command path emits the intent mark.
+    // Opening settings via a direct URL, a page reload, or a deep link does not
+    // run this callback, so those routes emit no settings_nav flow at all (the
+    // settle marks in SettingsScreen then no-op against a missing flow). This
+    // rung measures the in-app command/palette/shortcut path only.
     beginRendererFlow({ kind: "settings_nav", correlationKey: SETTINGS_NAV_FLOW_KEY });
     navigateApp("/settings?section=account");
   }, []);

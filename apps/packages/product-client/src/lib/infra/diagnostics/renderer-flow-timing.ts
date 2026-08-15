@@ -2,31 +2,41 @@ import {
   diagnosticField,
   recordRendererDiagnostic,
   type RendererDiagnosticCorrelation,
+  type RendererDiagnosticField,
 } from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 
 /**
  * Canonical renderer flow-timing marks (UX Latency + Transitions ADR §4.8,
  * Rung 1, Q17).
  *
- * The renderer connection/sync/turn event family (renderer-diagnostics-connection.ts,
- * renderer-diagnostic-migrations.ts) is the single instrumentation base. This
- * module extends that family with the two marks it was missing — `shell_committed`
- * and `content_stable` — so every instrumented flow yields the three stage
- * timings the ADR requires:
+ * This module is the single producer of the `renderer.flow.*` event family. It
+ * sits alongside the existing renderer connection/stream diagnostics
+ * (renderer-diagnostics-connection.ts, renderer-diagnostic-migrations.ts) and is
+ * the one place the four canonical UX flows (workspace_open, settings_nav,
+ * terminal_attach, session_open) emit stage timings. The older
+ * `logLatency(...)` latency-flow API and the `startMeasurementOperation(...)`
+ * measurement-port operation are no longer wired to these four flows; only
+ * genuinely out-of-scope probes (typing/jank/scroll, incremental history
+ * append/prepend, etc.) still use those APIs.
  *
- *   - intent_to_shell_ms  (intent      -> shell_committed): shell painted
- *   - shell_to_data_ms    (shell        -> data_ready):     data landed
- *   - data_to_stable_ms   (data_ready   -> content_stable): surface settled
+ * The three stage timings the ADR requires:
  *
- * There is deliberately no fourth instrumentation layer: the older
- * `logLatency(...)` latency-flow API and the measurement-port operation API are
- * consolidated onto this event family for the four canonical flows. Marks are
- * additive — reverting this rung is deleting the mark call sites, no ordering or
- * treatment change.
+ *   - intent_to_shell_ms  (intent      -> shell_committed)
+ *   - shell_to_data_ms    (shell        -> data_ready)
+ *   - data_to_stable_ms   (data_ready   -> content_stable)
+ *
+ * IMPORTANT: these marks are store/data-boundary proxies, not real paint
+ * commits. `shell_committed` fires when the shell's store state is in place and
+ * `content_stable` when the surface's data has settled at the boundary this code
+ * can observe; neither is a measured browser paint. A later rung that binds
+ * treatments to a budget should account for the paint gap they do not capture.
  *
  * Budgets stay measurement-validated DRAFTS: each flow names a metric with a
  * threshold slot, but `thresholdMs` is null (unenforced) until treatments bind
  * to a measured budget in a later rung.
+ *
+ * Marks are additive: reverting this rung is deleting the mark call sites, with
+ * no ordering or treatment change.
  */
 
 export type RendererFlowKind =
@@ -40,6 +50,9 @@ export type RendererFlowStage =
   | "shell_committed"
   | "data_ready"
   | "content_stable";
+
+/** Extra operational fields a call site may attach to a stage mark. */
+export type RendererFlowDetail = Record<string, string | number | boolean | null>;
 
 /**
  * Settings navigation is a singleton surface (one settings screen at a time),
@@ -106,6 +119,19 @@ function pruneStaleFlows(now: number): void {
   }
 }
 
+function detailFields(
+  detail: RendererFlowDetail | undefined,
+): Record<string, RendererDiagnosticField> {
+  if (!detail) {
+    return {};
+  }
+  const fields: Record<string, RendererDiagnosticField> = {};
+  for (const [key, value] of Object.entries(detail)) {
+    fields[key] = diagnosticField(value, "operational");
+  }
+  return fields;
+}
+
 /**
  * Open a flow at intent and emit `renderer.flow.intent`. Idempotent per
  * (kind, correlationKey): a re-begin restarts the clock, matching the old
@@ -143,6 +169,7 @@ export function beginRendererFlow(input: {
 export function markRendererFlowShellCommitted(input: {
   kind: RendererFlowKind;
   correlationKey: string;
+  detail?: RendererFlowDetail;
 }): void {
   const flow = activeFlows.get(flowKey(input.kind, input.correlationKey));
   if (!flow || flow.stages.has("shell_committed")) {
@@ -160,6 +187,7 @@ export function markRendererFlowShellCommitted(input: {
     fields: {
       flow_kind: diagnosticField(input.kind, "operational"),
       intent_to_shell_ms: diagnosticField(round(now - flow.startedAt), "operational"),
+      ...detailFields(input.detail),
     },
   });
 }
@@ -168,6 +196,7 @@ export function markRendererFlowShellCommitted(input: {
 export function markRendererFlowDataReady(input: {
   kind: RendererFlowKind;
   correlationKey: string;
+  detail?: RendererFlowDetail;
 }): void {
   const flow = activeFlows.get(flowKey(input.kind, input.correlationKey));
   if (!flow || flow.stages.has("data_ready")) {
@@ -189,6 +218,7 @@ export function markRendererFlowDataReady(input: {
         "operational",
       ),
       intent_to_data_ms: diagnosticField(round(now - flow.startedAt), "operational"),
+      ...detailFields(input.detail),
     },
   });
 }
@@ -196,10 +226,15 @@ export function markRendererFlowDataReady(input: {
 /**
  * Close the flow at content-stable and emit `renderer.flow.content_stable` with
  * every stage timing plus the flow's draft budget slot, then release its state.
+ *
+ * Stage timings that never happened are OMITTED (not sentinel-encoded), and
+ * `stages_completed` reports how many of {shell_committed, data_ready} were
+ * reached so aggregation can filter partial flows without parsing magic numbers.
  */
 export function finishRendererFlow(input: {
   kind: RendererFlowKind;
   correlationKey: string;
+  detail?: RendererFlowDetail;
 }): void {
   const key = flowKey(input.kind, input.correlationKey);
   const flow = activeFlows.get(key);
@@ -209,41 +244,75 @@ export function finishRendererFlow(input: {
   const now = nowMs();
   activeFlows.delete(key);
   const budget = RENDERER_FLOW_BUDGETS[input.kind];
+  const stagesCompleted =
+    (flow.shellAt === null ? 0 : 1) + (flow.dataAt === null ? 0 : 1);
+  const fields: Record<string, RendererDiagnosticField> = {
+    flow_kind: diagnosticField(input.kind, "operational"),
+    stages_completed: diagnosticField(stagesCompleted, "operational"),
+    data_to_stable_ms: diagnosticField(
+      round(now - (flow.dataAt ?? flow.shellAt ?? flow.startedAt)),
+      "operational",
+    ),
+    intent_to_stable_ms: diagnosticField(round(now - flow.startedAt), "operational"),
+    budget_metric: diagnosticField(budget.metric, "operational"),
+    budget_threshold_ms: diagnosticField(budget.thresholdMs, "operational"),
+    ...detailFields(input.detail),
+  };
+  if (flow.shellAt !== null) {
+    fields.intent_to_shell_ms = diagnosticField(
+      round(flow.shellAt - flow.startedAt),
+      "operational",
+    );
+  }
+  if (flow.dataAt !== null) {
+    fields.shell_to_data_ms = diagnosticField(
+      round(flow.dataAt - (flow.shellAt ?? flow.startedAt)),
+      "operational",
+    );
+  }
   recordRendererDiagnostic({
     name: "renderer.flow.content_stable",
     severity: "info",
     kind: "milestone",
     privacy: "operational",
     correlation: flow.correlation,
-    fields: {
-      flow_kind: diagnosticField(input.kind, "operational"),
-      intent_to_shell_ms: diagnosticField(
-        flow.shellAt === null ? -1 : round(flow.shellAt - flow.startedAt),
-        "operational",
-      ),
-      shell_to_data_ms: diagnosticField(
-        flow.dataAt === null
-          ? -1
-          : round(flow.dataAt - (flow.shellAt ?? flow.startedAt)),
-        "operational",
-      ),
-      data_to_stable_ms: diagnosticField(
-        round(now - (flow.dataAt ?? flow.shellAt ?? flow.startedAt)),
-        "operational",
-      ),
-      intent_to_stable_ms: diagnosticField(round(now - flow.startedAt), "operational"),
-      budget_metric: diagnosticField(budget.metric, "operational"),
-      budget_threshold_ms: diagnosticField(budget.thresholdMs, "operational"),
-    },
+    fields,
   });
 }
 
-/** Drop a flow without emitting content_stable (failure / navigation away). */
+/**
+ * Drop a flow without emitting content_stable (failure / navigation away /
+ * superseded selection), emitting `renderer.flow.abandoned` with an explicit
+ * reason. This is the renderer-family replacement for the old
+ * `cancelLatencyFlow(...)` staleness signal, so truthfulness is unchanged: an
+ * abandoned flow never reports a false content_stable milestone. No-ops when the
+ * flow is unknown (already finished/abandoned).
+ */
 export function abandonRendererFlow(input: {
   kind: RendererFlowKind;
   correlationKey: string;
+  reason: string;
 }): void {
-  activeFlows.delete(flowKey(input.kind, input.correlationKey));
+  const key = flowKey(input.kind, input.correlationKey);
+  const flow = activeFlows.get(key);
+  if (!flow) {
+    return;
+  }
+  activeFlows.delete(key);
+  const stagesCompleted =
+    (flow.shellAt === null ? 0 : 1) + (flow.dataAt === null ? 0 : 1);
+  recordRendererDiagnostic({
+    name: "renderer.flow.abandoned",
+    severity: "debug",
+    kind: "progress",
+    privacy: "operational",
+    correlation: flow.correlation,
+    fields: {
+      flow_kind: diagnosticField(input.kind, "operational"),
+      reason: diagnosticField(input.reason, "operational"),
+      stages_completed: diagnosticField(stagesCompleted, "operational"),
+    },
+  });
 }
 
 export function resetRendererFlowsForTest(): void {

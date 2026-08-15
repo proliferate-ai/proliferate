@@ -97,7 +97,11 @@ export function useTerminalStreamController() {
         void invalidateWorkspaceTerminals(workspaceId);
       },
       onError: () => {
-        abandonRendererFlow({ kind: "terminal_attach", correlationKey: terminalId });
+        abandonRendererFlow({
+          kind: "terminal_attach",
+          correlationKey: terminalId,
+          reason: "stream_error",
+        });
         bumpConnectionVersion(terminalId);
         if (!options?.readOnlyReplay && !isTerminalIntentionalClose(terminalId)) {
           triggerSelectedCloudReconnect(workspaceId);
@@ -118,6 +122,19 @@ export function useTerminalStreamController() {
     });
     if (didConnect) {
       bumpConnectionVersion(terminalId);
+    } else {
+      // Keep-alive reattach: ensureConnected short-circuits on an existing
+      // handle (or an already-exited entry) without firing onOpen/onData, so
+      // this flow would never reach data_ready/content_stable. We abandon it
+      // rather than leave a truncated flow to age out via prune. Reattach is
+      // deliberately UNMEASURED this rung: the interesting cost (first paint of
+      // a fresh attach) already happened on the original attach, so remeasuring
+      // a keep-alive reattach would report a near-zero, misleading timing.
+      abandonRendererFlow({
+        kind: "terminal_attach",
+        correlationKey: terminalId,
+        reason: "already_connected",
+      });
     }
     return identity;
   }, [
