@@ -89,6 +89,14 @@ pub struct AgentSummary {
     pub message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cli_auth_state: Option<AgentCliAuthState>,
+    /// True when the user has their own copy of this agent on PATH,
+    /// regardless of whether a managed copy also exists and wins resolution
+    /// (R2.0, always-managed: a managed copy never displaces a PATH one).
+    /// Drives the settings-pane one-time notice explaining the managed copy
+    /// when both exist. Additive and tolerant: absent on runtimes that
+    /// predate R2.0, so old readers simply see no notice.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub user_path_copy_detected: bool,
 }
 
 // --- Launch options ---

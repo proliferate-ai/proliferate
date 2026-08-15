@@ -158,18 +158,20 @@ triggered by the startup pass on every runtime boot
 walks the supported set and installs whatever the drift planner
 ([`installer/install_policy.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/install_policy.rs))
 says is absent or stale. A user
-authenticates harnesses; they never install them. The two carve-outs below
-are one named predicate
+authenticates harnesses; they never install them. Proliferate always
+maintains its own managed copy (R2.0, RULED): a user's own copy on PATH is
+detection-only now and no longer blocks the managed install — resolution
+already prefers the managed copy when both exist
+([`readiness/artifacts.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/artifacts.rs),
+`resolve_native_artifact`/`resolve_agent_process_artifact`), so nothing
+displaces the user's binary, but nothing defers to it either. The one
+remaining carve-out is one named predicate
 ([`installer/auto_install.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/auto_install.rs)),
-deliberately not a side effect of the pass's scope: PATH protection must
-outrank every other rule, so it cannot be something a scope change can
-silently remove. Completed installs
+deliberately not a side effect of the pass's scope. Completed installs
 poke the model-snapshot reconciler ([MODELS.md](../../../FEATURE_DOCS/MODELS.md))
 so a newly converged harness re-probes its models without extra wiring.
-Two carve-outs:
+The one carve-out:
 
-- An agent the user already provides on PATH is left alone: it is usable
-  through readiness as-is, and a managed install would shadow their copy.
 - Cursor never installs in cloud. Its readiness resolves through a headless
   credential path — an enabled `api_key` selection (agent-auth.md's
   `CURSOR_API_KEY` slot) upgrades `CredentialsRequired` to `Ready` the same
@@ -184,6 +186,19 @@ Two carve-outs:
   surface can interactively seed. For the same keychain reason it is
   excluded from unattended model probing and refreshed only on request
   (model-catalog.md's probe engine).
+
+When a managed copy lands alongside a harness the user already had on
+PATH, the settings pane (`HarnessPane.tsx`) shows a one-time, dismissible
+notice explaining that Proliferate now maintains its own copy and the
+user's own install is untouched; dismissal persists per harness under
+`proliferate.harnessManagedNotice.v1`. The signal is an additive,
+tolerant `AgentSummary.userPathCopyDetected` bit (anyharness-contract), read
+independently of which artifact resolution picked — a managed hit
+short-circuits before ever checking PATH, so the resolved artifact alone
+cannot express "both exist". An escape hatch,
+`ANYHARNESS_ALWAYS_MANAGED_INSTALL=off`, restores the pre-R2.0 PATH
+carve-out for operators who need to revert without a code change; it
+defaults on (the ruling).
 
 Install topology per surface is then only about who pays the first
 download:
@@ -216,8 +231,8 @@ unchanged is a no-op for X. Drift is also directionless (`!=`, not
 path as upgrading.
 
 The reconcile runs from two pokes, both covering the full supported set
-for the surface (PATH-provided agents excluded, cursor excluded in
-cloud):
+for the surface (cursor excluded in cloud; a PATH-provided agent is no
+longer excluded — R2.0 installs a managed copy alongside it):
 
 - the startup pass (`spawn_startup_pass` in
   [`runtime.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs))
