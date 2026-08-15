@@ -169,39 +169,57 @@ function AuthSetupEvidenceRow({
   const affordanceLabel = badge.launchable
     ? null
     : badge.actionLabel ?? HOME_SCREEN_LABELS.authSetupOpenAgents;
+  // The backoff line is shown VISIBLY (spec rung 7): a static next-attempt
+  // countdown (non-ticking, matching the rung-6 evidence summary's convention)
+  // and the last-failure detail, clamped so a long provider message stays one
+  // line rather than reflowing the card.
+  const backoffLine =
+    badge.phase === "backoff"
+      ? [
+          countdown ? `Next attempt in ${countdown}.` : "Retrying shortly.",
+          badge.lastFailureDetail ?? "",
+        ]
+          .join(" ")
+          .trim()
+      : null;
   return (
     <div
-      className="flex min-w-0 items-center gap-2"
+      className="flex min-w-0 flex-col gap-0.5"
       data-agent-onboarding-kind={badge.harnessKind}
       data-agent-onboarding-phase={badge.phase}
     >
-      <span className="flex size-5 shrink-0 items-center justify-center [&_svg]:icon-paired">
-        <ProviderIcon kind={badge.harnessKind} className="icon-paired" />
-      </span>
-      <span className="truncate text-ui-sm text-foreground">
-        {badge.displayName}
-      </span>
-      <span className="ml-auto flex shrink-0 items-center gap-1.5">
-        {badge.pending ? (
-          <Spinner className="icon-paired text-muted-foreground" />
-        ) : null}
-        <Badge tone={badge.tone} size="micro" data-agent-onboarding-badge={badge.label}>
-          {badge.label}
-        </Badge>
-        {affordanceLabel ? (
-          <button
-            type="button"
-            className="z-20 text-ui-sm text-foreground underline underline-offset-2"
-            onClick={onOpenAgents}
-            data-agent-onboarding-affordance={badge.actionLabel ?? "open-agents"}
-          >
-            {affordanceLabel}
-          </button>
-        ) : null}
-      </span>
-      {countdown ? (
-        <span className="sr-only" data-agent-onboarding-next-attempt>
-          Next attempt in {countdown}
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="flex size-5 shrink-0 items-center justify-center [&_svg]:icon-paired">
+          <ProviderIcon kind={badge.harnessKind} className="icon-paired" />
+        </span>
+        <span className="truncate text-ui-sm text-foreground">
+          {badge.displayName}
+        </span>
+        <span className="ml-auto flex shrink-0 items-center gap-1.5">
+          {badge.pending ? (
+            <Spinner className="icon-paired text-muted-foreground" />
+          ) : null}
+          <Badge tone={badge.tone} size="micro" data-agent-onboarding-badge={badge.label}>
+            {badge.label}
+          </Badge>
+          {affordanceLabel ? (
+            <button
+              type="button"
+              className="z-20 text-ui-sm text-foreground underline underline-offset-2"
+              onClick={onOpenAgents}
+              data-agent-onboarding-affordance={badge.actionLabel ?? "open-agents"}
+            >
+              {affordanceLabel}
+            </button>
+          ) : null}
+        </span>
+      </div>
+      {backoffLine ? (
+        <span
+          className="line-clamp-1 pl-7 text-ui-sm text-muted-foreground"
+          data-agent-onboarding-next-attempt
+        >
+          {backoffLine}
         </span>
       ) : null}
     </div>

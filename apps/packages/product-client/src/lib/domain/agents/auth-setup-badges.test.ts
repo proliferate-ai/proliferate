@@ -73,13 +73,17 @@ describe("deriveOnboardingAgentBadge — install state binding", () => {
     expect(badge.actionLabel).toBe("Install");
   });
 
-  it("binds an installed-but-underived agent to a bound pending state (no timer)", () => {
+  it("binds an installed-but-underived agent to an actionable terminal (never an eternal spinner)", () => {
     const badge = deriveOnboardingAgentBadge(
       agentFor({ installState: "installed", authState: undefined }),
     );
-    expect(badge.phase).toBe("waiting");
-    expect(badge.pending).toBe(true);
-    expect(badge.terminal).toBe(false);
+    // A runtime that never folds a derivation must not spin forever: the card
+    // completes via actionable-terminal semantics, with the pane fallback.
+    expect(badge.phase).toBe("actionable");
+    expect(badge.pending).toBe(false);
+    expect(badge.terminal).toBe(true);
+    expect(badge.launchable).toBe(false);
+    expect(badge.label).toBe("Waiting for status");
   });
 });
 
@@ -238,12 +242,18 @@ describe("resolveAuthSetupEvidence — card completion is state-bound", () => {
     expect(done).toBe(false);
   });
 
-  it("is not done while an adopted kind is missing from the projection", () => {
+  it("emits a visible named badge for an adopted kind missing from the projection", () => {
     const agents = byKind([
       agentFor({ kind: "claude", authState: authStateFor("usable") }),
     ]);
-    const { done } = resolveAuthSetupEvidence(["claude", "codex"], agents);
+    const { badges, done } = resolveAuthSetupEvidence(["claude", "codex"], agents);
     expect(done).toBe(false);
+    // The stuck agent is still accounted for by a row, named by its kind.
+    const missing = badges.find((badge) => badge.harnessKind === "codex");
+    expect(missing).toBeDefined();
+    expect(missing?.displayName).toBe("codex");
+    expect(missing?.pending).toBe(true);
+    expect(missing?.terminal).toBe(false);
   });
 
   it("completes only when every adopted agent reaches a terminal state (launchable or actionable)", () => {

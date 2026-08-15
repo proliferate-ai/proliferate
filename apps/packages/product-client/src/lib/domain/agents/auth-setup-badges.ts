@@ -1,6 +1,7 @@
 import type { AgentSummary } from "@anyharness/sdk";
 import { HOME_SCREEN_LABELS } from "#product/copy/home/home-screen-copy";
 import {
+  isEvidenceGreen,
   labelForDisplay,
   labelForNextAction,
   toneForDisplay,
@@ -123,13 +124,18 @@ export function deriveOnboardingAgentBadge(
         actionLabel: labelForNextAction("install"),
       };
     }
+    // Install complete but the runtime has not folded a derivation. Rather
+    // than a pending state that could spin forever against a runtime that
+    // never fills `authState`, this is an actionable terminal: the card can
+    // complete, and the pane fallback affordance keeps it from being a dead
+    // end. A real derivation, once it lands, replaces this on the next poll.
     return {
       ...base,
-      phase: "waiting",
-      label: HOME_SCREEN_LABELS.authSetupPreparing,
-      tone: "warning",
-      pending: true,
-      terminal: false,
+      phase: "actionable",
+      label: HOME_SCREEN_LABELS.authSetupWaitingStatus,
+      tone: "neutral",
+      pending: false,
+      terminal: true,
       launchable: false,
       actionLabel: null,
     };
@@ -170,19 +176,21 @@ export function deriveOnboardingAgentBadge(
     };
   }
 
+  if (isEvidenceGreen(authState.display)) {
+    // The two launchable, evidence-backed terminals (usable/authenticated).
+    return {
+      ...base,
+      phase: "ready",
+      label,
+      tone,
+      pending: false,
+      terminal: true,
+      launchable: true,
+      actionLabel: null,
+    };
+  }
+
   switch (authState.display) {
-    case "usable":
-    case "authenticated":
-      return {
-        ...base,
-        phase: "ready",
-        label,
-        tone,
-        pending: false,
-        terminal: true,
-        launchable: true,
-        actionLabel: null,
-      };
     case "selected":
       // Acknowledged and satisfiable, waiting on the first probe/trial. Bound
       // to the real state — it advances when the probe runs, not on a clock.
@@ -214,6 +222,27 @@ export function deriveOnboardingAgentBadge(
   }
 }
 
+/**
+ * The badge for an adopted kind not yet present in the agents projection. A
+ * bound pending row (spinner, no affordance) named by its kind, keeping the
+ * card honest about a harness it is still waiting on.
+ */
+function missingAgentBadge(kind: string): OnboardingAgentBadge {
+  return {
+    harnessKind: kind,
+    displayName: kind,
+    phase: "waiting",
+    label: HOME_SCREEN_LABELS.authSetupPreparing,
+    tone: "warning",
+    pending: true,
+    terminal: false,
+    launchable: false,
+    actionLabel: null,
+    nextAttemptAt: null,
+    lastFailureDetail: null,
+  };
+}
+
 export interface AuthSetupEvidence {
   badges: OnboardingAgentBadge[];
   /** True once every adopted agent has reached a terminal state. */
@@ -236,6 +265,11 @@ export function resolveAuthSetupEvidence(
   for (const kind of adoptedHarnessKinds) {
     const agent = agentsByKind.get(kind);
     if (!agent) {
+      // The projection has not caught up to this adopted kind. Emit a VISIBLE
+      // pending row (named by its kind, the only identity we hold) rather than
+      // a card with a silent gap — the agent is at least accounted for, and
+      // done stays false until it resolves.
+      badges.push(missingAgentBadge(kind));
       done = false;
       continue;
     }

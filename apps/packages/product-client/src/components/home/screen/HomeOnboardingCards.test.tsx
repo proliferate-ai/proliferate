@@ -182,7 +182,7 @@ describe("HomeOnboardingCards evidence-bound card (rung 7)", () => {
     expect(screen.getByText(HOME_SCREEN_LABELS.authSetupOpenAgents)).toBeTruthy();
   });
 
-  it("shows a backoff row's next attempt instead of an eternal spinner", () => {
+  it("shows a backoff row's next attempt and failure detail VISIBLY instead of an eternal spinner", () => {
     const future = new Date(Date.now() + 30_000).toISOString();
     const { container } = renderCards({
       authSetupEvidence: evidence([
@@ -197,10 +197,19 @@ describe("HomeOnboardingCards evidence-bound card (rung 7)", () => {
           launchable: false,
           actionLabel: "Top up or retry",
           nextAttemptAt: future,
+          lastFailureDetail: "429 rate limited",
         }),
       ]),
     });
-    expect(container.querySelector("[data-agent-onboarding-next-attempt]")).toBeTruthy();
+    const line = container.querySelector<HTMLElement>(
+      "[data-agent-onboarding-next-attempt]",
+    );
+    expect(line).toBeTruthy();
+    // Not sr-only: the line is visible text carrying both the countdown and
+    // the failure detail.
+    expect(line?.className).not.toContain("sr-only");
+    expect(line?.textContent).toContain("Next attempt in");
+    expect(line?.textContent).toContain("429 rate limited");
     // A terminal backoff row shows no spinner.
     expect(container.querySelector('[data-agent-onboarding-phase="backoff"] .animate-spin')).toBeNull();
   });

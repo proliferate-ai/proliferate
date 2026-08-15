@@ -17,6 +17,7 @@ export const HOME_SCREEN_LABELS = {
   authSetupInstalling: "Installing",
   authSetupPreparing: "Preparing",
   authSetupNeedsInstall: "Not installed",
+  authSetupWaitingStatus: "Waiting for status",
   authSetupOpenAgents: "Open agent settings",
   modelProbeProbingTitle: "Processing your models…",
   modelProbeDoneDescription: "Check out which models you already have access to.",
