@@ -329,6 +329,12 @@ for the NEXT boot's decision. Boot sequence:
    moves. The mark is written only after a successful activation decision.
    Catalog and registry always activate as the SAME staged pair; there is no
    path that mixes a staged catalog with the bundled registry or vice versa.
+   Publisher caution: the mark is monotonic, so an artifact published with a
+   FUTURE `generatedAt` (CI clock skew, manual stamping) pins every machine
+   that activates it ahead of later correctly-stamped catalogs until their
+   timestamps catch up — the failure is denial-of-update to the bundled
+   floor, never activation of anything unsigned, and the remedy is
+   republishing with a corrected, newer timestamp.
 
 **Registry consumers outside `CatalogSyncService`**: auth's launch-facts
 collection (`auth/launch_facts.rs`, `registry_flag_vars` and
