@@ -49,29 +49,34 @@ describe("session intent store", () => {
     const first = store.enqueueConfig({
       clientSessionId: "session-1",
       workspaceId: "workspace-1",
-      configId: "mode",
-      value: "plan",
+      controlKey: "effort",
+      configId: "reasoning_effort",
+      value: "high",
     });
     store.enqueueConfig({
       clientSessionId: "session-1",
       workspaceId: "workspace-1",
-      configId: "mode",
-      value: "accept",
+      controlKey: "effort",
+      configId: "reasoning_effort",
+      value: "max",
     });
     const last = store.enqueueConfig({
       clientSessionId: "session-1",
       workspaceId: "workspace-1",
-      configId: "mode",
-      value: "default",
+      controlKey: "effort",
+      configId: "reasoning_effort",
+      value: "high",
     });
 
     const state = useSessionIntentStore.getState();
     expect(state.intentIdsByClientSessionId["session-1"]).toEqual([first.intentId]);
     expect(last.intentId).toBe(first.intentId);
     expect(state.entriesById[first.intentId]).toMatchObject({
-      configId: "mode",
+      controlKey: "effort",
+      generation: first.generation + 2,
+      rawConfigId: "reasoning_effort",
       status: "queued",
-      value: "default",
+      value: "high",
     });
   });
 

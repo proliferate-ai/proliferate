@@ -1,8 +1,9 @@
-import type {
-  PromptOutboxEntry,
-  SessionIntent,
-  SessionSendPromptIntent,
-  SessionUpdateConfigIntent,
+import {
+  createUpdateConfigIntent,
+  type PromptOutboxEntry,
+  type SessionIntent,
+  type SessionSendPromptIntent,
+  type SessionUpdateConfigIntent,
 } from "./session-intent-model";
 
 export interface SessionIntentStateShape {
@@ -11,6 +12,16 @@ export interface SessionIntentStateShape {
 }
 
 export type PromptOutboxStateShape = SessionIntentStateShape;
+
+export type SessionConfigIntentEnqueueInput = Omit<
+  Parameters<typeof createUpdateConfigIntent>[0],
+  "intentId" | "controlKey" | "rawConfigId"
+> & {
+  intentId?: string;
+} & (
+  | { configId: string; controlKey?: string }
+  | { configId: null; controlKey: string }
+);
 
 export function upsertSessionIntent(
   state: SessionIntentStateShape,
@@ -55,6 +66,43 @@ export function findSupersedableTailConfigIntent(
     && tail.status === "queued"
     ? tail
     : null;
+}
+
+export function createOrSupersedeConfigIntent(
+  state: SessionIntentStateShape,
+  input: SessionConfigIntentEnqueueInput,
+  createIntentId: () => string,
+): { intent: SessionUpdateConfigIntent; superseded: boolean } {
+  const controlKey = input.controlKey ?? input.configId;
+  if (!controlKey) {
+    throw new Error("A semantic control key is required for a launch-only config intent");
+  }
+  const supersedable = input.intentId
+    ? null
+    : findSupersedableTailConfigIntent(state, input.clientSessionId, controlKey);
+  const intent = supersedable
+    ? {
+      ...supersedable,
+      generation: supersedable.generation + 1,
+      rawConfigId: input.configId,
+      value: input.value,
+      materializedSessionId: input.materializedSessionId ?? supersedable.materializedSessionId,
+      workspaceId: input.workspaceId ?? supersedable.workspaceId,
+      persistDefaultPreference: input.persistDefaultPreference ?? supersedable.persistDefaultPreference,
+      updatedAt: new Date().toISOString(),
+    }
+    : createUpdateConfigIntent({
+      clientSessionId: input.clientSessionId,
+      materializedSessionId: input.materializedSessionId,
+      workspaceId: input.workspaceId,
+      controlKey,
+      rawConfigId: input.configId,
+      value: input.value,
+      persistDefaultPreference: input.persistDefaultPreference,
+      now: input.now,
+      intentId: input.intentId ?? createIntentId(),
+    });
+  return { intent, superseded: Boolean(supersedable) };
 }
 
 export function patchSessionIntent(

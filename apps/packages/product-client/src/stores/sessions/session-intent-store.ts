@@ -8,7 +8,6 @@ import {
   createEditPendingPromptIntent,
   createPromptOutboxEntry,
   createResolveInteractionIntent,
-  createUpdateConfigIntent,
   type PromptOutboxCreateInput,
   type PromptOutboxEntry,
   type SessionDeletePendingPromptIntent,
@@ -30,12 +29,13 @@ import {
 } from "#product/domain/sessions/intents/session-intent-reconciliation";
 import {
   bindSessionIntentMaterialization,
-  findSupersedableTailConfigIntent,
+  createOrSupersedeConfigIntent,
   getPromptEntryByPromptId,
   patchSessionIntent,
   removeSessionIntent,
   sessionIntentsForSession,
   upsertSessionIntent,
+  type SessionConfigIntentEnqueueInput,
   type SessionIntentStateShape,
 } from "#product/domain/sessions/intents/session-intent-state";
 import { recordStoreActionDebugActivity } from "#product/lib/infra/measurement/measurement-port";
@@ -73,16 +73,6 @@ interface SessionIntentStoreState extends SessionIntentStateShape {
   clear: () => void;
 }
 
-type SessionConfigIntentEnqueueInput = Omit<
-  Parameters<typeof createUpdateConfigIntent>[0],
-  "intentId" | "controlKey" | "rawConfigId"
-> & {
-  intentId?: string;
-} & (
-  | { configId: string; controlKey?: string }
-  | { configId: null; controlKey: string }
-);
-
 const EMPTY_SESSION_INTENT_STATE: SessionIntentStateShape = {
   entriesById: {},
   intentIdsByClientSessionId: {},
@@ -112,41 +102,11 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
 
   enqueueConfig: (input) => {
     const debugStartedAtMs = startSessionIntentStoreActionTrace();
-    const controlKey = input.controlKey ?? input.configId;
-    if (!controlKey) {
-      throw new Error("A semantic control key is required for a launch-only config intent");
-    }
-    // Same intent id and queue position: the burst reads as one selection
-    // whose value kept changing, and ordering against any later intents is
-    // untouched. Skipped when the caller pins an explicit intentId.
-    const supersedable = input.intentId
-      ? null
-      : findSupersedableTailConfigIntent(
-        useSessionIntentStore.getState(),
-        input.clientSessionId,
-        controlKey,
-      );
-    const intent: SessionUpdateConfigIntent = supersedable
-      ? {
-        ...supersedable,
-        rawConfigId: input.configId,
-        value: input.value,
-        materializedSessionId: input.materializedSessionId ?? supersedable.materializedSessionId,
-        workspaceId: input.workspaceId ?? supersedable.workspaceId,
-        persistDefaultPreference: input.persistDefaultPreference ?? supersedable.persistDefaultPreference,
-        updatedAt: new Date().toISOString(),
-      }
-      : createUpdateConfigIntent({
-        clientSessionId: input.clientSessionId,
-        materializedSessionId: input.materializedSessionId,
-        workspaceId: input.workspaceId,
-        controlKey,
-        rawConfigId: input.configId,
-        value: input.value,
-        persistDefaultPreference: input.persistDefaultPreference,
-        now: input.now,
-        intentId: input.intentId ?? createSessionIntentId("config"),
-      });
+    const { intent, superseded } = createOrSupersedeConfigIntent(
+      useSessionIntentStore.getState(),
+      input,
+      () => createSessionIntentId("config"),
+    );
     set((state) => {
       const next = withDispatchVersion(state, upsertSessionIntent(state, intent));
       recordSessionIntentStoreAction("enqueueConfig", state, next, {
@@ -154,7 +114,7 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
         controlKey: intent.controlKey,
         rawConfigId: intent.rawConfigId,
         intentKind: intent.kind,
-        superseded: Boolean(supersedable),
+        superseded,
         workspaceId: intent.workspaceId,
       }, debugStartedAtMs);
       return next;

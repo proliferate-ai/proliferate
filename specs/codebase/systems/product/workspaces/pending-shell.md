@@ -552,12 +552,13 @@ projection path.
   state match or it would stay stuck. Optimism is therefore held through intent
   `accepted` (so a real switch never reverts to the not-yet-updated value
   mid-flight) and dropped the moment the authoritative value equals it.
-- Session creation snapshots queued pre-materialization config intents before
-  applying launch defaults. The final authoritative live config settles only
-  those exact records before the session is published: the latest confirmed
-  value reconciles, superseded values become stale, unsupported values become
-  stale, and an applicable unconfirmed latest value fails silently. A newer
-  intent outside the snapshot remains a normal ordered live change.
+- Session creation snapshots queued pre-materialization config-intent
+  generations before applying launch defaults. The final authoritative live
+  config settles only those exact generations before the session is published:
+  the latest confirmed value reconciles, superseded values become stale,
+  unsupported values become stale, and an applicable unconfirmed latest value
+  fails silently. A newer intent outside the snapshot remains a normal ordered
+  live change.
 - If the projected session has no materialized runtime yet, display labels must
   still use the same label mapping as the final session.
 - Do not mix raw ids and presentation labels. For example, a reasoning setting
@@ -692,10 +693,11 @@ Rules:
   terminating that click before dispatch silently drops it (PRO-261).
 - A session with no materialized AnyHarness id keeps intents queued.
 - Creation temporarily owns the exact pre-materialization config-intent
-  snapshot it consumes. It applies only each semantic control's latest value
-  through the authoritative raw config id, then settles the captured records
-  in one transaction before materialization or binding can expose them to the
-  dispatcher.
+  generations it snapshots. It applies only each semantic control's latest
+  value through the authoritative raw config id, then settles the captured
+  generations in one transaction before materialization or binding can expose
+  them to the dispatcher. Tail coalescing may reuse a captured intent id for a
+  newer generation; that newer choice remains queued for live dispatch.
 - A config update may unblock later intents after AnyHarness accepts it as
   `applied` or `queued`; runtime config ordering is authoritative after that.
 - A prompt intent renders immediately, dispatches after materialization, and
@@ -734,7 +736,8 @@ for unrelated UI hydration, history loading, or shell selection completion once
 the materialized session id exists.
 
 Creation-consumed config intents never enter this loop. Publication settles
-their exact frozen IDs before it materializes or binds the session record.
+their exact frozen IDs and generations before it materializes or binds the
+session record.
 Compatible existing-session adoption instead resolves launch-only semantic
 keys against that session's authoritative normalized controls before binding;
 applicable records remain ordered live work and unsupported records become
@@ -912,8 +915,9 @@ Minimum coverage by concern:
   immediately where visible, and dispatch only after materialized session id
 - creation-owned config intents: semantic and harness ids stay distinct,
   rapid selections preserve order, only the latest applicable value is applied,
-  authoritative settlement precedes publication, and a post-snapshot live
-  change dispatches once
+  authoritative settlement precedes publication, and a post-snapshot
+  tail-coalesced generation dispatches once even when its intent id or value
+  matches a captured generation
 - queued prompt controls: icons reserve immediately while disabled, then enable
   without remounting when local cancel or runtime seq is available
 - latency stability: no infinite Zustand snapshot loops and no render-heavy

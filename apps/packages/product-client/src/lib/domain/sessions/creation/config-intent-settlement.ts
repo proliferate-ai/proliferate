@@ -11,6 +11,7 @@ import type {
 
 export interface PreMaterializationConfigIntentSnapshotEntry {
   intentId: string;
+  generation: number;
   controlKey: string;
   rawConfigId: string | null;
   value: string;
@@ -22,6 +23,7 @@ export type PreMaterializationConfigIntentSnapshot =
 
 export interface ConfigIntentSettlementPatch {
   intentId: string;
+  generation: number;
   rawConfigId: string | null;
   status: "reconciled" | "stale" | "failed";
 }
@@ -32,6 +34,7 @@ export interface ConfigIntentSettlementPlan {
 
 export interface AdoptedSessionConfigIntentResolutionPatch {
   intentId: string;
+  generation: number;
   rawConfigId: string | null;
   status: "queued" | "stale";
 }
@@ -53,6 +56,7 @@ export function snapshotPreMaterializationConfigIntents(
     }
     return [{
       intentId: intent.intentId,
+      generation: intent.generation,
       controlKey: intent.controlKey,
       rawConfigId: intent.rawConfigId,
       value: intent.value,
@@ -97,6 +101,7 @@ export function planCreationConfigIntentSettlement(input: {
     for (const entry of entries) {
       patches.push({
         intentId: entry.intentId,
+        generation: entry.generation,
         rawConfigId,
         status: !applicable
           ? "stale"
@@ -129,6 +134,7 @@ export function planAdoptedSessionConfigIntentResolution(input: {
       const rawConfigId = control?.rawConfigId?.trim() || null;
       return [{
         intentId: entry.intentId,
+        generation: entry.generation,
         rawConfigId,
         status: isApplicableControlValue(control, entry.value)
           ? "queued" as const
@@ -147,7 +153,13 @@ export function applyConfigIntentSettlementPlan(
   const entriesById = { ...state.entriesById };
   for (const patch of plan.patches) {
     const intent = entriesById[patch.intentId];
-    if (!intent || intent.kind !== "update_config") {
+    if (
+      !intent
+      || intent.kind !== "update_config"
+      || intent.generation !== patch.generation
+      || intent.status !== "queued"
+      || intent.materializedSessionId !== null
+    ) {
       continue;
     }
     changed = true;
@@ -174,7 +186,13 @@ export function applyAdoptedSessionConfigIntentResolutionPlan(
   const entriesById = { ...state.entriesById };
   for (const patch of plan.patches) {
     const intent = entriesById[patch.intentId];
-    if (!intent || intent.kind !== "update_config" || intent.status !== "queued") {
+    if (
+      !intent
+      || intent.kind !== "update_config"
+      || intent.generation !== patch.generation
+      || intent.status !== "queued"
+      || intent.materializedSessionId !== null
+    ) {
       continue;
     }
     changed = true;

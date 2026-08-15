@@ -41,7 +41,7 @@ describe("session creation config-intent ownership", () => {
     const codex = strictConfigFixture({
       agentKind: "codex",
       applyState: "queued",
-      currentValue: "high",
+      currentValue: "low",
       modelId: "gpt-5.5",
       rawConfigId: "reasoning_effort",
       sessionId: "runtime-codex",
@@ -58,21 +58,20 @@ describe("session creation config-intent ownership", () => {
     });
     putProjectedRecord("client-codex", "workspace-1", "codex", "gpt-5.5");
     putProjectedRecord("client-claude", "workspace-1", "claude", "claude-fable-5");
-    enqueueEffort("client-codex", "reasoning_effort", "xhigh", "codex-old");
-    enqueueEffort("client-codex", "reasoning_effort", "max", "codex-latest");
+    const codexCaptured = enqueueEffort("client-codex", "reasoning_effort", "high");
     enqueueEffort("client-claude", "effort", "medium", "claude-old");
     enqueueEffort("client-claude", "effort", "high", "claude-latest");
 
     const codexSnapshot = snapshotFor("client-codex");
     const claudeSnapshot = snapshotFor("client-claude");
-    const [codexResult, claudeResult] = await Promise.all([
-      applyDefaults(codex, codexSnapshot),
-      applyDefaults(claude, claudeSnapshot),
-    ]);
-
-    // This selection happens after creation froze its exact ownership set.
-    // It must survive settlement and become the sole live dispatch candidate.
-    enqueueEffort("client-codex", "reasoning_effort", "xhigh", "codex-newer");
+    const codexDefaults = applyDefaults(codex, codexSnapshot);
+    const claudeDefaults = applyDefaults(claude, claudeSnapshot);
+    // Launch defaults are pending here. Production tail coalescing reuses the
+    // captured ID, so only its immutable generation can preserve this choice.
+    const codexNewer = enqueueEffort("client-codex", "reasoning_effort", "max");
+    expect(codexNewer.intentId).toBe(codexCaptured.intentId);
+    expect(codexNewer.generation).toBe(codexCaptured.generation + 1);
+    const [codexResult, claudeResult] = await Promise.all([codexDefaults, claudeDefaults]);
 
     const publicationOrder: string[] = [];
     let sawSettlement = false;
@@ -81,15 +80,15 @@ describe("session creation config-intent ownership", () => {
     const unsubscribeIntent = useSessionIntentStore.subscribe((state) => {
       if (
         !sawSettlement
-        && state.entriesById["codex-old"]?.status === "stale"
-        && state.entriesById["codex-latest"]?.status === "reconciled"
+        && state.entriesById["claude-old"]?.status === "stale"
+        && state.entriesById["claude-latest"]?.status === "reconciled"
       ) {
         sawSettlement = true;
         publicationOrder.push("settled");
       }
       if (
         !sawBinding
-        && state.entriesById["codex-newer"]?.materializedSessionId === "runtime-codex"
+        && state.entriesById["claude-latest"]?.materializedSessionId === "runtime-claude"
       ) {
         sawBinding = true;
         publicationOrder.push("bound");
@@ -98,47 +97,48 @@ describe("session creation config-intent ownership", () => {
     const unsubscribeDirectory = useSessionDirectoryStore.subscribe((state) => {
       if (
         !sawMaterialization
-        && state.entriesById["client-codex"]?.materializedSessionId === "runtime-codex"
+        && state.entriesById["client-claude"]?.materializedSessionId === "runtime-claude"
       ) {
         sawMaterialization = true;
         publicationOrder.push("materialized");
       }
     });
 
-    const versionBeforeCodexPublication = useSessionIntentStore.getState().dispatchVersion;
-    publishCreation("client-codex", "workspace-1", codexResult, codexSnapshot);
-    expect(useSessionIntentStore.getState().dispatchVersion)
-      .toBe(versionBeforeCodexPublication + 2);
+    const versionBeforeClaudePublication = useSessionIntentStore.getState().dispatchVersion;
     publishCreation("client-claude", "workspace-1", claudeResult, claudeSnapshot);
+    expect(useSessionIntentStore.getState().dispatchVersion)
+      .toBe(versionBeforeClaudePublication + 2);
+    publishCreation("client-codex", "workspace-1", codexResult, codexSnapshot);
     unsubscribeIntent();
     unsubscribeDirectory();
 
     expect(publicationOrder).toEqual(["settled", "materialized", "bound"]);
     expect(codex.requests).toEqual([
-      { configId: "reasoning_effort", value: "max" },
+      { configId: "reasoning_effort", value: "high" },
     ]);
     expect(claude.requests).toEqual([
       { configId: "effort", value: "high" },
     ]);
     expect(useSessionIntentStore.getState().entriesById).toMatchObject({
-      "codex-old": { status: "stale", rawConfigId: "reasoning_effort" },
-      "codex-latest": { status: "reconciled", rawConfigId: "reasoning_effort" },
-      "codex-newer": { status: "queued", rawConfigId: "reasoning_effort" },
       "claude-old": { status: "stale", rawConfigId: "effort" },
       "claude-latest": { status: "reconciled", rawConfigId: "effort" },
     });
+    expect(useSessionIntentStore.getState().entriesById[codexCaptured.intentId])
+      .toMatchObject({ generation: codexNewer.generation, materializedSessionId: "runtime-codex",
+        rawConfigId: "reasoning_effort", status: "queued", value: "max" });
 
     const intentState = useSessionIntentStore.getState();
     const codexNext = selectNextDispatchableSessionIntent(intentState, "client-codex");
     expect(codexNext).toMatchObject({
-      intentId: "codex-newer",
+      intentId: codexCaptured.intentId,
       controlKey: "effort",
       rawConfigId: "reasoning_effort",
+      value: "max",
     });
     expect(selectNextDispatchableSessionIntent(intentState, "client-claude")).toBeNull();
 
     const liveMutation = vi.fn().mockResolvedValue(
-      configResponse(codex.sessionWithValue("xhigh")),
+      configResponse(codex.sessionWithValue("max")),
     );
     const onFailure = vi.fn();
     mocks.getSessionClientAndWorkspace.mockResolvedValue({
@@ -152,7 +152,7 @@ describe("session creation config-intent ownership", () => {
 
     expect(liveMutation).toHaveBeenCalledTimes(1);
     expect(liveMutation).toHaveBeenCalledWith(expect.objectContaining({
-      request: { configId: "reasoning_effort", value: "xhigh" },
+      request: { configId: "reasoning_effort", value: "max" },
     }));
     expect(onFailure).not.toHaveBeenCalled();
   });
@@ -311,8 +311,8 @@ interface StrictConfigFixture {
 
 /**
  * This narrow network double preserves the production config-intent lifecycle:
- * semantic `effort` remains distinct from the harness raw ID;
- * lookup is exact; settable and advertised-value checks are enforced; calls
+ * semantic `effort` remains distinct from the harness raw ID; tail-coalesced
+ * choices reuse an ID only with a new generation; exact lookup, settable and
  * stay ordered; a queued response is not authoritative until a later config
  * read; and an applied response is confirmed only by authoritative state.
  * It deliberately defines no semantic-key alias.
@@ -480,10 +480,10 @@ function enqueueEffort(
   clientSessionId: string,
   rawConfigId: string,
   value: string,
-  intentId: string,
-): void {
-  useSessionIntentStore.getState().enqueueConfig({
-    intentId,
+  intentId?: string,
+) {
+  return useSessionIntentStore.getState().enqueueConfig({
+    ...(intentId ? { intentId } : {}),
     clientSessionId,
     workspaceId: "workspace-1",
     configId: rawConfigId,
