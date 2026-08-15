@@ -191,6 +191,28 @@ describe("Tooltip", () => {
     });
   });
 
+  /**
+   * The multi-line branch must bound BOTH axes: callers can hand it arbitrary
+   * text, and with only a width cap a long message wraps into a column taller
+   * than the viewport (PRO-266). `overflow-hidden` clips nothing until a
+   * height ceiling exists.
+   */
+  it("bounds multi-line content on both axes", async () => {
+    render(
+      <Tooltip content={"long message ".repeat(200)}>
+        <button type="button">chip</button>
+      </Tooltip>,
+    );
+
+    fireEvent.focus(screen.getByRole("button"));
+    await waitFor(() => {
+      const tooltip = screen.getByRole("tooltip");
+      expect(tooltip.style.maxHeight).toBe("min(18rem, calc(100vh - 1.5rem))");
+      expect(tooltip.style.maxWidth).toBe("min(22rem, calc(100vw - 1.5rem))");
+      expect(tooltip.className).toContain("overflow-hidden");
+    });
+  });
+
   it("leaves the default press-to-dismiss behavior alone when not opted in", async () => {
     render(
       <Tooltip content="Opens a menu">

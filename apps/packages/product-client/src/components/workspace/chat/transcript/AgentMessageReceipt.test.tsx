@@ -87,13 +87,9 @@ describe("AgentMessageReceipt", () => {
 
     fireEvent.focus(document.querySelector("[data-agent-identity-chip]")!);
     await waitFor(() => {
-      const tooltip = screen.getByRole("tooltip");
-      const preview = tooltip.textContent ?? "";
+      const preview = screen.getByRole("tooltip").textContent ?? "";
       expect(preview.length).toBeLessThanOrEqual(AGENT_MESSAGE_PREVIEW_MAX_CHARS);
       expect(preview.endsWith("…")).toBe(true);
-      // The primitive itself must bound height so no caller can fill the
-      // viewport with an unclamped payload.
-      expect(tooltip.style.maxHeight).toBe("min(18rem, calc(100vh - 1.5rem))");
     });
   });
 

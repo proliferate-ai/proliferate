@@ -112,10 +112,21 @@ describe("clampAgentMessagePreview", () => {
     expect(clampAgentMessagePreview(exact)).toBe(exact);
   });
 
-  it("clamps long messages to the ceiling with an ellipsis near a word boundary", () => {
+  it("clamps long messages to the ceiling with an ellipsis, trimming trailing whitespace", () => {
     const clamped = clampAgentMessagePreview("word ".repeat(200));
     expect(clamped.length).toBeLessThanOrEqual(AGENT_MESSAGE_PREVIEW_MAX_CHARS);
     expect(clamped.endsWith("…")).toBe(true);
     expect(clamped.at(-2)).not.toBe(" ");
+  });
+
+  it("never bisects a surrogate pair at the cut", () => {
+    // Places the emoji's two code units at indices 498-499 so the cut at 499
+    // would otherwise keep only the high surrogate.
+    const clamped = clampAgentMessagePreview(
+      `${"x".repeat(AGENT_MESSAGE_PREVIEW_MAX_CHARS - 2)}😀${"y".repeat(10)}`,
+    );
+    expect(clamped.isWellFormed()).toBe(true);
+    expect(clamped.endsWith("…")).toBe(true);
+    expect(clamped.includes("😀")).toBe(false);
   });
 });
