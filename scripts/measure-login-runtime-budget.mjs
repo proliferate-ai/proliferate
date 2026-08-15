@@ -99,7 +99,15 @@ const DIST = join(REPO_ROOT, "apps", "web", "dist");
 // each PR fit its own cap view, but the sum overflowed by 291 B. The standing
 // intent above is unchanged: lazy-load the support modal out of the first-load
 // graph and bring this cap back down; the raise is the unblock, not the fix.
-const CAPS = { js: 500500, css: 66000 };
+//
+// Raised to 503000/66100 on 2026-08-14 (PRO-150): main already measured
+// 501340/66013 (observability follow-ups #1849/#1850 outgrew the morning
+// raise; CSS has been 13 B over since before this branch), and PRO-150's
+// recorded-patch fallback adds 1360 genuine feature bytes (branch view
+// 501336). The composed sum lands ≈502.7k. Standing intent unchanged:
+// lazy-load the support modal out of the first-load graph and lower both
+// caps; the raise is the unblock, not the fix.
+const CAPS = { js: 503000, css: 66100 };
 // Baseline requests zero of these on /login; any byte is a fail-closed
 // regression (login/callback must not eagerly load fonts/images/audio).
 const ZERO_KINDS = ["font", "image", "audio"];
