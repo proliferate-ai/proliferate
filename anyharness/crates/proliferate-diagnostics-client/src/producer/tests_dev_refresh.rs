@@ -190,12 +190,13 @@ async fn rewrite_with_same_boot_id_does_not_swap() {
     refresh.abort();
 }
 
-/// The host's rewrite is not atomic: a poll can catch a torn/garbage read at
-/// some mtime T. The loop must not latch T on a failed parse, or a valid
-/// re-read at the indistinguishable same timestamp would be locked out —
-/// reproducing the outage this slice exists to fix.
+/// The host publishes atomically, but an external writer can leave garbage at
+/// some mtime T, and the host's rename can land within the same mtime granule.
+/// The loop must not latch T on a failed parse, or the valid re-read at the
+/// indistinguishable same timestamp would be locked out — reproducing the
+/// outage this slice exists to fix.
 #[tokio::test(flavor = "multi_thread")]
-async fn torn_read_then_valid_content_at_the_same_mtime_still_reattaches() {
+async fn garbage_then_valid_content_at_the_same_mtime_still_reattaches() {
     let old = CollectorFixture::accepting(TEST_COLLECTOR_BOOT).await;
     let fresh = CollectorFixture::accepting(FRESH_COLLECTOR_BOOT).await;
     let directory = tempfile::tempdir().expect("tempdir");
@@ -211,17 +212,17 @@ async fn torn_read_then_valid_content_at_the_same_mtime_still_reattaches() {
         TEST_POLL_INTERVAL,
     ));
 
-    // A torn read: the truncate landed, the content did not.
+    // An external writer left an empty file at mtime T.
     write_raw(&path, 1, "");
-    // Give the loop several ticks to observe the torn state at mtime T.
+    // Give the loop several ticks to observe the garbage state at mtime T.
     tokio::time::sleep(TEST_POLL_INTERVAL * 5).await;
     assert_eq!(
         ready_snapshot(&inner),
         Some((TEST_COLLECTOR_BOOT.to_owned(), 1)),
-        "a torn read must not swap"
+        "an incoherent read must not swap"
     );
 
-    // The completed write, indistinguishable by timestamp (same sequence).
+    // The host's publish, indistinguishable by timestamp (same sequence).
     write_snippet(
         &path,
         1,

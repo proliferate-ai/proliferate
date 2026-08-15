@@ -62,11 +62,13 @@ async fn dev_generation_refresh_with_interval(
         if mtime == seen_mtime {
             continue;
         }
-        // seen_mtime latches only after a coherent read: the host's rewrite is
-        // not atomic, so a torn/garbage read at this mtime must be retried on
-        // the next tick rather than locking the rewrite out until a later
-        // distinguishable timestamp — that would reproduce the very outage
-        // this loop exists to fix.
+        // seen_mtime latches only after a coherent read. The host publishes
+        // atomically (temp sibling + rename), but the file can also be
+        // replaced by other writers, and a rename can land within the same
+        // mtime granule as a garbage state we already observed. Latching a
+        // failed read would lock that rewrite out until a later
+        // distinguishable timestamp — reproducing the very outage this loop
+        // exists to fix — so failed reads retry on the next tick instead.
         let Ok(content) = tokio::fs::read_to_string(&path).await else {
             continue;
         };

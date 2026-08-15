@@ -241,7 +241,7 @@ pub(crate) struct ParsedDevEnv {
 
 /// Parses the host-published dev env snippet with the same bounds as
 /// [`dev_env_activation`]. Rejects missing keys and out-of-bound values —
-/// including a torn read of the host's rewrite, which the caller retries.
+/// including content from a non-host writer, which the caller retries.
 /// The file is 0600 and the capability is a secret: callers must never log
 /// values, only the endpoint.
 #[cfg(all(unix, debug_assertions))]
