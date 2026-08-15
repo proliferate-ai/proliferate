@@ -284,28 +284,64 @@ never move under a machine mid-work; harness installs mutate only across a
 restart, when nothing is running, and a fetched artifact only ever competes
 for the NEXT boot's decision. Boot sequence:
 
-1. Load whatever artifact a prior boot staged to
-   `runtime_home/catalog/staged/`, if present, re-running every validation
-   gate the bundled floor runs (a staged directory is untrusted input to a
-   fresh process until it re-verifies).
-2. If the base-url env is set: one best-effort fetch, bounded to a hard 3s
-   timeout, of the channel's rolling manifest and the catalog+registry
-   files it names — sha256-verified against the manifest, minisign-verified
-   against the baked publisher pubkey (a signing trust domain distinct from
-   desktop app signing; a second const slot exists for a two-release
-   rotation), gated through the SAME parse/validate/registry-pairing checks
-   the bundled floor runs, and checked for version identity between the
-   manifest and the documents it names. Any failure — fetch, signature,
-   gate, or version-identity — logs a typed `CATALOG_ARTIFACT_REJECTED` and
-   leaves the previously staged artifact (or nothing) in place; it never
-   touches the bundled floor.
-3. Decide once: the staged pair (freshly fetched or loaded from disk) wins
-   over the bundled floor iff it passed every gate AND its `generatedAt` is
-   strictly newer than the floor's, comparing RFC3339 instants — never the
-   dotted `catalogVersion` string lexicographically (`.9` sorts after
-   `.10`). Catalog and registry always activate as the SAME staged pair;
-   there is no path that mixes a staged catalog with the bundled registry
-   or vice versa.
+1. **The lane gate is env-AND-key, not env-alone.** The base-url env
+   (`ANYHARNESS_CATALOG_ARTIFACT_BASE_URL`, and it must resolve to an
+   `https://` URL — anything else, including bare `http://`, is refused and
+   treated as absent) must be set AND a signing pubkey must be baked in.
+   Either being missing makes the ENTIRE staged lane inert — not just the
+   network fetch: the warm-cache load of a previously staged directory is
+   gated the same way, so a directory left on disk by a differently-built
+   binary can never activate on a build that lacks the key.
+2. If the gate is open: one best-effort fetch, bounded to a hard 3s timeout
+   and a 4 MiB response-size ceiling per file, of the channel's rolling
+   manifest and the catalog+registry files it names. The manifest itself is
+   minisign-verified FIRST, before its `catalogVersion`/`registryVersion` are
+   trusted for anything (including building the versioned URLs the documents
+   are fetched from) — otherwise a forged-but-unsigned manifest pointing at
+   an old, still-validly-signed pair could walk a runtime backwards. The two
+   documents are then sha256-verified against the manifest and
+   minisign-verified against the baked publisher pubkey (a signing trust
+   domain distinct from desktop app signing; a second const slot exists for
+   a two-release rotation), gated through the SAME parse/validate/
+   registry-pairing checks the bundled floor runs, and checked for version
+   identity between the manifest and the documents it names. Any failure —
+   fetch, signature, gate, or version-identity — logs a typed
+   `CATALOG_ARTIFACT_REJECTED`.
+3. If this boot's fetch succeeded, the ALREADY-verified in-memory pair
+   activates directly — no disk round-trip. If it failed (or the gate was
+   closed), the runtime falls back to whatever a PRIOR boot staged to
+   `runtime_home/catalog/staged/`, re-running the full minisign verification
+   over the exact staged bytes (the `.minisig` files are persisted alongside
+   the staged documents for exactly this) plus every parse/validate gate —
+   a staged directory is untrusted input to a fresh process until it
+   re-verifies signatures itself, not just schema-shape.
+4. Decide once: the staged pair (freshly fetched or reloaded-and-reverified
+   from disk) wins over the bundled floor iff it passed every gate AND its
+   `generatedAt` is strictly newer than `max(bundled floor, this machine's
+   persisted activation high-water mark)`, comparing RFC3339 instants —
+   never the dotted `catalogVersion` string lexicographically (`.9` sorts
+   after `.10`). The high-water mark
+   (`runtime_home/catalog/activated.json`, tolerant read/write) records the
+   `generatedAt` of the last artifact this machine ever activated, across
+   restarts, so a still-validly-signed but OLDER artifact can never win once
+   a newer one has already been active here — downgrade resistance the
+   bundled-floor comparison alone cannot provide, since the floor never
+   moves. The mark is written only after a successful activation decision.
+   Catalog and registry always activate as the SAME staged pair; there is no
+   path that mixes a staged catalog with the bundled registry or vice versa.
+
+**Registry consumers outside `CatalogSyncService`**: auth's launch-facts
+collection (`auth/launch_facts.rs`, `registry_flag_vars` and
+`collect_launch_env_facts_with_ambient`) cannot reach the constructed
+`CatalogSyncService` without invasive plumbing through several launch call
+sites, so it reads through a documented process-global
+(`catalog::sync::active_agent_registry`), published exactly once at
+`CatalogSyncService` construction — the same one-decision, immutable-after-
+boot discipline as the active catalog itself. This closes the residual
+called out in earlier revisions of this document: a staged registry that
+advertises a new agent now yields consistent launch-facts instead of the
+collector silently reading the bundled floor underneath an activated staged
+registry.
 
 This also keeps the runtime version the rollback unit of record for the
 floor, and adds a second, faster rollback unit for the publisher lane:
@@ -323,16 +359,20 @@ immutability invariant.
 re-runs `scripts/validate-agent-catalog.mjs`, builds a manifest
 (`scripts/generate-agent-catalog-manifest.mjs`: `catalogVersion`,
 `registryVersion`, `generatedAt`, and a per-file sha256), minisign-signs
-`catalog.json` and `registry.json` with the `AGENT_CATALOG_SIGNING_*` CI
+`catalog.json`, `registry.json`, AND the manifest itself
+(`manifest.json.minisig`, same key) with the `AGENT_CATALOG_SIGNING_*` CI
 secrets (a trust domain separate from desktop app signing; the job fails
 with a clear message rather than publishing unsigned if those secrets are
-not yet provisioned), and publishes following the desktop updater's S3
-pattern exactly: a `head-object` refuse-existing guard plus
-`--if-none-match "*"` and `max-age=31536000, immutable` on the versioned,
-never-overwritten path (`catalogs/agents/<catalogVersion>/...`), then a
-short-cached (`max-age=300`) rolling pointer at
-`catalogs/agents/<channel>/manifest.json`, with a CloudFront invalidation
-scoped to that rolling pointer only — never the immutable versioned paths.
+not yet provisioned) — the manifest signature is what lets the runtime
+trust `catalogVersion`/`registryVersion` before it ever builds a versioned
+URL from them (see boot-sequence step 2 above) — and publishes following
+the desktop updater's S3 pattern exactly: a `head-object` refuse-existing
+guard plus `--if-none-match "*"` and `max-age=31536000, immutable` on the
+versioned, never-overwritten path (`catalogs/agents/<catalogVersion>/...`,
+now including `manifest.json.minisig`), then a short-cached
+(`max-age=300`) rolling pointer at `catalogs/agents/<channel>/manifest.json`
+plus its `.minisig` sibling, with a CloudFront invalidation scoped to both
+rolling-pointer paths only — never the immutable versioned paths.
 
 **Rollback**: every version this job publishes stays in S3 forever, so
 rolling back is a manual `aws s3 cp` of an OLDER version's `manifest.json`
