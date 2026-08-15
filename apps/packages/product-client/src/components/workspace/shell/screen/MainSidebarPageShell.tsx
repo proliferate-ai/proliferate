@@ -6,6 +6,7 @@ import {
   MAC_WINDOW_CONTROLS_INSET_CLASS,
   useHasMacWindowControls,
 } from "#product/hooks/ui/layout/use-mac-window-controls";
+import { useGlassChromeCanvas } from "#product/hooks/theme/derived/use-glass-chrome-canvas";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
 import {
   resolveMainSidebarEdgeClassName,
@@ -41,6 +42,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
   // the bare window fill. Matches WorkspaceShellSidebar so the main sidebar
   // keeps one look across route shells.
   const glassSidebar = transparentChromeEnabled && hasMacWindowControls;
+  useGlassChromeCanvas(glassSidebar);
   const chromeClasses = resolveStandardWorkspaceChromeClasses({
     transparent: transparentChromeEnabled,
     sidebarOpen,
@@ -57,7 +59,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
         // isolate: keeps sidebar-internal z-indexes below the resize
         // separator's overlapping hit strip (z-10 in the page context).
         className={`isolate flex shrink-0 flex-col overflow-hidden ${
-          glassSidebar ? "bg-sidebar/70" : "bg-sidebar"
+          glassSidebar ? "bg-sidebar/60" : "bg-sidebar"
         } ${
           sidebarResizing
             ? "transition-none"
@@ -82,7 +84,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-hidden">
-          <MainSidebar />
+          <MainSidebar glassBackground={glassSidebar} />
         </div>
       </div>
 

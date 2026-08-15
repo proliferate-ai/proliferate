@@ -39,7 +39,7 @@ export function WorkspaceShellSidebar({
       <div className="flex h-full min-h-0 flex-col">
         <div className="h-[46px] shrink-0" data-tauri-drag-region="true" />
         <div className="flex-1 min-h-0 overflow-hidden">
-          <MainSidebar showRightBorder={false} />
+          <MainSidebar showRightBorder={false} glassBackground={glassBackground} />
         </div>
       </div>
     </DebugProfiler>
@@ -49,7 +49,7 @@ export function WorkspaceShellSidebar({
   // over the content pane, where a translucent fill would bleed chat content
   // through instead of window vibrancy.
   const panelBackgroundClass = glassBackground && (open || toggleClosing)
-    ? "bg-sidebar/70"
+    ? "bg-sidebar/60"
     : "bg-sidebar";
 
   const panelStateClass = open

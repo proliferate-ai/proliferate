@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { motion } from "@proliferate/design/motion";
@@ -11,10 +11,17 @@ vi.mock("#product/components/diagnostics/DebugProfiler", () => ({
 }));
 
 vi.mock("#product/components/workspace/shell/sidebar/MainSidebar", () => ({
-  MainSidebar: ({ showRightBorder }: { showRightBorder?: boolean }) => (
+  MainSidebar: ({
+    showRightBorder,
+    glassBackground,
+  }: {
+    showRightBorder?: boolean;
+    glassBackground?: boolean;
+  }) => (
     <div
       data-testid="main-sidebar-body"
       data-show-right-border={showRightBorder ? "true" : "false"}
+      data-glass-background={glassBackground ? "true" : "false"}
     >
       <button type="button">Main navigation item</button>
     </div>
@@ -381,7 +388,7 @@ describe("WorkspaceShellSidebar glass background", () => {
 
   it("paints the docked panel translucent", () => {
     const panel = renderGlassSidebar(true);
-    expect(panel.classList.contains("bg-sidebar/70")).toBe(true);
+    expect(panel.classList.contains("bg-sidebar/60")).toBe(true);
     expect(panel.classList.contains("bg-sidebar")).toBe(false);
   });
 
@@ -401,7 +408,7 @@ describe("WorkspaceShellSidebar glass background", () => {
 
     expect(peekState(panel)).toBe("open");
     expect(panel.classList.contains("bg-sidebar")).toBe(true);
-    expect(panel.classList.contains("bg-sidebar/70")).toBe(false);
+    expect(panel.classList.contains("bg-sidebar/60")).toBe(false);
   });
 
   it("stays opaque when glass is not requested", () => {
@@ -410,6 +417,23 @@ describe("WorkspaceShellSidebar glass background", () => {
     );
     const panel = document.getElementById("main-sidebar");
     expect(panel?.classList.contains("bg-sidebar")).toBe(true);
-    expect(panel?.classList.contains("bg-sidebar/70")).toBe(false);
+    expect(panel?.classList.contains("bg-sidebar/60")).toBe(false);
+  });
+
+  /**
+   * The frame inside the panel must cede its background in glass mode — an
+   * opaque inner frame paints over the panel's translucency and turns the
+   * glass solid again no matter what the panel class says.
+   */
+  it("forwards glass to the inner sidebar frame", () => {
+    renderGlassSidebar(true);
+    expect(screen.getByTestId("main-sidebar-body").dataset.glassBackground).toBe("true");
+  });
+
+  it("keeps the inner frame opaque when glass is not requested", () => {
+    render(
+      <WorkspaceShellSidebar open width={280} onToggleSidebar={() => {}} />,
+    );
+    expect(screen.getByTestId("main-sidebar-body").dataset.glassBackground).toBe("false");
   });
 });

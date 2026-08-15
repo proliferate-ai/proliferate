@@ -54,7 +54,13 @@ import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvi
 import { useReleaseNotice } from "#product/hooks/updates/facade/use-release-notice";
 import { useRepositoryHeaderNewChat } from "#product/hooks/workspaces/ui/use-repository-header-new-chat";
 
-export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }: { showRightBorder?: boolean }) {
+export const MainSidebar = memo(function MainSidebar({
+  showRightBorder = true,
+  glassBackground = false,
+}: {
+  showRightBorder?: boolean;
+  glassBackground?: boolean;
+}) {
   useDebugRenderCount("workspace-sidebar");
   useSessionActivityReconciler();
   const { notice, dismissNotice, openChangelog } = useReleaseNotice();
@@ -243,7 +249,7 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
 
   return (
     <DebugProfiler id="workspace-sidebar">
-      <ProductSidebarFrame showRightBorder={showRightBorder} footer={(
+      <ProductSidebarFrame showRightBorder={showRightBorder} glassBackground={glassBackground} footer={(
           <DebugProfiler id="workspace-sidebar-footer">
             {sidebarOpen && notice ? (
               <ReleaseNoticeCard
