@@ -201,7 +201,10 @@ async function openAddRepoFlow(page: Page): Promise<void> {
 }
 
 async function expectEntryStepVisible(page: Page): Promise<void> {
-  await expect(page.getByRole("heading", { name: "Add a repository" })).toBeVisible();
+  // The entry step is hosted in an AnchoredCommandPopover (#1871): a modal
+  // Radix Popover, not a Dialog with a text heading, so its accessible name
+  // lives on the role="dialog" surface itself (aria-label), not a heading row.
+  await expect(page.getByRole("dialog", { name: "Add a repository" })).toBeVisible();
   // This suite boots the Desktop host (apps/desktop) over a web port, so
   // `host.desktop?.files` is truthy and AddRepoFlowHost offers BOTH options
   // (options === ["add-existing-folder", "cloud"]). Assert both are present:
@@ -248,7 +251,7 @@ test.describe("T2-WS-2: local + worktree create (desktop-web limits apply)", () 
 
     // No crash: the entry step is still mounted and interactable after the
     // unavailable-picker result (the dialog did not tear itself down or throw).
-    await expect(page.getByRole("heading", { name: "Add a repository" })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Add a repository" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Set up in Cloud" })).toBeVisible();
   });
 
