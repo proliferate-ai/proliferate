@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import { cadence } from "@proliferate/design/cadence";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { pendingWorkspaceEntries } from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
@@ -57,7 +58,13 @@ function useAwaitingCloudWorkspaceEntries(): readonly PendingWorkspaceEntry[] {
   }, [registry]);
 }
 
-const CLOUD_WORKSPACE_POLL_INTERVAL_MS = 3000;
+// Was a raw 3000ms literal. Snapped up to `cadence.standardMs` (5s): a
+// parked cloud-workspace launch is a multi-second-to-minutes provisioning
+// operation batched across every parked attempt per tick, so 2s of extra
+// latency per tick is inconsequential, and the ADR ruling forbids snapping
+// down (tightening) to `cadence.fastMs` (UX Latency + Transitions ADR §4.7,
+// Rung 6, Q8).
+const CLOUD_WORKSPACE_POLL_INTERVAL_MS = cadence.standardMs;
 /**
  * Per tick, not in total: the loop rotates through the parked attempts, so a
  * burst of launches cannot fan out into one refresh per launch per tick.

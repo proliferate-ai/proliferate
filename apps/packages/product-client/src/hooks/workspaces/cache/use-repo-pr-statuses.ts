@@ -11,8 +11,11 @@ import {
 } from "#product/lib/access/anyharness/pull-requests";
 import type { WorkspacePrStatusAvailability } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { cadence } from "@proliferate/design/cadence";
 
-const PR_STATUS_STALE_MS = 60_000;
+// Was a raw 60_000ms literal, already exactly `cadence.slowMs` (UX Latency +
+// Transitions ADR §4.7, Rung 6, Q8).
+const PR_STATUS_STALE_MS = cadence.slowMs;
 
 export interface RepoPrStatusesState {
   entriesByRepoRootId: Record<string, BranchPullRequestStatus[]>;
