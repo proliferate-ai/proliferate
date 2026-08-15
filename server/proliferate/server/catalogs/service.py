@@ -92,7 +92,7 @@ def registry_harness_kinds(*, path: Path = REGISTRY_PATH) -> tuple[str, ...]:
     the single source of truth. Order follows the registry document.
     """
     return tuple(
-        agent["kind"] for agent in _registry_agents(path) if isinstance(agent.get("kind"), str)
+        kind for agent in _registry_agents(path) if isinstance(kind := agent.get("kind"), str)
     )
 
 
@@ -119,18 +119,18 @@ def registry_gateway_capable_kinds(*, path: Path = REGISTRY_PATH) -> tuple[str, 
 def registry_single_source_kinds(*, path: Path = REGISTRY_PATH) -> tuple[str, ...]:
     """Harness kinds registry.json marks ``authCardinality: "single"`` (radio)."""
     return tuple(
-        agent["kind"]
+        kind
         for agent in _registry_agents(path)
-        if isinstance(agent.get("kind"), str) and agent.get("authCardinality") == "single"
+        if isinstance(kind := agent.get("kind"), str) and agent.get("authCardinality") == "single"
     )
 
 
 def registry_multi_source_kinds(*, path: Path = REGISTRY_PATH) -> tuple[str, ...]:
     """Harness kinds registry.json marks ``authCardinality: "multi"`` (additive)."""
     return tuple(
-        agent["kind"]
+        kind
         for agent in _registry_agents(path)
-        if isinstance(agent.get("kind"), str) and agent.get("authCardinality") == "multi"
+        if isinstance(kind := agent.get("kind"), str) and agent.get("authCardinality") == "multi"
     )
 
 
