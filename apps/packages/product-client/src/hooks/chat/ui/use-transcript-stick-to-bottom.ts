@@ -88,6 +88,12 @@ export function useTranscriptStickToBottom({
   const pinnedRef = useRef(true);
   const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
   const lastScrollTopRef = useRef(0);
+  // Last observed content height, tracked so a scroll event can tell a genuine
+  // user displacement (bottom-distance opened up while the content stayed the
+  // same size) apart from our own snap lagging a growing stream (bottom-distance
+  // opened up BECAUSE the content just grew). Only the former unpins a pinned
+  // viewport. See the pin decision in onViewportScroll.
+  const lastContentHeightRef = useRef(0);
   // Ownership markers: the PRIMARY classification signal telling our own
   // writes apart from a user scroll. See transcript-scroll-ownership.ts.
   // `useRef`'s initializer only takes effect on the first render.
@@ -116,6 +122,10 @@ export function useTranscriptStickToBottom({
     // transcript-scroll-ownership.ts).
     ownershipMarkersRef.current.record(expectedTop);
     lastScrollTopRef.current = expectedTop;
+    // Baseline the content-size detector to the height we just snapped against,
+    // so a later scroll event only counts as a resize when the content actually
+    // changed size past this write (not merely because this write settled).
+    lastContentHeightRef.current = viewport.scrollHeight;
   }, []);
 
   const notifyProgrammaticScroll = useCallback((write: () => void) => {
@@ -226,15 +236,6 @@ export function useTranscriptStickToBottom({
       return;
     }
 
-    // FALLBACK tier (last resort, engaged only while a marker is live): the
-    // tolerance missed because scrollHeight changed between our write and this
-    // event. While pinned, a downward-or-flat move is our own snap catching
-    // up, never a user scroll; unpinning here would be a false positive.
-    if (pinnedRef.current && ownershipMarkersRef.current.matchDownwardWhilePinned(top)) {
-      onScrollSample({ programmatic: true });
-      return;
-    }
-
     // No live marker owns this event: it is a user scroll (intent-attributed
     // below) or an unattributed scroll. Either way the user-scroll-wins pin
     // logic runs unchanged. The `userInitiated` flag distinguishes the two for
@@ -245,17 +246,51 @@ export function useTranscriptStickToBottom({
       totalVirtualSize: viewport.scrollHeight,
     });
     const delta = top - previousTop;
+
+    // Did the content just change size? A pinned snap can only write once per
+    // frame, so when a batch GROWS the transcript faster than the snap catches
+    // up, the resulting scroll event reports a bottom-distance beyond the repin
+    // band — not because the user moved away, but because our own follow is a
+    // frame behind a taller document. A measurement correction that SHRINKS the
+    // content is the mirror image: the browser clamps scrollTop down to the new
+    // (smaller) maximum, which reads as an upward delta even though the viewport
+    // never left the bottom. Neither is a user scroll: a user scroll never
+    // changes scrollHeight, and any genuine upward gesture unpins synchronously
+    // through the intent listener before its scroll event reaches here. So while
+    // pinned, a scroll event that coincides with a content-size change is our own
+    // follow and must HOLD the pin. A snap's ownership marker cannot be relied on
+    // to absorb these: its single-frame watchdog can expire before the lagging or
+    // coalesced scroll event arrives (the pinned-follow / false-unpin regression
+    // seen on BOTH engines when the fallback was gated on a live marker).
+    // Content-size change — observable directly here — is the durable signal; a
+    // genuine user displacement opens a bottom-distance with NO resize, so it
+    // still unpins.
+    const scrollHeightChanged =
+      lastContentHeightRef.current > 0
+      && Math.abs(viewport.scrollHeight - lastContentHeightRef.current) > DIRECTION_EPSILON_PX;
+    lastContentHeightRef.current = viewport.scrollHeight;
+    const holdForContentChange = pinnedRef.current && scrollHeightChanged;
+
     if (distance > repinThresholdPx) {
-      consumedAutoFollowBottomInsetRef.current = 0;
-      setPinned(false);
+      // Beyond the repin band. A user reading away from the bottom unpins — but
+      // while pinned, resize-driven lag is our own snap, not the user, so hold.
+      if (!holdForContentChange) {
+        consumedAutoFollowBottomInsetRef.current = 0;
+        setPinned(false);
+      }
+    } else if (distance <= PROGRAMMATIC_MATCH_TOL_PX) {
+      // Essentially at the hard bottom: a hair of upward delta here is a
+      // shrink/clamp or measurement correction (the browser clamped scrollTop
+      // down to a newly-shorter document), never a user leaving. Stay pinned.
+      consumedAutoFollowBottomInsetRef.current = autoFollowBottomInsetRef.current;
+      setPinned(true);
     } else if (delta > -DIRECTION_EPSILON_PX) {
       // Within the bottom band and not moving up — the user returned to bottom.
-      if (distance <= PROGRAMMATIC_MATCH_TOL_PX) {
-        consumedAutoFollowBottomInsetRef.current = autoFollowBottomInsetRef.current;
-      }
       setPinned(true);
     } else {
-      // Within the band but still moving up — the user is leaving.
+      // Within the band, off the hard bottom, and moving up — the user is
+      // genuinely leaving (an inset shrink that lands clear of the bottom still
+      // reads as a real departure). Unpin.
       consumedAutoFollowBottomInsetRef.current = 0;
       setPinned(false);
     }
@@ -322,6 +357,7 @@ export function useTranscriptStickToBottom({
   const resetForSession = useCallback(() => {
     clearAllMarkers();
     lastScrollTopRef.current = 0;
+    lastContentHeightRef.current = 0;
     consumedAutoFollowBottomInsetRef.current = 0;
     userScrollIntentUntilRef.current = 0;
     setPinned(true);

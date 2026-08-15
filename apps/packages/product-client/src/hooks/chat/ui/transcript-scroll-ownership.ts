@@ -94,23 +94,4 @@ export class TranscriptScrollOwnershipMarkers {
     this.remove(marker);
     return marker;
   }
-
-  /**
-   * FALLBACK tier (last resort, engaged only while a marker is live): the
-   * tolerance missed because scrollHeight changed between our write and this
-   * event. While pinned, a downward-or-flat move is our own snap catching
-   * up, never a user scroll; unpinning here would be a false positive.
-   * Consumes and returns the latest marker if this event qualifies, or null.
-   */
-  matchDownwardWhilePinned(top: number, tolerancePx = PROGRAMMATIC_MATCH_TOL_PX): ProgrammaticMarker | null {
-    if (this.queue.length === 0) {
-      return null;
-    }
-    const latest = this.queue[this.queue.length - 1];
-    if (top < latest.expectedTop - tolerancePx) {
-      return null;
-    }
-    this.remove(latest);
-    return latest;
-  }
 }
