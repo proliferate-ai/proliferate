@@ -225,10 +225,19 @@ export function HarnessProvidersSection({
               setModalLoading(true);
               void import(
                 "#product/components/settings/panes/agents/harness/ProviderPickerModal"
-              ).then(() => {
-                setModalLoading(false);
-                setModalOpen(true);
-              });
+              )
+                .then(() => {
+                  setModalLoading(false);
+                  setModalOpen(true);
+                })
+                .catch(() => {
+                  // A rejected chunk import (offline, bad deploy skew, etc.)
+                  // must not leave the trigger disabled+loading forever: clear
+                  // the pending state and surface the existing inline error
+                  // affordance so the user can retry.
+                  setModalLoading(false);
+                  setProviderError(HARNESS_PANE_COPY.providerPickerLoadError);
+                });
             }}
           >
             {HARNESS_PANE_COPY.providersConfigure}
@@ -237,6 +246,11 @@ export function HarnessProvidersSection({
             {HARNESS_PANE_COPY.providersCliNote}
           </p>
         </div>
+        {!modalOpen && providerError && (
+          <p role="alert" className="text-ui-sm text-destructive">
+            {providerError}
+          </p>
+        )}
       </div>
 
       {modalOpen ? (

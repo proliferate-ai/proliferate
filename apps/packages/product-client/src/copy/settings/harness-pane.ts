@@ -126,6 +126,7 @@ export const HARNESS_PANE_COPY = {
   providersNone: "No providers configured",
   providersConfiguredCount: (count: number) =>
     count === 1 ? "1 configured" : `${count} configured`,
+  providerPickerLoadError: "Could not load the provider picker. Try again.",
   // Providers modal (management surface).
   providersModalTitle: "Providers",
   providersModalDescription: "Wire your own keys into OpenCode.",

@@ -15,13 +15,38 @@ import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-co
  * sub-200ms workspace-status/session-loading pass never flashes a treatment.
  *
  * `awaiting-first-turn` keeps `ThinkingText` (agent-thinking copy, not a
- * loader); every other substep now renders the Class A `ProliferateLivingMark`
- * in place of the old `DotCellLoader` wave.
+ * loading treatment): it renders immediately, outside `LoadingBoundary`,
+ * because it is agent-activity feedback inside otherwise-ready content, not
+ * a wait state that should be withheld for a show-delay or held for a
+ * min-display floor. Every other substep renders the Class A
+ * `ProliferateLivingMark` in place of the old `DotCellLoader` wave.
  */
 export function ChatLoadingHero() {
   useDebugRenderCount("chat-loading-hero");
   const { caption, substep, workspaceName } = useChatLoadingSubstep();
-  const showThinking = substep === "awaiting-first-turn";
+
+  if (substep === "awaiting-first-turn") {
+    return (
+      <DebugProfiler id="chat-loading-hero">
+        <div
+          className="flex flex-col items-center text-center"
+          data-chat-loading-hero
+        >
+          <ThinkingText />
+          {caption && (
+            <p className="mt-4 text-chat font-medium text-muted-foreground">
+              {caption}
+            </p>
+          )}
+          {workspaceName && (
+            <p className="mt-1 text-chat font-medium text-muted-foreground/80">
+              {workspaceName}
+            </p>
+          )}
+        </div>
+      </DebugProfiler>
+    );
+  }
 
   return (
     <DebugProfiler id="chat-loading-hero">
@@ -32,11 +57,7 @@ export function ChatLoadingHero() {
         data-chat-loading-hero
         treatment={
           <>
-            {showThinking ? (
-              <ThinkingText />
-            ) : (
-              <ProliferateLivingMark />
-            )}
+            <ProliferateLivingMark />
             {caption && (
               <p className="mt-4 text-chat font-medium text-muted-foreground">
                 {caption}
