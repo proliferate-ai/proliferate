@@ -45,11 +45,17 @@ pub enum Tier1TrialCheck {
     Inconclusive(String),
 }
 
-/// A recorded trial verdict plus when it was observed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// A recorded trial verdict plus when it was observed and a fingerprint of the
+/// CREDENTIAL it verified. The fingerprint is what makes a verdict honest across
+/// a key rotation: a check against a different key carries a different
+/// fingerprint, and the engine invalidates a stored verdict whose fingerprint no
+/// longer matches the current credential rather than letting a green stand for a
+/// key that is gone.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tier1TrialResult {
     pub verdict: Tier1TrialVerdict,
     pub at: DateTime<Utc>,
+    pub fingerprint: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,7 +68,7 @@ impl Tier1TrialResult {
     /// Fold this recorded verdict into the dependency-free
     /// [`Tier1TrialFact`] the auth-state derivation consumes, computing the
     /// green evidence age against `now`.
-    pub fn to_fact(self, now: DateTime<Utc>) -> Tier1TrialFact {
+    pub fn to_fact(&self, now: DateTime<Utc>) -> Tier1TrialFact {
         match self.verdict {
             Tier1TrialVerdict::Green => Tier1TrialFact::Green {
                 age_seconds: now.signed_duration_since(self.at).num_seconds().max(0),
@@ -138,18 +144,33 @@ impl Tier1TrialEngine {
             .lock()
             .expect("tier-1 trial results poisoned")
             .get(harness_kind)
-            .copied()
+            .cloned()
     }
 
-    /// Fire a trial for a harness off an event. A no-op when the flag is off, the
-    /// harness has no gateway source, or a trial for it is already in flight.
+    /// Forget any stored verdict for a harness. Called when the harness no longer
+    /// has a gateway source (the source was switched away), so a stale gateway
+    /// green cannot linger in the map and be folded onto whatever credential is
+    /// now filling the slot.
+    fn clear(&self, harness_kind: &str) {
+        self.results
+            .lock()
+            .expect("tier-1 trial results poisoned")
+            .remove(harness_kind);
+    }
+
+    /// Fire a trial for a harness off an event. A no-op when the flag is off or a
+    /// trial for it is already in flight. When the harness has NO gateway source,
+    /// this is not merely a skip: any prior verdict is cleared, because a verdict
+    /// about a credential that is no longer configured is worse than none.
     /// Fire-and-forget: the caller (the same poke site as the probe) never waits.
     pub fn poke(self: &Arc<Self>, harness_kind: &str) {
         if !self.enabled {
             return;
         }
         let Some((base_url, key)) = self.gateway_credentials(harness_kind) else {
-            // Native / pasted-key sources stay heuristic — no trial (see module note).
+            // The source switched away from the gateway (or there never was one):
+            // drop any stale gateway verdict so it cannot outlive its credential.
+            self.clear(harness_kind);
             return;
         };
         {
@@ -161,18 +182,36 @@ impl Tier1TrialEngine {
         let engine = self.clone();
         let harness = harness_kind.to_string();
         tokio::spawn(async move {
+            // The guard frees the single-flight slot on EVERY exit — normal
+            // return, an early return, or a panic unwinding through the task — so
+            // a panicking trial self-heals instead of wedging the harness's slot
+            // shut forever.
+            let _in_flight = InFlightGuard {
+                engine: engine.clone(),
+                harness: harness.clone(),
+            };
             engine.run_trial(&harness, base_url, key).await;
-            engine
-                .in_flight
-                .lock()
-                .expect("tier-1 trial in-flight poisoned")
-                .remove(&harness);
         });
     }
 
-    /// Run one trial and record a conclusive verdict. Exposed for tests, which
-    /// drive it directly to assert the verdict mapping without the spawn.
+    /// Run one trial and record a conclusive verdict, fingerprinted by the
+    /// credential it verified. Exposed for tests, which drive it directly to
+    /// assert the verdict mapping and the rotation invalidation without the spawn.
     pub async fn run_trial(&self, harness_kind: &str, base_url: String, key: String) {
+        let fingerprint = credential_fingerprint(&base_url, &key);
+        // A key rotation (a different fingerprint) invalidates any prior verdict
+        // UP FRONT, before we even know the new outcome: the old verdict was about
+        // a key that is no longer configured. So a rotated key followed by an
+        // inconclusive recheck leaves nothing standing, never the stale green.
+        {
+            let mut results = self.results.lock().expect("tier-1 trial results poisoned");
+            if results
+                .get(harness_kind)
+                .is_some_and(|prior| prior.fingerprint != fingerprint)
+            {
+                results.remove(harness_kind);
+            }
+        }
         let check = self.probe.check(&base_url, &key).await;
         let verdict = match check {
             Tier1TrialCheck::Green => Tier1TrialVerdict::Green,
@@ -194,8 +233,16 @@ impl Tier1TrialEngine {
                 Tier1TrialResult {
                     verdict,
                     at: Utc::now(),
+                    fingerprint,
                 },
             );
+    }
+
+    /// The credential the last verdict verified, if any — exposed for tests that
+    /// assert a rotation replaced the fingerprint.
+    #[cfg(test)]
+    pub(crate) fn result_fingerprint(&self, harness_kind: &str) -> Option<String> {
+        self.result(harness_kind).map(|result| result.fingerprint)
     }
 
     /// The gateway (base_url, key) for a harness from the current state file, if a
@@ -216,6 +263,37 @@ impl Tier1TrialEngine {
         let key = source.key.clone().filter(|key| !key.trim().is_empty())?;
         Some((base_url, key))
     }
+}
+
+/// Frees a harness's single-flight slot on drop, so a panicking trial task never
+/// wedges the slot shut. Mirrors the `LiveStateGuard`/`ProbeScratch` guards the
+/// probe engine already uses to make in-flight state correct by construction.
+struct InFlightGuard {
+    engine: Arc<Tier1TrialEngine>,
+    harness: String,
+}
+
+impl Drop for InFlightGuard {
+    fn drop(&mut self) {
+        self.engine
+            .in_flight
+            .lock()
+            .expect("tier-1 trial in-flight poisoned")
+            .remove(&self.harness);
+    }
+}
+
+/// A stable, opaque fingerprint of the credential a verdict verified. In-memory
+/// only (never persisted, never logged), so a plain hash of base URL + key is
+/// enough: two checks against the same (proxy, key) collapse to one verdict, and
+/// a rotated key produces a different value that invalidates the old verdict.
+fn credential_fingerprint(base_url: &str, key: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    base_url.hash(&mut hasher);
+    0u8.hash(&mut hasher);
+    key.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
 }
 
 #[cfg(test)]

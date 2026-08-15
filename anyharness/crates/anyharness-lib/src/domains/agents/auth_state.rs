@@ -459,10 +459,17 @@ pub fn facts_from_resolved_with_runtime(
     };
 
     // A green tier-1 trial upgrades the credential it verified to the trial
-    // strength with the check's age. Only a credential that actually exists is
-    // upgraded — a trial cannot conjure evidence for a missing credential.
+    // strength with the check's age. Two guards keep this honest: only a
+    // credential that actually exists is upgraded (a trial cannot conjure evidence
+    // for a missing credential), and ONLY a GATEWAY-sourced credential is upgraded
+    // — the tier-1 trial verifies a gateway virtual key, so folding its green onto
+    // a native-login or pasted-key credential would attach `GatewayKeyCheck`
+    // evidence to a credential it never checked. A lingering stale gateway verdict
+    // therefore cannot promote a non-gateway credential.
     let credential = match (credential, runtime.trial) {
-        (Some(mut evidence), Some(Tier1TrialFact::Green { age_seconds })) => {
+        (Some(mut evidence), Some(Tier1TrialFact::Green { age_seconds }))
+            if evidence.source == CredentialSource::Gateway =>
+        {
             evidence.strength = CredentialEvidenceStrength::Tier1Trial;
             evidence.evidence_age_seconds = Some(age_seconds);
             Some(evidence)

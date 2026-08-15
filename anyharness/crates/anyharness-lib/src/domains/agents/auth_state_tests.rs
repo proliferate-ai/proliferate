@@ -60,6 +60,30 @@ fn runtime_fold_upgrades_a_gateway_credential_on_a_green_trial() {
 }
 
 #[test]
+fn a_green_trial_never_upgrades_a_non_gateway_credential() {
+    // A pasted-key (BYOK) credential, not a gateway one.
+    let mut resolved = gateway_resolved();
+    resolved.credentials_from_route = false;
+    resolved.credential_state = CredentialState::Ready;
+
+    let runtime = AuthRuntimeInputs {
+        probe: ProbeLifecycle::default(),
+        trial: Some(Tier1TrialFact::Green { age_seconds: 5 }),
+    };
+    let facts = facts_from_resolved_with_runtime(&resolved, &runtime);
+
+    let credential = facts.credential.as_ref().expect("byok credential");
+    assert_eq!(credential.source, CredentialSource::ApiKeyByok);
+    // The trial verifies a gateway key, so a green must NOT attach itself here.
+    assert_eq!(credential.strength, CredentialEvidenceStrength::BarePresence);
+    assert!(credential.evidence_age_seconds.is_none());
+    assert!(
+        !derive_agent_auth_state(&facts).display.is_green(),
+        "a stray gateway trial must not turn a BYOK credential green"
+    );
+}
+
+#[test]
 fn runtime_fold_marks_expired_on_an_expired_trial() {
     let resolved = gateway_resolved();
     let runtime = AuthRuntimeInputs {
