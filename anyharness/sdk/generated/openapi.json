@@ -7970,6 +7970,8 @@
         "enum": [
           "reachable",
           "unreachable",
+          "unauthorized",
+          "models_drifted",
           "budget_exhausted"
         ]
       },

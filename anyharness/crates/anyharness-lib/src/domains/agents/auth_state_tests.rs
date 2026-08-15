@@ -46,6 +46,7 @@ fn runtime_fold_upgrades_a_gateway_credential_on_a_green_trial() {
     let runtime = AuthRuntimeInputs {
         probe: ProbeLifecycle::default(),
         trial: Some(Tier1TrialFact::Green { age_seconds: 12 }),
+        gateway: None,
     };
     let facts = facts_from_resolved_with_runtime(&resolved, &runtime);
 
@@ -69,6 +70,7 @@ fn a_green_trial_never_upgrades_a_non_gateway_credential() {
     let runtime = AuthRuntimeInputs {
         probe: ProbeLifecycle::default(),
         trial: Some(Tier1TrialFact::Green { age_seconds: 5 }),
+        gateway: None,
     };
     let facts = facts_from_resolved_with_runtime(&resolved, &runtime);
 
@@ -89,6 +91,7 @@ fn runtime_fold_marks_expired_on_an_expired_trial() {
     let runtime = AuthRuntimeInputs {
         probe: ProbeLifecycle::default(),
         trial: Some(Tier1TrialFact::Expired),
+        gateway: None,
     };
     let facts = facts_from_resolved_with_runtime(&resolved, &runtime);
     assert!(facts.expired);
@@ -106,6 +109,7 @@ fn runtime_fold_threads_the_real_probe_lifecycle() {
             ..ProbeLifecycle::default()
         },
         trial: None,
+        gateway: None,
     };
     let facts = facts_from_resolved_with_runtime(&resolved, &runtime);
     assert_eq!(facts.probe.phase, ProbePhase::Backoff);
@@ -212,6 +216,38 @@ fn unavailable_on_budget_exhausted() {
         derive_agent_auth_state(&facts).display,
         AuthDisplay::Unavailable
     );
+}
+
+#[test]
+fn misconfigured_when_gateway_models_drifted() {
+    let facts = AgentAuthFacts {
+        credential: Some(CredentialEvidence {
+            source: CredentialSource::Gateway,
+            strength: CredentialEvidenceStrength::AcknowledgedRoute,
+            evidence_age_seconds: None,
+        }),
+        gateway: Some(GatewayHealth::ModelsDrifted),
+        ..base_installed()
+    };
+    let d = derive_agent_auth_state(&facts);
+    assert_eq!(d.display, AuthDisplay::Misconfigured);
+    assert_eq!(d.next_action, NextAction::FixConfig);
+}
+
+#[test]
+fn expired_when_gateway_unauthorized() {
+    let facts = AgentAuthFacts {
+        credential: Some(CredentialEvidence {
+            source: CredentialSource::Gateway,
+            strength: CredentialEvidenceStrength::AcknowledgedRoute,
+            evidence_age_seconds: None,
+        }),
+        gateway: Some(GatewayHealth::Unauthorized),
+        ..base_installed()
+    };
+    let d = derive_agent_auth_state(&facts);
+    assert_eq!(d.display, AuthDisplay::Expired);
+    assert_eq!(d.next_action, NextAction::LogInOrPasteKey);
 }
 
 #[test]
@@ -404,6 +440,8 @@ fn invariant_every_green_output_carries_dated_evidence() {
         None,
         Some(GatewayHealth::Reachable),
         Some(GatewayHealth::Unreachable),
+        Some(GatewayHealth::Unauthorized),
+        Some(GatewayHealth::ModelsDrifted),
         Some(GatewayHealth::BudgetExhausted),
     ];
     let bools = [false, true];

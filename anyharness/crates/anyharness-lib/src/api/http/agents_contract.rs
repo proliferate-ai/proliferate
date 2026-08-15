@@ -394,6 +394,8 @@ fn auth_gateway_to_contract(gateway: GatewayHealth) -> AgentAuthGatewayHealth {
     match gateway {
         GatewayHealth::Reachable => AgentAuthGatewayHealth::Reachable,
         GatewayHealth::Unreachable => AgentAuthGatewayHealth::Unreachable,
+        GatewayHealth::Unauthorized => AgentAuthGatewayHealth::Unauthorized,
+        GatewayHealth::ModelsDrifted => AgentAuthGatewayHealth::ModelsDrifted,
         GatewayHealth::BudgetExhausted => AgentAuthGatewayHealth::BudgetExhausted,
     }
 }

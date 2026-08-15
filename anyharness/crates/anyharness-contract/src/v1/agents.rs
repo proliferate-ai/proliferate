@@ -166,6 +166,8 @@ pub enum AgentAuthProbePhase {
 pub enum AgentAuthGatewayHealth {
     Reachable,
     Unreachable,
+    Unauthorized,
+    ModelsDrifted,
     BudgetExhausted,
 }
 
