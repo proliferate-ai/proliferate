@@ -240,14 +240,14 @@ pub(crate) struct ParsedDevEnv {
 }
 
 /// Parses the host-published dev env snippet with the same bounds as
-/// [`dev_env_activation`]. Rejects missing keys and out-of-bound values.
+/// [`dev_env_activation`]. Rejects missing keys and out-of-bound values —
+/// including a torn read of the host's rewrite, which the caller retries.
 /// The file is 0600 and the capability is a secret: callers must never log
 /// values, only the endpoint.
 #[cfg(all(unix, debug_assertions))]
-pub(crate) fn parse_dev_env_file(path: &std::path::Path) -> Option<ParsedDevEnv> {
+pub(crate) fn parse_dev_env_snippet(content: &str) -> Option<ParsedDevEnv> {
     use proliferate_diagnostics_protocol::v1::limits::MAX_ID_BYTES;
 
-    let content = std::fs::read_to_string(path).ok()?;
     if content.len() > DEV_ENV_FILE_MAX_BYTES {
         return None;
     }

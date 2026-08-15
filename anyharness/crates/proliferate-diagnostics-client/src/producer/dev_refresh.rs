@@ -10,7 +10,7 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use super::ProducerInner;
 use crate::bridge::activation::{
-    parse_dev_env_file, CollectorGenerationHandle, DEV_COLLECTOR_GENERATION,
+    parse_dev_env_snippet, CollectorGenerationHandle, DEV_COLLECTOR_GENERATION,
 };
 use crate::producer::transport::CollectorClient;
 
@@ -62,18 +62,27 @@ async fn dev_generation_refresh_with_interval(
         if mtime == seen_mtime {
             continue;
         }
-        seen_mtime = mtime;
-        let Some(parsed) = parse_dev_env_file(&path) else {
+        // seen_mtime latches only after a coherent read: the host's rewrite is
+        // not atomic, so a torn/garbage read at this mtime must be retried on
+        // the next tick rather than locking the rewrite out until a later
+        // distinguishable timestamp — that would reproduce the very outage
+        // this loop exists to fix.
+        let Ok(content) = tokio::fs::read_to_string(&path).await else {
+            continue;
+        };
+        let Some(parsed) = parse_dev_env_snippet(&content) else {
             continue;
         };
         if inner.current_collector_boot_id().as_deref() == Some(parsed.collector_boot_id.as_str()) {
             // Same generation republished (e.g. covering our own boot) —
             // nothing to do.
+            seen_mtime = mtime;
             continue;
         }
         let Ok(client) = CollectorClient::new(&parsed.endpoint, parsed.capability) else {
             continue;
         };
+        seen_mtime = mtime;
         dev_generation = dev_generation.saturating_add(1);
         inner.replace_generation(CollectorGenerationHandle {
             generation: dev_generation,
