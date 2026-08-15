@@ -1,0 +1,49 @@
+# Update Flow (AH-UPDFLOW) — invariants from the Update Flow ADR
+# implementation (rungs 1-2/5: managed-launcher atomic promotion, the
+# process-lifetime catalog). Family segment reserved per the ID-allocation
+# convention in lints/README.md: `UPDFLOW` mints AH-UPDFLOW-001+, distinct
+# from every other family minting in parallel tonight.
+#
+# Both rules are scoped to the whole anyharness/crates/** tree rather than a
+# single crate: AH-UPDFLOW-002's allowed call sites straddle the
+# anyharness-lib and anyharness crates (AppState construction lives in
+# anyharness-lib, the install-agents command lives in anyharness). If the
+# rungs that introduce the scoped modules have not landed on a given
+# checkout, the checker treats the absent files as vacuously clean — see
+# scripts/check_update_flow_lints.py's module docstring.
+#
+# Enforced by scripts/check_update_flow_lints.py.
+
+[[rule]]
+id = "AH-UPDFLOW-001"
+title = "managed launcher files are never written live"
+owner = "anyharness"
+status = "holds"
+enforced_by = "scripts/check_update_flow_lints.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/**"
+
+rule = """The non-atomic `generate_launcher_script` writer may only be called from inside integrations/agent_cli/launcher.rs itself, or from a call site whose enclosing function also promotes the written file through `ArchiveTreeActivation::activate_launcher` (a staged-write-then-journaled-promote, never a direct live write)."""
+alternative = """Call `generate_launcher_script_atomic`, or write to a staged sibling path and promote it through the same `ArchiveTreeActivation` the surrounding install already uses — never call the bare writer against a live launcher path."""
+why = """A managed launcher a session may be executing right now must never see a non-atomic write land on its live path; Update Flow FR-3/R2.5 requires every regeneration to go through rename-based promotion so a running session keeps its old inode."""
+
+[rule.example]
+bad = """`generate_launcher_script(&live_launcher_path, ..)` called directly against the live path with no promotion step"""
+good = """`generate_launcher_script_atomic(&launcher_path, ..)`, or `generate_launcher_script(&staged, ..)` followed by `activation.activate_launcher(&staged)` in the same function"""
+
+[[rule]]
+id = "AH-UPDFLOW-002"
+title = "the active agent catalog is constructed once per process"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_update_flow_lints.py"
+mode = "lint"
+scope = "anyharness/crates/**/src/**"
+
+rule = """`CatalogSyncService::from_bundled` / `from_staged_or_bundled` / `from_bundled_and_staged_via_env` may only be called from AppState construction (app/mod.rs), the install-agents command (commands/install_agents.rs), or `#[cfg(test)]` code."""
+alternative = """Take the already-constructed `CatalogSyncService` (or the `AgentCatalogService` built over it) as a dependency instead of constructing a fresh one."""
+why = """The active catalog is immutable for the process lifetime (FR-1, encodes the invariant Pablo's 796ff1f08 deletion reversed); a second construction site is a second, divergent in-memory catalog."""
+
+[rule.example]
+bad = """a domain service calling `CatalogSyncService::from_bundled()` to get "a" catalog instead of taking one"""
+good = """the constructor call stays in app/mod.rs's AppState wiring or commands/install_agents.rs; everything else takes a shared handle"""

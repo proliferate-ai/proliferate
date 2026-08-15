@@ -1068,3 +1068,15 @@ rule = "AH-STORE-4"
 path = "anyharness/crates/anyharness-lib/src/live/workflows/mod.rs"
 site = "mod lifecycle_tests::crate::domains::workspaces::store::WorkspaceStore"
 reason = "the WorkflowManager constructs actors and heals the boot fence from the same three stores the actor uses; same gen-2 ADR ruling and same capability-trait target as actor.rs"
+
+[[exception]]
+rule = "AH-UPDFLOW-001"
+path = "anyharness/crates/anyharness-lib/src/domains/agents/installer/npm.rs"
+site = "install_managed_npm_package::generate_launcher_script"
+reason = "pre-Update-Flow legacy direct write to the live launcher path; the Update Flow ADR rung that moves this call site onto the staged-write-then-activate_launcher promotion (or generate_launcher_script_atomic) is landing on open PRs #1922/#1931/#1940, not yet merged onto this branch"
+
+[[exception]]
+rule = "AH-UPDFLOW-001"
+path = "anyharness/crates/anyharness-lib/src/domains/agents/installer/agent_process.rs"
+site = "regenerate_agent_process_launcher::generate_launcher_script"
+reason = "pre-Update-Flow legacy direct write to the live launcher path; the Update Flow ADR rung that moves this call site onto the staged-write-then-activate_launcher promotion (or generate_launcher_script_atomic) is landing on open PRs #1922/#1931/#1940, not yet merged onto this branch"
