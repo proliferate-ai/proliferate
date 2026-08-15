@@ -327,6 +327,12 @@ pub struct ReconcileAgentResult {
     pub outcome: ReconcileOutcome,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    /// Typed classification of a terminal failure: one of `network`,
+    /// `checksum`, `in_use`, `disk`, `other`. Additive and tolerant: absent on
+    /// success/skip and on runtimes that predate typed failures, so old readers
+    /// simply ignore it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_kind: Option<String>,
     pub installed_artifacts: Vec<ArtifactStatus>,
 }
 

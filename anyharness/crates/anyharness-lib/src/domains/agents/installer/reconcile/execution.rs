@@ -348,6 +348,7 @@ async fn run_reconcile_job(
                         kind: descriptor.kind.clone(),
                         outcome: AgentReconcileOutcome::Skipped,
                         message: Some(skip.message().to_string()),
+                        failure_kind: None,
                         installed_artifacts: vec![],
                     };
                 }
