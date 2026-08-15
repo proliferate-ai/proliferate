@@ -64,7 +64,7 @@ use anyharness_contract::v1::{
     ProposedPlanDocumentResponse, ProposedPlanNativeResolutionState, ProposedPlanSummary,
     PruneOrphanWorktreeRequest, PullRequestChecksState, PullRequestReviewDecision,
     PullRequestState, PullRequestSummary, PushRequest, PushResponse, PushRevokedJtisRequest,
-    PushRevokedJtisResponse, PutWorkflowRunRequest, PutWorkflowRunWorkspaceRequest,
+    PushRevokedJtisResponse,
     RawSessionConfigOption, RawSessionConfigValue, ReadWorkspaceFileResponse, ReasoningVisibility,
     ReconcileAgentResult, ReconcileAgentsRequest, ReconcileAgentsResponse, ReconcileJobStatus,
     ReconcileOutcome, RenameWorkspaceFileEntryRequest, RenameWorkspaceFileEntryResponse,
@@ -100,12 +100,7 @@ use anyharness_contract::v1::{
     UnarchiveWorkspaceResponse, UnstagePatchRequest, UnstagePathsRequest,
     UpdateSessionTitleRequest, UpdateTerminalTitleRequest, UpdateWorkspaceDisplayNameRequest,
     UpdateWorkspaceMobilityRuntimeStateRequest, UsageUpdatePayload, UserInputInteractionPayload,
-    UserInputQuestion, UserInputQuestionOption, UserInputSubmittedAnswer, WorkflowRun,
-    WorkflowRunArgumentValue, WorkflowRunDefinition, WorkflowRunFailureCode,
-    WorkflowRunHarnessConfig, WorkflowRunInput, WorkflowRunInputType, WorkflowRunInterruptionCode,
-    WorkflowRunPromptStep, WorkflowRunResponse, WorkflowRunStage, WorkflowRunStatus,
-    WorkflowRunStep, WorkflowRunStepStatus, WorkflowRunWorkspaceResponse,
-    WorkflowWorkspacePlacementRequest, WorkflowWorkspaceResolvedPlacement, WorkflowWorkspaceStatus,
+    UserInputQuestion, UserInputQuestionOption, UserInputSubmittedAnswer,
     Workspace, WorkspaceArchiveNotice, WorkspaceArchiveNoticeKind, WorkspaceAvailability,
     WorkspaceExecutionPhase, WorkspaceExecutionSummary,
     WorkspaceFileEntry, WorkspaceFileKind, WorkspaceFileSearchResult, WorkspaceGitLockedBody,
@@ -269,11 +264,6 @@ mod support_windows;
         super::http::reviews::stop_review,
         super::http::reviews::send_review_feedback,
         super::http::reviews::mark_review_revision_ready,
-        super::http::workflow_runs::put_workflow_run,
-        super::http::workflow_runs::get_workflow_run,
-        super::http::workflow_runs::cancel_workflow_run,
-        super::http::workflow_workspaces::put_workflow_run_workspace,
-        super::http::workflow_workspaces::get_workflow_run_workspace,
     ),
     components(schemas(
         HealthResponse,
@@ -519,26 +509,6 @@ mod support_windows;
         GoalUpdatedPayload,
         GoalMetPayload,
         GoalClearedPayload,
-        PutWorkflowRunRequest,
-        WorkflowRunArgumentValue,
-        WorkflowRunFailureCode,
-        WorkflowRunInterruptionCode,
-        WorkflowRunDefinition,
-        WorkflowRunInput,
-        WorkflowRunInputType,
-        WorkflowRunStage,
-        WorkflowRunHarnessConfig,
-        WorkflowRunPromptStep,
-        WorkflowRunStatus,
-        WorkflowRunStepStatus,
-        WorkflowRunResponse,
-        WorkflowRun,
-        WorkflowRunStep,
-        PutWorkflowRunWorkspaceRequest,
-        WorkflowWorkspacePlacementRequest,
-        WorkflowWorkspaceStatus,
-        WorkflowWorkspaceResolvedPlacement,
-        WorkflowRunWorkspaceResponse,
         Loop,
         LoopSchedule,
         LoopScheduleKind,
@@ -704,7 +674,9 @@ mod support_windows;
 pub struct ApiDoc;
 pub fn openapi_json() -> String {
     support_windows::merge(
-        ApiDoc::openapi().merge_from(super::subagents_openapi::SubagentApiDoc::openapi()),
+        ApiDoc::openapi()
+            .merge_from(super::subagents_openapi::SubagentApiDoc::openapi())
+            .merge_from(super::workflow_runs_openapi::WorkflowRunsApiDoc::openapi()),
     )
     .to_pretty_json()
     .expect("OpenAPI serialization should not fail")

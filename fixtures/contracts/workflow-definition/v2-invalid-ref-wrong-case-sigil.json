@@ -1,0 +1,23 @@
+{
+  "rejectedBy": "structure",
+  "expectedIssuePath": "nodes.0.prompt",
+  "note": "Sigils are detected case-insensitively so a wrong-case sigil is a malformed reference, never silent literal text.",
+  "definition": {
+    "schemaVersion": 2,
+    "nodes": [
+      {
+        "id": "n_a",
+        "type": "agent",
+        "title": "Step",
+        "prompt": "Research @INPUT:topic today"
+      }
+    ],
+    "inputs": [
+      {
+        "name": "topic",
+        "description": "",
+        "required": true
+      }
+    ]
+  }
+}

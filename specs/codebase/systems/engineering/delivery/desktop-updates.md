@@ -135,11 +135,70 @@ by [`releases.md`](../../../../../guides/deploying/releases.md).
 | CDN is unavailable | App and updater remain usable; cached valid title may render. |
 | N-1 to N packaged upgrade | No target sidebar card appears before install; the installed title appears once after relaunch. |
 
+## Owned Download, Staging, And Verification
+
+The download is owned Rust-side rather than delegated to the updater plugin.
+The plugin cannot abort or resume, holds the whole download in memory,
+persists nothing, has no default timeout, and its `Update::install(bytes)`
+seam performs no signature verification. The owned path (default on) addresses
+each of these; the plugin path stays wired underneath and is restored by
+turning the flag off.
+
+Native commands live in `apps/desktop/src-tauri/src/updater_owned.rs`:
+
+- `updater_owned_check` builds the updater via the plugin's updater builder,
+  optionally overriding the endpoint, and stores the resulting `Update` in the
+  resources table. The baked minisign public key from `tauri.conf.json`
+  verifies the artifact no matter which endpoint served the manifest.
+- `updater_owned_download` streams the artifact to
+  `<app_data_dir>/updates/staged/<version>.tar.gz.partial` with a 10s connect
+  timeout and a per-read inactivity guard, resuming an existing partial with a
+  `Range` request only when the server answers 206, computes sha256, verifies
+  minisign over the file bytes, renames to the final staged name, and writes a
+  `<version>.staged.json` sidecar recording version, sha256, byte length,
+  signature, and stage time. A managed cancellation token enforces a single
+  live download.
+- `updater_owned_abort` cancels the in-flight download, which returns a typed
+  `UPDATER_DOWNLOAD_ABORTED`. A retry aborts and awaits the ack before starting
+  a new download, so there is never more than one live download.
+- `updater_staged_status` returns the staged identity only when the file still
+  hashes to its sidecar and minisign verifies; any mismatch deletes the
+  artifact and sidecar and returns nothing.
+- `updater_owned_install` re-verifies the staged bytes and installs them; the
+  Worker teardown ordering runs first, in the renderer wrapper, before install.
+
+The renderer state machine (`hooks/access/tauri/updater-*.ts`, driving
+`stores/updater/updater-store.ts`) adds `verifying` (bytes staged, sha256 and
+minisign being re-checked) and `reusingStaged` (a verified artifact for the
+offered version was found at check time, so nothing is downloaded). In the
+owned path `ready` means staged and verified, and the install runs at restart;
+the legacy path installs during download and `ready` means installed.
+
+Persistence uses the existing `updater_metadata` key additively:
+`{lastCheckedAt, skippedVersions, availableVersion?, staged?}`. The skip list is
+hydrated on boot so a skipped version is never re-announced after relaunch, and
+a persisted staged pointer that no longer matches the offered version is
+dropped.
+
+Two client-local flags gate the behavior (`hooks/access/tauri/updater-flags.ts`,
+persisted under `updater_flags`): `ownedUpdaterEnabled` defaults on and
+`updaterServerRedirectEnabled` defaults off. When the redirect flag is on and a
+non-official server is connected, the owned check points at that server's
+`/desktop/updater/latest.json`; any failure falls back to the baked feed. The
+server may additively supply cadence overrides on `/meta` under `desktopUpdater`
+(`checkIntervalMs`, `stallThresholdMs`), consumed tolerantly.
+
+Typed native errors are `UPDATER_CHECK_FAILED`, `UPDATER_DOWNLOAD_STALLED`,
+`UPDATER_DOWNLOAD_ABORTED`, `UPDATER_ARTIFACT_HASH_MISMATCH`,
+`UPDATER_INSTALL_FAILED`, and `UPDATER_DISK_FULL`.
+
 ## Implementation Ownership
 
 - Release manifest generation and CDN publication:
   `scripts/generate-updater-manifest.mjs`,
   `.github/workflows/release-desktop.yml`, and `apps/desktop/infra/main.tf`.
+- Owned native download, staging, and verification:
+  `apps/desktop/src-tauri/src/updater_owned.rs`.
 - Raw Tauri and downloads access: `apps/desktop/src/lib/access/**`.
 - React Query ownership for immutable manifests:
   `apps/desktop/src/hooks/access/**`.

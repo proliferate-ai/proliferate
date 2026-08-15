@@ -32,11 +32,21 @@ export function useRightPanelHeaderEntries({
   terminals,
   openViewerTargets,
   isCloudWorkspaceSelected,
+  hasWorkflowRun,
 }: {
   state: RightPanelWorkspaceState;
   terminals: readonly TerminalRecord[];
   openViewerTargets: readonly ViewerTarget[];
   isCloudWorkspaceSelected: boolean;
+  /**
+   * Whether this workspace has at least one gen-2 workflow run. The workflow
+   * tool is offered only then: the launch gate decides whether the tool can
+   * exist at all (`availableRightPanelTools`), and this decides whether a
+   * workspace has anything to show in it. It filters the rendered entry rather
+   * than the persisted order, because a run appearing or finishing must not
+   * rewrite the user's stored header.
+   */
+  hasWorkflowRun: boolean;
 }): RightPanelHeaderEntriesState {
   const terminalIdsInHeader = useMemo(
     () => new Set(terminalIdsFromHeaderOrder(state.headerOrder)),
@@ -74,7 +84,11 @@ export function useRightPanelHeaderEntries({
       if (!entry || seenKeys.has(key)) {
         continue;
       }
-      if (entry.kind === "tool" && availableToolSet.has(entry.tool)) {
+      if (
+        entry.kind === "tool"
+        && availableToolSet.has(entry.tool)
+        && (entry.tool !== "workflow" || hasWorkflowRun)
+      ) {
         entries.push({ kind: "tool", key, tool: entry.tool });
         seenKeys.add(key);
       }
@@ -98,6 +112,7 @@ export function useRightPanelHeaderEntries({
 
     return entries;
   }, [
+    hasWorkflowRun,
     isCloudWorkspaceSelected,
     state.headerOrder,
     terminalById,

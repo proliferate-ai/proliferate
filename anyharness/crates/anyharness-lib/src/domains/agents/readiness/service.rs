@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use super::artifacts::{
-    found_artifact, resolve_agent_process_artifact, resolve_agent_process_fallback,
-    resolve_agent_process_path_fallback, resolve_native_artifact,
+    agent_process_has_path_artifact, found_artifact, resolve_agent_process_artifact,
+    resolve_agent_process_fallback, resolve_agent_process_path_fallback, resolve_native_artifact,
 };
 use super::compatibility::detect_runtime_compatibility_issue;
 use super::overrides::resolve_agent_process_override;
@@ -40,6 +40,15 @@ use super::paths::{
 ///
 /// The route can only clear the credential rungs; see
 /// [`route_credentials_upgrade_status`].
+/// Whether the user has their own copy of this agent on PATH, regardless of
+/// whether a managed copy also exists and wins resolution. R2.0's settings
+/// notice ("Proliferate now maintains its own managed copy; your own install
+/// is untouched") needs exactly this "both exist" fact, which the resolved
+/// artifact alone cannot carry — see `agent_process_has_path_artifact`.
+pub fn has_user_path_copy(descriptor: &AgentDescriptor) -> bool {
+    agent_process_has_path_artifact(descriptor)
+}
+
 pub fn resolve_agent(descriptor: &AgentDescriptor, runtime_home: &Path) -> ResolvedAgent {
     let resolved = resolve_agent_unrouted(descriptor, runtime_home);
     apply_launch_route_upgrade(resolved, descriptor, runtime_home)

@@ -1,0 +1,37 @@
+{
+  "rejectedBy": "structure",
+  "expectedIssuePath": "edges.1.from",
+  "definition": {
+    "schemaVersion": 2,
+    "nodes": [
+      {
+        "id": "n_a",
+        "type": "agent",
+        "title": "Step n_a",
+        "prompt": "Run step n_a."
+      },
+      {
+        "id": "n_b",
+        "type": "agent",
+        "title": "Step n_b",
+        "prompt": "Run step n_b."
+      },
+      {
+        "id": "n_c",
+        "type": "agent",
+        "title": "Step n_c",
+        "prompt": "Run step n_c."
+      }
+    ],
+    "edges": [
+      {
+        "from": "n_a",
+        "to": "n_b"
+      },
+      {
+        "from": "n_a",
+        "to": "n_c"
+      }
+    ]
+  }
+}

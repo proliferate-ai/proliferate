@@ -215,6 +215,16 @@ pub enum AgentProcessInstallSpec {
         /// Path to the binary inside node_modules after install.
         executable_relpath: PathBuf,
     },
+    /// Install a first-party per-platform tarball, sha256-verified, through the
+    /// archive path. Additive install kind (Update Flow FR-3): the resolved
+    /// catalog pin drives the actual install as a `ResolvedPinSource::Archive`,
+    /// so this variant is a registry declaration, not a separate installer path.
+    DirectArchive {
+        /// Per-platform (registry platform key) archive targets.
+        targets: std::collections::BTreeMap<String, DirectArchiveTarget>,
+        /// ACP-mode launch args baked into the managed launcher.
+        args: Vec<String>,
+    },
     /// Resolve exclusively from PATH; no managed install is supported.
     PathOnly {
         /// Binary names to search for on PATH.
@@ -226,6 +236,15 @@ pub enum AgentProcessInstallSpec {
     },
     /// No automated install; docs-only guidance.
     Manual { docs_url: String },
+}
+
+/// One per-platform archive target for a `DirectArchive` install.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DirectArchiveTarget {
+    pub url: String,
+    pub sha256: String,
+    pub expected_binary: String,
+    pub download_size_bytes: Option<u64>,
 }
 
 /// Local fallback install rule when the ACP registry is unavailable or incomplete.
@@ -428,6 +447,28 @@ pub struct AgentDescriptor {
     pub auth: AuthSpec,
     /// URL for the agent's docs or repo (shown in UI).
     pub docs_url: Option<String>,
+    /// How this harness's own self-updater is neutralized by the managed
+    /// launcher (Update Flow FR-3). Drives `managed_launcher_env`.
+    pub self_update_neutralization: SelfUpdateNeutralization,
+}
+
+/// How a harness's self-update path is disabled by the managed launcher.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SelfUpdateNeutralization {
+    pub mechanism: SelfUpdateMechanism,
+    pub detail: String,
+    /// Env vars to inject into the managed launcher (non-empty only for `Env`).
+    pub env: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SelfUpdateMechanism {
+    /// A launcher env var disables the harness's self-updater.
+    Env,
+    /// Static analysis found no self-update path to neutralize.
+    NoneFound,
+    /// The harness has no self-update surface (e.g. binary-only adapter).
+    NotApplicable,
 }
 
 // ---------------------------------------------------------------------------
@@ -468,91 +509,15 @@ pub struct SpawnSpec {
 }
 
 // ---------------------------------------------------------------------------
-// Model registry catalog
+// Model registry catalog (split into model_catalog.rs for the line ceiling)
 // ---------------------------------------------------------------------------
 
-/// Runtime-owned model registry metadata used by session validation and launch defaults.
-#[derive(Debug, Clone)]
-pub struct ModelRegistryMetadata {
-    pub kind: String,
-    pub display_name: String,
-    pub default_model_id: Option<String>,
-    pub models: Vec<ModelRegistryModelMetadata>,
-}
-
-/// Runtime-owned model metadata for one harness registry row.
-#[derive(Debug, Clone)]
-pub struct ModelRegistryModelMetadata {
-    pub id: String,
-    pub display_name: String,
-    pub description: Option<String>,
-    pub is_default: bool,
-    pub default_opt_in: Option<bool>,
-    pub status: ModelCatalogStatus,
-    pub aliases: Vec<String>,
-    pub min_runtime_version: Option<String>,
-    pub launch_remediation: Option<ModelLaunchRemediationMetadata>,
-    pub session_default_controls: Vec<SessionDefaultControlMetadata>,
-    pub session_default_controls_state: SessionDefaultControlsState,
-}
-
-/// Runtime-owned lifecycle status for one model catalog row.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ModelCatalogStatus {
-    Candidate,
-    Active,
-    Deprecated,
-    Hidden,
-}
-
-/// Product-owned remediation class for a launch-time live-apply mismatch.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ModelLaunchRemediationKind {
-    ManagedReinstall,
-    ExternalUpdate,
-    Restart,
-}
-
-/// Runtime-owned catalog remediation metadata.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
-pub struct ModelLaunchRemediationMetadata {
-    pub kind: ModelLaunchRemediationKind,
-    pub message: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SessionDefaultControlKey {
-    Reasoning,
-    Effort,
-    FastMode,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
-pub struct SessionDefaultControlValueMetadata {
-    pub value: String,
-    pub label: String,
-    pub description: Option<String>,
-    pub is_default: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
-pub struct SessionDefaultControlMetadata {
-    pub key: SessionDefaultControlKey,
-    pub label: String,
-    pub values: Vec<SessionDefaultControlValueMetadata>,
-    pub default_value: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SessionDefaultControlsState {
-    Omitted,
-    Empty,
-    Valid,
-    Invalid,
-}
+pub use super::model_catalog::{
+    ModelCatalogStatus, ModelLaunchRemediationKind, ModelLaunchRemediationMetadata,
+    ModelRegistryMetadata, ModelRegistryModelMetadata, SessionDefaultControlKey,
+    SessionDefaultControlMetadata, SessionDefaultControlValueMetadata,
+    SessionDefaultControlsState,
+};
 
 /// Machine-local resolved state for one artifact (native or agent-process).
 #[derive(Debug, Clone)]

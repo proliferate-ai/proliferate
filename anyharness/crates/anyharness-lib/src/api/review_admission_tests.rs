@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use tower::util::ServiceExt;
 
 use super::router::build_router;
-use super::workflow_runs_tests::test_state;
+use super::session_admission_tests::test_state;
 use crate::app::test_support;
 use crate::domains::plans::model::NewPlan;
 use crate::domains::plans::service::PlanEventContext;

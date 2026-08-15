@@ -38,11 +38,17 @@ use crate::domains::agents::model_snapshot::{ModelSnapshotService, PokeReason};
 )]
 pub async fn list_agents(State(state): State<AppState>) -> Json<Vec<AgentSummary>> {
     let snapshot = state.agent_runtime.list_agents().await;
-    let summaries: Vec<AgentSummary> = snapshot
-        .agents
-        .iter()
-        .map(|agent| to_summary(agent, Some(&snapshot.reconcile_snapshot)))
-        .collect();
+    // to_summary probes PATH per agent (userPathCopyDetected); keep that
+    // synchronous IO off the async executor.
+    let summaries = tokio::task::spawn_blocking(move || {
+        snapshot
+            .agents
+            .iter()
+            .map(|agent| to_summary(agent, Some(&snapshot.reconcile_snapshot)))
+            .collect::<Vec<AgentSummary>>()
+    })
+    .await
+    .unwrap_or_default();
     Json(summaries)
 }
 
@@ -61,10 +67,12 @@ pub async fn get_agent(
     Path(kind): Path<String>,
 ) -> Result<Json<AgentSummary>, ApiError> {
     let snapshot = state.agent_runtime.get_agent(&kind).await?;
-    Ok(Json(to_summary(
-        &snapshot.agent,
-        Some(&snapshot.reconcile_snapshot),
-    )))
+    let summary = tokio::task::spawn_blocking(move || {
+        to_summary(&snapshot.agent, Some(&snapshot.reconcile_snapshot))
+    })
+    .await
+    .map_err(|e| ApiError::internal(format!("agent summary task failed: {e}")))?;
+    Ok(Json(summary))
 }
 
 #[utoipa::path(

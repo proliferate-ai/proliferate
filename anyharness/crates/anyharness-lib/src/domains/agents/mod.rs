@@ -3,6 +3,7 @@ pub mod auth_state;
 pub mod catalog;
 pub mod installer;
 pub mod model;
+pub mod model_catalog;
 pub mod model_snapshot;
 pub mod portability;
 pub mod readiness;

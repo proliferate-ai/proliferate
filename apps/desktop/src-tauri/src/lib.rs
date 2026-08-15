@@ -9,6 +9,7 @@ mod quit_flow;
 mod sidecar;
 mod state;
 mod telemetry;
+mod updater_owned;
 mod workspace_activity_indicator;
 
 use commands::{
@@ -203,6 +204,7 @@ pub fn run() {
     let _telemetry = telemetry::init(&diagnostics_producer);
     let sc = sidecar::create_sidecar_with_auto_port();
     let cloud_worker_state = cloud_worker::create_cloud_worker_state();
+    let owned_updater_state = updater_owned::create_owned_updater_state();
     let diagnostics_supervisor =
         diagnostics_collector::supervisor::DiagnosticsCollectorSupervisor::new(
             diagnostics_producer.clone(),
@@ -253,6 +255,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(sc.clone())
         .manage(cloud_worker_state)
+        .manage(owned_updater_state)
         .manage(diagnostics_supervisor.clone())
         .manage(diagnostics_producer.clone())
         .manage(support_snapshot_coordinator)
@@ -321,6 +324,11 @@ pub fn run() {
             keychain::get_pending_auth,
             keychain::set_pending_auth,
             keychain::clear_pending_auth,
+            updater_owned::updater_owned_check,
+            updater_owned::updater_owned_download,
+            updater_owned::updater_owned_abort,
+            updater_owned::updater_staged_status,
+            updater_owned::updater_owned_install,
         ]);
 
     #[cfg(target_os = "macos")]

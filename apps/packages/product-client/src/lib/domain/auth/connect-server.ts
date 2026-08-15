@@ -65,6 +65,15 @@ export interface ServerMeta {
   runtimeVersion: string;
   workerVersion: string;
   minDesktopVersion: string;
+  /**
+   * Additive, optional desktop updater cadence overrides. Absent on servers
+   * that never configured them; consumed tolerantly (a garbage value is
+   * ignored and the baked default stands). See server `MetaResponse`.
+   */
+  desktopUpdater?: {
+    checkIntervalMs?: number | null;
+    stallThresholdMs?: number | null;
+  } | null;
 }
 
 /**
