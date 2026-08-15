@@ -455,7 +455,7 @@ jobs:
 
   # Scroll-physics tier (specs/TESTING.md): the real transcript renderer driven
   # by a scripted streaming fixture in real Chromium AND real WebKit. Merge-
-  # gating like shared-frontend-packages — no continue-on-error. The suite runs
+  # gating like shared-frontend-packages, no continue-on-error. The suite runs
   # workers=1 by config; both browser engines are required because scroll
   # physics differ between Blink and WebKit.
   scroll-physics:
@@ -474,12 +474,18 @@ jobs:
           version: 10.11.0
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       # Builds product-client's own dist (and the shared packages it depends
       # on) so the fixture resolves the real transcript through `#product/*`.
       - name: Build shared packages
         run: pnpm shared:build
+
+      # Cheap compile-only check over the fixture's tsconfig.json (no
+      # browsers). Catches SDK event-schema drift before spending time
+      # installing browser engines.
+      - name: Typecheck scroll-physics fixture
+        run: pnpm --filter @proliferate/product-client typecheck:scroll-physics
 
       - name: Install Playwright chromium + webkit
         run: pnpm --filter @proliferate/product-client exec playwright install --with-deps chromium webkit

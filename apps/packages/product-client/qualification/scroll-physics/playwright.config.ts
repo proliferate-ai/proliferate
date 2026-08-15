@@ -25,7 +25,8 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  // A physics gate: flake must show up red, not hide behind a retry.
+  retries: 0,
   timeout: 60_000,
   expect: { timeout: 10_000 },
   reporter: process.env.CI ? [["list"], ["github"]] : [["list"]],

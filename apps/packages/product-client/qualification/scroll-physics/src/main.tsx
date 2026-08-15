@@ -43,7 +43,12 @@ const qualificationHost: ProductHost = {
     cancelLogin: async () => {},
     logout: async () => ({ provider: "github" }),
   },
-  cloud: { client: cloudClient },
+  cloud: {
+    client: cloudClient,
+    getSandboxGatewayAccessToken: async () => {
+      throw new Error("scroll-physics fixture performs no network I/O");
+    },
+  },
   storage: {
     getItem: async () => null,
     setItem: async () => {},
@@ -62,6 +67,7 @@ const qualificationHost: ProductHost = {
     setTag: () => {},
     routeChanged: () => {},
     getSupportContext: () => ({ clientReleaseId: "scroll-physics-qualification" }),
+    getAnonymousInstallId: async () => "scroll-physics-qualification",
   },
   desktop: null,
 };
