@@ -274,12 +274,12 @@ owner = "frontend"
 status = "holds"
 enforced_by = "scripts/check_frontend_boundaries.py"
 mode = "lint"
-scope = "apps/packages/product-client/src/components/workspace/shell/**, apps/packages/product-client/src/hooks/workspaces/workflows/use-run-workspace-command.ts, apps/packages/product-client/src/hooks/workspaces/facade/use-workspace-command-palette.ts"
+scope = "apps/packages/product-client/src/components/workspace/shell/**, apps/packages/product-client/src/hooks/workspaces/**"
 
-rule = """`useNavigate` and `useLocation` (react-router-dom) must not be used inside the workspace-shell component tree (components/workspace/shell/**) or its shell-scoped command hooks (use-run-workspace-command.ts, use-workspace-command-palette.ts)."""
+rule = """`useNavigate` and `useLocation` (react-router-dom) must not be used inside the workspace-shell component tree (components/workspace/shell/**) or any workspace hook (hooks/workspaces/**). The invariant is any shell-scoped hook subscribing to router location, not an enumerated file list."""
 alternative = """Navigate through the app-navigate handoff owned by the route host (AuthenticatedAppHost) instead of subscribing the shell to router state; read the current path from `window.location` at call time if a one-shot value is needed."""
 why = """PRO-170/PRO-182: `useNavigate` and `useLocation` subscribe their caller to every router location change. Called from shell-scoped hooks, that re-rendered the entire workspace shell on every settings/section/back navigation (35 long tasks, ~3s blocking measured in dev) instead of only the route view that actually changed."""
 
 [rule.example]
-bad = """`const navigate = useNavigate();` inside `components/workspace/shell/screen/MainScreen.tsx` or `use-run-workspace-command.ts`"""
+bad = """`const navigate = useNavigate();` inside `components/workspace/shell/screen/MainScreen.tsx` or `hooks/workspaces/workflows/use-run-workspace-command.ts`"""
 good = """`navigateApp(path)` via the app-navigate handoff registered by `AuthenticatedAppHost`"""

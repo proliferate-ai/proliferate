@@ -512,33 +512,20 @@ def is_ui_component_library_path(relative_path: str) -> bool:
     return "/" not in primitive_relative or primitive_relative.startswith("patterns/")
 
 
-SHELL_NAV_SCOPED_FILES = {
-    "apps/packages/product-client/src/hooks/workspaces/workflows/use-run-workspace-command.ts",
-    "apps/packages/product-client/src/hooks/workspaces/facade/use-workspace-command-palette.ts",
-}
-
-
 def is_shell_navigation_scoped_path(relative_path: str) -> bool:
     """True for the workspace-shell subtree that FE-NAV-1 guards: the shell
     component tree (MainScreen, StandardWorkspaceShell, MainSidebar and
-    siblings) plus the two shell-scoped hooks the PRO-170 incident named.
+    siblings) plus every workspace hook (hooks/workspaces/**) — the ADR
+    invariant is any shell-scoped hook subscribing to router location, not
+    just the two files the PRO-170 incident happened to name.
     """
-    return (
-        is_under(
-            relative_path,
-            "apps/packages/product-client/src/components/workspace/shell/",
-        )
-        or relative_path in SHELL_NAV_SCOPED_FILES
+    return is_under(
+        relative_path,
+        "apps/packages/product-client/src/components/workspace/shell/",
+    ) or is_under(
+        relative_path,
+        "apps/packages/product-client/src/hooks/workspaces/",
     )
-
-
-def is_route_view_path(relative_path: str) -> bool:
-    """Genuine route views are allowlisted: the top-level route host and the
-    page components mounted directly by the router legitimately read
-    location/navigate — they own the route boundary the shell tree must not
-    subscribe to.
-    """
-    return is_under(relative_path, "apps/packages/product-client/src/pages/")
 
 
 def is_query_cache_owner_path(relative_path: str) -> bool:
@@ -670,7 +657,7 @@ def check_file(path: Path) -> list[Violation]:
             "import of a retired legacy access path",
         )
 
-        if is_shell_navigation_scoped_path(rel) and not is_route_view_path(rel):
+        if is_shell_navigation_scoped_path(rel):
             nav_hit = first_match(line, (SHELL_NAV_HOOK_RE,))
             add_if(
                 violations,
