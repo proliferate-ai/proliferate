@@ -3692,7 +3692,7 @@ export interface components {
             status: string;
             /** Delta */
             delta?: {
-                [key: string]: unknown;
+                [key: string]: string[] | number | string;
             } | null;
             /** Verifiedat */
             verifiedAt?: string | null;
