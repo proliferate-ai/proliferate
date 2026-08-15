@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import type { Workspace } from "@anyharness/sdk";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { APP_ROUTES } from "#product/config/app-routes";
+import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useCloudBilling } from "#product/hooks/cloud/facade/use-cloud-billing";
 import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
@@ -54,6 +55,7 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
   const activeNewWorkspaceScope = useNewWorkspaceCommandScopeStore((state) => state.activeScope);
   const { cloudActive } = useCloudAvailabilityState();
   const { data: billingPlan } = useCloudBilling();
+  const capabilities = useAppCapabilities();
   const {
     data: repoConfigs,
     isPending: isRepoConfigsPending,
@@ -198,9 +200,11 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
   // are actionable readiness gates. Do not disable the command before the
   // connected dialog can explain/repair them; only billing is a terminal start
   // block at this surface.
-  const cloudUnavailableReason = cloudWorkspaceBlocked
-    ? "Cloud workspaces are blocked by billing."
-    : null;
+  const cloudUnavailableReason = !capabilities.cloudComputeEnabled
+    ? "Cloud workspaces are temporarily unavailable."
+    : cloudWorkspaceBlocked
+      ? "Cloud workspaces are blocked by billing."
+      : null;
   const newCloudCommandTarget = useMemo(() => resolveNewWorkspaceCommandTarget({
     commandKind: "cloud",
     scope: newWorkspaceCommandScope,

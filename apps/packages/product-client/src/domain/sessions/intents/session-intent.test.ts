@@ -418,6 +418,59 @@ describe("session intents", () => {
     });
   });
 
+  it("keeps queued config intents alive through an earlier request's matching echo (PRO-261)", () => {
+    // Fast cycling wraps: plan → accept → default → plan. The first request's
+    // echo carries the same value as the still-queued final click; reconciling
+    // that click before dispatch would drop it and revert the control.
+    let state = emptyState();
+    state = upsertSessionIntent(state, {
+      ...createUpdateConfigIntent({
+        intentId: "config-1",
+        clientSessionId: "session-1",
+        configId: "mode",
+        value: "plan",
+      }),
+      status: "accepted" as const,
+      applyState: "applied" as const,
+    });
+    for (const [intentId, value] of [
+      ["config-2", "accept"],
+      ["config-3", "default"],
+      ["config-4", "plan"],
+    ] as const) {
+      state = upsertSessionIntent(state, createUpdateConfigIntent({
+        intentId,
+        clientSessionId: "session-1",
+        configId: "mode",
+        value,
+      }));
+    }
+
+    const next = reconcileOutboxFromEnvelopes(state, "session-1", [{
+      seq: 2,
+      timestamp: "2026-05-12T00:00:01Z",
+      event: {
+        type: "config_option_update",
+        liveConfig: liveConfig("mode", "plan"),
+      },
+      sessionId: "session-1",
+    } as SessionEventEnvelope]);
+
+    expect(next.entriesById["config-1"]).toMatchObject({ status: "reconciled" });
+    expect(next.entriesById["config-2"]).toMatchObject({ status: "queued" });
+    expect(next.entriesById["config-3"]).toMatchObject({ status: "queued" });
+    expect(next.entriesById["config-4"]).toMatchObject({ status: "queued" });
+
+    // The control keeps projecting the final click, not an intermediate value.
+    const ordered = (next.intentIdsByClientSessionId["session-1"] ?? [])
+      .map((intentId) => next.entriesById[intentId])
+      .filter((intent) => intent !== undefined);
+    expect(pendingConfigChangesForSessionIntents(ordered).mode).toMatchObject({
+      value: "plan",
+      status: "submitting",
+    });
+  });
+
   it("preserves immutable queue seqs while reconciling a reorder event", () => {
     let state = emptyState();
     state = upsertSessionIntent(state, {

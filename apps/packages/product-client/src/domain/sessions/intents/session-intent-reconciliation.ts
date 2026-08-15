@@ -92,7 +92,13 @@ export function reconcileOutboxFromEnvelopes(
         if (
           intent.kind === "update_config"
           && intent.clientSessionId === clientSessionId
-          && (intent.status === "accepted" || intent.status === "dispatching" || intent.status === "queued")
+          // Never "queued": a not-yet-dispatched intent must survive echoes
+          // of earlier requests. Fast cycling wraps through repeated values,
+          // so an earlier request's echo can match a later click's value —
+          // terminating that click here silently drops it and the control
+          // reverts (PRO-261). "dispatching" stays reconcilable: that
+          // intent's own echo may legitimately beat its HTTP response.
+          && (intent.status === "accepted" || intent.status === "dispatching")
           && getAuthoritativeConfigValue(event.liveConfig, intent.configId) === intent.value
         ) {
           nextState = patchPromptOutboxEntry(nextState, intent.intentId, {
