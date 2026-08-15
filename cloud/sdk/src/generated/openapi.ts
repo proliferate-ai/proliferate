@@ -4693,6 +4693,20 @@ export interface components {
             /** Logourl */
             logoUrl: string | null;
         };
+        /**
+         * DesktopUpdaterCadence
+         * @description Optional desktop updater cadence overrides.
+         *
+         *     Both fields default to ``None``; the desktop keeps its baked defaults unless
+         *     a deployment sets them. Additive and tolerant — the desktop ignores absent
+         *     or malformed values.
+         */
+        DesktopUpdaterCadence: {
+            /** Checkintervalms */
+            checkIntervalMs?: number | null;
+            /** Stallthresholdms */
+            stallThresholdMs?: number | null;
+        };
         /** DesktopWorkerEnrollmentRequest */
         DesktopWorkerEnrollmentRequest: {
             /** Desktopinstallid */
@@ -5347,6 +5361,7 @@ export interface components {
             /** Mindesktopversion */
             minDesktopVersion: string;
             capabilities: components["schemas"]["ServerCapabilities"];
+            desktopUpdater?: components["schemas"]["DesktopUpdaterCadence"] | null;
         };
         /** OAuthAvailabilityResponse */
         OAuthAvailabilityResponse: {
