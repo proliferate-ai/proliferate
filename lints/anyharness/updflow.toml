@@ -21,7 +21,7 @@ owner = "anyharness"
 status = "holds"
 enforced_by = "scripts/check_update_flow_lints.py"
 mode = "lint"
-scope = "anyharness/crates/anyharness-lib/src/**"
+scope = "anyharness/crates/**"
 
 rule = """The non-atomic `generate_launcher_script` writer may only be called from inside integrations/agent_cli/launcher.rs itself, or from a call site whose enclosing function also promotes the written file through `ArchiveTreeActivation::activate_launcher` (a staged-write-then-journaled-promote, never a direct live write)."""
 alternative = """Call `generate_launcher_script_atomic`, or write to a staged sibling path and promote it through the same `ArchiveTreeActivation` the surrounding install already uses — never call the bare writer against a live launcher path."""

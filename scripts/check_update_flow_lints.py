@@ -74,6 +74,38 @@ def _relative(path: Path) -> str:
     return str(path.relative_to(REPO_ROOT))
 
 
+def _code_portion(line: str) -> str:
+    """The line with `//` comments and string-literal bodies removed.
+
+    Keeps the matchers from firing on prose that merely NAMES a banned call
+    (doc comments, log/format strings). Deliberately naive — no multi-line
+    strings or nested block comments — because rule matches inside those are
+    already adversarial-only, and this checker targets rustfmt-shaped code.
+    """
+    out: list[str] = []
+    in_str = False
+    i = 0
+    while i < len(line):
+        ch = line[i]
+        if in_str:
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == '"':
+                in_str = False
+            i += 1
+            continue
+        if ch == '"':
+            in_str = True
+            i += 1
+            continue
+        if ch == "/" and line[i : i + 2] == "//":
+            break
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
 def _brace_delta(line: str) -> int:
     # Good enough for this repo's formatting: braces inside string/char
     # literals in the lines we care about (fn signatures, call sites) are not
@@ -160,7 +192,7 @@ def check_launcher_writes() -> tuple[list[str], list[str]]:
             continue
         lines = text.splitlines()
         for idx, line in enumerate(lines):
-            if not LAUNCHER_CALL_RE.search(line):
+            if not LAUNCHER_CALL_RE.search(_code_portion(line)):
                 continue
             lineno = idx + 1
             fn_start, fn_end = _enclosing_fn_range(lines, lineno)
@@ -203,7 +235,7 @@ def check_catalog_construction() -> list[str]:
             continue  # whole file is test-only (declared behind #[cfg(test)])
         cfg_test_ranges = _cfg_test_ranges(lines)
         for idx, line in enumerate(lines):
-            match = CATALOG_CTOR_RE.search(line)
+            match = CATALOG_CTOR_RE.search(_code_portion(line))
             if not match:
                 continue
             lineno = idx + 1
