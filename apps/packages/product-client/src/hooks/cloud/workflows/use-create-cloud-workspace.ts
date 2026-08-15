@@ -48,6 +48,12 @@ interface CreateCloudWorkspaceAndEnterOptions {
   repoGroupKeyToExpand?: string | null;
   latencyFlowId?: string | null;
   initialSession?: PendingWorkspaceInitialSession | null;
+  /**
+   * A caller that has to name this attempt before it exists (Home, which scopes
+   * its launch intent to it) mints the id and passes it in; everyone else lets
+   * the flow mint its own.
+   */
+  attemptId?: string | null;
 }
 
 export type CloudWorkspaceEntryResult =
@@ -142,10 +148,11 @@ export function useCreateCloudWorkspace() {
     repoGroupKeyToExpand?: string | null;
     latencyFlowId?: string | null;
     initialSession?: PendingWorkspaceInitialSession | null;
+    attemptId?: string | null;
   }): Promise<CloudWorkspaceEntryResult> => {
     const startedAt = startLatencyTimer();
     const repoLabel = `${args.target.gitOwner}/${args.target.gitRepoName}`;
-    const attemptId = createPendingWorkspaceAttemptId();
+    const attemptId = args.attemptId ?? createPendingWorkspaceAttemptId();
     const cloudWorkspaces = getWorkspaceCollections()?.cloudWorkspaces ?? [];
     const knownBranchNames = collectKnownCloudBranchNames({
       target: args.target,
@@ -354,6 +361,7 @@ export function useCreateCloudWorkspace() {
       repoGroupKeyToExpand: options?.repoGroupKeyToExpand,
       latencyFlowId: options?.latencyFlowId,
       initialSession: options?.initialSession,
+      attemptId: options?.attemptId,
     });
   }, [runCloudWorkspaceCreateFlow]);
 

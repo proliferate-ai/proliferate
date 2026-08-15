@@ -186,7 +186,7 @@ function moveOutboxPromptsToRecovery(
 
 function clearLaunchIntent(launchIntentId: string | null | undefined): void {
   if (launchIntentId) {
-    useChatLaunchIntentStore.getState().clearIfActive(launchIntentId);
+    useChatLaunchIntentStore.getState().clear(launchIntentId);
   }
 }
 

@@ -73,4 +73,17 @@ describe("clearWorkspaceRuntimeState", () => {
     expect(state.pendingWorkspaces.attemptOrder).toEqual([]);
     expect(state.pendingWorkspaces.entriesByAttemptId).toEqual({});
   });
+
+  it("does not deselect when the cleared workspace is not the selected one", () => {
+    const clearSelection = vi.fn();
+
+    clearWorkspaceRuntimeState(
+      { removeWorkspaceSlots: vi.fn(), clearSelection },
+      "workspace-a",
+      { clearSelection: true },
+    );
+
+    expect(clearSelection).not.toHaveBeenCalled();
+    expect(useSessionSelectionStore.getState().selectedWorkspaceId).toBe("workspace-b");
+  });
 });

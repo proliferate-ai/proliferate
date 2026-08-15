@@ -36,8 +36,9 @@ export interface SidebarWorkspaceItemWithWorkspace {
 
 export function buildSidebarWorkspaceItems(args: {
   workspaces: LogicalWorkspace[];
-  pendingItem: SidebarWorkspaceItemState | null;
-  pendingOwnedWorkspaceId: string | null;
+  pendingItems: readonly SidebarWorkspaceItemState[];
+  /** Materialized ids owned by live pending attempts, from any repo group. */
+  pendingOwnedWorkspaceIds: ReadonlySet<string>;
   pinnedSet?: Set<string>;
   selectedLogicalWorkspaceId: string | null;
   selectedWorkspaceId: string | null;
@@ -64,11 +65,16 @@ export function buildSidebarWorkspaceItems(args: {
     buildSidebarWorkspaceItem(entry, { ...args, linkCandidateCloudWorkspaceIds })
   );
 
+  // Suppression runs whenever any attempt is live, not just when this group
+  // hosts a pending row: an attempt's materialized workspace can sort into a
+  // different repo group than its pending projection (PRO-230).
+  const hasPendingSuppression =
+    args.pendingItems.length > 0 || args.pendingOwnedWorkspaceIds.size > 0;
   return applyDuplicateLocalNameSuffixes(
-    args.pendingItem
+    hasPendingSuppression
       ? workspaceItemsWithWorkspace.filter(({ workspace, item }) =>
-        item.id !== args.pendingItem?.id
-        && !pendingOwnsLogicalWorkspace(args.pendingOwnedWorkspaceId, workspace)
+        !args.pendingItems.some((pendingItem) => pendingItem.id === item.id)
+        && !pendingOwnsLogicalWorkspace(args.pendingOwnedWorkspaceIds, workspace)
       )
       : workspaceItemsWithWorkspace,
   );
@@ -112,13 +118,15 @@ export function collectCloudWorkspaceLinkCandidates(
 }
 
 export function pendingOwnsLogicalWorkspace(
-  pendingWorkspaceId: string | null,
+  pendingWorkspaceIds: ReadonlySet<string>,
   workspace: LogicalWorkspace,
 ): boolean {
-  return Boolean(
-    pendingWorkspaceId
-    && logicalWorkspaceMatchesId(workspace, pendingWorkspaceId),
-  );
+  for (const pendingWorkspaceId of pendingWorkspaceIds) {
+    if (logicalWorkspaceMatchesId(workspace, pendingWorkspaceId)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function buildSidebarWorkspaceItem(

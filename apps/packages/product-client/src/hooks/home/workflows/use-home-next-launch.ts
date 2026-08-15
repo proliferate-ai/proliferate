@@ -4,23 +4,34 @@ import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-crea
 import { useHomeNextLaunchPromptActions } from "#product/hooks/home/workflows/use-home-next-launch-prompt-actions";
 import { useWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
-import type { HomeLaunchTarget, HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
+import type {
+  HomeLaunchTarget,
+  HomeNextLaunchOutcome,
+  HomeNextModelSelection,
+} from "#product/lib/domain/home/home-next-launch";
 import {
   createPendingWorkspaceAttemptId,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
+import {
+  launchSubmitFingerprint,
+  type LaunchSubmitFingerprint,
+} from "#product/lib/domain/workspaces/creation/launch-concurrency";
+import {
+  pendingWorkspaceFailureNoticeOwnsFailure,
+} from "#product/hooks/workspaces/workflows/pending-workspace-failure-notice";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useCoworkThreadLaunchContext } from "#product/providers/CoworkThreadLaunchProvider";
 import { launchHomeCloudTarget } from "#product/hooks/home/workflows/launch-home-cloud-target";
 import {
-  buildHomePendingWorkspaceInitialSession,
-  buildResolvedHomeLaunchControlValues,
+  beginHomeNextLaunch,
   describeHomeLaunchTarget,
   homeLaunchFailureRetryMode,
   homeNextLaunchErrorMessage,
   markHomeLaunchIntentMaterializedFromPendingWorkspace,
-  newHomeNextLaunchId,
+  resolveHomeNextLaunchRefusal,
 } from "#product/hooks/home/workflows/home-next-launch-intent";
 
 interface HomeNextLaunchInput {
@@ -34,16 +45,23 @@ interface HomeNextLaunchInput {
 // Owns the Home Next submit action. Does not own read-only selection state or deferred launch replay.
 export function useHomeNextLaunch() {
   const navigate = useNavigate();
-  const [isLaunching, setIsLaunching] = useState(false);
-  const inFlightRef = useRef(false);
+  // A count, not a flag: with several launches in flight the first one to
+  // settle used to clear the send spinner and re-enable Escape-to-clear while
+  // the others were still running (PRO-230 review nit).
+  const [launchingCount, setLaunchingCount] = useState(0);
+  // Was an in-flight lock, which refused every second launch. Now it only
+  // remembers the last submit, so the identical prompt sent twice in a
+  // keystroke still collapses into one launch while two different prompts
+  // start two (PRO-230).
+  const lastSubmitRef = useRef<LaunchSubmitFingerprint | null>(null);
   const showToast = useToastStore((state) => state.show);
   const showErrorToast = useToastStore((state) => state.showError);
   const enqueueDeferredLaunch = useDeferredHomeLaunchStore((state) => state.enqueue);
   const beginLaunchIntent = useChatLaunchIntentStore((state) => state.begin);
-  const clearLaunchIntentIfActive = useChatLaunchIntentStore((state) => state.clearIfActive);
-  const failLaunchIntentIfActive = useChatLaunchIntentStore((state) => state.failIfActive);
+  const clearLaunchIntent = useChatLaunchIntentStore((state) => state.clear);
+  const failLaunchIntent = useChatLaunchIntentStore((state) => state.fail);
   const markLaunchIntentMaterialized =
-    useChatLaunchIntentStore((state) => state.markMaterializedIfActive);
+    useChatLaunchIntentStore((state) => state.markMaterialized);
   const { desktopTargetsAvailable, createThreadFromSelection } =
     useCoworkThreadLaunchContext();
   const {
@@ -64,62 +82,37 @@ export function useHomeNextLaunch() {
     modeId,
     launchControlValues,
     target,
-  }: HomeNextLaunchInput): Promise<boolean> => {
+  }: HomeNextLaunchInput): Promise<HomeNextLaunchOutcome> => {
     const prompt = text.trim();
-    if (!prompt || inFlightRef.current) {
-      return false;
-    }
-    if (!desktopTargetsAvailable && target.kind !== "cloud") {
-      const message = target.kind === "cowork"
-        ? "Cowork threads are available in the Desktop app."
-        : "Local launch targets are available in the Desktop app.";
-      showToast(message, "info");
-      return false;
+    const submit = launchSubmitFingerprint(prompt, target, Date.now());
+    const refusal = resolveHomeNextLaunchRefusal({
+      prompt,
+      target,
+      submit,
+      lastSubmit: lastSubmitRef.current,
+      desktopTargetsAvailable,
+      pendingWorkspaces: useSessionSelectionStore.getState().pendingWorkspaces,
+    });
+    if (refusal) {
+      if (refusal.message) {
+        showToast(refusal.message, "info");
+      }
+      return refusal.outcome;
     }
 
-    inFlightRef.current = true;
-    setIsLaunching(true);
-    const launchIntentId = newHomeNextLaunchId();
-    const promptId = newHomeNextLaunchId();
-    const resolvedLaunchControlValues = buildResolvedHomeLaunchControlValues({
-      modeId,
-      launchControlValues,
-    });
-    const initialSession = buildHomePendingWorkspaceInitialSession({
+    lastSubmitRef.current = submit;
+    setLaunchingCount((count) => count + 1);
+    const {
+      launchIntentId,
+      promptId,
+      resolvedLaunchControlValues,
+      initialSession,
+    } = beginHomeNextLaunch(beginLaunchIntent, {
+      prompt,
       modelSelection,
       modeId,
-      launchControlValues: resolvedLaunchControlValues,
-    });
-    beginLaunchIntent({
-      id: launchIntentId,
-      catalogSnapshotId: null,
-      agentKind: modelSelection.kind,
-      modelId: modelSelection.modelId,
-      modeId,
-      launchControlValues: resolvedLaunchControlValues,
-      promptId,
-      queuedPromptBlocks: [{ type: "text", text: prompt }],
-      optimisticContentParts: [{ type: "text", text: prompt }],
-      text: prompt,
-      contentParts: [{ type: "text", text: prompt }],
-      targetKind: target.kind,
-      retryInput: {
-        text: prompt,
-        modelSelection,
-        modeId,
-        launchControlValues: resolvedLaunchControlValues,
-        target,
-      },
-      materializedWorkspaceId: null,
-      materializedSessionId: null,
-      // The pending-workspace attempt (if any) isn't created until after this
-      // intent begins; it gets threaded in once known via
-      // markHomeLaunchIntentMaterializedFromPendingWorkspace.
-      attemptId: null,
-      targetWorkspaceId: target.kind === "local" ? target.existingWorkspaceId : null,
-      createdAt: Date.now(),
-      sendAttemptedAt: null,
-      failure: null,
+      launchControlValues,
+      target,
     });
 
     // Minted per target branch below; the catch needs it to scope failure state
@@ -163,8 +156,8 @@ export function useHomeNextLaunch() {
           // The user dismissed the pending thread. Nothing failed, so the
           // launch stops quietly instead of raising a "not started" toast,
           // matching the local and worktree branches below.
-          clearLaunchIntentIfActive(launchIntentId);
-          return false;
+          clearLaunchIntent(launchIntentId);
+          return "not-started";
         }
         if (!queuedProjectedSessionId) {
           navigate("/");
@@ -185,8 +178,8 @@ export function useHomeNextLaunch() {
             launchIntentId,
           });
         }
-        clearLaunchIntentIfActive(launchIntentId);
-        return true;
+        clearLaunchIntent(launchIntentId);
+        return "launched";
       }
 
       if (target.kind === "local") {
@@ -225,8 +218,8 @@ export function useHomeNextLaunch() {
         if (createdWorkspacePromise && !createdWorkspace) {
           // The user dismissed the pending workspace. Nothing failed, so the
           // launch stops quietly instead of raising a "not started" toast.
-          clearLaunchIntentIfActive(launchIntentId);
-          return false;
+          clearLaunchIntent(launchIntentId);
+          return "not-started";
         }
         const workspaceId = target.existingWorkspaceId ?? createdWorkspace?.workspaceId;
         if (!workspaceId) {
@@ -259,8 +252,8 @@ export function useHomeNextLaunch() {
             allowFreshFallback: target.existingWorkspaceId !== null,
           });
         }
-        clearLaunchIntentIfActive(launchIntentId);
-        return true;
+        clearLaunchIntent(launchIntentId);
+        return "launched";
       }
 
       if (target.kind === "worktree") {
@@ -294,8 +287,8 @@ export function useHomeNextLaunch() {
         if (!createdWorkspace) {
           // The user dismissed the pending worktree. Nothing failed, so the
           // launch stops quietly instead of raising a "not started" toast.
-          clearLaunchIntentIfActive(launchIntentId);
-          return false;
+          clearLaunchIntent(launchIntentId);
+          return "not-started";
         }
         const { workspaceId, projectedSessionId: createdProjectedSessionId } = createdWorkspace;
         if (!queuedProjectedSessionId) {
@@ -319,12 +312,20 @@ export function useHomeNextLaunch() {
             allowFreshFallback: false,
           });
         }
-        clearLaunchIntentIfActive(launchIntentId);
-        return true;
+        clearLaunchIntent(launchIntentId);
+        return "launched";
       }
 
+      // The cloud branch mints its attempt id here like the other three rather
+      // than letting the cloud flow mint its own: without it the catch below
+      // had no attempt to scope this launch's failure to, and fell back to
+      // whatever attempt the user happened to be attending — which under
+      // concurrency is another launch's (PRO-230 review finding 1).
+      const cloudAttemptId = createPendingWorkspaceAttemptId();
+      launchAttemptId = cloudAttemptId;
       return await launchHomeCloudTarget({
         target,
+        attemptId: cloudAttemptId,
         prompt,
         promptId,
         launchIntentId,
@@ -338,34 +339,40 @@ export function useHomeNextLaunch() {
         promptProjectedPendingWorkspaceSession,
         promptProjectedOrCreateFreshSession,
         markLaunchIntentMaterialized,
-        clearLaunchIntentIfActive,
+        clearLaunchIntent,
         enqueueDeferredLaunch,
         navigate,
         showToast,
       });
     } catch (error) {
       markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId, launchAttemptId);
-      failLaunchIntentIfActive(launchIntentId, {
+      failLaunchIntent(launchIntentId, {
         message: homeNextLaunchErrorMessage(error),
         retryMode: homeLaunchFailureRetryMode(launchIntentId, launchAttemptId),
       });
       // No Retry here: the Home composer puts the prompt back in the editor
-      // when `launch` returns false, so the composer's own send button is the
-      // retry. A second entry point would leave a duplicate draft behind.
-      showErrorToast({
-        headline: "Work not started",
-        consequence:
-          `Nothing was started on ${describeHomeLaunchTarget(target)}. Your prompt is back in the composer.`,
-        cause: homeNextLaunchErrorMessage(error),
-      });
-      return false;
+      // when the launch does not start, so the composer's own send button is
+      // the retry. A second entry point would leave a duplicate draft behind.
+      //
+      // And no toast at all when the attempt's own failure notice already
+      // raised one: an unattended failure otherwise stacked two error toasts
+      // for one event, the second of which claims the prompt is back in a
+      // composer the user is not looking at (PRO-230 review finding 5).
+      if (!pendingWorkspaceFailureNoticeOwnsFailure(launchAttemptId)) {
+        showErrorToast({
+          headline: "Work not started",
+          consequence:
+            `Nothing was started on ${describeHomeLaunchTarget(target)}. Your prompt is back in the composer.`,
+          cause: homeNextLaunchErrorMessage(error),
+        });
+      }
+      return "not-started";
     } finally {
-      inFlightRef.current = false;
-      setIsLaunching(false);
+      setLaunchingCount((count) => count - 1);
     }
   }, [
     beginLaunchIntent,
-    clearLaunchIntentIfActive,
+    clearLaunchIntent,
     createCloudWorkspaceAndEnterWithResult,
     promptProjectedOrCreateFreshSession,
     promptProjectedPendingWorkspaceSession,
@@ -374,7 +381,7 @@ export function useHomeNextLaunch() {
     createWorktreeAndEnterWithResult,
     desktopTargetsAvailable,
     enqueueDeferredLaunch,
-    failLaunchIntentIfActive,
+    failLaunchIntent,
     markLaunchIntentMaterialized,
     navigate,
     promptExistingSession,
@@ -383,5 +390,5 @@ export function useHomeNextLaunch() {
     showToast,
   ]);
 
-  return { isLaunching, launch };
+  return { isLaunching: launchingCount > 0, launch };
 }

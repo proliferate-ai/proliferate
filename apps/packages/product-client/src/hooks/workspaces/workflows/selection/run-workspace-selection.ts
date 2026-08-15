@@ -8,6 +8,9 @@ import {
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import {
+  selectPendingWorkspaceAttempt,
+} from "#product/hooks/workspaces/workflows/pending-workspace-attempt-access";
+import {
   findLogicalWorkspace,
   logicalWorkspaceRelatedIds,
 } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
@@ -55,6 +58,15 @@ export async function runWorkspaceSelection(
   deps: WorkspaceSelectionDeps,
   request: WorkspaceSelectionRequest,
 ): Promise<void> {
+  if (selectPendingWorkspaceAttempt({
+    workspaceId: request.workspaceId,
+    force: request.options?.force,
+    latencyFlowId: request.options?.latencyFlowId,
+    initialActiveSessionId: request.options?.initialActiveSessionId,
+  })) {
+    return;
+  }
+
   const logicalWorkspace = findLogicalWorkspace(deps.logicalWorkspaces, request.workspaceId);
   if (!logicalWorkspace) {
     const targetWorkspace = parseTargetWorkspaceSyntheticId(request.workspaceId);

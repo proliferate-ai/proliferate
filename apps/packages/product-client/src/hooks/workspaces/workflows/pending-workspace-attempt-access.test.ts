@@ -9,6 +9,7 @@ import {
   pendingWorkspaceEntry,
 } from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 import {
+  enterPendingWorkspaceAttemptShell,
   getPendingWorkspaceEntry,
   isAttemptAttended,
   isAttemptLive,
@@ -74,6 +75,29 @@ describe("pending workspace attempt access", () => {
     });
     expect(pendingWorkspaceEntry(registry, "attempt-b")?.stage).toBe("submitting");
     expect(registry.attemptOrder).toEqual(["attempt-a", "attempt-b"]);
+  });
+  it("attends an unattended attempt without disturbing the others", () => {
+    // Clicking a pending sidebar row, or a failure toast's Show, lands here for
+    // an attempt the user is not currently watching (PRO-230).
+    useSessionSelectionStore.getState().setPendingWorkspaceEntry(entry("attempt-a"));
+    useSessionSelectionStore.getState().setPendingWorkspaceEntry(entry("attempt-b"));
+    useSessionSelectionStore.getState().activateWorkspace({
+      logicalWorkspaceId: "workspace-other",
+      workspaceId: "workspace-other",
+    });
+
+    expect(enterPendingWorkspaceAttemptShell("attempt-b")).toBe(true);
+
+    expect(isAttemptAttended("attempt-b")).toBe(true);
+    expect(useSessionSelectionStore.getState().selectedLogicalWorkspaceId)
+      .toBe(buildPendingWorkspaceUiKey({ attemptId: "attempt-b" }));
+    expect(useSessionSelectionStore.getState().pendingWorkspaces.attemptOrder)
+      .toEqual(["attempt-a", "attempt-b"]);
+  });
+
+  it("does nothing for an attempt that is already gone", () => {
+    expect(enterPendingWorkspaceAttemptShell("attempt-missing")).toBe(false);
+    expect(useSessionSelectionStore.getState().selectedLogicalWorkspaceId).toBeNull();
   });
 });
 

@@ -17,7 +17,7 @@ import { WorkspaceCreationReceipt } from "#product/components/workspace/chat/tra
 import { useChatLaunchIntentActions } from "#product/hooks/chat/workflows/use-chat-launch-intent-actions";
 import { resolveChatLaunchIntentView } from "#product/lib/domain/chat/launch/launch-intent";
 import { isReceiptPendingEntry } from "#product/lib/domain/workspaces/creation/creation-receipt";
-import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
+import { useShellLaunchIntent } from "#product/hooks/chat/derived/use-shell-launch-intent";
 import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { formatTranscriptActionTime } from "#product/domain/chats/transcript/transcript-action-time";
 
@@ -30,7 +30,7 @@ export function ChatLaunchIntentPane({
   bottomInsetPx,
   nonDisplacingBottomInsetPx,
 }: ChatLaunchIntentPaneProps) {
-  const activeIntent = useChatLaunchIntentStore((state) => state.activeIntent);
+  const activeIntent = useShellLaunchIntent();
   const {
     dismiss,
     isRetrying,

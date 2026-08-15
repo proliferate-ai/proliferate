@@ -72,7 +72,7 @@ export function materializeExistingSession({
   }
   upsertWorkspaceSessionRecord(workspaceId, existingSession);
   if (launchIntentId) {
-    useChatLaunchIntentStore.getState().markMaterializedIfActive(
+    useChatLaunchIntentStore.getState().markMaterialized(
       launchIntentId,
       {
         clientSessionId: pendingSessionId,

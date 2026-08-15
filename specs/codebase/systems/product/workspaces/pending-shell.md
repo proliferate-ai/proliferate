@@ -252,6 +252,16 @@ responses, and queued prompt edit/delete actions.
     use one check for both: that is the bug this split exists to prevent
     (PRO-230).
 
+11. Two launches can run at once, all the way down.
+    Every ledger a launch touches is keyed, never singular: pending attempts by
+    attempt id, launch intents by intent id. Each mutator names its own record
+    and a missing id is a no-op, so a second submit can neither replace the
+    first launch nor turn its later writes into silent no-ops. A shell resolves
+    which intent it shows by scope, not by asking for "the" intent. The only
+    ceiling is `MAX_CONCURRENT_PENDING_LAUNCHES`, which refuses the submit
+    outright rather than queueing it, and a same-prompt debounce that collapses
+    a repeated Enter (PRO-230).
+
 ## 5. State Ownership
 
 Use these owners. Do not introduce another general-purpose pending state owner.
@@ -536,8 +546,17 @@ projection path.
 
 ### Sidebar
 
-- The sidebar renders the attended entry, so it shows at most one pending row.
-  Unattended attempts run without a row of their own for now.
+- The sidebar renders every live attempt, so several pending rows may coexist.
+  A repo group can host more than one; within a group, pending rows come first
+  and follow launch order.
+- Cowork attempts are excluded from the repo groups and rendered by
+  `CoworkThreadsSection`, which likewise renders all of them, not just the
+  attended one.
+- A failed attempt keeps its row and carries an error indicator on it. The row
+  stays clickable: selecting it re-enters that attempt's pending shell, which
+  is the creation receipt with retry/back (Invariant 8). Selecting a
+  `pending-workspace:<attemptId>` key is a first-class selection path, not a
+  workspace lookup that happens to fail.
 - Use `buildPendingSidebarProjection(entry)` for pending rows.
 - The pending projection counts the entry's creation time as activity
   (`sortRecency.activityAt = createdAt`), so a new workspace sorts among
@@ -547,6 +566,14 @@ projection path.
   known and the selected workspace id matches the pending entry's workspace id,
   the pending projection may render with the real logical id.
 - Suppress the duplicate real item while the pending projection owns that id.
+  Suppression keys off `entry.workspaceId`, never off what the user has
+  selected, and applies in every repo group:
+  - An unattended attempt whose workspace has already landed in the
+    collections cache is still the owner of its row, and selection has nothing
+    to say about that.
+  - An attempt's materialized workspace can sort into a different group than
+    its pending projection, so a suppression scoped to the pending row's own
+    group misses it.
 - Keep the active row visible even if it is outside the collapsed/sidebar item
   limit.
 
@@ -729,14 +756,30 @@ Rules:
 
 Pending failures must preserve enough state to retry or exit cleanly:
 
-- the pending workspace entry remains selected
+- the pending workspace entry remains selected when the user was attending it
+- a failure the user was not attending never renders over another shell:
+  - the sidebar row carries the error indicator until the attempt is dismissed
+  - one toast per attempt announces it, with a Show action that re-enters that
+    attempt's pending shell
+  - an attended failure keeps the inline presentation only, and an unattended
+    one suppresses the launch-level "work not started" toast, so one failure is
+    announced once either way
 - queued session intents remain visible and owned by the projected session
 - setup/create errors render in the workspace status panel
 - retry uses the original deterministic request unless the user explicitly
   changes it
 - back/abort clears that attempt's pending state and does not persist the
   pending workspace key; it is the explicit dismissal, since switching
-  workspaces no longer ends an attempt
+  workspaces no longer ends an attempt. It clears exactly one attempt and the
+  launch intent linked to it, and leaves the other attempts running: the
+  full-registry reset belongs to app-level paths (sign-out) only
+- a retry of a failed create replaces the attempt: the replacement starts first,
+  then the failed entry and its launch intent are dropped, so the sidebar swaps
+  one row for another instead of keeping both
+- failed attempts are swept on an hourly interval, and on mount, once they are
+  older than a day, so an ignored failure does not accumulate a row for the rest
+  of the session. The registry is in-memory, so app start is never when a stale
+  row is found
 - an interrupted empty-session create remains resumable under its original
   client id and runtime UUID until the runtime acknowledges that create
 - a cloud attempt left at `awaiting-cloud-ready` while the user is looking
@@ -762,6 +805,24 @@ Minimum coverage by concern:
 - model selector: projected session labels match final labels
 - sidebar: pending row before materialization, handoff to real logical id, no
   duplicate item, active row visible under item limits
+- sidebar with several launches: one row per attempt within a group and across
+  groups, a failed row carrying its error indicator, and exactly one row for an
+  unattended attempt whose real workspace has already landed, including when
+  that workspace sorts into a different group
+- launch intent registry: two intents coexist, every mutator targets one intent
+  by id, a second `begin` leaves the first intent's fields verbatim, and
+  `resolveLaunchIntentForShell` gives each shell its own intent (scoped beats
+  unscoped, unscoped matches only an empty shell)
+- two concurrent launches end to end: both intents live at once, both finalize,
+  each prompt routed to its own attempt's projected session, and both entries
+  cleared
+- per-attempt dismissal: back clears that attempt and its linked launch intent
+  and leaves the others running
+- unattended failure: one toast with a Show action, an attended failure with no
+  toast, and no global pane over the other launch's shell
+- launch cap and debounce: the launch past the cap is refused with a toast and
+  no intent, the same prompt submitted twice starts one launch, and two
+  different prompts start two
 - finalization: projected sessions materialize before pending state clears
 - switching away mid-launch: the launch still materializes the workspace, sends
   its first prompt, and clears its own entry, without throwing, force-selecting,

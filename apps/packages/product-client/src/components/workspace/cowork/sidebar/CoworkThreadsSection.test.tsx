@@ -225,8 +225,6 @@ describe("CoworkThreadsSection", () => {
         },
       },
     });
-    // The row renders because this is the attempt the user is attending: the
-    // sidebar shows the attended entry, not every in-flight attempt.
     useSessionSelectionStore.setState({
       pendingWorkspaces: registryOf({
         ...pendingEntry,
@@ -385,8 +383,51 @@ describe("CoworkThreadsSection", () => {
     expect(screen.getByTestId("status-error")).not.toBeNull();
     expect(screen.queryByText("No chats yet")).toBeNull();
   });
+
+  it("renders every cowork attempt, including the ones nobody is watching", () => {
+    const attended = coworkEntry("attempt-attended", "Watched chat");
+    const unattended = coworkEntry("attempt-unattended", "Background chat");
+    const failedUnattended = {
+      ...coworkEntry("attempt-failed-unattended", "Broken chat"),
+      stage: "failed" as const,
+      errorMessage: "Couldn't create chat",
+    };
+    useSessionSelectionStore.setState({
+      pendingWorkspaces: registryOf(attended, unattended, failedUnattended),
+      selectedLogicalWorkspaceId: buildPendingWorkspaceUiKey(attended),
+    });
+
+    render(<CoworkThreadsSection />);
+
+    const rows = screen.getAllByTestId("thread-row");
+    expect(rows).toHaveLength(3);
+    expect(rows.map((row) => row.getAttribute("data-active")))
+      .toEqual(["true", "false", "false"]);
+    expect(screen.getByText("Background chat")).not.toBeNull();
+    // The failure belongs to its own row: it does not take over the section,
+    // and the other two attempts keep their spinners.
+    expect(screen.getAllByTestId("status-iterating")).toHaveLength(2);
+    expect(screen.getAllByTestId("status-error")).toHaveLength(1);
+  });
 });
 
-function registryOf(entry: PendingWorkspaceEntry): PendingWorkspaceRegistry {
-  return upsertPendingWorkspaceEntry(EMPTY_PENDING_WORKSPACE_REGISTRY, entry);
+function coworkEntry(attemptId: string, displayName: string): PendingWorkspaceEntry {
+  return buildSubmittingPendingWorkspaceEntry({
+    attemptId,
+    selectedWorkspaceId: null,
+    source: "cowork-created",
+    displayName,
+    request: {
+      kind: "cowork",
+      input: {
+        agentKind: "claude",
+        modelId: "sonnet",
+        sourceWorkspaceId: null,
+      },
+    },
+  });
+}
+
+function registryOf(...entries: PendingWorkspaceEntry[]): PendingWorkspaceRegistry {
+  return entries.reduce(upsertPendingWorkspaceEntry, EMPTY_PENDING_WORKSPACE_REGISTRY);
 }

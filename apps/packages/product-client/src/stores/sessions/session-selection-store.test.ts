@@ -215,6 +215,27 @@ describe("session selection store invariants", () => {
       .toBe(EMPTY_PENDING_WORKSPACE_REGISTRY);
   });
 
+  it("keeps every attempt when the reset is scoped to one workspace", () => {
+    // Retiring a workspace, or dismissing one attempt, routes through
+    // `clearSelection` to deselect. Dropping the registry there would abort
+    // every other launch in flight (PRO-230).
+    const registry = registryOf(
+      pendingWorkspaceEntry("attempt-a"),
+      pendingWorkspaceEntry("attempt-b"),
+    );
+    useSessionSelectionStore.setState({
+      pendingWorkspaces: registry,
+      selectedWorkspaceId: "workspace-a",
+      selectedLogicalWorkspaceId: "logical-a",
+    });
+
+    useSessionSelectionStore.getState().clearSelection({ preservePendingWorkspaces: true });
+
+    expect(useSessionSelectionStore.getState().pendingWorkspaces).toBe(registry);
+    expect(useSessionSelectionStore.getState().selectedWorkspaceId).toBeNull();
+    expect(useSessionSelectionStore.getState().selectedLogicalWorkspaceId).toBeNull();
+  });
+
   it("keeps inline recovery when the retained shell is reactivated", () => {
     useSessionSelectionStore.setState({
       workspaceSessionRecovery: {

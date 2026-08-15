@@ -35,6 +35,9 @@ import {
   isAttemptLive,
   patchAttempt,
 } from "#product/hooks/workspaces/workflows/pending-workspace-attempt-access";
+import {
+  notifyUnattendedPendingWorkspaceFailure,
+} from "#product/hooks/workspaces/workflows/pending-workspace-failure-notice";
 import type {
   WorkspaceEntryFinalizationResult,
 } from "#product/hooks/workspaces/workflows/workspace-entry-finalization";
@@ -252,6 +255,7 @@ export function useWorkspaceEntryFlow() {
       request: overrides?.request ?? entry.request,
       setupScript: overrides?.setupScript ?? entry.setupScript,
     });
+    notifyUnattendedPendingWorkspaceFailure(entry, errorMessage);
   }, []);
 
   const selectWorkspaceWithArrival = useCallback(async (input: {

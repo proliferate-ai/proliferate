@@ -4,7 +4,6 @@ import type {
   HomeNextModelSelection,
 } from "#product/lib/domain/home/home-next-launch";
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
-import { buildPendingWorkspaceUiKey } from "#product/lib/domain/workspaces/creation/pending-entry";
 import type { DesktopAgentLaunchAgent } from "#product/lib/domain/agents/cloud-launch-catalog";
 
 export type ChatLaunchTargetKind = HomeLaunchTarget["kind"];
@@ -63,27 +62,14 @@ export interface ChatLaunchIntent {
   failure: ChatLaunchIntentFailure | null;
 }
 
-/** The workspace UI identities a launch intent is allowed to own the surface of. */
-export interface LaunchIntentScope {
-  pendingUiKey: string | null;
-  workspaceId: string | null;
-}
-
-/**
- * An intent only owns the launch-intent pane / shell for its own workspace.
- * Before anything materializes, that scope is the pending-workspace UI key of
- * its own attempt; once a workspace is targeted or materialized, it is that
- * workspace's id. A `null` scope in both fields means the intent has not
- * attached to any workspace yet (the Home first-paint window).
- */
-export function resolveLaunchIntentScope(intent: ChatLaunchIntent): LaunchIntentScope {
-  return {
-    pendingUiKey: intent.attemptId
-      ? buildPendingWorkspaceUiKey({ attemptId: intent.attemptId })
-      : null,
-    workspaceId: intent.materializedWorkspaceId ?? intent.targetWorkspaceId,
-  };
-}
+// Shell-ownership resolution lives in its own module so the launch-intent
+// registry — reachable from the signed-out shell's eager graph — does not drag
+// this file's view-model work into the login first-load chunk (PRO-230).
+export {
+  launchIntentOwnsShell,
+  resolveLaunchIntentScope,
+  type LaunchIntentScope,
+} from "#product/lib/domain/chat/launch/launch-intent-scope";
 
 export interface ChatLaunchIntentViewModel {
   title: string;
