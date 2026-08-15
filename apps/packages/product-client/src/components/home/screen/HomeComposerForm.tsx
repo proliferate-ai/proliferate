@@ -184,7 +184,7 @@ export function HomeComposerForm({
               from shifting while a menu opens. */}
           <div
             ref={setComposerOverlayHost}
-            className="absolute inset-x-0 bottom-full z-20 flex flex-col"
+            className="absolute inset-x-0 bottom-full z-popover flex flex-col"
           />
           <ChatComposerSurface
             onPasteCapture={handleFilePasteCapture}
