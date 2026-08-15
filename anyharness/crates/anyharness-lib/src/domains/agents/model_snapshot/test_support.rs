@@ -225,6 +225,8 @@ impl GatewayModelResolve for CountingPlanProducer {
 pub(crate) enum FakeBehavior {
     Ok,
     Fail(String),
+    /// Fast-fail as a spawn failure — the harness binary could not be started.
+    Spawn(String),
     /// Sleep this long before answering — used with a paused clock to exercise the
     /// timeout path deterministically.
     Sleep(Duration),
@@ -319,6 +321,7 @@ impl ProbeRunner for FakeRunner {
                 &self.models.lock().expect("models poisoned"),
             )),
             FakeBehavior::Fail(detail) => Err(ProbeError::Failed { detail }),
+            FakeBehavior::Spawn(detail) => Err(ProbeError::Spawn { detail }),
             FakeBehavior::Sleep(duration) => {
                 match tokio::time::timeout(request.per_probe_timeout, tokio::time::sleep(duration))
                     .await

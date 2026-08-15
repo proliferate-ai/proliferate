@@ -36,6 +36,9 @@ import { measureDebugComputation } from "#product/lib/infra/measurement/measurem
 interface UseWorkspaceSidebarStateArgs {
   showArchived: boolean;
   repoConfigs?: readonly RepoConfigResponse[];
+  /** Whether Cloud compute is enabled on this deployment (PRO-10); gates the
+   * `add-cloud-copy` availability command. */
+  cloudComputeEnabled: boolean;
 }
 
 interface WorkspaceSidebarState {
@@ -55,6 +58,7 @@ const EMPTY_LAST_VIEWED_SESSION_ERROR_AT_BY_SESSION: Record<string, string> = {}
 export function useWorkspaceSidebarState({
   repoConfigs = [],
   showArchived,
+  cloudComputeEnabled,
 }: UseWorkspaceSidebarStateArgs): WorkspaceSidebarState {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
@@ -196,8 +200,10 @@ export function useWorkspaceSidebarState({
       sessionLastViewedAt,
       suppressActiveNeedsReview: windowFocused,
       desktopInstallId,
+      cloudComputeEnabled,
     })), [
     activeSessionTitle,
+    cloudComputeEnabled,
     desktopInstallId,
     gitStatus,
     gitStatusesByLogicalId,

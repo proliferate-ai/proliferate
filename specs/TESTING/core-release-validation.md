@@ -321,7 +321,7 @@ blocked when the developer intentionally omits Stripe.
 
 | ID | Required validation |
 | --- | --- |
-| `T2-WF-1` | UI definition creation/edit, immutable versions, live reference validation, input coercion/interpolation, manual launch, and local/cloud delivery intent. |
+| `T2-WF-1` | UI definition creation/edit, immutable versions, live reference validation, input coercion/interpolation, manual launch, and local/cloud delivery intent. The current collector (`tests/intent/specs/workflow-runs.spec.ts`) drives the gen-1 shape; the new tier-2 seam spec `workflow-trigger-seam.spec.ts` covers the gen-2 builder equivalent instead (see `specs/TESTING/scenarios.md#T2-WF-1`). |
 | `T2-WF-2` | Poll item deduplication, invalid item reporting, cursor advancement only after scheduling, replay safety, dead endpoint behavior, and enabled-state truth. |
 | `T2-WF-3` | Function invocation CRUD, args schema, reserved namespace, write-only headers, rotation, and endpoint validation. |
 | `T2-WF-4` | Chat/workflow default-access authoring composes to the frozen provider/tool scope carried by a run. |
@@ -489,7 +489,7 @@ upstream calls, never by agent prose.
 
 | ID | Required validation |
 | --- | --- |
-| `T3-WF-1` | UI author/launch, strict emit schema, corrective retry, deterministic branch, and required-invocation receipt reach a terminal run. |
+| `T3-WF-1` | UI author/launch, strict emit schema, corrective retry, deterministic branch, and required-invocation receipt reach a terminal run. PR7 additionally authors and registers a narrower two-node research/human-review reference run against the frozen gen-2 ADR contract (`tests/release/src/scenarios/t3-wf-1.ts`); it is not executed until the parallel Rust routes land in PR5a (Lane R). |
 | `T3-WF-2` | Allowed function call captures schema-valid arguments once; denied call records scope denial and makes zero upstream requests. |
 | `T3-WF-3` | Connected-but-ungranted integration is absent from listing, forced call is denied, and zero provider traffic occurs. |
 | `T3-WF-4` | Sequential slot reuse and parallel dirty-state fork/lane work/merge/join preserve lane-qualified state and downstream visibility. |

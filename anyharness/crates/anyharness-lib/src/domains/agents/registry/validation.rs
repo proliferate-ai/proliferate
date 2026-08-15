@@ -55,7 +55,102 @@ fn validate_agent(
         );
     }
     validate_auth(&agent.kind, &agent.auth)?;
+    validate_self_update_neutralization(&agent.kind, &agent.self_update_neutralization)?;
+    validate_agent_process_install(&agent.kind, &agent.agent_process.install)?;
     validate_provider_config(&agent.kind, &agent.provider_config)
+}
+
+fn validate_agent_process_install(
+    agent_kind: &str,
+    install: &crate::domains::agents::registry::schema::AgentRegistryAgentProcessInstall,
+) -> anyhow::Result<()> {
+    use crate::domains::agents::registry::schema::AgentRegistryAgentProcessInstall;
+    // Only the additive direct_archive kind carries integrity fields the schema
+    // cannot fully constrain; the other kinds are validated at projection time.
+    if let AgentRegistryAgentProcessInstall::DirectArchive { platforms, .. } = install {
+        if platforms.is_empty() {
+            anyhow::bail!(
+                "agent registry agent '{agent_kind}' direct_archive declares no platforms"
+            );
+        }
+        for (platform, target) in platforms {
+            if target.url.trim().is_empty() {
+                anyhow::bail!(
+                    "agent registry agent '{agent_kind}' direct_archive platform '{platform}' has an empty url"
+                );
+            }
+            if target.expected_binary.trim().is_empty() {
+                anyhow::bail!(
+                    "agent registry agent '{agent_kind}' direct_archive platform '{platform}' has an empty expectedBinary"
+                );
+            }
+            // expectedBinary is joined under the extracted tree and exec'd by
+            // the launcher; keep it strictly tree-relative.
+            let binary = std::path::Path::new(target.expected_binary.trim());
+            if binary.is_absolute()
+                || binary
+                    .components()
+                    .any(|c| !matches!(c, std::path::Component::Normal(_)))
+            {
+                anyhow::bail!(
+                    "agent registry agent '{agent_kind}' direct_archive platform '{platform}' expectedBinary must be a relative path without '..' components"
+                );
+            }
+            let sha = target.sha256.trim();
+            if sha.len() != 64 || !sha.chars().all(|c| c.is_ascii_hexdigit()) {
+                anyhow::bail!(
+                    "agent registry agent '{agent_kind}' direct_archive platform '{platform}' sha256 must be 64 hex chars"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+const VALID_SELF_UPDATE_MECHANISMS: &[&str] = &["env", "none_found", "not_applicable"];
+
+fn validate_self_update_neutralization(
+    agent_kind: &str,
+    neutralization: &crate::domains::agents::registry::schema::AgentRegistrySelfUpdateNeutralization,
+) -> anyhow::Result<()> {
+    if !VALID_SELF_UPDATE_MECHANISMS.contains(&neutralization.mechanism.as_str()) {
+        anyhow::bail!(
+            "agent registry agent '{}' selfUpdateNeutralization mechanism '{}' is not supported",
+            agent_kind,
+            neutralization.mechanism
+        );
+    }
+    if neutralization.detail.trim().is_empty() {
+        anyhow::bail!(
+            "agent registry agent '{}' selfUpdateNeutralization detail is empty",
+            agent_kind
+        );
+    }
+    // An `env` mechanism must actually declare at least one var to inject;
+    // non-env mechanisms must not carry env vars (they document a finding).
+    if neutralization.mechanism == "env" {
+        if neutralization.env.is_empty() {
+            anyhow::bail!(
+                "agent registry agent '{}' selfUpdateNeutralization mechanism 'env' declares no env vars",
+                agent_kind
+            );
+        }
+        for var in &neutralization.env {
+            if var.name.trim().is_empty() {
+                anyhow::bail!(
+                    "agent registry agent '{}' selfUpdateNeutralization env var name is empty",
+                    agent_kind
+                );
+            }
+        }
+    } else if !neutralization.env.is_empty() {
+        anyhow::bail!(
+            "agent registry agent '{}' selfUpdateNeutralization mechanism '{}' must not declare env vars",
+            agent_kind,
+            neutralization.mechanism
+        );
+    }
+    Ok(())
 }
 
 fn validate_provider_config(
@@ -258,154 +353,5 @@ fn validate_auth(agent_kind: &str, auth: &AgentRegistryAuth) -> anyhow::Result<(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::domains::agents::registry::bundled::bundled_agent_registry_document;
-    use crate::domains::agents::registry::schema::AgentRegistryAuthSlotEnvVar;
-
-    #[test]
-    fn registry_rejects_duplicate_env_var_names() {
-        let mut registry = bundled_agent_registry_document().clone();
-        let slot = &mut registry.agents[0].auth.slots[0];
-        slot.env_vars.push(AgentRegistryAuthSlotEnvVar::Name(
-            "ANTHROPIC_API_KEY".to_string(),
-        ));
-
-        let error =
-            validate_agent_registry_document(&registry).expect_err("duplicate env var must fail");
-
-        assert!(
-            error
-                .to_string()
-                .contains("env var 'ANTHROPIC_API_KEY' is duplicated"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
-    fn registry_rejects_empty_discovery_kind() {
-        let mut registry = bundled_agent_registry_document().clone();
-        registry.agents[0].auth.slots[0]
-            .discovery_kinds
-            .push("  ".to_string());
-
-        let error = validate_agent_registry_document(&registry)
-            .expect_err("empty discovery kind must fail");
-
-        assert!(
-            error.to_string().contains("has empty discovery kind"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
-    fn bundled_registry_provider_config_validates() {
-        // The bundled document's claude/codex/opencode providerConfig blocks
-        // must already pass — this pins that Track D's declarations are
-        // valid, not just parseable.
-        validate_agent_registry_document(bundled_agent_registry_document())
-            .expect("bundled registry with providerConfig must validate");
-    }
-
-    #[test]
-    fn registry_rejects_unsupported_provider_config_kind() {
-        use crate::domains::agents::registry::schema::AgentRegistryProviderConfig;
-
-        let mut registry = bundled_agent_registry_document().clone();
-        registry.agents[0]
-            .provider_config
-            .push(AgentRegistryProviderConfig {
-                kind: "google_vertex".to_string(),
-                label: "Google Vertex".to_string(),
-                env_vars: vec![AgentRegistryAuthSlotEnvVar::Name(
-                    "ANTHROPIC_VERTEX_PROJECT_ID".to_string(),
-                )],
-                pending: false,
-                pending_reason: None,
-            });
-
-        let error = validate_agent_registry_document(&registry)
-            .expect_err("unsupported providerConfig kind must fail");
-
-        assert!(
-            error
-                .to_string()
-                .contains("providerConfig kind 'google_vertex' is not supported"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
-    fn registry_rejects_duplicate_provider_config_kind() {
-        use crate::domains::agents::registry::schema::AgentRegistryProviderConfig;
-
-        let mut registry = bundled_agent_registry_document().clone();
-        let duplicate = registry.agents[0].provider_config[0].clone();
-        registry.agents[0]
-            .provider_config
-            .push(AgentRegistryProviderConfig {
-                kind: duplicate.kind.clone(),
-                label: duplicate.label.clone(),
-                env_vars: duplicate.env_vars.clone(),
-                pending: duplicate.pending,
-                pending_reason: duplicate.pending_reason.clone(),
-            });
-
-        let error = validate_agent_registry_document(&registry)
-            .expect_err("duplicate providerConfig kind must fail");
-
-        assert!(
-            error.to_string().contains("is duplicated"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
-    fn registry_rejects_provider_config_with_no_env_vars() {
-        use crate::domains::agents::registry::schema::AgentRegistryProviderConfig;
-
-        let mut registry = bundled_agent_registry_document().clone();
-        registry.agents[0].provider_config = vec![AgentRegistryProviderConfig {
-            kind: "aws_bedrock".to_string(),
-            label: "AWS Bedrock".to_string(),
-            env_vars: vec![],
-            pending: false,
-            pending_reason: None,
-        }];
-
-        let error = validate_agent_registry_document(&registry)
-            .expect_err("providerConfig with no env vars must fail");
-
-        assert!(
-            error.to_string().contains("has no env vars"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
-    fn registry_rejects_provider_config_duplicate_env_var() {
-        use crate::domains::agents::registry::schema::AgentRegistryProviderConfig;
-
-        let mut registry = bundled_agent_registry_document().clone();
-        registry.agents[0].provider_config = vec![AgentRegistryProviderConfig {
-            kind: "aws_bedrock".to_string(),
-            label: "AWS Bedrock".to_string(),
-            env_vars: vec![
-                AgentRegistryAuthSlotEnvVar::Name("AWS_REGION".to_string()),
-                AgentRegistryAuthSlotEnvVar::Name("AWS_REGION".to_string()),
-            ],
-            pending: false,
-            pending_reason: None,
-        }];
-
-        let error = validate_agent_registry_document(&registry)
-            .expect_err("duplicate providerConfig env var must fail");
-
-        assert!(
-            error
-                .to_string()
-                .contains("env var 'AWS_REGION' is duplicated"),
-            "unexpected error: {error}"
-        );
-    }
-}
+#[path = "validation_tests.rs"]
+mod tests;

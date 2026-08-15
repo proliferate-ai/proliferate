@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { motion } from "@proliferate/design/motion";
 import { Button } from "#product/primitives/Button";
 import { Check, Copy } from "#product/primitives/icons/core";
+import { useChainedVerticalWheel } from "#product/primitives/utils/use-chained-vertical-wheel";
 
 /**
  * Code block card: bordered rounded shell with a header carrying
@@ -19,6 +20,7 @@ export function MarkdownCodeBlockShell({
   children?: ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
+  const handleContentWheel = useChainedVerticalWheel();
 
   function copyCode() {
     void writeClipboardText(code)
@@ -57,7 +59,8 @@ export function MarkdownCodeBlockShell({
         </Button>
       </div>
       <div
-        className="overflow-x-auto overflow-y-auto p-3 font-mono text-chat font-normal [&_pre]:!m-0 [&_pre]:!p-0 [&_pre]:!bg-transparent [&_code]:text-chat"
+        onWheel={handleContentWheel}
+        className="overscroll-none overflow-x-auto overflow-y-auto p-3 font-mono text-chat font-normal [&_pre]:!m-0 [&_pre]:!p-0 [&_pre]:!bg-transparent [&_code]:text-chat"
         data-markdown-code-content="true"
       >
         {children ?? (

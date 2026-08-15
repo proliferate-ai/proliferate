@@ -240,6 +240,27 @@ Important install cases:
   reinstall do it on demand. The version + source come from the bundled
   catalog lockfile, resolved at probe time by
   `scripts/agent-catalog/resolve-pins.mjs`
+- every LIVE managed launcher write is staged-then-atomically-renamed, never
+  written in place: `generate_launcher_script_atomic`
+  (`integrations/agent_cli/launcher.rs`) writes a `.{name}.next` sibling, marks
+  it executable, and renames it over the live launcher, keeping a transient
+  `.{name}.previous` so a failed promotion restores the prior launcher. The
+  npm/git adapter path and the seed launcher-regeneration path both go through
+  it; the archive-adapter path stages equivalently via
+  `ArchiveTreeActivation::activate_launcher`. A running managed session keeps
+  its old launcher inode open across the rename (POSIX semantics) — no kills,
+  no waiting
+- the managed launcher's env is data-driven from the registry's per-harness
+  `selfUpdateNeutralization` record (`managed_launcher_env` in
+  `installer/agent_process.rs`): an `env` mechanism injects each declared var,
+  `none_found`/`not_applicable` inject nothing. This is why managed Claude
+  launchers carry `DISABLE_AUTOUPDATER=1` — it is registry data, not a
+  hardcoded per-kind rule
+- a terminal install failure is classified: `InstallError::kind()`
+  (`installer/service.rs`) yields `InstallErrorKind` `{ network, checksum,
+  in_use, disk, other }`, carried additively on
+  `AgentReconcileResult.failure_kind` and surfaced as the contract's
+  `ReconcileAgentResult.failureKind` so the failure toast can name the cause
 - installer mutations are serialized by runtime-home file locks under
   `agents/<kind>/.install.lock` so desktop, CLI, and seed hydration do not
   write the same agent at the same time
@@ -423,8 +444,10 @@ The seed archive intentionally does not carry generated launchers. After
 hydration, the runtime regenerates launchers in the real runtime home so their
 absolute executable paths and PATH prefixes point at the final location. The
 generated launchers include the managed native CLI directory and the bundled
-Node `bin` directory when present. Managed Claude launchers set
-`DISABLE_AUTOUPDATER=1` so desktop releases, not Claude's own updater, own the
+Node `bin` directory when present, and are written through the staged-atomic
+promotion helper. Their env comes from the registry's per-harness
+`selfUpdateNeutralization` record, which is why managed Claude launchers set
+`DISABLE_AUTOUPDATER=1` — so desktop releases, not Claude's own updater, own the
 managed seeded version.
 
 Hydration is ownership-aware:

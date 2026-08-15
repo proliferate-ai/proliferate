@@ -102,6 +102,8 @@ async fn bounded_terminal_retry_runs_status_and_finish_callback_exactly_once() {
                     on_turn_finish: Some(Arc::new(move |_| {
                         callback_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     })),
+                    on_interaction_requested: None,
+                    on_interaction_resolved: None,
                     on_exit: None,
                 },
                 caps,
@@ -332,6 +334,8 @@ async fn runtime_close_preserves_partial_output_and_records_cancelled_completion
                         error_details: result.error_details,
                     });
                 })),
+                on_interaction_requested: None,
+                on_interaction_resolved: None,
                 on_exit: None,
             };
             let attempts = Arc::new(std::sync::atomic::AtomicUsize::new(0));

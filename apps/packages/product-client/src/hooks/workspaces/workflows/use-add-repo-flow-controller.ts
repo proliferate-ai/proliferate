@@ -128,10 +128,12 @@ export function useAddRepoFlowController({
     onClose,
   ]);
 
-  // Host-truthful options: only Desktop can register an existing local folder
-  // or clone locally; Web offers only the managed-Cloud setup.
+  // Host-capability gating (ADR Q3 / FM8): Desktop only ever offers its local
+  // options and NEVER cloud (the cloud workspace surface is culled from
+  // desktop). Web has no local file bridge, so it keeps the managed-Cloud setup
+  // as its sole option — never returning an empty list.
   const options = useMemo<AddRepoFlowOption[]>(
-    () => (files ? ["add-existing-folder", "clone-from-github", "cloud"] : ["cloud"]),
+    () => (files ? ["add-existing-folder", "clone-from-github"] : ["cloud"]),
     [files],
   );
 

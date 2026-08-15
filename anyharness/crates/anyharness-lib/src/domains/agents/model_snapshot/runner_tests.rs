@@ -92,7 +92,6 @@ fn request(home: &TempRuntimeHome, timeout: Duration) -> ProbeRequest {
         },
         runtime_home: home.path().to_path_buf(),
         per_probe_timeout: timeout,
-        model_switch_timeout: Duration::from_secs(1),
     }
 }
 

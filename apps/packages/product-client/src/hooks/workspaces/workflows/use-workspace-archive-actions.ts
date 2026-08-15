@@ -42,6 +42,11 @@ const ARCHIVE_SETTLE_TIMEOUT_MS = motion.delay.optimisticSettleTimeoutMs;
  * (via `isError`) because it is one. */
 const BUSY_TOAST_DURATION_MS = 6_000;
 
+/** T1/T2 success toasts auto-dismiss: Undo and the View links are expiring
+ * conveniences, not decisions the toast must hold open — the archived page
+ * keeps both affordances available after the toast is gone. */
+const SUCCESS_TOAST_DURATION_MS = 10_000;
+
 export interface UnarchiveScenarioState {
   workspaceId: string;
   workspaceName: string;
@@ -268,6 +273,7 @@ export function useWorkspaceArchiveActions() {
     showToast({
       weight: "announcement",
       tone: "success",
+      duration: SUCCESS_TOAST_DURATION_MS,
       title: ARCHIVE_TOAST_COPY.archiveSuccessTitle(name),
       description: archiveNoticeDescription(noticeKinds),
       secondary: {
@@ -394,6 +400,7 @@ export function useWorkspaceArchiveActions() {
       showToast({
         weight: "announcement",
         tone: "success",
+        duration: SUCCESS_TOAST_DURATION_MS,
         title: ARCHIVE_TOAST_COPY.unarchiveSuccessTitle(name),
         description: unarchiveNoticeDescription(noticeKinds),
         commit: {

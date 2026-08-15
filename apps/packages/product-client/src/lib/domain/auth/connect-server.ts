@@ -65,6 +65,24 @@ export interface ServerMeta {
   runtimeVersion: string;
   workerVersion: string;
   minDesktopVersion: string;
+  /**
+   * Explicit operator opt-in to hard-block clients below `minDesktopVersion`.
+   * Optional (not asserted by `isServerMetaShape`): older servers (pre-rung-4)
+   * omit this field entirely. Always read through
+   * `readMinDesktopVersionEnforced`, never accessed directly, so a missing or
+   * malformed value fails open to "not enforced" rather than reading as
+   * `undefined`-is-truthy or throwing.
+   */
+  minDesktopVersionEnforced?: unknown;
+  /**
+   * Additive, optional desktop updater cadence overrides. Absent on servers
+   * that never configured them; consumed tolerantly (a garbage value is
+   * ignored and the baked default stands). See server `MetaResponse`.
+   */
+  desktopUpdater?: {
+    checkIntervalMs?: number | null;
+    stallThresholdMs?: number | null;
+  } | null;
 }
 
 /**
@@ -72,6 +90,11 @@ export interface ServerMeta {
  * Proliferate server's `MetaResponse` — a non-200 or a differently-shaped
  * body (any other web server, a typo'd host, etc.) must read as "not a
  * Proliferate server," never as a crash.
+ *
+ * `minDesktopVersionEnforced` is read tolerantly: absent or non-boolean on an
+ * otherwise well-shaped response still passes, defaulting to `false` on the
+ * parsed value below (`isServerMetaShape` narrows the type; callers that need
+ * the enforced flag should prefer `readMinDesktopVersionEnforced`).
  */
 export function isServerMetaShape(value: unknown): value is ServerMeta {
   if (typeof value !== "object" || value === null) {
@@ -85,4 +108,16 @@ export function isServerMetaShape(value: unknown): value is ServerMeta {
     && typeof record.workerVersion === "string"
     && typeof record.minDesktopVersion === "string"
   );
+}
+
+/**
+ * Tolerant read of the `minDesktopVersionEnforced` opt-in flag: anything other
+ * than a literal `true` (missing field, garbage value, older server) reads as
+ * `false`, so a malformed/absent flag can never accidentally start blocking.
+ */
+export function readMinDesktopVersionEnforced(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  return (value as Record<string, unknown>).minDesktopVersionEnforced === true;
 }

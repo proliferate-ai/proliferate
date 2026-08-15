@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { motion } from "@proliferate/design/motion";
 import { Button } from "#product/primitives/Button";
 import { Check, Copy } from "#product/primitives/icons/core";
+import { useChainedVerticalWheel } from "#product/primitives/utils/use-chained-vertical-wheel";
 import type { HighlightedToken } from "#product/lib/infra/editor/highlighting";
 import { CodeBlockTokenContent } from "./CodeBlockTokenContent";
 import type { RenderTokenFn } from "./CodeTokenLine";
@@ -41,6 +42,7 @@ export function CodeBlock({
   children,
 }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
+  const handleContentWheel = useChainedVerticalWheel();
 
   function copyCode() {
     void writeClipboardText(code).then((success) => {
@@ -73,7 +75,8 @@ export function CodeBlock({
         </Button>
       </div>
       <div
-        className="overflow-x-auto overflow-y-auto p-3 font-mono text-chat font-normal"
+        onWheel={handleContentWheel}
+        className="overscroll-none overflow-x-auto overflow-y-auto p-3 font-mono text-chat font-normal"
         data-markdown-code-content="true"
       >
         {children ?? (tokens ? (

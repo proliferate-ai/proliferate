@@ -35,8 +35,8 @@ vi.mock("#product/stores/toast/toast-store", () => ({
     selector({ show: showToast }),
 }));
 
-// ConfirmationDialog wraps Radix Dialog (no jsdom polyfills) — stub to plain
-// buttons so the revoke flow is exercisable.
+// ConfirmationDialog and ApiKeyCreatorModal wrap Radix Dialog (no jsdom
+// polyfills) — stub both to plain buttons so their flows are exercisable.
 vi.mock("#product/primitives/patterns/ConfirmationDialog", () => ({
   ConfirmationDialog: ({
     open,
@@ -53,6 +53,32 @@ vi.mock("#product/primitives/patterns/ConfirmationDialog", () => ({
       <div>
         <button type="button" onClick={onConfirm}>{confirmLabel}</button>
         <button type="button" onClick={onClose}>dialog-cancel</button>
+      </div>
+    ) : null,
+}));
+
+vi.mock("#product/components/settings/panes/agent-auth/ApiKeyCreatorModal", () => ({
+  ApiKeyCreatorModal: ({
+    open,
+    heading,
+    onSubmit,
+    onClose,
+  }: {
+    open: boolean;
+    heading: string;
+    onSubmit: (input: { title: string; value: string; envVarName: string }) => void;
+    onClose: () => void;
+  }) =>
+    open ? (
+      <div>
+        <div>{heading}</div>
+        <button
+          type="button"
+          onClick={() => onSubmit({ title: "Personal key", value: "sk-ant-123", envVarName: "" })}
+        >
+          creator-submit
+        </button>
+        <button type="button" onClick={onClose}>creator-cancel</button>
       </div>
     ) : null,
 }));
@@ -95,14 +121,14 @@ describe("ApiKeysPane", () => {
     expect(screen.queryByText("Work key")).not.toBeNull();
     expect(screen.queryByText("sk-...abcd")).not.toBeNull();
     expect(screen.queryByText("Backup")).not.toBeNull();
-    expect(screen.queryByText("2 keys")).not.toBeNull();
   });
 
-  it("labels the empty visual state without changing the existing form focus order", () => {
+  it("shows the empty state with the header Add key action", () => {
     const { container } = render(<ApiKeysPane />);
 
     expect(screen.queryByText(AGENT_API_KEYS_COPY.emptyTitle)).not.toBeNull();
-    expect(screen.queryByRole("button", { name: "Add first key" })).toBeNull();
+    const addButton = screen.getByRole("button", { name: AGENT_API_KEYS_COPY.addAction });
+    expect(addButton.getAttribute("type")).toBe("button");
     expect(container.querySelector('[data-api-keys-state="ready"]')).not.toBeNull();
   });
 
@@ -126,9 +152,7 @@ describe("ApiKeysPane", () => {
     const view = render(<ApiKeysPane />);
 
     const retryButton = screen.getByRole("button", { name: AGENT_API_KEYS_COPY.retryAction });
-    const addButton = screen.getByRole("button", { name: AGENT_API_KEYS_COPY.addAction });
     expect(retryButton.getAttribute("type")).toBe("button");
-    expect(addButton.getAttribute("type")).toBe("submit");
     expect(screen.queryByText(AGENT_API_KEYS_COPY.loadError)).not.toBeNull();
 
     await user.click(retryButton);
@@ -140,7 +164,6 @@ describe("ApiKeysPane", () => {
         name: AGENT_API_KEYS_COPY.retryingAction,
       }) as HTMLButtonElement).disabled,
     ).toBe(true);
-    expect(screen.getByRole("button", { name: AGENT_API_KEYS_COPY.addAction })).toBe(addButton);
 
     state.keys.isError = false;
     state.keys.data = [key()];
@@ -153,7 +176,6 @@ describe("ApiKeysPane", () => {
     expect(screen.queryByText(AGENT_API_KEYS_COPY.loadError)).toBeNull();
     expect(screen.queryByRole("button", { name: AGENT_API_KEYS_COPY.retryAction })).toBeNull();
     expect(screen.queryByText("Work key")).not.toBeNull();
-    expect(screen.getByRole("button", { name: AGENT_API_KEYS_COPY.addAction })).toBe(addButton);
   });
 
   it("keeps failed Retry keyboard-accessible and restores it without duplicate refetch", async () => {
@@ -167,7 +189,7 @@ describe("ApiKeysPane", () => {
     render(<ApiKeysPane />);
 
     const retryButton = screen.getByRole("button", { name: AGENT_API_KEYS_COPY.retryAction });
-    await user.tab();
+    retryButton.focus();
     expect(document.activeElement).toBe(retryButton);
     await user.keyboard("{Enter}");
     await user.keyboard("{Enter}");
@@ -258,21 +280,40 @@ describe("ApiKeysPane", () => {
     expect(refetchKeys).toHaveBeenCalledTimes(1);
   });
 
-  it("creates a key from title + value only", () => {
+  it("creates a key through the Add key modal", () => {
     render(<ApiKeysPane />);
 
-    fireEvent.change(screen.getByLabelText(AGENT_API_KEYS_COPY.titleLabel), {
-      target: { value: "Personal key" },
-    });
-    fireEvent.change(screen.getByLabelText(AGENT_API_KEYS_COPY.valueLabel), {
-      target: { value: "sk-ant-123" },
-    });
+    expect(screen.queryByText(AGENT_API_KEYS_COPY.addModalHeading)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: AGENT_API_KEYS_COPY.addAction }));
+    expect(screen.queryByText(AGENT_API_KEYS_COPY.addModalHeading)).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "creator-submit" }));
 
     expect(createMutate).toHaveBeenCalledWith(
       { title: "Personal key", value: "sk-ant-123" },
       expect.anything(),
     );
+  });
+
+  it("closes the Add key modal and toasts on success", () => {
+    createMutate.mockImplementation((_input, cbs) => cbs.onSuccess({ title: "Personal key" }));
+    render(<ApiKeysPane />);
+
+    fireEvent.click(screen.getByRole("button", { name: AGENT_API_KEYS_COPY.addAction }));
+    fireEvent.click(screen.getByRole("button", { name: "creator-submit" }));
+
+    expect(screen.queryByText(AGENT_API_KEYS_COPY.addModalHeading)).toBeNull();
+    expect(showToast).toHaveBeenCalledWith("Added API key Personal key.", "info");
+  });
+
+  it("keeps the Add key modal open and toasts on failure", () => {
+    createMutate.mockImplementation((_input, cbs) => cbs.onError(new Error("nope")));
+    render(<ApiKeysPane />);
+
+    fireEvent.click(screen.getByRole("button", { name: AGENT_API_KEYS_COPY.addAction }));
+    fireEvent.click(screen.getByRole("button", { name: "creator-submit" }));
+
+    expect(screen.queryByText(AGENT_API_KEYS_COPY.addModalHeading)).not.toBeNull();
+    expect(showToast).toHaveBeenCalledWith("nope");
   });
 
   it("revokes a key after confirmation", () => {

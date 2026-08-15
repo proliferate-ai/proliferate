@@ -91,7 +91,6 @@ impl ModelSnapshotService {
                 plan,
                 runtime_home: self.runtime_home.clone(),
                 per_probe_timeout: self.config.per_probe_timeout,
-                model_switch_timeout: self.config.model_switch_timeout,
             })
             .await;
         // No explicit Idle write: `live_state` drops at the end of this scope on

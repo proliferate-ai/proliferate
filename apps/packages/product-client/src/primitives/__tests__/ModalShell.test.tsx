@@ -2,6 +2,7 @@
 
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
 import { ModalShell } from "#product/primitives/patterns/ModalShell";
 import { useNativeOverlayOpen } from "#product/primitives/overlays/overlay-presence";
 
@@ -63,5 +64,26 @@ describe("ModalShell", () => {
     );
 
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+  });
+});
+
+describe("ConfirmationDialog", () => {
+  it("focuses the confirm action on open so Enter confirms", async () => {
+    render(
+      <ConfirmationDialog
+        open
+        title="Revoke API key"
+        description="Revoke this?"
+        confirmLabel="Revoke key"
+        confirmVariant="destructive"
+        onClose={vi.fn()}
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    const confirm = screen.getByRole("button", { name: "Revoke key" });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(confirm);
+    });
   });
 });
