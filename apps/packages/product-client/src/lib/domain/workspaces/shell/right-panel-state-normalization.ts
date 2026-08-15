@@ -16,20 +16,33 @@ import {
   type ViewerTarget,
 } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
+interface RightPanelNormalizationOptions {
+  isCloudWorkspaceSelected: boolean;
+  liveTerminals?: readonly RightPanelTerminalRecord[];
+  liveViewerTargets?: readonly ViewerTarget[];
+  /**
+   * Run-scoped availability of the gen-2 workflow tool, as a tri-state:
+   * `undefined` (the default) while the runs list has not settled, `false` once
+   * a settled list shows no run. It retires an *active* `tool:workflow` entry
+   * and nothing else — the persisted header order is never rewritten on it,
+   * because a run appearing or finishing is not a change the user made to their
+   * header. See `resolveWorkflowToolAvailability`.
+   */
+  hasWorkflowRun?: boolean;
+}
+
 export function normalizeRightPanelMaterializedState(
   input: Partial<RightPanelMaterializedState> | undefined,
-  options: {
-    isCloudWorkspaceSelected: boolean;
-    liveTerminals?: readonly RightPanelTerminalRecord[];
-    liveViewerTargets?: readonly ViewerTarget[];
-  },
+  options: RightPanelNormalizationOptions,
 ): RightPanelMaterializedState {
   const headerOrder = normalizeRightPanelHeaderOrder(input?.headerOrder, {
     isCloudWorkspaceSelected: options.isCloudWorkspaceSelected,
     liveTerminals: options.liveTerminals,
     liveViewerTargets: options.liveViewerTargets,
   });
-  const activeEntryKey = resolveRightPanelActiveEntryKey(input?.activeEntryKey, headerOrder);
+  const activeEntryKey = resolveRightPanelActiveEntryKey(input?.activeEntryKey, headerOrder, {
+    hasWorkflowRun: options.hasWorkflowRun,
+  });
 
   return {
     activeEntryKey,
@@ -39,11 +52,7 @@ export function normalizeRightPanelMaterializedState(
 
 export function reconcileRightPanelWorkspaceState(
   input: Partial<RightPanelWorkspaceState> | undefined,
-  options: {
-    isCloudWorkspaceSelected: boolean;
-    liveTerminals?: readonly RightPanelTerminalRecord[];
-    liveViewerTargets?: readonly ViewerTarget[];
-  },
+  options: RightPanelNormalizationOptions,
 ): RightPanelWorkspaceState {
   // Runtime callers rely on reconciliation converging after one pass; keep
   // normalizeRightPanelMaterializedState idempotent when adding new fields.
@@ -183,13 +192,18 @@ function resolveValidTerminalIds(
 function resolveRightPanelActiveEntryKey(
   input: RightPanelActiveEntryKey | "tool:allChanges" | undefined,
   headerOrder: readonly RightPanelHeaderEntryKey[],
+  options: { hasWorkflowRun?: boolean },
 ): RightPanelActiveEntryKey {
   if (input === "tool:allChanges" && headerOrder.includes("tool:git")) {
     return "tool:git";
   }
   if (input && input !== "tool:allChanges") {
     const parsed = parseRightPanelHeaderEntryKey(input);
-    if (parsed && headerOrder.includes(input)) {
+    // A workflow entry the header order still carries but no run can fill is
+    // treated as absent here: same fallback the launch gate reaches through
+    // when it drops the key from the order outright.
+    const retired = input === "tool:workflow" && options.hasWorkflowRun === false;
+    if (parsed && !retired && headerOrder.includes(input)) {
       return input;
     }
   }

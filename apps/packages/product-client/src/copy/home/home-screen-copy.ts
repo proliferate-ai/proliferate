@@ -4,7 +4,7 @@ export const HOME_SCREEN_LABELS = {
   configureDefaultHarnessesTitle: "Configure default harnesses",
   configureDefaultHarnessesDescription: "Pick the coding agents and models you want to use.",
   configureRepositoryTitle: "Configure your repo",
-  configureRepositoryDescription: "Finish setting up this repo for cloud workspaces.",
+  configureRepositoryDescription: "Finish setting up this repo to start working.",
   // Ack-gated onboarding step (agent-auth.md): shown from first-run adoption's
   // gateway writes until the runtime acks the delivered auth state (or the
   // ~20s grace window passes and the step auto-advances).

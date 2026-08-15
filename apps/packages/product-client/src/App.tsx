@@ -23,6 +23,15 @@ const AuthenticatedProductClient = lazy(
 // Desktop-only: the app-update flow (restart dialog, phase toasts, automatic
 // download). Lazy so the public shell — and /login, which has a fail-closed
 // first-load JS budget — never pulls the updater state machine.
+// Lazy like DesktopUpdateSurface: the gate only ever renders for an
+// authenticated desktop, so its query hooks must not ride the /login chunk
+// (login first-load budget).
+const MinDesktopVersionGate = lazy(() =>
+  import("#product/components/auth/MinDesktopVersionGate").then((m) => ({
+    default: m.MinDesktopVersionGate,
+  })),
+)
+
 const DesktopUpdateSurface = lazy(() =>
   import("#product/components/feedback/DesktopUpdateSurface").then((m) => ({
     default: m.DesktopUpdateSurface,
@@ -127,6 +136,7 @@ export function App({ RoutesComponent }: AppProps) {
   return (
       <ShortcutRevealProvider>
         <MacWindowControlsSafeArea />
+        <AppMinDesktopVersionGate />
         <RoutesComponent>
           <Route path="/index.html" element={<Navigate to="/" replace />} />
           <Route path="/settings/cloud" element={<SettingsCloudRedirect />} />
@@ -300,6 +310,31 @@ function AppUpdateSurface() {
   return (
     <Suspense fallback={null}>
       <DesktopUpdateSurface />
+    </Suspense>
+  )
+}
+
+/**
+ * Same desktop-only gate as `AppUpdateSurface`: the min-desktop-version block
+ * screen only makes sense where there's an updater to jump into and a
+ * connectable server to be behind on, so Web never pays for the query hooks.
+ */
+function AppMinDesktopVersionGate() {
+  const host = useProductHost()
+  const hasUpdater = Boolean(host.desktop?.updater)
+  // Never cover the sign-in/connect surface: a signed-out user must always be
+  // able to reach it and point the app at a different server, so a
+  // misconfigured floor can only ever strand a session, not the app itself.
+  const authenticated =
+    host.auth.state.status === "authenticated" || !host.auth.authRequired
+
+  if (!hasUpdater || !authenticated) {
+    return null
+  }
+
+  return (
+    <Suspense fallback={null}>
+      <MinDesktopVersionGate />
     </Suspense>
   )
 }

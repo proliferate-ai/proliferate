@@ -87,6 +87,13 @@ export {
 } from "./lib/query-keys.js";
 
 export {
+  anyHarnessWorkflowRunsScopeKey,
+  anyHarnessWorkflowRunsListScopeKey,
+  anyHarnessWorkflowRunsListKey,
+  anyHarnessWorkflowRunKey,
+} from "./lib/query-keys-workflow-runs.js";
+
+export {
   useRuntimeHealthQuery,
 } from "./hooks/runtime.js";
 export {
@@ -195,6 +202,16 @@ export {
   useReorderPendingPromptsMutation,
   useSteerPendingPromptMutation,
 } from "./hooks/session-pending-prompts.js";
+export {
+  useWorkflowRunQuery,
+  useWorkflowRunsQuery,
+  useWorkflowRunMutations,
+  useWorkflowRunProjectionWriter,
+  resolveWorkflowRunRefetchInterval,
+  resolveWorkflowRunsListRefetchInterval,
+  WORKFLOW_RUN_ACTIVE_INTERVAL_MS,
+  WORKFLOW_RUNS_LIST_ACTIVE_INTERVAL_MS,
+} from "./hooks/workflow-runs.js";
 export {
   useWorkspacePlansQuery,
   usePlanDetailQuery,

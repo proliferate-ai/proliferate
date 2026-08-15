@@ -161,4 +161,10 @@ export const HARNESS_PANE_COPY = {
     surface === "local"
       ? `Updating ${displayName} on this machine.`
       : `Updating ${displayName} in Proliferate Cloud.`,
+  // R2.0 (always-managed install): one-time notice when a managed copy lands
+  // alongside a harness the user already had on PATH.
+  managedNoticeTitle: "Proliferate now maintains its own managed copy",
+  managedNoticeDescription: (displayName: string) =>
+    `Your own ${displayName} install is untouched and never modified.`,
+  managedNoticeDismiss: "Got it",
 } as const;

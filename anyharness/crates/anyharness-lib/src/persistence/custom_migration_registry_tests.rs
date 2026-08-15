@@ -37,14 +37,18 @@ fn custom_foreign_key_migrations_register_the_workspace_drop_cleanup_columns_reb
     assert!(CUSTOM_FOREIGN_KEY_MIGRATIONS
         .iter()
         .any(|(name, _)| *name == "0068_workspace_drop_cleanup_columns"));
-    // The rebuild must run LAST: a fresh database has to reach the
-    // cleanup-column-free shape after every earlier rebuild has had its turn
-    // at the table.
+    // The rebuild must run after every earlier workspace rebuild has had its
+    // turn at the table; only the workflow gen-2 rebuild (which never touches
+    // the workspaces shape) may follow it.
+    let position = CUSTOM_FOREIGN_KEY_MIGRATIONS
+        .iter()
+        .position(|(name, _)| *name == "0068_workspace_drop_cleanup_columns")
+        .expect("registry contains the drop-cleanup rebuild");
     assert_eq!(
-        CUSTOM_FOREIGN_KEY_MIGRATIONS
-            .last()
-            .expect("registry is non-empty")
-            .0,
-        "0068_workspace_drop_cleanup_columns"
+        CUSTOM_FOREIGN_KEY_MIGRATIONS[position + 1..]
+            .iter()
+            .map(|(name, _)| *name)
+            .collect::<Vec<_>>(),
+        vec!["0069_workflow_runs_gen2"]
     );
 }

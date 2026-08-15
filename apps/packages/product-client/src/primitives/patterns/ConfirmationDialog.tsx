@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Button } from "#product/primitives/Button";
 import { ModalShell } from "./ModalShell";
 
@@ -26,11 +27,16 @@ export function ConfirmationDialog({
   onClose,
   onConfirm,
 }: ConfirmationDialogProps) {
+  // The confirm action is the dialog's default button: it takes initial focus,
+  // so Enter confirms on open while Tab → Enter still reaches Cancel.
+  const confirmRef = useRef<HTMLButtonElement>(null);
+
   return (
     <ModalShell
       open={open}
       onClose={onClose}
       disableClose={disableClose}
+      initialFocusRef={confirmRef}
       title={title}
       description={description}
       headerContent={(
@@ -62,6 +68,7 @@ export function ConfirmationDialog({
             {cancelLabel}
           </Button>
           <Button
+            ref={confirmRef}
             type="button"
             variant={confirmVariant}
             size="md"

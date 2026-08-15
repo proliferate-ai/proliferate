@@ -79,6 +79,93 @@ async fn failures_arm_exponential_backoff_and_a_success_resets_it() {
     assert_eq!(cleared.next_attempt_at, None);
 }
 
+/// A spawn failure fast-fails with the named `spawn_failed` code and arms the
+/// same backoff a probe failure would — proving the FAST-FAIL path (ADR FR-2, A5)
+/// records a structured, retry-scheduling failure rather than a generic one or a
+/// timeout.
+#[tokio::test]
+async fn a_spawn_failure_fast_fails_with_a_named_code_and_arms_backoff() {
+    let home = seeded_home("spawn", "opencode");
+    let (service, runner, _plan) = engine(&home, "opencode", test_config());
+
+    // Seed a good observation first so the failed attempt has a document to
+    // annotate — `record_failed_attempt` writes `lastAttempt` onto an existing
+    // document only, never a models-less one.
+    runner.set_behavior(FakeBehavior::Ok);
+    service.refresh_now("opencode").await.expect("seed a good observation");
+
+    runner.set_behavior(FakeBehavior::Spawn(
+        "no executable path for agent".to_string(),
+    ));
+    let error = service
+        .refresh_now("opencode")
+        .await
+        .expect_err("spawn must fail");
+    assert!(
+        matches!(&error, RefreshError::Probe(ProbeError::Spawn { .. })),
+        "a spawn failure must surface as ProbeError::Spawn, got {error:?}"
+    );
+    if let RefreshError::Probe(probe_error) = &error {
+        assert!(
+            probe_error.detail().starts_with(ProbeError::CODE_SPAWN),
+            "the persisted detail must carry the named code, got {}",
+            probe_error.detail()
+        );
+    }
+
+    let now = chrono::Utc::now();
+    let status = service.status("opencode", now);
+    assert_eq!(
+        status.state,
+        super::super::status::LiveState::Backoff,
+        "a spawn failure must arm backoff"
+    );
+    assert!(
+        status.next_attempt_at.is_some(),
+        "backoff must expose nextAttemptAt"
+    );
+    assert_eq!(
+        status.last_error.as_deref(),
+        Some("spawn_failed: no executable path for agent"),
+        "the status surface must render the named spawn code"
+    );
+    // The last-good model list keeps serving — a failed refresh never destroys truth.
+    assert!(status.model_count > 0);
+}
+
+/// The retuned ceiling (ADR FR-2, A5): the doubling ladder caps at 30 minutes,
+/// not the old 6 hours. Driven by forced refreshes (which bypass the window) so
+/// the counter climbs past the cap without a real clock.
+#[tokio::test]
+async fn backoff_ladder_caps_at_the_thirty_minute_ceiling() {
+    let home = seeded_home("ceiling", "opencode");
+    let (service, runner, _plan) = engine(&home, "opencode", test_config());
+    runner.set_behavior(FakeBehavior::Fail("provider down".to_string()));
+
+    // 12 failures: 60s doubling reaches 30min (1800s) by the sixth, so the ladder
+    // is well past the cap here.
+    for _ in 0..12 {
+        let _ = service.refresh_now("opencode").await;
+    }
+
+    let now = chrono::Utc::now();
+    let capped_delay = chrono::DateTime::parse_from_rfc3339(
+        service
+            .status("opencode", now)
+            .next_attempt_at
+            .as_ref()
+            .expect("nextAttemptAt"),
+    )
+    .expect("parse")
+    .signed_duration_since(now)
+    .num_seconds();
+    // 1800s +/-20% envelope: the jitter cannot escape the ceiling by more than its spread.
+    assert!(
+        (1440..=2160).contains(&capped_delay),
+        "the ladder must cap at 30min +/-20%, got {capped_delay}s"
+    );
+}
+
 /// The backoff jitter itself: deterministic, inside ±20%, and actually spreading.
 ///
 /// It exists because the failures that matter arrive in groups — one provider outage

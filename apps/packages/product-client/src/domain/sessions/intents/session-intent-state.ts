@@ -2,6 +2,7 @@ import type {
   PromptOutboxEntry,
   SessionIntent,
   SessionSendPromptIntent,
+  SessionUpdateConfigIntent,
 } from "./session-intent-model";
 
 export interface SessionIntentStateShape {
@@ -32,6 +33,28 @@ export function upsertSessionIntent(
       [intent.clientSessionId]: nextOrder,
     },
   };
+}
+
+// A fast cycling burst must not build a FIFO backlog of intermediate values:
+// while the newest intent in a session's ordered list is still a queued
+// update for the same config option, a follow-up selection supersedes it in
+// place instead of appending (PRO-261). Only the tail qualifies — superseding
+// past any other intent would reorder config work across prompts or
+// interaction responses, which dispatch ordering forbids. "queued" only: a
+// dispatching intent's request is already on the wire with its old value.
+export function findSupersedableTailConfigIntent(
+  state: SessionIntentStateShape,
+  clientSessionId: string,
+  configId: string,
+): SessionUpdateConfigIntent | null {
+  const intentIds = state.intentIdsByClientSessionId[clientSessionId] ?? [];
+  const tailId = intentIds[intentIds.length - 1];
+  const tail = tailId ? state.entriesById[tailId] : undefined;
+  return tail?.kind === "update_config"
+    && tail.configId === configId
+    && tail.status === "queued"
+    ? tail
+    : null;
 }
 
 export function patchSessionIntent(

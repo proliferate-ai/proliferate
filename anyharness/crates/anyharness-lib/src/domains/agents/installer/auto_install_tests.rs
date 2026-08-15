@@ -1,11 +1,17 @@
 //! The auto-install decision matrix. Pure inputs, so this enumerates the whole
-//! product rather than the cells that happened to bite us — and the PATH column
-//! is the one that had ZERO coverage before, because the protection used to be an
-//! accident of `installed_only`'s scope rather than a rule.
+//! product rather than the cells that happened to bite us. R2.0 retired the
+//! PATH carve-out from the always-managed policy; the PATH column below
+//! covers both that (installs now) and the legacy escape hatch (still skips).
+
+use std::sync::Mutex;
 
 use super::*;
 use crate::domains::agents::model::AgentKind;
 use crate::domains::agents::runtime::RuntimeSurface;
+
+/// `ANYHARNESS_ALWAYS_MANAGED_INSTALL` is process-global; serialize the one
+/// test that mutates it against parallel test-thread execution.
+static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn facts(has_path_artifact: bool, has_managed_artifact: bool) -> AgentInstallFacts {
     AgentInstallFacts {
@@ -53,39 +59,76 @@ fn an_absent_agent_auto_installs_on_a_full_pass() {
     }
 }
 
-/// THE carve-out with no prior coverage: a user's own binary on PATH is never
-/// clobbered, on any surface, in any scope. A managed install would shadow their
-/// copy, and readiness already reports it usable.
+/// R2.0 (RULED): a user's own binary on PATH no longer blocks a managed
+/// install — it installs alongside it, on every surface and scope (cursor in
+/// cloud is still the one carve-out, tested separately below).
 #[test]
-fn a_path_provided_agent_is_never_clobbered() {
+fn a_path_provided_agent_now_installs_alongside_it() {
     for surface in [RuntimeSurface::Local, RuntimeSurface::Cloud] {
-        for installed_only in [true, false] {
-            for kind in [
-                AgentKind::Claude,
-                AgentKind::Codex,
-                AgentKind::OpenCode,
-                AgentKind::Grok,
-                AgentKind::Cursor,
-            ] {
-                assert_eq!(
-                    auto_install_decision(&kind, surface, installed_only, PATH_ONLY),
-                    Err(AutoInstallSkip::UserProvidedOnPath),
-                    "{kind:?} on {surface:?} (installed_only={installed_only}) must be skipped"
-                );
-            }
+        for kind in [
+            AgentKind::Claude,
+            AgentKind::Codex,
+            AgentKind::OpenCode,
+            AgentKind::Grok,
+        ] {
+            assert_eq!(
+                auto_install_decision(&kind, surface, false, PATH_ONLY),
+                Ok(()),
+                "{kind:?} on {surface:?} must install even though a PATH copy exists"
+            );
         }
     }
 }
 
-/// PATH protection outranks every other rule — asserted as precedence, because
-/// an ordering regression here is the one that silently overwrites a user's
-/// binary. Cursor-in-cloud on PATH must report the PATH reason, not the cursor
-/// one: both would skip, but only one of them is about protecting the user.
+/// `installed_only` still respects a path-only agent as "not managed": it has
+/// no managed artifact yet, so a scoped pass leaves it for the next full pass.
 #[test]
-fn path_protection_outranks_the_cursor_and_scope_rules() {
+fn installed_only_still_skips_a_path_only_agent_as_unmanaged() {
+    assert_eq!(
+        auto_install_decision(&AgentKind::Codex, RuntimeSurface::Local, true, PATH_ONLY),
+        Err(AutoInstallSkip::NotManagedInInstalledOnlyPass)
+    );
+}
+
+/// Cursor-in-cloud is the one remaining carve-out and still outranks nothing
+/// else — it is the highest-precedence check now that the PATH carve-out is
+/// retired from the decision path.
+#[test]
+fn cursor_in_cloud_still_skips_even_with_a_path_copy() {
     assert_eq!(
         auto_install_decision(&AgentKind::Cursor, RuntimeSurface::Cloud, true, PATH_ONLY),
-        Err(AutoInstallSkip::UserProvidedOnPath)
+        Err(AutoInstallSkip::CursorUnsupportedInCloud)
+    );
+}
+
+/// The legacy escape hatch (`ANYHARNESS_ALWAYS_MANAGED_INSTALL=off`) restores
+/// the pre-R2.0 PATH carve-out through the escape-hatch entry point, without
+/// touching the always-managed predicate under test above. Guarded by a
+/// mutex: env vars are process-global and tests run in parallel.
+#[test]
+fn escape_hatch_restores_the_legacy_path_carve_out() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    std::env::set_var("ANYHARNESS_ALWAYS_MANAGED_INSTALL", "off");
+    assert_eq!(
+        auto_install_decision_with_escape_hatch(
+            &AgentKind::Codex,
+            RuntimeSurface::Local,
+            false,
+            PATH_ONLY
+        ),
+        Err(AutoInstallSkip::UserProvidedOnPath),
+        "off must restore the pre-R2.0 skip"
+    );
+    std::env::remove_var("ANYHARNESS_ALWAYS_MANAGED_INSTALL");
+    assert_eq!(
+        auto_install_decision_with_escape_hatch(
+            &AgentKind::Codex,
+            RuntimeSurface::Local,
+            false,
+            PATH_ONLY
+        ),
+        Ok(()),
+        "unset (default) must be the always-managed policy"
     );
 }
 

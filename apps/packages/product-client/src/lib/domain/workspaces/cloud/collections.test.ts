@@ -179,15 +179,16 @@ describe("upsertCloudWorkspaceCollections", () => {
 
     const next = upsertCloudWorkspaceCollections(existing, inserted);
 
+    // Cloud culling (PRO-10, FR-2): every collection built at this seam has its
+    // cloud rows removed, so an upserted cloud workspace never surfaces while
+    // local rows are preserved. (Pre-cull, cloudWorkspaces held ["cloud-2",
+    // "cloud-1"].)
     expect(next?.localWorkspaces.map((workspace) => workspace.id)).toEqual(["workspace-1"]);
-    expect(next?.cloudWorkspaces.map((workspace) => workspace.id)).toEqual([
-      "cloud-2",
-      "cloud-1",
-    ]);
+    expect(next?.cloudWorkspaces).toEqual([]);
     expect(next?.workspaces.map((workspace) => workspace.id)).toEqual(["workspace-1"]);
   });
 
-  it("replaces an existing cloud workspace snapshot", () => {
+  it("keeps cloud workspaces culled when a snapshot is replaced", () => {
     const existing = buildWorkspaceCollections(
       [makeWorkspace({ id: "workspace-1" })],
       [makeRepoRoot()],
@@ -202,9 +203,9 @@ describe("upsertCloudWorkspaceCollections", () => {
 
     const next = upsertCloudWorkspaceCollections(existing, updated);
 
-    expect(next?.cloudWorkspaces).toHaveLength(1);
-    expect(next?.cloudWorkspaces[0]?.status).toBe("ready");
-    expect(next?.cloudWorkspaces[0]?.updatedAt).toBe("2026-04-06T12:00:00.000Z");
+    // Cloud culling (PRO-10, FR-2): the row is never surfaced regardless of its
+    // status. (Pre-cull, this asserted the "ready" snapshot replaced "pending".)
+    expect(next?.cloudWorkspaces).toEqual([]);
   });
 
   it("returns undefined when the workspace collections cache is not populated", () => {
@@ -322,14 +323,18 @@ describe("workspaceCollectionsNeedActivityRefresh", () => {
     expect(workspaceCollectionsNeedActivityRefresh(collections)).toBe(false);
   });
 
-  it("requests refresh while cloud post-ready setup is still running", () => {
+  // Cloud culling (PRO-10, FR-2): cloud rows are removed at this seam, so cloud
+  // post-ready setup no longer drives an activity refresh. (Pre-cull, a "ready"
+  // cloud workspace in "starting_setup" requested a refresh; now there is no
+  // cloud row to poll.)
+  it("does not request refresh for a culled cloud post-ready setup", () => {
     const collections = buildWorkspaceCollections(
       [],
       [],
       [makeCloudWorkspace({ status: "ready", postReadyPhase: "starting_setup" })],
     );
 
-    expect(workspaceCollectionsNeedActivityRefresh(collections)).toBe(true);
+    expect(workspaceCollectionsNeedActivityRefresh(collections)).toBe(false);
   });
 
   it("stops refreshing after cloud post-ready work completes", () => {
