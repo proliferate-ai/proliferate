@@ -111,17 +111,60 @@ body {
   line-height: var(--text-ui--line-height);
 }
 
-:is(input, textarea, [contenteditable]:not([contenteditable="false"]), [data-ui-thin-caret]) {
-  caret-color: var(--color-text-caret);
+/* Layered per the shared-reset rule in specs/frontend/styling.md: unlayered
+   CSS beats every layer, which would both strip caret utilities off matching
+   elements and defeat the empty-field caret suppression below — that rule must
+   win this one by specificity inside the same layer. */
+@layer base {
+  :is(input, textarea, [contenteditable]:not([contenteditable="false"]), [data-ui-thin-caret]) {
+    caret-color: var(--color-text-caret);
+  }
 }
 
-/* Current macOS WebKit paints native insertion carets at two CSS pixels, while
-   native placeholders otherwise begin at that same origin. Offset only the
-   focused placeholder: entered text and its caret keep their established
-   alignment. The base layer lets a specialized control override this contract. */
+/* Current macOS WebKit paints native insertion carets at two CSS pixels, at the
+   same origin where a native placeholder's first glyph begins. Rather than
+   nudging the focused placeholder aside (which visibly bumped it on every
+   focus/blur while it stayed on screen), suppress the native caret only while
+   the placeholder is shown — an empty field's caret provably sits at the
+   content-box origin — and paint the same one-pixel replacement caret the chat
+   composer uses, as a background bar at that origin. Typing any character
+   dismisses the placeholder, which atomically restores the native caret in the
+   same style rule (IME composition included). Entered text, its caret, and the
+   resting placeholder never move. The base layer lets a specialized control
+   override this contract. */
 @layer base {
-  :is(input, textarea):focus::placeholder {
-    text-indent: 2px;
+  /* activity-motion */
+  :is(input, textarea):focus:placeholder-shown {
+    animation: ui-empty-field-caret-blink 1s steps(1, end) infinite;
+    background-image: linear-gradient(var(--color-text-caret), var(--color-text-caret));
+    background-origin: content-box;
+    background-repeat: no-repeat;
+    background-size: 1px min(1lh, 1.25em);
+    caret-color: transparent;
+  }
+  /* Single-line inputs center their one line box in the content box; textareas
+     stack lines from the content-box top. Align the bar with where the first
+     glyph actually renders in each. */
+  input:focus:placeholder-shown {
+    background-position: 0 50%;
+  }
+  textarea:focus:placeholder-shown {
+    background-position: 0 calc((1lh - min(1lh, 1.25em)) / 2);
+  }
+}
+
+@keyframes ui-empty-field-caret-blink {
+  0%, 54% {
+    background-image: linear-gradient(var(--color-text-caret), var(--color-text-caret));
+  }
+  55%, 100% {
+    background-image: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(input, textarea):focus:placeholder-shown {
+    animation: none;
   }
 }
 
