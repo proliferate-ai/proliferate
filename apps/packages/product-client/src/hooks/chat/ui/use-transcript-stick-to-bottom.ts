@@ -1,18 +1,17 @@
-import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useRef, useState, type RefObject } from "react";
 import { resolveVirtualBottomDistance } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import {
   DIRECTION_EPSILON_PX,
-  PROGRAMMATIC_MATCH_TOL_PX,
   REPIN_BOTTOM_THRESHOLD_PX,
   TRANSCRIPT_USER_SCROLL_SETTLE_MS,
   type ContentHeightScrollAnchor,
   type TranscriptScrollSample,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
 import { decideTranscriptScrollPin } from "#product/hooks/chat/ui/transcript-scroll-pin-decision";
-import { resolveAutoFollowScrollTop } from "#product/hooks/chat/ui/transcript-auto-follow-target";
 import { TranscriptFramePipeline } from "#product/hooks/chat/ui/transcript-frame-pipeline";
 import { useTranscriptFramePipelineLifecycle } from "#product/hooks/chat/ui/use-transcript-frame-pipeline-lifecycle";
 import { TranscriptScrollOwnershipMarkers } from "#product/hooks/chat/ui/transcript-scroll-ownership";
+import { useTranscriptAutoFollowBottom } from "#product/hooks/chat/ui/use-transcript-auto-follow-bottom";
 import { useTranscriptSubmitStampRepin } from "#product/hooks/chat/ui/use-transcript-submit-stamp-repin";
 import { useTranscriptUserScrollIntent } from "#product/hooks/chat/ui/use-transcript-user-scroll-intent";
 
@@ -145,8 +144,6 @@ export function useTranscriptStickToBottom({
   // glue window's fragile quiet-frame termination, which ends a frame early on a
   // slow runner and loses the last estimate-to-measured correction.
   const compensationDeadlineRef = useRef(0);
-  const autoFollowBottomInsetRef = useRef(Math.max(0, autoFollowBottomInsetPx));
-  const consumedAutoFollowBottomInsetRef = useRef(0);
   const userScrollIntentUntilRef = useRef(0);
 
   const setPinned = useCallback((next: boolean) => {
@@ -202,78 +199,22 @@ export function useTranscriptStickToBottom({
     onScrollSample({ programmatic: false, userInitiated: true });
   }, [onScrollSample, setPinned]);
 
-  // Registered before consumer layout effects. Preserve however much of an
-  // existing overlay range the user deliberately consumed; if another card is
-  // stacked above the composer, only the NEW height remains manual-only.
-  useLayoutEffect(() => {
-    const previousInset = autoFollowBottomInsetRef.current;
-    const previousConsumedInset = consumedAutoFollowBottomInsetRef.current;
-    const nextInset = Math.max(0, autoFollowBottomInsetPx);
-    const viewport = scrollRef.current;
-
-    // Removing consumed overlay range can make the browser clamp scrollTop
-    // upward to the new hard bottom. Mark that queued scroll event as
-    // non-user so its negative delta cannot disable pinned auto-follow.
-    if (
-      nextInset < previousInset &&
-      previousConsumedInset > 0 &&
-      pinnedRef.current &&
-      viewport
-    ) {
-      const top = viewport.scrollTop;
-      const distanceFromHardBottom = resolveVirtualBottomDistance({
-        scrollOffset: top,
-        viewportSize: viewport.clientHeight,
-        totalVirtualSize: viewport.scrollHeight,
-      });
-      if (
-        top < lastScrollTopRef.current - DIRECTION_EPSILON_PX &&
-        distanceFromHardBottom <= PROGRAMMATIC_MATCH_TOL_PX
-      ) {
-        markNonUserScrollPosition(viewport);
-      }
-    }
-
-    consumedAutoFollowBottomInsetRef.current = Math.min(previousConsumedInset, nextInset);
-    autoFollowBottomInsetRef.current = nextInset;
-  }, [autoFollowBottomInsetPx, markNonUserScrollPosition, scrollRef]);
-
-  const scrollToBottom = useCallback(() => {
-    const viewport = scrollRef.current;
-    if (!viewport) {
-      return;
-    }
-    const requestedTop = resolveAutoFollowScrollTop(
-      viewport,
-      autoFollowBottomInsetRef.current,
-      consumedAutoFollowBottomInsetRef.current,
-    );
-    const reachableTop = Math.min(
-      requestedTop,
-      Math.max(0, viewport.scrollHeight - viewport.clientHeight),
-    );
-    if (Math.abs(viewport.scrollTop - reachableTop) <= PROGRAMMATIC_MATCH_TOL_PX) {
-      // Keep direction tracking aligned even when the browser (or the
-      // virtualizer's initial offset) already placed us at the target. Without
-      // this baseline, the first small upward user scroll can look downward
-      // relative to the stale pre-mount position and immediately re-pin.
-      lastScrollTopRef.current = viewport.scrollTop;
-      return;
-    }
-    // Pin against the real DOM scroll height, never virtualizer.scrollToIndex:
-    // index scrolling positions by the *estimated* size of unmeasured rows
-    // (e.g. the row appended by this very update) and visibly bounces when the
-    // measurement corrects a frame later.
-    notifyProgrammaticScroll(() => {
-      viewport.scrollTop = requestedTop;
-    });
-  }, [notifyProgrammaticScroll, scrollRef]);
-
-  const handleScrollToBottomClick = useCallback(() => {
-    consumedAutoFollowBottomInsetRef.current = autoFollowBottomInsetRef.current;
-    setPinned(true);
-    scrollToBottom();
-  }, [scrollToBottom, setPinned]);
+  // Owns the manual-only overlay inset, its scrollTop math, and the
+  // scroll-to-bottom callbacks. See use-transcript-auto-follow-bottom.ts.
+  const {
+    consumedAutoFollowBottomInsetRef,
+    consumeFullInset,
+    scrollToBottom,
+    handleScrollToBottomClick,
+  } = useTranscriptAutoFollowBottom({
+    scrollRef,
+    autoFollowBottomInsetPx,
+    pinnedRef,
+    setPinned,
+    lastScrollTopRef,
+    markNonUserScrollPosition,
+    notifyProgrammaticScroll,
+  });
 
   const onViewportScroll = useCallback((viewport: HTMLDivElement) => {
     const top = viewport.scrollTop;
@@ -322,7 +263,7 @@ export function useTranscriptStickToBottom({
       setPinned(false);
     } else if (decision.pin === true) {
       if (decision.consumeInset === "full") {
-        consumedAutoFollowBottomInsetRef.current = autoFollowBottomInsetRef.current;
+        consumeFullInset();
       }
       setPinned(true);
     }
@@ -334,7 +275,7 @@ export function useTranscriptStickToBottom({
         ? { programmatic: false, userInitiated: true }
         : { programmatic: false },
     );
-  }, [onScrollSample, pinnedRef, repinThresholdPx, setPinned]);
+  }, [consumeFullInset, onScrollSample, pinnedRef, repinThresholdPx, setPinned]);
 
   // Session re-entry / submit / tab-resume "glue": snap each frame while a
   // freshly mounted or resumed measurement backlog lands, terminating when the
