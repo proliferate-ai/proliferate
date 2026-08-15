@@ -40,6 +40,33 @@ pub struct AgentRegistryAgent {
     /// Readers of the flag vocabulary must consult both.
     #[serde(default)]
     pub provider_config: Vec<AgentRegistryProviderConfig>,
+    /// How this harness's own self-updater is neutralized so the managed lane
+    /// stays the single source of version truth (Update Flow FR-3 / R2.5).
+    /// Required per harness — validation rejects a document that omits it.
+    pub self_update_neutralization: AgentRegistrySelfUpdateNeutralization,
+}
+
+/// Per-harness record of HOW the harness's own self-update path is disabled by
+/// the managed launcher. Drives `managed_launcher_env`: an `env` mechanism
+/// injects each `env[]` var into the launcher; `none_found`/`not_applicable`
+/// inject nothing and exist to document the static-analysis finding honestly.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRegistrySelfUpdateNeutralization {
+    /// One of `env`, `none_found`, `not_applicable`.
+    pub mechanism: String,
+    /// Human-readable evidence: which var disables it, or why none was found.
+    pub detail: String,
+    /// Env vars injected into the managed launcher when `mechanism == "env"`.
+    #[serde(default)]
+    pub env: Vec<AgentRegistrySelfUpdateEnvVar>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRegistrySelfUpdateEnvVar {
+    pub name: String,
+    pub value: String,
 }
 
 /// One typed provider-config declaration: which vault `kind` this harness

@@ -428,6 +428,28 @@ pub struct AgentDescriptor {
     pub auth: AuthSpec,
     /// URL for the agent's docs or repo (shown in UI).
     pub docs_url: Option<String>,
+    /// How this harness's own self-updater is neutralized by the managed
+    /// launcher (Update Flow FR-3). Drives `managed_launcher_env`.
+    pub self_update_neutralization: SelfUpdateNeutralization,
+}
+
+/// How a harness's self-update path is disabled by the managed launcher.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SelfUpdateNeutralization {
+    pub mechanism: SelfUpdateMechanism,
+    pub detail: String,
+    /// Env vars to inject into the managed launcher (non-empty only for `Env`).
+    pub env: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SelfUpdateMechanism {
+    /// A launcher env var disables the harness's self-updater.
+    Env,
+    /// Static analysis found no self-update path to neutralize.
+    NoneFound,
+    /// The harness has no self-update surface (e.g. binary-only adapter).
+    NotApplicable,
 }
 
 // ---------------------------------------------------------------------------

@@ -55,7 +55,54 @@ fn validate_agent(
         );
     }
     validate_auth(&agent.kind, &agent.auth)?;
+    validate_self_update_neutralization(&agent.kind, &agent.self_update_neutralization)?;
     validate_provider_config(&agent.kind, &agent.provider_config)
+}
+
+const VALID_SELF_UPDATE_MECHANISMS: &[&str] = &["env", "none_found", "not_applicable"];
+
+fn validate_self_update_neutralization(
+    agent_kind: &str,
+    neutralization: &crate::domains::agents::registry::schema::AgentRegistrySelfUpdateNeutralization,
+) -> anyhow::Result<()> {
+    if !VALID_SELF_UPDATE_MECHANISMS.contains(&neutralization.mechanism.as_str()) {
+        anyhow::bail!(
+            "agent registry agent '{}' selfUpdateNeutralization mechanism '{}' is not supported",
+            agent_kind,
+            neutralization.mechanism
+        );
+    }
+    if neutralization.detail.trim().is_empty() {
+        anyhow::bail!(
+            "agent registry agent '{}' selfUpdateNeutralization detail is empty",
+            agent_kind
+        );
+    }
+    // An `env` mechanism must actually declare at least one var to inject;
+    // non-env mechanisms must not carry env vars (they document a finding).
+    if neutralization.mechanism == "env" {
+        if neutralization.env.is_empty() {
+            anyhow::bail!(
+                "agent registry agent '{}' selfUpdateNeutralization mechanism 'env' declares no env vars",
+                agent_kind
+            );
+        }
+        for var in &neutralization.env {
+            if var.name.trim().is_empty() {
+                anyhow::bail!(
+                    "agent registry agent '{}' selfUpdateNeutralization env var name is empty",
+                    agent_kind
+                );
+            }
+        }
+    } else if !neutralization.env.is_empty() {
+        anyhow::bail!(
+            "agent registry agent '{}' selfUpdateNeutralization mechanism '{}' must not declare env vars",
+            agent_kind,
+            neutralization.mechanism
+        );
+    }
+    Ok(())
 }
 
 fn validate_provider_config(
@@ -296,6 +343,70 @@ mod tests {
             error.to_string().contains("has empty discovery kind"),
             "unexpected error: {error}"
         );
+    }
+
+    #[test]
+    fn registry_rejects_unsupported_self_update_mechanism() {
+        let mut registry = bundled_agent_registry_document().clone();
+        registry.agents[0].self_update_neutralization.mechanism = "auto_magic".to_string();
+
+        let error = validate_agent_registry_document(&registry)
+            .expect_err("unsupported self-update mechanism must fail");
+        assert!(
+            error
+                .to_string()
+                .contains("selfUpdateNeutralization mechanism 'auto_magic' is not supported"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn registry_rejects_env_mechanism_without_vars() {
+        use crate::domains::agents::registry::schema::AgentRegistrySelfUpdateNeutralization;
+        let mut registry = bundled_agent_registry_document().clone();
+        registry.agents[0].self_update_neutralization = AgentRegistrySelfUpdateNeutralization {
+            mechanism: "env".to_string(),
+            detail: "claims env but declares nothing".to_string(),
+            env: vec![],
+        };
+
+        let error = validate_agent_registry_document(&registry)
+            .expect_err("env mechanism with no vars must fail");
+        assert!(
+            error.to_string().contains("declares no env vars"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn registry_rejects_non_env_mechanism_carrying_env_vars() {
+        use crate::domains::agents::registry::schema::{
+            AgentRegistrySelfUpdateEnvVar, AgentRegistrySelfUpdateNeutralization,
+        };
+        let mut registry = bundled_agent_registry_document().clone();
+        registry.agents[0].self_update_neutralization = AgentRegistrySelfUpdateNeutralization {
+            mechanism: "none_found".to_string(),
+            detail: "no updater found".to_string(),
+            env: vec![AgentRegistrySelfUpdateEnvVar {
+                name: "X".to_string(),
+                value: "1".to_string(),
+            }],
+        };
+
+        let error = validate_agent_registry_document(&registry)
+            .expect_err("non-env mechanism carrying env vars must fail");
+        assert!(
+            error.to_string().contains("must not declare env vars"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn bundled_registry_self_update_neutralization_validates() {
+        // The bundled document's per-harness selfUpdateNeutralization records
+        // (claude=env DISABLE_AUTOUPDATER, others=none_found) must already pass.
+        validate_agent_registry_document(bundled_agent_registry_document())
+            .expect("bundled registry self-update neutralization must validate");
     }
 
     #[test]

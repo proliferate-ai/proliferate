@@ -4,14 +4,15 @@ use super::bundled::bundled_agent_registry_document;
 use super::schema::{
     AgentRegistryAgent, AgentRegistryAgentProcessFallback, AgentRegistryAgentProcessInstall,
     AgentRegistryAuthMaterialization, AgentRegistryDocument, AgentRegistryNativeArtifact,
-    AgentRegistryNativeInstall,
+    AgentRegistryNativeInstall, AgentRegistrySelfUpdateNeutralization,
 };
 use super::validation::validate_agent_registry_document;
 use crate::domains::agents::model::{
     AgentDescriptor, AgentKind, AgentProcessArtifactSpec, AgentProcessFallback,
     AgentProcessInstallSpec, AuthMaterializationSpec, AuthReadinessPolicy, AuthSlotSpec, AuthSpec,
     CommandSpec, CredentialDiscoveryKind, GatewayEnvMaterializationSpec, LaunchSpecTemplate,
-    LoginSpec, NativeArtifactSpec, NativeInstallSpec, Platform, SyncedFilesMaterializationSpec,
+    LoginSpec, NativeArtifactSpec, NativeInstallSpec, Platform, SelfUpdateMechanism,
+    SelfUpdateNeutralization, SyncedFilesMaterializationSpec,
 };
 
 /// Returns trusted process/auth descriptors from the bundled registry only.
@@ -85,6 +86,31 @@ fn agent_registry_agent_to_descriptor(
                 .collect::<anyhow::Result<Vec<_>>>()?,
         },
         docs_url: agent.docs_url.clone(),
+        self_update_neutralization: agent_registry_self_update_to_spec(
+            &agent.self_update_neutralization,
+        )?,
+    })
+}
+
+fn agent_registry_self_update_to_spec(
+    neutralization: &AgentRegistrySelfUpdateNeutralization,
+) -> anyhow::Result<SelfUpdateNeutralization> {
+    let mechanism = match neutralization.mechanism.as_str() {
+        "env" => SelfUpdateMechanism::Env,
+        "none_found" => SelfUpdateMechanism::NoneFound,
+        "not_applicable" => SelfUpdateMechanism::NotApplicable,
+        other => {
+            anyhow::bail!("unsupported self-update neutralization mechanism '{other}'")
+        }
+    };
+    Ok(SelfUpdateNeutralization {
+        mechanism,
+        detail: neutralization.detail.clone(),
+        env: neutralization
+            .env
+            .iter()
+            .map(|var| (var.name.clone(), var.value.clone()))
+            .collect(),
     })
 }
 
