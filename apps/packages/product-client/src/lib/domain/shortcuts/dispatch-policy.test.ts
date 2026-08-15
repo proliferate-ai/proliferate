@@ -242,10 +242,14 @@ describe("shortcut dispatch policy", () => {
   });
 
   it("yields the left-sidebar toggle to the composer's bold chord only over highlighted text", () => {
-    const composerEditorTarget = {
-      closest: (selector: string) =>
-        selector === "[data-chat-composer-editor]" ? {} : null,
-    } as unknown as EventTarget;
+    const composerTarget = (highlighted: boolean) => ({
+      closest: (selector: string) => {
+        if (selector === "[data-chat-composer-editor][data-chat-composer-highlight]") {
+          return highlighted ? {} : null;
+        }
+        return selector === "[data-chat-composer-editor]" ? {} : null;
+      },
+    }) as unknown as EventTarget;
     const boldChordEvent = {
       key: "b",
       code: "KeyB",
@@ -254,23 +258,25 @@ describe("shortcut dispatch policy", () => {
       shiftKey: false,
       altKey: false,
       defaultPrevented: false,
-      target: composerEditorTarget,
-    } as KeyboardEvent;
+    };
 
-    vi.stubGlobal("document", { getSelection: () => ({ isCollapsed: false }) });
-    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, boldChordEvent))
-      .toBe(false);
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, {
+      ...boldChordEvent,
+      target: composerTarget(true),
+    } as KeyboardEvent)).toBe(false);
 
     // The right-panel toggle (⌘⌥B) is not a formatting chord and stays global.
     expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleRightPanel, {
       ...boldChordEvent,
       altKey: true,
+      target: composerTarget(true),
     } as KeyboardEvent)).toBe(true);
 
     // A collapsed caret has nothing to unformat; the sidebar keeps the key.
-    vi.stubGlobal("document", { getSelection: () => ({ isCollapsed: true }) });
-    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, boldChordEvent))
-      .toBe(true);
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, {
+      ...boldChordEvent,
+      target: composerTarget(false),
+    } as KeyboardEvent)).toBe(true);
   });
 
   it("allows right-panel toggle from text-entry and terminal focus targets", () => {

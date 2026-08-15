@@ -156,17 +156,12 @@ function isDigitShortcutEvent(event: KeyboardShortcutEventLike): boolean {
   return /^[1-9]$/.test(event.key) || /^Digit[1-9]$/.test(event.code ?? "");
 }
 
-function isComposerRichTextTarget(target: EventTarget | null): boolean {
+function isHighlightedComposerTarget(target: EventTarget | null): boolean {
   const element = target as HTMLElement | null;
   return typeof element?.closest === "function"
-    && element.closest("[data-chat-composer-editor]") !== null;
-}
-
-function hasHighlightedTextSelection(): boolean {
-  const selection = typeof document !== "undefined"
-    ? document.getSelection?.()
-    : null;
-  return selection !== null && selection !== undefined && !selection.isCollapsed;
+    && element.closest(
+      "[data-chat-composer-editor][data-chat-composer-highlight]",
+    ) !== null;
 }
 
 export function shouldDispatchKeyboardShortcut(
@@ -175,13 +170,13 @@ export function shouldDispatchKeyboardShortcut(
 ): boolean {
   // The composer's rich-text editor authors bold with the same primary-B
   // chord (Lexical's native FORMAT_TEXT_COMMAND handling). The editor owns
-  // the key only while composer text is highlighted; with a collapsed caret —
-  // or focus anywhere else, including the terminal — the sidebar keeps it
-  // (PRO-265).
+  // the key only while composer text is highlighted — the editor mirrors
+  // that state onto its root as `data-chat-composer-highlight`. With a
+  // collapsed caret, or focus anywhere else including the terminal, the
+  // sidebar keeps it (PRO-265).
   if (
     shortcut.id === SHORTCUTS.toggleLeftSidebar.id
-    && isComposerRichTextTarget(event.target)
-    && hasHighlightedTextSelection()
+    && isHighlightedComposerTarget(event.target)
   ) {
     return false;
   }

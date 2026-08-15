@@ -278,7 +278,16 @@ function ComposerEditorBridge({
 
   useEffect(() => editor.registerUpdateListener(({ editorState, dirtyElements, dirtyLeaves, tags }) => {
     editorState.read(() => {
-      onEditorContextChange?.(readComposerEditorContext());
+      const context = readComposerEditorContext();
+      onEditorContextChange?.(context);
+      // Mirror "text is highlighted" onto the root so the global shortcut
+      // dispatcher can cede ⌘B to the editor's bold chord without reading
+      // DOM selection state; Lexical's selection is what bold applies to,
+      // so it is the source of truth (PRO-265).
+      editor.getRootElement()?.toggleAttribute(
+        "data-chat-composer-highlight",
+        context.anchorOffset !== context.focusOffset,
+      );
       if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
       const payload = JSON.stringify(editorState.toJSON());
       if (payload === lastDocumentPayloadRef.current) return;

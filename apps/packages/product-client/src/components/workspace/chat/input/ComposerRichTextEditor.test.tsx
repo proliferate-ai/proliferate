@@ -4,10 +4,12 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   $createParagraphNode,
+  $createRangeSelection,
   $createTextNode,
   $getRoot,
   $getSelection,
   $isRangeSelection,
+  $setSelection,
   KEY_ENTER_COMMAND,
   KEY_TAB_COMMAND,
   PASTE_COMMAND,
@@ -19,6 +21,8 @@ import {
 } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import { replaceComposerTextRange } from "#product/components/workspace/chat/input/ComposerEditorDocument";
 import type { ChatComposerEditorSnapshot } from "#product/lib/domain/chat/composer/file-mention-draft-model";
+import { SHORTCUTS } from "#product/config/shortcuts/registry";
+import { shouldDispatchKeyboardShortcut } from "#product/lib/domain/shortcuts/dispatch-policy";
 
 let originalRangeRectDescriptor: PropertyDescriptor | undefined;
 
@@ -71,6 +75,47 @@ describe("ComposerRichTextEditor", () => {
     await waitFor(() => {
       expect(harness.root.querySelector(".font-semibold")?.textContent).toBe("bold");
       expect(harness.root.querySelector(".italic")?.textContent).toBe("italic");
+    });
+  });
+
+  it("cedes the sidebar's B chord to bold only while text is highlighted", async () => {
+    const harness = renderEditor();
+    await harness.ready();
+    act(() => resetText(harness.editor, "chord"));
+    const boldChordEvent = {
+      key: "b",
+      code: "KeyB",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: false,
+      target: harness.root,
+    } as unknown as KeyboardEvent;
+
+    // Collapsed caret: the editor does not claim the chord.
+    expect(harness.root.hasAttribute("data-chat-composer-highlight")).toBe(false);
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, boldChordEvent))
+      .toBe(true);
+
+    act(() => {
+      harness.editor.update(() => {
+        const textNode = $getRoot().getAllTextNodes()[0]!;
+        const selection = $createRangeSelection();
+        selection.setTextNodeRange(textNode, 0, textNode, textNode.getTextContentSize());
+        $setSelection(selection);
+      }, { discrete: true });
+    });
+
+    // Highlighted text: the editor claims the chord and the key bolds it.
+    await waitFor(() => {
+      expect(harness.root.hasAttribute("data-chat-composer-highlight")).toBe(true);
+    });
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, boldChordEvent))
+      .toBe(false);
+    fireEvent.keyDown(harness.root, { key: "b", ctrlKey: true });
+    await waitFor(() => {
+      expect(harness.root.querySelector(".font-semibold")?.textContent).toBe("chord");
     });
   });
 
