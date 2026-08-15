@@ -35,11 +35,12 @@ const PR_STATUS_UNAVAILABLE_LABEL = "PR status unavailable — gh not signed in"
  */
 export function WorkspacesPage() {
   const actions = useWorkspaceSidebarActions();
-  const { cloudActive } = useCloudAvailabilityState();
+  const { cloudActive, cloudComputeEnabled } = useCloudAvailabilityState();
   const { data: repoConfigs } = useRepositories(cloudActive);
   const { groups } = useWorkspaceSidebarState({
     showArchived: false,
     repoConfigs: repoConfigs?.repositories ?? [],
+    cloudComputeEnabled,
   });
   // Row git/PR state rides on item.gitStatus (fed by the same hook inside
   // the sidebar state); the page only needs the sync map for the §4.4 note.

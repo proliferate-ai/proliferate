@@ -130,6 +130,7 @@ export const MainSidebar = memo(function MainSidebar({
   } = useWorkspaceSidebarState({
     showArchived: false,
     repoConfigs: repoConfigs?.repositories ?? [],
+    cloudComputeEnabled,
   });
   const navigate = useNavigate();
   const location = useLocation();
