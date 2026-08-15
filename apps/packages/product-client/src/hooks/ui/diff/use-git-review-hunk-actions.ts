@@ -4,10 +4,17 @@ import {
   useStagePatchMutation,
   useUnstagePatchMutation,
 } from "@anyharness/sdk-react";
-import type { UnifiedDiffHunkActions } from "#product/components/content/ui/diff/UnifiedDiffViewer";
 import { extractHunkPatch, isHunkActionEligible } from "#product/lib/domain/files/hunk-patch";
 import type { GitPanelReviewScope } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 import { useToastStore } from "#product/stores/toast/toast-store";
+
+/** Structurally matches the diff viewers' `UnifiedDiffHunkActions` prop (hooks cannot import component types). */
+export interface GitReviewHunkActions {
+  mode: "staged" | "unstaged";
+  disabled: boolean;
+  onRevert: (hunkIndex: number) => void;
+  onStageOrUnstage: (hunkIndex: number) => void;
+}
 
 /**
  * Hunk-level actions for a git review row: only for working-tree scopes
@@ -33,7 +40,7 @@ export function useGitReviewHunkActions({
   layout: "unified" | "split";
   diffTruncated: boolean;
   isRuntimeReady: boolean;
-}): UnifiedDiffHunkActions | null {
+}): GitReviewHunkActions | null {
   const shouldUnstage = sectionScope === "staged";
   // Lightweight mutation hooks — share the same query client.
   const revertMutation = useRevertGitPatchesMutation({ workspaceId });
