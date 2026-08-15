@@ -1,14 +1,40 @@
+import type { WorkflowRunV2 } from "@anyharness/sdk";
 import { Button } from "#product/primitives/Button";
 import { Spinner } from "#product/primitives/Spinner";
+import { StatusDot } from "#product/primitives/StatusDot";
 import { Workflow } from "#product/primitives/icons/product";
 import { EmptyState } from "#product/primitives/patterns/EmptyState";
 import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
 import { PaneHeader } from "#product/components/workspace/pane/PaneHeader";
+import { workflowRunStatusDotTone } from "#product/components/workflows/workflow-run-status-dot";
 import { WorkflowDocsList } from "#product/components/workflows/run-view/WorkflowDocsList";
 import { WorkflowGraphView } from "#product/components/workflows/run-view/WorkflowGraphView";
 import { WORKFLOW_RUN_VIEW_COPY } from "#product/copy/workflows/workflow-run-view-copy";
+import { workflowRunStatusTone } from "#product/domain/workflows/run-view-model";
 import { useWorkflowPane } from "#product/hooks/workflows/facade/use-workflow-pane";
 import { useWorkflowDocOpen } from "#product/hooks/workflows/ui/use-workflow-doc-open";
+
+/**
+ * The run's own state on the pane header: status dot plus label, the same
+ * treatment the design's run header wears. Renders nothing while the pane has
+ * no run, and nothing for a status this build has no words for (a newer
+ * runtime's status stays a silent dot-less header, never an invented label).
+ */
+function WorkflowRunStatusChip({ run }: { run: WorkflowRunV2 | null }) {
+  if (!run) {
+    return null;
+  }
+  const label = WORKFLOW_RUN_VIEW_COPY.runStatusLabel(run.status);
+  if (!label) {
+    return null;
+  }
+  return (
+    <span className="flex items-center gap-1.5 px-1 text-ui-sm text-muted-foreground">
+      <StatusDot tone={workflowRunStatusDotTone(workflowRunStatusTone(run.status))} />
+      {label}
+    </span>
+  );
+}
 
 /**
  * The Workflows gen-2 run view, as the workspace's right-panel pane: the
@@ -40,6 +66,7 @@ export function WorkflowPane({ workspaceId }: { workspaceId: string }) {
             </span>
           </div>
         )}
+        right={<WorkflowRunStatusChip run={pane.run} />}
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
         {pane.status === "loading" ? (

@@ -10,7 +10,22 @@
  */
 export const WORKFLOW_RUN_VIEW_COPY = {
   /** Right-panel header title, and the header entry's tab label. */
-  paneTitle: "Workflow",
+  paneTitle: "Execution",
+
+  /**
+   * The run's own state, worn on the pane header. One label per contract
+   * status — read partially on purpose (this module stays free of SDK types),
+   * so the pane hides the status for a value this build has no words for
+   * rather than inventing one. The tone that colors the dot beside the label
+   * lives in `run-view-model.ts` (`workflowRunStatusTone`).
+   */
+  runStatusLabel: (status: string): string | undefined => ({
+    running: "Running",
+    awaiting_human: "Waiting on approval",
+    interrupted: "Paused",
+    completed: "Succeeded",
+    failed: "Failed",
+  } as Partial<Record<string, string>>)[status],
 
   /** The run exists but the projection has not arrived yet. */
   loading: "Loading run…",

@@ -10,6 +10,7 @@ import type {
   WorkflowRunProjectionV2,
   WorkflowRunV2,
 } from "@anyharness/sdk";
+import type { WorkflowRunTone } from "./run-presentation";
 
 /**
  * Tone vocabulary local to the domain layer (mirrors gen-1's
@@ -59,6 +60,26 @@ export interface WorkflowNodeControlSet {
   flipToAgent: boolean;
   flipToHuman: boolean;
   addAdhoc: boolean;
+}
+
+/**
+ * Tone for the run's own status, worn beside its label on the pane header.
+ * Speaks `run-presentation.ts`'s `WorkflowRunTone` vocabulary so the component
+ * layer maps it through the shared `workflowRunStatusDotTone`. Same
+ * total-declaration / partial-read discipline as `NODE_STATUS_TONE`: an
+ * unknown status from a newer runtime lands on `neutral` instead of a hole.
+ */
+const RUN_STATUS_TONE: Record<WorkflowRunV2["status"], WorkflowRunTone> = {
+  running: "info",
+  awaiting_human: "info",
+  interrupted: "warning",
+  completed: "success",
+  failed: "danger",
+};
+
+export function workflowRunStatusTone(status: WorkflowRunV2["status"]): WorkflowRunTone {
+  const byStatus: Partial<Record<string, WorkflowRunTone>> = RUN_STATUS_TONE;
+  return byStatus[status] ?? "neutral";
 }
 
 /** A run the user can still act on: every non-terminal state. */

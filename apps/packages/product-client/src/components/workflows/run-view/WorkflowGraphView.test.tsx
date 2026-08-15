@@ -137,8 +137,8 @@ describe("WorkflowGraphView", () => {
       },
     ]);
 
-    expect(screen.getByText("01 · First attempt")).toBeTruthy();
-    expect(screen.getByText("01 · Second attempt")).toBeTruthy();
+    expect(screen.getByText("First attempt")).toBeTruthy();
+    expect(screen.getByText("Second attempt")).toBeTruthy();
     expect(edgesOf(container).length).toBe(0);
   });
 
@@ -159,9 +159,9 @@ describe("WorkflowGraphView", () => {
       },
     ]);
 
-    const sideTitle = screen.getByText("01 · Side errand");
+    const sideTitle = screen.getByText("Side errand");
     expect(sideTitle.closest(".border-l")).not.toBeNull();
-    const chainTitle = screen.getByText("01 · Anchor");
+    const chainTitle = screen.getByText("Anchor");
     expect(chainTitle.closest(".border-l")).toBeNull();
   });
 
@@ -185,8 +185,8 @@ describe("WorkflowGraphView", () => {
       },
     ]);
 
-    const side = screen.getByText("01 · Side errand");
-    const secondAttempt = screen.getByText("01 · Second attempt");
+    const side = screen.getByText("Side errand");
+    const secondAttempt = screen.getByText("Second attempt");
     expect(side.closest(".border-l")).not.toBeNull();
     expect(
       side.compareDocumentPosition(secondAttempt) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -210,7 +210,7 @@ describe("WorkflowGraphView", () => {
       },
     ]);
 
-    expect(screen.getByText("01 · Orphaned errand").closest(".border-l")).not.toBeNull();
+    expect(screen.getByText("Orphaned errand").closest(".border-l")).not.toBeNull();
   });
 
   it("passes card callbacks through untouched", () => {
