@@ -63,6 +63,14 @@ vi.mock("#product/components/diagnostics/DebugProfiler", () => ({
   DebugProfiler: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
+// The workflows_v2 launch gate, held mutable so the sidebar is covered with
+// gen-2 both dark and live rather than only at the current default.
+const workflowsGateState = vi.hoisted(() => ({ enabled: true }));
+
+vi.mock("#product/lib/domain/capabilities/workflows-v2", () => ({
+  isWorkflowsV2Enabled: () => workflowsGateState.enabled,
+}));
+
 vi.mock("#product/components/app/sidebar/SidebarAccountFooter", () => ({
   SidebarAccountFooter: () => <div data-testid="sidebar-account-footer" />,
 }));
@@ -336,6 +344,7 @@ afterEach(() => {
   cleanup();
   clearShortcutHandlerRegistryForTests();
   vi.clearAllMocks();
+  workflowsGateState.enabled = true;
   releaseNoticeState.notice = null;
   productHostState.desktop = null;
   workspaceUiState.sidebarOpen = true;
@@ -435,6 +444,31 @@ describe("MainSidebar scroll boundary", () => {
       navRow("Support").compareDocumentPosition(repositories)
         & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+});
+
+describe("MainSidebar workflows gate", () => {
+  function workflowsRows(): HTMLElement[] {
+    return screen.queryAllByRole("button", { name: /^Workflows/ });
+  }
+
+  it("renders the Workflows row while the gate is on", () => {
+    workflowsGateState.enabled = true;
+
+    renderMainSidebar();
+
+    expect(workflowsRows()).toHaveLength(1);
+  });
+
+  it("omits the Workflows row entirely while the gate is off", () => {
+    workflowsGateState.enabled = false;
+
+    renderMainSidebar();
+
+    expect(workflowsRows()).toHaveLength(0);
+    // The neighbouring destinations are untouched: only the gen-2 row goes.
+    expect(screen.queryAllByRole("button", { name: /^Workspaces/ })).not.toHaveLength(0);
+    expect(screen.queryAllByRole("button", { name: /^Support/ })).not.toHaveLength(0);
   });
 });
 

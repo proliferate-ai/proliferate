@@ -256,6 +256,27 @@ describe("useAppShortcuts", () => {
       expect(actions.openSupport.execute).not.toHaveBeenCalled();
     });
   });
+
+  describe("app.go-automations gating", () => {
+    // The workflows_v2 gate hides the action, and a hidden action must leave
+    // its shortcut unregistered rather than routing to the dark surface.
+    it("routes the shortcut through app command actions when the action is visible", () => {
+      const actions = commandActions();
+      renderHook(() => useAppShortcuts(actions));
+
+      expect(runShortcutHandler("app.go-automations", { source: "keyboard" })).toBe(true);
+      expect(actions.goWorkflows.execute).toHaveBeenCalledWith("shortcut");
+    });
+
+    it("leaves the shortcut unregistered (inert) when the action is hidden", () => {
+      const actions = commandActions();
+      actions.goWorkflows = { ...actions.goWorkflows, hidden: true };
+      renderHook(() => useAppShortcuts(actions));
+
+      expect(runShortcutHandler("app.go-automations", { source: "keyboard" })).toBe(false);
+      expect(actions.goWorkflows.execute).not.toHaveBeenCalled();
+    });
+  });
 });
 
 function GlobalShortcutOwner({
