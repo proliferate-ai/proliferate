@@ -290,6 +290,8 @@ class DesktopUpdaterCadence(BaseModel):
 
     checkIntervalMs: int | None = None
     stallThresholdMs: int | None = None
+
+
 class AgentCatalogChannel(BaseModel):
     """Publisher-lane channel this deployment advertises (Update Flow ADR,
     FR-1). A desktop shell or cloud worker launches its runtime sidecar with

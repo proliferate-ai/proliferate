@@ -130,7 +130,8 @@ _META_GOLDEN_FIELDS = [
     "capabilities",
     # Additive (FR-2): optional desktop updater cadence override, null unless
     # the deployment configured it.
-    "desktopUpdater", "agentCatalog",
+    "desktopUpdater",
+    "agentCatalog",
 ]
 
 
