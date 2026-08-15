@@ -228,6 +228,127 @@ describe("useTranscriptStickToBottom above-change compensation (PRO-187, r4)", (
     });
     expect(viewport.scrollTop).toBe(1500);
   });
+
+  // Deterministic negative control for the r5 prepend UNDER-compensation CI
+  // defect (PRO-187): on a CPU-throttled runner the freshly-prepended older
+  // rows' estimate-to-measured corrections trickle in over a second or more,
+  // spaced out past the fixed initial compensation deadline. The pre-fix
+  // deadline lapsed after the first couple of frame passes, so every later
+  // correction jumped the reader up toward the newly prepended top (chromium
+  // scrollTop 120 vs > 150 / delta 528 vs > 576). The fix extends the window by
+  // a quiet interval on every fresh above-anchor growth, so as long as
+  // corrections keep arriving they keep being absorbed.
+  it("keeps absorbing corrections that arrive spread out past the initial deadline", () => {
+    let clock = 0;
+    const nowSpy = vi.spyOn(performance, "now").mockImplementation(() => clock);
+    try {
+      const handle = renderHarness();
+      const { viewport, api } = handle.current;
+      setContentHeight(viewport, 2000);
+      viewport.scrollTop = 1000;
+
+      act(() => {
+        api.setPinned(false);
+        // Initial deadline = 0 + 500ms (ABOVE_CHANGE_COMPENSATION_MAX_MS).
+        api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 1000 });
+      });
+      // Two rounds so the forced-glue window terminates on its quiet frame;
+      // corrections then drive isolated frame passes via the content
+      // ResizeObserver (requestFrame is a no-op while glue is still active).
+      act(() => {
+        flushRafRound();
+      });
+      act(() => {
+        flushRafRound();
+      });
+
+      // Correction 1 at t=400ms (inside the initial 500ms window): total grows
+      // to 2400. Absorbed, and the window extends to 400 + 1000 = 1400ms.
+      clock = 400;
+      setContentHeight(viewport, 2400);
+      act(() => {
+        api.notifyContentResize();
+      });
+      expect(viewport.scrollTop).toBe(1400);
+      act(() => {
+        flushRafRound();
+      });
+
+      // Correction 2 at t=1200ms — PAST the initial 500ms deadline, but inside
+      // the extended 1400ms window. Pre-fix this was dropped (deadline lapsed at
+      // 500) and scrollTop stayed 1400, the CI under-compensation. With the
+      // extension it is absorbed: scrollTop = 1000 + (2800 - 2000) = 1800, and
+      // the window extends again to 1200 + 1000 = 2200ms.
+      clock = 1200;
+      setContentHeight(viewport, 2800);
+      act(() => {
+        api.notifyContentResize();
+      });
+      expect(viewport.scrollTop).toBe(1800);
+      act(() => {
+        flushRafRound();
+      });
+
+      // Correction 3 at t=2000ms (inside 2200ms): fully absorbed.
+      clock = 2000;
+      setContentHeight(viewport, 3000);
+      act(() => {
+        api.notifyContentResize();
+      });
+      expect(viewport.scrollTop).toBe(2000);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  // The extended window is bounded: once corrections go quiet for longer than
+  // the quiet interval, a later isolated growth no longer re-anchors the reader
+  // (ordinary below-the-viewport growth is free to move it again).
+  it("closes the window once corrections go quiet past the extension interval", () => {
+    let clock = 0;
+    const nowSpy = vi.spyOn(performance, "now").mockImplementation(() => clock);
+    try {
+      const handle = renderHarness();
+      const { viewport, api } = handle.current;
+      setContentHeight(viewport, 2000);
+      viewport.scrollTop = 1000;
+
+      act(() => {
+        api.setPinned(false);
+        api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 1000 });
+      });
+      act(() => {
+        flushRafRound();
+      });
+      act(() => {
+        flushRafRound();
+      });
+
+      // A single correction at t=400ms extends the window to 1400ms.
+      clock = 400;
+      setContentHeight(viewport, 2400);
+      act(() => {
+        api.notifyContentResize();
+      });
+      expect(viewport.scrollTop).toBe(1400);
+      act(() => {
+        flushRafRound();
+      });
+
+      // Then corrections go quiet. A growth at t=1600ms (past the 1400ms extended
+      // deadline) is treated as ordinary below-the-viewport growth: the anchor is
+      // cleared and the reader is NOT pulled back up.
+      clock = 1600;
+      viewport.scrollTop = 1400;
+      setContentHeight(viewport, 3000);
+      act(() => {
+        api.notifyContentResize();
+      });
+      expect(viewport.scrollTop).toBe(1400);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
 });
 
 describe("above-change compensation cancels on upward user intent (PRO-187, r4)", () => {

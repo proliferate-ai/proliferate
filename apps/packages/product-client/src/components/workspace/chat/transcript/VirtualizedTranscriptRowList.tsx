@@ -312,6 +312,20 @@ export function VirtualizedTranscriptRowList({
     startAboveChangeCompensation,
   });
 
+  // Rung 5 (PRO-187): re-run the pinned snap on every commit whose ROWS changed,
+  // not only when the row COUNT or the estimate-derived total changes. A
+  // streaming turn grows its rendered DOM on each chunk while its
+  // composition estimate — and therefore `totalContentHeight`, an estimate sum
+  // until the row remeasures — stays constant, so neither `renderableRows.length`
+  // nor `totalContentHeight` fires mid-stream. The grown row lives in normal
+  // flow, so `scrollHeight` grows in the SAME commit it renders; snapping only
+  // from the content ResizeObserver trails that growth by a frame (or several,
+  // spread out on a slow/loaded CI runner), painting a bottom-distance spike
+  // above the follow ceiling (the r5 pinned-follow / repin regression:
+  // bottomDistance 132 > 120). Keying on the `renderableRows` identity runs this
+  // pinned snap in that commit's layout phase, reading the already-grown
+  // `scrollHeight`, so the growth and its snap paint together. Still the single
+  // writer — scrollToBottom marks its own write through the ownership markers.
   useLayoutEffect(() => {
     if (!pinnedRef.current) {
       return;
@@ -321,7 +335,7 @@ export function VirtualizedTranscriptRowList({
     isSessionBusy,
     lastPromptSubmittedAtMs,
     pinnedRef,
-    renderableRows.length,
+    renderableRows,
     scrollToBottom,
     totalContentHeight,
   ]);

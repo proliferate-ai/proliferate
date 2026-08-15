@@ -2,6 +2,25 @@ import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 
 import type { ContentHeightScrollAnchor } from "#product/hooks/chat/ui/transcript-row-list-model";
 import type { TranscriptFramePipeline } from "#product/hooks/chat/ui/transcript-frame-pipeline";
 
+// While an above-change compensation anchor is live, each estimate-to-measured
+// correction of a freshly-prepended older row grows the total above the reader
+// and must be absorbed into scrollTop. On a slow/CPU-throttled runner those
+// corrections do not all land inside the fixed initial deadline
+// (ABOVE_CHANGE_COMPENSATION_MAX_MS in use-transcript-stick-to-bottom.ts) — they
+// trickle in over a second or more, spaced out by hundreds of ms. So instead of
+// letting the initial deadline end the window while corrections are still
+// arriving, extend it by this quiet window every time a fresh growth is observed
+// (see runFramePass). The window therefore stays open as long as the prepended
+// rows keep correcting taller, and closes only once they go quiet — the fix for
+// the r5 prepend under-compensation (chromium scrollTop 120 vs > 150 / delta 528
+// vs > 576 on the throttled runner, and the severe near-top landing).
+const ABOVE_CHANGE_COMPENSATION_QUIET_EXTENSION_MS = 1_000;
+// Absolute ceiling on the extended window, measured from the anchor's first
+// frame pass, so a pathological never-quiet growth source can never hold the
+// reader anchored forever and later below-the-viewport growth is eventually free
+// to move it again.
+const ABOVE_CHANGE_COMPENSATION_ABSOLUTE_MAX_MS = 3_000;
+
 export interface UseTranscriptFramePipelineLifecycleOptions {
   /** The single owned per-frame pipeline instance (stable ref). */
   pipelineRef: RefObject<TranscriptFramePipeline>;
@@ -58,7 +77,9 @@ export function useTranscriptFramePipelineLifecycle({
   const compensationTotalFloorRef = useRef<{
     anchor: ContentHeightScrollAnchor | null;
     maxScrollHeight: number;
-  }>({ anchor: null, maxScrollHeight: 0 });
+    // Hard ceiling (interactionNow ms) for the extended window of THIS anchor.
+    absoluteDeadline: number;
+  }>({ anchor: null, maxScrollHeight: 0, absoluteDeadline: 0 });
 
   const runFramePass = useCallback(() => {
     const viewport = scrollRef.current;
@@ -102,8 +123,22 @@ export function useTranscriptFramePipelineLifecycle({
     if (floor.anchor !== anchor) {
       floor.anchor = anchor;
       floor.maxScrollHeight = anchor.scrollHeight;
+      floor.absoluteDeadline = now + ABOVE_CHANGE_COMPENSATION_ABSOLUTE_MAX_MS;
     }
-    floor.maxScrollHeight = Math.max(floor.maxScrollHeight, viewport.scrollHeight);
+    // A fresh above-anchor growth this pass is a late estimate-to-measured
+    // correction still arriving; keep the compensation window open past the
+    // initial deadline (bounded by the absolute ceiling) so every such
+    // correction is absorbed even when a throttled runner spreads them out well
+    // beyond the fixed initial window. Without this the deadline lapses after a
+    // couple of frame passes and the remaining, still-arriving corrections jump
+    // the reader up toward the newly prepended top (r5 prepend under-compensation).
+    if (viewport.scrollHeight > floor.maxScrollHeight) {
+      floor.maxScrollHeight = viewport.scrollHeight;
+      compensationDeadlineRef.current = Math.min(
+        now + ABOVE_CHANGE_COMPENSATION_QUIET_EXTENSION_MS,
+        floor.absoluteDeadline,
+      );
+    }
     const effectiveScrollHeight = floor.maxScrollHeight;
     notifyProgrammaticScroll(() => {
       viewport.scrollTop = anchor.scrollTop + (effectiveScrollHeight - anchor.scrollHeight);
