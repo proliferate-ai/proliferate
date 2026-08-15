@@ -284,6 +284,65 @@ describe("useAgentsPaneSessionLifecycle pane-owned reconnect", () => {
     expect(rendered.result.current.reconnectState.reconnecting).toBe(true);
   });
 
+  it("resets reconnectState on a session switch even though isPaneRouteActive flips before clientSessionId", async () => {
+    const handleA = installChild("client-a", "child-a");
+    installChild("client-b", "child-b");
+    let capturedOnReconnectNeeded: (() => void) | undefined;
+    mocks.ensureSessionStreamConnected.mockImplementation(async (
+      sessionId: string,
+      options?: { onReconnectNeeded?: () => void },
+    ) => {
+      const record = getSessionRecord(sessionId);
+      if (sessionId === "client-a") {
+        capturedOnReconnectNeeded = options?.onReconnectNeeded;
+        if (record?.materializedSessionId) {
+          setSessionStreamHandle({
+            sessionId: record.materializedSessionId,
+            workspaceId: record.workspaceId,
+            handle: handleA,
+          });
+        }
+        patchSessionRecord(sessionId, { streamConnectionState: "open" });
+        return;
+      }
+      // The next session's stream stays connecting so its own success path
+      // cannot mask a missed reset — the only thing that can clear the stale
+      // "reconnecting" state here is releasePaneStream on the old session.
+      patchSessionRecord(sessionId, { streamConnectionState: "connecting" });
+      await new Promise<void>(() => {});
+    });
+
+    const rendered = renderHook(
+      ({ input }: { input: AgentsPaneSessionLifecycleInput }) =>
+        useAgentsPaneSessionLifecycle(input),
+      { initialProps: { input: createInput("client-a", "child-a") } },
+    );
+
+    await waitFor(() => {
+      expect(mocks.ensureSessionStreamConnected).toHaveBeenCalledTimes(1);
+    });
+    expect(capturedOnReconnectNeeded).toBeTypeOf("function");
+
+    // Drive the pane into a "reconnecting" state on client-a.
+    act(() => {
+      capturedOnReconnectNeeded?.();
+    });
+    expect(rendered.result.current.reconnectState.reconnecting).toBe(true);
+
+    // Switch to client-b: the effect cleanup for client-a runs releasePaneStream,
+    // which must clear the per-hook reconnectState unconditionally.
+    await act(async () => {
+      rendered.rerender({ input: createInput("client-b", "child-b") });
+      await Promise.resolve();
+    });
+
+    expect(rendered.result.current.reconnectState).toEqual({
+      attempt: 0,
+      nextDelayMs: 0,
+      reconnecting: false,
+    });
+  });
+
   it("does not retry once the child becomes closed before the reconnect timer fires", async () => {
     const handle = installChild("client-a", "child-a");
     let capturedOnReconnectNeeded: (() => void) | undefined;

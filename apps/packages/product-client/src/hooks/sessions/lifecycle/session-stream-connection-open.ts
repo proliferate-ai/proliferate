@@ -137,6 +137,16 @@ export async function openSessionStreamConnection({
       isStillCurrent,
     });
   };
+  const scheduleImmediateReconnect = () => {
+    scheduleSessionStreamReconnect({
+      sessionId,
+      options,
+      refreshSessionSlotMeta,
+      ensureSessionStreamConnected,
+      isStillCurrent,
+      immediate: true,
+    });
+  };
   const streamFlushController = createSessionStreamFlushController({
     sessionId,
     streamMeasurementOperationId,
@@ -153,6 +163,7 @@ export async function openSessionStreamConnection({
       handle?.close();
     },
     scheduleReconnect,
+    scheduleImmediateReconnect,
     clearActiveSummaryRefreshTimer: refreshController.clearActiveSummaryRefreshTimer,
     scheduleActiveSummaryRefresh: refreshController.scheduleActiveSummaryRefresh,
     scheduleStartupReadyRefresh: refreshController.scheduleStartupReadyRefresh,

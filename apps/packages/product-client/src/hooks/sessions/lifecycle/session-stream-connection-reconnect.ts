@@ -22,6 +22,13 @@ interface ScheduleSessionStreamReconnectInput {
     options?: SessionStreamConnectOptions,
   ) => Promise<void>;
   isStillCurrent: () => boolean;
+  /**
+   * Bypass-backoff fast path for a gap-reconcile forced close (Q9): fire on the
+   * next tick without waiting on the shared error-retry curve and without
+   * advancing the per-session attempt counter. Defaults to false (ordinary
+   * error retry).
+   */
+  immediate?: boolean;
 }
 
 export function scheduleSessionStreamReconnect({
@@ -30,6 +37,7 @@ export function scheduleSessionStreamReconnect({
   refreshSessionSlotMeta,
   ensureSessionStreamConnected,
   isStillCurrent,
+  immediate = false,
 }: ScheduleSessionStreamReconnectInput): void {
   clearSessionReconnectTimer(sessionId);
   if (!isStillCurrent()) {
@@ -70,6 +78,19 @@ export function scheduleSessionStreamReconnect({
   // once the online transition triggers flushOfflineSessionReconnects.
   if (!isConnectivityOnline()) {
     registerOfflineSessionReconnect(sessionId, runner);
+    return;
+  }
+
+  if (immediate) {
+    // Gap-reconcile forced reconnect: do NOT advance the shared attempt counter
+    // and do NOT wait on the curve — schedule on the next tick. The attempt
+    // number reported is the unchanged current one.
+    recordSessionStreamReconnectScheduled({
+      sessionId,
+      attempt: currentSessionReconnectAttempt(sessionId),
+      delayMs: 0,
+    });
+    scheduleSessionReconnectTimer(sessionId, runner, 0);
     return;
   }
 

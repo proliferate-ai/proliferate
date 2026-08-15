@@ -150,9 +150,12 @@ export function useAgentsPaneSessionLifecycle(
     // pending pane-owned reconnect and drop its backoff count.
     clearPaneReconnectTimer(sessionId);
     paneReconnectBackoffRef.current.delete(sessionId);
-    if (isCurrent(sessionId)) {
-      setReconnectState({ attempt: 0, nextDelayMs: 0, reconnecting: false });
-    }
+    // reconnectState is per-hook-instance, not a shared/session-keyed map, so it
+    // must be reset unconditionally on release. The isCurrent guard used to skip
+    // this exactly on a session switch (isPaneRouteActive flips before
+    // clientSessionId changes), leaving stale "reconnecting" state visible until
+    // the next session connected.
+    setReconnectState({ attempt: 0, nextDelayMs: 0, reconnecting: false });
 
     const lease = paneStreamLeaseRef.current?.clientSessionId === sessionId
       ? paneStreamLeaseRef.current
@@ -193,7 +196,7 @@ export function useAgentsPaneSessionLifecycle(
         streamConnectionState: "disconnected",
       });
     }
-  }, [clearPaneReconnectTimer, isCurrent]);
+  }, [clearPaneReconnectTimer]);
 
   const connectPaneStream = useCallback((sessionId: string) => {
     if (guardRef.current.isClosed || !isCurrent(sessionId)) {
