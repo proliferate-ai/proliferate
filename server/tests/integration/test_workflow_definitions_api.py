@@ -500,8 +500,14 @@ async def test_unknown_fields_are_rejected_at_every_definition_layer(
             json=body,
         )
         assert response.status_code == 422
+        # The union body namespaces error locs by request-model branch.
+        namespaced = (
+            expected_location[0],
+            "WorkflowDefinitionCreateRequest",
+            *expected_location[1:],
+        )
         assert any(
-            tuple(error["loc"]) == expected_location and error["type"] == "extra_forbidden"
+            tuple(error["loc"]) == namespaced and error["type"] == "extra_forbidden"
             for error in response.json()["detail"]
         )
 

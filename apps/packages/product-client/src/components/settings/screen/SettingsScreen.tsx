@@ -32,6 +32,7 @@ import { SettingsScopeTabs } from "#product/primitives/patterns/settings/Setting
 import { ArrowLeft } from "#product/primitives/icons/core";
 import { SETTINGS_COPY } from "#product/copy/settings/settings-copy";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useMacWindowControlsInsetClass } from "#product/hooks/ui/layout/use-mac-window-controls";
 import { useWorkspaceSidebarResize } from "#product/hooks/preferences/ui/use-workspace-sidebar-resize";
 import { useUpdater } from "#product/hooks/access/tauri/use-updater";
@@ -70,11 +71,21 @@ export function SettingsScreen({
     checkNow,
     updatesSupported,
   } = useUpdater();
-  const repoSelection = resolveRepoScopeSelection({
+  // Host-capability gating (ADR Q3, FR-2/FR-3): the Cloud|Local scope toggles
+  // and cloud repo context are culled from desktop. Only web keeps the cloud
+  // settings surface reachable. Desktop always resolves to the Local context so
+  // no repo-scope pane ever renders its cloud arm (RepoCloudGate and the GitHub
+  // App authorization affordances stay dormant, web-only).
+  const host = useProductHost();
+  const cloudSettingsReachable = host.surface === "web";
+  const resolvedRepoSelection = resolveRepoScopeSelection({
     repositories,
     activeRepoSourceRoot,
     focus,
   });
+  const repoSelection = cloudSettingsReachable
+    ? resolvedRepoSelection
+    : { ...resolvedRepoSelection, context: "local" as const };
   const activeSectionIsAdminOnly = isSettingsAdminOnlySection(activeSection);
   const adminAccessLoading = organizationsQuery.isLoading || admin.isLoading;
   const isAdminConfirmed = admin.isAdmin === true;
@@ -166,11 +177,14 @@ export function SettingsScreen({
                 repositories={repositories}
                 activeRepoSourceRoot={activeRepoSourceRoot}
                 focus={focus}
+                showContextToggle={cloudSettingsReachable}
                 onSelectRepo={onSelectRepo}
                 onSelectRepoContext={onSelectRepoContext}
                 onSelectCloudEnvironment={onSelectCloudEnvironment}
               />
-            ) : activeScope === "agents" && (isSettingsHarnessSection(effectiveActiveSection) || effectiveActiveSection === "agent-api-keys") ? (
+            ) : activeScope === "agents"
+              && cloudSettingsReachable
+              && (isSettingsHarnessSection(effectiveActiveSection) || effectiveActiveSection === "agent-api-keys") ? (
               <AgentScopeHeaderControls />
             ) : null}
           </div>

@@ -21,7 +21,7 @@ export function desktopWorkerStartupFailureNotice(
 
   return {
     kind: credentialsLocked ? "credentials_locked" : "startup_failed",
-    headline: "Cloud integrations unavailable",
+    headline: "Integrations unavailable",
     consequence: credentialsLocked
       ? "An earlier Proliferate Worker is still running. Quit other Proliferate apps; if none are open, restart your computer, then retry."
       : "Proliferate will keep trying in the background. Retry now, or dismiss this notice.",

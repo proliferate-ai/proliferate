@@ -9,12 +9,16 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
+import type { WorkflowDefinitionRecordV2 } from "@proliferate/cloud-sdk";
 import { WorkflowsPage } from "#product/pages/WorkflowsPage";
+import type { WorkflowStarterTemplateV2 } from "#product/config/workflows/starter-templates";
+import { WORKFLOW_STARTER_TEMPLATES_V2 } from "#product/config/workflows/starter-templates";
 import { useAuthStore } from "#product/test/auth-store-double";
 
-const workflowSurface = vi.hoisted(() => vi.fn());
-const runSurface = vi.hoisted(() => vi.fn());
+const mainSurface = vi.hoisted(() => vi.fn());
+const builderSurface = vi.hoisted(() => vi.fn());
 const authMode = vi.hoisted(() => ({ devBypassed: false }));
+const workflowsV2 = vi.hoisted(() => ({ enabled: true }));
 
 class TestIntersectionObserver {
   observe() {}
@@ -26,6 +30,10 @@ vi.stubGlobal("IntersectionObserver", TestIntersectionObserver);
 
 vi.mock("#product/lib/domain/auth/auth-mode", () => ({
   isDevAuthBypassed: () => authMode.devBypassed,
+}));
+
+vi.mock("#product/lib/domain/capabilities/workflows-v2", () => ({
+  isWorkflowsV2Enabled: () => workflowsV2.enabled,
 }));
 
 // WorkflowsPage reads normalized auth through the host; bridge the store so the
@@ -42,34 +50,38 @@ vi.mock("@proliferate/product-client/host/ProductHostProvider", async () => {
   };
 });
 
-vi.mock("#product/components/workflows/definitions/WorkflowDefinitionsSurface", () => ({
-  WorkflowDefinitionsSurface: (props: {
+vi.mock("#product/components/workflows/main/WorkflowsMainSurface", () => ({
+  WorkflowsMainSurface: (props: {
     authCacheScope: string;
-    selectedWorkflowId: string | null;
-    managedRunsEnabled: boolean;
+    onEdit: (id: string) => void;
+    onNew: (template: WorkflowStarterTemplateV2 | null) => void;
   }) => {
-    workflowSurface(props);
-    return <section data-testid="workflow-definitions" />;
+    mainSurface(props);
+    return (
+      <section data-testid="workflows-main">
+        <button type="button" onClick={() => props.onEdit("wf-existing")}>
+          go-to-edit
+        </button>
+        <button type="button" onClick={() => props.onNew(WORKFLOW_STARTER_TEMPLATES_V2[0])}>
+          go-to-new-from-template
+        </button>
+        <button type="button" onClick={() => props.onNew(null)}>
+          go-to-new-blank
+        </button>
+      </section>
+    );
   },
 }));
 
-vi.mock("#product/components/workflows/runs/WorkflowRunsSurface", () => ({
-  WorkflowRunsSurface: (props: {
+vi.mock("#product/components/workflows/builder-v2/WorkflowBuilderSurface", () => ({
+  WorkflowBuilderSurface: (props: {
+    definitionId: string | null;
+    template?: WorkflowStarterTemplateV2 | null;
     authCacheScope: string;
-    workflowDefinitionId: string;
-    runId: string;
   }) => {
-    runSurface(props);
-    return <section data-testid="workflow-run" />;
+    builderSurface(props);
+    return <section data-testid="workflow-builder" />;
   },
-}));
-
-vi.mock("#product/hooks/capabilities/derived/use-app-capabilities", () => ({
-  useAppCapabilities: () => ({ workflowManagedRunsEnabled: true }),
-}));
-
-vi.mock("#product/hooks/workflows/workflows/use-workflow-run-open-actions", () => ({
-  useWorkflowRunOpenActions: () => ({ openWorkflowRunSession: vi.fn() }),
 }));
 
 vi.mock("#product/components/workspace/shell/screen/MainSidebarPageShell", () => ({
@@ -97,12 +109,23 @@ function renderWorkflows(path = "/workflows") {
   );
 }
 
+function signIn() {
+  useAuthStore.setState({
+    status: "authenticated",
+    session: null,
+    user: {
+      id: "user-1",
+      email: "user@example.com",
+      display_name: "Test User",
+    },
+    error: null,
+  });
+}
+
 describe("WorkflowsPage authentication boundary", () => {
   beforeEach(() => {
     authMode.devBypassed = false;
-    // TEMPORARY (workflows beta gate): the notice acknowledgement lives in
-    // sessionStorage, so each test starts from a fresh browser session.
-    window.sessionStorage.clear();
+    workflowsV2.enabled = true;
     useAuthStore.setState({
       status: "anonymous",
       session: null,
@@ -113,15 +136,15 @@ describe("WorkflowsPage authentication boundary", () => {
 
   afterEach(() => {
     cleanup();
-    workflowSurface.mockClear();
-    runSurface.mockClear();
+    mainSurface.mockClear();
+    builderSurface.mockClear();
   });
 
   it("shows a sign-in gate without mounting cloud workflow queries", () => {
     renderWorkflows("/workflows/workflow-1?source=sidebar#details");
 
     expect(screen.getByText("Sign in to use workflows")).toBeTruthy();
-    expect(workflowSurface).not.toHaveBeenCalled();
+    expect(mainSurface).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
@@ -137,102 +160,124 @@ describe("WorkflowsPage authentication boundary", () => {
 
     expect(screen.getByText("Account details unavailable")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();
-    expect(workflowSurface).not.toHaveBeenCalled();
+    expect(mainSurface).not.toHaveBeenCalled();
   });
 
   it("explains that development auth bypass cannot access personal workflows", () => {
     authMode.devBypassed = true;
-    useAuthStore.setState({
-      status: "authenticated",
-      user: {
-        id: "local-dev-user",
-        email: "dev@proliferate.local",
-        display_name: "Local Developer",
-      },
-    });
+    signIn();
 
     renderWorkflows();
 
     expect(screen.getByText("Workflows need account authentication")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();
-    expect(workflowSurface).not.toHaveBeenCalled();
-  });
-
-  it("mounts the connected surface only with the authenticated user's cache scope", () => {
-    useAuthStore.setState({
-      status: "authenticated",
-      session: null,
-      user: {
-        id: "user-1",
-        email: "user@example.com",
-        display_name: "Test User",
-      },
-      error: null,
-    });
-
-    renderWorkflows("/workflows/workflow-1");
-
-    expect(screen.getByTestId("workflow-definitions")).toBeTruthy();
-    expect(workflowSurface).toHaveBeenCalledWith(expect.objectContaining({
-      authCacheScope: "user-1",
-      selectedWorkflowId: "workflow-1",
-      managedRunsEnabled: true,
-    }));
-  });
-
-  // TEMPORARY (workflows beta gate): delete with WORKFLOWS_BETA_GATE_ENABLED.
-  it("raises the beta notice over the mounted surface and dismisses it", () => {
-    useAuthStore.setState({
-      status: "authenticated",
-      session: null,
-      user: {
-        id: "user-1",
-        email: "user@example.com",
-        display_name: "Test User",
-      },
-      error: null,
-    });
-
-    renderWorkflows();
-
-    expect(screen.getByText("This feature is in beta")).toBeTruthy();
-    // The gate is an interstitial, not a removal: the surface is still mounted.
-    expect(screen.getByTestId("workflow-definitions")).toBeTruthy();
-    expect(workflowSurface).toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("button", { name: "Continue anyway" }));
-
-    expect(screen.queryByText("This feature is in beta")).toBeNull();
-    expect(screen.getByTestId("workflow-definitions")).toBeTruthy();
-
-    // The acknowledgement is session-scoped, so a remount (route change, or a
-    // reload inside the same browser session) does not re-raise the notice.
-    cleanup();
-    renderWorkflows();
-    expect(screen.queryByText("This feature is in beta")).toBeNull();
-    expect(screen.getByTestId("workflow-definitions")).toBeTruthy();
-  });
-
-  it("mounts the definition-scoped run deep link with the authenticated scope", () => {
-    useAuthStore.setState({
-      status: "authenticated",
-      session: null,
-      user: {
-        id: "user-1",
-        email: "user@example.com",
-        display_name: "Test User",
-      },
-      error: null,
-    });
-
-    renderWorkflows("/workflows/workflow-1/runs/run-1");
-
-    expect(screen.getByTestId("workflow-run")).toBeTruthy();
-    expect(runSurface).toHaveBeenCalledWith(expect.objectContaining({
-      authCacheScope: "user-1",
-      workflowDefinitionId: "workflow-1",
-      runId: "run-1",
-    }));
-    expect(workflowSurface).not.toHaveBeenCalled();
+    expect(mainSurface).not.toHaveBeenCalled();
   });
 });
+
+describe("WorkflowsPage v2 routing", () => {
+  beforeEach(() => {
+    authMode.devBypassed = false;
+    workflowsV2.enabled = true;
+    signIn();
+  });
+
+  afterEach(() => {
+    cleanup();
+    mainSurface.mockClear();
+    builderSurface.mockClear();
+  });
+
+  it("renders the v2 main surface at the list route with the authenticated scope", () => {
+    renderWorkflows("/workflows");
+
+    expect(screen.getByTestId("workflows-main")).toBeTruthy();
+    expect(mainSurface).toHaveBeenCalledWith(expect.objectContaining({
+      authCacheScope: "user-1",
+    }));
+    expect(builderSurface).not.toHaveBeenCalled();
+  });
+
+  it("renders the builder for an existing definition id", () => {
+    renderWorkflows("/workflows/wf-123");
+
+    expect(screen.getByTestId("workflow-builder")).toBeTruthy();
+    expect(builderSurface).toHaveBeenCalledWith(expect.objectContaining({
+      definitionId: "wf-123",
+      authCacheScope: "user-1",
+    }));
+  });
+
+  it("renders the builder blank for the 'new' sentinel with no state", () => {
+    renderWorkflows("/workflows/new");
+
+    expect(screen.getByTestId("workflow-builder")).toBeTruthy();
+    expect(builderSurface).toHaveBeenCalledWith(expect.objectContaining({
+      definitionId: null,
+      template: null,
+    }));
+  });
+
+  it("navigates list -> new with the chosen template, and edit -> the definition id", () => {
+    renderWorkflows("/workflows");
+
+    fireEvent.click(screen.getByText("go-to-new-from-template"));
+
+    expect(screen.getByTestId("workflow-builder")).toBeTruthy();
+    expect(builderSurface).toHaveBeenCalledWith(expect.objectContaining({
+      definitionId: null,
+      template: WORKFLOW_STARTER_TEMPLATES_V2[0],
+    }));
+  });
+
+  it("navigates list -> edit with the clicked definition id", () => {
+    renderWorkflows("/workflows");
+
+    fireEvent.click(screen.getByText("go-to-edit"));
+
+    expect(screen.getByTestId("workflow-builder")).toBeTruthy();
+    expect(builderSurface).toHaveBeenCalledWith(expect.objectContaining({
+      definitionId: "wf-existing",
+    }));
+  });
+
+  it("redirects the gen-1 per-run route back to the list", () => {
+    renderWorkflows("/workflows/wf-123/runs/run-1");
+
+    expect(screen.getByTestId("workflows-main")).toBeTruthy();
+    expect(builderSurface).not.toHaveBeenCalled();
+  });
+});
+
+describe("WorkflowsPage with the v2 launch flag off", () => {
+  beforeEach(() => {
+    authMode.devBypassed = false;
+    workflowsV2.enabled = false;
+    signIn();
+  });
+
+  afterEach(() => {
+    cleanup();
+    mainSurface.mockClear();
+    builderSurface.mockClear();
+  });
+
+  it("shows the unavailable state instead of any workflows surface", () => {
+    renderWorkflows("/workflows");
+
+    expect(screen.getByText("Workflows are being rebuilt")).toBeTruthy();
+    expect(mainSurface).not.toHaveBeenCalled();
+    expect(builderSurface).not.toHaveBeenCalled();
+  });
+
+  it("shows the unavailable state for a definition route too", () => {
+    renderWorkflows("/workflows/wf-123");
+
+    expect(screen.getByText("Workflows are being rebuilt")).toBeTruthy();
+    expect(builderSurface).not.toHaveBeenCalled();
+  });
+});
+
+// Unused but keeps the definition-record type import intentional if a future
+// test needs to assert on a real `WorkflowBuilderSurface` payload shape.
+type _KeepImport = WorkflowDefinitionRecordV2;

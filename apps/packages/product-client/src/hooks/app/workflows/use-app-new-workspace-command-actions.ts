@@ -1,20 +1,12 @@
 import { useCallback, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import type { Workspace } from "@anyharness/sdk";
-import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { APP_ROUTES } from "#product/config/app-routes";
-import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
-import { useCloudBilling } from "#product/hooks/cloud/facade/use-cloud-billing";
-import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
 import { useHomeNextRepositorySelection } from "#product/hooks/home/derived/use-home-next-repository-selection";
 import { useHomeNextTargetSelectionSnapshot } from "#product/hooks/home/ui/use-home-next-target-selection-state";
 import { useStandardRepoProjection } from "#product/hooks/workspaces/derived/use-standard-repo-projection";
 import { useWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-workspace-entry-actions";
 import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-navigation-workflow";
-import {
-  buildConfiguredCloudRepoKeys,
-} from "#product/lib/domain/workspaces/cloud/cloud-workspace-creation";
-import { useCloudRepoActionState } from "#product/hooks/cloud/derived/use-cloud-repo-action-state";
 import {
   buildRepositoryNewWorkspaceCommandScope,
   buildSelectedWorkspaceNewWorkspaceCommandScope,
@@ -25,7 +17,6 @@ import {
   startLatencyFlow,
 } from "#product/lib/infra/measurement/measurement-port";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
-import { useCloudRepositoryIntentStore } from "#product/stores/cloud/cloud-repository-intent-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useNewWorkspaceCommandScopeStore } from "#product/stores/workspaces/new-workspace-command-scope-store";
 import type { AppCommandActions, AppCommandInvocation } from "#product/hooks/app/workflows/app-command-action-types";
@@ -34,12 +25,12 @@ const EMPTY_WORKSPACES: Workspace[] = [];
 
 export type AppNewWorkspaceCommandActions = Pick<
   AppCommandActions,
-  "newLocalWorkspace" | "newWorktreeWorkspace" | "newCloudWorkspace"
+  "newLocalWorkspace" | "newWorktreeWorkspace"
 >;
 
 // Owns workspace creation commands exposed at the global app command surface.
+// Cloud creation is culled (PRO-10); only local and worktree remain.
 export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandActions {
-  const beginCloudRepositoryIntent = useCloudRepositoryIntentStore((state) => state.begin);
   const location = useLocation();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const showToast = useToastStore((state) => state.show);
@@ -52,12 +43,6 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
     baseBranchOverride: homeTargetSelection.baseBranchOverride,
   });
   const activeNewWorkspaceScope = useNewWorkspaceCommandScopeStore((state) => state.activeScope);
-  const { cloudActive } = useCloudAvailabilityState();
-  const { data: billingPlan } = useCloudBilling();
-  const {
-    data: repoConfigs,
-    isPending: isRepoConfigsPending,
-  } = useRepositories(cloudActive);
   const {
     repoRoots,
     localWorkspaces,
@@ -70,19 +55,16 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
     createWorktreeAndEnter,
     isCreatingWorktreeWorkspace,
   } = useWorkspaceEntryActions();
-  const {
-    createCloudWorkspaceAndEnter,
-    isCreatingCloudWorkspace,
-  } = useCreateCloudWorkspace();
 
-  const configuredCloudRepoKeys = useMemo(
-    () => buildConfiguredCloudRepoKeys(repoConfigs?.repositories),
-    [repoConfigs?.repositories],
-  );
-  const cloudRepoConfigsInitialLoading = cloudActive
-    && isRepoConfigsPending
-    && !repoConfigs;
-  const cloudWorkspaceBlocked = billingPlan?.billingMode === "enforce" && billingPlan.startBlocked;
+  const showDisabledShortcutToast = useCallback((
+    invocation: AppCommandInvocation,
+    reason: string,
+  ) => {
+    if (invocation === "shortcut") {
+      showToast(reason);
+    }
+  }, [showToast]);
+
   const homeNewWorkspaceScope = useMemo(() => {
     if (
       location.pathname !== APP_ROUTES.home
@@ -117,21 +99,7 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
     activeNewWorkspaceScope
     ?? homeNewWorkspaceScope
     ?? selectedNewWorkspaceScope;
-  const commandCloudRepoAction = useCloudRepoActionState({
-    repoTarget: newWorkspaceCommandScope?.cloudRepoTarget ?? null,
-    configuredRepoKeys: configuredCloudRepoKeys,
-    isInitialConfigLoad: cloudRepoConfigsInitialLoading,
-    cloudConnected: cloudActive,
-  });
 
-  const showDisabledShortcutToast = useCallback((
-    invocation: AppCommandInvocation,
-    reason: string,
-  ) => {
-    if (invocation === "shortcut") {
-      showToast(reason);
-    }
-  }, [showToast]);
   const newLocalCommandTarget = useMemo(() => resolveNewWorkspaceCommandTarget({
     commandKind: "local",
     scope: newWorkspaceCommandScope,
@@ -194,66 +162,6 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
     showToast,
   ]);
 
-  // Sign-in, operator capability, repository authority, and environment setup
-  // are actionable readiness gates. Do not disable the command before the
-  // connected dialog can explain/repair them; only billing is a terminal start
-  // block at this surface.
-  const cloudUnavailableReason = cloudWorkspaceBlocked
-    ? "Cloud workspaces are blocked by billing."
-    : null;
-  const newCloudCommandTarget = useMemo(() => resolveNewWorkspaceCommandTarget({
-    commandKind: "cloud",
-    scope: newWorkspaceCommandScope,
-    busyReason: isCreatingCloudWorkspace ? "Action already in progress." : null,
-    cloudUnavailableReason,
-    cloudRepoAction: commandCloudRepoAction,
-  }), [
-    cloudUnavailableReason,
-    commandCloudRepoAction,
-    isCreatingCloudWorkspace,
-    newWorkspaceCommandScope,
-  ]);
-  const newCloudWorkspace = useCallback((invocation: AppCommandInvocation) => {
-    if (newCloudCommandTarget.disabledReason !== null) {
-      showDisabledShortcutToast(invocation, newCloudCommandTarget.disabledReason);
-      return;
-    }
-    if (newCloudCommandTarget.cloudActionKind === "configure") {
-      // Not a dead state: open the connected Cloud action dialog to repair the
-      // first unmet prerequisite, then continue into workspace creation
-      // (setup-and-continue) once every gate is green.
-      beginCloudRepositoryIntent({
-        kind: "create_cloud_workspace",
-        repo: {
-          gitProvider: "github",
-          gitOwner: newCloudCommandTarget.target.gitOwner,
-          gitRepoName: newCloudCommandTarget.target.gitRepoName,
-        },
-        continuation: {
-          repoGroupKeyToExpand: newCloudCommandTarget.repoGroupKeyToExpand,
-          baseBranch: newCloudCommandTarget.target.baseBranch ?? null,
-        },
-      });
-      return;
-    }
-
-    navigateToWorkspaceShell();
-    const latencyFlowId = startLatencyFlow({
-      flowKind: "cloud_workspace_create",
-      source: invocation,
-    });
-    void createCloudWorkspaceAndEnter(newCloudCommandTarget.target, {
-      latencyFlowId,
-      repoGroupKeyToExpand: newCloudCommandTarget.repoGroupKeyToExpand,
-    });
-  }, [
-    beginCloudRepositoryIntent,
-    createCloudWorkspaceAndEnter,
-    navigateToWorkspaceShell,
-    newCloudCommandTarget,
-    showDisabledShortcutToast,
-  ]);
-
   return useMemo<AppNewWorkspaceCommandActions>(() => ({
     newLocalWorkspace: {
       execute: newLocalWorkspace,
@@ -263,13 +171,7 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
       execute: newWorktreeWorkspace,
       disabledReason: newWorktreeCommandTarget.disabledReason,
     },
-    newCloudWorkspace: {
-      execute: newCloudWorkspace,
-      disabledReason: newCloudCommandTarget.disabledReason,
-    },
   }), [
-    newCloudCommandTarget.disabledReason,
-    newCloudWorkspace,
     newLocalCommandTarget.disabledReason,
     newLocalWorkspace,
     newWorktreeCommandTarget.disabledReason,

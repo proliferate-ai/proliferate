@@ -222,17 +222,15 @@ describe("useAppShortcuts", () => {
     expect(document.activeElement).toBe(composer);
   });
 
-  it("keeps the explicit local, worktree, and cloud creation shortcuts", () => {
+  it("keeps the explicit local and worktree creation shortcuts", () => {
     const actions = commandActions();
     renderHook(() => useAppShortcuts(actions));
 
     expect(runShortcutHandler("workspace.new-local", { source: "keyboard" })).toBe(true);
     expect(runShortcutHandler("workspace.new-worktree", { source: "keyboard" })).toBe(true);
-    expect(runShortcutHandler("workspace.new-cloud", { source: "keyboard" })).toBe(true);
 
     expect(actions.newLocalWorkspace.execute).toHaveBeenCalledWith("shortcut");
     expect(actions.newWorktreeWorkspace.execute).toHaveBeenCalledWith("shortcut");
-    expect(actions.newCloudWorkspace.execute).toHaveBeenCalledWith("shortcut");
   });
 
   describe("app.open-support gating", () => {
@@ -254,6 +252,27 @@ describe("useAppShortcuts", () => {
 
       expect(runShortcutHandler("app.open-support", { source: "keyboard" })).toBe(false);
       expect(actions.openSupport.execute).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("app.go-automations gating", () => {
+    // The workflows_v2 gate hides the action, and a hidden action must leave
+    // its shortcut unregistered rather than routing to the dark surface.
+    it("routes the shortcut through app command actions when the action is visible", () => {
+      const actions = commandActions();
+      renderHook(() => useAppShortcuts(actions));
+
+      expect(runShortcutHandler("app.go-automations", { source: "keyboard" })).toBe(true);
+      expect(actions.goWorkflows.execute).toHaveBeenCalledWith("shortcut");
+    });
+
+    it("leaves the shortcut unregistered (inert) when the action is hidden", () => {
+      const actions = commandActions();
+      actions.goWorkflows = { ...actions.goWorkflows, hidden: true };
+      renderHook(() => useAppShortcuts(actions));
+
+      expect(runShortcutHandler("app.go-automations", { source: "keyboard" })).toBe(false);
+      expect(actions.goWorkflows.execute).not.toHaveBeenCalled();
     });
   });
 });
@@ -308,7 +327,6 @@ function commandActions(): AppCommandActions {
     addRepository: action(),
     newLocalWorkspace: action(),
     newWorktreeWorkspace: action(),
-    newCloudWorkspace: action(),
     copyWorkspacePath: action(),
     copyBranchName: action(),
   };

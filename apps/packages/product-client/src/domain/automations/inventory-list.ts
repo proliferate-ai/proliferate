@@ -52,6 +52,11 @@ function automationInventoryItem(
     automation.executionTarget,
     automation.targetKind,
   );
+  // Cloud culling (PRO-10, FR-2 / FM5): a cloud-target automation stays listed
+  // but its target is gone, so it is badged inactive rather than hidden.
+  const targetInactiveBadge = targetAvailability === "managed_cloud"
+    ? "Target no longer available"
+    : null;
   const runNowDisabledReason = clientSurface === "web" && targetAvailability === "desktop_required"
     ? AUTOMATION_DESKTOP_REQUIRED_MESSAGE
     : null;
@@ -68,6 +73,7 @@ function automationInventoryItem(
     scopeLabel,
     targetLabel,
     targetAvailability,
+    targetInactiveBadge,
     statusKind: "waiting",
     statusLabel,
     enabled: automation.enabled,

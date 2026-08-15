@@ -149,9 +149,15 @@ pub fn render(
     Ok(blocks)
 }
 
+/// The house sentinel that marks a block as harness instruction rather than
+/// user content. Shared with the workflow envelope renderer, which bakes it
+/// into stored instruction blocks at render time (Ruling D).
+pub(crate) const SYSTEM_INSTRUCTION_WRAPPER: &str =
+    "System instruction from AnyHarness, not user content:\n";
+
 fn system_instruction_block(instruction: &str) -> acp::schema::ContentBlock {
     acp::schema::ContentBlock::Text(acp::schema::TextContent::new(format!(
-        "System instruction from AnyHarness, not user content:\n{instruction}"
+        "{SYSTEM_INSTRUCTION_WRAPPER}{instruction}"
     )))
 }
 

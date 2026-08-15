@@ -31,11 +31,11 @@ use super::{ModelSnapshotService, PokeReason, ProbeEngineConfig, ProbeEngineMode
 fn test_config() -> ProbeEngineConfig {
     ProbeEngineConfig {
         per_probe_timeout: Duration::from_secs(30),
-        model_switch_timeout: Duration::from_secs(1),
         backoff_base: Duration::from_secs(60),
-        backoff_max: Duration::from_secs(6 * 3600),
+        backoff_max: Duration::from_secs(30 * 60),
         max_concurrent_probes: 1,
         sweep_age_multiplier: 3,
+        tier1_trial_enabled: false,
     }
 }
 

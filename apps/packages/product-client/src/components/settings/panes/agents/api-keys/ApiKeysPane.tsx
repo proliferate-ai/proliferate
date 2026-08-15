@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AgentApiKey } from "@proliferate/cloud-sdk";
 import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import {
@@ -6,15 +6,15 @@ import {
   useCreateAgentApiKey,
   useRevokeAgentApiKey,
 } from "@proliferate/cloud-sdk-react";
+import { Plus } from "#product/primitives/icons/core";
 import { Button } from "#product/primitives/Button";
-import { Badge } from "#product/primitives/Badge";
 import { ConfirmationDialog } from "#product/primitives/patterns/ConfirmationDialog";
-import { Input } from "#product/primitives/Input";
-import { Label } from "#product/primitives/Label";
 import { PageHeader } from "#product/primitives/patterns/PageHeader";
+import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
 import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
+import { ApiKeyCreatorModal, type ApiKeyCreatorSubmit } from "#product/components/settings/panes/agent-auth/ApiKeyCreatorModal";
 import { AGENT_API_KEYS_COPY } from "#product/copy/settings/agent-api-keys-copy";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useToastStore } from "#product/stores/toast/toast-store";
@@ -32,6 +32,11 @@ function revokeConflictHarnesses(error: unknown): string[] | null {
   return null;
 }
 
+function formatCreatedAt(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
+}
+
 export function ApiKeysPane() {
   const { cloudActive, authStatus, cloudComputeEnabled } = useCloudAvailabilityState();
   const showToast = useToastStore((state) => state.show);
@@ -40,8 +45,7 @@ export function ApiKeysPane() {
   const createKey = useCreateAgentApiKey();
   const revokeKey = useRevokeAgentApiKey();
 
-  const [title, setTitle] = useState("");
-  const [value, setValue] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
   const [pendingRevoke, setPendingRevoke] = useState<AgentApiKey | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
   const retryInFlight = useRef(false);
@@ -58,20 +62,13 @@ export function ApiKeysPane() {
   }, []);
 
   const keys = keysQuery.data ?? [];
-  const canSubmit =
-    title.trim().length > 0 && value.trim().length > 0 && !createKey.isPending;
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!canSubmit) {
-      return;
-    }
+  function handleCreate(input: ApiKeyCreatorSubmit) {
     createKey.mutate(
-      { title: title.trim(), value: value.trim() },
+      { title: input.title, value: input.value },
       {
         onSuccess: (created) => {
-          setTitle("");
-          setValue("");
+          setAddOpen(false);
           showToast(`Added API key ${created.title}.`, "info");
         },
         onError: (error) => {
@@ -130,9 +127,7 @@ export function ApiKeysPane() {
     // Truthful cause: a signed-in user on a compute-unconfigured deployment
     // gets the operator explanation, not a "sign in" prompt they can't act on
     // (PR2-GATING-01 class). Anonymous users still get the sign-in prompt.
-    const description = authStatus === "authenticated" && !cloudComputeEnabled
-      ? AGENT_API_KEYS_COPY.cloudNotConfigured
-      : AGENT_API_KEYS_COPY.signInRequired;
+    const operatorGated = authStatus === "authenticated" && !cloudComputeEnabled;
     return (
       <SettingsPageBody data-api-keys-pane="" data-api-keys-state="gated">
         <PageHeader
@@ -140,12 +135,15 @@ export function ApiKeysPane() {
           title={AGENT_API_KEYS_COPY.title}
           description={AGENT_API_KEYS_COPY.description}
         />
-        <SettingsSection>
-          <SettingsRow
-            label={AGENT_API_KEYS_COPY.title}
-            description={description}
-          />
-        </SettingsSection>
+        <SettingsEmptyState
+          size="compact"
+          title={operatorGated
+            ? AGENT_API_KEYS_COPY.cloudNotConfiguredTitle
+            : AGENT_API_KEYS_COPY.signInRequiredTitle}
+          description={operatorGated
+            ? AGENT_API_KEYS_COPY.cloudNotConfigured
+            : AGENT_API_KEYS_COPY.signInRequired}
+        />
       </SettingsPageBody>
     );
   }
@@ -162,29 +160,30 @@ export function ApiKeysPane() {
         variant="flat"
         title={AGENT_API_KEYS_COPY.title}
         description={AGENT_API_KEYS_COPY.description}
+        action={
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setAddOpen(true)}
+          >
+            <Plus className="icon-paired" />
+            {AGENT_API_KEYS_COPY.addAction}
+          </Button>
+        }
       />
 
-      <SettingsSection
-        title={AGENT_API_KEYS_COPY.keysSection}
-        action={keysQuery.isLoading || keysQuery.isError ? null : (
-          <Badge tone={keys.length > 0 ? "success" : "neutral"}>
-            {keys.length} {keys.length === 1 ? "key" : "keys"}
-          </Badge>
-        )}
-      >
-        {keysQuery.isLoading ? (
-          <SettingsRow
-            label={AGENT_API_KEYS_COPY.keysSection}
-            description={AGENT_API_KEYS_COPY.loading}
-          />
-        ) : keysQuery.isError ? (
-          <SettingsRow
-            label={AGENT_API_KEYS_COPY.keysSection}
-            description={AGENT_API_KEYS_COPY.loadError}
-          >
+      {keysQuery.isLoading ? (
+        <div className="text-ui-sm text-muted-foreground">{AGENT_API_KEYS_COPY.loading}</div>
+      ) : keysQuery.isError ? (
+        <SettingsEmptyState
+          size="compact"
+          title={AGENT_API_KEYS_COPY.loadError}
+          action={
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               size="sm"
               loading={isRetrying}
               onClick={handleRetry}
@@ -193,14 +192,17 @@ export function ApiKeysPane() {
                 ? AGENT_API_KEYS_COPY.retryingAction
                 : AGENT_API_KEYS_COPY.retryAction}
             </Button>
-          </SettingsRow>
-        ) : keys.length === 0 ? (
-          <SettingsRow
-            label={AGENT_API_KEYS_COPY.emptyTitle}
-            description={AGENT_API_KEYS_COPY.emptyDescription}
-          />
-        ) : (
-          keys.map((key) => (
+          }
+        />
+      ) : keys.length === 0 ? (
+        <SettingsEmptyState
+          size="compact"
+          title={AGENT_API_KEYS_COPY.emptyTitle}
+          description={AGENT_API_KEYS_COPY.emptyDescription}
+        />
+      ) : (
+        <SettingsSection title={AGENT_API_KEYS_COPY.keysSection}>
+          {keys.map((key) => (
             <SettingsRow
               key={key.id}
               label={
@@ -211,6 +213,7 @@ export function ApiKeysPane() {
                   </span>
                 </span>
               }
+              description={AGENT_API_KEYS_COPY.createdDetail(formatCreatedAt(key.createdAt))}
             >
               <Button
                 type="button"
@@ -221,50 +224,21 @@ export function ApiKeysPane() {
                 {AGENT_API_KEYS_COPY.revokeAction}
               </Button>
             </SettingsRow>
-          ))
-        )}
-      </SettingsSection>
+          ))}
+        </SettingsSection>
+      )}
 
-      <SettingsSection
-        title={AGENT_API_KEYS_COPY.addSection}
-        description={AGENT_API_KEYS_COPY.addSectionDescription}
-      >
-        <form
-          className="flex flex-col gap-2 p-3.5 sm:flex-row"
-          onSubmit={handleSubmit}
-        >
-          <div className="sm:flex-1">
-            <Label htmlFor="agent-api-key-title" className="sr-only">
-              {AGENT_API_KEYS_COPY.titleLabel}
-            </Label>
-            <Input
-              id="agent-api-key-title"
-              aria-label={AGENT_API_KEYS_COPY.titleLabel}
-              placeholder={AGENT_API_KEYS_COPY.titlePlaceholder}
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-            />
-          </div>
-          <Input
-            aria-label={AGENT_API_KEYS_COPY.valueLabel}
-            placeholder={AGENT_API_KEYS_COPY.valuePlaceholder}
-            type="password"
-            autoComplete="off"
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-            className="sm:flex-1"
-          />
-          <Button
-            type="submit"
-            variant="primary"
-            size="md"
-            disabled={!canSubmit}
-            loading={createKey.isPending}
-          >
-            {AGENT_API_KEYS_COPY.addAction}
-          </Button>
-        </form>
-      </SettingsSection>
+      <ApiKeyCreatorModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        heading={AGENT_API_KEYS_COPY.addModalHeading}
+        description={AGENT_API_KEYS_COPY.addModalDescription}
+        showTitleField
+        submitLabel={AGENT_API_KEYS_COPY.addAction}
+        submitting={createKey.isPending}
+        error={null}
+        onSubmit={handleCreate}
+      />
 
       <ConfirmationDialog
         open={pendingRevoke !== null}
