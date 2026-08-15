@@ -101,6 +101,12 @@ export class TranscriptFramePipeline {
   // drop it.
   private framePassRanThisFrame = false;
   private frameHandle: number | null = null;
+  // Content height the last pass in THIS frame snapped against. A second notify
+  // in the same frame re-runs the pass ONLY when the measured height has grown
+  // past this — a real later estimate-to-measured correction the single snap
+  // must still absorb — never for the snap's own echo (a scrollTop write changes
+  // no observed size, so a re-run can never loop). See `requestFrame`.
+  private framePassHeight = -1;
   // The self-driving forced-glue window (session entry / submit / tab resume).
   // `glueActive` is likewise the source of truth for the same reentrancy reason.
   private glueActive = false;
@@ -129,27 +135,42 @@ export class TranscriptFramePipeline {
    * growth the viewport would trail one frame behind a taller document forever.
    *
    * Coalesces: the first notify in a frame runs `runFramePass` exactly once and
-   * arms a per-frame guard; every later notify in the same frame folds into that
-   * pass. A guard-reset rAF (the ONLY rAF here, reserved for crossing into the
-   * next frame) clears the guard so the next frame's first notify snaps afresh.
-   * A no-op while a forced-glue window is already snapping every frame.
+   * arms a per-frame guard; a later notify in the same frame folds into that
+   * pass UNLESS the content has grown further since it ran — a real later
+   * estimate-to-measured correction (React commit then virtualizer re-measure
+   * land as separate same-frame notifies, and the taller one can arrive second),
+   * which re-runs the pass so the snap tracks the FINAL height instead of
+   * trailing one growth step behind. Re-running on strict growth can never loop:
+   * the pass only writes scrollTop, which changes no observed size. A guard-reset
+   * rAF (the ONLY rAF here, reserved for crossing into the next frame) clears the
+   * guard so the next frame's first notify snaps afresh. A no-op while a
+   * forced-glue window is already snapping every frame.
    */
   requestFrame(): void {
-    if (this.glueActive || this.framePassRanThisFrame) {
+    if (this.glueActive) {
       return;
     }
     const writer = this.writer;
     if (writer == null) {
       return;
     }
+    if (this.framePassRanThisFrame && writer.measureContentHeight() <= this.framePassHeight) {
+      return;
+    }
     // Arm the guard BEFORE running the pass so a reentrant notify (a snap write
     // that itself trips the RO) folds in rather than snapping twice.
     this.framePassRanThisFrame = true;
-    this.frameHandle = this.raf(() => {
-      this.framePassRanThisFrame = false;
-      this.frameHandle = null;
-    });
+    if (this.frameHandle == null) {
+      this.frameHandle = this.raf(() => {
+        this.framePassRanThisFrame = false;
+        this.frameHandle = null;
+        this.framePassHeight = -1;
+      });
+    }
     writer.runFramePass();
+    // Record the height the snap just settled against so a later same-frame
+    // notify re-runs only on further growth (a scrollTop write leaves it equal).
+    this.framePassHeight = writer.measureContentHeight();
   }
 
   /**
@@ -169,6 +190,7 @@ export class TranscriptFramePipeline {
     }
     this.framePassRanThisFrame = false;
     this.frameHandle = null;
+    this.framePassHeight = -1;
     if (this.glueHandle != null) {
       this.caf(this.glueHandle);
     }
@@ -215,6 +237,7 @@ export class TranscriptFramePipeline {
     }
     this.framePassRanThisFrame = false;
     this.frameHandle = null;
+    this.framePassHeight = -1;
     if (this.glueHandle != null) {
       this.caf(this.glueHandle);
     }
