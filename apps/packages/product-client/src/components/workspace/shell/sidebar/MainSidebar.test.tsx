@@ -1,107 +1,41 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MainSidebar } from "#product/components/workspace/shell/sidebar/MainSidebar";
-import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import { useSupportModalStore } from "#product/stores/support/support-modal-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
+import { runShortcutHandler } from "#product/lib/domain/shortcuts/registry";
 import {
-  clearShortcutHandlerRegistryForTests,
-  runShortcutHandler,
-} from "#product/lib/domain/shortcuts/registry";
+  cloudAvailabilityState,
+  LOGICAL_ID,
+  makePinnedItemState,
+  productHostState,
+  releaseNoticeState,
+  renderMainSidebar,
+  resetMainSidebarTestState,
+  RUNTIME_ID,
+  sidebarActionMocks,
+  toastShowMock,
+  workspaceArchiveActionsMock,
+  workspaceSidebarState,
+  workspaceUiState,
+} from "./main-sidebar-test-harness";
 
-const releaseNoticeState = vi.hoisted(() => ({
-  notice: null as null | {
-    version: string;
-    title: string;
-  },
-  dismissNotice: vi.fn(),
-  openChangelog: vi.fn(),
-}));
-
-const sidebarActionMocks = vi.hoisted(() => ({
-  handleAddRepo: vi.fn(),
-  handleCreateCloudWorkspace: vi.fn(),
-  handleCreateLocalWorkspace: vi.fn(),
-  handleCreateWorktreeWorkspace: vi.fn(),
-  handleGoHome: vi.fn(),
-  handleGoHomeForRepository: vi.fn(),
-  handleGoWorkflows: vi.fn(),
-  handleGoWorkspaces: vi.fn(),
-  handleMarkWorkspaceDone: vi.fn(),
-  handleOpenPullRequest: vi.fn(),
-  handleSelectWorkspace: vi.fn(),
-  handleSidebarIndicatorAction: vi.fn(),
-}));
-
-const workspaceSidebarState = vi.hoisted(() => ({
-  groups: [] as Array<{
-    sourceRoot: string;
-    items: Array<{
-      active: boolean;
-      id?: string;
-      localWorkspaceId?: string | null;
-      cloudWorkspaceId?: string | null;
-      name?: string;
-    }>;
-  }>,
-  pinnedItems: [] as unknown[],
-  selectedWorkspaceId: null as string | null,
-  selectedLogicalWorkspaceId: null as string | null,
-  emptyState: null,
-  isLoading: false,
-}));
-
-vi.mock("#product/hooks/updates/facade/use-release-notice", () => ({
-  useReleaseNotice: () => releaseNoticeState,
-}));
-
-vi.mock("#product/components/diagnostics/DebugProfiler", () => ({
-  DebugProfiler: ({ children }: { children: ReactNode }) => <>{children}</>,
-}));
-
-vi.mock("#product/components/app/sidebar/SidebarAccountFooter", () => ({
-  SidebarAccountFooter: () => <div data-testid="sidebar-account-footer" />,
-}));
-
+vi.mock("#product/hooks/updates/facade/use-release-notice", () => ({ useReleaseNotice: () => releaseNoticeState }));
+vi.mock("#product/components/diagnostics/DebugProfiler", () => ({ DebugProfiler: ({ children }: { children: ReactNode }) => <>{children}</> }));
+vi.mock("#product/components/app/sidebar/SidebarAccountFooter", () => ({ SidebarAccountFooter: () => <div data-testid="sidebar-account-footer" /> }));
 vi.mock("#product/primitives/patterns/sidebar/SidebarRowSurface", () => ({
-  SidebarRowSurface: ({
-    active,
-    children,
-    onPress,
-  }: {
-    active?: boolean;
-    children: ReactNode;
-    onPress?: () => void;
-  }) => (
-    <div role="button" tabIndex={0} data-active={String(!!active)} onClick={onPress}>
-      {children}
-    </div>
+  SidebarRowSurface: ({ active, children, onPress }: { active?: boolean; children: ReactNode; onPress?: () => void }) => (
+    <div role="button" tabIndex={0} data-active={String(!!active)} onClick={onPress}>{children}</div>
   ),
 }));
-
 vi.mock("#product/primitives/patterns/sidebar/SidebarActionButton", () => ({
-  SidebarActionButton: ({
-    children,
-    onClick,
-    title,
-  }: {
-    children: ReactNode;
-    onClick?: () => void;
-    title: string;
-  }) => (
-    <button type="button" aria-label={title} onClick={onClick}>
-      {children}
-    </button>
+  SidebarActionButton: ({ children, onClick, title }: { children: ReactNode; onClick?: () => void; title: string }) => (
+    <button type="button" aria-label={title} onClick={onClick}>{children}</button>
   ),
 }));
-
-vi.mock("./SidebarWorkspaceVariantIcon", () => ({
-  SidebarWorkspaceVariantIcon: () => <span data-testid="workspace-variant-icon" />,
-}));
+vi.mock("./SidebarWorkspaceVariantIcon", () => ({ SidebarWorkspaceVariantIcon: () => <span data-testid="workspace-variant-icon" /> }));
 
 // Rows come from the groups MainSidebar actually hands down (i.e. after its
 // optimistic-hide filter), and each row forwards `item.id` exactly as the
@@ -116,9 +50,7 @@ vi.mock("./SidebarWorkspaceContent", () => ({
     cloudWorkspaceEnabled: boolean;
   }) => (
     <div data-testid="sidebar-workspace-content" data-cloud-workspace-enabled={String(cloudWorkspaceEnabled)}>
-      <button type="button" onClick={() => onNewChatForRepository("/repo-a")}>
-        New chat in Repo A
-      </button>
+      <button type="button" onClick={() => onNewChatForRepository("/repo-a")}>New chat in Repo A</button>
       {groups.flatMap((group) => group.items).filter((item) => !!item.id).map((item) => (
         <div key={item.id} data-testid={`sidebar-row-${item.id}`}>
           <button type="button" onClick={() => onArchiveWorkspace(item.id!)}>{`Archive ${item.name}`}</button>
@@ -129,199 +61,72 @@ vi.mock("./SidebarWorkspaceContent", () => ({
   ),
 }));
 
-vi.mock("#product/components/workspace/cowork/sidebar/CoworkThreadsSection", () => ({
-  CoworkThreadsSection: () => <div data-testid="cowork-threads" />,
-}));
-
+vi.mock("#product/components/workspace/cowork/sidebar/CoworkThreadsSection", () => ({ CoworkThreadsSection: () => <div data-testid="cowork-threads" /> }));
 vi.mock("#product/primitives/PopoverMenuItem", () => ({
-  PopoverMenuItem: ({
-    label,
-    onClick,
-  }: {
-    label: string;
-    onClick?: () => void;
-  }) => (
-    <button type="button" onClick={onClick}>
-      {label}
-    </button>
+  PopoverMenuItem: ({ label, onClick }: { label: string; onClick?: () => void }) => (
+    <button type="button" onClick={onClick}>{label}</button>
   ),
 }));
-
 vi.mock("#product/primitives/patterns/AutoHideScrollArea", () => ({
-  AutoHideScrollArea: ({ children }: { children: ReactNode }) => (
-    <div data-testid="sidebar-scroll-area">{children}</div>
-  ),
+  AutoHideScrollArea: ({ children }: { children: ReactNode }) => <div data-testid="sidebar-scroll-area">{children}</div>,
 }));
 
 // The PopoverButton mock below renders every popover body eagerly, so the
 // Repositories header's add-repository flow would mount its whole data layer
 // in a sidebar test.
-vi.mock("#product/components/workspace/repo-setup/AddRepositoryFlowPanel", () => ({
-  AddRepositoryFlowPanel: () => null,
-}));
-
+vi.mock("#product/components/workspace/repo-setup/AddRepositoryFlowPanel", () => ({ AddRepositoryFlowPanel: () => null }));
 vi.mock("#product/primitives/PopoverButton", () => ({
   POPOVER_SURFACE_CLASS: "",
-  PopoverButton: ({
-    children,
-    trigger,
-  }: {
-    children: () => ReactNode;
-    trigger: ReactNode;
-  }) => (
-    <div>
-      {trigger}
-      {children()}
-    </div>
+  PopoverButton: ({ children, trigger }: { children: () => ReactNode; trigger: ReactNode }) => (
+    <div>{trigger}{children()}</div>
   ),
 }));
 
-const cloudAvailabilityState = vi.hoisted(() => ({
-  cloudActive: false,
-  cloudUnavailable: false,
-  authStatus: "authenticated" as string,
-  cloudComputeEnabled: true,
-}));
-
-vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
-  useCloudAvailabilityState: () => cloudAvailabilityState,
-}));
-
-vi.mock("#product/hooks/capabilities/derived/use-app-capabilities", () => ({
-  useAppCapabilities: () => ({ managedCloudStatus: "disabled" }),
-}));
-
-const productHostState = vi.hoisted(() => ({
-  desktop: null as object | null,
-  clipboard: { writeText: () => Promise.resolve() },
-}));
-
-vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
-  useProductHost: () => productHostState,
-}));
-
-vi.mock("#product/hooks/workspaces/workflows/use-add-repo", () => ({
-  useAddRepo: () => ({ addRepoFromPath: vi.fn(), isAddingRepo: false }),
-}));
-
-vi.mock("#product/hooks/cloud/facade/use-cloud-billing", () => ({
-  useCloudBilling: () => ({ data: null }),
-}));
-
+vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({ useCloudAvailabilityState: () => cloudAvailabilityState }));
+vi.mock("#product/hooks/capabilities/derived/use-app-capabilities", () => ({ useAppCapabilities: () => ({ managedCloudStatus: "disabled" }) }));
+vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({ useProductHost: () => productHostState }));
+vi.mock("#product/hooks/workspaces/workflows/use-add-repo", () => ({ useAddRepo: () => ({ addRepoFromPath: vi.fn(), isAddingRepo: false }) }));
+vi.mock("#product/hooks/cloud/facade/use-cloud-billing", () => ({ useCloudBilling: () => ({ data: null }) }));
 vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useRemoveCloudRepoEnvironment: () => ({
-    mutateAsync: vi.fn(),
-    isPending: false,
-  }),
+  useRemoveCloudRepoEnvironment: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useRepositories: () => ({ data: { repositories: [] }, isPending: false }),
 }));
-
-vi.mock("#product/hooks/ui/debug/use-debug-render-count", () => ({
-  useDebugRenderCount: () => {},
-}));
-
-vi.mock("#product/hooks/workspaces/derived/use-sidebar-shortcut-targets", () => ({
-  useSidebarShortcutTargets: () => [],
-}));
-
+vi.mock("#product/hooks/ui/debug/use-debug-render-count", () => ({ useDebugRenderCount: () => {} }));
+vi.mock("#product/hooks/workspaces/derived/use-sidebar-shortcut-targets", () => ({ useSidebarShortcutTargets: () => [] }));
 vi.mock("#product/hooks/support/derived/use-support-report-snapshot", () => ({
   useSupportReportSnapshot: () => ({
     openedAt: "2026-05-30T00:00:00.000Z",
     source: "sidebar",
-    context: {
-      source: "sidebar",
-      intent: "general",
-      workspaceName: "hedgehog",
-      workspaceLocation: "local",
-    },
+    context: { source: "sidebar", intent: "general", workspaceName: "hedgehog", workspaceLocation: "local" },
     defaultScope: "app_only",
     defaultWorkspaceId: null,
     workspaceOptions: [],
   }),
 }));
-
 vi.mock("#product/hooks/support/workflows/use-open-support-report-window", () => ({
   useOpenSupportReportWindow: () => ({
-    openBug: vi.fn(() => {
-      useSupportModalStore.getState().openFeedback();
-    }),
+    openBug: vi.fn(() => { useSupportModalStore.getState().openFeedback(); }),
     openFeature: vi.fn(),
     canSubmit: true,
     disabledReason: null,
   }),
 }));
-
-vi.mock("#product/hooks/support/facade/use-support-availability", () => ({
-  useSupportAvailability: () => ({
-    canSubmit: true,
-    disabledReason: null,
-  }),
-}));
-
-vi.mock("#product/hooks/workspaces/derived/use-pending-workspace-entries", () => ({
-  useAttendedPendingWorkspaceEntry: () => null,
-}));
-
-const workspaceUiState = vi.hoisted(() => ({
-  archiveWorkspace: vi.fn(),
-  hideRepoRoot: vi.fn(),
-  sidebarOpen: true,
-  unarchiveWorkspace: vi.fn(),
-  unarchiveWorkspaces: vi.fn(),
-  pinWorkspace: vi.fn(),
-  unpinWorkspace: vi.fn(),
-  workspaceTypes: ["local", "worktree", "cloud"],
-  toggleSidebarWorkspaceType: vi.fn(),
-  repositoriesCollapsed: false,
-  setRepositoriesCollapsed: vi.fn(),
-}));
-
+vi.mock("#product/hooks/support/facade/use-support-availability", () => ({ useSupportAvailability: () => ({ canSubmit: true, disabledReason: null }) }));
+vi.mock("#product/hooks/workspaces/derived/use-pending-workspace-entries", () => ({ useAttendedPendingWorkspaceEntry: () => null }));
 vi.mock("#product/stores/preferences/workspace-ui-store", () => ({
-  useWorkspaceUiStore: (selector: (state: typeof workspaceUiState) => unknown) =>
-    selector(workspaceUiState),
+  useWorkspaceUiStore: (selector: (state: typeof workspaceUiState) => unknown) => selector(workspaceUiState),
 }));
-
-vi.mock("#product/hooks/workspaces/workflows/use-workspace-display-name-actions", () => ({
-  useWorkspaceDisplayNameActions: () => ({ updateWorkspaceDisplayName: vi.fn() }),
-}));
-
-vi.mock("#product/hooks/workspaces/workflows/use-workspace-sidebar-actions", () => ({
-  useWorkspaceSidebarActions: () => sidebarActionMocks,
-}));
-
+vi.mock("#product/hooks/workspaces/workflows/use-workspace-display-name-actions", () => ({ useWorkspaceDisplayNameActions: () => ({ updateWorkspaceDisplayName: vi.fn() }) }));
+vi.mock("#product/hooks/workspaces/workflows/use-workspace-sidebar-actions", () => ({ useWorkspaceSidebarActions: () => sidebarActionMocks }));
 vi.mock("#product/hooks/cloud/workflows/use-cloud-workspace-actions", () => ({
-  useCloudWorkspaceActions: () => ({
-    archiveCloudWorkspace: vi.fn(),
-    restoreCloudWorkspace: vi.fn(),
-  }),
+  useCloudWorkspaceActions: () => ({ archiveCloudWorkspace: vi.fn(), restoreCloudWorkspace: vi.fn() }),
 }));
-
-const workspaceArchiveActionsMock = vi.hoisted(() => ({
-  archive: vi.fn(),
-  unarchive: vi.fn(),
-  optimisticallyArchivedIds: new Set<string>(),
-  scenario: null as null | { workspaceId: string },
-  dismissScenario: vi.fn(),
-}));
-
-vi.mock("#product/providers/WorkspaceArchiveActionsProvider", () => ({
-  useWorkspaceArchiveActionsContext: () => workspaceArchiveActionsMock,
-}));
-
-vi.mock("#product/hooks/workspaces/cache/use-workspace-collections-invalidation", () => ({
-  useWorkspaceCollectionsInvalidation: () => vi.fn(),
-}));
-
+vi.mock("#product/providers/WorkspaceArchiveActionsProvider", () => ({ useWorkspaceArchiveActionsContext: () => workspaceArchiveActionsMock }));
+vi.mock("#product/hooks/workspaces/cache/use-workspace-collections-invalidation", () => ({ useWorkspaceCollectionsInvalidation: () => vi.fn() }));
 vi.mock("#product/stores/sessions/harness-connection-store", () => ({
-  useHarnessConnectionStore: (selector: (state: { runtimeUrl: string }) => unknown) =>
-    selector({ runtimeUrl: "http://127.0.0.1:8482" }),
+  useHarnessConnectionStore: (selector: (state: { runtimeUrl: string }) => unknown) => selector({ runtimeUrl: "http://127.0.0.1:8482" }),
 }));
-
-vi.mock("@proliferate/cloud-sdk/client/workspaces", () => ({
-  archiveCloudWorkspace: vi.fn(),
-  restoreCloudWorkspace: vi.fn(),
-}));
-
+vi.mock("@proliferate/cloud-sdk/client/workspaces", () => ({ archiveCloudWorkspace: vi.fn(), restoreCloudWorkspace: vi.fn() }));
 vi.mock("#product/hooks/workspaces/facade/use-sidebar-repo-group-state", () => ({
   useSidebarRepoGroupState: () => ({
     collapsedRepoGroupKeys: new Set<string>(),
@@ -331,73 +136,12 @@ vi.mock("#product/hooks/workspaces/facade/use-sidebar-repo-group-state", () => (
     clearRepoGroupShowMore: vi.fn(),
   }),
 }));
-
-vi.mock("#product/hooks/workspaces/derived/use-workspace-sidebar-state", () => ({
-  useWorkspaceSidebarState: () => workspaceSidebarState,
-}));
-
-vi.mock("#product/hooks/sessions/lifecycle/use-session-activity-reconciler", () => ({
-  useSessionActivityReconciler: () => {},
-}));
+vi.mock("#product/hooks/workspaces/derived/use-workspace-sidebar-state", () => ({ useWorkspaceSidebarState: () => workspaceSidebarState }));
+vi.mock("#product/hooks/sessions/lifecycle/use-session-activity-reconciler", () => ({ useSessionActivityReconciler: () => {} }));
 
 afterEach(() => {
-  cleanup();
-  clearShortcutHandlerRegistryForTests();
-  vi.clearAllMocks();
-  releaseNoticeState.notice = null;
-  productHostState.desktop = null;
-  workspaceUiState.sidebarOpen = true;
-  workspaceSidebarState.groups = [];
-  workspaceSidebarState.pinnedItems = [];
-  workspaceSidebarState.selectedWorkspaceId = null;
-  workspaceSidebarState.selectedLogicalWorkspaceId = null;
-  workspaceArchiveActionsMock.optimisticallyArchivedIds = new Set<string>();
-  workspaceArchiveActionsMock.scenario = null;
-  cloudAvailabilityState.cloudActive = false;
-  cloudAvailabilityState.cloudUnavailable = false;
-  cloudAvailabilityState.authStatus = "authenticated";
-  cloudAvailabilityState.cloudComputeEnabled = true;
+  resetMainSidebarTestState();
 });
-
-function makePinnedItemState(overrides: Partial<SidebarWorkspaceItemState> = {}): SidebarWorkspaceItemState {
-  return {
-    id: "ws-pinned",
-    localWorkspaceId: null,
-    cloudWorkspaceId: null,
-    name: "Pinned workspace",
-    defaultName: "Pinned workspace",
-    hasDisplayNameOverride: false,
-    renameSupported: false,
-    subtitle: null,
-    active: false,
-    archived: false,
-    pinnedIds: ["ws-pinned"],
-    variant: "worktree",
-    statusIndicator: null,
-    lastInteracted: null,
-    needsReview: false,
-    workspaceLocationCopyLabel: null,
-    workspaceLocationCopyValue: null,
-    workspaceLocationCopyToastLabel: null,
-    branchName: null,
-    sessionCount: null,
-    gitStatus: null,
-    availabilityCommands: [],
-    cloudWorkspaceIdForActions: null,
-    linkedMaterializationId: null,
-    repoOwner: null,
-    repoName: null,
-    ...overrides,
-  };
-}
-
-function renderMainSidebar() {
-  return render(
-    <MemoryRouter initialEntries={["/"]}>
-      <MainSidebar />
-    </MemoryRouter>,
-  );
-}
 
 describe("MainSidebar host capabilities", () => {
   it("omits Desktop-only Cowork threads on Web", () => {
@@ -572,13 +316,6 @@ describe("MainSidebar pinned section", () => {
   });
 });
 
-// A sidebar item's `id` is the LOGICAL workspace id; the runtime archive and
-// unarchive verbs address the UUID `localWorkspaceId` carries. Distinct here,
-// so handing a logical id to a runtime verb fails loudly.
-const LOGICAL_ID = "remote:github:proliferate-ai:proliferate:fledgling";
-const RUNTIME_ID = "1f0b6a4c-6f1f-4f1a-9b2e-2c5f7f3a1d44";
-const toastShowMock = vi.fn();
-
 describe("MainSidebar archive workspace (§3.2/§5.6/§9)", () => {
   // A real group, so the resolver's actual lookup is exercised rather than
   // its not-found fallback.
@@ -687,29 +424,5 @@ describe("MainSidebar archive workspace (§3.2/§5.6/§9)", () => {
 
     expect(workspaceArchiveActionsMock.unarchive)
       .toHaveBeenCalledWith(RUNTIME_ID, "Feature workspace");
-  });
-});
-
-describe("MainSidebar cloud workspace gating (PRO-10)", () => {
-  // A cloud-configured repo's "New Cloud Workspace" action must stay gated
-  // by capabilities.cloudComputeEnabled, not just billing — otherwise a
-  // compute-disabled deployment still lets users spawn cloud workspaces for
-  // repos already cloud-configured (cloudRepoAction.kind === "create").
-  it("disables the cloud workspace action when cloudComputeEnabled is false, even though billing allows it", () => {
-    cloudAvailabilityState.cloudComputeEnabled = false;
-
-    renderMainSidebar();
-
-    expect(screen.getByTestId("sidebar-workspace-content").dataset.cloudWorkspaceEnabled)
-      .toBe("false");
-  });
-
-  it("enables the cloud workspace action when cloudComputeEnabled is true and billing allows it", () => {
-    cloudAvailabilityState.cloudComputeEnabled = true;
-
-    renderMainSidebar();
-
-    expect(screen.getByTestId("sidebar-workspace-content").dataset.cloudWorkspaceEnabled)
-      .toBe("true");
   });
 });
