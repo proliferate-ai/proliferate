@@ -68,17 +68,32 @@ describe("WorkflowTriggerDialog", () => {
 
     // Negative control: the optional input stays empty for the whole test, so
     // an enabled Confirm proves only the required one gates.
-    fireEvent.change(screen.getByLabelText("issue"), { target: { value: "PRO-174" } });
-    expect(screen.getByLabelText("notes")).toHaveProperty("value", "");
+    fireEvent.change(screen.getByLabelText("Issue"), { target: { value: "PRO-174" } });
+    expect(screen.getByLabelText("Notes")).toHaveProperty("value", "");
     expect(confirm()).toHaveProperty("disabled", false);
 
-    fireEvent.change(screen.getByLabelText("issue"), { target: { value: "   " } });
+    fireEvent.change(screen.getByLabelText("Issue"), { target: { value: "   " } });
     expect(confirm()).toHaveProperty("disabled", true);
   });
 
-  it("defaults placement to a new worktree", () => {
+  it("shows the authored workflow description under the title", () => {
+    renderDialog({ ...definitionRecord(), description: "Triage one issue end to end." });
+
+    expect(screen.getByText("Triage one issue end to end.")).toBeTruthy();
+  });
+
+  it("collapses a usable saved repository to a summary until Change is clicked", () => {
     renderDialog();
 
+    // The saved default (root-1) is listed, so the location reads as one line
+    // and neither control is rendered.
+    expect(screen.getByText(/Runs in/).textContent).toBe("Runs in proliferate · New worktree");
+    expect(screen.queryByLabelText("Repository")).toBeNull();
+    expect(screen.queryByRole("radio", { name: "New worktree" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Change" }));
+
+    expect(screen.getByLabelText("Repository")).toBeTruthy();
     expect(screen.getByRole("radio", { name: "New worktree" }).getAttribute("aria-checked"))
       .toBe("true");
     expect(screen.getByRole("radio", { name: "Repo root" }).getAttribute("aria-checked"))
@@ -88,10 +103,10 @@ describe("WorkflowTriggerDialog", () => {
   it("submits an argument for every declared input, blank optionals included", () => {
     renderDialog();
 
-    fireEvent.change(screen.getByLabelText("issue"), { target: { value: " PRO-174 " } });
+    fireEvent.change(screen.getByLabelText("Issue"), { target: { value: " PRO-174 " } });
     // `notes` is left blank on purpose: a prompt that reads `@input:notes`
     // cannot launch unless the argument is present, so it must arrive as "".
-    expect(screen.getByLabelText("notes")).toHaveProperty("value", "");
+    expect(screen.getByLabelText("Notes")).toHaveProperty("value", "");
     fireEvent.click(screen.getByRole("button", { name: "Start run" }));
 
     expect(triggerActions.triggerRun).toHaveBeenCalledWith({
@@ -107,7 +122,8 @@ describe("WorkflowTriggerDialog", () => {
       defaultRepoConfigId: null,
     });
 
-    fireEvent.change(screen.getByLabelText("issue"), { target: { value: "PRO-174" } });
+    // No saved default: the location controls are open from the start.
+    fireEvent.change(screen.getByLabelText("Issue"), { target: { value: "PRO-174" } });
     fireEvent.change(screen.getByLabelText("Repository"), { target: { value: "root-2" } });
     fireEvent.click(screen.getByRole("radio", { name: "Repo root" }));
     fireEvent.click(screen.getByRole("button", { name: "Start run" }));
@@ -122,6 +138,7 @@ describe("WorkflowTriggerDialog", () => {
   it("offers the listed repo roots, falling back to the folder name", () => {
     renderDialog();
 
+    fireEvent.click(screen.getByRole("button", { name: "Change" }));
     const options = Array.from(
       screen.getByLabelText("Repository").querySelectorAll("option"),
     ).map((option) => [option.getAttribute("value"), option.textContent]);
@@ -138,7 +155,9 @@ describe("WorkflowTriggerDialog", () => {
       defaultRepoConfigId: "repo-config-9",
     });
 
-    fireEvent.change(screen.getByLabelText("issue"), { target: { value: "PRO-174" } });
+    // An unavailable saved default forces the controls open — a summary line
+    // could not explain why the run is blocked.
+    fireEvent.change(screen.getByLabelText("Issue"), { target: { value: "PRO-174" } });
     expect(screen.getByText("Saved repository unavailable (repo-config-9)")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Start run" })).toHaveProperty("disabled", true);
 
