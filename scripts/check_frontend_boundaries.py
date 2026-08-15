@@ -104,6 +104,7 @@ QUERY_CACHE_CALL_RE = re.compile(
 REACT_IMPORT_RE = re.compile(
     r"^\s*import(?:\s+type)?(?:\s+[^;]*\s+from)?\s+['\"]react['\"]"
 )
+SHELL_NAV_HOOK_RE = re.compile(r"\buseNavigate\b|\buseLocation\b")
 QUERY_HOOK_NAMES = {
     "useInfiniteQuery",
     "useMutation",
@@ -511,6 +512,35 @@ def is_ui_component_library_path(relative_path: str) -> bool:
     return "/" not in primitive_relative or primitive_relative.startswith("patterns/")
 
 
+SHELL_NAV_SCOPED_FILES = {
+    "apps/packages/product-client/src/hooks/workspaces/workflows/use-run-workspace-command.ts",
+    "apps/packages/product-client/src/hooks/workspaces/facade/use-workspace-command-palette.ts",
+}
+
+
+def is_shell_navigation_scoped_path(relative_path: str) -> bool:
+    """True for the workspace-shell subtree that FE-NAV-1 guards: the shell
+    component tree (MainScreen, StandardWorkspaceShell, MainSidebar and
+    siblings) plus the two shell-scoped hooks the PRO-170 incident named.
+    """
+    return (
+        is_under(
+            relative_path,
+            "apps/packages/product-client/src/components/workspace/shell/",
+        )
+        or relative_path in SHELL_NAV_SCOPED_FILES
+    )
+
+
+def is_route_view_path(relative_path: str) -> bool:
+    """Genuine route views are allowlisted: the top-level route host and the
+    page components mounted directly by the router legitimately read
+    location/navigate — they own the route boundary the shell tree must not
+    subscribe to.
+    """
+    return is_under(relative_path, "apps/packages/product-client/src/pages/")
+
+
 def is_query_cache_owner_path(relative_path: str) -> bool:
     return (
         is_under(relative_path, "apps/desktop/src/hooks/access/")
@@ -639,6 +669,19 @@ def check_file(path: Path) -> list[Violation]:
             ),
             "import of a retired legacy access path",
         )
+
+        if is_shell_navigation_scoped_path(rel) and not is_route_view_path(rel):
+            nav_hit = first_match(line, (SHELL_NAV_HOOK_RE,))
+            add_if(
+                violations,
+                bool(nav_hit),
+                "FE-NAV-1",
+                path,
+                lineno,
+                nav_hit,
+                f"{nav_hit} subscribes the workspace shell to router location "
+                "changes",
+            )
 
         if in_domain:
             domain_anchor = first_present(

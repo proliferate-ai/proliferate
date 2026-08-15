@@ -405,3 +405,45 @@ path = "apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap
 site = "function setRuntimeUrlIfChanged::useHarnessConnectionStore.setState"
 reason = "runtime bootstrap mutates imported connection store"
 
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx"
+site = "useLocation"
+reason = "pre-existing direct router subscription; not yet moved to the app-navigate handoff (UX-latency ADR R8/Q18)"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx"
+site = "const navigate::useNavigate"
+reason = "pre-existing direct router subscription; not yet moved to the app-navigate handoff (UX-latency ADR R8/Q18)"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx"
+site = "const location::useLocation"
+reason = "pre-existing direct router subscription; not yet moved to the app-navigate handoff (UX-latency ADR R8/Q18)"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/hooks/workspaces/facade/use-workspace-command-palette.ts"
+site = "useNavigate"
+reason = "pre-existing direct router subscription; not yet moved to the app-navigate handoff (UX-latency ADR R8/Q18)"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/hooks/workspaces/facade/use-workspace-command-palette.ts"
+site = "const navigate::useNavigate"
+reason = "pre-existing direct router subscription; not yet moved to the app-navigate handoff (UX-latency ADR R8/Q18)"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-run-workspace-command.ts"
+site = "useNavigate"
+reason = "pre-existing direct router subscription; not yet moved to the app-navigate handoff (UX-latency ADR R8/Q18)"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-run-workspace-command.ts"
+site = "const navigate::useNavigate"
+reason = "pre-existing direct router subscription; not yet moved to the app-navigate handoff (UX-latency ADR R8/Q18)"
+
