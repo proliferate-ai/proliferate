@@ -83,9 +83,16 @@ impl ProbeError {
     pub const CODE_SPAWN: &'static str = "spawn_failed";
 
     /// True when a harness error string names a spawn/exec failure rather than an
-    /// in-session probe failure. Matched against the two messages
+    /// in-session probe failure. Matched against the messages
     /// `spawn_agent_process` raises when a binary is missing or will not exec, so
     /// a broken install fast-fails as [`Self::Spawn`] instead of `Failed`.
+    ///
+    /// COUPLING: these substrings are the literal messages produced in
+    /// `live::sessions::driver::process::spawn_agent_process` (`no executable path
+    /// for agent`, `spawn agent subprocess: ...`). A `.context(...)` wrapper or a
+    /// reword there silently breaks this match — the matching comment on that side
+    /// says the same. The forward-safe fix is a typed spawn error; until then this
+    /// coupling is the seam to keep honest.
     pub fn is_spawn_failure(message: &str) -> bool {
         message.contains("spawn agent subprocess")
             || message.contains("no executable path for agent")
