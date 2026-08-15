@@ -14,6 +14,12 @@ interface RepoScopeHeaderControlsProps {
   repositories: SettingsRepositoryEntry[];
   activeRepoSourceRoot: string | null;
   focus: SettingsFocus;
+  /**
+   * Whether the Cloud|Local context toggle is reachable. Desktop culls the
+   * cloud repo context (ADR Q3/FR-2), so it passes false and only the repo
+   * picker renders; web keeps the toggle.
+   */
+  showContextToggle: boolean;
   onSelectRepo: (sourceRoot: string) => void;
   onSelectRepoContext: (context: RepoSettingsContext) => void;
   onSelectCloudEnvironment: (gitOwner: string, gitRepoName: string) => void;
@@ -29,6 +35,7 @@ export function RepoScopeHeaderControls({
   repositories,
   activeRepoSourceRoot,
   focus,
+  showContextToggle,
   onSelectRepo,
   onSelectRepoContext,
   onSelectCloudEnvironment,
@@ -68,16 +75,18 @@ export function RepoScopeHeaderControls({
           });
         }}
       />
-      <SegmentedControl
-        ariaLabel="Repository settings context"
-        className="shrink-0"
-        value={context}
-        items={[
-          { id: "cloud", label: "Cloud", icon: <CloudIcon aria-hidden="true" /> },
-          { id: "local", label: "Local", icon: <Laptop aria-hidden="true" /> },
-        ]}
-        onChange={onSelectRepoContext}
-      />
+      {showContextToggle ? (
+        <SegmentedControl
+          ariaLabel="Repository settings context"
+          className="shrink-0"
+          value={context}
+          items={[
+            { id: "cloud", label: "Cloud", icon: <CloudIcon aria-hidden="true" /> },
+            { id: "local", label: "Local", icon: <Laptop aria-hidden="true" /> },
+          ]}
+          onChange={onSelectRepoContext}
+        />
+      ) : null}
     </div>
   );
 }
