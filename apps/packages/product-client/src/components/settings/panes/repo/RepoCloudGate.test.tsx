@@ -105,7 +105,7 @@ describe("RepoCloudGate operator gate (PR2-GATING-01)", () => {
     render(
       <RepoCloudGate
         editor={editor()}
-        cloudEnabled
+        controlPlaneReachable
         cloudActive
         cloudSignInChecking={false}
         cloudSignInAvailable
@@ -125,7 +125,7 @@ describe("RepoCloudGate operator gate (PR2-GATING-01)", () => {
     render(
       <RepoCloudGate
         editor={editor()}
-        cloudEnabled
+        controlPlaneReachable
         cloudActive
         cloudSignInChecking={false}
         cloudSignInAvailable

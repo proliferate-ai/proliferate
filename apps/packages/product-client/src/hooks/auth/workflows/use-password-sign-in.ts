@@ -18,7 +18,7 @@ export interface UsePasswordSignInResult {
 // show the form only when the connected server supports password login.
 export function usePasswordSignIn(): UsePasswordSignInResult {
   const { startLogin } = useAuditedAuth();
-  const { cloudEnabled } = useAppCapabilities();
+  const { controlPlaneReachable } = useAppCapabilities();
   const {
     data: authMethods,
     isPending: authMethodsPending,
@@ -26,8 +26,8 @@ export function usePasswordSignIn(): UsePasswordSignInResult {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const signInChecking = cloudEnabled && authMethodsPending;
-  const signInAvailable = cloudEnabled && authMethods?.passwordLogin === true;
+  const signInChecking = controlPlaneReachable && authMethodsPending;
+  const signInAvailable = controlPlaneReachable && authMethods?.passwordLogin === true;
 
   const signIn = useCallback(async (email: string, password: string) => {
     if (!signInAvailable) {

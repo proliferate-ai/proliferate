@@ -47,7 +47,7 @@ describe("deriveAppCapabilities", () => {
       }),
     });
 
-    expect(caps.cloudEnabled).toBe(true);
+    expect(caps.controlPlaneReachable).toBe(true);
     expect(caps.billingEnabled).toBe(true);
     expect(caps.usageMeteringEnabled).toBe(true);
     // Cloud culling (PRO-10): CLOUD_COMPUTE_TEMPORARILY_DISABLED is now `true`,
@@ -72,7 +72,7 @@ describe("deriveAppCapabilities", () => {
     });
 
     // Sign-in still works against a self-managed control plane.
-    expect(caps.cloudEnabled).toBe(true);
+    expect(caps.controlPlaneReachable).toBe(true);
     expect(caps.billingEnabled).toBe(false);
     expect(caps.usageMeteringEnabled).toBe(false);
     expect(caps.cloudComputeEnabled).toBe(false);
@@ -115,7 +115,7 @@ describe("deriveAppCapabilities", () => {
       contract: null,
     });
 
-    expect(caps.cloudEnabled).toBe(true);
+    expect(caps.controlPlaneReachable).toBe(true);
     expect(caps.billingEnabled).toBe(false);
     expect(caps.cloudComputeEnabled).toBe(false);
     expect(caps.agentGatewayEnabled).toBe(false);
@@ -155,7 +155,7 @@ describe("deriveAppCapabilities", () => {
       }),
     });
 
-    expect(caps.cloudEnabled).toBe(false);
+    expect(caps.controlPlaneReachable).toBe(false);
     expect(caps.billingEnabled).toBe(false);
     expect(caps.cloudComputeEnabled).toBe(false);
     expect(caps.agentGatewayEnabled).toBe(false);

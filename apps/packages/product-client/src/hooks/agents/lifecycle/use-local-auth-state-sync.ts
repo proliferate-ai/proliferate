@@ -67,12 +67,12 @@ export function useLocalAuthStateSync() {
   // routes for LOCAL sessions, which a gateway-enabled, compute-less server
   // still needs. Gate on authenticated + reachable instead (see
   // `shouldSyncLocalAuthState`).
-  const { cloudEnabled, authStatus } = useCloudAvailabilityState();
+  const { controlPlaneReachable, authStatus } = useCloudAvailabilityState();
   const apiBaseUrl = useProductHost().deployment.apiBaseUrl;
   const authenticated = authStatus === "authenticated";
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
-  const stateQuery = useAgentAuthState("local", authenticated && cloudEnabled);
+  const stateQuery = useAgentAuthState("local", authenticated && controlPlaneReachable);
   const cloudClient = useCloudClient();
   const queryClient = useQueryClient();
   const lastPushedRef = useRef<string | null>(null);
@@ -96,7 +96,7 @@ export function useLocalAuthStateSync() {
   const [enrollmentPollMs, setEnrollmentPollMs] = useState<number | false>(
     ENROLLMENT_SYNC_POLL_MS,
   );
-  const enrollmentQuery = useAgentGatewayEnrollment(authenticated && cloudEnabled, {
+  const enrollmentQuery = useAgentGatewayEnrollment(authenticated && controlPlaneReachable, {
     refetchInterval: enrollmentPollMs,
   });
   // "none" (a 404 — enrollment row not created yet) counts as an observed
@@ -126,7 +126,7 @@ export function useLocalAuthStateSync() {
   }, [enrollmentSyncStatus, queryClient]);
 
   useEffect(() => {
-    if (!shouldSyncLocalAuthState({ authenticated, serverReachable: cloudEnabled, runtimeHealthy })) {
+    if (!shouldSyncLocalAuthState({ authenticated, serverReachable: controlPlaneReachable, runtimeHealthy })) {
       return;
     }
     // Wait until the server state has settled before deciding anything.
@@ -223,7 +223,7 @@ export function useLocalAuthStateSync() {
     apiBaseUrl,
     authenticated,
     cloudClient,
-    cloudEnabled,
+    controlPlaneReachable,
     invalidateAgentLaunchReadinessResources,
     queryClient,
     runtimeHealthy,

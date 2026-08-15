@@ -61,7 +61,7 @@ export function SettingsScreen({
   onSelectRepoContext,
   onSelectCloudEnvironment,
 }: SettingsScreenProps) {
-  const { authStatus, cloudActive, cloudEnabled, cloudSignInAvailable, cloudSignInChecking } = useCloudAvailabilityState();
+  const { authStatus, cloudActive, controlPlaneReachable, cloudSignInAvailable, cloudSignInChecking } = useCloudAvailabilityState();
   const authenticated = authStatus === "authenticated";
   const { activeOrganizationId, organizationsQuery } = useActiveOrganization();
   const admin = useIsAdmin(activeOrganizationId);
@@ -192,12 +192,12 @@ export function SettingsScreen({
             }}
             onSelectSection={onSelectSection}
             disabledSections={{
-              integrations: !cloudEnabled,
-              "organization-integrations": !cloudEnabled,
-              "agent-api-keys": !cloudEnabled,
-              "organization-secrets": !cloudEnabled,
-              "organization-sso": !cloudEnabled,
-              "personal-secrets": !cloudEnabled,
+              integrations: !controlPlaneReachable,
+              "organization-integrations": !controlPlaneReachable,
+              "agent-api-keys": !controlPlaneReachable,
+              "organization-secrets": !controlPlaneReachable,
+              "organization-sso": !controlPlaneReachable,
+              "personal-secrets": !controlPlaneReachable,
             }}
             onCheckForUpdates={() => { void checkNow(); }}
             updateActionState={{
@@ -229,7 +229,7 @@ export function SettingsScreen({
                 {renderSettingsSection(
                   effectiveActiveSection,
                   repoSelection,
-                  cloudEnabled,
+                  controlPlaneReachable,
                   cloudActive,
                   cloudSignInChecking,
                   cloudSignInAvailable,

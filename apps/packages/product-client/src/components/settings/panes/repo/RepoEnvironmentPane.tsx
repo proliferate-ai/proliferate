@@ -24,7 +24,7 @@ import {
 export function RepoEnvironmentPane({
   repository,
   context,
-  cloudEnabled,
+  controlPlaneReachable,
   cloudActive,
   cloudSignInChecking,
   cloudSignInAvailable,
@@ -52,7 +52,7 @@ export function RepoEnvironmentPane({
       {context === "cloud" ? (
         <EnvironmentCloud
           repository={repository}
-          cloudEnabled={cloudEnabled}
+          controlPlaneReachable={controlPlaneReachable}
           cloudActive={cloudActive}
           cloudSignInChecking={cloudSignInChecking}
           cloudSignInAvailable={cloudSignInAvailable}
@@ -66,13 +66,13 @@ export function RepoEnvironmentPane({
 
 function EnvironmentCloud({
   repository,
-  cloudEnabled,
+  controlPlaneReachable,
   cloudActive,
   cloudSignInChecking,
   cloudSignInAvailable,
 }: {
   repository: SettingsRepositoryEntry;
-  cloudEnabled: boolean;
+  controlPlaneReachable: boolean;
   cloudActive: boolean;
   cloudSignInChecking: boolean;
   cloudSignInAvailable: boolean;
@@ -83,7 +83,7 @@ function EnvironmentCloud({
   return (
     <RepoCloudGate
       editor={editor}
-      cloudEnabled={cloudEnabled}
+      controlPlaneReachable={controlPlaneReachable}
       cloudActive={cloudActive}
       cloudSignInChecking={cloudSignInChecking}
       cloudSignInAvailable={cloudSignInAvailable}

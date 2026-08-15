@@ -24,7 +24,7 @@ export interface UseGitHubSignInResult {
 // transition. The query self-guards on control-plane reachability.
 export function useGitHubSignIn(): UseGitHubSignInResult {
   const { startLogin, cancelLogin } = useAuditedAuth();
-  const { cloudEnabled } = useAppCapabilities();
+  const { controlPlaneReachable } = useAppCapabilities();
   const {
     data: githubDesktopAuthAvailable,
     isPending: githubDesktopAuthAvailabilityPending,
@@ -32,9 +32,9 @@ export function useGitHubSignIn(): UseGitHubSignInResult {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const signInChecking = cloudEnabled && githubDesktopAuthAvailabilityPending;
-  const signInAvailable = cloudEnabled && githubDesktopAuthAvailable?.enabled === true;
-  const signInUnavailableDescription = cloudEnabled
+  const signInChecking = controlPlaneReachable && githubDesktopAuthAvailabilityPending;
+  const signInAvailable = controlPlaneReachable && githubDesktopAuthAvailable?.enabled === true;
+  const signInUnavailableDescription = controlPlaneReachable
     ? CAPABILITY_COPY.githubAuthUnavailableDescription
     : CAPABILITY_COPY.githubLocalDescription;
 
