@@ -49,7 +49,7 @@ ChatView
     │     └── TodoProgressPill              (transient centered pill above ChatInput — plan/todo progress, any agent)
     ├── ChatInput
     │   └── ChatComposerSurface
-    │       └── form: ComposerCommandEditor + ModelSelector + SessionConfigControls + ChatComposerActions
+    │       └── form: ComposerCommandEditor + ChatInputControlRow (ComposerLeadingControls + ComposerTrailingControls + ChatComposerActions)
     │           (or the blocked-status takeover: ComposerBlockedStatusLine +
     │            ComposerBlockedControlRow while a persistent condition blocks chat)
     └── footerSlot
@@ -208,25 +208,23 @@ display labels or from one provider's raw runtime id shape.
 
 Rules:
 
-- Model and reasoning effort share one composer pill: `Model · Effort`. Its
-  compact root menu presents `Model`, `Effort`, and `Speed` as nested rows when
-  the harness exposes those controls. Each row shows the current value and
-  opens its complete choice list in a side panel. The Model panel retains the
-  searchable grouped catalog; Effort preserves the authored option ladder;
-  Speed presents the default and fast choices. Provider setup and settings
-  remain in the nested Advanced row. Do not render a separate click-to-cycle
-  effort-bars button or a separate Fast icon button. Model-only contexts such
-  as plan handoff may omit the tuning rows.
-- `Ctrl+Shift+M` toggles the active compact root menu open and closed, including
+- The model pill opens the searchable grouped catalog popover
+  (`ComposerModelPickerPopover`) and owns model/harness selection only. Under
+  the ruled composer input grammar (owner rev #1851, superseding the earlier
+  combined `Model · Effort` pill), reasoning effort, `fast_mode`, and the
+  working mode are separate composer chips — see §1.2 for their placement and
+  interaction contracts. Model-only contexts such as plan handoff render just
+  the model selection.
+- `Ctrl+Shift+M` toggles the model picker popover open and closed, including
   while the composer editor is focused. It does nothing while that selector is
   unavailable.
-- Closing the active root menu with `Ctrl+Shift+M`, Escape, or a keyboard model
+- Closing the picker with `Ctrl+Shift+M`, Escape, or a keyboard model
   selection returns focus to the active composer editor without changing its
   draft or caret. Pointer dismissal and model selectors outside an active
   composer keep their own focus behavior.
 - Preserve authored catalog effort labels (`Extra High`, `Max`, `Ultra`, and
-  so on); do not rewrite distinct values to internal spellings such as
-  `Xhigh`.
+  so on) wherever effort values render, including the effort stepper chip; do
+  not rewrite distinct values to internal spellings such as `Xhigh`.
 - The current composer chip uses the active session's effective runtime model
   once AnyHarness reports one. Pending launches may show requested model intent.
 - Picker selected state, dedupe, visibility, and display labels use canonical
@@ -251,15 +249,39 @@ showing the raw session values that required the mapping.
 
 ## 1.2 Session control placement
 
-The chat and Home composers use the same control partition and visible order:
+The chat and Home composers use the same control partition and visible order
+(`ComposerLeadingControls` in `ChatInputControlRow.tsx`, shared verbatim; home
+feeds it launch-time descriptors instead of live-session ones):
 
-1. the combined model/harness, reasoning-effort, and Fast selector
-2. the primary working mode selector
+1. the model/harness selector (§1.1)
+2. the Fast toggle, when the harness exposes `fast_mode`
+3. the reasoning-effort stepper, when the harness exposes an effort ladder
+4. the primary working mode badge
+5. the goal button (live sessions only) and urgent-only integrations
 
-Reasoning effort and `fast_mode` live inside the model selector described in
-§1.1; they must not also render as separate composer controls. The primary
-working mode is compact text plus a subtle disclosure chevron, without a
-leading mode icon.
+`buildComposerSessionControlGroups` owns the partition: it promotes the mode,
+effort, and `fast_mode` descriptors to their dedicated chips. Controls it does
+not promote (the permission/access `mode` while `collaboration_mode` is
+primary, and any other unclaimed configuration control) do not render in the
+composer row at all — there is no overflow or three-dot configuration menu;
+harness configuration surfaces (`SessionConfigControls`, the full-menu
+`SessionModeControl`) remain their home in settings.
+
+The two cycling chips share one interaction contract:
+
+- The reasoning-effort stepper (`ComposerEffortStepper`) is a six-bar ladder
+  chip. Click steps to the next level and wraps at the top; `⌘ click`
+  (`Ctrl click` on non-Apple platforms) steps back and wraps at the bottom.
+  `⌃⇧E` steps forward and `⌃⌥⇧E` steps back from anywhere on the main screen.
+- The working mode badge (`ComposerModeBadge`) is icon-only at every width —
+  the mode's configured glyph and nothing else, remounted per value so the
+  step is legible from the glyph swap. Click steps to the next mode;
+  `⌘ click`/`Ctrl click` steps back. `Shift+Tab` from the composer editor also
+  steps back.
+- Both chips' tooltips use `keepOpenOnPress`, report the value just landed on,
+  and carry the click-to-step and `⌘ click`-to-step-back hints
+  (`appendSessionControlStepHint`); the modifier word is platform-resolved,
+  never hardcoded.
 
 Visible controls use one consistent inter-item rhythm. Compact controls must
 not reserve a trailing pending-state slot when no pending state exists; that
@@ -272,13 +294,13 @@ keeps Codex's collaboration mode independent from its read-only/auto/full-access
 permissions while preserving harnesses such as Claude, Cursor, and OpenCode
 whose working and access behavior still share one mode control.
 
-Permission/access mode and every other unclaimed configuration control render
-only under the rightmost three-dot configuration menu. A reasoning-level
-control with two or more ordered values remains visible in the combined picker
-when the runtime reports it as non-settable, but its choices are disabled.
-Cowork hides the permission/access `mode` because its access policy is
-product-defined, but retains independent working-mode controls such as
-`collaboration_mode` together with model tuning in the combined picker.
+A reasoning-effort ladder with two or more ordered values keeps its chip
+visible when the runtime reports it as non-settable, but the chip is disabled
+— it still reads the level. Cowork hides the permission/access `mode` because
+its access policy is product-defined
+(`filterComposerSessionControlsForSurface`), but retains independent
+working-mode controls such as `collaboration_mode` together with the tuning
+chips.
 
 ### Compact control tier (narrow composers)
 
@@ -288,11 +310,8 @@ Home composer wrapper anchors its own), labeled control pills shed their words
 so the row degrades to icons instead of truncating mid-word or painting over
 neighboring controls:
 
-- The working-mode pill swaps its mode name for the mode's configured icon
-  (`SessionControlIcon`) and stops shrinking at that icon footprint. A mode
-  value without a configured icon keeps its text at every width. This is the
-  one sanctioned exception to "no leading mode icon": the icon renders only
-  under the compact tier, never beside the name.
+- The working-mode badge is already icon-only at every width (§1.2), so the
+  compact tier changes nothing about it.
 - The reasoning pill hides the level word; the lit level bars keep reading
   the level.
 - The integrations pill hides the connected count and keeps the glyph. The
