@@ -453,6 +453,40 @@ jobs:
       - name: Test workflow definition surface
         run: pnpm --filter @proliferate/product-client exec vitest run src/components/workflows/definitions/WorkflowDefinitionsSurface.test.tsx
 
+  # Scroll-physics tier (specs/TESTING.md): the real transcript renderer driven
+  # by a scripted streaming fixture in real Chromium AND real WebKit. Merge-
+  # gating like shared-frontend-packages — no continue-on-error. The suite runs
+  # workers=1 by config; both browser engines are required because scroll
+  # physics differ between Blink and WebKit.
+  scroll-physics:
+    name: Transcript scroll physics (chromium + webkit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.11.0
+
+      - name: Install dependencies
+        run: pnpm install
+
+      # Builds product-client's own dist (and the shared packages it depends
+      # on) so the fixture resolves the real transcript through `#product/*`.
+      - name: Build shared packages
+        run: pnpm shared:build
+
+      - name: Install Playwright chromium + webkit
+        run: pnpm --filter @proliferate/product-client exec playwright install --with-deps chromium webkit
+
+      - name: Run scroll-physics suite
+        run: pnpm --filter @proliferate/product-client test:scroll-physics
+
   # Fail-closed Tier-2 gate for the workflow-definition lifecycle (T2-WFDEF-1)
   # only. No continue-on-error: a red result fails the CI workflow on PRs and
   # main, which also blocks the Deploy Staging workflow_run spine. This check

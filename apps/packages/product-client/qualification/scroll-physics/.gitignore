@@ -1,0 +1,5 @@
+# Playwright run artifacts (dist/ is already ignored repo-wide).
+/test-results/
+/playwright-report/
+/blob-report/
+/.last-run.json
