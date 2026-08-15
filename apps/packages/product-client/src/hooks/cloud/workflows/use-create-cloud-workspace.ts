@@ -45,9 +45,7 @@ import {
 
 const MAX_CLOUD_CREATE_ATTEMPTS = 3;
 
-// Matches the message used at the command-surface gate
-// (use-app-new-workspace-command-actions.ts) so the two gates read as one
-// consistent unavailability story regardless of which entry point tripped.
+// Matches the command-surface gate message (use-app-new-workspace-command-actions.ts).
 const CLOUD_WORKSPACE_UNAVAILABLE_MESSAGE = "Cloud workspaces are temporarily unavailable.";
 
 interface CreateCloudWorkspaceAndEnterOptions {
@@ -79,9 +77,8 @@ export type CloudWorkspaceEntryResult =
   }
   | {
     status: "interrupted";
-    // Set only when the attempt failed with a server error (vs. being
-    // superseded by a newer attempt); carries the resolved server message so
-    // callers can surface it in a toast instead of a generic string.
+    // Set only on server-error failure (not superseded attempts); carries the
+    // resolved server message for caller toasts.
     failureMessage?: string;
   }
   // The user dismissed the pending workspace: nothing failed, so callers stop
@@ -211,12 +208,9 @@ export function useCreateCloudWorkspace() {
       }
       currentEntry = nextEntry;
 
-      // Defense in depth: the command surface already gates fresh creates on
-      // this capability, but the receipt's Retry path (PRO-10 round-3 finding)
-      // reaches this flow directly and has no gate of its own. Fail the same
-      // way a server-rejected create fails, before the mutation is ever
-      // invoked, so a workspace never gets created out from under a disabled
-      // capability.
+      // Defense in depth (PRO-10): callers like the receipt Retry path reach
+      // this flow without their own gate; fail like a server-rejected create
+      // before the mutation ever runs.
       if (!cloudComputeEnabled) {
         failPendingEntry(
           getPendingWorkspaceEntry(attemptId) ?? currentEntry,

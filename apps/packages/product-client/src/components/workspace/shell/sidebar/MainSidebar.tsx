@@ -93,12 +93,8 @@ export const MainSidebar = memo(function MainSidebar({
   const actions = useWorkspaceSidebarActions();
   const shortcutRevealVisible = useShortcutRevealVisible();
   const sidebarShortcutTargetIds = useSidebarShortcutTargets();
-  const {
-    cloudActive,
-    cloudUnavailable,
-    authStatus: cloudAuthStatus,
-    cloudComputeEnabled,
-  } = useCloudAvailabilityState();
+  const { cloudActive, cloudUnavailable, authStatus: cloudAuthStatus, cloudComputeEnabled } =
+    useCloudAvailabilityState();
   const { data: billingPlan } = useCloudBilling();
   const {
     data: repoConfigs,
@@ -386,9 +382,8 @@ export const MainSidebar = memo(function MainSidebar({
   }, [beginWorkspaceAvailabilityIntent]);
 
   const cloudWorkspaceBlocked = billingPlan?.billingMode === "enforce" && billingPlan.startBlocked;
-  // Truthful cause for a blocked cloud-workspace action: a signed-in user on a
-  // compute-unconfigured deployment sees the operator explanation, not a "sign
-  // in" tooltip they can't act on (PR2-GATING-01 class).
+  // A signed-in user on a compute-unconfigured deployment sees the operator
+  // explanation, not a "sign in" tooltip they can't act on (PR2-GATING-01).
   const cloudComputeUnconfiguredForSignedInUser =
     cloudAuthStatus === "authenticated" && !cloudComputeEnabled;
   const cloudWorkspaceEnabled = !cloudWorkspaceBlocked && cloudComputeEnabled;

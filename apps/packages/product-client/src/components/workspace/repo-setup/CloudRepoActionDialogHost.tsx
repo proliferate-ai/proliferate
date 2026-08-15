@@ -88,8 +88,7 @@ export function CloudRepoActionDialogHost() {
   const requiredOperatorReady = requirement === "github_repository_access"
     ? capabilities.githubRepositoryAccessStatus === "ready"
     : capabilities.cloudComputeEnabled
-      && capabilities.githubRepositoryAccessStatus === "ready"
-      && capabilities.managedCloudStatus === "ready";
+      && capabilities.githubRepositoryAccessStatus === "ready" && capabilities.managedCloudStatus === "ready";
   const authority = useGitHubRepoAuthority(
     { gitOwner: repo?.gitOwner, gitRepoName: repo?.gitRepoName },
     // Never issue a user/authority query while the required operator-owned
