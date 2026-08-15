@@ -162,18 +162,26 @@ function isComposerRichTextTarget(target: EventTarget | null): boolean {
     && element.closest("[data-chat-composer-editor]") !== null;
 }
 
+function hasHighlightedTextSelection(): boolean {
+  const selection = typeof document !== "undefined"
+    ? document.getSelection?.()
+    : null;
+  return selection !== null && selection !== undefined && !selection.isCollapsed;
+}
+
 export function shouldDispatchKeyboardShortcut(
   shortcut: Pick<ShortcutDef, "allowInInputs" | "id" | "match" | "nonMacMatch">,
   event: KeyboardShortcutEventLike,
 ): boolean {
   // The composer's rich-text editor authors bold with the same primary-B
-  // chord (Lexical's native FORMAT_TEXT_COMMAND handling), so while the
-  // keydown target is inside a composer editor the editor owns the key.
-  // Everywhere else — including the terminal — the sidebar keeps it
+  // chord (Lexical's native FORMAT_TEXT_COMMAND handling). The editor owns
+  // the key only while composer text is highlighted; with a collapsed caret —
+  // or focus anywhere else, including the terminal — the sidebar keeps it
   // (PRO-265).
   if (
     shortcut.id === SHORTCUTS.toggleLeftSidebar.id
     && isComposerRichTextTarget(event.target)
+    && hasHighlightedTextSelection()
   ) {
     return false;
   }

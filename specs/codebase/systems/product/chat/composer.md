@@ -105,9 +105,10 @@ fence exists on its own line; an incomplete fence remains literal text. A
 complete pasted fence is imported as the same editable code block. The editor
 serializes that block back to fenced Markdown, so draft and submission
 boundaries remain unchanged. Cmd/Ctrl-B and Cmd/Ctrl-I toggle marks through the
-rich-text command layer; while focus is inside a composer editor the global
-left-sidebar toggle yields the B chord to the editor (PRO-265) — everywhere
-else, including the terminal, it keeps toggling the sidebar.
+rich-text command layer; the global left-sidebar toggle yields the B chord to
+the editor only while composer text is highlighted (PRO-265) — with a
+collapsed caret, or focus anywhere else including the terminal, it keeps
+toggling the sidebar.
 Tab/Shift-Tab indent or outdent only when the selection
 is inside a list item. Every composer surface — workspace, Home, and queued
 edits — submits on plain Enter or Cmd/Ctrl-Enter, including from a list item or
