@@ -82,7 +82,7 @@ function AuthSetupEvidenceRow({
               type="button"
               variant="unstyled"
               size="unstyled"
-              className="z-20 text-ui-sm text-foreground underline underline-offset-2"
+              className="z-raised text-ui-sm text-foreground underline underline-offset-2"
               onClick={onOpenAgents}
               data-agent-onboarding-affordance={badge.actionLabel ?? "open-agents"}
             >
