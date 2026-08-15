@@ -2376,6 +2376,15 @@ export interface components {
             nativeRequired: boolean;
             readiness: components["schemas"]["AgentReadinessState"];
             supportsLogin: boolean;
+            /**
+             * @description True when the user has their own copy of this agent on PATH,
+             *     regardless of whether a managed copy also exists and wins resolution
+             *     (R2.0, always-managed: a managed copy never displaces a PATH one).
+             *     Drives the settings-pane one-time notice explaining the managed copy
+             *     when both exist. Additive and tolerant: absent on runtimes that
+             *     predate R2.0, so old readers simply see no notice.
+             */
+            userPathCopyDetected?: boolean;
         };
         /** @enum {string} */
         AnyHarnessBoundedWindowCompletenessV1: "complete" | "limit_uncertain";
@@ -4195,6 +4204,13 @@ export interface components {
         /** @enum {string} */
         ReasoningVisibility: "private";
         ReconcileAgentResult: {
+            /**
+             * @description Typed classification of a terminal failure: one of `network`,
+             *     `checksum`, `in_use`, `disk`, `other`. Additive and tolerant: absent on
+             *     success/skip and on runtimes that predate typed failures, so old readers
+             *     simply ignore it.
+             */
+            failureKind?: string | null;
             installedArtifacts: components["schemas"]["ArtifactStatus"][];
             kind: string;
             message?: string | null;
