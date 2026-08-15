@@ -5,22 +5,27 @@
 //! > Installation is automatic. Every harness supported on a surface converges
 //! > with no user action: absent means install, drifted means reinstall, and both
 //! > are the same mechanism… A user authenticates harnesses; they never install
-//! > them. Two carve-outs:
+//! > them. One carve-out:
 //! >
-//! > - An agent the user already provides on PATH is left alone: it is usable
-//! >   through readiness as-is, and a managed install would shadow their copy.
 //! > - Cursor never installs in cloud. It is login-only with no headless
 //! >   credential path, so a cloud install could never reach `Ready`.
 //!
-//! The carve-outs used to be implicit in `installed_only`: because that scope
-//! skipped every agent that was not already managed-installed, it skipped
-//! PATH-provided agents *as a side effect* of skipping absent ones. Dropping the
-//! flag to get auto-install would therefore have silently dropped the PATH
-//! protection too — a managed install would land on top of a user's own binary.
+//! R2.0 (RULED 2026-08-14): Proliferate always maintains its own managed copy,
+//! even alongside a user's PATH install. The PATH carve-out that used to block
+//! install here is retired from the decision path — `has_path_artifact` is now
+//! a detection-only signal (surfaced to the settings-notice, see
+//! product-client's HarnessPane) rather than a reason to skip. The predicate
+//! stays pure (no IO, no env reads); the one legacy exception is
+//! `auto_install_decision_with_escape_hatch`, which reads
+//! `ANYHARNESS_ALWAYS_MANAGED_INSTALL` to restore the pre-R2.0 policy for
+//! revert.
 //!
-//! So the carve-outs move here, as one decision function with a name, per the
-//! plan's requirement that auto-install ride "behind an explicit tested
-//! predicate". A pure fn over facts the caller gathers: no IO, no env reads.
+//! Cursor-in-cloud used to be implicit in `installed_only` too: because that
+//! scope skipped every agent that was not already managed-installed, it
+//! skipped cursor as a side effect of skipping absent ones. Dropping the flag
+//! to get auto-install would have silently dropped that too, so it moved here
+//! as one decision function with a name, per the plan's requirement that
+//! auto-install ride "behind an explicit tested predicate".
 
 use crate::domains::agents::model::AgentKind;
 use crate::domains::agents::runtime::RuntimeSurface;
@@ -49,8 +54,10 @@ pub struct AgentInstallFacts {
 /// `installed_only` boolean collapsed both into one generic skip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AutoInstallSkip {
-    /// The user provides this agent on PATH. A managed install would shadow
-    /// their copy, and readiness already reports it usable.
+    /// Legacy-only (post-R2.0): reachable solely through
+    /// `auto_install_decision_with_escape_hatch` when
+    /// `ANYHARNESS_ALWAYS_MANAGED_INSTALL=off`. The always-managed policy
+    /// (`auto_install_decision`) never returns this.
     UserProvidedOnPath,
     /// Cursor in cloud: login-only, no headless credential path, so an install
     /// could never reach `Ready`.
@@ -80,26 +87,20 @@ impl AutoInstallSkip {
 
 /// The decision. `Ok(())` means "reconcile this agent" (the drift planner then
 /// decides whether any actual work is needed); `Err(skip)` means leave it alone.
-///
-/// Ordering is deliberate. The PATH check comes FIRST, before the surface and
-/// scope checks, because it is the one carve-out that protects something the user
-/// owns: no combination of scope or surface may ever result in a managed install
-/// landing on top of their binary.
+/// Post-R2.0 the only carve-outs are cursor-in-cloud and the installed-only
+/// scope; `has_path_artifact` no longer gates this at all.
 pub fn auto_install_decision(
     kind: &AgentKind,
     surface: RuntimeSurface,
     installed_only: bool,
     facts: AgentInstallFacts,
 ) -> Result<(), AutoInstallSkip> {
-    // 1. The user's own binary is never touched — highest precedence.
+    // 1. R2.0 (RULED): Proliferate always maintains its own managed copy. A
+    // user's PATH artifact is a detection-only signal now — it no longer
+    // blocks install. `has_path_artifact` is retained on `AgentInstallFacts`
+    // for the settings-notice signal (see product-client HarnessPane) and for
+    // the legacy escape hatch below, not to gate this decision.
     //
-    // `has_managed_artifact` wins over `has_path_artifact` when both are true:
-    // that is a machine where we already installed a managed copy AND the user
-    // has one on PATH, so the managed copy is ours to keep converging. Skipping
-    // it would strand it at an old pin forever.
-    if facts.has_path_artifact && !facts.has_managed_artifact {
-        return Err(AutoInstallSkip::UserProvidedOnPath);
-    }
     // 2. Cursor in cloud could never reach Ready, so installing it is pure cost.
     if *kind == AgentKind::Cursor && surface == RuntimeSurface::Cloud {
         return Err(AutoInstallSkip::CursorUnsupportedInCloud);
@@ -111,6 +112,33 @@ pub fn auto_install_decision(
         return Err(AutoInstallSkip::NotManagedInInstalledOnlyPass);
     }
     Ok(())
+}
+
+/// Escape hatch for R2.0: `ANYHARNESS_ALWAYS_MANAGED_INSTALL=off` restores the
+/// pre-R2.0 policy (a user's PATH artifact blocks a managed install) for
+/// operators who need to revert without a code change. Defaults on (the
+/// ruling). A plain env read, no caching, so tests can set/unset per-case.
+pub fn always_managed_install_enabled() -> bool {
+    std::env::var("ANYHARNESS_ALWAYS_MANAGED_INSTALL")
+        .map(|value| value != "off")
+        .unwrap_or(true)
+}
+
+/// `auto_install_decision` plus the legacy escape hatch: when the flag is
+/// turned off, a user's PATH artifact without a managed copy is skipped
+/// exactly as it was before R2.0. Callers should use this entry point; the
+/// pure predicate above stays the always-managed policy tests pin down.
+pub fn auto_install_decision_with_escape_hatch(
+    kind: &AgentKind,
+    surface: RuntimeSurface,
+    installed_only: bool,
+    facts: AgentInstallFacts,
+) -> Result<(), AutoInstallSkip> {
+    if !always_managed_install_enabled() && facts.has_path_artifact && !facts.has_managed_artifact
+    {
+        return Err(AutoInstallSkip::UserProvidedOnPath);
+    }
+    auto_install_decision(kind, surface, installed_only, facts)
 }
 
 #[cfg(test)]

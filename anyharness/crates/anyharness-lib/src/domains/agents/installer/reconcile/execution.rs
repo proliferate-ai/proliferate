@@ -12,7 +12,7 @@ use crate::domains::agents::installer::progress::{
     InstallProgressPhase, InstallProgressReporter, InstallProgressUpdate,
 };
 use crate::domains::agents::installer::auto_install::{
-    auto_install_decision, AgentInstallFacts,
+    auto_install_decision_with_escape_hatch, AgentInstallFacts,
 };
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::installer::InstallOptions;
@@ -334,9 +334,12 @@ async fn run_reconcile_job(
                     has_path_artifact: any_artifact_is("path"),
                     has_managed_artifact: any_artifact_is("managed"),
                 };
-                if let Err(skip) =
-                    auto_install_decision(&descriptor.kind, surface, installed_only, facts)
-                {
+                if let Err(skip) = auto_install_decision_with_escape_hatch(
+                    &descriptor.kind,
+                    surface,
+                    installed_only,
+                    facts,
+                ) {
                     tracing::debug!(
                         agent_kind = descriptor.kind.as_str(),
                         ?surface,
