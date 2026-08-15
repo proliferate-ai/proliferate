@@ -3,6 +3,7 @@ import { DiffViewer } from "#product/components/content/ui/DiffViewer";
 import { useTurnCurrentFilePatch } from "#product/hooks/chat/cache/use-turn-current-file-diffs";
 import { useLazyDiffFileLines } from "#product/hooks/ui/diff/use-lazy-diff-file-lines";
 import type { GitPanelReviewFile } from "#product/lib/domain/workspaces/changes/git-panel-diff";
+import { resolveDiffDisplayPolicy } from "#product/lib/domain/workspaces/changes/diff-display-policy";
 import { CircleAlert } from "#product/primitives/icons/status";
 import { FileCode, FileIcon } from "#product/primitives/icons/workspace";
 import { RefreshCw } from "#product/primitives/icons/platform";
@@ -70,6 +71,18 @@ export function TurnDiffFileCard({
     binary: Boolean(diffQuery.data?.binary || currentDiff?.binary),
     truncated: Boolean(diffQuery.data?.truncated && !patch),
   });
+  // Transcript-recorded fallback for files git can no longer diff against the
+  // base (reverted, or written outside the repo). Gap expansion stays off —
+  // the recorded patch's new side may not match the current worktree file.
+  const recordedPatch = !currentDiff ? file.touched?.recordedPatch ?? null : null;
+  const recordedPolicy = recordedPatch
+    ? resolveDiffDisplayPolicy({
+        path: file.path,
+        additions: file.touched?.recordedAdditions ?? 0,
+        deletions: file.touched?.recordedDeletions ?? 0,
+        patch: recordedPatch,
+      })
+    : null;
   const displayAdditions = currentDiff || diffQuery.data ? additions : fallbackAdditions;
   const displayDeletions = currentDiff || diffQuery.data ? deletions : fallbackDeletions;
 
@@ -103,12 +116,29 @@ export function TurnDiffFileCard({
           onOpenFile={onOpenFile}
         />
       ) : !currentDiff ? (
-        <TurnDiffInlineState
-          icon={<FileIcon className="icon-paired" />}
-          title="No current diff"
-          description="This file was touched, but there are no current changes to review against the selected base."
-          onOpenFile={onOpenFile}
-        />
+        recordedPatch && recordedPolicy ? (
+          !recordedPolicy.canRenderInline ? (
+            <DiffDisplayPolicyPlaceholder
+              title={recordedPolicy.placeholderTitle}
+              description={recordedPolicy.placeholderDescription}
+            />
+          ) : (
+            <DiffViewer
+              patch={recordedPatch}
+              filePath={file.displayPath}
+              contentSearchUnitId={`diff:${turnId}:${file.path}`}
+              viewportClassName={TURN_DIFF_VIEWPORT_CLASS}
+              variant="chat"
+            />
+          )
+        ) : (
+          <TurnDiffInlineState
+            icon={<FileIcon className="icon-paired" />}
+            title="No current diff"
+            description="This file was touched, but there are no current changes to review against the selected base."
+            onOpenFile={onOpenFile}
+          />
+        )
       ) : !metadataPolicy?.canFetchInline ? (
         <DiffDisplayPolicyPlaceholder
           title={metadataPolicy?.placeholderTitle ?? "Too large to render inline"}

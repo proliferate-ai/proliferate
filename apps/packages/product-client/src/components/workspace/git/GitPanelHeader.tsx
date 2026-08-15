@@ -163,8 +163,12 @@ function GitReviewJumpToFileMenu({
                   0,
                   entry.file.displayPath.length - baseName.length,
                 ).replace(/\/$/, "");
-                const additions = entry.file.currentDiff?.additions ?? 0;
-                const deletions = entry.file.currentDiff?.deletions ?? 0;
+                const additions = entry.file.currentDiff?.additions
+                  ?? entry.file.touched?.recordedAdditions
+                  ?? 0;
+                const deletions = entry.file.currentDiff?.deletions
+                  ?? entry.file.touched?.recordedDeletions
+                  ?? 0;
                 return (
                   <PopoverMenuItem
                     key={entry.key}

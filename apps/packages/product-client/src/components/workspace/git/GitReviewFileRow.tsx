@@ -1,13 +1,9 @@
-import { useCallback, useEffect, useMemo, type CSSProperties } from "react";
+import { useEffect, useMemo, type CSSProperties } from "react";
 import {
   type AnyHarnessQueryTimingOptions,
   useGitDiffQuery,
-  useRevertGitPatchesMutation,
-  useStagePatchMutation,
-  useUnstagePatchMutation,
 } from "@anyharness/sdk-react";
 import { DiffViewer } from "#product/components/content/ui/DiffViewer";
-import type { UnifiedDiffHunkActions } from "#product/components/content/ui/diff/UnifiedDiffViewer";
 import { CircleAlert } from "#product/primitives/icons/status";
 import { FileIcon } from "#product/primitives/icons/workspace";
 import { RefreshCw } from "#product/primitives/icons/platform";
@@ -17,10 +13,9 @@ import {
   GitReviewInlineEmptyState,
 } from "#product/components/workspace/git/GitReviewInlineState";
 import { GitReviewFileSectionShell } from "#product/components/workspace/git/GitReviewFileSectionShell";
+import { useGitReviewHunkActions } from "#product/hooks/ui/diff/use-git-review-hunk-actions";
 import { useLazyDiffFileLines } from "#product/hooks/ui/diff/use-lazy-diff-file-lines";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
-import { extractHunkPatch, isHunkActionEligible } from "#product/lib/domain/files/hunk-patch";
-import { useToastStore } from "#product/stores/toast/toast-store";
 import {
   DIFF_ROW_VIRTUALIZATION_LINE_THRESHOLD,
   resolveDiffDisplayPolicy,
@@ -111,15 +106,6 @@ export function GitReviewFileRow({
   const currentDiff = file.currentDiff;
   const isBranchMode = sectionScope === "branch";
   const isLastTurnMode = sectionScope === "last_turn";
-  const shouldUnstage = sectionScope === "staged";
-
-  // Hunk-level mutation hooks (lightweight — share the same query client)
-  const revertMutation = useRevertGitPatchesMutation({ workspaceId });
-  const stagePatchMutation = useStagePatchMutation({ workspaceId });
-  const unstagePatchMutation = useUnstagePatchMutation({ workspaceId });
-  const showToast = useToastStore((state) => state.show);
-  const hunkMutationInFlight =
-    revertMutation.isPending || stagePatchMutation.isPending || unstagePatchMutation.isPending;
   // Gap expansion reads the worktree file, which only matches the diff's
   // NEW side for worktree-target scopes: `unstaged` (worktree vs index) and
   // `last_turn`/`base_worktree` (worktree vs merge-base). `staged` diffs
@@ -156,9 +142,24 @@ export function GitReviewFileRow({
     ...(diffTimingOptions ?? {}),
   });
   const diffErrorMessage = diffQuery.isError ? formatDiffErrorMessage(diffQuery.error) : null;
-  const additions = diffQuery.data?.additions ?? currentDiff?.additions ?? 0;
-  const deletions = diffQuery.data?.deletions ?? currentDiff?.deletions ?? 0;
+  const additions = diffQuery.data?.additions ?? currentDiff?.additions ?? file.touched?.recordedAdditions ?? 0;
+  const deletions = diffQuery.data?.deletions ?? currentDiff?.deletions ?? file.touched?.recordedDeletions ?? 0;
   const patch = diffQuery.data?.patch ?? null;
+  // Transcript-recorded fallback for last-turn files git can no longer diff
+  // against the base (reverted, or written outside the repo). Hunk actions and
+  // gap expansion stay off — the recorded patch may not apply to the worktree.
+  const recordedPatch = !currentDiff ? file.touched?.recordedPatch ?? null : null;
+  const recordedPolicy = useMemo(
+    () => recordedPatch
+      ? resolveDiffDisplayPolicy({
+          path: file.path,
+          additions: file.touched?.recordedAdditions ?? 0,
+          deletions: file.touched?.recordedDeletions ?? 0,
+          patch: recordedPatch,
+        })
+      : null,
+    [file.path, file.touched, recordedPatch],
+  );
   const patchPolicy = useMemo(
     () => patch
       ? resolveDiffDisplayPolicy({
@@ -183,76 +184,26 @@ export function GitReviewFileRow({
   // [data-diff-row-virtualization] rule in design product.css): the diff
   // renders at full height in the outer panel scroll, so without it every
   // row of a multi-thousand-line patch stays painted while scrolling.
+  const renderedPatchPolicy = patchPolicy ?? recordedPolicy;
   const virtualizeDiffRows = Boolean(
-    patchPolicy
-    && patchPolicy.patchLineCount > DIFF_ROW_VIRTUALIZATION_LINE_THRESHOLD,
+    renderedPatchPolicy
+    && renderedPatchPolicy.patchLineCount > DIFF_ROW_VIRTUALIZATION_LINE_THRESHOLD,
   );
   const emptyDiffState = formatEmptyDiffState({
     binary: Boolean(diffQuery.data?.binary || currentDiff?.binary),
     truncated: Boolean(diffQuery.data?.truncated && !patch),
   });
 
-  // Hunk-level actions: only for working-tree scopes (unstaged/staged) in
-  // unified layout, and only when the patch is complete and the file is not
-  // binary/rename/copy. Branch and last-turn diffs are excluded — their hunks
-  // are not guaranteed to apply against the current worktree/index.
-  const hunkActionsEnabled = Boolean(
-    patch
-    && !isBranchMode
-    && !isLastTurnMode
-    && layout === "unified"
-    && !diffQuery.data?.truncated
-    && isHunkActionEligible(patch, file.oldPath)
-    && isRuntimeReady,
-  );
-
-  const handleHunkRevert = useCallback(
-    (hunkIndex: number) => {
-      if (!patch) return;
-      const result = extractHunkPatch({ patch, hunkIndex, filePath: file.path, oldPath: file.oldPath });
-      if (result) {
-        revertMutation
-          .mutateAsync({
-            entries: [{
-              path: file.path,
-              operation: "edit",
-              patch: result.patch,
-            }],
-          })
-          .catch((error: unknown) => {
-            showToast(formatHunkActionError(error, "Could not revert this change."));
-          });
-      }
-    },
-    [patch, file.path, file.oldPath, revertMutation, showToast],
-  );
-
-  const handleHunkStageOrUnstage = useCallback(
-    (hunkIndex: number) => {
-      if (!patch) return;
-      const result = extractHunkPatch({ patch, hunkIndex, filePath: file.path, oldPath: file.oldPath });
-      if (!result) return;
-      if (shouldUnstage) {
-        unstagePatchMutation.mutateAsync(result.patch).catch((error: unknown) => {
-          showToast(formatHunkActionError(error, "Could not unstage this change."));
-        });
-      } else {
-        stagePatchMutation.mutateAsync(result.patch).catch((error: unknown) => {
-          showToast(formatHunkActionError(error, "Could not stage this change."));
-        });
-      }
-    },
-    [patch, file.path, file.oldPath, shouldUnstage, stagePatchMutation, unstagePatchMutation, showToast],
-  );
-
-  const hunkActions: UnifiedDiffHunkActions | null = hunkActionsEnabled
-    ? {
-        mode: shouldUnstage ? "staged" : "unstaged",
-        disabled: !isRuntimeReady || hunkMutationInFlight,
-        onRevert: handleHunkRevert,
-        onStageOrUnstage: handleHunkStageOrUnstage,
-      }
-    : null;
+  const hunkActions = useGitReviewHunkActions({
+    workspaceId,
+    sectionScope,
+    path: file.path,
+    oldPath: file.oldPath,
+    patch,
+    layout,
+    diffTruncated: Boolean(diffQuery.data?.truncated),
+    isRuntimeReady,
+  });
 
   useEffect(() => {
     if (diffQuery.data || diffQuery.isError) {
@@ -299,12 +250,36 @@ export function GitReviewFileRow({
         onOpenFile={() => void openFile(file.path)}
       >
         {!currentDiff ? (
-          <GitReviewInlineEmptyState
-            icon={<FileIcon className="icon-paired" />}
-            title="No current diff"
-            description="This file was touched, but there are no current changes to review against the selected base."
-            onOpenFile={() => void openFile(file.path)}
-          />
+          recordedPatch && recordedPolicy ? (
+            !recordedPolicy.canRenderInline ? (
+              <DiffDisplayPolicyPlaceholder
+                title={recordedPolicy.placeholderTitle}
+                description={recordedPolicy.placeholderDescription}
+                onOpenFile={() => void openFile(file.path)}
+              />
+            ) : (
+              <DiffViewer
+                patch={recordedPatch}
+                filePath={file.displayPath}
+                wrapLongLines={wrapLongLines}
+                layout={layout}
+                variant={layout === "unified" ? "chat" : "default"}
+                contentSearchUnitId={`review-diff:${id}`}
+                contentSearchSurface="review"
+                contentSearchOrderKey={contentSearchOrderKey}
+                overscrollBehaviorX="none"
+                overscrollBehaviorY="none"
+                chainVerticalWheel
+              />
+            )
+          ) : (
+            <GitReviewInlineEmptyState
+              icon={<FileIcon className="icon-paired" />}
+              title="No current diff"
+              description="This file was touched, but there are no current changes to review against the selected base."
+              onOpenFile={() => void openFile(file.path)}
+            />
+          )
         ) : !metadataPolicy?.canFetchInline ? (
           <DiffDisplayPolicyPlaceholder
             title={metadataPolicy?.placeholderTitle ?? "Too large to render inline"}
@@ -384,11 +359,4 @@ function formatDiffErrorMessage(error: unknown): string {
     return error;
   }
   return "Failed to load diff";
-}
-
-function formatHunkActionError(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message.trim()) {
-    return error.message;
-  }
-  return fallback;
 }

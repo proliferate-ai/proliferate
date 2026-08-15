@@ -4,6 +4,7 @@ import type {
   TranscriptState,
   TurnRecord,
 } from "@anyharness/sdk";
+import { collectTurnFilePatches } from "./turn-file-patches";
 
 export interface LastTurnTouchedFile {
   key: string;
@@ -12,6 +13,10 @@ export interface LastTurnTouchedFile {
   displayPath: string;
   operation: FileChangeOperation;
   topLevel: boolean;
+  recordedAdditions: number;
+  recordedDeletions: number;
+  /** Combined patch recorded in the transcript, for files git can no longer diff. */
+  recordedPatch: string | null;
 }
 
 export interface LastTurnTouchedFilesResult {
@@ -24,6 +29,13 @@ export function collectTurnTouchedFiles(
   transcript: TranscriptState,
 ): LastTurnTouchedFile[] {
   const byPath = new Map<string, LastTurnTouchedFile>();
+  const recordedByPath = new Map(
+    collectTurnFilePatches(turn, transcript).map((filePatch) => [filePatch.path, {
+      additions: filePatch.additions,
+      deletions: filePatch.deletions,
+      patch: filePatch.patches.filter((patch) => patch.trim().length > 0).join("\n") || null,
+    }]),
+  );
   for (const itemId of turn.itemOrder) {
     const item = transcript.itemsById[itemId];
     if (!item || item.kind !== "tool_call" || item.parentToolCallId) {
@@ -38,9 +50,13 @@ export function collectTurnTouchedFiles(
         continue;
       }
       const previous = byPath.get(touched.path);
+      const recorded = recordedByPath.get(touched.path);
       byPath.set(touched.path, {
         ...touched,
         oldPath: touched.oldPath ?? previous?.oldPath ?? null,
+        recordedAdditions: recorded?.additions ?? 0,
+        recordedDeletions: recorded?.deletions ?? 0,
+        recordedPatch: recorded?.patch ?? null,
       });
     }
   }
@@ -75,7 +91,9 @@ export function latestCompletedTurn(transcript: TranscriptState | null): TurnRec
   return null;
 }
 
-function touchedFileFromPart(part: FileChangeContentPart): LastTurnTouchedFile | null {
+function touchedFileFromPart(
+  part: FileChangeContentPart,
+): Omit<LastTurnTouchedFile, "recordedAdditions" | "recordedDeletions" | "recordedPatch"> | null {
   const path = normalizePath(part.newWorkspacePath ?? part.workspacePath ?? part.newPath ?? part.path);
   if (!path) {
     return null;

@@ -28,8 +28,8 @@ export function summarizeGitPanelSectionStats(
   return sections.reduce(
     (stats, section) => {
       for (const file of section.files) {
-        stats.additions += file.currentDiff?.additions ?? 0;
-        stats.deletions += file.currentDiff?.deletions ?? 0;
+        stats.additions += file.currentDiff?.additions ?? file.touched?.recordedAdditions ?? 0;
+        stats.deletions += file.currentDiff?.deletions ?? file.touched?.recordedDeletions ?? 0;
       }
       return stats;
     },

@@ -88,6 +88,9 @@ describe("git panel diff domain", () => {
           displayPath: "clean.md",
           operation: "edit",
           topLevel: true,
+          recordedAdditions: 1,
+          recordedDeletions: 0,
+          recordedPatch: "@@ -1 +1 @@\n-old\n+new",
         },
         {
           key: ":dirty.md:edit",
@@ -96,6 +99,9 @@ describe("git panel diff domain", () => {
           displayPath: "dirty.md",
           operation: "edit",
           topLevel: true,
+          recordedAdditions: 0,
+          recordedDeletions: 0,
+          recordedPatch: null,
         },
       ],
       baseWorktreeFiles: [

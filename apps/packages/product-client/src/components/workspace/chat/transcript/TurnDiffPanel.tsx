@@ -62,8 +62,10 @@ export function TurnDiffPanel({
   const fileStats = new Map(files.map((file) => {
     const transcriptBadge = findFileBadge(turn, file.path, file.displayPath);
     return [file.key, {
-      additions: file.currentDiff?.additions ?? transcriptBadge?.additions ?? 0,
-      deletions: file.currentDiff?.deletions ?? transcriptBadge?.deletions ?? 0,
+      additions: file.currentDiff?.additions ?? transcriptBadge?.additions
+        ?? file.touched?.recordedAdditions ?? 0,
+      deletions: file.currentDiff?.deletions ?? transcriptBadge?.deletions
+        ?? file.touched?.recordedDeletions ?? 0,
     }];
   }));
   const totalAdditions = [...fileStats.values()]
