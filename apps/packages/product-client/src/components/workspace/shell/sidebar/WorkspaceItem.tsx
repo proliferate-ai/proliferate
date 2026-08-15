@@ -190,7 +190,9 @@ export function WorkspaceItem({
         else handlePinCommand();
       }}
     >
-      <Pin />
+      {/* Filled body marks the pinned state; the stem is a zero-area line
+          path, so the stroke stays on rather than `stroke-none`. */}
+      <Pin className={pinned ? "fill-current" : undefined} />
     </SidebarActionButton>
   ) : null;
   const archiveHoverAction = onArchive && !archived ? (
