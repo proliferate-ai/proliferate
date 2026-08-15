@@ -1,5 +1,6 @@
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { DotCellLoader } from "#product/primitives/DotCellLoader";
+import { LoadingBoundary } from "#product/primitives/LoadingBoundary";
 import {
   CHAT_COLUMN_CLASSNAME,
   CHAT_SURFACE_GUTTER_CLASSNAME,
@@ -8,9 +9,15 @@ import {
 /**
  * The chat pane's switch/load wait state: a centered activity cell instead of
  * fake message skeletons (PRO-182 — a clean loader reads better than a
- * transient skeleton that content immediately replaces). The delayed
- * `content-fade-in` keeps sub-200ms switches loader-free so fast paths never
- * flash it.
+ * transient skeleton that content immediately replaces).
+ *
+ * The show-delay is no longer a hand-rolled `content-fade-in` + animation-delay:
+ * this surface routes through the shared `LoadingBoundary` (UX Latency +
+ * Transitions ADR §4.2, Rung 2), which owns the 200ms show-delay so sub-200ms
+ * switches stay loader-free. The component is only mounted while switching, so it
+ * holds `state="pending"` for its whole life; the parent unmounts it on resolve.
+ * Rung 3 swaps the treatment visual to the living mark; this rung keeps the
+ * existing DotCellLoader.
  */
 export function TranscriptSwitchingPlaceholder({
   label = "Loading chat",
@@ -25,13 +32,18 @@ export function TranscriptSwitchingPlaceholder({
         aria-label={label}
         data-chat-switching-placeholder
       >
-        <div
-          className={`${CHAT_COLUMN_CLASSNAME} flex flex-1 flex-col items-center justify-center gap-3 animate-content-fade-in [animation-delay:var(--duration-disclosure)] [animation-fill-mode:backwards]`}
+        <LoadingBoundary
+          state="pending"
+          diagnostics={{ flow: "transcript_switch" }}
+          className={`${CHAT_COLUMN_CLASSNAME} flex flex-1 flex-col items-center justify-center gap-3`}
           aria-hidden="true"
-        >
-          <DotCellLoader className="text-muted-foreground" variant="wave" />
-          <p className="text-chat font-medium text-muted-foreground">{label}</p>
-        </div>
+          treatment={
+            <>
+              <DotCellLoader className="text-muted-foreground" variant="wave" />
+              <p className="text-chat font-medium text-muted-foreground">{label}</p>
+            </>
+          }
+        />
       </div>
     </DebugProfiler>
   );

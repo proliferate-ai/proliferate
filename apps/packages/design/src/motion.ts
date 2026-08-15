@@ -66,6 +66,30 @@ export const motion = {
      */
     tabNameRevealMs: 420,
   },
+  /**
+   * Loading-treatment timing. Its own scale, deliberately not aliased to the
+   * interaction or activity numbers: these two waits gate whether a loading
+   * treatment (spinner, living mark, dot cell) is allowed to appear at all and
+   * how long it must stay once it does. They are JS-scheduled, so consumers read
+   * these numbers directly and never hand-author the milliseconds.
+   */
+  loading: {
+    /**
+     * Show delay. No loading treatment mounts until a wait has lasted this long,
+     * so any resolution faster than this never flashes a treatment at all. The
+     * ADR's Class C default window (UX Latency + Transitions ADR §4.2). Set to
+     * 200ms by founder ruling and the ADR; an earlier requirements draft said
+     * 150ms and is superseded.
+     */
+    showDelayMs: 200,
+    /**
+     * Minimum display. Once a treatment has mounted it stays at least this long
+     * before yielding to resolved content or an empty state, so a treatment that
+     * only just appeared cannot immediately vanish and read as a flicker. Applies
+     * to both ready and empty resolutions.
+     */
+    minDisplayMs: 300,
+  },
   /** UI choreography delays; these are not animation durations. */
   delay: {
     autoHideScrollbarMs: 700,

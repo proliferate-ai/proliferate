@@ -582,6 +582,40 @@ leaving, how far apart stepped level bars fire. They live with motion because
 they are perceived as part of the same choreography, and JS consumers that must
 stay in lockstep with CSS import them and format through `motion.cssMs()`.
 
+### Loading treatments
+
+| Value | ms | Role |
+| --- | --- | --- |
+| `loading.showDelayMs` | 200 | No loading treatment mounts until a wait has lasted this long. |
+| `loading.minDisplayMs` | 300 | A mounted treatment stays at least this long before it yields. |
+
+> **Loading is its own scale, and a treatment is gated, not free.** These two
+> waits are JS-scheduled and deliberately unaliased to the interaction or
+> activity numbers: `showDelayMs` is the Class C default window from the UX
+> Latency + Transitions ADR §4.2, and `minDisplayMs` is the anti-flicker floor.
+> Any wait that resolves faster than 200ms never mounts a treatment at all, so
+> fast paths stay treatment-free; once a treatment is up it holds for 300ms so a
+> just-appeared spinner cannot flash back out.
+
+The [`LoadingBoundary`](../apps/packages/product-client/src/primitives/LoadingBoundary.tsx)
+primitive is the single owner of that state machine. Surfaces never hand-roll a
+`content-fade-in` + `animation-delay` show-delay again; they pass a discriminated
+`pending | empty | ready` state and a treatment slot. Doctrine, all load-bearing:
+
+- The state is discriminated, never a boolean. `empty` is a resolved outcome and
+  may only render after data lands; while `pending` the boundary shows the class
+  treatment or nothing, never the empty slot.
+- The treatment is a call-site slot: Class A is `ProliferateLivingMark`, Class B
+  is `Spinner`. The boundary never renders two treatments inside one pending
+  window, and the treatment identity is stable for the whole window.
+- The one sanctioned reveal is `content-fade-in` at `--duration-enter`; reduced
+  motion disables the fade so content appears instantly. No treatment carries a
+  raw millisecond.
+- The boundary emits `renderer.loading.*` marks (`treatment_shown`,
+  `treatment_suppressed`, `settled`) through the same renderer diagnostics port
+  as the Rung 1 `renderer.flow.*` family, so the show-delay suppression and the
+  min-display hold are observable in telemetry.
+
 > **Raw time literals are illegal in the design CSS.** `check-theme.mjs`'s
 > `checkRawMotionAuthority` walks `product.css` and the generated
 > theme and fails any `animation`/`transition` declaration carrying a numeric
