@@ -20,6 +20,7 @@ import { ReviewsClient } from "./reviews.js";
 import { RuntimeClient } from "./runtime.js";
 import { SessionsClient } from "./sessions.js";
 import { TerminalsClient } from "./terminals.js";
+import { WorkflowRunsV2Client } from "./workflow-runs-v2.js";
 import { WorktreesClient } from "./worktrees.js";
 import { WorkspacesClient } from "./workspaces.js";
 
@@ -542,6 +543,7 @@ export class AnyHarnessClient {
   readonly pullRequests: PullRequestsClient;
   readonly terminals: TerminalsClient;
   readonly processes: ProcessesClient;
+  readonly workflowRunsV2: WorkflowRunsV2Client;
 
   constructor(options: AnyHarnessClientOptions) {
     const transport = new AnyHarnessTransport(options);
@@ -564,6 +566,7 @@ export class AnyHarnessClient {
     this.pullRequests = new PullRequestsClient(transport);
     this.terminals = new TerminalsClient(transport);
     this.processes = new ProcessesClient(transport);
+    this.workflowRunsV2 = new WorkflowRunsV2Client(transport);
   }
 }
 

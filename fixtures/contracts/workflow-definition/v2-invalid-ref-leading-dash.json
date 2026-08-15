@@ -1,0 +1,16 @@
+{
+  "rejectedBy": "structure",
+  "expectedIssuePath": "nodes.0.prompt",
+  "note": "A doc slug cannot start with a dash; the malformed token is an error, not a silent non-match.",
+  "definition": {
+    "schemaVersion": 2,
+    "nodes": [
+      {
+        "id": "n_a",
+        "type": "agent",
+        "title": "Step",
+        "prompt": "Write into @doc:-leading and stop"
+      }
+    ]
+  }
+}

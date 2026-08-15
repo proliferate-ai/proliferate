@@ -294,8 +294,16 @@ export function buildWorkspaceCommandPaletteEntries(args: {
   ];
 
   // Mirrors the sidebar hiding its support action under `support.kind ===
-  // "none"`: don't just disable the palette entry, don't register it at all.
-  return args.appActions.openSupport.hidden
-    ? entries.filter((entry) => entry.id !== "app.open-support")
-    : entries;
+  // "none"`, and its Workflows row under the workflows_v2 gate: don't just
+  // disable the palette entry, don't register it at all.
+  const hiddenEntryIds = new Set(
+    [
+      args.appActions.openSupport.hidden ? "app.open-support" : null,
+      args.appActions.goWorkflows.hidden ? "app.go-workflows" : null,
+    ].filter((id): id is string => id !== null),
+  );
+
+  return hiddenEntryIds.size === 0
+    ? entries
+    : entries.filter((entry) => !hiddenEntryIds.has(entry.id));
 }

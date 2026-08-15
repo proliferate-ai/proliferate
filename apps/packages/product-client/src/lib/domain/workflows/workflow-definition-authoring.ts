@@ -1,4 +1,4 @@
-import type { WorkflowDefinitionResponse } from "@proliferate/cloud-sdk";
+import type { WorkflowDefinitionAnyResponse } from "@proliferate/cloud-sdk";
 import {
   isWorkflowRevisionConflict,
   workflowDefinitionFromResponse,
@@ -12,15 +12,17 @@ export interface WorkflowRepositoryOptionModel {
 }
 
 export function workflowDefinitionModel(
-  response: WorkflowDefinitionResponse,
-): WorkflowDefinition {
+  response: WorkflowDefinitionAnyResponse,
+): WorkflowDefinition | null {
   return workflowDefinitionFromResponse(response);
 }
 
 export function workflowDefinitionModels(
-  responses: readonly WorkflowDefinitionResponse[],
+  responses: readonly WorkflowDefinitionAnyResponse[],
 ): WorkflowDefinition[] {
-  return responses.map(workflowDefinitionFromResponse);
+  return responses
+    .map(workflowDefinitionFromResponse)
+    .filter((definition): definition is WorkflowDefinition => definition !== null);
 }
 
 export function workflowRepositoryOptions(
