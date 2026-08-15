@@ -40,6 +40,24 @@ describe("ComposerContextRing", () => {
     expect(container.innerHTML).toBe("");
   });
 
+  it("renders nothing when used or size is not a finite number", () => {
+    mocks.usage = createUsage({ used: Number.NaN });
+    const { container } = render(<ComposerContextRing />);
+    expect(container.innerHTML).toBe("");
+  });
+
+  it("clamps the arc and rows at 100% when used exceeds size", () => {
+    mocks.usage = createUsage({ used: 320000, size: 300000 });
+    render(<ComposerContextRing />);
+
+    const trigger = screen.getByRole("button", { name: /320\.0k of 300\.0k used/ });
+    fireEvent.click(trigger);
+    const arc = trigger.querySelectorAll("circle")[1]!;
+    expect(Number(arc.getAttribute("stroke-dashoffset"))).toBe(0);
+    expect(screen.getByText("Used").nextElementSibling?.textContent).toBe("100.0%");
+    expect(screen.getByText("Free space").nextElementSibling?.textContent).toBe("0.0%");
+  });
+
   it("draws the arc from used/size and stays neutral below the threshold", () => {
     mocks.usage = createUsage();
     render(<ComposerContextRing />);

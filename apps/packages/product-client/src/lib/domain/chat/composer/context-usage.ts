@@ -6,7 +6,9 @@
  */
 export function formatCompactTokenCount(value: number): string {
   const magnitude = Math.abs(value);
-  if (magnitude >= 1_000_000) {
+  // 999_950+ would render as "1000.0k" via toFixed(1) — promote to the M tier
+  // at the same point the k mantissa rounds past three digits.
+  if (magnitude >= 999_950) {
     return `${(value / 1_000_000).toFixed(1)}M`;
   }
   if (magnitude >= 1_000) {

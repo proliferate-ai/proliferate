@@ -21,6 +21,11 @@ describe("formatCompactTokenCount", () => {
     expect(formatCompactTokenCount(1000000)).toBe("1.0M");
     expect(formatCompactTokenCount(2560000)).toBe("2.6M");
   });
+
+  it("promotes to the M tier where the k mantissa would round to 1000.0", () => {
+    expect(formatCompactTokenCount(999949)).toBe("999.9k");
+    expect(formatCompactTokenCount(999950)).toBe("1.0M");
+  });
 });
 
 describe("isContextUsageDestructive", () => {

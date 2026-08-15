@@ -22,7 +22,10 @@ const RING_CIRCUMFERENCE = 43.98;
 export function ComposerContextRing() {
   const usage = useActiveSessionUsage();
 
-  if (!usage || !usage.size || usage.size <= 0) {
+  // `used`/`size` are typed as numbers but arrive off the wire — a NaN here
+  // would flow into the arc's dash math and render "NaN" in the header, so
+  // gate on finiteness the same way parseUsageCost distrusts `cost`.
+  if (!usage || !Number.isFinite(usage.used) || !Number.isFinite(usage.size) || usage.size <= 0) {
     return null;
   }
 
