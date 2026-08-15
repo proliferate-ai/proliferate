@@ -1,16 +1,22 @@
 import { useEffect, useRef, type MutableRefObject, type Ref } from "react";
 import {
+  $copyNode,
+  $createParagraphNode,
   $getRoot,
   $getSelection,
+  $isLineBreakNode,
   $isRangeSelection,
+  $isTextNode,
   COMMAND_PRIORITY_HIGH,
   INDENT_CONTENT_COMMAND,
   KEY_ENTER_COMMAND,
   KEY_TAB_COMMAND,
   OUTDENT_CONTENT_COMMAND,
+  type ElementNode,
   type LexicalEditor,
+  type LexicalNode,
 } from "lexical";
-import { $isListItemNode } from "@lexical/list";
+import { $isListItemNode, $isListNode, type ListItemNode } from "@lexical/list";
 import {
   $convertFromMarkdownString,
   $convertToMarkdownString,
@@ -322,6 +328,11 @@ function ComposerBehaviorPlugin({
       if (onCommandKey?.(event)) return true;
       const plainEnter = !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
       const primaryEnter = !event.shiftKey && !event.altKey && (event.metaKey || event.ctrlKey);
+      const shiftEnter = event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
+      if (shiftEnter && $exitListForShiftEnter(editor)) {
+        event.preventDefault();
+        return true;
+      }
       if (!plainEnter && !primaryEnter) return false;
       event.preventDefault();
       if (!event.repeat && canSubmit) onSubmit();
@@ -335,6 +346,7 @@ function ComposerBehaviorPlugin({
         return event.defaultPrevented;
       }
       event.preventDefault();
+      if (event.shiftKey && $outdentTopLevelListItems()) return true;
       return editor.dispatchCommand(
         event.shiftKey ? OUTDENT_CONTENT_COMMAND : INDENT_CONTENT_COMMAND,
         undefined,
@@ -349,11 +361,91 @@ function ComposerBehaviorPlugin({
 function selectionIsInList(): boolean {
   const selection = $getSelection();
   if (!$isRangeSelection(selection)) return false;
-  let node = selection.anchor.getNode();
-  while (node && !$isListItemNode(node)) {
-    const parent = node.getParent();
-    if (!parent) return false;
-    node = parent;
+  return $nearestListItem(selection.anchor.getNode()) !== null;
+}
+
+function $nearestListItem(node: LexicalNode): ListItemNode | null {
+  let current: LexicalNode | null = node;
+  while (current !== null && !$isListItemNode(current)) current = current.getParent();
+  return $isListItemNode(current) ? current : null;
+}
+
+// Lexical's stock OUTDENT_CONTENT_COMMAND only shrinks nesting, so it is a
+// silent no-op for items already at the top level (PRO-267). The missing
+// outdent step — item becomes a paragraph, splitting its list around it — is
+// owned here. Nested items (and wrapper items holding a nested list) still
+// take Lexical's own outdent path.
+function $outdentTopLevelListItems(): boolean {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection)) return false;
+  const items = new Set<ListItemNode>();
+  for (const node of selection.getNodes()) {
+    const item = $nearestListItem(node);
+    if (item) items.add(item);
   }
-  return $isListItemNode(node);
+  if (items.size === 0) return false;
+  for (const item of items) {
+    if (item.getIndent() > 0 || item.getChildren().some($isListNode)) return false;
+  }
+  for (const item of items) $convertListItemToParagraph(item);
+  return true;
+}
+
+// Plain Enter submits the message, so Shift+Enter doubles as the list exit:
+// on an empty item it leaves the list (or un-nests one level), and on an
+// empty trailing line it moves the caret into a paragraph below the list.
+function $exitListForShiftEnter(editor: LexicalEditor): boolean {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection) || !selection.isCollapsed()) return false;
+  const item = $nearestListItem(selection.anchor.getNode());
+  if (!item) return false;
+  const effectivelyEmpty = item
+    .getChildren()
+    .every((child) => $isTextNode(child) && child.getTextContentSize() === 0);
+  if (effectivelyEmpty) {
+    if (item.getIndent() > 0) return editor.dispatchCommand(OUTDENT_CONTENT_COMMAND, undefined);
+    $convertListItemToParagraph(item);
+    return true;
+  }
+  if (item.getIndent() > 0) return false;
+  const { anchor } = selection;
+  const caretOnEmptyTrailingLine = $isLineBreakNode(item.getLastChild())
+    && anchor.type === "element"
+    && anchor.getNode().is(item)
+    && anchor.offset === item.getChildrenSize();
+  if (!caretOnEmptyTrailingLine) return false;
+  item.getLastChild()?.remove();
+  const list = item.getParentOrThrow();
+  $splitListAfterItem(item, list);
+  const paragraph = $createParagraphNode();
+  list.insertAfter(paragraph);
+  if (item.getChildrenSize() === 0) {
+    item.remove();
+    if (list.getChildrenSize() === 0) list.remove();
+  }
+  paragraph.selectEnd();
+  return true;
+}
+
+function $convertListItemToParagraph(item: ListItemNode): void {
+  const selection = $getSelection();
+  const caretWasOnItem = $isRangeSelection(selection)
+    && selection.anchor.type === "element"
+    && selection.anchor.getNode().is(item);
+  const list = item.getParentOrThrow();
+  const paragraph = $createParagraphNode();
+  paragraph.append(...item.getChildren());
+  $splitListAfterItem(item, list);
+  list.insertAfter(paragraph);
+  item.remove();
+  if (list.getChildrenSize() === 0) list.remove();
+  if (caretWasOnItem || paragraph.isEmpty()) paragraph.selectEnd();
+}
+
+function $splitListAfterItem(item: ListItemNode, list: ElementNode): void {
+  const trailing = item.getNextSiblings();
+  if (trailing.length === 0) return;
+  const trailingList = $copyNode(list);
+  trailingList.append(...trailing);
+  list.insertAfter(trailingList);
 }
