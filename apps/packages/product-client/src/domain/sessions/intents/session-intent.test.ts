@@ -1,7 +1,4 @@
-import type {
-  SessionEventEnvelope,
-  SessionLiveConfigSnapshot,
-} from "@anyharness/sdk";
+import type { SessionEventEnvelope, SessionLiveConfigSnapshot } from "@anyharness/sdk";
 import { createTranscriptState } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
 import {
@@ -22,9 +19,7 @@ import {
   upsertSessionIntent,
   type SessionIntentStateShape,
 } from "./session-intent-state";
-import {
-  reconcileOutboxFromEnvelopes,
-} from "./session-intent-reconciliation";
+import { reconcileOutboxFromEnvelopes } from "./session-intent-reconciliation";
 
 describe("session intents", () => {
   it("keeps queue-placed sends out of the transcript while preserving failed sends", () => {
@@ -102,16 +97,14 @@ describe("session intents", () => {
     const queued = createUpdateConfigIntent({
       intentId: "config-1",
       clientSessionId: "session-1",
-      controlKey: "effort",
-      rawConfigId: "reasoning_effort",
+      controlKey: "effort", rawConfigId: "reasoning_effort",
       value: "xhigh",
     });
     const acceptedQueued = {
       ...createUpdateConfigIntent({
         intentId: "config-2",
         clientSessionId: "session-1",
-        controlKey: "mode",
-        rawConfigId: "mode",
+        controlKey: "mode", rawConfigId: "mode",
         value: "plan",
       }),
       status: "accepted" as const,
@@ -135,8 +128,7 @@ describe("session intents", () => {
       ...createUpdateConfigIntent({
         intentId: "config-applied",
         clientSessionId: "session-1",
-        controlKey: "mode",
-        rawConfigId: "mode",
+        controlKey: "mode", rawConfigId: "mode",
         value: "plan",
       }),
       status: "accepted" as const,
@@ -162,8 +154,7 @@ describe("session intents", () => {
       ...createUpdateConfigIntent({
         intentId: "config-default",
         clientSessionId: "session-1",
-        controlKey: "mode",
-        rawConfigId: "mode",
+        controlKey: "mode", rawConfigId: "mode",
         value: "default",
       }),
       status: "accepted" as const,
@@ -172,8 +163,7 @@ describe("session intents", () => {
     const latest = createUpdateConfigIntent({
       intentId: "config-plan",
       clientSessionId: "session-1",
-      controlKey: "mode",
-      rawConfigId: "mode",
+      controlKey: "mode", rawConfigId: "mode",
       value: "plan",
     });
 
@@ -188,8 +178,7 @@ describe("session intents", () => {
       ...createUpdateConfigIntent({
         intentId: "config-plan",
         clientSessionId: "session-1",
-        controlKey: "mode",
-        rawConfigId: "mode",
+        controlKey: "mode", rawConfigId: "mode",
         value: "plan",
       }),
       status: "failed" as const,
@@ -263,8 +252,7 @@ describe("session intents", () => {
       ...createUpdateConfigIntent({
         intentId: "config-failed",
         clientSessionId: "session-1",
-        controlKey: "mode",
-        rawConfigId: "mode",
+        controlKey: "mode", rawConfigId: "mode",
         value: "plan",
       }),
       status: "failed",
@@ -272,8 +260,7 @@ describe("session intents", () => {
     state = upsertSessionIntent(state, createUpdateConfigIntent({
       intentId: "config-next",
       clientSessionId: "session-1",
-      controlKey: "effort",
-      rawConfigId: "reasoning_effort",
+      controlKey: "effort", rawConfigId: "reasoning_effort",
       value: "high",
     }));
 
@@ -304,8 +291,7 @@ describe("session intents", () => {
         ...createUpdateConfigIntent({
           intentId: "ignored-config",
           clientSessionId: "session-1",
-          controlKey: "mode",
-          rawConfigId: "mode",
+          controlKey: "mode", rawConfigId: "mode",
           value: "plan",
         }),
       },
@@ -363,8 +349,7 @@ describe("session intents", () => {
       ...createUpdateConfigIntent({
         intentId: "config-1",
         clientSessionId: "session-1",
-        controlKey: "effort",
-        rawConfigId: "reasoning_effort",
+        controlKey: "effort", rawConfigId: "reasoning_effort",
         value: "high",
       }),
       status: "accepted",
@@ -558,8 +543,7 @@ describe("session intents", () => {
       ...createUpdateConfigIntent({
         intentId: "config-session-1",
         clientSessionId: "session-1",
-        controlKey: "effort",
-        rawConfigId: "reasoning_effort",
+        controlKey: "effort", rawConfigId: "reasoning_effort",
         value: "high",
       }),
       status: "accepted",
@@ -569,8 +553,7 @@ describe("session intents", () => {
       ...createUpdateConfigIntent({
         intentId: "config-session-2",
         clientSessionId: "session-2",
-        controlKey: "effort",
-        rawConfigId: "reasoning_effort",
+        controlKey: "effort", rawConfigId: "reasoning_effort",
         value: "high",
       }),
       status: "accepted",

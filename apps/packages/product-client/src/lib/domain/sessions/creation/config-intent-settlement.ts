@@ -122,9 +122,6 @@ export function planAdoptedSessionConfigIntentResolution(input: {
 }): AdoptedSessionConfigIntentResolutionPlan {
   return {
     patches: input.snapshot.flatMap((entry) => {
-      if (entry.rawConfigId !== null) {
-        return [];
-      }
       const control = findNormalizedControlBySemanticKey(
         input.liveConfig,
         entry.controlKey,

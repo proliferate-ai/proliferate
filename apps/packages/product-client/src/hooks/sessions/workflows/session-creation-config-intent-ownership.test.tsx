@@ -7,39 +7,18 @@ import type {
 } from "@anyharness/sdk";
 import { AnyHarnessError } from "@anyharness/sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  selectNextDispatchableSessionIntent,
-} from "#product/domain/sessions/intents/session-intent-selectors";
-import {
-  sessionIntentsForSession,
-} from "#product/domain/sessions/intents/session-intent-state";
-import {
-  dispatchConfigIntent,
-  type ConfigIntentDispatchDeps,
-} from "#product/hooks/sessions/lifecycle/session-intent-config-dispatch";
-import {
-  materializeExistingSession,
-} from "#product/hooks/sessions/workflows/session-creation-materialization-helpers";
-import {
-  publishCreatedSessionMaterialization,
-} from "#product/hooks/sessions/workflows/session-creation-publication";
-import type {
-  SessionConfigModelRegistry,
-} from "#product/lib/domain/chat/launch/session-config";
-import {
-  configValuesFromIntentSnapshot,
-  planCreationConfigIntentSettlement,
-  snapshotPreMaterializationConfigIntents,
-} from "#product/lib/domain/sessions/creation/config-intent-settlement";
-import {
-  applySessionLaunchDefaults,
-} from "#product/lib/workflows/sessions/session-launch-defaults";
+import { selectNextDispatchableSessionIntent } from "#product/domain/sessions/intents/session-intent-selectors";
+import { sessionIntentsForSession } from "#product/domain/sessions/intents/session-intent-state";
+import { dispatchConfigIntent, type ConfigIntentDispatchDeps } from "#product/hooks/sessions/lifecycle/session-intent-config-dispatch";
+import { materializeExistingSession } from "#product/hooks/sessions/workflows/session-creation-materialization-helpers";
+import { publishCreatedSessionMaterialization } from "#product/hooks/sessions/workflows/session-creation-publication";
+import type { SessionConfigModelRegistry } from "#product/lib/domain/chat/launch/session-config";
+import { configValuesFromIntentSnapshot, planCreationConfigIntentSettlement,
+  snapshotPreMaterializationConfigIntents } from "#product/lib/domain/sessions/creation/config-intent-settlement";
+import { applySessionLaunchDefaults } from "#product/lib/workflows/sessions/session-launch-defaults";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
-import {
-  createEmptySessionRecord,
-  putSessionRecord,
-} from "#product/stores/sessions/session-records";
+import { createEmptySessionRecord, putSessionRecord } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 const mocks = vi.hoisted(() => ({
@@ -244,7 +223,7 @@ describe("session creation config-intent ownership", () => {
       "unconfirmed-latest": { status: "failed" },
     });
   });
-  it("resolves launch-only targets from an adopted session before binding", () => {
+  it("authoritatively classifies mapped launch intents before adoption binding", async () => {
     const fixture = strictConfigFixture({
       agentKind: "codex",
       applyState: "applied",
@@ -255,21 +234,14 @@ describe("session creation config-intent ownership", () => {
       values: ["high", "max"],
     });
     putProjectedRecord("client-adopted", "workspace-1", "codex", "gpt-5.5");
-    useSessionIntentStore.getState().enqueueConfig({
-      intentId: "adopted-supported",
-      clientSessionId: "client-adopted",
-      workspaceId: "workspace-1",
-      configId: null,
-      controlKey: "effort",
-      value: "max",
-    });
-    useSessionIntentStore.getState().enqueueConfig({
-      intentId: "adopted-unsupported",
-      clientSessionId: "client-adopted",
-      workspaceId: "workspace-1",
-      configId: null,
-      controlKey: "effort",
-      value: "ultra",
+    enqueueEffort("client-adopted", "catalog_reasoning_effort", "ultra", "adopted-unsupported");
+    enqueueEffort("client-adopted", "catalog_reasoning_effort", "max", "adopted-supported");
+    let classifiedBeforeBinding = false;
+    const unsubscribe = useSessionIntentStore.subscribe((state) => {
+      classifiedBeforeBinding ||=
+        state.entriesById["adopted-unsupported"]?.status === "stale"
+        && state.entriesById["adopted-supported"]?.rawConfigId === "reasoning_effort"
+        && state.entriesById["adopted-supported"]?.materializedSessionId === null;
     });
 
     materializeExistingSession({
@@ -281,7 +253,9 @@ describe("session creation config-intent ownership", () => {
       upsertWorkspaceSessionRecord: vi.fn(),
       workspaceId: "workspace-1",
     });
+    unsubscribe();
 
+    expect(classifiedBeforeBinding).toBe(true);
     expect(useSessionIntentStore.getState().entriesById).toMatchObject({
       "adopted-supported": {
         status: "queued",
@@ -294,6 +268,34 @@ describe("session creation config-intent ownership", () => {
         materializedSessionId: "runtime-adopted",
       },
     });
+    const next = selectNextDispatchableSessionIntent(
+      useSessionIntentStore.getState(),
+      "client-adopted",
+    );
+    expect(next).toMatchObject({
+      intentId: "adopted-supported",
+      controlKey: "effort",
+      rawConfigId: "reasoning_effort",
+    });
+
+    const liveMutation = vi.fn().mockResolvedValue(
+      configResponse(fixture.sessionWithValue("max")),
+    );
+    const onFailure = vi.fn();
+    mocks.getSessionClientAndWorkspace.mockResolvedValue({
+      workspaceId: "workspace-1",
+      materializedSessionId: "runtime-adopted",
+    });
+    await dispatchConfigIntent(
+      next as Extract<typeof next, { kind: "update_config" }>,
+      dispatchDeps(liveMutation, onFailure),
+    );
+
+    expect(liveMutation).toHaveBeenCalledTimes(1);
+    expect(liveMutation).toHaveBeenCalledWith(expect.objectContaining({
+      request: { configId: "reasoning_effort", value: "max" },
+    }));
+    expect(onFailure).not.toHaveBeenCalled();
   });
 });
 type ConfigSnapshot = ReturnType<typeof snapshotPreMaterializationConfigIntents>;
