@@ -145,8 +145,16 @@ impl CompletionDeliveryWorker {
             &next_attempt,
         )? {
             ClaimedDeliveryEnqueueOutcome::Enqueued {
-                delivery, pending, ..
-            } => (delivery, pending),
+                delivery,
+                pending,
+                superseded_delivery_id,
+                ..
+            } => {
+                if let Some(superseded_delivery_id) = superseded_delivery_id {
+                    log_wake_withheld(&delivery, &superseded_delivery_id, "coalesced");
+                }
+                (delivery, pending)
+            }
             ClaimedDeliveryEnqueueOutcome::AlreadyVisible { delivery, .. } => {
                 log_delivered(&delivery, &now.to_rfc3339());
                 log_delivery_skipped(
@@ -156,7 +164,7 @@ impl CompletionDeliveryWorker {
                 );
                 return Ok(());
             }
-            ClaimedDeliveryEnqueueOutcome::Suppressed { delivery, reason } => {
+            ClaimedDeliveryEnqueueOutcome::Suppressed { delivery } => {
                 // The delivery is terminal without a parent prompt. The
                 // injected completion event is the only parent-transcript
                 // record, so it stays best effort with the same guarantees as
@@ -165,15 +173,7 @@ impl CompletionDeliveryWorker {
                 if let Some(session_runtime) = self.session_runtime.upgrade() {
                     inject_completion_event(&session_runtime, &delivery).await;
                 }
-                tracing::info!(
-                    target: "anyharness.subagent.delivery_suppressed",
-                    delivery_id = %delivery.delivery_id,
-                    parent_session_id = %delivery.parent_session_id,
-                    child_session_id = %delivery.child_session_id,
-                    reason = reason.as_str(),
-                    result_class = "suppressed",
-                    "completion delivery resolved without a parent wake turn"
-                );
+                log_wake_withheld(&delivery, &delivery.delivery_id, "redundant_child_message");
                 return Ok(());
             }
             ClaimedDeliveryEnqueueOutcome::Stale => {
@@ -287,6 +287,24 @@ fn log_delivery_skipped(delivery_id: &str, session_id: &str, reason: &'static st
         session_id = %session_id,
         reason,
         "completion delivery skipped at claim"
+    );
+}
+
+/// A completion delivery resolved without its own parent wake turn — either
+/// suppressed outright or coalesced into a newer sibling's queue row.
+fn log_wake_withheld(
+    delivery: &CompletionDeliveryRecord,
+    withheld_delivery_id: &str,
+    reason: &'static str,
+) {
+    tracing::info!(
+        target: "anyharness.subagent.delivery_suppressed",
+        delivery_id = %withheld_delivery_id,
+        parent_session_id = %delivery.parent_session_id,
+        child_session_id = %delivery.child_session_id,
+        reason,
+        result_class = "suppressed",
+        "completion delivery resolved without a parent wake turn"
     );
 }
 

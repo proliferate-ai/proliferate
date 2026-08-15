@@ -10,7 +10,7 @@ use super::super::{
     CompletionDeliveryRecord, CompletionDeliveryState, CompletionDeliveryStore,
     DurableTerminalTurn,
 };
-use super::{ClaimedDeliveryEnqueueOutcome, WakeSuppressionReason};
+use super::ClaimedDeliveryEnqueueOutcome;
 use crate::domains::sessions::extensions::SessionTurnOutcome;
 use crate::domains::sessions::model::SessionEventRecord;
 use crate::domains::sessions::prompt::{provenance::PromptProvenance, PromptPayload};
@@ -192,12 +192,10 @@ fn completed_wake_is_suppressed_while_child_message_is_queued() {
         .expect("suppression decision");
     let ClaimedDeliveryEnqueueOutcome::Suppressed {
         delivery: suppressed,
-        reason,
     } = outcome
     else {
         panic!("expected suppression");
     };
-    assert_eq!(reason, WakeSuppressionReason::RedundantChildMessage);
     assert_eq!(suppressed.state, CompletionDeliveryState::Delivered);
     assert!(suppressed.parent_prompt_seq.is_none());
     assert!(suppressed.parent_turn_id.is_none());
@@ -260,10 +258,7 @@ fn completed_wake_is_suppressed_after_parent_executed_child_message() {
         .expect("suppression decision");
     assert!(matches!(
         outcome,
-        ClaimedDeliveryEnqueueOutcome::Suppressed {
-            reason: WakeSuppressionReason::RedundantChildMessage,
-            ..
-        }
+        ClaimedDeliveryEnqueueOutcome::Suppressed { .. }
     ));
     let queue = SessionStore::new(db)
         .list_pending_prompts(&delivery.parent_session_id)
@@ -324,7 +319,7 @@ fn message_queued_before_the_terminal_turn_does_not_suppress() {
 }
 
 #[test]
-fn second_wake_coalesces_while_first_wake_is_still_queued() {
+fn newer_wake_takes_over_the_queued_row_of_an_unconsumed_older_wake() {
     let db = Db::open_in_memory().expect("open db");
     seed_link(&db, false);
     let first = persist_delivery_for_started_turn(
@@ -371,15 +366,27 @@ fn second_wake_coalesces_while_first_wake_is_still_queued() {
             "2026-08-11T00:02:17Z",
         )
         .expect("coalesce second wake");
-    assert!(matches!(
-        outcome,
-        ClaimedDeliveryEnqueueOutcome::Suppressed {
-            reason: WakeSuppressionReason::Coalesced,
-            ..
-        }
-    ));
+    let ClaimedDeliveryEnqueueOutcome::Enqueued {
+        delivery: second_enqueued,
+        pending,
+        inserted,
+        superseded_delivery_id,
+    } = outcome
+    else {
+        panic!("expected coalesced enqueue");
+    };
+    assert!(!inserted);
+    assert_eq!(
+        superseded_delivery_id.as_deref(),
+        Some(first.delivery_id.as_str())
+    );
 
-    // The first wake stays the single queued drain-time prompt.
+    // The older wake's queue row is rewritten in place: same seq and position,
+    // now carrying the newest completion so the parent never drains stale
+    // output.
+    assert_eq!(pending.seq, first_pending.seq);
+    assert_eq!(pending.text, second.notification_text);
+    assert!(pending_prompt_matches_delivery(&pending, &second_enqueued));
     let queue = SessionStore::new(db)
         .list_pending_prompts(&first.parent_session_id)
         .expect("queue");
@@ -387,22 +394,13 @@ fn second_wake_coalesces_while_first_wake_is_still_queued() {
         queue.iter().map(|row| row.seq).collect::<Vec<_>>(),
         vec![first_pending.seq]
     );
-    assert_eq!(
-        store
-            .find(&first.delivery_id)
-            .expect("first")
-            .expect("row")
-            .state,
-        CompletionDeliveryState::Enqueued
-    );
-    assert_eq!(
-        store
-            .find(&second.delivery_id)
-            .expect("second")
-            .expect("row")
-            .state,
-        CompletionDeliveryState::Delivered
-    );
+
+    let retired = store.find(&first.delivery_id).expect("first").expect("row");
+    assert_eq!(retired.state, CompletionDeliveryState::Delivered);
+    assert!(retired.parent_prompt_seq.is_none());
+    assert!(retired.parent_turn_id.is_none());
+    assert_eq!(second_enqueued.state, CompletionDeliveryState::Enqueued);
+    assert_eq!(second_enqueued.parent_prompt_seq, Some(first_pending.seq));
 }
 
 #[test]
@@ -478,6 +476,7 @@ fn atomic_enqueue_preserves_ordinary_collision_and_adds_one_canonical_row() {
         delivery: enqueued,
         pending,
         inserted,
+        ..
     } = outcome
     else {
         panic!("expected enqueue");

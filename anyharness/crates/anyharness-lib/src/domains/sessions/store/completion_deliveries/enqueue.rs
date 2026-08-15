@@ -18,42 +18,27 @@ use crate::domains::sessions::store::pending_prompts::{
     insert_pending_prompt_row, map_pending_prompt,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum WakeSuppressionReason {
-    /// An earlier wake for the same child is still queued and unconsumed; one
-    /// drain-time wake covers both completions.
-    Coalesced,
-    /// The child's own `send_message` for this terminal turn already reached
-    /// the parent (queued or executed), so a second wake turn is redundant.
-    RedundantChildMessage,
-}
-
-impl WakeSuppressionReason {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::Coalesced => "coalesced",
-            Self::RedundantChildMessage => "redundant_child_message",
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ClaimedDeliveryEnqueueOutcome {
     Enqueued {
         delivery: CompletionDeliveryRecord,
         pending: PendingPromptRecord,
         inserted: bool,
+        /// An older queued wake for the same child whose queue row was
+        /// rewritten in place to carry this delivery; that delivery is retired
+        /// without its own wake turn.
+        superseded_delivery_id: Option<String>,
     },
     AlreadyVisible {
         delivery: CompletionDeliveryRecord,
         parent_turn_id: String,
     },
-    /// Terminal without a parent prompt: the completion stays durable and the
-    /// worker still injects the completion metadata event, but no wake turn is
+    /// Terminal without a parent prompt: the child's own message for this turn
+    /// already reached the parent. The completion stays durable and the worker
+    /// still injects the completion metadata event, but no wake turn is
     /// created in the parent transcript.
     Suppressed {
         delivery: CompletionDeliveryRecord,
-        reason: WakeSuppressionReason,
     },
     Stale,
 }
@@ -167,42 +152,54 @@ impl CompletionDeliveryStore {
                 .filter(|record| pending_prompt_matches_delivery(record, &delivery))
                 .collect::<Vec<_>>();
             canonical.sort_by_key(|record| record.seq);
-            // Suppression applies only to a delivery that has never reached the
-            // parent queue. A previously enqueued delivery (recreate/retry
-            // paths) keeps the legacy exactly-once reconciliation.
-            if delivery.parent_prompt_seq.is_none() && canonical.is_empty() {
-                if let Some(reason) = wake_suppression_reason(tx, &delivery)? {
-                    let changed = tx.execute(
-                        "UPDATE session_link_completion_deliveries
-                         SET state = 'delivered', delivered_at = COALESCE(delivered_at, ?3),
-                             updated_at = ?3, lease_token = NULL, lease_expires_at = NULL,
-                             last_error_code = NULL
-                         WHERE delivery_id = ?1 AND lease_token = ?2
-                           AND state != 'delivered'",
-                        params![delivery.delivery_id, lease_token, now],
-                    )?;
-                    if changed != 1 {
-                        return Err(completion_delivery_error(
-                            "claimed delivery lease changed during wake suppression",
-                        ));
-                    }
-                    let suppressed = find_delivery_in_tx(tx, delivery_id)?.ok_or_else(|| {
-                        completion_delivery_error("suppressed outbox row disappeared")
-                    })?;
-                    return Ok(ClaimedDeliveryEnqueueOutcome::Suppressed {
-                        delivery: suppressed,
-                        reason,
-                    });
-                }
-            }
-            let (pending, inserted) = match delivery
-                .parent_prompt_seq
-                .and_then(|expected| canonical.iter().find(|record| record.seq == expected))
-                .cloned()
-                .or_else(|| canonical.first().cloned())
+            // Coalescing and suppression apply only to a delivery that has
+            // never reached the parent queue. A previously enqueued delivery
+            // (recreate/retry paths) keeps the legacy exactly-once
+            // reconciliation.
+            let is_fresh = delivery.parent_prompt_seq.is_none() && canonical.is_empty();
+            let adopted = if is_fresh {
+                adopt_superseded_sibling_wake(tx, &delivery, now)?
+            } else {
+                None
+            };
+            if is_fresh
+                && adopted.is_none()
+                && wake_is_redundant_with_child_message(tx, &delivery)?
             {
-                Some(record) => (record, false),
-                None => (insert_canonical_prompt(tx, &delivery, now)?, true),
+                let changed = tx.execute(
+                    "UPDATE session_link_completion_deliveries
+                     SET state = 'delivered', delivered_at = COALESCE(delivered_at, ?3),
+                         updated_at = ?3, lease_token = NULL, lease_expires_at = NULL,
+                         last_error_code = NULL
+                     WHERE delivery_id = ?1 AND lease_token = ?2
+                       AND state != 'delivered'",
+                    params![delivery.delivery_id, lease_token, now],
+                )?;
+                if changed != 1 {
+                    return Err(completion_delivery_error(
+                        "claimed delivery lease changed during wake suppression",
+                    ));
+                }
+                let suppressed = find_delivery_in_tx(tx, delivery_id)?.ok_or_else(|| {
+                    completion_delivery_error("suppressed outbox row disappeared")
+                })?;
+                return Ok(ClaimedDeliveryEnqueueOutcome::Suppressed {
+                    delivery: suppressed,
+                });
+            }
+            let (pending, inserted, superseded_delivery_id) = match adopted {
+                Some((record, superseded_delivery_id)) => {
+                    (record, false, Some(superseded_delivery_id))
+                }
+                None => match delivery
+                    .parent_prompt_seq
+                    .and_then(|expected| canonical.iter().find(|record| record.seq == expected))
+                    .cloned()
+                    .or_else(|| canonical.first().cloned())
+                {
+                    Some(record) => (record, false, None),
+                    None => (insert_canonical_prompt(tx, &delivery, now)?, true, None),
+                },
             };
             let duplicate_seqs = canonical
                 .iter()
@@ -246,6 +243,7 @@ impl CompletionDeliveryStore {
                 delivery: enqueued,
                 pending,
                 inserted,
+                superseded_delivery_id,
             })
         })
     }
@@ -316,18 +314,22 @@ fn load_prompt_id_rows(
     rows
 }
 
-fn insert_canonical_prompt(
-    conn: &rusqlite::Connection,
-    delivery: &CompletionDeliveryRecord,
-    queued_at: &str,
-) -> rusqlite::Result<PendingPromptRecord> {
-    let payload = PromptPayload::text(delivery.notification_text.clone()).with_provenance(
+fn canonical_wake_payload(delivery: &CompletionDeliveryRecord) -> PromptPayload {
+    PromptPayload::text(delivery.notification_text.clone()).with_provenance(
         PromptProvenance::SubagentWake {
             session_link_id: delivery.session_link_id.clone(),
             completion_id: delivery.delivery_id.clone(),
             label: delivery.label.clone(),
         },
-    );
+    )
+}
+
+fn insert_canonical_prompt(
+    conn: &rusqlite::Connection,
+    delivery: &CompletionDeliveryRecord,
+    queued_at: &str,
+) -> rusqlite::Result<PendingPromptRecord> {
+    let payload = canonical_wake_payload(delivery);
     let blocks_json = payload.blocks_json().map_err(sql_conversion_error)?;
     let provenance_json = payload.provenance_json().map_err(sql_conversion_error)?;
     let changed = conn.execute(
@@ -364,49 +366,32 @@ fn insert_canonical_prompt(
     Ok(record)
 }
 
-/// Decide whether a fresh completion wake may resolve without a parent prompt.
-/// Only successful completions are ever suppressed: failed and cancelled turns
-/// always materialize a wake turn so the parent is forced to look.
-fn wake_suppression_reason(
+/// Coalesce a fresh delivery with an older wake for the same child that is
+/// still queued and unconsumed: rewrite that queue row in place (same seq and
+/// queue position, so no queue-visibility event is needed) to carry this
+/// delivery's canonical prompt, and retire the older delivery without its own
+/// wake turn. The parent then drains at most one wake per child, always with
+/// the newest completion output.
+fn adopt_superseded_sibling_wake(
     tx: &rusqlite::Connection,
     delivery: &CompletionDeliveryRecord,
-) -> rusqlite::Result<Option<WakeSuppressionReason>> {
-    if delivery.outcome != SessionTurnOutcome::Completed {
-        return Ok(None);
-    }
-    if sibling_wake_is_queued(tx, delivery)? {
-        return Ok(Some(WakeSuppressionReason::Coalesced));
-    }
-    let Some(turn_started_at) = child_turn_started_at(tx, delivery)? else {
-        return Ok(None);
-    };
-    if child_message_is_queued_since(tx, delivery, turn_started_at)?
-        || child_message_executed_since(tx, delivery, turn_started_at)?
-    {
-        return Ok(Some(WakeSuppressionReason::RedundantChildMessage));
-    }
-    Ok(None)
-}
-
-/// Another delivery for the same child whose canonical wake prompt is still
-/// sitting unconsumed in the parent queue. That queued wake will wake the
-/// parent once for the whole backlog.
-fn sibling_wake_is_queued(
-    tx: &rusqlite::Connection,
-    delivery: &CompletionDeliveryRecord,
-) -> rusqlite::Result<bool> {
+    now: &str,
+) -> rusqlite::Result<Option<(PendingPromptRecord, String)>> {
     let mut stmt = tx.prepare(
         "SELECT * FROM session_link_completion_deliveries
          WHERE parent_session_id = ?1 AND child_session_id = ?2
            AND delivery_id != ?3 AND state = 'enqueued'
-           AND parent_prompt_seq IS NOT NULL",
+           AND lease_token IS NULL AND parent_prompt_seq IS NOT NULL
+           AND created_at <= ?4
+         ORDER BY parent_prompt_seq ASC",
     )?;
     let siblings = stmt
         .query_map(
             params![
                 delivery.parent_session_id,
                 delivery.child_session_id,
-                delivery.delivery_id
+                delivery.delivery_id,
+                delivery.created_at,
             ],
             map_delivery,
         )?
@@ -422,11 +407,73 @@ fn sibling_wake_is_queued(
                 map_pending_prompt,
             )
             .optional()?;
-        if pending.is_some_and(|record| pending_prompt_matches_delivery(&record, &sibling)) {
-            return Ok(true);
+        let Some(pending) =
+            pending.filter(|record| pending_prompt_matches_delivery(record, &sibling))
+        else {
+            continue;
+        };
+
+        let payload = canonical_wake_payload(delivery);
+        let blocks_json = payload.blocks_json().map_err(sql_conversion_error)?;
+        let provenance_json = payload.provenance_json().map_err(sql_conversion_error)?;
+        let rewritten = tx.execute(
+            "UPDATE session_pending_prompts
+             SET prompt_id = ?3, text = ?4, blocks_json = ?5, provenance_json = ?6
+             WHERE session_id = ?1 AND seq = ?2",
+            params![
+                delivery.parent_session_id,
+                pending.seq,
+                delivery.prompt_id(),
+                payload.text_summary,
+                blocks_json,
+                provenance_json,
+            ],
+        )?;
+        if rewritten != 1 {
+            return Err(completion_delivery_error(
+                "queued sibling wake changed during coalescing rewrite",
+            ));
         }
+        let retired = tx.execute(
+            "UPDATE session_link_completion_deliveries
+             SET state = 'delivered', parent_prompt_seq = NULL,
+                 delivered_at = COALESCE(delivered_at, ?2), updated_at = ?2,
+                 lease_token = NULL, lease_expires_at = NULL, last_error_code = NULL
+             WHERE delivery_id = ?1 AND state = 'enqueued' AND lease_token IS NULL",
+            params![sibling.delivery_id, now],
+        )?;
+        if retired != 1 {
+            return Err(completion_delivery_error(
+                "superseded delivery changed during coalescing rewrite",
+            ));
+        }
+        update_completion_projection(tx, &sibling.delivery_id, None, None, true, now)?;
+        let adopted = tx.query_row(
+            "SELECT * FROM session_pending_prompts WHERE session_id = ?1 AND seq = ?2",
+            params![delivery.parent_session_id, pending.seq],
+            map_pending_prompt,
+        )?;
+        return Ok(Some((adopted, sibling.delivery_id)));
     }
-    Ok(false)
+    Ok(None)
+}
+
+/// Whether the child's own `send_message` for this terminal turn already
+/// reached the parent, making a separate wake turn redundant. Only successful
+/// completions are ever suppressed: failed and cancelled turns always
+/// materialize a wake turn so the parent is forced to look.
+fn wake_is_redundant_with_child_message(
+    tx: &rusqlite::Connection,
+    delivery: &CompletionDeliveryRecord,
+) -> rusqlite::Result<bool> {
+    if delivery.outcome != SessionTurnOutcome::Completed {
+        return Ok(false);
+    }
+    let Some(turn_started_at) = child_turn_started_at(tx, delivery)? else {
+        return Ok(false);
+    };
+    Ok(child_message_is_queued_since(tx, delivery, turn_started_at)?
+        || child_message_executed_since(tx, delivery, turn_started_at)?)
 }
 
 fn child_turn_started_at(

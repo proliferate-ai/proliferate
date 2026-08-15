@@ -267,19 +267,23 @@ delivery intent; the delivery worker admits at most one parent prompt with
 once visibility. The terminal assistant message remains the completion payload
 relayed to the parent.
 
-A fresh completed-turn delivery may instead resolve without any parent prompt
-at enqueue time, in the same transaction that would have inserted the wake:
+A fresh delivery may instead resolve without its own parent wake turn at
+enqueue time, in the same transaction that would have inserted the wake:
 
-- `redundant_child_message` — the child's own `agent_session` message for the
-  terminal turn already reached the parent (still queued since the child turn
-  started, or already executed as a parent transcript item), so the message is
-  the wake and a second turn would be redundant.
 - `coalesced` — an earlier wake for the same child is still queued and
-  unconsumed; that one drain-time wake covers the backlog.
+  unconsumed. Its queue row is rewritten in place (same seq and queue
+  position) to carry the newest delivery's canonical prompt, and the older
+  delivery is retired, so the parent drains at most one wake per child and
+  always sees the newest completion output.
+- `redundant_child_message` — the child's own `agent_session` message for the
+  completed terminal turn already reached the parent (still queued since the
+  child turn started, or already executed as a parent transcript item), so the
+  message is the wake and a second turn would be redundant. This never applies
+  to failed or cancelled turns; those always materialize a wake turn.
 
-Suppression never applies to failed or cancelled turns, nor to a delivery that
-ever reached the parent queue (recreate/retry reconciliation keeps its legacy
-exactly-once path). A suppressed delivery is terminal `delivered` with no
+Neither applies to a delivery that ever reached the parent queue
+(recreate/retry reconciliation keeps its legacy exactly-once path). A retired
+or suppressed delivery is terminal `delivered` with no
 `parent_prompt_seq`/`parent_turn_id`; the completion ledger row and injected
 completion event keep the result durable and visible to delegated-work
 surfaces, and the worker records the decision under
