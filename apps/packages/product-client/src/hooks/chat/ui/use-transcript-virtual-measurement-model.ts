@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { measureElement as defaultMeasureElement } from "@tanstack/react-virtual";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import {
@@ -26,6 +26,15 @@ export function useTranscriptVirtualMeasurementModel({
   // the rung 5 measured-height cache to remounts of the SAME session (see
   // transcript-row-height-cache.ts). Never persisted beyond this runtime.
   const sessionKey = `${selectedWorkspaceId ?? ""}:${activeSessionId}`;
+  // Live row snapshot read at call time by the referentially-stable accessors
+  // below. estimateSize/measureElement need the current row (for its
+  // composition token) without themselves rotating on every content-only
+  // snapshot — rotating them would violate the accessor-stability contract the
+  // measurement memo relies on (see measurementSignature note below) and churn
+  // TanStack's estimate pass each render. A ref keeps the read fresh; identity
+  // stays pinned to composition/session scope.
+  const renderableRowsRef = useRef(renderableRows);
+  renderableRowsRef.current = renderableRows;
   // TanStack keys its measurement memo on getItemKey identity. Serialize only
   // the ordered key/estimate inputs, then retain the parsed model and accessors
   // across content-only row snapshots. They rotate only when row composition
@@ -71,7 +80,7 @@ export function useTranscriptVirtualMeasurementModel({
         return estimateRenderableRowHeight(undefined);
       }
       const [key, compositionEstimate] = entry;
-      const row = renderableRows[index];
+      const row = renderableRowsRef.current[index];
       const persisted = getMeasuredRowHeight(
         sessionKey,
         key,
@@ -79,7 +88,7 @@ export function useTranscriptVirtualMeasurementModel({
       );
       return persisted ?? compositionEstimate;
     },
-    [measurementEntries, renderableRows, rowCompositionKey, sessionKey],
+    [measurementEntries, rowCompositionKey, sessionKey],
   );
   const estimatedRowsHeight = useMemo(
     () => measurementEntries.reduce((sum, entry) => sum + entry[1], 0),
