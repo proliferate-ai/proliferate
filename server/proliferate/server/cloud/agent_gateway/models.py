@@ -189,6 +189,13 @@ class AgentAuthDeliveryAckResponse(AgentGatewayBaseModel):
 # --------------------------------------------------------------------------- #
 
 
+# The parsed verification-delta shape (never key material): a diff verdict
+# carries the missing/extra model-id lists plus the observed/expected counts, and
+# the degraded fallback carries string notes. Precise rather than ``Any`` so the
+# strict mypy census stays clean.
+VerificationDelta = dict[str, list[str] | int | str]
+
+
 class AgentGatewayVerificationVerdict(AgentGatewayBaseModel):
     """One per-harness gateway-enablement verdict (agent-auth.md FR-3).
 
@@ -198,7 +205,7 @@ class AgentGatewayVerificationVerdict(AgentGatewayBaseModel):
 
     harness_kind: str = Field(alias="harnessKind")
     status: str
-    delta: dict[str, Any] | None = None
+    delta: VerificationDelta | None = None
     verified_at: str | None = Field(default=None, alias="verifiedAt")
 
 
@@ -314,7 +321,7 @@ def desired_source(input_source: AgentAuthSourceInput) -> DesiredAuthSource:
 def verification_verdict_payload(
     record: AgentGatewayEnrollmentKeyRecord,
 ) -> AgentGatewayVerificationVerdict:
-    delta: dict[str, Any] | None = None
+    delta: VerificationDelta | None = None
     if record.verification_delta is not None:
         try:
             parsed = json.loads(record.verification_delta)
@@ -323,10 +330,10 @@ def verification_verdict_payload(
         if isinstance(parsed, dict):
             delta = parsed
     return AgentGatewayVerificationVerdict(
-        harnessKind=record.harness_kind,
+        harness_kind=record.harness_kind,
         status=record.verification_status or "",
         delta=delta,
-        verifiedAt=_iso(record.verified_at),
+        verified_at=_iso(record.verified_at),
     )
 
 
