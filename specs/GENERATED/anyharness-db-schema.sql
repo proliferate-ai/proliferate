@@ -588,7 +588,7 @@ CREATE TABLE sessions (
     updated_at TEXT NOT NULL,
     last_prompt_at TEXT,
     closed_at TEXT
-, thinking_budget_tokens INTEGER, title TEXT, requested_model_id TEXT, current_model_id TEXT, requested_mode_id TEXT, current_mode_id TEXT, dismissed_at TEXT, mcp_bindings_ciphertext TEXT, system_prompt_append TEXT, mcp_binding_summaries_json TEXT, origin_json TEXT, subagents_enabled INTEGER NOT NULL DEFAULT 1, mcp_binding_policy TEXT NOT NULL DEFAULT 'inherit_workspace', action_capabilities_json TEXT, agent_auth_contexts TEXT, pending_prompt_seq_cursor INTEGER NOT NULL DEFAULT 0);
+, thinking_budget_tokens INTEGER, title TEXT, requested_model_id TEXT, current_model_id TEXT, requested_mode_id TEXT, current_mode_id TEXT, dismissed_at TEXT, mcp_bindings_ciphertext TEXT, system_prompt_append TEXT, mcp_binding_summaries_json TEXT, origin_json TEXT, subagents_enabled INTEGER NOT NULL DEFAULT 1, mcp_binding_policy TEXT NOT NULL DEFAULT 'inherit_workspace', action_capabilities_json TEXT, agent_auth_contexts TEXT, pending_prompt_seq_cursor INTEGER NOT NULL DEFAULT 0, workflow_run_id TEXT, workflow_node_row_id TEXT);
 
 -- table: terminal_command_runs
 CREATE TABLE terminal_command_runs (
@@ -611,70 +611,63 @@ CREATE TABLE terminal_command_runs (
     updated_at TEXT NOT NULL
 );
 
--- table: workflow_run_steps
-CREATE TABLE workflow_run_steps (
-            run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
-            stage_index INTEGER NOT NULL,
-            step_index INTEGER NOT NULL,
-            status TEXT NOT NULL CHECK (
-                status IN ('pending','running','completed','failed','cancelled','interrupted')
-            ),
-            prompt_id TEXT NOT NULL UNIQUE,
-            turn_id TEXT,
-            failure_code TEXT,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            started_at TEXT,
-            finished_at TEXT,
-            PRIMARY KEY (run_id, stage_index, step_index),
-            CHECK ((status = 'failed') = (failure_code IS NOT NULL))
-        );
+-- table: workflow_run_docs
+CREATE TABLE workflow_run_docs (
+    id                    TEXT PRIMARY KEY,
+    run_id                TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
+    slug                  TEXT NOT NULL,
+    filename              TEXT NOT NULL,             -- NN-slug.md; NN derived from the producing node's chain_index
+    producing_node_row_id TEXT,
+    seeded_from_template  INTEGER NOT NULL,
+    created_at            TEXT NOT NULL,
+    updated_at            TEXT NOT NULL,
+    UNIQUE (run_id, slug),
+    -- The filename law is not injective over slugs alone (seeded "00-plan.md"
+    -- from slug "plan" collides with a registered slug "00-plan"); two rows
+    -- must never claim one file.
+    UNIQUE (run_id, filename)
+);
+
+-- table: workflow_run_nodes
+CREATE TABLE workflow_run_nodes (
+    id                    TEXT PRIMARY KEY,          -- the node row id, the API-addressable identity
+    run_id                TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
+    definition_node_id    TEXT,                      -- null for adhoc; replacements inherit it
+    kind                  TEXT NOT NULL CHECK (kind IN ('defined','replacement','adhoc')),
+    node_type             TEXT NOT NULL CHECK (node_type IN ('agent','human_in_loop')),  -- MUTABLE, type flips land here
+    replaces_node_row_id  TEXT,
+    anchor_node_row_id    TEXT,                      -- adhoc: where it hangs off the chain
+    chain_index           INTEGER,                   -- position on the linear chain; adhoc copies its anchor's
+    title                 TEXT NOT NULL,
+    prompt                TEXT NOT NULL,
+    status                TEXT NOT NULL CHECK (status IN ('pending','running','needs_attention','awaiting_human','completed','failed')),
+    session_id            TEXT,
+    prompt_id             TEXT,                      -- the envelope prompt's id (provenance; the extension reports every turn end of a linked session)
+    model                 TEXT,                      -- JSON NodeModel: the row's own launch pick (adhoc); NULL = resolve via the frozen definition, then the app default
+    rendered_envelope     TEXT,                      -- JSON {instructionBlocks, firstMessage, systemPromptAppend}
+    failure_code          TEXT CHECK (failure_code IS NULL OR failure_code IN ('node_launch_failed','turn_error','refusal','empty_turn','harness_cap','superseded')),
+    first_turn_finished_at TEXT,                     -- first turn end of the CURRENT execution; bounds UndoAdvance
+    created_at            TEXT NOT NULL,
+    started_at            TEXT,
+    completed_at          TEXT,
+    CHECK ((status = 'failed') = (failure_code IS NOT NULL))
+);
 
 -- table: workflow_runs
 CREATE TABLE workflow_runs (
-            id TEXT PRIMARY KEY,
-            schema_version INTEGER NOT NULL CHECK (schema_version IN (1, 2)),
-            invocation_json TEXT NOT NULL CHECK (json_valid(invocation_json)),
-            resolved_plan_json TEXT CHECK (
-                resolved_plan_json IS NULL OR json_valid(resolved_plan_json)
-            ),
-            status TEXT NOT NULL CHECK (
-                status IN ('accepted','running','completed','failed','cancelled','interrupted')
-            ),
-            workspace_id TEXT NOT NULL,
-            session_id TEXT,
-            failure_code TEXT,
-            state_version INTEGER NOT NULL CHECK (state_version >= 1),
-            cancel_requested_at TEXT,
-            interruption_code TEXT CHECK (
-                interruption_code IS NULL OR interruption_code = 'runtime_restarted'
-            ),
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            started_at TEXT,
-            finished_at TEXT,
-            CHECK (
-                (schema_version = 1 AND resolved_plan_json IS NULL)
-                OR (schema_version = 2 AND resolved_plan_json IS NOT NULL)
-            ),
-            CHECK ((status = 'failed') = (failure_code IS NOT NULL)),
-            CHECK ((status = 'interrupted') = (interruption_code IS NOT NULL))
-        );
-
--- table: workflow_workspace_materializations
-CREATE TABLE workflow_workspace_materializations (
-    run_id                  TEXT PRIMARY KEY,
-    schema_version          INTEGER NOT NULL CHECK (schema_version = 1),
-    request_json            TEXT NOT NULL,
-    resolved_placement_json TEXT,
-    status                  TEXT NOT NULL
-                            CHECK (status IN ('accepted', 'materializing', 'ready', 'failed')),
-    workspace_id            TEXT,
-    failure_code            TEXT,
-    failure_message         TEXT,
-    created_at              TEXT NOT NULL,
-    updated_at              TEXT NOT NULL,
-    finished_at             TEXT
+    id                  TEXT PRIMARY KEY,            -- minted by the courier; PUT is idempotent on it
+    invocation_id       TEXT NOT NULL,
+    definition_json     TEXT NOT NULL,               -- verbatim snapshot, IMMUTABLE after insert
+    arguments_json      TEXT NOT NULL,
+    workspace_id        TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    status              TEXT NOT NULL CHECK (status IN ('running','awaiting_human','interrupted','completed','failed')),
+    current_node_row_id TEXT,
+    failure_code        TEXT CHECK (failure_code IS NULL OR failure_code IN ('node_launch_failed','turn_error','refusal','empty_turn','harness_cap','superseded')),
+    interruption_code   TEXT CHECK (interruption_code IS NULL OR interruption_code IN ('user_cancel','app_shutdown','runtime_restarted')),
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL,
+    completed_at        TEXT,
+    CHECK ((status = 'failed') = (failure_code IS NOT NULL))
 );
 
 -- table: workspace_access_modes
@@ -912,6 +905,9 @@ CREATE UNIQUE INDEX idx_session_raw_notifications_session_seq
 CREATE INDEX idx_sessions_activity
     ON sessions(workspace_id, last_prompt_at, updated_at);
 
+-- index: idx_sessions_workflow_run_id
+CREATE INDEX idx_sessions_workflow_run_id ON sessions(workflow_run_id) WHERE workflow_run_id IS NOT NULL;
+
 -- index: idx_terminal_command_runs_status
 CREATE INDEX idx_terminal_command_runs_status
     ON terminal_command_runs(status);
@@ -928,15 +924,14 @@ CREATE INDEX idx_terminal_command_runs_workspace_activity
 CREATE INDEX idx_terminal_command_runs_workspace_created
     ON terminal_command_runs(workspace_id, created_at DESC);
 
--- index: idx_workflow_runs_active_session_controller
-CREATE UNIQUE INDEX idx_workflow_runs_active_session_controller
-         ON workflow_runs(session_id)
-         WHERE session_id IS NOT NULL
-           AND status NOT IN ('completed', 'failed', 'cancelled', 'interrupted');
+-- index: idx_workflow_run_docs_run_id
+CREATE INDEX idx_workflow_run_docs_run_id ON workflow_run_docs(run_id);
 
--- index: idx_workflow_workspace_materializations_workspace_id
-CREATE INDEX idx_workflow_workspace_materializations_workspace_id
-    ON workflow_workspace_materializations(workspace_id);
+-- index: idx_workflow_run_nodes_run_id
+CREATE INDEX idx_workflow_run_nodes_run_id ON workflow_run_nodes(run_id);
+
+-- index: idx_workflow_runs_workspace_id
+CREATE INDEX idx_workflow_runs_workspace_id ON workflow_runs(workspace_id);
 
 -- index: idx_workspaces_lifecycle
 CREATE INDEX idx_workspaces_lifecycle

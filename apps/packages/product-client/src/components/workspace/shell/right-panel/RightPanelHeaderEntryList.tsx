@@ -9,7 +9,8 @@ import {
   AppShellTerminalIcon,
 } from "#product/primitives/icons/app-shell";
 import { UsersRound } from "#product/primitives/icons/platform";
-import { ScratchPadIcon } from "#product/primitives/icons/product";
+import { ScratchPadIcon, Workflow } from "#product/primitives/icons/product";
+import { WORKFLOW_RUN_VIEW_COPY } from "#product/copy/workflows/workflow-run-view-copy";
 import type { IconProps } from "#product/primitives/icons/types";
 import { RightPanelHeaderEntryDropZone } from "#product/components/workspace/shell/right-panel/RightPanelHeaderEntryDropZone";
 import { TerminalHeaderIcon } from "#product/components/workspace/shell/right-panel/TerminalHeaderIcon";
@@ -42,6 +43,7 @@ const PANEL_TOOLS: Record<RightPanelTool, ToolConfig> = {
   scratch: { label: "Scratch", icon: ScratchPadIcon },
   git: { label: "Changes", icon: AppShellReviewIcon },
   agents: { label: "Agents", icon: UsersRound },
+  workflow: { label: WORKFLOW_RUN_VIEW_COPY.paneTitle, icon: Workflow },
 };
 
 interface RightPanelHeaderEntryListProps {

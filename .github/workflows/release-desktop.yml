@@ -394,6 +394,13 @@ jobs:
           anyharness_version="$(grep '^version' ../../anyharness/crates/anyharness/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')"
           short_sha="${GITHUB_SHA:0:12}"
 
+          # Stamp the shipped sidecar's actual version so the desktop shell's
+          # boot-time runtime_version_assert (baked in via include_str! at
+          # compile time, below) compares against the anyharness build that is
+          # actually bundled alongside it, not a stale checked-in placeholder.
+          # Must happen before `pnpm tauri build` compiles the crate.
+          printf '{\n  "anyharnessVersion": "%s"\n}\n' "$anyharness_version" > runtime-version.json
+
           export VITE_PROLIFERATE_RELEASE="${VITE_PROLIFERATE_RELEASE:-proliferate-desktop@${desktop_version}+${short_sha}}"
           # Launch gate: ship with cloud compute hidden (identity/billing stay
           # enabled). Remove this line to re-enable cloud workspaces in builds.

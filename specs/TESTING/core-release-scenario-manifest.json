@@ -1098,7 +1098,7 @@
       "tier": 3,
       "implementation": {
         "status": "deferred",
-        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); workflow run launch/branching not merged (workflows Part II)"
+        "reason": "not in the standing Tier 3 set: no composed journey references it (qualificationPolicy.tier3StandingSelection.unreferencedDisposition); scenario authored and registered in workflows gen-2 PR7, execution deferred until the runtime workflow-runs routes (gen-2 PR5a) land"
       }
     },
     {

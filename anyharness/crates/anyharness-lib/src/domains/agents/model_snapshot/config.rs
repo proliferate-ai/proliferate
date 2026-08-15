@@ -52,15 +52,22 @@ impl PokeReason {
 
 #[derive(Debug, Clone)]
 pub struct ProbeEngineConfig {
-    /// Hard bound on one attempt. `probe_agent` carries none of its own.
+    /// Hard bound on one attempt. `probe_agent` carries none of its own. Retuned
+    /// (ADR FR-2, A5) from 240s to 45s: a healthy harness answers ACP `initialize`
+    /// in well under a second, so a probe still running after 45s is stuck, not
+    /// slow, and a shorter ceiling turns a wedged spawn into a fast failed attempt
+    /// the backoff can then space out. A genuine spawn failure fast-fails long
+    /// before this bound is reached (see [`super::probe::ProbeError::Spawn`]).
     pub per_probe_timeout: Duration,
-    /// Documents intent only: the field it feeds is never read by
-    /// `run_enumeration` today.
-    pub model_switch_timeout: Duration,
     /// First failure waits this long before another AUTOMATIC poke may retry;
     /// each subsequent failure doubles it. Failure-only: a successful probe arms
     /// nothing, and a manual refresh bypasses the window.
     pub backoff_base: Duration,
+    /// Ceiling on the doubling ladder. Retuned (ADR FR-2, A5) from 6h to 30min:
+    /// the failures this brakes are transient (a provider blip, a mid-rotation
+    /// key), and a half-hour ceiling recovers a self-healed harness within one
+    /// window instead of leaving it dark for hours, while still bounding the
+    /// spawn rate of a hard-down harness.
     pub backoff_max: Duration,
     /// Machine-wide concurrent probes. 1 by default: each probe spawns a real
     /// harness process, far heavier than the `gh` calls `pr_status_cache` caps
@@ -69,17 +76,23 @@ pub struct ProbeEngineConfig {
     /// How long an orphan scratch must be untouched before the sweep may remove
     /// it, expressed as a multiple of `per_probe_timeout`.
     pub sweep_age_multiplier: u32,
+    /// The tier-1 instant-credential trial gate (ADR FR-2). OFF by default: a
+    /// trial makes a real network call with the harness's own key on every poke,
+    /// so it stays behind a flag until a deployment opts in. When off, the trial
+    /// engine records nothing and credentials stay at their heuristic
+    /// (bare-presence / acknowledged-route) strength.
+    pub tier1_trial_enabled: bool,
 }
 
 impl Default for ProbeEngineConfig {
     fn default() -> Self {
         Self {
-            per_probe_timeout: Duration::from_secs(240),
-            model_switch_timeout: Duration::from_secs(10),
+            per_probe_timeout: Duration::from_secs(45),
             backoff_base: Duration::from_secs(60),
-            backoff_max: Duration::from_secs(6 * 60 * 60),
+            backoff_max: Duration::from_secs(30 * 60),
             max_concurrent_probes: 1,
             sweep_age_multiplier: 3,
+            tier1_trial_enabled: false,
         }
     }
 }

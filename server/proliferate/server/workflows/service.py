@@ -93,6 +93,11 @@ async def update_workflow_definition(
     current: WorkflowDefinitionSnapshot,
     body: WorkflowDefinitionUpdateRequest,
 ) -> WorkflowDefinitionSnapshot:
+    if current.schema_version != 1:
+        raise InvalidWorkflowDefinition(
+            "A schema version 2 definition cannot be updated with a version 1 body.",
+            path="schemaVersion",
+        )
     if body.expected_revision != current.revision:
         raise WorkflowDefinitionRevisionConflict(
             expected_revision=body.expected_revision,
@@ -223,7 +228,9 @@ async def put_workflow_invocation(
             stored = WorkflowInvocationCreateRequest.model_validate(existing.creation_request_json)
             stored_identity = canonical_json(stored.model_dump(by_alias=True, mode="json"))
         except ValueError as error:
-            raise InvalidWorkflowInvocation("Stored workflow invocation is invalid.") from error
+            # The stored request does not parse as a v1 body (a v2 invocation
+            # already owns this id): the caller collided, the data is fine.
+            raise WorkflowInvocationConflict() from error
         if stored_identity != request_identity:
             raise WorkflowInvocationConflict()
         return WorkflowInvocationPutResult(value=existing, created=False)

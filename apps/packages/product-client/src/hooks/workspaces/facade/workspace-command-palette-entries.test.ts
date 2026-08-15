@@ -21,7 +21,6 @@ function baseAppActions(): AppCommandActions {
     addRepository: commandAction(),
     newLocalWorkspace: commandAction(),
     newWorktreeWorkspace: commandAction(),
-    newCloudWorkspace: commandAction(),
     copyWorkspacePath: commandAction(),
     copyBranchName: commandAction(),
   };
@@ -80,6 +79,38 @@ describe("buildWorkspaceCommandPaletteEntries support routing", () => {
 
     expect(entries.find((entry) => entry.id === "app.open-support")).toBeUndefined();
     // Sanity: hiding support doesn't drop unrelated entries.
+    expect(entries.find((entry) => entry.id === "app.open-web")).not.toBeUndefined();
+  });
+});
+
+// Same treatment for the gen-2 Workflows entry: while the workflows_v2 gate is
+// off, "Go to Workflows" must not be offered at all — a disabled entry would
+// still advertise a surface that ships dark.
+describe("buildWorkspaceCommandPaletteEntries workflows gating", () => {
+  it("registers 'Go to Workflows' when the action is visible (gate on)", () => {
+    const appActions = baseAppActions();
+    const entries = buildWorkspaceCommandPaletteEntries(baseArgs(appActions));
+
+    expect(entries.find((entry) => entry.id === "app.go-workflows")).not.toBeUndefined();
+  });
+
+  it("does not register 'Go to Workflows' at all when the action is hidden (gate off)", () => {
+    const appActions = baseAppActions();
+    appActions.goWorkflows = { ...commandAction(), hidden: true };
+    const entries = buildWorkspaceCommandPaletteEntries(baseArgs(appActions));
+
+    expect(entries.find((entry) => entry.id === "app.go-workflows")).toBeUndefined();
+    expect(entries.find((entry) => entry.id === "app.go-home")).not.toBeUndefined();
+  });
+
+  it("drops both entries when support and workflows are hidden together", () => {
+    const appActions = baseAppActions();
+    appActions.openSupport = { ...commandAction(), hidden: true };
+    appActions.goWorkflows = { ...commandAction(), hidden: true };
+    const entries = buildWorkspaceCommandPaletteEntries(baseArgs(appActions));
+
+    expect(entries.find((entry) => entry.id === "app.open-support")).toBeUndefined();
+    expect(entries.find((entry) => entry.id === "app.go-workflows")).toBeUndefined();
     expect(entries.find((entry) => entry.id === "app.open-web")).not.toBeUndefined();
   });
 });

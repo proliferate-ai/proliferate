@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
 import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";
 import { useStandardRepoProjection } from "#product/hooks/workspaces/derived/use-standard-repo-projection";
 import {
@@ -24,6 +25,7 @@ export function useSidebarShortcutTargets(): string[] {
   );
   const { logicalWorkspaces } = useLogicalWorkspaces();
   const { repoRoots } = useStandardRepoProjection();
+  const { cloudComputeEnabled } = useAppCapabilities();
   const {
     hiddenRepoRootIds,
     collapsedRepoGroups,
@@ -66,7 +68,9 @@ export function useSidebarShortcutTargets(): string[] {
     activeSessionTitle: null,
     lastViewedAt: EMPTY_LAST_VIEWED_AT,
     workspaceLastInteracted,
+    cloudComputeEnabled,
   }), [
+    cloudComputeEnabled,
     hiddenRepoRootSet,
     logicalWorkspaces,
     repoRoots,

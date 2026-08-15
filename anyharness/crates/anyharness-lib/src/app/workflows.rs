@@ -1,119 +1,54 @@
-//! Construction-only wiring for the workflow-runs domain (spec
-//! `specs/FEATURE_DOCS/WORKFLOWS.md`). Intentionally two-phase: the workflow
-//! session extension must exist before `SessionRuntime::new` (it rides the
-//! session extension list), while the completed `SessionRuntime` is injected
-//! into `WorkflowRunRuntime` afterwards. No behavior lives here.
+//! Workflow composition root: the boot fence. Gen-1's fence made policy — no
+//! auto-resume ever. The sweep runs during app construction, BEFORE the
+//! manager exists, so no actor can accept a command against un-fenced rows:
+//! every running node row — chain or adhoc — parks needs_attention against
+//! its dead session, the run parks interrupted only if it was itself running
+//! (Ruling K), and resume is always a human choice. `awaiting_human` and
+//! `interrupted` runs with no running nodes are durable parks and survive
+//! untouched.
 
-use std::sync::Arc;
+use crate::domains::workflows::model::WorkflowInterruptionCode;
+use crate::domains::workflows::store::WorkflowStore;
+use crate::domains::workflows::transition::{next, Decision, WorkflowEvent};
 
-use tokio::runtime::Handle;
-
-use crate::domains::sessions::admission::{SessionMutationAdmission, SessionOperabilityPolicy};
-use crate::domains::sessions::runtime::SessionRuntime;
-use crate::domains::workflows::control::{WorkflowRunGates, WorkflowSessionControllerPolicy};
-use crate::domains::workflows::runtime::WorkflowRunRuntime;
-use crate::domains::workflows::service::WorkflowRunService;
-use crate::domains::workflows::session_extension::WorkflowRunSessionExtension;
-use crate::domains::workflows::store::WorkflowRunStore;
-use crate::domains::workflows::workspace_materialization::{
-    MaterializationStore, WorkflowWorkspaceRuntime, WorkflowWorkspaceService,
-};
-use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
-use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
-use crate::domains::workspaces::runtime::WorkspaceRuntime;
-use crate::persistence::Db;
-
-use super::AppStateInitError;
-
-/// Phase-1 output: everything that must exist before `SessionRuntime::new`.
-pub(super) struct WorkflowWiringPhaseOne {
-    pub service: Arc<WorkflowRunService>,
-    pub session_extension: Arc<WorkflowRunSessionExtension>,
-    pub gates: Arc<WorkflowRunGates>,
-    /// Session mutation admission (spec 2b): sessions own the mechanics; the
-    /// injected policy is the Workflows controller lookup, so this is built
-    /// here and shared with every mutation owner via AppState.
-    pub admission: Arc<SessionMutationAdmission>,
-    /// Isolated Workflow workspace placement (spec
-    /// `workflow-workspace-placement`): the durable materialization service,
-    /// shared by the run-acceptance guard and the placement runtime facade.
-    pub workspace_materialization: Arc<WorkflowWorkspaceService>,
-    pub main_handle: Handle,
-}
-
-/// Phase-2 output: the two async workflow facades stored on `AppState`.
-pub(super) struct WorkflowWiringPhaseTwo {
-    pub run_runtime: Arc<WorkflowRunRuntime>,
-    pub workspace_runtime: Arc<WorkflowWorkspaceRuntime>,
-}
-
-/// Phase 1: build the store and service, synchronously fence interrupted
-/// run/step rows (a failure aborts AppState initialization — HTTP must not
-/// serve ambiguous rows), capture the process/main Tokio handle, and build the
-/// completion extension for the session extension list.
-pub(super) fn wire_workflows_before_sessions(
-    db: &Db,
-    operability_policy: Arc<dyn SessionOperabilityPolicy>,
-) -> Result<WorkflowWiringPhaseOne, AppStateInitError> {
-    let service = Arc::new(WorkflowRunService::new(WorkflowRunStore::new(db.clone())));
-    service
-        .fence_nonterminal_after_restart()
-        .map_err(|error| AppStateInitError::WorkflowFencingFailed(anyhow::Error::new(error)))?;
-    let main_handle = Handle::current();
-    // One shared per-run gate set (spec workflow-run-control §6.1): injected
-    // into BOTH the workflow runtime and the completion extension.
-    let gates = Arc::new(WorkflowRunGates::new());
-    let admission = Arc::new(SessionMutationAdmission::new(
-        Arc::new(WorkflowSessionControllerPolicy::new(WorkflowRunStore::new(
-            db.clone(),
-        ))),
-        operability_policy,
-    ));
-    let workspace_materialization = Arc::new(WorkflowWorkspaceService::new(
-        MaterializationStore::new(db.clone()),
-    ));
-    let session_extension = Arc::new(WorkflowRunSessionExtension::new(
-        service.clone(),
-        gates.clone(),
-        admission.clone(),
-        main_handle.clone(),
-    ));
-    Ok(WorkflowWiringPhaseOne {
-        service,
-        session_extension,
-        gates,
-        admission,
-        workspace_materialization,
-        main_handle,
-    })
-}
-
-/// Phase 2: inject the completed `SessionRuntime` into the run facade and build
-/// the placement facade. Both async workflow facades are stored on `AppState`.
-pub(super) fn wire_workflow_runtime(
-    phase_one: WorkflowWiringPhaseOne,
-    session_runtime: Arc<SessionRuntime>,
-    operation_gate: Arc<WorkspaceOperationGate>,
-    access_gate: Arc<WorkspaceAccessGate>,
-    workspace_runtime: Arc<WorkspaceRuntime>,
-) -> WorkflowWiringPhaseTwo {
-    let run_runtime = Arc::new(WorkflowRunRuntime::new(
-        phase_one.service,
-        session_runtime,
-        operation_gate,
-        access_gate,
-        phase_one.gates,
-        phase_one.admission,
-        phase_one.workspace_materialization.clone(),
-        phase_one.main_handle.clone(),
-    ));
-    let workspace_runtime = Arc::new(WorkflowWorkspaceRuntime::new(
-        phase_one.workspace_materialization,
-        workspace_runtime,
-        phase_one.main_handle,
-    ));
-    WorkflowWiringPhaseTwo {
-        run_runtime,
-        workspace_runtime,
+/// Fence every run with rows claiming live execution (Ruling K's sweep set:
+/// a running run OR any running node — an adhoc routinely runs under an
+/// awaiting_human run). Returns the fenced run ids (the resume popover's
+/// feed). Per-run failures are logged and skipped: one corrupt run must not
+/// block the app boot, and its rows stay non-terminal for the next fence.
+pub fn run_boot_fence(store: &WorkflowStore) -> Vec<String> {
+    let run_ids = match store.boot_fence_run_ids() {
+        Ok(run_ids) => run_ids,
+        Err(error) => {
+            tracing::error!(error = %error, "workflow boot fence sweep query failed");
+            return Vec::new();
+        }
+    };
+    let mut fenced = Vec::new();
+    for run_id in run_ids {
+        let state = match store.load_run_state(&run_id) {
+            Ok(Some(state)) => state,
+            Ok(None) => continue,
+            Err(error) => {
+                tracing::error!(run_id = %run_id, error = %error, "workflow boot fence load failed");
+                continue;
+            }
+        };
+        let event = WorkflowEvent::BootFence {
+            code: WorkflowInterruptionCode::RuntimeRestarted,
+        };
+        let transition = match next(&state, &event) {
+            Decision::Transition(transition) => transition,
+            // Hold: already terminal or already fenced — idempotent.
+            Decision::Hold | Decision::Illegal(_) => continue,
+        };
+        match store.apply_transition(&run_id, &transition, &event) {
+            Ok(_applied) => fenced.push(run_id),
+            Err(error) => {
+                tracing::error!(run_id = %run_id, error = %error, "workflow boot fence persist failed");
+            }
+        }
     }
+    WorkflowStore::emit_boot_fence_summary(&fenced);
+    fenced
 }

@@ -25,6 +25,13 @@ import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selec
 import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useDesktopInstallId } from "#product/hooks/workspaces/derived/use-desktop-install-id";
 import { useToastStore } from "#product/stores/toast/toast-store";
+import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
+
+// Matches the message used at the command-surface gate
+// (use-create-cloud-workspace.ts / use-app-new-workspace-command-actions.ts)
+// so every entry point into a disabled Cloud compute deployment reads as one
+// consistent unavailability story.
+const CLOUD_WORKSPACE_UNAVAILABLE_MESSAGE = "Cloud workspaces are temporarily unavailable.";
 
 /**
  * Executes the workspace-copy availability actions (PR 5 Flows 2/3/5). All
@@ -44,6 +51,7 @@ export function useWorkspaceAvailabilityActions() {
   const report = useReportMaterialization().mutateAsync;
   const unlink = useUnlinkMaterialization().mutateAsync;
   const desktopInstallId = useDesktopInstallId();
+  const { cloudComputeEnabled } = useAppCapabilities();
   const { selectWorkspace } = useWorkspaceSelection();
   const { invalidateWorkspaceCollectionsForRuntime } = useWorkspaceCollectionsInvalidationActions();
   const showToast = useToastStore((state) => state.show);
@@ -229,6 +237,14 @@ export function useWorkspaceAvailabilityActions() {
     gitOwner: string;
     gitRepoName: string;
   }): Promise<boolean> => {
+    // Defense in depth: the menu affordance is already gated on
+    // cloudComputeEnabled (workspace-availability-commands.ts), but this
+    // action can be reached directly, so it never calls the Cloud SDK while
+    // the capability is disabled (PRO-10).
+    if (!cloudComputeEnabled) {
+      showToast(CLOUD_WORKSPACE_UNAVAILABLE_MESSAGE);
+      return false;
+    }
     try {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
       const status = await client.git.getStatus(args.localAnyharnessWorkspaceId);
@@ -270,7 +286,7 @@ export function useWorkspaceAvailabilityActions() {
       showToast(error instanceof Error ? error.message : "Could not add a Cloud copy.");
       return false;
     }
-  }, [desktopInstallId, runtime, selectWorkspace, showToast]);
+  }, [cloudComputeEnabled, desktopInstallId, runtime, selectWorkspace, showToast]);
 
   /** Flow 5: unlink this Mac's association (non-destructive; idempotent). */
   const unlinkThisMac = useCallback(async (args: {

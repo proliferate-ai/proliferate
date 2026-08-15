@@ -1,5 +1,6 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
+import { cullCloudWorkspaceRows } from "#product/lib/domain/workspaces/cloud/cloud-culling";
 import { shouldPollCloudWorkspaceForUpdates } from "#product/lib/domain/workspaces/cloud/cloud-workspace-status";
 
 function sortWorkspacesByUpdatedAtDesc<T extends Pick<Workspace, "updatedAt">>(workspaces: T[]): T[] {
@@ -68,7 +69,10 @@ export function buildWorkspaceCollections(
   return {
     localWorkspaces: activeLocalWorkspaces,
     repoRoots,
-    cloudWorkspaces,
+    // Cloud culling (PRO-10, FR-2): existing cloud workspace rows are removed
+    // once, here, at the single data-source seam so no downstream list can
+    // resurrect a cloud surface from stale rows (FM1).
+    cloudWorkspaces: cullCloudWorkspaceRows(cloudWorkspaces),
     workspaces: activeLocalWorkspaces,
     allWorkspaces: sortedLocalWorkspaces,
   };
