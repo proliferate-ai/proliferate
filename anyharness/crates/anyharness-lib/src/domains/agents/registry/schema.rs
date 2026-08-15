@@ -158,6 +158,17 @@ pub enum AgentRegistryAgentProcessInstall {
         source_build_binary_name: Option<String>,
         executable_relpath: PathBuf,
     },
+    /// First-party per-platform tarball pins (no ACP registry, no npm): a
+    /// sha256-verified archive per platform, resolved by resolve-pins.mjs onto
+    /// the catalog's archive source and installed through the existing archive
+    /// path. Additive — pending Agent Auth ADR ratification; no catalog entry
+    /// uses it yet (claude/codex stay git/npm this rung).
+    #[serde(rename = "direct_archive")]
+    DirectArchive {
+        platforms: HashMap<String, AgentRegistryAgentProcessArchiveTarget>,
+        #[serde(default)]
+        args: Vec<String>,
+    },
     #[serde(rename = "path_only")]
     PathOnly {
         candidate_binaries: Vec<String>,
@@ -168,6 +179,16 @@ pub enum AgentRegistryAgentProcessInstall {
     },
     #[serde(rename = "manual")]
     Manual { docs_url: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRegistryAgentProcessArchiveTarget {
+    pub url: String,
+    pub sha256: String,
+    pub expected_binary: String,
+    #[serde(default)]
+    pub size: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

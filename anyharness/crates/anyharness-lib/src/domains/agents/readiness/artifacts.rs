@@ -130,6 +130,20 @@ pub(super) fn resolve_agent_process_artifact(
                 Some("Not installed. Use the install endpoint to set up.".into()),
             )
         }
+        AgentProcessInstallSpec::DirectArchive { .. } => {
+            // Installed via the archive path; the managed launcher is the proof
+            // of install, same as the registry-backed archive adapter.
+            let managed_candidates = managed_launcher_candidates(&managed_dir, kind, None);
+            for path in &managed_candidates {
+                if path.exists() {
+                    return found_artifact(ArtifactRole::AgentProcess, path.clone(), "managed");
+                }
+            }
+            not_found_artifact(
+                ArtifactRole::AgentProcess,
+                Some("Not installed. Use the install endpoint to set up.".into()),
+            )
+        }
         AgentProcessInstallSpec::PathOnly {
             candidate_binaries,
             docs_url,
@@ -177,6 +191,7 @@ pub(super) fn managed_npm_executable_relpath(spec: &AgentProcessInstallSpec) -> 
             executable_relpath, ..
         } => Some(executable_relpath.as_path()),
         AgentProcessInstallSpec::RegistryBacked { .. }
+        | AgentProcessInstallSpec::DirectArchive { .. }
         | AgentProcessInstallSpec::PathOnly { .. }
         | AgentProcessInstallSpec::Manual { .. } => None,
     }

@@ -215,6 +215,16 @@ pub enum AgentProcessInstallSpec {
         /// Path to the binary inside node_modules after install.
         executable_relpath: PathBuf,
     },
+    /// Install a first-party per-platform tarball, sha256-verified, through the
+    /// archive path. Additive install kind (Update Flow FR-3): the resolved
+    /// catalog pin drives the actual install as a `ResolvedPinSource::Archive`,
+    /// so this variant is a registry declaration, not a separate installer path.
+    DirectArchive {
+        /// Per-platform (registry platform key) archive targets.
+        targets: std::collections::BTreeMap<String, DirectArchiveTarget>,
+        /// ACP-mode launch args baked into the managed launcher.
+        args: Vec<String>,
+    },
     /// Resolve exclusively from PATH; no managed install is supported.
     PathOnly {
         /// Binary names to search for on PATH.
@@ -226,6 +236,15 @@ pub enum AgentProcessInstallSpec {
     },
     /// No automated install; docs-only guidance.
     Manual { docs_url: String },
+}
+
+/// One per-platform archive target for a `DirectArchive` install.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DirectArchiveTarget {
+    pub url: String,
+    pub sha256: String,
+    pub expected_binary: String,
+    pub download_size_bytes: Option<u64>,
 }
 
 /// Local fallback install rule when the ACP registry is unavailable or incomplete.

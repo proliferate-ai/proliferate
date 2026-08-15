@@ -10,9 +10,9 @@ use super::validation::validate_agent_registry_document;
 use crate::domains::agents::model::{
     AgentDescriptor, AgentKind, AgentProcessArtifactSpec, AgentProcessFallback,
     AgentProcessInstallSpec, AuthMaterializationSpec, AuthReadinessPolicy, AuthSlotSpec, AuthSpec,
-    CommandSpec, CredentialDiscoveryKind, GatewayEnvMaterializationSpec, LaunchSpecTemplate,
-    LoginSpec, NativeArtifactSpec, NativeInstallSpec, Platform, SelfUpdateMechanism,
-    SelfUpdateNeutralization, SyncedFilesMaterializationSpec,
+    CommandSpec, CredentialDiscoveryKind, DirectArchiveTarget, GatewayEnvMaterializationSpec,
+    LaunchSpecTemplate, LoginSpec, NativeArtifactSpec, NativeInstallSpec, Platform,
+    SelfUpdateMechanism, SelfUpdateNeutralization, SyncedFilesMaterializationSpec,
 };
 
 /// Returns trusted process/auth descriptors from the bundled registry only.
@@ -174,6 +174,25 @@ fn agent_registry_agent_process_install_to_spec(
             source_build_binary_name: source_build_binary_name.clone(),
             executable_relpath: executable_relpath.clone(),
         },
+        AgentRegistryAgentProcessInstall::DirectArchive { platforms, args } => {
+            AgentProcessInstallSpec::DirectArchive {
+                targets: platforms
+                    .iter()
+                    .map(|(platform, target)| {
+                        (
+                            platform.clone(),
+                            DirectArchiveTarget {
+                                url: target.url.clone(),
+                                sha256: target.sha256.clone(),
+                                expected_binary: target.expected_binary.clone(),
+                                download_size_bytes: target.size,
+                            },
+                        )
+                    })
+                    .collect(),
+                args: args.clone(),
+            }
+        }
         AgentRegistryAgentProcessInstall::PathOnly {
             candidate_binaries,
             default_args,

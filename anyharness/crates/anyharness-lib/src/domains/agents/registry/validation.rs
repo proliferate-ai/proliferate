@@ -56,7 +56,43 @@ fn validate_agent(
     }
     validate_auth(&agent.kind, &agent.auth)?;
     validate_self_update_neutralization(&agent.kind, &agent.self_update_neutralization)?;
+    validate_agent_process_install(&agent.kind, &agent.agent_process.install)?;
     validate_provider_config(&agent.kind, &agent.provider_config)
+}
+
+fn validate_agent_process_install(
+    agent_kind: &str,
+    install: &crate::domains::agents::registry::schema::AgentRegistryAgentProcessInstall,
+) -> anyhow::Result<()> {
+    use crate::domains::agents::registry::schema::AgentRegistryAgentProcessInstall;
+    // Only the additive direct_archive kind carries integrity fields the schema
+    // cannot fully constrain; the other kinds are validated at projection time.
+    if let AgentRegistryAgentProcessInstall::DirectArchive { platforms, .. } = install {
+        if platforms.is_empty() {
+            anyhow::bail!(
+                "agent registry agent '{agent_kind}' direct_archive declares no platforms"
+            );
+        }
+        for (platform, target) in platforms {
+            if target.url.trim().is_empty() {
+                anyhow::bail!(
+                    "agent registry agent '{agent_kind}' direct_archive platform '{platform}' has an empty url"
+                );
+            }
+            if target.expected_binary.trim().is_empty() {
+                anyhow::bail!(
+                    "agent registry agent '{agent_kind}' direct_archive platform '{platform}' has an empty expectedBinary"
+                );
+            }
+            let sha = target.sha256.trim();
+            if sha.len() != 64 || !sha.chars().all(|c| c.is_ascii_hexdigit()) {
+                anyhow::bail!(
+                    "agent registry agent '{agent_kind}' direct_archive platform '{platform}' sha256 must be 64 hex chars"
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 const VALID_SELF_UPDATE_MECHANISMS: &[&str] = &["env", "none_found", "not_applicable"];
@@ -397,6 +433,55 @@ mod tests {
             .expect_err("non-env mechanism carrying env vars must fail");
         assert!(
             error.to_string().contains("must not declare env vars"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn registry_accepts_valid_direct_archive_and_rejects_bad_sha() {
+        use crate::domains::agents::registry::schema::{
+            AgentRegistryAgentProcessArchiveTarget, AgentRegistryAgentProcessInstall,
+        };
+        use std::collections::HashMap;
+
+        let mut registry = bundled_agent_registry_document().clone();
+        let mut platforms = HashMap::new();
+        platforms.insert(
+            "macos_arm64".to_string(),
+            AgentRegistryAgentProcessArchiveTarget {
+                url: "https://downloads.test/agent.tar.gz".to_string(),
+                sha256: "a".repeat(64),
+                expected_binary: "pkg/agent".to_string(),
+                size: None,
+            },
+        );
+        registry.agents[0].agent_process.install =
+            AgentRegistryAgentProcessInstall::DirectArchive {
+                platforms,
+                args: vec!["acp".to_string()],
+            };
+        validate_agent_registry_document(&registry)
+            .expect("a well-formed direct_archive install must validate");
+
+        let mut bad = HashMap::new();
+        bad.insert(
+            "macos_arm64".to_string(),
+            AgentRegistryAgentProcessArchiveTarget {
+                url: "https://downloads.test/agent.tar.gz".to_string(),
+                sha256: "not-a-sha".to_string(),
+                expected_binary: "pkg/agent".to_string(),
+                size: None,
+            },
+        );
+        registry.agents[0].agent_process.install =
+            AgentRegistryAgentProcessInstall::DirectArchive {
+                platforms: bad,
+                args: vec![],
+            };
+        let error = validate_agent_registry_document(&registry)
+            .expect_err("a bad direct_archive sha256 must fail");
+        assert!(
+            error.to_string().contains("sha256 must be 64 hex"),
             "unexpected error: {error}"
         );
     }
