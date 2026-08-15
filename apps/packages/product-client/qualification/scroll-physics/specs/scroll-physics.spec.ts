@@ -366,12 +366,10 @@ test.describe("transcript scroll physics", () => {
     await settle(page);
     await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
 
-    await drive(page, "beginStreamingTurn");
-    await settle(page);
     const before = await metrics(page);
 
     // Engineer the marker-tolerance-miss precondition the single-slot pixel
-    // classification papered over: append batches on a tight cadence so
+    // classification papered over: grow the transcript on a tight cadence so
     // scrollHeight changes between a glue write and the scroll event it
     // produces, with several programmatic writes in flight at once. Under that
     // classification a later write overwrote an earlier marker and the stale
@@ -395,11 +393,21 @@ test.describe("transcript scroll physics", () => {
     // per-frame distance bound mid-run is deliberately avoided: the glue
     // catch-up can lag a frame under machine load and briefly widen the gap
     // without the pin being lost.
-    for (let batch = 0; batch < 30; batch += 1) {
-      await drive(page, "streamChunks", 2);
+    //
+    // Growth is driven by appending finalized turns on a tight cadence rather
+    // than a live assistant stream: a finalized turn hydrates inert (turn_ended)
+    // and renders its full tall height in the commit it lands, so every batch is
+    // hundreds of pixels of REAL, immediately-measured content growth. A live
+    // assistant stream would instead be gated by the typewriter reveal (capped
+    // at a few hundred characters per second), which delivers too little visible
+    // height per second to prove genuine growth in a bounded run once the seeded
+    // turns hydrate inert. Each append fires the pinned content-resize snap, so
+    // the rapid cadence still keeps several programmatic glue writes racing
+    // scroll events, exactly the precondition this scenario guards.
+    for (let batch = 0; batch < 12; batch += 1) {
+      await drive(page, "appendFinalizedTurns", 1);
       await settle(page, 80);
     }
-    await drive(page, "finalizeStreamingTurn");
     await settle(page, 500);
     const after = await metrics(page);
 
@@ -411,7 +419,7 @@ test.describe("transcript scroll physics", () => {
     // absolute px bound, so machine load cannot flip it (mirrors the
     // prepend-anchoring scenario's ratio band).
     const addedHeight = after.scrollHeight - before.scrollHeight;
-    expect(addedHeight, "streaming must actually grow the transcript").toBeGreaterThan(300);
+    expect(addedHeight, "growth must actually grow the transcript").toBeGreaterThan(300);
     // A follow that survived leaves the resting gap well under the full growth
     // (the viewport advanced with the content); a follow lost early leaves the
     // viewport frozen with ~all the growth accumulated below it (ratio near 1).
