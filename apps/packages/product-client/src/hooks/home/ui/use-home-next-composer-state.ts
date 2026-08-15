@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import type { PromptAttachmentController } from "#product/hooks/chat/ui/use-chat-prompt-attachments";
 import { useHomeNextLaunch } from "#product/hooks/home/workflows/use-home-next-launch";
@@ -32,7 +32,6 @@ export function useHomeNextComposerState({
   launchTarget,
   attachments,
 }: UseHomeNextComposerStateArgs) {
-  const submitInFlightRef = useRef(false);
   const [draftState, setDraftState] = useState<{
     value: string;
     snapshot?: ChatComposerEditorSnapshot;
@@ -52,14 +51,17 @@ export function useHomeNextComposerState({
   // Attachment-only submits are legal, matching the chat composer: supported
   // attachments count as prompt content.
   const isEmpty = draft.trim().length === 0 && !attachments.hasSupportedAttachments;
+  // Deliberately not gated on `isLaunching`: a launch in flight is exactly the
+  // state a second Enter has to be allowed in, since the whole point is that
+  // two launches can run at once. `isLaunching` still drives the send button's
+  // spinner, it just no longer refuses the next prompt (PRO-230).
   const submitDisabledReason = isEmpty ? null : targetDisabledReason;
   const canSubmit =
     !isEmpty
     && modelAvailabilityState === "launchable"
     && canLaunchTarget
     && !!modelSelection
-    && !!launchTarget
-    && !isLaunching;
+    && !!launchTarget;
 
   const setDraft = useCallback((
     value: string,
@@ -69,14 +71,12 @@ export function useHomeNextComposerState({
   }, []);
 
   const submit = useCallback(async () => {
-    if (
-      !canSubmit
-      || !modelSelection
-      || !launchTarget
-      || submitInFlightRef.current
-    ) return;
+    // No submit-in-flight lock: the draft is cleared synchronously below, so a
+    // repeated Enter fails `canSubmit` on an empty draft, and a genuinely new
+    // prompt is a second launch rather than a dropped one. `launch` owns the
+    // same-prompt debounce for the case the two collide (PRO-230).
+    if (!canSubmit || !modelSelection || !launchTarget) return;
 
-    submitInFlightRef.current = true;
     const submittedDraft = draftState;
     // Snapshotted now so files attached mid-launch stay out of this send.
     // The chips stay visible until success: failure keeps them alongside the
@@ -92,7 +92,7 @@ export function useHomeNextComposerState({
     });
 
     try {
-      const succeeded = await launch({
+      const outcome = await launch({
         text: submittedDraft.value,
         attachmentSnapshots,
         modelSelection,
@@ -100,7 +100,10 @@ export function useHomeNextComposerState({
         launchControlValues,
         target: launchTarget,
       });
-      if (succeeded) {
+      // A duplicate submit collapsed into a launch that is running, so the
+      // draft stays gone: putting it back would offer the user a re-send of a
+      // prompt already on its way (PRO-230 review finding 7).
+      if (outcome === "launched" || outcome === "duplicate") {
         attachments.clearSubmittedAttachments(attachmentSnapshots);
       } else {
         restoreSubmittedDraft();
@@ -109,8 +112,6 @@ export function useHomeNextComposerState({
       // `launch` normally converts workflow failures to `false`. Keep the
       // composer rollback invariant even if an unexpected error escapes it.
       restoreSubmittedDraft();
-    } finally {
-      submitInFlightRef.current = false;
     }
   }, [
     attachments,

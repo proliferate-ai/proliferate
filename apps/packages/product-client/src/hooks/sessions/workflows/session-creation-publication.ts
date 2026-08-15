@@ -71,7 +71,7 @@ export function publishCreatedSessionMaterialization(input: {
   });
 
   if (input.launchIntentId) {
-    useChatLaunchIntentStore.getState().markMaterializedIfActive(
+    useChatLaunchIntentStore.getState().markMaterialized(
       input.launchIntentId,
       {
         clientSessionId: input.pendingSessionId,

@@ -65,10 +65,22 @@ const SupportReportQueueRoot = lazy(() =>
   })),
 )
 
-// Local automation execution and deferred home-launch resumption both no-op
-// signed-out, so the owner is authenticated-only + lazy for the same reason:
-// the login shell never fetches or parses the local-automation or
-// deferred-launch modules (login runtime JS budget).
+// The launch lifecycles consume the client-owned launch registry, which only a
+// signed-in viewer can have. Same treatment as the restart offer: lazy +
+// authenticated-only, so the login first-load chunk parses zero bytes of the
+// launch / session-creation graph (login runtime JS budget, PRO-230).
+const AuthenticatedLaunchLifecycles = lazy(() =>
+  import("#product/providers/AuthenticatedLaunchLifecycles").then((m) => ({
+    default: m.AuthenticatedLaunchLifecycles,
+  })),
+)
+
+// Local automation execution both no-ops signed-out, so the owner is
+// authenticated-only + lazy for the same reason: the login shell never
+// fetches or parses the local-automation module (login runtime JS budget).
+// Deferred home-launch resumption is owned by AuthenticatedLaunchLifecycles
+// above (it shares that component's launch-registry lifetime), so it is not
+// duplicated here.
 const AuthenticatedBackgroundLifecycles = lazy(() =>
   import("#product/providers/AuthenticatedBackgroundLifecycles").then((m) => ({
     default: m.AuthenticatedBackgroundLifecycles,
@@ -248,6 +260,15 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
       {authStatus === "authenticated" && (
         <Suspense fallback={null}>
           <SupportReportQueueRoot />
+        </Suspense>
+      )}
+      {/* Launch lifecycles: resident above the route tree so a launch survives
+          navigating away from the workspace that started it, but authenticated-
+          only + lazy so the login first-load chunk never pulls the launch
+          registry / session-creation graph (PRO-230). */}
+      {authStatus === "authenticated" && (
+        <Suspense fallback={null}>
+          <AuthenticatedLaunchLifecycles />
         </Suspense>
       )}
       {authStatus === "authenticated" && (

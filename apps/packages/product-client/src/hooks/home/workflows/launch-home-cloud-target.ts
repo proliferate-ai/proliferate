@@ -1,14 +1,26 @@
 import type { PromptAttachmentSnapshot } from "#product/domain/chats/composer/prompt-attachment-snapshot";
 import type { CloudWorkspaceEntryResult } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
-import type { HomeLaunchTarget, HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
+import type {
+  HomeLaunchTarget,
+  HomeNextLaunchOutcome,
+  HomeNextModelSelection,
+} from "#product/lib/domain/home/home-next-launch";
 import type { PendingWorkspaceInitialSession } from "#product/lib/domain/workspaces/creation/pending-entry";
 import type { DeferredHomeLaunch } from "#product/stores/home/deferred-home-launch-store";
 import { buildDeferredHomeLaunchId } from "#product/stores/home/deferred-home-launch-store";
+import {
+  markHomeLaunchIntentMaterializedFromPendingWorkspace,
+} from "#product/hooks/home/workflows/home-next-launch-intent";
 import { failLatencyFlow, startLatencyFlow } from "#product/lib/infra/measurement/measurement-port";
 
 /** The cloud branch's slice of one launch call, passed in rather than re-derived. */
 export interface LaunchHomeCloudTargetInput {
   target: Extract<HomeLaunchTarget, { kind: "cloud" }>;
+  /**
+   * Minted by the caller so this launch's intent, prompt routing and failure
+   * handling all name the same attempt instead of resolving "the attended one".
+   */
+  attemptId: string;
   prompt: string;
   attachmentSnapshots?: PromptAttachmentSnapshot[];
   promptId: string;
@@ -26,6 +38,7 @@ export interface LaunchHomeCloudTargetDeps {
     options: {
       latencyFlowId: string;
       initialSession: PendingWorkspaceInitialSession;
+      attemptId: string;
     },
   ) => Promise<CloudWorkspaceEntryResult>;
   promptProjectedPendingWorkspaceSession: (input: {
@@ -34,6 +47,7 @@ export interface LaunchHomeCloudTargetDeps {
     promptId: string;
     launchIntentId: string;
     waitUntil?: Promise<unknown>;
+    attemptId?: string | null;
   }) => Promise<string | null>;
   promptProjectedOrCreateFreshSession: (input: {
     workspaceId: string;
@@ -55,7 +69,7 @@ export interface LaunchHomeCloudTargetDeps {
       sessionId?: string | null;
     },
   ) => void;
-  clearLaunchIntentIfActive: (intentId: string) => void;
+  clearLaunchIntent: (intentId: string) => void;
   enqueueDeferredLaunch: (launch: DeferredHomeLaunch) => void;
   navigate: (to: string) => void;
   /** Only ever called with "info": this path's two outcomes are both queued, not failed. */
@@ -76,7 +90,7 @@ const CLOUD_QUEUED_MESSAGE = "Prompt queued. It will send when the cloud workspa
 export async function launchHomeCloudTarget(
   input: LaunchHomeCloudTargetInput,
   deps: LaunchHomeCloudTargetDeps,
-): Promise<boolean> {
+): Promise<HomeNextLaunchOutcome> {
   const latencyFlowId = startLatencyFlow({
     flowKind: "cloud_workspace_create",
     source: "home",
@@ -87,19 +101,31 @@ export async function launchHomeCloudTarget(
       gitRepoName: input.target.gitRepoName,
       baseBranch: input.target.baseBranch,
     },
-    { latencyFlowId, initialSession: input.initialSession },
+    { latencyFlowId, initialSession: input.initialSession, attemptId: input.attemptId },
   );
+  // Same reasoning as the cowork/local/worktree branches: the create call's
+  // synchronous prefix has already registered the pending attempt, so scope the
+  // intent to it now rather than only once the launch settles.
+  markHomeLaunchIntentMaterializedFromPendingWorkspace(input.launchIntentId, input.attemptId);
   const queuedProjectedSessionId = await deps.promptProjectedPendingWorkspaceSession({
     text: input.prompt,
     attachmentSnapshots: input.attachmentSnapshots,
     promptId: input.promptId,
     launchIntentId: input.launchIntentId,
     waitUntil: resultPromise,
+    attemptId: input.attemptId,
   });
   if (queuedProjectedSessionId) {
     deps.navigate("/");
   }
   const result = await resultPromise;
+  if (result.status === "dismissed") {
+    // The user dismissed the pending workspace. Nothing failed, so the launch
+    // stops quietly instead of raising a "not started" toast.
+    failLatencyFlow(latencyFlowId, "cloud_workspace_create_dismissed");
+    deps.clearLaunchIntent(input.launchIntentId);
+    return "not-started";
+  }
   if (result.status === "interrupted") {
     failLatencyFlow(latencyFlowId, "cloud_workspace_create_interrupted");
     // Prefer the resolved server message (e.g. a billing gate 402) so the
@@ -133,11 +159,11 @@ export async function launchHomeCloudTarget(
         allowFreshFallback: false,
       });
     }
-    deps.clearLaunchIntentIfActive(input.launchIntentId);
+    deps.clearLaunchIntent(input.launchIntentId);
     if (result.status !== "ready") {
       deps.showToast(CLOUD_QUEUED_MESSAGE, "info");
     }
-    return true;
+    return "launched";
   }
 
   // No session shell to hold the prompt, so it waits on the deferred queue and
@@ -162,5 +188,5 @@ export async function launchHomeCloudTarget(
     createdAt: input.createdAt,
   });
   deps.showToast(CLOUD_QUEUED_MESSAGE, "info");
-  return true;
+  return "launched";
 }

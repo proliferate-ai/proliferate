@@ -15,9 +15,9 @@ export function useHomeNextLaunchPromptActions() {
   const { promptSession } = useSessionPromptWorkflow();
   const { createSessionWithResolvedConfig } = useSessionCreationActions();
   const markLaunchIntentMaterialized =
-    useChatLaunchIntentStore((state) => state.markMaterializedIfActive);
+    useChatLaunchIntentStore((state) => state.markMaterialized);
   const markLaunchIntentSendAttempted =
-    useChatLaunchIntentStore((state) => state.markSendAttemptedIfActive);
+    useChatLaunchIntentStore((state) => state.markSendAttempted);
 
   const createFreshSession = useCallback(async (input: {
     workspaceId: string;
@@ -99,10 +99,12 @@ export function useHomeNextLaunchPromptActions() {
     promptId: string;
     launchIntentId: string;
     waitUntil?: Promise<unknown>;
+    /** Routes the prompt to this attempt's projected session, attended or not. */
+    attemptId?: string | null;
   }): Promise<string | null> => {
     const projected = input.waitUntil
-      ? await waitForProjectedPendingWorkspaceSession(input.waitUntil)
-      : resolveProjectedPendingWorkspaceSession();
+      ? await waitForProjectedPendingWorkspaceSession(input.waitUntil, input.attemptId)
+      : resolveProjectedPendingWorkspaceSession(input.attemptId);
     if (!projected) {
       return null;
     }

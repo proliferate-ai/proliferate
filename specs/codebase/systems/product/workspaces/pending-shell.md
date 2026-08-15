@@ -37,7 +37,10 @@ Use this map to decide whether this spec applies and where to look first.
 | `apps/desktop/src/stores/sessions/session-intent-store.ts` | Ordered client session intents. |
 | `apps/desktop/src/hooks/sessions/workflows/use-session-intent-actions.ts` | Prompt/config/interaction enqueue actions. |
 | `apps/desktop/src/hooks/sessions/lifecycle/use-session-intent-dispatcher.ts` | Ordered runtime dispatcher. |
-| `apps/desktop/src/stores/sessions/session-selection-store.ts` | Selected ids and pending entry. |
+| `apps/desktop/src/stores/sessions/session-selection-store.ts` | Selected ids and the pending workspace registry. |
+| `apps/packages/product-client/src/lib/domain/workspaces/creation/pending-entry-registry.ts` | Pending attempts keyed by attempt id, and lookups over them. |
+| `apps/packages/product-client/src/lib/domain/workspaces/creation/pending-attention.ts` | Whether an attempt is the one the user is looking at. |
+| `apps/packages/product-client/src/hooks/workspaces/workflows/pending-workspace-attempt-access.ts` | `isAttemptLive` / `isAttemptAttended` / `patchAttempt` imperative reads. |
 
 ### Where To Start
 
@@ -124,6 +127,10 @@ Do not merge these ledgers to make one surface easier. A pending workspace is
 not a fake logical workspace. A projected session is not a real runtime
 session. A session intent is not a transcript event.
 
+Selection is a camera. It decides what is presented, never whether a launch
+completes. The shell-selection ledger points at one attempt at a time; the
+attempts themselves live in their own registry and finish on their own.
+
 ## 3. Vocabulary
 
 **Pending workspace entry**
@@ -149,6 +156,20 @@ Pending entries may learn this id before workspace selection has finished.
 A client session record created before a real AnyHarness session exists. It is
 stored under the pending workspace UI key and is used by header tabs, model
 controls, chat surface state, and queued prompts.
+
+**Live attempt**
+
+An attempt still present in the pending workspace registry. Liveness is what
+the launch pipeline runs on: patching the entry, remapping and materializing
+projected sessions, and clearing the entry. Only an explicit dismissal (back,
+or an app-level selection reset) ends it.
+
+**Attended attempt**
+
+The attempt the user is currently looking at: the selected logical workspace id
+equals `pending-workspace:<attemptId>`, or the entry has a materialized
+workspace id and it equals the selected workspace id. Attendance gates
+presentation only, and at most one attempt is attended at a time.
 
 **Launch intent**
 
@@ -183,7 +204,9 @@ responses, and queued prompt edit/delete actions.
 4. The projected session is chat truth before materialization.
    If a pending workspace has an active projected session, the chat surface
    renders the normal session surface. `ChatLaunchIntentPane` must not override
-   a projected session shell.
+   a projected session shell. The projected session belongs to its attempt, not
+   to the current selection: an unattended attempt still remaps and materializes
+   its projected session, it just does not activate it.
 
 5. Outbound user work renders before runtime acknowledgement.
    Submitted prompts, config changes, and visible interaction responses are
@@ -206,13 +229,58 @@ responses, and queued prompt edit/delete actions.
    controls. Do not navigate away or silently clear the pending entry on
    failure.
 
+9. Switching workspaces never ends a launch.
+   Attempts live in a registry keyed by attempt id. Selection moves the camera:
+   it changes selected ids and the selection nonce, and leaves every attempt in
+   place. A launch the user switched away from still materializes its workspace,
+   sends its first prompt, and clears its own entry.
+
+   A cloud attempt still provisioning is no exception. `use-cloud-workspace-polling`
+   drives every attempt parked at `awaiting-cloud-ready`, not the selected one,
+   so that workspace becomes ready, materializes, and clears its own entry
+   behind the user, and `use-home-deferred-launch-runner` sends the queued
+   prompt off the same per-attempt readiness.
+
+   Both drivers are mounted by `ProductLifecycleRoot`, not by the workspace
+   shell, and that placement is load-bearing: the shell unmounts whenever
+   nothing is selected, which is where Home, Workflows and Workspaces put the
+   user. A registry-wide driver mounted under the shell would stop for every
+   parked attempt the moment the user leaves a workspace, which is the same
+   stall by another route.
+
+   The root mounts them through `AuthenticatedLaunchLifecycles`, a lazy
+   component rendered only once auth status is `authenticated` (the same
+   treatment `AuthRestartOfferRoot` gets). A signed-out viewer has no registry
+   and no attempts, so nothing is lost, and the login shell — which has a
+   fail-closed first-load JS budget — never pulls the launch, session-creation
+   or cloud-polling graph into its entry chunk.
+
+10. Liveness gates the pipeline; attendance gates presentation.
+    Pipeline work (patch the entry, remap and materialize projected sessions,
+    clear the entry) is gated on `isAttemptLive`. Presentation side effects
+    (force-selecting the real workspace, the arrival event, activating the
+    created session, composer focus) are gated on `isAttemptAttended`. Never
+    use one check for both: that is the bug this split exists to prevent
+    (PRO-230).
+
+11. Two launches can run at once, all the way down.
+    Every ledger a launch touches is keyed, never singular: pending attempts by
+    attempt id, launch intents by intent id. Each mutator names its own record
+    and a missing id is a no-op, so a second submit can neither replace the
+    first launch nor turn its later writes into silent no-ops. A shell resolves
+    which intent it shows by scope, not by asking for "the" intent. The only
+    ceiling is `MAX_CONCURRENT_PENDING_LAUNCHES`, which refuses the submit
+    outright rather than queueing it, and a same-prompt debounce that collapses
+    a repeated Enter (PRO-230).
+
 ## 5. State Ownership
 
 Use these owners. Do not introduce another general-purpose pending state owner.
 
 | Concern | Owner | Notes |
 | --- | --- | --- |
-| Current selected ids and pending workspace entry | `session-selection-store` | Client-only local state. No APIs or persistence. |
+| Current selected ids and the pending workspace registry | `session-selection-store` | Client-only local state. No APIs or persistence. |
+| Which attempt the user is attending | derived, never stored | `useAttendedPendingWorkspaceEntry` for components, `isAttemptAttended` for workflows. Deriving it from selection is what keeps it honest across a switch. |
 | Projected and materialized session directory rows | session directory/session records stores | Records may initially point at a pending workspace key. |
 | Shell tab intent | workspace UI shell-tab state | Written immediately for projected sessions. |
 | Queued outbound session work | `session-intent-store` | Ordered prompts, config updates, interaction responses, and queued prompt edits/deletes. |
@@ -398,12 +466,19 @@ enter the workspace shell before dispatching the async create work.
 
 When the real workspace id is known:
 
+0. Check that the attempt is still live, and read attendance once.
+   A dismissed attempt stops here. Attendance is read before the selection in
+   step 2, because that selection would otherwise make every later read look
+   attended.
+
 1. Patch the pending entry with `workspaceId`.
    This lets projection helpers enter handoff mode.
 
-2. Select the real workspace with `preservePending: true`.
-   Selection should keep the pending shell active while the real logical
-   workspace, sessions, file tree, and launch catalog load.
+2. Select the real workspace with `preservePending: true`, if the attempt is
+   attended. Selection should keep the pending shell active while the real
+   logical workspace, sessions, file tree, and launch catalog load. An
+   unattended attempt skips this step entirely: it must not pull the user out
+   of the workspace they are looking at.
 
 3. Preserve the projected active session id.
    If the active session belongs to the pending workspace key, pass it as the
@@ -412,11 +487,14 @@ When the real workspace id is known:
 4. Remap projected sessions to the real workspace.
    `usePendingWorkspaceSessionMaterialization` owns this. Session intents
    remain the visible owner while the real AnyHarness session is created in the
-   background.
+   background. This runs for live attempts whether or not they are attended;
+   an unattended one creates its session without activating it and writes its
+   shell intent against its own workspace rather than the visible one.
 
-5. Set the workspace arrival event.
+5. Set the workspace arrival event, if the attempt is attended.
    Arrival panels use this event to show the final "new worktree/workspace"
-   context and setup-script state.
+   context and setup-script state. An unattended arrival has no panel to fill,
+   and firing it would retarget the visible workspace's panel.
 
 6. Stamp `workspaceLastInteracted` for the materialized workspace id
    immediately before the pending entry is cleared. Both the finalization path
@@ -424,9 +502,11 @@ When the real workspace id is known:
    across the handoff instead of dropping when the pending projection's
    creation-time activity disappears.
 
-7. Clear pending workspace state after selection finalization.
-   Do not clear as soon as the real workspace appears in cache. That creates a
-   visible gap between the pending projection and the real row.
+7. Clear this attempt's pending entry after selection finalization.
+   Clear by attempt id, never by clearing the whole registry: another launch
+   may still be in flight. Do not clear as soon as the real workspace appears
+   in cache. That creates a visible gap between the pending projection and the
+   real row.
 
 ## 9. UI Projection Rules
 
@@ -477,6 +557,17 @@ projection path.
 
 ### Sidebar
 
+- The sidebar renders every live attempt, so several pending rows may coexist.
+  A repo group can host more than one; within a group, pending rows come first
+  and follow launch order.
+- Cowork attempts are excluded from the repo groups and rendered by
+  `CoworkThreadsSection`, which likewise renders all of them, not just the
+  attended one.
+- A failed attempt keeps its row and carries an error indicator on it. The row
+  stays clickable: selecting it re-enters that attempt's pending shell, which
+  is the creation receipt with retry/back (Invariant 8). Selecting a
+  `pending-workspace:<attemptId>` key is a first-class selection path, not a
+  workspace lookup that happens to fail.
 - Use `buildPendingSidebarProjection(entry)` for pending rows.
 - The pending projection counts the entry's creation time as activity
   (`sortRecency.activityAt = createdAt`), so a new workspace sorts among
@@ -486,6 +577,14 @@ projection path.
   known and the selected workspace id matches the pending entry's workspace id,
   the pending projection may render with the real logical id.
 - Suppress the duplicate real item while the pending projection owns that id.
+  Suppression keys off `entry.workspaceId`, never off what the user has
+  selected, and applies in every repo group:
+  - An unattended attempt whose workspace has already landed in the
+    collections cache is still the owner of its row, and selection has nothing
+    to say about that.
+  - An attempt's materialized workspace can sort into a different group than
+    its pending projection, so a suppression scoped to the pending row's own
+    group misses it.
 - Keep the active row visible even if it is outside the collapsed/sidebar item
   limit.
 
@@ -668,14 +767,50 @@ Rules:
 
 Pending failures must preserve enough state to retry or exit cleanly:
 
-- the pending workspace entry remains selected
+- the pending workspace entry remains selected when the user was attending it
+- a failure the user was not attending never renders over another shell:
+  - the sidebar row carries the error indicator until the attempt is dismissed
+  - one toast per attempt announces it, with a Show action that re-enters that
+    attempt's pending shell
+  - an attended failure keeps the inline presentation only, and an unattended
+    one suppresses the launch-level "work not started" toast, so one failure is
+    announced once either way
 - queued session intents remain visible and owned by the projected session
 - setup/create errors render in the workspace status panel
 - retry uses the original deterministic request unless the user explicitly
   changes it
-- back/abort clears pending state and does not persist the pending workspace key
+- back/abort clears that attempt's pending state and does not persist the
+  pending workspace key; it is the explicit dismissal, since switching
+  workspaces no longer ends an attempt. It clears exactly one attempt and the
+  launch intent linked to it, and leaves the other attempts running: the
+  full-registry reset belongs to app-level paths (sign-out) only
+- a retry of a failed create replaces the attempt: the replacement starts first,
+  then the failed entry and its launch intent are dropped, so the sidebar swaps
+  one row for another instead of keeping both
+- failed attempts are swept on an hourly interval, and on mount, once they are
+  older than a day, so an ignored failure does not accumulate a row for the rest
+  of the session. The registry is in-memory, so app start is never when a stale
+  row is found
 - an interrupted empty-session create remains resumable under its original
   client id and runtime UUID until the runtime acknowledges that create
+- a cloud attempt still provisioning while the user is looking elsewhere is
+  stalled, not failed: it holds its registry entry and its queued prompt while
+  polling keeps working on it, and neither one waits on the user re-attending
+  the workspace
+- a cloud provisioning failure the user was not attending lands on the same
+  per-attempt surface as a create-time failure: the entry goes to `failed` and
+  one toast announces it. The deferred launch behind it releases its queued
+  prompt through the launch intent instead of raising a second notice for the
+  same failure
+- a workspace that reaches a terminal status other than ready (`error`, but
+  also `lost` and `archived`) fails its attempt on the spot. Waiting is only
+  correct while the outcome can still change; a terminal status means the
+  attempt would otherwise hold its entry and its queued prompt until the
+  hour-long staleness sweep
+- a queued prompt that fails to send after the create resolved is announced by
+  whoever launched it, not by the creation workflow's composer copy: a
+  background promotion has no composer holding the text, so its notice names
+  the workspace and offers a way to open it
 
 If materialization fails after a projected session exists, do not create a new
 session automatically. The user should see the failed workspace shell and keep
@@ -694,7 +829,42 @@ Minimum coverage by concern:
 - model selector: projected session labels match final labels
 - sidebar: pending row before materialization, handoff to real logical id, no
   duplicate item, active row visible under item limits
+- sidebar with several launches: one row per attempt within a group and across
+  groups, a failed row carrying its error indicator, and exactly one row for an
+  unattended attempt whose real workspace has already landed, including when
+  that workspace sorts into a different group
+- launch intent registry: two intents coexist, every mutator targets one intent
+  by id, a second `begin` leaves the first intent's fields verbatim, and
+  `resolveLaunchIntentForShell` gives each shell its own intent (scoped beats
+  unscoped, unscoped matches only an empty shell)
+- two concurrent launches end to end: both intents live at once, both finalize,
+  each prompt routed to its own attempt's projected session, and both entries
+  cleared
+- per-attempt dismissal: back clears that attempt and its linked launch intent
+  and leaves the others running
+- unattended failure: one toast with a Show action, an attended failure with no
+  toast, and no global pane over the other launch's shell
+- launch cap and debounce: the launch past the cap is refused with a toast and
+  no intent, the same prompt submitted twice starts one launch, and two
+  different prompts start two
 - finalization: projected sessions materialize before pending state clears
+- switching away mid-launch: the launch still materializes the workspace, sends
+  its first prompt, and clears its own entry, without throwing, force-selecting,
+  firing an arrival event, or changing the active session
+- a per-workspace clear (retire, mark done, cloud delete, or dismissing one
+  attempt) leaves every other live attempt in the registry
+- cloud polling: an unattended attempt is polled and finalized, several parked
+  attempts are polled, one tick refreshes at most the batch cap, an attempt
+  that leaves the awaiting state stops being polled, a failed provision marks
+  that attempt's own entry, a terminal non-error status fails the attempt
+  instead of parking it, the loop is mounted by the lifecycle root rather than
+  the shell (and off the signed-out shell entirely), and cache churn does not
+  make it tick faster than its interval
+- deferred launch promotion: a launch promotes on its own workspace's
+  readiness, an unattended promotion leaves the active session and the selected
+  workspace untouched, an attended one still activates the created session, two
+  launches promote independently, and a queued prompt that fails to send
+  unattended is announced with its workspace instead of the composer copy
 - home launch: initial prompt remains attached to the projected session and
   does not create a second fresh session
 - interrupted empty-session creation: persistence precedes the create request,
@@ -718,6 +888,8 @@ Do not:
 - regenerate worktree names after entering the pending shell
 - inject fake `LogicalWorkspace` rows for pending entries
 - clear pending state when the real workspace merely appears in cache
+- treat selection as a launch lifecycle: clearing an attempt because the user
+  switched away, or gating pipeline work on what the user is looking at
 - create a fresh session after a projected session exists
 - hide queued user messages until AnyHarness acknowledges them
 - write pending config changes directly into session directory records

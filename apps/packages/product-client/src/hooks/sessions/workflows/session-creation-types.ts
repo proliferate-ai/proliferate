@@ -17,6 +17,19 @@ export interface CreateSessionWithResolvedConfigOptions {
   /** Live defaults frozen before an interrupted empty create. */
   frozenLiveControlValues?: Record<string, string>;
   workspaceId?: string;
+  /**
+   * The shell the new session belongs to, when that is not the selected one.
+   * An unattended pending-workspace launch materializes its session while the
+   * user is looking elsewhere, so reading the current selection would write
+   * the shell intent and failure recovery against the wrong workspace.
+   */
+  targetWorkspaceUiKey?: string | null;
+  /**
+   * Defaults to true. False leaves the current active session alone: the
+   * session is created and its shell intent recorded, but the user's view does
+   * not move to it.
+   */
+  activateOnCreate?: boolean;
   latencyFlowId?: string | null;
   measurementOperationId?: MeasurementOperationId | null;
   promptId?: string | null;
@@ -37,6 +50,18 @@ export interface CreateSessionWithResolvedConfigOptions {
   skipInitialPromptEnqueue?: boolean;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
   /**
+   * Own the announcement of a create that fails after the prompt was enqueued.
+   *
+   * A create carrying a prompt resolves at enqueue, so the caller's own `await`
+   * never sees this failure and the default announcement is the composer one:
+   * "your message is still in the composer". True for a person who just typed,
+   * false for a background promotion into a workspace nobody is looking at —
+   * there is no composer holding that text and the toast names no workspace.
+   * Callers that launch unattended pass this and announce it themselves, with
+   * the workspace they know about (PRO-230 review finding 3).
+   */
+  onQueuedPromptFailure?: (error: unknown) => void;
+  /**
    * When set, the creation workflow immediately hides this unused session
    * after activating the optimistic replacement. Destructive cleanup and
    * runtime dismissal commit only after the replacement materializes; failure
@@ -54,6 +79,10 @@ export interface CreateEmptySessionWithResolvedConfigOptions {
   launchControlValues?: Record<string, string>;
   frozenLiveControlValues?: Record<string, string>;
   workspaceId?: string;
+  /** The shell the new session belongs to, when that is not the selected one. */
+  targetWorkspaceUiKey?: string | null;
+  /** Defaults to true. False creates the session without moving the user to it. */
+  activateOnCreate?: boolean;
   latencyFlowId?: string | null;
   clientSessionId?: string | null;
   /** Stable server session UUID used to resume an interrupted empty create. */

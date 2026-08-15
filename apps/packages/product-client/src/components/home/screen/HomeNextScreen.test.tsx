@@ -219,7 +219,7 @@ describe("HomeNextScreen model availability notices", () => {
     window.localStorage.clear();
     screenMocks.handleHomeAction.mockClear();
     screenMocks.launch.mockClear();
-    screenMocks.launch.mockResolvedValue(true);
+    screenMocks.launch.mockResolvedValue("launched");
   });
 
   afterEach(() => {
@@ -334,7 +334,7 @@ describe("HomeNextScreen model availability notices", () => {
   });
 
   it.each([
-    { label: "returns false", fail: () => screenMocks.launch.mockResolvedValue(false) },
+    { label: "returns false", fail: () => screenMocks.launch.mockResolvedValue("not-started") },
     {
       label: "rejects",
       fail: () => screenMocks.launch.mockRejectedValue(new Error("unexpected launch failure")),
@@ -451,7 +451,7 @@ describe("HomeNextScreen composer attachments", () => {
     resetHomeNext();
     window.localStorage.clear();
     screenMocks.launch.mockClear();
-    screenMocks.launch.mockResolvedValue(true);
+    screenMocks.launch.mockResolvedValue("launched");
     URL.createObjectURL = vi.fn(() => "blob:home-attachment");
     URL.revokeObjectURL = vi.fn();
   });
@@ -510,7 +510,7 @@ describe("HomeNextScreen composer attachments", () => {
   });
 
   it("keeps attachments alongside the restored draft when launch fails", async () => {
-    screenMocks.launch.mockResolvedValue(false);
+    screenMocks.launch.mockResolvedValue("not-started");
     render(<HomeNextScreen />);
 
     fireEvent.change(homeFileInput(), {

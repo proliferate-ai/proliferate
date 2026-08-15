@@ -8,11 +8,14 @@ import {
 } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import {
+  EMPTY_PENDING_WORKSPACE_REGISTRY,
+} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 
 describe("session split stores", () => {
   beforeEach(() => {
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: null,
+      pendingWorkspaces: EMPTY_PENDING_WORKSPACE_REGISTRY,
       selectedLogicalWorkspaceId: null,
       selectedWorkspaceId: null,
       workspaceSelectionNonce: 0,

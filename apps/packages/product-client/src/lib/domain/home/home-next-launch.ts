@@ -76,6 +76,32 @@ export type HomeLaunchTarget =
   }
   | { kind: "cloud"; gitOwner: string; gitRepoName: string; baseBranch: string };
 
+/**
+ * What one Home submit did.
+ *
+ * A boolean could not tell the composer whether to put the prompt back: a
+ * submit that collapsed into the identical launch already running started no
+ * new work, but the work *is* running, so restoring the draft would hand the
+ * user back a prompt that is already being answered. The four cases are what
+ * the two callers actually branch on — the composer restores the draft for
+ * everything except `launched` and `duplicate`, and the launch-intent pane's
+ * Retry clears the intent it replaced only when a replacement intent exists
+ * (`launched`, `not-started`).
+ */
+export type HomeNextLaunchOutcome =
+  /** Work started: it is running, queued, or waiting on a cloud workspace. */
+  | "launched"
+  /**
+   * Attempted and ended without starting work — creation failed, or the user
+   * dismissed the pending workspace. It minted a launch intent, which owns the
+   * outcome's presentation.
+   */
+  | "not-started"
+  /** Collapsed into the identical submit already in flight; nothing minted. */
+  | "duplicate"
+  /** Never attempted: no launch slot, no such target on this host, no prompt. */
+  | "refused";
+
 export function resolveHomeModelAvailabilityState(input: {
   isLoading: boolean;
   hasLoadError: boolean;

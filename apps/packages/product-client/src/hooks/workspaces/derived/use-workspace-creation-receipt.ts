@@ -16,6 +16,7 @@ import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import { shouldUseLocalRuntimeWorkspaceSessionsQuery } from "#product/lib/domain/workspaces/tabs/workspace-session-query-target";
 import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/derived/use-hot-paint-gate";
@@ -49,7 +50,7 @@ function pendingNoun(entry: PendingWorkspaceEntry): WorkspaceCreationReceiptNoun
  *   (there is only one session at that point, so no gating applies).
  */
 export function useWorkspaceCreationReceiptKey(): string | null {
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const workspaceArrivalEvent = useSessionSelectionStore((state) => state.workspaceArrivalEvent);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
@@ -152,7 +153,7 @@ export function useWorkspaceCreationReceiptKey(): string | null {
  */
 export function useWorkspaceCreationReceiptState(): WorkspaceCreationReceiptState | null {
   const receiptKey = useWorkspaceCreationReceiptKey();
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,

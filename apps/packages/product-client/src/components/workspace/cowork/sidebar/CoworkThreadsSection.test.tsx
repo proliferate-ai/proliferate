@@ -8,8 +8,14 @@ import { CoworkThreadsSection } from "#product/components/workspace/cowork/sideb
 import {
   buildPendingWorkspaceUiKey,
   buildSubmittingPendingWorkspaceEntry,
+  type PendingWorkspaceEntry,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import {
+  EMPTY_PENDING_WORKSPACE_REGISTRY,
+  type PendingWorkspaceRegistry,
+  upsertPendingWorkspaceEntry,
+} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
 
 const coworkState = vi.hoisted(() => ({
   statusLoading: false,
@@ -189,7 +195,7 @@ describe("CoworkThreadsSection", () => {
     });
     coworkState.threadsLoading = true;
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: pendingEntry,
+      pendingWorkspaces: registryOf(pendingEntry),
       selectedLogicalWorkspaceId: buildPendingWorkspaceUiKey(pendingEntry),
     });
 
@@ -220,10 +226,11 @@ describe("CoworkThreadsSection", () => {
       },
     });
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: {
+      pendingWorkspaces: registryOf({
         ...pendingEntry,
         workspaceId: "workspace-cowork",
-      },
+      }),
+      selectedWorkspaceId: "workspace-cowork",
     });
     coworkState.threads = [{
       id: "thread-1",
@@ -285,12 +292,13 @@ describe("CoworkThreadsSection", () => {
       },
     });
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: {
+      pendingWorkspaces: registryOf({
         ...pendingEntry,
         stage: "failed",
         workspaceId: "workspace-cowork",
         errorMessage: "Couldn't apply launch defaults",
-      },
+      }),
+      selectedWorkspaceId: "workspace-cowork",
     });
     coworkState.threads = [{
       id: "thread-1",
@@ -330,11 +338,12 @@ describe("CoworkThreadsSection", () => {
       },
     });
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: {
+      pendingWorkspaces: registryOf({
         ...pendingEntry,
         stage: "failed",
         errorMessage: "Couldn't create chat",
-      },
+      }),
+      selectedLogicalWorkspaceId: buildPendingWorkspaceUiKey(pendingEntry),
     });
 
     render(<CoworkThreadsSection />);
@@ -359,12 +368,13 @@ describe("CoworkThreadsSection", () => {
       },
     });
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: {
+      pendingWorkspaces: registryOf({
         ...pendingEntry,
         stage: "failed",
         workspaceId: "workspace-cowork",
         errorMessage: "Couldn't apply launch defaults",
-      },
+      }),
+      selectedWorkspaceId: "workspace-cowork",
     });
 
     render(<CoworkThreadsSection />);
@@ -373,4 +383,51 @@ describe("CoworkThreadsSection", () => {
     expect(screen.getByTestId("status-error")).not.toBeNull();
     expect(screen.queryByText("No chats yet")).toBeNull();
   });
+
+  it("renders every cowork attempt, including the ones nobody is watching", () => {
+    const attended = coworkEntry("attempt-attended", "Watched chat");
+    const unattended = coworkEntry("attempt-unattended", "Background chat");
+    const failedUnattended = {
+      ...coworkEntry("attempt-failed-unattended", "Broken chat"),
+      stage: "failed" as const,
+      errorMessage: "Couldn't create chat",
+    };
+    useSessionSelectionStore.setState({
+      pendingWorkspaces: registryOf(attended, unattended, failedUnattended),
+      selectedLogicalWorkspaceId: buildPendingWorkspaceUiKey(attended),
+    });
+
+    render(<CoworkThreadsSection />);
+
+    const rows = screen.getAllByTestId("thread-row");
+    expect(rows).toHaveLength(3);
+    expect(rows.map((row) => row.getAttribute("data-active")))
+      .toEqual(["true", "false", "false"]);
+    expect(screen.getByText("Background chat")).not.toBeNull();
+    // The failure belongs to its own row: it does not take over the section,
+    // and the other two attempts keep their spinners.
+    expect(screen.getAllByTestId("status-iterating")).toHaveLength(2);
+    expect(screen.getAllByTestId("status-error")).toHaveLength(1);
+  });
 });
+
+function coworkEntry(attemptId: string, displayName: string): PendingWorkspaceEntry {
+  return buildSubmittingPendingWorkspaceEntry({
+    attemptId,
+    selectedWorkspaceId: null,
+    source: "cowork-created",
+    displayName,
+    request: {
+      kind: "cowork",
+      input: {
+        agentKind: "claude",
+        modelId: "sonnet",
+        sourceWorkspaceId: null,
+      },
+    },
+  });
+}
+
+function registryOf(...entries: PendingWorkspaceEntry[]): PendingWorkspaceRegistry {
+  return entries.reduce(upsertPendingWorkspaceEntry, EMPTY_PENDING_WORKSPACE_REGISTRY);
+}

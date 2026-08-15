@@ -19,12 +19,30 @@ import {
 } from "#product/stores/sessions/session-intent-store";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import {
+  EMPTY_PENDING_WORKSPACE_REGISTRY,
+  upsertPendingWorkspaceEntry,
+} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
+import {
+  MAX_CONCURRENT_PENDING_LAUNCHES,
+} from "#product/lib/domain/workspaces/creation/launch-concurrency";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+import {
+  launchIntents,
+} from "#product/lib/domain/chat/launch/launch-intent-registry";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
 import { useHomeNextLaunch } from "#product/hooks/home/workflows/use-home-next-launch";
-import type { HomeLaunchTarget } from "#product/lib/domain/home/home-next-launch";
+import type {
+  HomeLaunchTarget,
+  HomeNextLaunchOutcome,
+} from "#product/lib/domain/home/home-next-launch";
 import { CoworkThreadLaunchProvider } from "#product/providers/CoworkThreadLaunchProvider";
+
+import {
+  renderHomeNextLaunch,
+  sessionIdForAttempt,
+} from "#product/hooks/home/workflows/use-home-next-launch.test-support";
 
 const mocks = vi.hoisted(() => {
   const createThreadFromSelection = vi.fn();
@@ -108,13 +126,10 @@ vi.mock("#product/hooks/sessions/workflows/use-session-interaction-resolution-ac
   }),
 }));
 
-function launchWrapper({ children }: { children: ReactNode }) {
-  return <CoworkThreadLaunchProvider>{children}</CoworkThreadLaunchProvider>;
-}
-
-function renderHomeNextLaunch() {
-  return renderHook(() => useHomeNextLaunch(), { wrapper: launchWrapper });
-}
+// Routing half: which workflow a Home launch target reaches, and how the
+// launch intent is scoped to its own pending attempt. The concurrency cases
+// (two live launches, the cap, failure announcement, prompt dedupe) live in
+// `use-home-next-launch.concurrency.test.tsx`; the file-size gate splits them.
 
 describe("useHomeNextLaunch", () => {
   beforeEach(() => {
@@ -124,7 +139,7 @@ describe("useHomeNextLaunch", () => {
     useSessionTranscriptStore.getState().clearEntries();
     useSessionIntentStore.getState().clear();
     useSessionSelectionStore.getState().clearSelection();
-    useChatLaunchIntentStore.setState({ activeIntent: null });
+    useChatLaunchIntentStore.setState({ intentsById: {}, intentOrder: [] });
     useDeferredHomeLaunchStore.setState({ launches: {} });
   });
 
@@ -167,9 +182,9 @@ describe("useHomeNextLaunch", () => {
     });
 
     const { result } = renderHomeNextLaunch();
-    let succeeded = false;
+    let outcome: HomeNextLaunchOutcome = "refused";
     await act(async () => {
-      succeeded = await result.current.launch({
+      outcome = await result.current.launch({
         text: "build the projected destination",
         modelSelection: { kind: "codex", modelId: "gpt-5.4" },
         modeId: null,
@@ -190,7 +205,7 @@ describe("useHomeNextLaunch", () => {
       ? renderableOutboxEntriesForTranscript(promptIntents, record.transcript)
       : [];
 
-    expect(succeeded).toBe(true);
+    expect(outcome).toBe("launched");
     expect(promptIntents).toHaveLength(1);
     expect(destinationPromptRows).toHaveLength(1);
     expect(destinationPromptRows[0]?.text).toBe("build the projected destination");
@@ -207,23 +222,6 @@ describe("useHomeNextLaunch", () => {
   // and before awaiting it — not only after the create promise settles.
   it("scopes the launch intent to its pending attempt before the create promise resolves (PRO-230)", async () => {
     const sessionId = "client-session:codex:sync-scope";
-    const pendingEntry = buildSubmittingPendingWorkspaceEntry({
-      attemptId: "sync-scope-attempt",
-      selectedWorkspaceId: null,
-      source: "worktree-created",
-      displayName: "sync-scope",
-      repoLabel: "repo",
-      baseBranchName: "main",
-      request: {
-        kind: "worktree",
-        input: {
-          repoRootId: "repo-root-1",
-          sourceWorkspaceId: null,
-          baseBranch: "main",
-          defaultBranch: "main",
-        },
-      },
-    });
 
     let resolveCreate: (value: { workspaceId: string; projectedSessionId: string | null }) => void =
       () => {};
@@ -232,10 +230,32 @@ describe("useHomeNextLaunch", () => {
         resolveCreate = resolve;
       },
     );
-    // Mirrors production: beginPendingWorkspace runs synchronously in the
-    // create workflow's body, before its first await, so the pending entry
-    // is already in the store by the time the caller gets the promise back.
-    mocks.createWorktreeAndEnterWithResult.mockImplementation(() => {
+    let mintedAttemptId: string | null = null;
+    let pendingEntry: ReturnType<typeof buildSubmittingPendingWorkspaceEntry> | null = null;
+    // Mirrors production: use-home-next-launch.ts pre-mints the attempt id
+    // and threads it through as an option; the create workflow's own
+    // beginPendingWorkspace call (registered here under that same id) runs
+    // synchronously, before its first await, so the pending entry is already
+    // in the registry by the time the caller gets the promise back.
+    mocks.createWorktreeAndEnterWithResult.mockImplementation((_input, options) => {
+      mintedAttemptId = options.attemptId;
+      pendingEntry = buildSubmittingPendingWorkspaceEntry({
+        attemptId: options.attemptId,
+        selectedWorkspaceId: null,
+        source: "worktree-created",
+        displayName: "sync-scope",
+        repoLabel: "repo",
+        baseBranchName: "main",
+        request: {
+          kind: "worktree",
+          input: {
+            repoRootId: "repo-root-1",
+            sourceWorkspaceId: null,
+            baseBranch: "main",
+            defaultBranch: "main",
+          },
+        },
+      });
       useSessionSelectionStore.getState().enterPendingWorkspaceShell(pendingEntry, {
         initialActiveSessionId: sessionId,
       });
@@ -244,7 +264,7 @@ describe("useHomeNextLaunch", () => {
 
     const { result } = renderHomeNextLaunch();
 
-    let launchPromise: Promise<boolean> = Promise.resolve(false);
+    let launchPromise: Promise<HomeNextLaunchOutcome> = Promise.resolve("refused");
     act(() => {
       launchPromise = result.current.launch({
         text: "scope before resolve",
@@ -264,29 +284,31 @@ describe("useHomeNextLaunch", () => {
     // The create promise is still pending here, so if scoping only happened
     // in the catch block (the pre-fix behavior), attemptId would still be
     // null at this point.
-    expect(useChatLaunchIntentStore.getState().activeIntent?.attemptId).toBe("sync-scope-attempt");
+    expect(mintedAttemptId).not.toBeNull();
+    expect(launchIntents(useChatLaunchIntentStore.getState())[0]?.attemptId)
+      .toBe(mintedAttemptId);
 
     putSessionRecord(createEmptySessionRecord(sessionId, "codex", {
-      workspaceId: buildPendingWorkspaceUiKey(pendingEntry),
+      workspaceId: buildPendingWorkspaceUiKey(pendingEntry!),
       materializedSessionId: null,
       modelId: "gpt-5.4",
     }));
     resolveCreate({ workspaceId: "workspace-real", projectedSessionId: sessionId });
 
-    let succeeded = false;
+    let outcome: HomeNextLaunchOutcome = "refused";
     await act(async () => {
-      succeeded = await launchPromise;
+      outcome = await launchPromise;
     });
-    expect(succeeded).toBe(true);
+    expect(outcome).toBe("launched");
   });
 
   it("does not invoke the Desktop Cowork workflow from Web Home", async () => {
     mocks.productHost.desktop = null;
     const { result } = renderHomeNextLaunch();
 
-    let succeeded = true;
+    let outcome: HomeNextLaunchOutcome = "launched";
     await act(async () => {
-      succeeded = await result.current.launch({
+      outcome = await result.current.launch({
         text: "start cowork on web",
         modelSelection: { kind: "codex", modelId: "gpt-5.4" },
         modeId: null,
@@ -295,12 +317,12 @@ describe("useHomeNextLaunch", () => {
       });
     });
 
-    expect(succeeded).toBe(false);
+    expect(outcome).toBe("refused");
     expect(result.current.isLaunching).toBe(false);
     expect(mocks.useCoworkThreadWorkflow).not.toHaveBeenCalled();
     expect(mocks.createThreadFromSelection).not.toHaveBeenCalled();
     expect(mocks.navigate).not.toHaveBeenCalled();
-    expect(useChatLaunchIntentStore.getState().activeIntent).toBeNull();
+    expect(useChatLaunchIntentStore.getState().intentOrder).toEqual([]);
     expect(mocks.showToast).toHaveBeenCalledWith(
       "Cowork threads are available in the Desktop app.",
       "info",
@@ -323,6 +345,32 @@ describe("useHomeNextLaunch", () => {
 
     expect(mocks.useCoworkThreadWorkflow).toHaveBeenCalledTimes(1);
     expect(mocks.createThreadFromSelection).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops a dismissed Cowork launch quietly, like local and worktree (PRO-230)", async () => {
+    // A null result is a dismissal, not a failure: the same shape that the
+    // local and worktree branches already treat as a quiet stop.
+    mocks.createThreadFromSelection.mockResolvedValue(null);
+    const { result } = renderHomeNextLaunch();
+
+    let outcome: HomeNextLaunchOutcome = "launched";
+    await act(async () => {
+      outcome = await result.current.launch({
+        text: "start cowork on desktop",
+        modelSelection: { kind: "codex", modelId: "gpt-5.4" },
+        modeId: null,
+        launchControlValues: {},
+        target: { kind: "cowork" },
+      });
+    });
+
+    expect(outcome).toBe("not-started");
+    expect(mocks.showErrorToast).not.toHaveBeenCalled();
+    expect(useChatLaunchIntentStore.getState().intentOrder).toEqual([]);
+    // The attempt id is minted by the caller, so intent and prompt routing can
+    // scope to this attempt instead of whichever entry happens to be attended.
+    expect(mocks.createThreadFromSelection.mock.calls[0]?.[0]?.attemptId)
+      .toEqual(expect.any(String));
   });
 
   it.each([
@@ -348,9 +396,9 @@ describe("useHomeNextLaunch", () => {
     mocks.productHost.desktop = null;
     const { result } = renderHomeNextLaunch();
 
-    let succeeded = true;
+    let outcome: HomeNextLaunchOutcome = "launched";
     await act(async () => {
-      succeeded = await result.current.launch({
+      outcome = await result.current.launch({
         text: "do not launch locally",
         modelSelection: { kind: "codex", modelId: "gpt-5.4" },
         modeId: null,
@@ -359,12 +407,12 @@ describe("useHomeNextLaunch", () => {
       });
     });
 
-    expect(succeeded).toBe(false);
+    expect(outcome).toBe("refused");
     expect(mocks.useCoworkThreadWorkflow).not.toHaveBeenCalled();
     expect(mocks.createLocalWorkspaceAndEnterWithResult).not.toHaveBeenCalled();
     expect(mocks.createWorktreeAndEnterWithResult).not.toHaveBeenCalled();
     expect(mocks.createCloudWorkspaceAndEnterWithResult).not.toHaveBeenCalled();
-    expect(useChatLaunchIntentStore.getState().activeIntent).toBeNull();
+    expect(useChatLaunchIntentStore.getState().intentOrder).toEqual([]);
     expect(mocks.showToast).toHaveBeenCalledWith(
       "Local launch targets are available in the Desktop app.",
       "info",

@@ -56,7 +56,9 @@ export function clearWorkspaceRuntimeState(
   clearWorkspaceBootstrappedInSession(workspaceId);
 
   if (options?.clearSelection && selectedWorkspaceId === workspaceId) {
-    deps.clearSelection();
+    // Scoped to one workspace, so it deselects without touching the other
+    // attempts in the pending registry (PRO-230).
+    deps.clearSelection({ preservePendingWorkspaces: true });
     resetWorkspaceEditorState();
   }
 }

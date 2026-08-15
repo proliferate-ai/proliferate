@@ -16,9 +16,19 @@ import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {
   isProjectedSessionMaterializationCandidate,
 } from "#product/lib/domain/sessions/creation/projected-session-materialization";
+import {
+  isAttemptAttended,
+} from "#product/hooks/workspaces/workflows/pending-workspace-attempt-access";
 
 interface PendingWorkspaceSessionMaterializationOptions {
   eventPrefix?: string;
+  /**
+   * The attendance decision already made for this attempt. Finalization reads
+   * attendance once, before it force-selects the real workspace; passing that
+   * value here keeps one decision governing the whole finalize + materialize
+   * sequence instead of re-reading it after the await (PRO-230).
+   */
+  attended?: boolean;
 }
 
 export interface PendingWorkspaceSessionMaterializationResult {
@@ -39,9 +49,11 @@ function projectedSessionMaterializationKey(workspaceId: string, sessionId: stri
 
 function materializeProjectedSession(input: {
   attemptId?: string | null;
+  activateOnCreate?: boolean;
   createEmptySessionWithResolvedConfig: CreateEmptySessionWithResolvedConfig;
   eventPrefix: string;
   session: SessionRuntimeRecord;
+  targetWorkspaceUiKey?: string | null;
   workspaceId: string;
 }): boolean {
   if (input.session.materializedSessionId) {
@@ -62,6 +74,8 @@ function materializeProjectedSession(input: {
     modeId: input.session.modeId ?? undefined,
     reuseInFlightEmptySession: false,
     preserveProjectedSessionOnCreateFailure: true,
+    activateOnCreate: input.activateOnCreate,
+    targetWorkspaceUiKey: input.targetWorkspaceUiKey,
   }).then((clientSessionId) => {
     logLatency(`${input.eventPrefix}.projected_session_create_completed`, {
       attemptId: input.attemptId ?? null,
@@ -121,15 +135,22 @@ export function usePendingWorkspaceSessionMaterialization() {
       });
     }
 
+    // An unattended attempt still materializes; it just must not steal the
+    // active session or write shell intent against the workspace the user is
+    // actually looking at. Callers that already decided attendance before an
+    // await pass it in, so the decision cannot flip mid-sequence.
+    const attended = options?.attended ?? isAttemptAttended(entry.attemptId);
     let materializationStartCount = 0;
     for (const session of projectedSessions) {
       // Session intents remain the user-visible owner while this background
       // create binds the projected client session to a real runtime session.
       if (materializeProjectedSession({
         attemptId: entry.attemptId,
+        activateOnCreate: attended,
         createEmptySessionWithResolvedConfig,
         eventPrefix,
         session,
+        targetWorkspaceUiKey: attended ? null : workspaceId,
         workspaceId,
       })) {
         materializationStartCount += 1;

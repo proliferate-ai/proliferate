@@ -23,7 +23,7 @@ import {
   resolvePendingPromptTrailingStatus,
 } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
 import { isReceiptPendingEntry } from "#product/lib/domain/workspaces/creation/creation-receipt";
-import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import type { PromptOutboxEntry } from "#product/domain/sessions/intents/session-intent-model";
 
 const OUTBOX_ACCEPTED_RUNNING_ECHO_GRACE_MS = 15_000;
@@ -69,9 +69,7 @@ export function TranscriptPendingPromptRow({
   // frontier slot until the first turn lands — through worktree setup, agent
   // boot, and prompt dispatch. Without the working status below it, that
   // whole window reads as a dead session (PRO-119).
-  const creationInFlight = useSessionSelectionStore(
-    (state) => isReceiptPendingEntry(state.pendingWorkspaceEntry),
-  );
+  const creationInFlight = isReceiptPendingEntry(useAttendedPendingWorkspaceEntry());
   if (outboxEntry?.deliveryState === "failed_before_dispatch") {
     return (
       <TurnShell isFirst={rowIndex === 0}>
