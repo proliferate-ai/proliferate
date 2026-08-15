@@ -131,8 +131,10 @@ export function ProviderRow({
           {provider.consoleUrl || provider.docsUrl ? (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-ui-sm">
               {provider.consoleUrl ? (
-                <button
+                <Button
                   type="button"
+                  variant="unstyled"
+                  size="unstyled"
                   className="flex items-center gap-1 text-foreground hover:underline"
                   onClick={() => {
                     void links.openExternal(provider.consoleUrl as string);
@@ -140,11 +142,13 @@ export function ProviderRow({
                 >
                   {HARNESS_PANE_COPY.providerConsoleLink}
                   <ArrowUpRight className="icon-compact" />
-                </button>
+                </Button>
               ) : null}
               {provider.docsUrl ? (
-                <button
+                <Button
                   type="button"
+                  variant="unstyled"
+                  size="unstyled"
                   className="flex items-center gap-1 text-muted-foreground hover:underline"
                   onClick={() => {
                     void links.openExternal(provider.docsUrl as string);
@@ -152,7 +156,7 @@ export function ProviderRow({
                 >
                   {HARNESS_PANE_COPY.providerDocsLink}
                   <ArrowUpRight className="icon-compact" />
-                </button>
+                </Button>
               ) : null}
             </div>
           ) : (

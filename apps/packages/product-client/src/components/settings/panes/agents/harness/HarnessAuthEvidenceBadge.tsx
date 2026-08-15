@@ -1,5 +1,6 @@
 import { RefreshCw } from "#product/primitives/icons/platform";
 import { Badge } from "#product/primitives/Badge";
+import { Button } from "#product/primitives/Button";
 import { IconButton } from "#product/primitives/IconButton";
 import {
   evidenceAgeLine,
@@ -137,13 +138,15 @@ export function HarnessAuthEvidenceSummary({
           ) : null}
           {handoff.label}
           {handoff.retryable && onRetryHandoff ? (
-            <button
+            <Button
               type="button"
+              variant="unstyled"
+              size="unstyled"
               className="text-foreground underline underline-offset-2"
               onClick={onRetryHandoff}
             >
               Retry
-            </button>
+            </Button>
           ) : null}
         </p>
       ) : null}
