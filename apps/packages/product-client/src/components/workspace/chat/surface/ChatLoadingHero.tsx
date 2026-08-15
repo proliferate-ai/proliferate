@@ -10,7 +10,7 @@ import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-co
  * Transitions ADR §4.3, Rung 3). The dispatcher (ChatView) only mounts this
  * component while `mode.kind` is `workspace-status` or `session-loading`, so
  * it holds `state="pending"` for its whole life and the parent unmounts it on
- * resolve — same governs-its-own-life shape as `TranscriptSwitchingPlaceholder`.
+ * resolve, the same governs-its-own-life shape as `TranscriptSwitchingPlaceholder`.
  * Routing through `LoadingBoundary` still buys the 200ms show-delay so a
  * sub-200ms workspace-status/session-loading pass never flashes a treatment.
  *

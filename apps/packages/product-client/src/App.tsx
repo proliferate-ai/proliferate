@@ -149,7 +149,7 @@ export function App({ RoutesComponent }: AppProps) {
                   // the show-delay window is honored. Known limitation: a
                   // `Suspense` fallback is unmounted the instant the chunk
                   // resolves, so `LoadingBoundary` never gets a `ready`
-                  // transition here and its min-display hold cannot engage —
+                  // transition here and its min-display hold cannot engage;
                   // a resolve inside the 200-500ms window can still flash the
                   // mark briefly. See PR #1926 for the residual-flicker note.
                   <Suspense
