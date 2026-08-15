@@ -21,7 +21,6 @@ function baseAppActions(): AppCommandActions {
     addRepository: commandAction(),
     newLocalWorkspace: commandAction(),
     newWorktreeWorkspace: commandAction(),
-    newCloudWorkspace: commandAction(),
     copyWorkspacePath: commandAction(),
     copyBranchName: commandAction(),
   };

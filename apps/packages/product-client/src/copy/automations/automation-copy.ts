@@ -24,7 +24,7 @@ export const AUTOMATION_TEMPLATE_OPTIONS = [
 export const AUTOMATION_RUN_COPY = {
   queued: "Queued",
   claimed: "Claimed by executor",
-  creatingWorkspace: "Creating cloud workspace",
+  creatingWorkspace: "Creating workspace",
   creatingLocalWorkspace: "Creating local worktree",
   provisioningWorkspace: "Preparing runtime",
   provisioningLocalWorkspace: "Preparing worktree",
@@ -37,7 +37,7 @@ export const AUTOMATION_RUN_COPY = {
 } as const;
 
 export const AUTOMATION_PREEXECUTOR_COPY = {
-  pageDescription: "Schedule recurring cloud or local agent sessions.",
+  pageDescription: "Schedule recurring local agent sessions.",
   emptyState: "Create a workflow to queue scheduled runs.",
-  modalDescription: "Cloud workflows start a new cloud workspace and session for each run.",
+  modalDescription: "Workflows start a new local worktree and session for each run.",
 } as const;

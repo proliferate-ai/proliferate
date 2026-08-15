@@ -1,14 +1,12 @@
 import { Button } from "#product/primitives/Button";
 import { ExternalLink } from "#product/primitives/icons/core";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
+import { COMMAND_ENVIRONMENT_DOCS_URL } from "#product/config/capabilities";
 
 interface RunCommandHelpProps {
   scope: string;
   className?: string;
 }
-
-const COMMAND_ENVIRONMENT_DOCS_URL =
-  "https://github.com/proliferate-ai/proliferate/blob/main/specs/anyharness/workspace-command-environment.md";
 
 export function RunCommandHelp({
   scope,

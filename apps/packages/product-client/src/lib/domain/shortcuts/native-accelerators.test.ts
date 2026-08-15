@@ -24,6 +24,5 @@ describe("getShortcutNativeAccelerator", () => {
     expect(getShortcutNativeAccelerator(SHORTCUTS.tabByIndex)).toBeNull();
     expect(getShortcutNativeAccelerator(SHORTCUTS.increaseWindowZoom)).toBeNull();
     expect(getShortcutNativeAccelerator(SHORTCUTS.newWorktree)).toBeNull();
-    expect(getShortcutNativeAccelerator(SHORTCUTS.newCloud)).toBeNull();
   });
 });

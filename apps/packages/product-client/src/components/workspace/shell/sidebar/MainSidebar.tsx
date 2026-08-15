@@ -359,7 +359,6 @@ export const MainSidebar = memo(function MainSidebar({
     isDesktopHost,
     managedCloudAvailable,
     handleSetUpCloud,
-    handleAddToThisMac,
   } = useSidebarRepoAvailabilityActions();
 
   const beginWorkspaceAvailabilityIntent = useWorkspaceAvailabilityIntentStore(
@@ -500,7 +499,6 @@ export const MainSidebar = memo(function MainSidebar({
                 managedCloudAvailable={managedCloudAvailable}
                 onOpenCloudRepoSettingsForGroup={handleOpenCloudRepoSettings}
                 onSetUpCloudForGroup={handleSetUpCloud}
-                onAddToThisMac={handleAddToThisMac}
               />
             </DebugProfiler>
           )}

@@ -35,7 +35,7 @@ describe("useWorkspaceRemoteAccessActions", () => {
     });
 
     expect(hookMocks.showToast).toHaveBeenCalledWith(
-      "Cloud workspaces now open through the managed sandbox gateway.",
+      "Remote access now opens through the managed sandbox gateway.",
       "info",
     );
   });
