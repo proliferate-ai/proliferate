@@ -8,11 +8,18 @@ import {
   type LocalAutomationRepoCandidate,
   type LocalAutomationWorktreePlan,
 } from "#product/lib/domain/automations/local-executor/plan";
+import { cadence } from "@proliferate/design/cadence";
 
 const AUTOMATION_LOCAL_ORIGIN = { kind: "system", entrypoint: "desktop" } as const;
+// Named exception (does not sit on the `cadence` scale): 2s falls strictly
+// between `cadence.fastMs` (1s) and `cadence.standardMs` (5s). Snapping down
+// to fast would tighten this bounded setup-status poll (forbidden); snapping
+// up to standard would slow automation workspace setup detection against a
+// 360s deadline for no benefit. Kept as its own named constant per the ADR
+// §4.7 Rung 6 (Q8) exception convention.
 const SETUP_POLL_INTERVAL_MS = 2_000;
 const SETUP_TIMEOUT_MS = 360_000;
-const LIVE_CONFIG_POLL_INTERVAL_MS = 1_000;
+const LIVE_CONFIG_POLL_INTERVAL_MS = cadence.fastMs;
 const LIVE_CONFIG_TIMEOUT_MS = 30_000;
 
 export class LocalAutomationExecutorError extends Error {
