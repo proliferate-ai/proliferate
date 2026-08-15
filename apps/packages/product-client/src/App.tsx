@@ -1,7 +1,6 @@
 import { Suspense, lazy } from "react"
 import { Navigate, Route } from "react-router-dom"
 import { BootstrappedRoute, PublicOnlyRoute } from "#product/components/auth/AuthGate"
-import { MinDesktopVersionGate } from "#product/components/auth/MinDesktopVersionGate"
 import { UserPreferencesGate } from "#product/components/app/UserPreferencesGate"
 import { ToastHost } from "#product/primitives/patterns/toast/ToastHost"
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
@@ -22,6 +21,15 @@ const AuthenticatedProductClient = lazy(
 // Desktop-only: the app-update flow (restart dialog, phase toasts, automatic
 // download). Lazy so the public shell — and /login, which has a fail-closed
 // first-load JS budget — never pulls the updater state machine.
+// Lazy like DesktopUpdateSurface: the gate only ever renders for an
+// authenticated desktop, so its query hooks must not ride the /login chunk
+// (login first-load budget).
+const MinDesktopVersionGate = lazy(() =>
+  import("#product/components/auth/MinDesktopVersionGate").then((m) => ({
+    default: m.MinDesktopVersionGate,
+  })),
+)
+
 const DesktopUpdateSurface = lazy(() =>
   import("#product/components/feedback/DesktopUpdateSurface").then((m) => ({
     default: m.DesktopUpdateSurface,
@@ -301,6 +309,10 @@ function AppMinDesktopVersionGate() {
     return null
   }
 
-  return <MinDesktopVersionGate />
+  return (
+    <Suspense fallback={null}>
+      <MinDesktopVersionGate />
+    </Suspense>
+  )
 }
 

@@ -205,6 +205,10 @@ pub(super) async fn wait_healthy(sidecar: &SharedSidecar, require_child: bool) -
                         let _ = child.start_kill();
                     }
                     guard.child = None;
+                    #[cfg(all(
+                        target_os = "macos",
+                        any(target_arch = "aarch64", target_arch = "x86_64")
+                    ))]
                     sidecar.set_child_shutdown_signal(None);
                     persist_runtime_info(&guard.info, health.as_ref());
                     return BootOutcome::Failed("runtime_version_mismatch");

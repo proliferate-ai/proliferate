@@ -8,7 +8,7 @@ import { useAppSidebarSignOutAction } from "#product/hooks/app/workflows/use-app
 /**
  * Full-screen takeover blocking a desktop below the connected server's
  * enforced `minDesktopVersion`. Clones `BootstrappedRoute`'s gating pattern
- * (fixed inset-0 z-50 above the workspace outlet) rather than a dismissible
+ * (fixed inset-0 z-overlay above the workspace outlet) rather than a dismissible
  * modal, because this is a hard requirement, not a nag — the ADR ruling for
  * FR-4 is a blocking screen, not a toast the user can defer indefinitely.
  *
@@ -28,7 +28,7 @@ export function MinDesktopVersionGate() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background">
+    <div className="fixed inset-0 z-overlay flex items-center justify-center bg-background">
       <div className="w-full max-w-[420px] px-6 text-center">
         <span className="mx-auto flex size-11 items-center justify-center rounded-lg border border-border/70 bg-surface-elevated-secondary">
           <AlertTriangle className="icon-paired text-special" />

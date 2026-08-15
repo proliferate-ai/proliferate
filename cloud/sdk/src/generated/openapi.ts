@@ -5346,6 +5346,8 @@ export interface components {
             workerVersion: string;
             /** Mindesktopversion */
             minDesktopVersion: string;
+            /** Mindesktopversionenforced */
+            minDesktopVersionEnforced: boolean;
             capabilities: components["schemas"]["ServerCapabilities"];
         };
         /** OAuthAvailabilityResponse */
