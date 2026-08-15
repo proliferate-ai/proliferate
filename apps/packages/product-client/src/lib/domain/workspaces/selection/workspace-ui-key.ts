@@ -11,6 +11,26 @@ export function resolveWorkspaceUiKey(
   return selectedLogicalWorkspaceId ?? materializedWorkspaceId ?? null;
 }
 
+/**
+ * The ui key a failed session creation should recover under.
+ *
+ * An unattended launch materializes its session while the user is looking at
+ * another workspace, so recovery cannot derive the key from the current
+ * selection (that would name the wrong workspace); the caller names it instead.
+ * Shell intent is deliberately not keyed from this: the writer's own resolution
+ * already yields this same id while the workspace is unselected, and yields the
+ * logical id once it is selected, which is the key later reads use (PRO-230).
+ */
+export function resolveRecoveryWorkspaceUiKey(
+  targetWorkspaceUiKey: string | null | undefined,
+  selectedLogicalWorkspaceId: string | null | undefined,
+  workspaceId: string,
+): string {
+  return targetWorkspaceUiKey
+    ?? resolveWorkspaceUiKey(selectedLogicalWorkspaceId, workspaceId)
+    ?? workspaceId;
+}
+
 export function resolveWorkspaceShellStateKey(args: {
   workspaceId: string | null | undefined;
   shellWorkspaceId?: string | null | undefined;

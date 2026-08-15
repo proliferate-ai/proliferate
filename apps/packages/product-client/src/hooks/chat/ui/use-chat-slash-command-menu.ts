@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from "react";
+import type { AvailableSessionCommand } from "@anyharness/sdk";
 import { useActiveSessionTranscript } from "#product/hooks/chat/derived/use-active-session-transcript-state";
 import { useComposerMenuNavigation } from "#product/hooks/chat/ui/use-composer-menu-navigation";
 import {
@@ -13,15 +14,22 @@ interface UseChatSlashCommandMenuArgs {
   open: boolean;
   query: string;
   onSelect: (command: SessionSlashCommandViewModel) => void;
+  /**
+   * Overrides the active session's ACP catalog as the raw command source.
+   * The home composer injects the persisted per-harness catalog here because
+   * no session exists before workspace creation (PRO-228).
+   */
+  commandsSource?: readonly AvailableSessionCommand[];
 }
 
 export function useChatSlashCommandMenu({
   open,
   query,
   onSelect,
+  commandsSource,
 }: UseChatSlashCommandMenuArgs) {
   const transcript = useActiveSessionTranscript();
-  const availableCommands = transcript?.availableCommands ?? EMPTY_COMMANDS;
+  const availableCommands = commandsSource ?? transcript?.availableCommands ?? EMPTY_COMMANDS;
 
   const commands = useMemo(() => {
     if (!open) {

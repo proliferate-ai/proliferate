@@ -213,6 +213,35 @@ impl AgentOperationsError {
     }
 }
 
+/// Diagnostics outcome class for a stable error code, keyed by what the
+/// calling agent can do about it. Instrumentation sits at the MCP tool
+/// boundary, where the typed error has already been reduced to its code, so
+/// this maps codes rather than variants; unknown codes fall back to `error`.
+pub fn agent_operations_outcome_class(code: &str) -> &'static str {
+    match code {
+        "AGENT_RUNTIME_FORBIDDEN"
+        | "AGENT_CALLER_CLOSED"
+        | "AGENT_CAPABILITY_DENIED"
+        | "SUBAGENT_SAME_WORKSPACE_REQUIRED"
+        | "SUBAGENT_OPEN_REQUIRED"
+        | "SESSION_CLOSED"
+        | "SESSION_CONTROLLED_BY_WORKFLOW"
+        | "WORKSPACE_MUTATION_BLOCKED"
+        | "WORKSPACE_LIVE_SESSION_BLOCKED"
+        | "WORKSPACE_ARCHIVED"
+        | "SUBAGENT_FANOUT_LIMIT"
+        | "WORKSPACE_SINGLE_SESSION" => "denied",
+        "AGENT_NOT_FOUND"
+        | "AGENT_CALLER_NOT_FOUND"
+        | "SESSION_NOT_FOUND"
+        | "TERMINAL_NOT_FOUND"
+        | "WORKSPACE_NOT_FOUND"
+        | "WORKSPACE_DIRECTORY_MISSING"
+        | "WORKSPACE_MCP_TOOL_NOT_FOUND" => "not_found",
+        _ => "error",
+    }
+}
+
 fn create_subagent_code(error: &CreateSubagentAgentSessionError) -> &'static str {
     match error {
         CreateSubagentAgentSessionError::Access(error) => workspace_access_code(error),
@@ -517,5 +546,73 @@ mod tests {
         assert_eq!(error.code(), WORKSPACE_MCP_ATTACHMENT_CODE);
         assert_eq!(error.public_message(), WORKSPACE_MCP_ATTACHMENT_DETAIL);
         assert!(!error.public_message().contains("private token detail"));
+    }
+
+    #[test]
+    fn outcome_class_separates_denials_from_missing_targets_and_failures() {
+        let denied = AgentOperationsError::CapabilityDenied {
+            capability: AgentCapability::GetAgent,
+            denial: CapabilityDenial::SubagentSameWorkspaceRequired,
+        };
+        assert_eq!(
+            agent_operations_outcome_class(denied.code()),
+            "denied",
+            "same-workspace refusal is a denial, not a generic failure"
+        );
+        assert_eq!(
+            agent_operations_outcome_class(AgentOperationsError::RuntimeBoundaryDenied.code()),
+            "denied"
+        );
+        assert_eq!(
+            agent_operations_outcome_class(AgentOperationsError::SubagentOpenRequired.code()),
+            "denied"
+        );
+        let archived = AgentOperationsError::Create(CreateOrdinaryAgentSessionError::Access(
+            WorkspaceAccessError::WorkspaceArchived("ws_1".into()),
+        ));
+        assert_eq!(
+            agent_operations_outcome_class(archived.code()),
+            "denied",
+            "an archived workspace is a caller-caused refusal, not a generic failure"
+        );
+        let fanout_limit = AgentOperationsError::CreateSubagent(
+            CreateSubagentAgentSessionError::Relationship(CreateSessionLinkError::FanoutLimit),
+        );
+        assert_eq!(
+            agent_operations_outcome_class(fanout_limit.code()),
+            "denied",
+            "hitting the subagent fanout limit is a caller-caused refusal"
+        );
+        let single_session = AgentOperationsError::Create(CreateOrdinaryAgentSessionError::Create(
+            CreateAndStartSessionError::WorkspaceSingleSession {
+                session_id: "session_1".into(),
+            },
+        ));
+        assert_eq!(
+            agent_operations_outcome_class(single_session.code()),
+            "denied",
+            "a workspace already at its single-session limit is a caller-caused refusal"
+        );
+        assert_eq!(
+            agent_operations_outcome_class(AgentOperationsError::AgentNotFound.code()),
+            "not_found"
+        );
+        assert_eq!(
+            agent_operations_outcome_class(AgentOperationsError::CallerNotFound.code()),
+            "not_found"
+        );
+        assert_eq!(
+            agent_operations_outcome_class(AgentOperationsError::InvalidCursor.code()),
+            "error"
+        );
+        assert_eq!(
+            agent_operations_outcome_class(
+                AgentOperationsError::Internal(anyhow::anyhow!("boom")).code()
+            ),
+            "error"
+        );
+        // MCP-layer codes never reach AgentOperationsError::code().
+        assert_eq!(agent_operations_outcome_class("WORKSPACE_MCP_TOOL_NOT_FOUND"), "not_found");
+        assert_eq!(agent_operations_outcome_class("WORKSPACE_MCP_ARGUMENTS_INVALID"), "error");
     }
 }

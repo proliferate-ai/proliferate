@@ -41,10 +41,22 @@ afterAll(async () => {
   await viteServer?.close();
 }, 60_000);
 
-describe("native placeholder caret spacing", () => {
-  it("keeps focused input and textarea placeholders clear without shifting entered text", async () => {
+// INTENTIONAL CONTRACT CHANGE (PRO-249): this replaces the #1799 pin that
+// asserted the FOCUSED placeholder carried a 2px text-indent. That fix moved
+// the placeholder 2px on every focus/blur of an empty native field. The new
+// contract never moves the placeholder: while a native field is empty and
+// focused, the native caret is suppressed (`caret-color: transparent`) and a
+// 1px replacement caret is painted as a background bar at the content-box
+// origin — the same 1px-caret philosophy the Lexical chat composer uses. Typing
+// dismisses `:placeholder-shown` and atomically restores the native caret.
+describe("empty-field replacement caret", () => {
+  it("suppresses the native caret and paints a 1px bar without moving the placeholder", async () => {
+    // Reduced motion disables the blink animation, so the base rule's static
+    // background-image applies deterministically — never assert a mid-blink
+    // computed background-image without this.
     const page = await browser.newPage({ viewport: { width: 360, height: 160 } });
     try {
+      await page.emulateMedia({ reducedMotion: "reduce" });
       await page.goto(fixtureUrl, { waitUntil: "networkidle" });
       const fields = [
         page.getByPlaceholder("Search models"),
@@ -53,28 +65,80 @@ describe("native placeholder caret spacing", () => {
       ];
 
       for (const field of fields) {
-        await field.focus();
-        const focusedIndent = await field.evaluate((element) => ({
-          input: getComputedStyle(element).textIndent,
-          placeholder: getComputedStyle(element, "::placeholder").textIndent,
+        // Park focus on the button so each field starts provably blurred,
+        // regardless of where the previous loop iteration left it.
+        await page.getByRole("button", { name: "Done" }).focus();
+
+        // Blurred + empty: native caret intact, no replacement bar, no indent.
+        const blurred = await field.evaluate((element) => ({
+          caretColor: getComputedStyle(element).caretColor,
+          backgroundImage: getComputedStyle(element).backgroundImage,
+          placeholderIndent: getComputedStyle(element, "::placeholder").textIndent,
         }));
-        expect(focusedIndent).toEqual({
-          input: "0px",
-          placeholder: "2px",
-        });
+        expect(blurred.caretColor).not.toBe("rgba(0, 0, 0, 0)");
+        expect(blurred.backgroundImage).toBe("none");
+        expect(blurred.placeholderIndent).toBe("0px");
 
+        // Focused + empty: native caret suppressed, 1px bar painted at the
+        // content-box origin, and — the PRO-249 regression pin — the
+        // placeholder does NOT move (its own and its ::placeholder text-indent
+        // both stay 0px).
+        await field.focus();
+        const focused = await field.evaluate((element) => ({
+          caretColor: getComputedStyle(element).caretColor,
+          backgroundImage: getComputedStyle(element).backgroundImage,
+          backgroundSize: getComputedStyle(element).backgroundSize,
+          backgroundOrigin: getComputedStyle(element).backgroundOrigin,
+          elementIndent: getComputedStyle(element).textIndent,
+          placeholderIndent: getComputedStyle(element, "::placeholder").textIndent,
+        }));
+        expect(focused.caretColor).toBe("rgba(0, 0, 0, 0)");
+        expect(focused.backgroundImage).toContain("linear-gradient");
+        expect(focused.backgroundSize.startsWith("1px")).toBe(true);
+        expect(focused.backgroundOrigin).toBe("content-box");
+        expect(focused.elementIndent).toBe("0px");
+        expect(focused.placeholderIndent).toBe("0px");
+
+        // Typing dismisses the placeholder, which restores the native caret and
+        // drops the replacement bar in the same style rule.
         await field.fill("entered text");
-        expect(
-          await field.evaluate((element) => getComputedStyle(element).textIndent),
-        ).toBe("0px");
+        const typed = await field.evaluate((element) => ({
+          caretColor: getComputedStyle(element).caretColor,
+          backgroundImage: getComputedStyle(element).backgroundImage,
+        }));
+        expect(typed.backgroundImage).toBe("none");
+        expect(typed.caretColor).not.toBe("rgba(0, 0, 0, 0)");
 
+        // Cleared + blurred (focus moves to the Done button): bar gone, native
+        // caret restored.
         await field.fill("");
         await page.getByRole("button", { name: "Done" }).focus();
+        const cleared = await field.evaluate((element) => ({
+          caretColor: getComputedStyle(element).caretColor,
+          backgroundImage: getComputedStyle(element).backgroundImage,
+        }));
+        expect(cleared.backgroundImage).toBe("none");
+        expect(cleared.caretColor).not.toBe("rgba(0, 0, 0, 0)");
+      }
+    } finally {
+      await page.close();
+    }
+  }, 60_000);
+
+  it("blinks the replacement caret when motion is allowed", async () => {
+    const page = await browser.newPage({ viewport: { width: 360, height: 160 } });
+    try {
+      await page.emulateMedia({ reducedMotion: "no-preference" });
+      await page.goto(fixtureUrl, { waitUntil: "networkidle" });
+      for (const field of [
+        page.getByPlaceholder("Search models"),
+        page.getByPlaceholder("Search files"),
+        page.getByPlaceholder("Add objective"),
+      ]) {
+        await field.focus();
         expect(
-          await field.evaluate(
-            (element) => getComputedStyle(element, "::placeholder").textIndent,
-          ),
-        ).toBe("0px");
+          await field.evaluate((element) => getComputedStyle(element).animationName),
+        ).toBe("ui-empty-field-caret-blink");
       }
     } finally {
       await page.close();

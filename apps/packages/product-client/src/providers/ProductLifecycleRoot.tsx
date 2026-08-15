@@ -14,8 +14,6 @@ import { useAppCommandActions } from "#product/hooks/app/workflows/use-app-comma
 import { useAgentAutoReconcile } from "#product/hooks/agents/lifecycle/use-agent-auto-reconcile"
 import { useFirstRunAuthAdoption } from "#product/hooks/agents/lifecycle/use-first-run-auth-adoption"
 import { useLocalAuthStateSync } from "#product/hooks/agents/lifecycle/use-local-auth-state-sync"
-import { useLocalAutomationExecutor } from "#product/hooks/automations/lifecycle/use-local-automation-executor"
-import { useHomeDeferredLaunchRunner } from "#product/hooks/home/lifecycle/use-home-deferred-launch-runner"
 import { useAppearancePreferenceLifecycle } from "#product/hooks/preferences/lifecycle/use-appearance-preference-lifecycle"
 import { useRepoPreferencesLifecycle } from "#product/hooks/preferences/lifecycle/use-repo-preferences-lifecycle"
 import { useUserPreferencesLifecycle } from "#product/hooks/preferences/lifecycle/use-user-preferences-lifecycle"
@@ -27,6 +25,7 @@ import { useShortcutDispatcher } from "#product/hooks/shortcuts/lifecycle/use-sh
 import { useCrashRecoverySupportAction } from "#product/hooks/support/workflows/use-crash-recovery-support-action"
 import { useSupportReportRetentionLifecycle } from "#product/hooks/support/lifecycle/use-support-report-retention"
 import { useTurnEndSound } from "#product/hooks/sessions/lifecycle/use-turn-end-sound"
+import { useTurnEndDiagnostics } from "#product/hooks/sessions/lifecycle/use-turn-end-diagnostics"
 import { useWorkspaceGitStatusPersistence } from "#product/hooks/workspaces/lifecycle/use-workspace-git-status-persistence"
 import {
   elapsedStartupMs,
@@ -63,6 +62,28 @@ const AuthRestartOfferRoot = lazy(() =>
 const SupportReportQueueRoot = lazy(() =>
   import("#product/providers/SupportReportQueueRoot").then((m) => ({
     default: m.SupportReportQueueRoot,
+  })),
+)
+
+// The launch lifecycles consume the client-owned launch registry, which only a
+// signed-in viewer can have. Same treatment as the restart offer: lazy +
+// authenticated-only, so the login first-load chunk parses zero bytes of the
+// launch / session-creation graph (login runtime JS budget, PRO-230).
+const AuthenticatedLaunchLifecycles = lazy(() =>
+  import("#product/providers/AuthenticatedLaunchLifecycles").then((m) => ({
+    default: m.AuthenticatedLaunchLifecycles,
+  })),
+)
+
+// Local automation execution both no-ops signed-out, so the owner is
+// authenticated-only + lazy for the same reason: the login shell never
+// fetches or parses the local-automation module (login runtime JS budget).
+// Deferred home-launch resumption is owned by AuthenticatedLaunchLifecycles
+// above (it shares that component's launch-registry lifetime), so it is not
+// duplicated here.
+const AuthenticatedBackgroundLifecycles = lazy(() =>
+  import("#product/providers/AuthenticatedBackgroundLifecycles").then((m) => ({
+    default: m.AuthenticatedBackgroundLifecycles,
   })),
 )
 
@@ -163,6 +184,7 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
   recordBootDiagnosticOnce("app_runtime.render.before.use_turn_end_sound")
   useTurnEndSound()
   recordBootDiagnosticOnce("app_runtime.render.after.use_turn_end_sound")
+  useTurnEndDiagnostics()
   recordBootDiagnosticOnce("app_runtime.render.before.use_agent_auto_reconcile")
   useAgentAutoReconcile()
   recordBootDiagnosticOnce("app_runtime.render.after.use_agent_auto_reconcile")
@@ -172,12 +194,6 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
   recordBootDiagnosticOnce("app_runtime.render.before.use_local_auth_state_sync")
   useLocalAuthStateSync()
   recordBootDiagnosticOnce("app_runtime.render.after.use_local_auth_state_sync")
-  recordBootDiagnosticOnce("app_runtime.render.before.use_local_automation_executor")
-  useLocalAutomationExecutor()
-  recordBootDiagnosticOnce("app_runtime.render.after.use_local_automation_executor")
-  recordBootDiagnosticOnce("app_runtime.render.before.use_home_deferred_launch_runner")
-  useHomeDeferredLaunchRunner()
-  recordBootDiagnosticOnce("app_runtime.render.after.use_home_deferred_launch_runner")
   recordBootDiagnosticOnce("app_runtime.render.before.use_user_preferences_lifecycle")
   useUserPreferencesLifecycle()
   recordBootDiagnosticOnce("app_runtime.render.after.use_user_preferences_lifecycle")
@@ -244,6 +260,20 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
       {authStatus === "authenticated" && (
         <Suspense fallback={null}>
           <SupportReportQueueRoot />
+        </Suspense>
+      )}
+      {/* Launch lifecycles: resident above the route tree so a launch survives
+          navigating away from the workspace that started it, but authenticated-
+          only + lazy so the login first-load chunk never pulls the launch
+          registry / session-creation graph (PRO-230). */}
+      {authStatus === "authenticated" && (
+        <Suspense fallback={null}>
+          <AuthenticatedLaunchLifecycles />
+        </Suspense>
+      )}
+      {authStatus === "authenticated" && (
+        <Suspense fallback={null}>
+          <AuthenticatedBackgroundLifecycles />
         </Suspense>
       )}
       {children}

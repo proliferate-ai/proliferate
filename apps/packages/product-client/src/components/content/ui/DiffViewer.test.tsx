@@ -34,8 +34,12 @@ index 1111111..2222222 100644
 
 describe("DiffViewer chat variant", () => {
   it("lets chat and sidebar diff unchanged rows reveal the diff body surface", () => {
+    // This rule lives in the lazy-loaded authenticated stylesheet, not the
+    // eager product.css: it only ever renders inside authenticated chat and
+    // sidebar diff surfaces, so it must not cost the login runtime CSS
+    // budget (scripts/measure-login-runtime-budget.mjs).
     const desktopCss = readFileSync(
-      new URL("../../../../../../packages/design/src/css/product.css", import.meta.url),
+      new URL("../../../app/authenticated.css", import.meta.url),
       "utf8",
     );
     const sharedSurfaceRule =

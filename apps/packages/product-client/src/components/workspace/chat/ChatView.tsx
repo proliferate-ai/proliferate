@@ -31,7 +31,6 @@ import { useChatAvailabilityState } from "#product/hooks/chat/derived/use-chat-a
 import { useChatDockInset } from "#product/hooks/chat/ui/use-chat-dock-inset";
 import { useChatPromptAttachments } from "#product/hooks/chat/ui/use-chat-prompt-attachments";
 import { useChatRootFocus } from "#product/hooks/chat/ui/use-chat-root-focus";
-import { useCloudWorkspacePolling } from "#product/hooks/chat/lifecycle/use-cloud-workspace-polling";
 import { useComposerDockSlots } from "#product/hooks/chat/ui/use-composer-dock-slots";
 import { useQueuedPromptEditStatus } from "#product/hooks/chat/ui/use-queued-prompt-edit";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
@@ -230,7 +229,6 @@ export const ChatView = memo(function ChatView({
     stickyNonDisplacingBottomInsetPx,
   } = useChatDockInset();
 
-  useCloudWorkspacePolling();
   useSelectedCloudRuntimeRehydration(selectedCloudRuntime);
   useSessionErrorAcknowledgement();
 

@@ -68,7 +68,7 @@ describe("planBatchedStreamSideEffects", () => {
     ]);
   });
 
-  it("plans startup refreshes from available command updates", () => {
+  it("plans startup refreshes and catalog recording from available command updates", () => {
     const plan = planBatchedStreamSideEffects({
       ...baseInput(),
       envelopes: [
@@ -83,6 +83,16 @@ describe("planBatchedStreamSideEffects", () => {
         delayMs: 0,
       },
     ]);
+    expect(plan.recordAvailableCommandsCatalog).toBe(true);
+  });
+
+  it("does not plan catalog recording without an available command update", () => {
+    const plan = planBatchedStreamSideEffects({
+      ...baseInput(),
+      envelopes: [turnStarted(2)],
+    });
+
+    expect(plan.recordAvailableCommandsCatalog).toBe(false);
   });
 
   it("plans subagent relationship, mount, and cache invalidation commands", () => {

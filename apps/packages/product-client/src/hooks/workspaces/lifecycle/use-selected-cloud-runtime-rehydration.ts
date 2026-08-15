@@ -15,13 +15,19 @@ import { useSessionDirectoryStore } from "#product/stores/sessions/session-direc
 import {
   isProjectedSessionMaterializationCandidate,
 } from "#product/lib/domain/sessions/creation/projected-session-materialization";
+import {
+  pendingWorkspaceEntryForWorkspaceId,
+} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
+import {
+  isAttemptAttended,
+} from "#product/hooks/workspaces/workflows/pending-workspace-attempt-access";
 
 export function useSelectedCloudRuntimeRehydration(
   selectedCloudRuntime: SelectedCloudRuntimeState,
 ): void {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
-  const setPendingWorkspaceEntry = useSessionSelectionStore((state) => state.setPendingWorkspaceEntry);
+  const clearPendingWorkspaceEntry = useSessionSelectionStore((state) => state.clearPendingWorkspaceEntry);
   const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
   const { bootstrapWorkspace } = useWorkspaceBootstrapActions();
   const materializePendingWorkspaceSessions = usePendingWorkspaceSessionMaterialization();
@@ -62,7 +68,10 @@ export function useSelectedCloudRuntimeRehydration(
       shouldRehydrateOnReadyRef.current = true;
     }
 
-    const pendingWorkspaceEntry = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+    const pendingWorkspaceEntry = pendingWorkspaceEntryForWorkspaceId(
+      useSessionSelectionStore.getState().pendingWorkspaces,
+      workspaceId,
+    );
     const hasAwaitingPendingWorkspaceEntry = Boolean(
       pendingWorkspaceEntry
         && pendingWorkspaceEntry.workspaceId === workspaceId
@@ -83,6 +92,15 @@ export function useSelectedCloudRuntimeRehydration(
     }
 
     shouldRehydrateOnReadyRef.current = false;
+
+    // Attendance is decided here, before the bootstrap await, and threaded into
+    // materialization — PR1's convention. Re-reading it afterwards would let a
+    // switch-away during bootstrap change the decision that governs the rest of
+    // the sequence (PRO-230 review finding 5).
+    const attendedAttemptId = pendingWorkspaceEntry?.attemptId ?? null;
+    const attendedBeforeBootstrap = attendedAttemptId
+      ? isAttemptAttended(attendedAttemptId)
+      : false;
 
     let cancelled = false;
     void (async () => {
@@ -105,7 +123,10 @@ export function useSelectedCloudRuntimeRehydration(
         return;
       }
 
-      const pendingWorkspaceEntry = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+      const pendingWorkspaceEntry = pendingWorkspaceEntryForWorkspaceId(
+        useSessionSelectionStore.getState().pendingWorkspaces,
+        workspaceId,
+      );
       if (
         !pendingWorkspaceEntry
         || pendingWorkspaceEntry.workspaceId !== workspaceId
@@ -123,9 +144,16 @@ export function useSelectedCloudRuntimeRehydration(
       materializePendingWorkspaceSessions(
         pendingWorkspaceEntry,
         workspaceId,
-        { eventPrefix: "workspace.cloud_runtime_rehydration" },
+        {
+          eventPrefix: "workspace.cloud_runtime_rehydration",
+          // Only the attempt the decision was taken for carries it; a different
+          // attempt landing during the await falls back to its own read.
+          ...(pendingWorkspaceEntry.attemptId === attendedAttemptId
+            ? { attended: attendedBeforeBootstrap }
+            : {}),
+        },
       );
-      setPendingWorkspaceEntry(null);
+      clearPendingWorkspaceEntry(pendingWorkspaceEntry.attemptId);
       setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
         workspaceId,
         source: pendingWorkspaceEntry.source,
@@ -154,7 +182,7 @@ export function useSelectedCloudRuntimeRehydration(
     materializeReadyWorkspaceProjectedSessions,
     runtimeUrl,
     selectedLogicalWorkspaceId,
-    setPendingWorkspaceEntry,
+    clearPendingWorkspaceEntry,
     setWorkspaceArrivalEvent,
     selectedCloudRuntime.connectionInfo?.accessToken,
     selectedCloudRuntime.connectionInfo?.anyharnessWorkspaceId,

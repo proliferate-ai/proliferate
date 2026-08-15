@@ -1,8 +1,12 @@
 import {
   getNextSessionModeValue,
+  getPreviousSessionModeValue,
   resolveSessionControlPresentation,
 } from "#product/lib/domain/chat/session-controls/session-mode-control";
-import { resolveSessionControlTooltip } from "#product/lib/domain/chat/session-controls/session-toggle-control";
+import {
+  appendSessionControlStepHint,
+  resolveSessionControlTooltip,
+} from "#product/lib/domain/chat/session-controls/session-toggle-control";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import type { ConfiguredSessionControlKey } from "#product/lib/domain/chat/session-controls/presentation";
 import { SessionControlIcon } from "#product/components/workspace/chat/session-controls/SessionControlIcon";
@@ -52,15 +56,20 @@ export function ComposerModeBadge({
     ?? control.detail
     ?? control.label;
   const nextValue = getNextSessionModeValue(control.options, currentValue);
+  const previousValue = getPreviousSessionModeValue(control.options, currentValue);
   // `control.label`, not a literal "Permissions": SESSION_CONTROL_LABELS
   // already spells the permissions control "Permissions" and the
   // collaboration control "Mode", so the descriptor's own word is the ruled
   // copy for the one and stays honest for the other.
-  const tooltip = resolveSessionControlTooltip(
+  // The accessible name carries the mode itself; the pointer hint is a mouse
+  // affordance, so it rides only the tooltip and title — same split as
+  // ComposerEffortStepper's aria-label.
+  const accessibleName = resolveSessionControlTooltip(
     control.label,
     shortLabel,
     currentOption?.description ?? null,
   );
+  const tooltip = appendSessionControlStepHint(accessibleName, "switch");
 
   const badge = (
     <ComposerControlButton
@@ -78,12 +87,21 @@ export function ComposerModeBadge({
         </span>
       )}
       label={shortLabel}
-      aria-label={tooltip}
+      aria-label={accessibleName}
       title={tooltip}
       data-session-mode-trigger=""
       data-session-mode-selected={currentValue ?? ""}
       data-session-mode-next={nextValue ?? ""}
-      onClick={nextValue ? () => control.onSelect(nextValue) : undefined}
+      data-session-mode-previous={previousValue ?? ""}
+      onClick={nextValue
+        ? (event) => {
+          if ((event.metaKey || event.ctrlKey) && previousValue) {
+            control.onSelect(previousValue);
+            return;
+          }
+          control.onSelect(nextValue);
+        }
+        : undefined}
     />
   );
 

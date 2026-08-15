@@ -250,9 +250,8 @@ vi.mock("#product/hooks/support/facade/use-support-availability", () => ({
   }),
 }));
 
-vi.mock("#product/stores/sessions/session-selection-store", () => ({
-  useSessionSelectionStore: (selector: (state: { pendingWorkspaceEntry: null }) => unknown) =>
-    selector({ pendingWorkspaceEntry: null }),
+vi.mock("#product/hooks/workspaces/derived/use-pending-workspace-entries", () => ({
+  useAttendedPendingWorkspaceEntry: () => null,
 }));
 
 const workspaceUiState = vi.hoisted(() => ({

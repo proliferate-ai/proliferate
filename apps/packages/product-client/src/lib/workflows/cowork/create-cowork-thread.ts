@@ -12,6 +12,12 @@ import {
 } from "#product/lib/domain/workspaces/creation/pending-entry";
 
 export interface CreateCoworkThreadWorkflowInput {
+  /**
+   * Pre-minted by callers that need to scope launch-intent and prompt routing
+   * to this attempt before the workflow returns (PRO-230). Minted here when
+   * absent.
+   */
+  attemptId?: string;
   agentKind: string;
   modelId: string;
   modeId?: string | null;
@@ -32,8 +38,11 @@ export interface CreateCoworkThreadWorkflowDeps {
   elapsedSince(createdAt: number): number;
   logLatency(event: string, fields?: Record<string, unknown>): void;
   getSelectedWorkspaceId(): string | null;
-  getPendingWorkspaceEntry(): PendingWorkspaceEntry | null;
-  isAttemptCurrent(attemptId: string): boolean;
+  getPendingWorkspaceEntry(attemptId: string): PendingWorkspaceEntry | null;
+  /** The attempt has not been dismissed, so the pipeline may keep working. */
+  isAttemptLive(attemptId: string): boolean;
+  /** The user is looking at this attempt, so selection may move. */
+  isAttemptAttended(attemptId: string): boolean;
   setThreadsCollapsed(collapsed: boolean): void;
   beginPendingWorkspace(
     entry: PendingWorkspaceEntry,
@@ -72,11 +81,11 @@ export interface CreateCoworkThreadWorkflowDeps {
   }): void;
   setDraftText(workspaceId: string, text: string): void;
   clearDraft(workspaceId: string): void;
-  setPendingWorkspaceEntry(entry: PendingWorkspaceEntry | null): void;
+  setPendingWorkspaceEntry(entry: PendingWorkspaceEntry): void;
+  clearPendingWorkspaceEntry(attemptId: string): void;
   activateWorkspace(input: {
     logicalWorkspaceId: string | null;
     workspaceId: string;
-    clearPending: boolean;
     initialActiveSessionId: string | null;
   }): void;
   rememberLastViewedSession(workspaceId: string, sessionId: string): void;
@@ -117,7 +126,7 @@ export async function createCoworkThreadWorkflow(
 
   const selectedWorkspaceId = deps.getSelectedWorkspaceId();
   const entry: PendingWorkspaceEntry = {
-    attemptId: deps.createPendingWorkspaceAttemptId(),
+    attemptId: input.attemptId ?? deps.createPendingWorkspaceAttemptId(),
     source: "cowork-created",
     stage: "submitting",
     displayName: UNTITLED_COWORK_THREAD_TITLE,
@@ -150,7 +159,7 @@ export async function createCoworkThreadWorkflow(
   deps.navigateToWorkspaceShell();
 
   try {
-    if (!deps.isAttemptCurrent(entry.attemptId)) {
+    if (!deps.isAttemptLive(entry.attemptId)) {
       return null;
     }
 
@@ -179,7 +188,7 @@ export async function createCoworkThreadWorkflow(
       totalElapsedMs: deps.elapsedMs(totalStartedAt),
     });
 
-    if (!deps.isAttemptCurrent(entry.attemptId)) {
+    if (!deps.isAttemptLive(entry.attemptId)) {
       return null;
     }
 
@@ -201,7 +210,7 @@ export async function createCoworkThreadWorkflow(
       launchControlValues: input.launchControlValues,
     });
 
-    if (!deps.isAttemptCurrent(entry.attemptId)) {
+    if (!deps.isAttemptLive(entry.attemptId)) {
       return null;
     }
 
@@ -224,16 +233,27 @@ export async function createCoworkThreadWorkflow(
     }
 
     const selectionStartedAt = deps.startLatencyTimer();
-    deps.activateWorkspace({
-      logicalWorkspaceId: null,
-      workspaceId: result.workspace.id,
-      clearPending: false,
-      initialActiveSessionId: activeSessionId,
-    });
-    deps.rememberLastViewedSession(result.workspace.id, launchedSession.id);
+    // Selection is a camera: an unattended thread still materializes, it just
+    // does not pull the user out of the workspace they are looking at.
+    const attended = deps.isAttemptAttended(entry.attemptId);
+    if (attended) {
+      deps.activateWorkspace({
+        logicalWorkspaceId: null,
+        workspaceId: result.workspace.id,
+        initialActiveSessionId: activeSessionId,
+      });
+    }
+    // "The user has seen this" state, so it only applies when the thread was
+    // actually on screen; stamping it for an unattended launch suppresses the
+    // unread and first-visit affordances that key off it (PRO-230).
+    if (attended) {
+      deps.rememberLastViewedSession(result.workspace.id, launchedSession.id);
+      deps.markWorkspaceViewed(result.workspace.id);
+      deps.markWorkspaceBootstrappedInSession(result.workspace.id);
+    }
+    // Recency ordering is not a viewed stamp: the thread exists and should sort
+    // as recent whether or not the user watched it appear (spec §8 step 6).
     deps.trackWorkspaceInteraction(result.workspace.id, deps.nowIso());
-    deps.markWorkspaceViewed(result.workspace.id);
-    deps.markWorkspaceBootstrappedInSession(result.workspace.id);
 
     const workspaceInitStartedAt = deps.startLatencyTimer();
     void deps.initWorkspace({
@@ -261,8 +281,8 @@ export async function createCoworkThreadWorkflow(
       selectionElapsedMs: deps.elapsedMs(selectionStartedAt),
       totalElapsedMs: deps.elapsedMs(totalStartedAt),
     });
-    if (deps.isAttemptCurrent(entry.attemptId)) {
-      deps.setPendingWorkspaceEntry(null);
+    if (deps.isAttemptLive(entry.attemptId)) {
+      deps.clearPendingWorkspaceEntry(entry.attemptId);
     }
     return {
       ...result,
@@ -275,11 +295,8 @@ export async function createCoworkThreadWorkflow(
       errorMessage: message,
       elapsedSincePendingMs: deps.elapsedSince(entry.createdAt),
     });
-    if (deps.isAttemptCurrent(entry.attemptId)) {
-      const currentPending = deps.getPendingWorkspaceEntry();
-      const failedEntry = currentPending?.attemptId === entry.attemptId
-        ? currentPending
-        : entry;
+    if (deps.isAttemptLive(entry.attemptId)) {
+      const failedEntry = deps.getPendingWorkspaceEntry(entry.attemptId) ?? entry;
       deps.setPendingWorkspaceEntry({
         ...failedEntry,
         stage: "failed",

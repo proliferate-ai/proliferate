@@ -19,11 +19,22 @@ const DEMO_AGENT_IDENTITY = buildDelegatedAgentIdentity({
   sessionLinkId: "library-agent-link",
 });
 
+// Hover target for the clamped message preview: far past the preview ceiling,
+// the way a real subagent brief is.
+const DEMO_LONG_MESSAGE =
+  "Investigate the retry behavior end to end, trace the actual mechanism until you can explain why it occurs, and report back with a mental model plus concrete fix options. "
+    .repeat(20);
+
 function AgentIdentityChipDemo() {
   return (
     <div className="flex flex-col items-start gap-2">
       <AgentIdentityChip identity={DEMO_AGENT_IDENTITY} onOpen={noop} />
       <AgentIdentityChip identity={DEMO_AGENT_IDENTITY} closed />
+      <AgentIdentityChip
+        identity={DEMO_AGENT_IDENTITY}
+        exactMessage={DEMO_LONG_MESSAGE}
+        onOpen={noop}
+      />
     </div>
   );
 }

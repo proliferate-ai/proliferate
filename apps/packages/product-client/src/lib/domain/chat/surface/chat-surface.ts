@@ -1,4 +1,8 @@
 import type { Workspace } from "@anyharness/sdk";
+import {
+  launchIntentOwnsShell,
+  type LaunchIntentScope,
+} from "#product/lib/domain/chat/launch/launch-intent";
 
 export type ChatSurfaceState =
   | { kind: "no-workspace" }
@@ -28,9 +32,15 @@ export interface ResolveChatSurfaceStateInput {
   selectedWorkspaceId: string | null;
   hasPendingWorkspaceEntry: boolean;
   activeLaunchIntentId: string | null;
+  /** The workspace identities the active launch intent may own, if any. */
+  launchIntentScope: LaunchIntentScope | null;
   /** True while the active launch intent is still in flight (not failed). */
   launchIntentInFlight: boolean;
   launchIntentSessionId: string | null;
+  /** The current shell's own selected logical workspace id (pending-workspace UI key or workspace id). */
+  shellLogicalWorkspaceId: string | null;
+  /** The current shell's own selected (materialized) workspace id. */
+  shellWorkspaceId: string | null;
   selectedLocalWorkspace: Workspace | null;
   isArrivalWorkspace: boolean;
   shouldShowSelectedCloudWorkspaceStatus: boolean;
@@ -60,11 +70,22 @@ export function shouldMountWorkspaceShell(args: {
 
 export function resolveLaunchIntentSurfaceOverride(args: {
   activeLaunchIntentId: string | null;
+  launchIntentScope: LaunchIntentScope | null;
   launchIntentSessionId: string | null;
   activeSessionId: string | null;
   hasVisibleSessionContent: boolean;
+  shellLogicalWorkspaceId: string | null;
+  shellWorkspaceId: string | null;
 }): LaunchIntentSurfaceOverride | null {
   if (!args.activeLaunchIntentId) {
+    return null;
+  }
+
+  if (!launchIntentOwnsShell({
+    scope: args.launchIntentScope,
+    shellLogicalWorkspaceId: args.shellLogicalWorkspaceId,
+    shellWorkspaceId: args.shellWorkspaceId,
+  })) {
     return null;
   }
 
@@ -121,9 +142,12 @@ export function resolveChatSurfaceState(input: ResolveChatSurfaceStateInput): Ch
 
   const launchIntentOverride = resolveLaunchIntentSurfaceOverride({
     activeLaunchIntentId: input.activeLaunchIntentId,
+    launchIntentScope: input.launchIntentScope,
     launchIntentSessionId: input.launchIntentSessionId,
     activeSessionId: scopedActiveSessionId,
     hasVisibleSessionContent: scopedHasContent,
+    shellLogicalWorkspaceId: input.shellLogicalWorkspaceId,
+    shellWorkspaceId: input.shellWorkspaceId,
   });
   if (launchIntentOverride) {
     return launchIntentOverride;

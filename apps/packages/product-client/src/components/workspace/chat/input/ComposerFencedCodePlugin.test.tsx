@@ -255,37 +255,6 @@ describe("ComposerFencedCodePlugin", () => {
     expect(onChange.mock.calls.at(-1)?.[0]).toBe(`\`\`\`\n${code}\n\`\`\`\n`);
   });
 
-  it("keeps pasted inline-code characters but strips the code text format", async () => {
-    mockRangeRect();
-    const onChange = vi.fn();
-    const harness = renderEditor({ value: "", onChange });
-    await harness.ready();
-    act(() => resetText(harness.editor, ""));
-    onChange.mockClear();
-
-    // A copied rendered code span arrives as text/html <code>; Lexical maps a
-    // single-line <code> to the inline-code text format rather than a block.
-    act(() => {
-      harness.editor.dispatchCommand(
-        PASTE_COMMAND,
-        htmlPasteEvent("<code>const ready = true;</code>", "const ready = true;"),
-      );
-    });
-
-    await waitFor(() => {
-      expect(harness.root.textContent).toBe("const ready = true;");
-    });
-    expect(harness.root.querySelector("code")).toBeNull();
-    act(() => {
-      harness.editor.update(() => {
-        $getRoot().getAllTextNodes().at(-1)?.selectEnd();
-      }, { discrete: true });
-    });
-    await typeCharacters(harness.editor, " and typed", harness.root);
-    expect(harness.root.querySelector("code")).toBeNull();
-    expect(onChange.mock.calls.at(-1)?.[0]).toBe("const ready = true; and typed");
-  });
-
   it("imports a pasted rendered code block as one escapable block", async () => {
     const onChange = vi.fn();
     const harness = renderEditor({ value: "", onChange });

@@ -67,6 +67,7 @@ export const SHORTCUT_GROUPS = [
       "focusChat",
       "openModelSelector",
       "cycleReasoningEffort",
+      "cycleReasoningEffortBack",
       "openTerminal",
       "toggleLeftSidebar",
       "toggleRightPanel",

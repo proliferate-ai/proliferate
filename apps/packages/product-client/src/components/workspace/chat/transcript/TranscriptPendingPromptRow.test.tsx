@@ -13,6 +13,14 @@ import {
 } from "#product/domain/sessions/intents/session-intent-model";
 import { TranscriptPendingPromptRow as TranscriptPendingPromptRowImpl } from "#product/components/workspace/chat/transcript/TranscriptPendingPromptRow";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import {
+  EMPTY_PENDING_WORKSPACE_REGISTRY,
+  upsertPendingWorkspaceEntry,
+} from "#product/lib/domain/workspaces/creation/pending-entry-registry";
+import {
+  buildPendingWorkspaceUiKey,
+  buildSubmittingPendingWorkspaceEntry,
+} from "#product/lib/domain/workspaces/creation/pending-entry";
 
 const NOW = "2026-05-20T17:00:00.000Z";
 const TRANSCRIPT = createTranscriptState("session-1");
@@ -32,7 +40,11 @@ function TranscriptPendingPromptRow(
 describe("TranscriptPendingPromptRow", () => {
   afterEach(() => {
     cleanup();
-    useSessionSelectionStore.setState({ pendingWorkspaceEntry: null });
+    useSessionSelectionStore.setState({
+      pendingWorkspaces: EMPTY_PENDING_WORKSPACE_REGISTRY,
+      selectedLogicalWorkspaceId: null,
+      selectedWorkspaceId: null,
+    });
   });
 
   it("renders closed-session send failures as a compact line", () => {
@@ -223,8 +235,19 @@ describe("TranscriptPendingPromptRow", () => {
   });
 
   it("hosts the receipt alone while the workspace creation is still in flight", () => {
+    const pendingEntry = buildSubmittingPendingWorkspaceEntry({
+      attemptId: "attempt-1",
+      selectedWorkspaceId: null,
+      source: "worktree-created",
+      displayName: "Worktree",
+      request: { kind: "local", sourceRoot: "/tmp/workspace-1" },
+    });
     useSessionSelectionStore.setState({
-      pendingWorkspaceEntry: { source: "worktree-created" } as never,
+      pendingWorkspaces: upsertPendingWorkspaceEntry(
+        EMPTY_PENDING_WORKSPACE_REGISTRY,
+        pendingEntry,
+      ),
+      selectedLogicalWorkspaceId: buildPendingWorkspaceUiKey(pendingEntry),
     });
     const { container } = render(
       <TranscriptPendingPromptRow

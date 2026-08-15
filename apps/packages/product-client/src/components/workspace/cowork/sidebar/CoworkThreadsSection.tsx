@@ -6,9 +6,13 @@ import { useCoworkStatus } from "#product/hooks/access/anyharness/cowork/use-cow
 import { useCoworkThreadWorkflow } from "#product/hooks/cowork/workflows/use-cowork-thread-workflow";
 import { useCoworkThreads } from "#product/hooks/access/anyharness/cowork/use-cowork-threads";
 import { useWorkspaceSidebarActivityStates } from "#product/hooks/workspaces/derived/use-workspace-sidebar-activities";
-import { buildPendingWorkspaceUiKey } from "#product/lib/domain/workspaces/creation/pending-entry";
+import {
+  buildPendingWorkspaceUiKey,
+  type PendingWorkspaceEntry,
+} from "#product/lib/domain/workspaces/creation/pending-entry";
 import { SidebarStatusIndicatorView } from "#product/components/workspace/shell/sidebar/SidebarIndicators";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { usePendingWorkspaceEntries } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { SidebarActionButton } from "#product/primitives/patterns/sidebar/SidebarActionButton";
 import { CoworkThreadItem } from "#product/components/workspace/cowork/sidebar/CoworkThreadItem";
@@ -22,7 +26,7 @@ export function CoworkThreadsSection() {
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) =>
     state.selectedLogicalWorkspaceId
   );
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntries = usePendingWorkspaceEntries();
   const workspaceActivities = useWorkspaceSidebarActivityStates();
   const { status, isLoading: statusLoading } = useCoworkStatus();
   const { threads, isLoading: threadsLoading } = useCoworkThreads(status?.enabled ?? false);
@@ -33,37 +37,37 @@ export function CoworkThreadsSection() {
   const handleToggleCollapsed = useCallback(() => {
     setThreadsCollapsed(!threadsCollapsed);
   }, [setThreadsCollapsed, threadsCollapsed]);
-  const pendingCoworkEntry = pendingWorkspaceEntry?.source === "cowork-created"
-    ? pendingWorkspaceEntry
-    : null;
-  const pendingCoworkUiKey = pendingCoworkEntry
-    ? buildPendingWorkspaceUiKey(pendingCoworkEntry)
-    : null;
-  const pendingCoworkOwnsRow = pendingCoworkEntry !== null;
-  const pendingCoworkWorkspaceIdToSuppress = pendingCoworkOwnsRow
-    ? pendingCoworkEntry?.workspaceId ?? null
-    : null;
-  // The pending row remains the single presentation owner until activation
-  // clears it. Once creation has a real workspace id, suppress that query row
-  // instead of swapping identities partway through materialization. Failed
-  // entries keep owning the row so their selected shell and error state remain
-  // truthful until retry, navigation, or finalization clears the projection.
-  const listedThreads = useMemo(() => (
-    pendingCoworkWorkspaceIdToSuppress
-      ? threads.filter((thread) => thread.workspaceId !== pendingCoworkWorkspaceIdToSuppress)
-      : threads
-  ), [pendingCoworkWorkspaceIdToSuppress, threads]);
-  const showPendingCoworkThread = pendingCoworkOwnsRow;
-  const pendingCoworkThreadActive = Boolean(
-    pendingCoworkEntry
-    && (
-      selectedLogicalWorkspaceId === pendingCoworkUiKey
-      || (
-        pendingCoworkEntry.workspaceId
-        && selectedWorkspaceId === pendingCoworkEntry.workspaceId
-      )
-    ),
+  // Cowork-created attempts are excluded from the repo sidebar projection, so
+  // this section is the only place they appear — and several can be starting at
+  // once (PRO-230).
+  const pendingCoworkEntries = useMemo(
+    () => pendingWorkspaceEntries.filter((entry) => entry.source === "cowork-created"),
+    [pendingWorkspaceEntries],
   );
+  // Each pending row remains the single presentation owner of its thread until
+  // activation clears it. Once a creation has a real workspace id, suppress
+  // that query row instead of swapping identities partway through
+  // materialization. Failed entries keep owning their row so their selected
+  // shell and error state remain truthful until retry, navigation, or
+  // finalization clears the projection.
+  const pendingCoworkWorkspaceIdsToSuppress = useMemo(
+    () => new Set(
+      pendingCoworkEntries
+        .map((entry) => entry.workspaceId)
+        .filter((workspaceId): workspaceId is string => workspaceId !== null),
+    ),
+    [pendingCoworkEntries],
+  );
+  const listedThreads = useMemo(() => (
+    pendingCoworkWorkspaceIdsToSuppress.size > 0
+      ? threads.filter((thread) => !pendingCoworkWorkspaceIdsToSuppress.has(thread.workspaceId))
+      : threads
+  ), [pendingCoworkWorkspaceIdsToSuppress, threads]);
+  const showPendingCoworkThreads = pendingCoworkEntries.length > 0;
+  const isPendingCoworkThreadActive = useCallback((entry: PendingWorkspaceEntry) => (
+    selectedLogicalWorkspaceId === buildPendingWorkspaceUiKey(entry)
+    || Boolean(entry.workspaceId && selectedWorkspaceId === entry.workspaceId)
+  ), [selectedLogicalWorkspaceId, selectedWorkspaceId]);
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(new Set());
   const toggleThreadExpanded = useCallback((threadId: string) => {
     setExpandedThreadIds((prev) => {
@@ -116,24 +120,25 @@ export function CoworkThreadsSection() {
 
       {!threadsCollapsed && (
         <div className="flex flex-col gap-px">
-          {showPendingCoworkThread && pendingCoworkEntry && (
+          {pendingCoworkEntries.map((entry) => (
             <ProductSidebarThreadRow
-              active={pendingCoworkThreadActive}
+              key={entry.attemptId}
+              active={isPendingCoworkThreadActive(entry)}
               trailingStatus={(
                 <SidebarStatusIndicatorView
-                  indicator={pendingCoworkEntry.stage === "failed"
+                  indicator={entry.stage === "failed"
                     ? {
                         kind: "error",
-                        tooltip: pendingCoworkEntry.errorMessage ?? "Couldn't start chat",
+                        tooltip: entry.errorMessage ?? "Couldn't start chat",
                       }
                     : { kind: "iterating", tooltip: "Creating chat" }}
                 />
               )}
-              label={pendingCoworkEntry.displayName}
+              label={entry.displayName}
             />
-          )}
+          ))}
           {statusLoading || threadsLoading ? (
-            showPendingCoworkThread ? null : (
+            showPendingCoworkThreads ? null : (
               <div className="flex flex-col gap-1 px-2 py-2" aria-label="Loading threads" role="status">
                 <SkeletonBlock className="h-7 w-full bg-surface-control" />
                 <SkeletonBlock className="h-7 w-[82%] bg-surface-control/80" />
@@ -141,7 +146,7 @@ export function CoworkThreadsSection() {
               </div>
             )
           ) : listedThreads.length === 0 ? (
-            showPendingCoworkThread ? null : (
+            showPendingCoworkThreads ? null : (
               <div className="px-2 py-2 text-ui-sm text-sidebar-muted-foreground">
                 {isCreatingThread ? "Creating chat" : "No chats yet"}
               </div>

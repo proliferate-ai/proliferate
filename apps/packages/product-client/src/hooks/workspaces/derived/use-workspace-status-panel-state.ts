@@ -16,6 +16,7 @@ import {
 } from "#product/lib/domain/workspaces/availability";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 import {
   useCloudWorkspaceBillingBlockStore,
@@ -114,7 +115,7 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const { data: workspaceCollections } = useWorkspaces();
   const pendingSourceRepoRootPath = useMemo(() => {
     if (!pendingWorkspaceEntry) {

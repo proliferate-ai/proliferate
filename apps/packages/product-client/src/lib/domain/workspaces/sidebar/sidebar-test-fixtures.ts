@@ -329,7 +329,7 @@ export function buildGroups(args: {
   hiddenRepoRootIds?: string[];
   selectedLogicalWorkspaceId?: string | null;
   selectedWorkspaceId?: string | null;
-  pendingWorkspaceEntry?: PendingWorkspaceEntry | null;
+  pendingWorkspaceEntries?: readonly PendingWorkspaceEntry[];
   workspaceActivities?: Record<string, SidebarSessionActivityState>;
   pendingPromptCounts?: Record<string, number>;
   lastViewedAt?: Record<string, string>;
@@ -350,7 +350,7 @@ export function buildGroups(args: {
     hiddenRepoRootIds: new Set(args.hiddenRepoRootIds ?? []),
     selectedLogicalWorkspaceId: args.selectedLogicalWorkspaceId ?? null,
     selectedWorkspaceId: args.selectedWorkspaceId ?? null,
-    pendingWorkspaceEntry: args.pendingWorkspaceEntry ?? null,
+    pendingWorkspaceEntries: args.pendingWorkspaceEntries ?? [],
     workspaceActivities: args.workspaceActivities ?? {},
     pendingPromptCounts: args.pendingPromptCounts,
     gitStatus: undefined,

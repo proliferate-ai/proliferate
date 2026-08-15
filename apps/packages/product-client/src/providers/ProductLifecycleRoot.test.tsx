@@ -36,6 +36,7 @@ vi.mock("#product/hooks/agents/lifecycle/use-first-run-auth-adoption", () => ({ 
 vi.mock("#product/hooks/agents/lifecycle/use-local-auth-state-sync", () => ({ useLocalAuthStateSync: vi.fn() }));
 vi.mock("#product/hooks/automations/lifecycle/use-local-automation-executor", () => ({ useLocalAutomationExecutor: vi.fn() }));
 vi.mock("#product/hooks/home/lifecycle/use-home-deferred-launch-runner", () => ({ useHomeDeferredLaunchRunner: vi.fn() }));
+vi.mock("#product/hooks/workspaces/lifecycle/use-cloud-workspace-polling", () => ({ useCloudWorkspacePolling: vi.fn() }));
 vi.mock("#product/hooks/preferences/lifecycle/use-appearance-preference-lifecycle", () => ({ useAppearancePreferenceLifecycle: vi.fn() }));
 vi.mock("#product/hooks/preferences/lifecycle/use-repo-preferences-lifecycle", () => ({ useRepoPreferencesLifecycle: vi.fn() }));
 vi.mock("#product/hooks/preferences/lifecycle/use-user-preferences-lifecycle", () => ({ useUserPreferencesLifecycle: vi.fn() }));
@@ -49,8 +50,10 @@ vi.mock("#product/hooks/support/workflows/use-crash-recovery-support-action", ()
 }));
 vi.mock("#product/hooks/sessions/lifecycle/use-turn-end-sound", () => ({ useTurnEndSound: vi.fn() }));
 vi.mock("#product/hooks/workspaces/lifecycle/use-workspace-git-status-persistence", () => ({ useWorkspaceGitStatusPersistence: vi.fn() }));
-// Mutable so one test can drive the authenticated-only lazy mounts; every other
-// test keeps the pre-session status the login shell renders under.
+// Mutable so tests can drive the authenticated-only lazy mounts (the support
+// report queue, the launch lifecycles) by moving the shell between the
+// signed-out and signed-in states; every other test keeps the pre-session
+// status the login shell renders under.
 const authStatus = vi.hoisted(() => ({
   value: "loading" as "loading" | "anonymous" | "authenticated",
 }));
@@ -76,6 +79,12 @@ vi.mock("#product/providers/SupportReportQueueRoot", () => ({
   SupportReportQueueRoot: () => <div data-testid="support-report-queue-root" />,
 }));
 
+vi.mock("#product/providers/AuthenticatedBackgroundLifecycles", () => ({
+  AuthenticatedBackgroundLifecycles: () => (
+    <div data-testid="authenticated-background-lifecycles" />
+  ),
+}));
+
 // Counted rather than stubbed away: where this hook runs relative to the auth
 // gate is the behaviour under test, not an implementation detail.
 const retentionSweepCount = vi.hoisted(() => ({ value: 0 }));
@@ -95,6 +104,8 @@ vi.mock("#product/providers/DesktopProductLifecycleRoot", () => ({
 
 import { ProductLifecycleRoot } from "#product/providers/ProductLifecycleRoot";
 import { useAppCommandActionsContext } from "#product/providers/AppCommandActionsProvider";
+import { useCloudWorkspacePolling } from "#product/hooks/workspaces/lifecycle/use-cloud-workspace-polling";
+import { useHomeDeferredLaunchRunner } from "#product/hooks/home/lifecycle/use-home-deferred-launch-runner";
 
 function CommandContextProbe() {
   const actions = useAppCommandActionsContext();
@@ -249,6 +260,40 @@ describe("ProductLifecycleRoot", () => {
       expect(retentionSweepCount.value).toBeGreaterThan(0);
       cleanup();
     }
+  });
+
+  it("keeps the launch lifecycles off the signed-out shell and mounts them once authenticated", async () => {
+    // Residency AND reachability. Both loops must outlive the workspace shell:
+    // mounted inside it they would stop the moment the user sits on Home or
+    // /workflows — both of which null the selection ids and unmount the shell —
+    // leaving parked cloud attempts unpolled and prompts sent into attempts
+    // nothing will finalize (PRO-230 review finding 1). But the launch registry
+    // only exists for a signed-in viewer, so they are mounted behind the
+    // authenticated gate as a lazy chunk, which is what keeps the launch /
+    // session-creation graph out of the login first-load budget.
+    authStatus.value = "anonymous";
+    const host = makeTestProductHost({
+      auth: { restoreSession: vi.fn().mockResolvedValue(undefined) },
+    });
+    const tree = () => (
+      <ProductHostProvider host={host}>
+        <ProductLifecycleRoot>
+          <div data-testid="app-tree">app</div>
+        </ProductLifecycleRoot>
+      </ProductHostProvider>
+    );
+
+    const { rerender } = render(tree());
+
+    expect(screen.getByTestId("app-tree")).toBeTruthy();
+    expect(useHomeDeferredLaunchRunner).not.toHaveBeenCalled();
+    expect(useCloudWorkspacePolling).not.toHaveBeenCalled();
+
+    authStatus.value = "authenticated";
+    rerender(tree());
+
+    await waitFor(() => expect(useHomeDeferredLaunchRunner).toHaveBeenCalled());
+    expect(useCloudWorkspacePolling).toHaveBeenCalled();
   });
 
   it("keeps a single Desktop lifecycle mount under StrictMode", () => {

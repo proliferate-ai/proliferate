@@ -13,6 +13,7 @@ import {
 import { resetWorkspaceEditorState } from "#product/stores/editor/workspace-editor-state";
 import { markWorkspaceViewed } from "#product/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { useToastStore } from "#product/stores/toast/toast-store";
 
 // Navigation-only workflow: every consumer calls these inside event handlers,
@@ -25,7 +26,7 @@ export function useWorkspaceNavigationWorkflow() {
   const deselectWorkspacePreservingSessions = useSessionSelectionStore(
     (state) => state.deselectWorkspacePreservingSessions,
   );
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,

@@ -25,6 +25,7 @@ import { OfflineIndicator } from "#product/components/app/OfflineIndicator";
 import { useMainScreenState } from "#product/hooks/main/facade/use-main-screen-state";
 import { useMainScreenShortcuts } from "#product/hooks/main/lifecycle/use-main-screen-shortcuts";
 import { useMainScreenActions } from "#product/hooks/main/workflows/use-main-screen-actions";
+import { useGlassChromeCanvas } from "#product/hooks/theme/derived/use-glass-chrome-canvas";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useHasMacWindowControls } from "#product/hooks/ui/layout/use-mac-window-controls";
@@ -40,6 +41,7 @@ import {
 import { WorkspacePathProvider } from "#product/providers/WorkspacePathProvider";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import {
   buildSettingsHref,
   resolveWorkspaceRepoSettingsHref,
@@ -56,7 +58,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   // acknowledgement intentionally stays in ChatView because errors are
   // transcript-scoped and need the chat surface for context.
   useWorkspaceActivityAcknowledgement({ enabled: visible });
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const pendingWorkspacePath = resolvePendingWorkspacePath(pendingWorkspaceEntry);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
@@ -99,6 +101,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   } = layout;
   const transparentChromeEnabled = useTransparentChromeEnabled();
   const hasMacWindowControls = useHasMacWindowControls();
+  useGlassChromeCanvas(transparentChromeEnabled && hasMacWindowControls);
   const workspaceGeometry = useWorkspaceShellGeometry({
     leftWidth: sidebarOpen ? sidebarWidth : 0,
     rightWidth: hasWorkspaceShell && !hasLaunchIntentOnlyShell && rightPanelOpen
@@ -246,6 +249,10 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
               <WorkspaceShellSidebar
                 open={sidebarOpen}
                 width={sidebarWidth}
+                // Vibrancy only exists behind the window on macOS Desktop
+                // (apply_vibrancy in src-tauri/src/lib.rs); elsewhere a
+                // translucent sidebar would expose the bare window fill.
+                glassBackground={transparentChromeEnabled && hasMacWindowControls}
                 showAnimatedDivider={transparentChromeEnabled}
                 snapGeometry={workspaceGeometry.snapLeft}
                 onToggleSidebar={workspaceGeometry.toggleLeft}

@@ -20,6 +20,20 @@ function normalizeReasoningEffortValue(value: string | null): string | null {
   return normalizedValue === "max" ? "xhigh" : normalizedValue;
 }
 
+export function getSteppedReasoningEffortValue(
+  options: ReadonlyArray<{ value: string; selected: boolean }>,
+  direction: 1 | -1,
+): string | null {
+  if (options.length < 2) {
+    return null;
+  }
+
+  const currentIndex = options.findIndex((option) => option.selected);
+  const effectiveIndex = currentIndex >= 0 ? currentIndex : 0;
+  const steppedIndex = (effectiveIndex + direction + options.length) % options.length;
+  return options[steppedIndex]?.value ?? null;
+}
+
 function resolveShortLabel(value: string | null, label?: string | null): string | null {
   // Authored catalog labels ("Extra High", "Max", "Ultra") win — never rewrite
   // them to internal spellings (chat-composer.md §1.1). Values only fall back

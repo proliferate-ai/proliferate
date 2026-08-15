@@ -19,8 +19,9 @@ import { shouldMountWorkspaceShell } from "#product/lib/domain/chat/surface/chat
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
-import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
+import { useShellLaunchIntent } from "#product/hooks/chat/derived/use-shell-launch-intent";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
   CLOSED_PUBLISH_DIALOG_STATE,
@@ -81,7 +82,7 @@ export function useMainScreenState(): MainScreenState {
     CLOSED_PUBLISH_DIALOG_STATE,
   );
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useAttendedPendingWorkspaceEntry();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
@@ -113,15 +114,17 @@ export function useMainScreenState(): MainScreenState {
     rightPanelSuppressed: Boolean(pendingWorkspaceEntry),
   });
 
-  const activeLaunchIntent = useChatLaunchIntentStore((state) => state.activeIntent);
+  const activeLaunchIntent = useShellLaunchIntent();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const { data: workspaceCollections } = useWorkspaces();
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
   const repoRoots = workspaceCollections?.repoRoots ?? [];
-  const activeLaunchIntentIdForShell =
-    selectedWorkspaceId || pendingWorkspaceEntry
-      ? activeLaunchIntent?.id ?? null
-      : null;
+  // An intent only mounts the shell for its own workspace: a selected
+  // workspace or pending entry always mounts the shell on their own, and an
+  // intent additionally mounts it only when it is this shell's own — which
+  // `useShellLaunchIntent` already decided by scope. This stops one
+  // workspace's launch intent from hijacking an unrelated shell (PRO-230).
+  const activeLaunchIntentIdForShell = activeLaunchIntent?.id ?? null;
   const hasLaunchIntentOnlyShell = false;
   const hasWorkspaceShell = shouldMountWorkspaceShell({
     selectedWorkspaceId,

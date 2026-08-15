@@ -11,6 +11,10 @@ import {
 import type {
   WorkspaceEntrySelectionDeps,
 } from "#product/hooks/workspaces/workflows/workspace-entry-finalization";
+import {
+  isAttemptAttended,
+  isAttemptLive,
+} from "#product/hooks/workspaces/workflows/pending-workspace-attempt-access";
 import { useWorkspaceSelection } from "#product/hooks/workspaces/workflows/selection/use-workspace-selection";
 
 // Stable dependency bundle consumed by the workspace-entry finalization workflows.
@@ -20,6 +24,9 @@ export function useWorkspaceEntrySelectionDeps(): WorkspaceEntrySelectionDeps {
   const setPendingWorkspaceEntry = useSessionSelectionStore(
     (state) => state.setPendingWorkspaceEntry,
   );
+  const clearPendingWorkspaceEntry = useSessionSelectionStore(
+    (state) => state.clearPendingWorkspaceEntry,
+  );
   const setWorkspaceArrivalEvent = useSessionSelectionStore(
     (state) => state.setWorkspaceArrivalEvent,
   );
@@ -28,13 +35,17 @@ export function useWorkspaceEntrySelectionDeps(): WorkspaceEntrySelectionDeps {
     expandRepoGroup: ensureRepoGroupExpanded,
     getSelectionState: useSessionSelectionStore.getState,
     getSessionRecord,
+    isAttemptAttended,
+    isAttemptLive,
     materializePendingWorkspaceSessions,
     selectWorkspace,
     setPendingWorkspaceEntry,
+    clearPendingWorkspaceEntry,
     setWorkspaceArrivalEvent,
     trackWorkspaceInteraction: (workspaceId: string) =>
       trackWorkspaceInteraction(workspaceId, new Date().toISOString()),
   }), [
+    clearPendingWorkspaceEntry,
     materializePendingWorkspaceSessions,
     selectWorkspace,
     setPendingWorkspaceEntry,

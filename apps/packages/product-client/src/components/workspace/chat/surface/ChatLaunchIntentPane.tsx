@@ -17,8 +17,8 @@ import { WorkspaceCreationReceipt } from "#product/components/workspace/chat/tra
 import { useChatLaunchIntentActions } from "#product/hooks/chat/workflows/use-chat-launch-intent-actions";
 import { resolveChatLaunchIntentView } from "#product/lib/domain/chat/launch/launch-intent";
 import { isReceiptPendingEntry } from "#product/lib/domain/workspaces/creation/creation-receipt";
-import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
-import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useShellLaunchIntent } from "#product/hooks/chat/derived/use-shell-launch-intent";
+import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { formatTranscriptActionTime } from "#product/domain/chats/transcript/transcript-action-time";
 
 interface ChatLaunchIntentPaneProps {
@@ -30,7 +30,7 @@ export function ChatLaunchIntentPane({
   bottomInsetPx,
   nonDisplacingBottomInsetPx,
 }: ChatLaunchIntentPaneProps) {
-  const activeIntent = useChatLaunchIntentStore((state) => state.activeIntent);
+  const activeIntent = useShellLaunchIntent();
   const {
     dismiss,
     isRetrying,
@@ -42,9 +42,7 @@ export function ChatLaunchIntentPane({
   // (no session exists yet to think), so the creation receipt replaces it in
   // the frontier slot. The pending prompt row inherits the receipt at the
   // same position when the queued prompt lands and the transcript takes over.
-  const hostsWorkspaceReceipt = useSessionSelectionStore(
-    (state) => isReceiptPendingEntry(state.pendingWorkspaceEntry),
-  );
+  const hostsWorkspaceReceipt = isReceiptPendingEntry(useAttendedPendingWorkspaceEntry());
 
   if (!activeIntent) {
     return null;

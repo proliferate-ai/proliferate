@@ -1,4 +1,5 @@
 import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
+import type { PromptAttachmentSnapshot } from "#product/domain/chats/composer/prompt-attachment-snapshot";
 import type {
   HomeLaunchTarget,
   HomeNextModelSelection,
@@ -15,6 +16,7 @@ export type ChatLaunchRetryMode =
 
 export interface ChatLaunchRetryInput {
   text: string;
+  attachmentSnapshots?: PromptAttachmentSnapshot[];
   modelSelection: HomeNextModelSelection;
   modeId: string | null;
   launchControlValues?: Record<string, string>;
@@ -53,10 +55,23 @@ export interface ChatLaunchIntent {
   retryInput: ChatLaunchRetryInput;
   materializedWorkspaceId: string | null;
   materializedSessionId: string | null;
+  /** The pending-workspace attempt this launch created, once known. */
+  attemptId: string | null;
+  /** The existing workspace this launch targets, when launching into one. */
+  targetWorkspaceId: string | null;
   createdAt: number;
   sendAttemptedAt: number | null;
   failure: ChatLaunchIntentFailure | null;
 }
+
+// Shell-ownership resolution lives in its own module so the launch-intent
+// registry — reachable from the signed-out shell's eager graph — does not drag
+// this file's view-model work into the login first-load chunk (PRO-230).
+export {
+  launchIntentOwnsShell,
+  resolveLaunchIntentScope,
+  type LaunchIntentScope,
+} from "#product/lib/domain/chat/launch/launch-intent-scope";
 
 export interface ChatLaunchIntentViewModel {
   title: string;
@@ -85,6 +100,26 @@ export function resolveChatLaunchRetryMode(
   return "safe";
 }
 
+function pendingWorkspaceMatchesLaunchTarget(
+  target: ChatLaunchRetryInput["target"],
+  pending: PendingWorkspaceEntry,
+): boolean {
+  if (target.kind === "cowork") {
+    return pending.source === "cowork-created";
+  }
+  if (target.kind === "worktree") {
+    return pending.source === "worktree-created";
+  }
+  if (target.kind === "cloud") {
+    return pending.source === "cloud-created";
+  }
+  if (target.kind === "local") {
+    return !target.existingWorkspaceId && pending.source === "local-created";
+  }
+
+  return false;
+}
+
 export function resolveLaunchIntentPendingWorkspaceId(
   intent: ChatLaunchIntent,
   pending: PendingWorkspaceEntry | null,
@@ -93,23 +128,28 @@ export function resolveLaunchIntentPendingWorkspaceId(
     return null;
   }
 
-  const target = intent.retryInput.target;
-  if (target.kind === "cowork") {
-    return pending.source === "cowork-created" ? pending.workspaceId : null;
-  }
-  if (target.kind === "worktree") {
-    return pending.source === "worktree-created" ? pending.workspaceId : null;
-  }
-  if (target.kind === "cloud") {
-    return pending.source === "cloud-created" ? pending.workspaceId : null;
-  }
-  if (target.kind === "local") {
-    return !target.existingWorkspaceId && pending.source === "local-created"
-      ? pending.workspaceId
-      : null;
+  return pendingWorkspaceMatchesLaunchTarget(intent.retryInput.target, pending)
+    ? pending.workspaceId
+    : null;
+}
+
+/**
+ * The attempt id becomes known as soon as the pending workspace entry exists,
+ * well before its `workspaceId` (or a failure) resolves. Callers use this to
+ * scope an intent to its own attempt even when the launch never produces a
+ * workspace at all.
+ */
+export function resolveLaunchIntentPendingAttemptId(
+  intent: ChatLaunchIntent,
+  pending: PendingWorkspaceEntry | null,
+): string | null {
+  if (!pending) {
+    return null;
   }
 
-  return null;
+  return pendingWorkspaceMatchesLaunchTarget(intent.retryInput.target, pending)
+    ? pending.attemptId
+    : null;
 }
 
 export function resolveChatLaunchIntentView(

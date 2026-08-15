@@ -4,7 +4,7 @@ import { ComposerEffortStepper } from "./ComposerEffortStepper";
 import { ComposerFastModeToggle } from "./ComposerFastModeToggle";
 import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
-import { ComposerPressureRing } from "./ComposerPressureRing";
+import { ComposerContextRing } from "./ComposerContextRing";
 import { ComposerIntegrationsControl } from "./ComposerIntegrationsControl";
 import { ComposerModeBadge } from "./ComposerModeBadge";
 import {
@@ -157,11 +157,10 @@ export interface ComposerTrailingControlsProps {
 }
 
 /**
- * The trailing control cluster (runtime-pressure ring, attach) — shared
- * between chat and home like ComposerLeadingControls. Home passes
- * supportsAttachments/canAttachFiles=false and gets the exact disabled
- * plus-button + "available after a session starts" detail that chat's
- * pre-session state shows.
+ * The trailing control cluster (context-usage ring, attach) — shared
+ * between chat and home like ComposerLeadingControls. Home feeds it a
+ * home-scoped attachment controller (optimistic pre-session capabilities);
+ * chat feeds it the live session's controller.
  */
 export function ComposerTrailingControls({
   runtimeControlsDisabled,
@@ -186,8 +185,8 @@ export function ComposerTrailingControls({
 
   return (
     <>
-      {/* 7. Runtime-pressure ring — self-gating on the pressure facade. */}
-      <ComposerPressureRing />
+      {/* 7. Context-usage ring — self-gating on the active session's usage state. */}
+      <ComposerContextRing />
 
       {/* 8. Plus button — direct file attach */}
       {!isEditingQueuedPrompt && (

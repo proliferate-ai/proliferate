@@ -99,6 +99,8 @@ export function useChatTranscriptSelection({
       clampSelectionToRoot,
       getSelectedResponse: getSelectedAssistantResponse,
       isSelectedResponseVisible: isSelectedResponseInViewport,
+      isSelectedResponseMenuHovered: () =>
+        !!document.querySelector("[data-selected-response-actions]:hover"),
       setSelectedResponse: commitSelectedResponse,
       hasSelectedResponse: () => selectedResponseRef.current !== null,
       requestSelectedResponseMenuFocus: () => {

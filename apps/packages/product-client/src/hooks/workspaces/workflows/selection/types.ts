@@ -7,11 +7,17 @@ import type { Workspace } from "@anyharness/sdk";
 import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
+import type { ClearSelectionOptions } from "#product/stores/sessions/session-selection-store";
 
 export interface WorkspaceSelectionOptions {
   force?: boolean;
   forceCold?: boolean;
   forceSessionDirectoryRefresh?: boolean;
+  /**
+   * Marks the pending-shell handoff, where the projected session the shell is
+   * already painting must survive the selection instead of being replaced by
+   * the workspace's own last-active session.
+   */
   preservePending?: boolean;
   initialActiveSessionId?: string | null;
   latencyFlowId?: string | null;
@@ -61,10 +67,10 @@ export interface WorkspaceSelectionDeps {
   setSelectedLogicalWorkspaceId: (logicalWorkspaceId: string | null) => void;
   setSelectedWorkspace: (
     id: string,
-    opts?: { initialActiveSessionId?: string | null; clearPending?: boolean },
+    opts?: { initialActiveSessionId?: string | null },
   ) => void;
   removeWorkspaceSlots: (workspaceId: string) => void;
-  clearSelection: () => void;
+  clearSelection: (options?: ClearSelectionOptions) => void;
   bootstrapWorkspace: (input: {
     workspaceId: string;
     logicalWorkspaceId: string;
