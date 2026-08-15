@@ -70,7 +70,10 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
 }
 
 describe("upsertCloudWorkspaceForRuntime", () => {
-  it("creates a cloud-active workspace cache when none exists yet", () => {
+  // Cloud culling (PRO-10, FR-2): collections built at the data-source seam
+  // remove cloud rows, so upserting a cloud workspace never surfaces it.
+  // (Pre-cull this asserted the cache held ["cloud-1"].)
+  it("keeps cloud workspaces culled when a cache is created", () => {
     const queryClient = new QueryClient();
     const runtimeUrl = "http://127.0.0.1:8502";
     const workspace = makeCloudWorkspace();
@@ -78,13 +81,11 @@ describe("upsertCloudWorkspaceForRuntime", () => {
     upsertCloudWorkspaceForRuntime(queryClient, runtimeUrl, workspace);
 
     expect(
-      getWorkspaceCollectionsFromCache(queryClient, runtimeUrl)?.cloudWorkspaces.map(
-        (entry) => entry.id,
-      ),
-    ).toEqual(["cloud-1"]);
+      getWorkspaceCollectionsFromCache(queryClient, runtimeUrl)?.cloudWorkspaces,
+    ).toEqual([]);
   });
 
-  it("preserves existing local workspace projections while inserting cloud workspaces", () => {
+  it("preserves existing local workspace projections while cloud workspaces stay culled", () => {
     const queryClient = new QueryClient();
     const runtimeUrl = "http://127.0.0.1:8502";
     queryClient.setQueryData(
@@ -96,6 +97,7 @@ describe("upsertCloudWorkspaceForRuntime", () => {
 
     const collections = getWorkspaceCollectionsFromCache(queryClient, runtimeUrl);
     expect(collections?.localWorkspaces.map((entry) => entry.id)).toEqual(["local-1"]);
-    expect(collections?.cloudWorkspaces.map((entry) => entry.id)).toEqual(["cloud-1"]);
+    // Cloud culling (PRO-10, FR-2): cloud row never surfaces. (Pre-cull: ["cloud-1"].)
+    expect(collections?.cloudWorkspaces).toEqual([]);
   });
 });

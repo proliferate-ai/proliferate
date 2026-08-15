@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isServerMetaShape, normalizeServerUrl } from "#product/lib/domain/auth/connect-server";
+import {
+  isServerMetaShape,
+  normalizeServerUrl,
+  readMinDesktopVersionEnforced,
+} from "#product/lib/domain/auth/connect-server";
 
 describe("normalizeServerUrl", () => {
   it("rejects a blank address", () => {
@@ -95,5 +99,29 @@ describe("isServerMetaShape", () => {
 
   it("rejects an unrelated JSON body (e.g. a non-Proliferate server on that host)", () => {
     expect(isServerMetaShape({ status: "ok" })).toBe(false);
+  });
+
+  // `minDesktopVersionEnforced` is a rung-4 addition; an older server that
+  // never shipped it must still parse as a valid meta shape (tolerant read).
+  it("accepts a meta response missing minDesktopVersionEnforced", () => {
+    expect(isServerMetaShape(validMeta)).toBe(true);
+  });
+});
+
+describe("readMinDesktopVersionEnforced", () => {
+  it("reads true only on a literal boolean true", () => {
+    expect(readMinDesktopVersionEnforced({ minDesktopVersionEnforced: true })).toBe(true);
+  });
+
+  it("fails open (false) when the field is absent", () => {
+    expect(readMinDesktopVersionEnforced({})).toBe(false);
+  });
+
+  it("fails open (false) on garbage values", () => {
+    expect(readMinDesktopVersionEnforced({ minDesktopVersionEnforced: "true" })).toBe(false);
+    expect(readMinDesktopVersionEnforced({ minDesktopVersionEnforced: 1 })).toBe(false);
+    expect(readMinDesktopVersionEnforced(null)).toBe(false);
+    expect(readMinDesktopVersionEnforced(undefined)).toBe(false);
+    expect(readMinDesktopVersionEnforced("not an object")).toBe(false);
   });
 });

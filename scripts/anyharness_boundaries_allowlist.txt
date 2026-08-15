@@ -58,13 +58,14 @@ DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/agents/model_snap
 DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/test_support.rs 3 test-fixture support file (not excluded by should_skip) builds live probe snapshots; target = agents runtime valve or move under tests/ (grid plan PR 6c)
 DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/plans/decision_op.rs 2 plan decision op imports actor command types (Resolution, ResolveInteractionCommandError) via the live::sessions root re-export, not ::model; target = model re-export or plans runtime valve (grid plan PR 6e)
 DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/sessions/execution_summary.rs 1 summary reads LiveSessionExecutionSnapshot from live::sessions::handle, not ::model; target = re-export the snapshot as a model shape (grid plan PR 6d)
+DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/workflows/session_extension.rs 1 the turn-finished extension hands its notification straight to live::workflows::WorkflowManager instead of a runtime valve; deliberate in the gen-2 ADR (the manager IS the engine's front door) but the import shape is valve-less; target = a workflows runtime valve or capability trait (post-merge cleanup, journaled)
 DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs 2 access gate holds live terminals directly (1 use-line + 1 re-import inside the inline cfg(test) mod the engine cannot see); target = workspaces runtime valve (grid plan PR 6b)
 DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/workspaces/archive/quiesce.rs 1 archive quiesce holds live terminals directly, exactly as access_gate.rs and deletion/purge.rs do — the three plane stops are the same live surface; target = workspaces runtime valve (grid plan PR 6b)
 DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/purge.rs 1 purge holds live terminals directly (row-dies-last quiesce is deliberately duplicated from archive/quiesce.rs rather than shared, R5); target = workspaces runtime valve (grid plan PR 6b)
 DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/workspaces/setup_runtime.rs 1 workspace setup holds live terminals directly; target = workspaces runtime valve (grid plan PR 6b)
 
 # Rule: live/** never fetches from domain stores/services.
-# 7 files, 20 occurrences.
+# 9 files, 28 occurrences.
 #
 # live/sessions/probe.rs dropped out entirely (grid plan PR 7): its
 # resolve_agent_unrouted call moved to the callers (AcpProbeRunner::run in
@@ -77,6 +78,8 @@ DOMAIN_LIVE_VALVE anyharness/crates/anyharness-lib/src/domains/workspaces/setup_
 # the same install-artifact question, and no ActorCapabilities-style seam
 # reaches live::sessions::probe today.
 LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/sessions/background_work/mod.rs 2 both inside the inline cfg(test) mod the engine cannot see (1 import + 1 SessionStore::new in a fixture); target = none, engine-invisible cfg boundary
+LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/workflows/actor.rs 5 the WorkflowActor's persist-before-act loop commits every transition through WorkflowStore (plus Session/Workspace stores for side effects) before acting — the gen-2 ADR makes the actor the write authority, colliding with live-never-fetches; target = capability traits wired in app/ (post-merge cleanup, journaled)
+LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/workflows/mod.rs 3 the WorkflowManager constructs actors and heals the boot fence from the same three stores the actor uses; same gen-2 ADR ruling and same capability-trait target as actor.rs
 LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/command_runs/pty.rs 5 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
 LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/command_runs/setup_process.rs 3 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
 LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/command_runs/workspace_stop.rs 2 R3: split from manager.rs to stay under the line cap (spec Scope section F); carries forward manager.rs's own already-allowlisted occurrence of this same live/terminals-uses-the-older-lock-based-doctrine exception for the TerminalCommandService/new_command_run_record calls the three workspace-wide stop primitives need; ratchet only, do not fix
@@ -85,16 +88,26 @@ LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/han
 LIVE_DOMAIN_STORE_IMPORT anyharness/crates/anyharness-lib/src/live/terminals/manager.rs 4 live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix
 
 # Rule: api/** calls domain facades, never stores.
-# 2 files, 10 occurrences.
+# 4 files, 13 occurrences.
 API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/health.rs 1 in-memory health snapshot named like a store (Arc<RwLock<AgentSeedHealth>>, not SQL); matches the state.*_store pattern; benign - seeded rather than special-cased to keep the pattern simple
+API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workflow_run_commands.rs 2 the command routes answer their 404 discriminator and post-command projection from WorkflowStore reads; the gen-2 ADR rules reads-from-rows-never-actors (no domain facade exists by design); target = a thin reads facade if one ever grows (post-merge, journaled)
+API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs 7 courier PUT upsert and the list/detail projections read WorkflowStore directly per the gen-2 ADR reads-from-rows ruling; same no-facade-by-design note as workflow_run_commands.rs
 API_STORE_ESCAPE anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs 3 cfg(test)-mod store wiring the engine cannot see past; target = none, engine-invisible cfg boundary ; -6: R5 deletes the preflight/retry test module's store constructions along with the handlers
 
-# Rule: policy.rs and *_policy.rs files are pure.
+# Rule: api/** must not import live runtime internals directly
+# (API_LIVE_RUNTIME_IMPORT).
 # 1 file, 1 occurrence.
-POLICY_PURITY anyharness/crates/anyharness-lib/src/domains/workflows/control/policy.rs 1 store-holding policy file: imports WorkflowRunStore at :8 and keeps it as a field, so the decision reads the DB instead of taking facts; target = pass the controlling run id in, or rename to a gate (cleanup PR TBD)
+API_LIVE_RUNTIME_IMPORT anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs 1 the command handlers match live::workflows::WorkflowCommandError to pick status codes (the oneshot reply IS the response per the gen-2 ADR); target = re-export the error through the domain or map it at the manager seam (post-merge, journaled)
+
+# Rule: policy.rs and *_policy.rs files are pure.
+# Zero occurrences - workflows gen-2 (PR1) deleted the last offender (gen-1's
+# store-holding control/policy.rs) with the gen-1 domain. The gen-2
+# destruction-controller policy holds a raw Db handle, which this rule's
+# store-segment import pattern deliberately does not match; its inline SQL is
+# the DOMAIN_SQL_OUTSIDE_STORE row below.
 
 # Rule: SQL in domains/** lives in the store.
-# 2 files, 2 occurrences.
+# 2 files, 3 occurrences.
 #
 # activity/feeds.rs, plans/decision_op.rs, plans/service.rs, and
 # sessions/links/completions.rs dropped out entirely (grid plan PR 5b):
@@ -106,9 +119,10 @@ POLICY_PURITY anyharness/crates/anyharness-lib/src/domains/workflows/control/pol
 # transaction), and sessions/links/completions.rs's LinkCompletionStore
 # physically relocated to domains/sessions/store/link_completions.rs (a
 # `links/completions.rs` re-export shim keeps every external import path
-# unchanged). Remaining two rows are both engine-invisible cfg(test)
-# boundaries that later PRs still own.
-DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workflows/workspace_materialization/test_support.rs 1 format!-built COUNT query in a test-support file (not excluded by should_skip); target = none, test fixture
+# unchanged). Of the remaining two rows, access_gate.rs is an
+# engine-invisible cfg(test) boundary; the workflows gen-2 policy row is a
+# real engine-visible read that belongs in the store.
+DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workflows/policy.rs 2 the gen-2 destruction-controller policy's controlling-run lookup runs its SELECT inline over a raw Db handle instead of through WorkflowStore; target = move the query into store.rs and pass facts in (journaled ADR wart, cleanup PR TBD)
 DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs 1 inside the inline cfg(test) mod the engine cannot see (DROP TABLE workspace_access_modes); the repo_roots INSERT that used to sit alongside it moved to the shared repo_roots test_support helper (grid plan PR 8c); target = none, engine-invisible cfg boundary
 
 # Rule: the runtime valve holds live/ powers but never re-exports them
@@ -199,6 +213,6 @@ DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/ser
 DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/store/events.rs 4 4 inline wire paths (SessionEvent/SessionEventEnvelope at :53/:55/:73 and a turbofish deserialize at :527) below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
 DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/store/persisted_payloads.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
 DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/sessions/subagents/transcript.rs 1 1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)
-DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/workflows/execution.rs 1 1 wire type import below the mapper boundary; target = workflows domain twins (grid plan PR 10.x)
+DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/workflows/session_extension.rs 1 1 wire type import (InteractionKind/InteractionOutcome, the types the extension contexts in sessions/extensions.rs already carry) mapped to tracing discriminants below the mapper boundary; resolves with the sessions domain twins (grid plan PR 10.x)
 DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/workspaces/access_model.rs 1 1 wire type import below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)
 DOMAIN_CONTRACT_IMPORT anyharness/crates/anyharness-lib/src/domains/workspaces/creator_context.rs 1 1 wire type import below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)

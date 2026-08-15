@@ -1,0 +1,33 @@
+{
+  "note": "Reference-scan edge cases that must VALIDATE on every plane (Ruling C.1): a sentence may end directly after a reference (trailing prose punctuation peels), references may sit back-to-back (capture stops at the next @), and quoted or comma-followed references resolve.",
+  "definition": {
+    "schemaVersion": 2,
+    "nodes": [
+      {
+        "id": "n_a",
+        "type": "agent",
+        "title": "Step",
+        "prompt": "Research @input:topic. Write into @doc:research-findings@doc:proposal, citing \"@input:topic\"."
+      }
+    ],
+    "inputs": [
+      {
+        "name": "topic",
+        "description": "",
+        "required": true
+      }
+    ],
+    "docTemplates": [
+      {
+        "slug": "research-findings",
+        "producingNodeId": "n_a",
+        "body": "# Findings\n"
+      },
+      {
+        "slug": "proposal",
+        "producingNodeId": "n_a",
+        "body": "# Proposal\n"
+      }
+    ]
+  }
+}

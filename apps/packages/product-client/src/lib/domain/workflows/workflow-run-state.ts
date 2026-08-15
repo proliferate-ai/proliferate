@@ -1,9 +1,11 @@
+import { AnyHarnessError } from "@anyharness/sdk";
 import type {
   ManagedWorkflowHistoryItem,
   ManagedWorkflowInvocationResponse,
 } from "@proliferate/cloud-sdk";
 import { safeWorkflowFailureCopy } from "#product/domain/workflows/run-presentation";
 
+/** Status plus stable code from either plane's error envelope. */
 export interface WorkflowCloudError {
   status: number;
   code: string | null;
@@ -50,6 +52,18 @@ export function inspectWorkflowCloudError(error: unknown): WorkflowCloudError | 
     return null;
   }
   return { status, code };
+}
+
+/**
+ * The runtime plane's counterpart. `AnyHarnessError` carries RFC 7807 fields
+ * under `.problem`, not at the top level, so `inspectWorkflowCloudError` never
+ * matches one and every runtime failure would otherwise read as uncoded.
+ */
+export function inspectWorkflowRuntimeError(error: unknown): WorkflowCloudError | null {
+  if (!(error instanceof AnyHarnessError)) {
+    return null;
+  }
+  return { status: error.problem.status, code: error.problem.code ?? null };
 }
 
 export function safeWorkflowActionError(error: unknown): string {

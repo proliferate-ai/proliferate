@@ -138,10 +138,6 @@ export function RepoGroup({
         accelerator: getShortcutNativeAccelerator(SHORTCUTS.newWorktree) ?? undefined,
         label: getShortcutDisplayLabel(SHORTCUTS.newWorktree),
       },
-      cloud: {
-        accelerator: getShortcutNativeAccelerator(SHORTCUTS.newCloud) ?? undefined,
-        label: getShortcutDisplayLabel(SHORTCUTS.newCloud),
-      },
     },
   });
   const menuModel = [

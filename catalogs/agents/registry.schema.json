@@ -38,7 +38,8 @@
         "displayName",
         "agentProcess",
         "launch",
-        "auth"
+        "auth",
+        "selfUpdateNeutralization"
       ],
       "additionalProperties": false,
       "properties": {
@@ -91,6 +92,9 @@
           "items": {
             "$ref": "#/$defs/providerConfig"
           }
+        },
+        "selfUpdateNeutralization": {
+          "$ref": "#/$defs/selfUpdateNeutralization"
         }
       }
     },
@@ -354,6 +358,55 @@
             "docsUrl": {
               "type": "string",
               "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "platforms"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "direct_archive"
+            },
+            "platforms": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "url",
+                  "sha256",
+                  "expectedBinary"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "expectedBinary": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "size": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            },
+            "args": {
+              "$ref": "#/$defs/stringArray"
             }
           }
         }
@@ -689,6 +742,47 @@
       "additionalProperties": {
         "type": "string",
         "minLength": 1
+      }
+    },
+    "selfUpdateNeutralization": {
+      "type": "object",
+      "required": [
+        "mechanism",
+        "detail"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "mechanism": {
+          "enum": [
+            "env",
+            "none_found",
+            "not_applicable"
+          ]
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1
+        },
+        "env": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "value"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "value": {
+                "type": "string"
+              }
+            }
+          }
+        }
       }
     }
   }

@@ -145,18 +145,18 @@ describe("shortcut matching", () => {
     )).toBeNull();
   });
 
-  it("uses the non-mac cloud shortcut binding and label", () => {
-    expect(getShortcutDisplayLabel(SHORTCUTS.newCloud)).toBe("Ctrl+Alt+N");
+  it("uses the non-mac new-local shortcut binding and label", () => {
+    expect(getShortcutDisplayLabel(SHORTCUTS.newLocal)).toBe("Ctrl+Shift+N");
 
     expect(matchShortcutDef(
-      SHORTCUTS.newCloud,
+      SHORTCUTS.newLocal,
       {
         key: "n",
         code: "KeyN",
         metaKey: false,
         ctrlKey: true,
-        shiftKey: false,
-        altKey: true,
+        shiftKey: true,
+        altKey: false,
       } as KeyboardEvent,
     )).toEqual({});
 

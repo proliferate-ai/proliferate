@@ -288,7 +288,10 @@ impl SessionRuntime {
         .map_err(map_ordinary_start_error)
     }
 
-    async fn compensate_new_agent_session(&self, session_id: &str) -> anyhow::Result<()> {
+    /// Close and delete one freshly minted session that failed to start or to
+    /// take its first prompt. Shared with the workflow engine's node launch,
+    /// which compensates a half-born session through the same steps.
+    pub(crate) async fn compensate_new_agent_session(&self, session_id: &str) -> anyhow::Result<()> {
         if let Some(handle) = self.acp_manager.get_handle(session_id).await {
             let _ = handle.close().await;
         }

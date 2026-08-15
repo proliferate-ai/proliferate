@@ -67,12 +67,12 @@ export const AUTH_ACCOUNT_LABELS = {
   devBypassTitle: "Local development mode",
   devBypassLabel: "Signed in as",
   devBypassDescription:
-    "Auth is bypassed. Set VITE_DEV_DISABLE_AUTH=false to use real sign-in and cloud workspaces.",
+    "Auth is bypassed. Set VITE_DEV_DISABLE_AUTH=false to use real sign-in and credential sync.",
   signedInLabel: "Signed in as",
   anonymousTitle: "Not signed in",
   anonymousLabel: "Local mode",
   anonymousDescription:
-    "Local workspaces are available without an account. Sign in to use cloud workspaces and credential sync.",
+    "Local workspaces are available without an account. Sign in to sync credentials across your devices.",
   localPill: "Local",
   signIn: "Sign in",
   checkingSignIn: "Checking GitHub…",

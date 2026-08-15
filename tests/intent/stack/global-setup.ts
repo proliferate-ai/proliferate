@@ -19,6 +19,16 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
       WORKFLOW_MANAGED_RUNS_ENABLED: "true",
       RUN_BACKGROUND_WORKERS: "false",
     },
+    extraDesktopEnv: {
+      // T2-WFDEF-1 / T2-WF-1 drive the gen-2 workflows surface, which ships
+      // behind the workflows_v2 gate (product-client
+      // lib/domain/capabilities/workflows-v2.ts). "1" forces it on whatever
+      // WORKFLOWS_V2_DEFAULT currently is, so those specs neither depend on
+      // the launch default nor break when it flips. The suite shares one Vite
+      // process, so this is necessarily run-wide; no other spec asserts the
+      // absence of the workflows surface.
+      VITE_WORKFLOWS_V2: "1",
+    },
   });
   process.env.TIER2_INTENT_API_BASE_URL = stack.apiBaseUrl;
   process.env.TIER2_INTENT_WEB_BASE_URL = stack.webBaseUrl;

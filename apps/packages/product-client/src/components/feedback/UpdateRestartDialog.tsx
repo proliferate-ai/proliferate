@@ -3,6 +3,11 @@ import { ModalShell } from "#product/primitives/patterns/ModalShell";
 import { RefreshCw } from "#product/primitives/icons/platform";
 import { useUpdater } from "#product/hooks/access/tauri/use-updater";
 import { useRunningAgentCount } from "#product/hooks/app/lifecycle/use-running-agent-count";
+import { useRunningAgentSummaries } from "#product/hooks/app/lifecycle/use-running-agent-summaries";
+
+// Cap the listed titles so a large batch of running sessions doesn't blow out
+// the dialog; the remainder folds into an "and N more" tail.
+const MAX_LISTED_TITLES = 5;
 
 export function UpdateRestartDialog() {
   const {
@@ -14,6 +19,7 @@ export function UpdateRestartDialog() {
     restartNow,
   } = useUpdater();
   const runningCount = useRunningAgentCount();
+  const runningSummaries = useRunningAgentSummaries();
 
   const ready = availableVersion
     ? `Proliferate ${availableVersion} is ready.`
@@ -28,6 +34,15 @@ export function UpdateRestartDialog() {
   const deferLabel = runningCount === 1
     ? "Restart when it finishes"
     : "Restart when they finish";
+
+  // Untitled entries (no transcript title synced yet) never get listed
+  // individually — the count-only copy already covers them, and a bare
+  // "Untitled" line would be noise, not information.
+  const listedTitles = runningSummaries
+    .map((summary) => summary.title?.trim())
+    .filter((title): title is string => Boolean(title))
+    .slice(0, MAX_LISTED_TITLES);
+  const remainingCount = Math.max(0, runningCount - listedTitles.length);
 
   return (
     <ModalShell
@@ -79,14 +94,28 @@ export function UpdateRestartDialog() {
         </div>
       </div>
       {hasRunning ? (
-        <div className="mt-3 flex items-center gap-2.5 rounded-lg border border-border/70 bg-surface-elevated-secondary px-3 py-2">
-          <span className="relative flex size-1.5 shrink-0" aria-hidden="true">
+        <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-border/70 bg-surface-elevated-secondary px-3 py-2">
+          <span className="relative mt-1 flex size-1.5 shrink-0" aria-hidden="true">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-special opacity-50 motion-reduce:hidden" />
             <span className="relative inline-flex icon-status rounded-full bg-special [font-size:var(--text-ui-sm)]" />
           </span>
-          <span className="text-ui-sm text-muted-foreground">
-            <span className="text-foreground">{runningLabel}</span> — {stopClause}
-          </span>
+          <div className="min-w-0 text-ui-sm text-muted-foreground">
+            <p>
+              <span className="text-foreground">{runningLabel}</span> — {stopClause}
+            </p>
+            {listedTitles.length > 0 ? (
+              <ul className="mt-1 space-y-0.5">
+                {listedTitles.map((title, index) => (
+                  <li key={`${title}-${index}`} className="truncate text-foreground">
+                    {title}
+                  </li>
+                ))}
+                {remainingCount > 0 ? (
+                  <li className="text-muted-foreground">and {remainingCount} more</li>
+                ) : null}
+              </ul>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </ModalShell>

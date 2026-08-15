@@ -15,10 +15,10 @@ use std::path::PathBuf;
 
 /// Harnesses excluded from every UNATTENDED probe.
 ///
-/// Cursor is keychain-only: `cursor-agent` ignores `CURSOR_API_KEY` and reads the
-/// macOS Keychain, so an unattended spawn can surface an OS keychain prompt with
-/// no user-visible cause. A manual refresh is still allowed — the user asked, so
-/// a prompt has an obvious explanation.
+/// Cursor's credential lives in the macOS Keychain, so an unattended `cursor-agent`
+/// spawn can surface an OS keychain prompt with no user-visible cause. A manual
+/// refresh is still allowed — the user asked, so a prompt has an obvious
+/// explanation.
 ///
 /// Enforced in ONE place, `poke_harness`, rather than per call site: the list used
 /// to be consulted only by the whole-machine enumeration, so the pokes that name a
