@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { PromptAttachmentSnapshot } from "#product/domain/chats/composer/prompt-attachment-snapshot";
 
 export type DeferredHomeLaunchStatus = "pending" | "consuming";
 
@@ -13,6 +14,8 @@ export interface DeferredHomeLaunch {
   modeId: string | null;
   launchControlValues?: Record<string, string>;
   promptText: string;
+  /** In-memory only (holds Files); this store must never gain persistence. */
+  attachmentSnapshots?: PromptAttachmentSnapshot[];
   promptId: string;
   launchIntentId: string;
   createdAt: number;

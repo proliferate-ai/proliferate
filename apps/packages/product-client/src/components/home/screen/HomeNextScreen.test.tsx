@@ -152,6 +152,22 @@ vi.mock("#product/components/workspace/chat/composer/ChatComposerSurface", () =>
   ),
 }));
 
+vi.mock("#product/components/workspace/chat/content/PromptContentRenderer", () => ({
+  DraftAttachmentPreviewList: ({ attachments, onRemove }: any) => (
+    <div data-testid="draft-attachment-list">
+      {attachments.map((attachment: any) => (
+        <button
+          key={attachment.id}
+          type="button"
+          onClick={() => onRemove(attachment.id)}
+        >
+          {`attachment:${attachment.name}`}
+        </button>
+      ))}
+    </div>
+  ),
+}));
+
 vi.mock("#product/components/workspace/chat/input/ComposerRichTextEditor", () => ({
   ComposerRichTextEditor: ({ value, snapshot, onChange, onKeyDown, disabled }: any) => (
     <textarea aria-label="Prompt" data-editor-snapshot={snapshot?.payload} value={value} onChange={(event) => onChange(event.target.value, event.timeStamp, { version: 1, payload: "home-editor-snapshot" })} onKeyDown={onKeyDown} disabled={disabled} />
@@ -420,11 +436,96 @@ describe("HomeNextScreen composer control-row parity", () => {
       isEditingQueuedPrompt: false,
       chatDisabled: false,
       isSubmitting: false,
-      // Home has no attachments infra pre-session; the shared cluster shows
-      // chat's exact pre-session disabled state for these.
-      supportsAttachments: false,
-      canAttachFiles: false,
+      // Pre-session attachments run on the home-scoped controller with
+      // optimistic capabilities, so the shared cluster's + button is live.
+      supportsAttachments: true,
+      canAttachFiles: true,
     });
+    expect(typeof screenMocks.trailingControlsProps.onAttachFile).toBe("function");
+  });
+});
+
+describe("HomeNextScreen composer attachments", () => {
+  beforeEach(() => {
+    installLocalStorageMock();
+    resetHomeNext();
+    window.localStorage.clear();
+    screenMocks.launch.mockClear();
+    screenMocks.launch.mockResolvedValue(true);
+    URL.createObjectURL = vi.fn(() => "blob:home-attachment");
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  function homeFileInput(): HTMLInputElement {
+    const input = document.querySelector('input[type="file"]');
+    expect(input).not.toBeNull();
+    return input as HTMLInputElement;
+  }
+
+  it("attaches picked files, sends them with the launch, and clears on success", async () => {
+    render(<HomeNextScreen />);
+
+    fireEvent.change(homeFileInput(), {
+      target: { files: [new File(["notes"], "notes.txt", { type: "text/plain" })] },
+    });
+    expect(screen.getByText("attachment:notes.txt")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "use my notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+    expect(screenMocks.launch).toHaveBeenCalledWith(expect.objectContaining({
+      text: "use my notes",
+      attachmentSnapshots: [
+        expect.objectContaining({ name: "notes.txt", kind: "text_resource" }),
+      ],
+    }));
+    await waitFor(() => {
+      expect(screen.queryByText("attachment:notes.txt")).toBeNull();
+    });
+  });
+
+  it("keeps attachments alongside the restored draft when launch fails", async () => {
+    screenMocks.launch.mockResolvedValue(false);
+    render(<HomeNextScreen />);
+
+    fireEvent.change(homeFileInput(), {
+      target: { files: [new File(["png"], "shot.png", { type: "image/png" })] },
+    });
+    const prompt = screen.getByLabelText("Prompt") as HTMLTextAreaElement;
+    fireEvent.change(prompt, { target: { value: "look at this" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+    await waitFor(() => expect(prompt.value).toBe("look at this"));
+    expect(screen.getByText("attachment:shot.png")).toBeTruthy();
+  });
+
+  it("attaches files dropped anywhere on the home screen", () => {
+    const { container } = render(<HomeNextScreen />);
+    const root = container.firstElementChild as HTMLElement;
+
+    fireEvent.drop(root, {
+      dataTransfer: {
+        types: ["Files"],
+        files: [new File(["png"], "drop.png", { type: "image/png" })],
+      },
+    });
+
+    expect(screen.getByText("attachment:drop.png")).toBeTruthy();
+  });
+
+  it("removes an attachment from the draft list", () => {
+    render(<HomeNextScreen />);
+
+    fireEvent.change(homeFileInput(), {
+      target: { files: [new File(["notes"], "notes.txt", { type: "text/plain" })] },
+    });
+    fireEvent.click(screen.getByText("attachment:notes.txt"));
+
+    expect(screen.queryByText("attachment:notes.txt")).toBeNull();
   });
 });
 

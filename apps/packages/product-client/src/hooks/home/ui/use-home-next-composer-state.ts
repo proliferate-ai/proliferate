@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import type { PromptAttachmentController } from "#product/hooks/chat/ui/use-chat-prompt-attachments";
 import { useHomeNextLaunch } from "#product/hooks/home/workflows/use-home-next-launch";
 import { useHomeDraftHandoffStore } from "#product/stores/home/home-draft-handoff-store";
 import type {
@@ -18,6 +19,7 @@ interface UseHomeNextComposerStateArgs {
   modeId: string | null;
   launchControlValues: Record<string, string>;
   launchTarget: HomeLaunchTarget | null;
+  attachments: PromptAttachmentController;
 }
 
 export function useHomeNextComposerState({
@@ -28,6 +30,7 @@ export function useHomeNextComposerState({
   modeId,
   launchControlValues,
   launchTarget,
+  attachments,
 }: UseHomeNextComposerStateArgs) {
   const submitInFlightRef = useRef(false);
   const [draftState, setDraftState] = useState<{
@@ -74,6 +77,10 @@ export function useHomeNextComposerState({
 
     submitInFlightRef.current = true;
     const submittedDraft = draftState;
+    // Snapshotted now so files attached mid-launch stay out of this send.
+    // The chips stay visible until success: failure keeps them alongside the
+    // restored draft, mirroring the chat composer's clear-on-success contract.
+    const attachmentSnapshots = attachments.snapshotForSubmit();
     const restoreSubmittedDraft = () => {
       setDraftState((currentDraft) => (
         currentDraft.value.length === 0 ? submittedDraft : currentDraft
@@ -86,12 +93,15 @@ export function useHomeNextComposerState({
     try {
       const succeeded = await launch({
         text: submittedDraft.value,
+        attachmentSnapshots,
         modelSelection,
         modeId,
         launchControlValues,
         target: launchTarget,
       });
-      if (!succeeded) {
+      if (succeeded) {
+        attachments.clearSubmittedAttachments(attachmentSnapshots);
+      } else {
         restoreSubmittedDraft();
       }
     } catch {
@@ -102,6 +112,7 @@ export function useHomeNextComposerState({
       submitInFlightRef.current = false;
     }
   }, [
+    attachments,
     canSubmit,
     draftState,
     launch,

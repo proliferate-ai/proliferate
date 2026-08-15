@@ -158,10 +158,9 @@ export interface ComposerTrailingControlsProps {
 
 /**
  * The trailing control cluster (runtime-pressure ring, attach) — shared
- * between chat and home like ComposerLeadingControls. Home passes
- * supportsAttachments/canAttachFiles=false and gets the exact disabled
- * plus-button + "available after a session starts" detail that chat's
- * pre-session state shows.
+ * between chat and home like ComposerLeadingControls. Home feeds it a
+ * home-scoped attachment controller (optimistic pre-session capabilities);
+ * chat feeds it the live session's controller.
  */
 export function ComposerTrailingControls({
   runtimeControlsDisabled,
