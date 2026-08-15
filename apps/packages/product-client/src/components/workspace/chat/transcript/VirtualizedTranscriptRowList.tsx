@@ -15,6 +15,7 @@ import {
 import { TranscriptFloatingControls } from "./TranscriptRowListShared";
 import { useAboveChangeCompensation } from "#product/hooks/chat/ui/use-above-change-compensation";
 import { useTranscriptStickToBottom } from "#product/hooks/chat/ui/use-transcript-stick-to-bottom";
+import { useTranscriptCompletedTurnAnchor } from "#product/hooks/chat/ui/use-transcript-completed-turn-anchor";
 import { VirtualTranscriptViewport } from "./VirtualTranscriptViewport";
 import { PREPEND_BLANK_FALLBACK_GRACE_MS, useTranscriptVirtualizerBlankFallback } from "#product/hooks/chat/ui/use-transcript-virtualizer-blank-fallback";
 import { useTranscriptVirtualAnchorCapture } from "#product/hooks/chat/ui/use-transcript-virtual-anchor-capture";
@@ -288,48 +289,14 @@ export function VirtualizedTranscriptRowList({
     return () => { window.cancelAnimationFrame(frame); };
   }, [isLoadingOlderHistory, maybeLoadOlderHistory, rows.length]);
 
-  // While unpinned, a completing turn can split one row into completed-history +
-  // content — a new, unmeasured row inserted ABOVE the anchored row. The
-  // getOffsetForIndex + offsetWithinRowPx restore lands against the 360px
-  // estimate and bumps when measurement corrects. When rows were inserted above
-  // the anchor, hold the user's position with the measured scrollHeight delta;
-  // pure shifts and below-the-viewport appends keep the offset reposition / no-op.
-  useLayoutEffect(() => {
-    const anchor = pendingAnchorRef.current;
-    pendingAnchorRef.current = null;
-    if (!anchor || pinnedRef.current) {
-      return;
-    }
-    if (
-      anchor.rowCount === renderableRows.length
-      && renderableRows[anchor.rowIndex]?.key === anchor.key
-    ) {
-      return;
-    }
-
-    const nextIndex = renderableRows.findIndex((row) => row.key === anchor.key);
-    if (nextIndex < 0) {
-      return;
-    }
-
-    if (nextIndex > anchor.rowIndex) {
-      startAboveChangeCompensation(anchor);
-      return;
-    }
-
-    const offsetInfo = virtualizer.getOffsetForIndex(nextIndex, "start");
-    if (!offsetInfo) return;
-    notifyProgrammaticScroll(() => {
-      virtualizer.scrollToOffset(offsetInfo[0] + anchor.offsetWithinRowPx);
-    });
-  }, [
-    notifyProgrammaticScroll,
+  useTranscriptCompletedTurnAnchor({
+    pendingAnchorRef,
     pinnedRef,
     renderableRows,
-    rows.length,
-    startAboveChangeCompensation,
     virtualizer,
-  ]);
+    notifyProgrammaticScroll,
+    startAboveChangeCompensation,
+  });
 
   useLayoutEffect(() => {
     if (!pinnedRef.current) {

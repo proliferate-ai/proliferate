@@ -9,6 +9,8 @@ import {
   TRANSCRIPT_USER_SCROLL_SETTLE_MS,
   type TranscriptScrollSample,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
+import { decideTranscriptScrollPin } from "#product/hooks/chat/ui/transcript-scroll-pin-decision";
+import { resolveAutoFollowScrollTop } from "#product/hooks/chat/ui/transcript-auto-follow-target";
 import { TranscriptScrollOwnershipMarkers } from "#product/hooks/chat/ui/transcript-scroll-ownership";
 import { useTranscriptSubmitStampRepin } from "#product/hooks/chat/ui/use-transcript-submit-stamp-repin";
 import { useTranscriptUserScrollIntent } from "#product/hooks/chat/ui/use-transcript-user-scroll-intent";
@@ -247,53 +249,33 @@ export function useTranscriptStickToBottom({
     });
     const delta = top - previousTop;
 
-    // Did the content just change size? A pinned snap can only write once per
-    // frame, so when a batch GROWS the transcript faster than the snap catches
-    // up, the resulting scroll event reports a bottom-distance beyond the repin
-    // band — not because the user moved away, but because our own follow is a
-    // frame behind a taller document. A measurement correction that SHRINKS the
-    // content is the mirror image: the browser clamps scrollTop down to the new
-    // (smaller) maximum, which reads as an upward delta even though the viewport
-    // never left the bottom. Neither is a user scroll: a user scroll never
-    // changes scrollHeight, and any genuine upward gesture unpins synchronously
-    // through the intent listener before its scroll event reaches here. So while
-    // pinned, a scroll event that coincides with a content-size change is our own
-    // follow and must HOLD the pin. A snap's ownership marker cannot be relied on
-    // to absorb these: its single-frame watchdog can expire before the lagging or
-    // coalesced scroll event arrives (the pinned-follow / false-unpin regression
-    // seen on BOTH engines when the fallback was gated on a live marker).
-    // Content-size change — observable directly here — is the durable signal; a
-    // genuine user displacement opens a bottom-distance with NO resize, so it
-    // still unpins.
+    // Content-size change is observed here (not inferred from a marker) so it is
+    // the durable signal that our own follow — not the user — opened the
+    // bottom-distance. The classification itself (content-size hold, direction
+    // gate, repin band) lives in decideTranscriptScrollPin; this hook only reads
+    // the geometry and applies the returned decision to pin + inset state.
     const scrollHeightChanged =
       lastContentHeightRef.current > 0
       && Math.abs(viewport.scrollHeight - lastContentHeightRef.current) > DIRECTION_EPSILON_PX;
     lastContentHeightRef.current = viewport.scrollHeight;
-    const holdForContentChange = pinnedRef.current && scrollHeightChanged;
-
-    if (distance > repinThresholdPx) {
-      // Beyond the repin band. A user reading away from the bottom unpins — but
-      // while pinned, resize-driven lag is our own snap, not the user, so hold.
-      if (!holdForContentChange) {
-        consumedAutoFollowBottomInsetRef.current = 0;
-        setPinned(false);
-      }
-    } else if (distance <= PROGRAMMATIC_MATCH_TOL_PX) {
-      // Essentially at the hard bottom: a hair of upward delta here is a
-      // shrink/clamp or measurement correction (the browser clamped scrollTop
-      // down to a newly-shorter document), never a user leaving. Stay pinned.
-      consumedAutoFollowBottomInsetRef.current = autoFollowBottomInsetRef.current;
-      setPinned(true);
-    } else if (delta > -DIRECTION_EPSILON_PX) {
-      // Within the bottom band and not moving up — the user returned to bottom.
-      setPinned(true);
-    } else {
-      // Within the band, off the hard bottom, and moving up — the user is
-      // genuinely leaving (an inset shrink that lands clear of the bottom still
-      // reads as a real departure). Unpin.
+    const decision = decideTranscriptScrollPin({
+      distance,
+      delta,
+      scrollHeightChanged,
+      pinned: pinnedRef.current,
+      repinThresholdPx,
+    });
+    if (decision.pin === false) {
       consumedAutoFollowBottomInsetRef.current = 0;
       setPinned(false);
+    } else if (decision.pin === true) {
+      if (decision.consumeInset === "full") {
+        consumedAutoFollowBottomInsetRef.current = autoFollowBottomInsetRef.current;
+      }
+      setPinned(true);
     }
+    // decision.pin === "hold": our own resize lag — leave pin and inset as they
+    // are so a lagging follow is never misread as the user leaving.
     const userInitiated = interactionNow() < userScrollIntentUntilRef.current;
     onScrollSample(
       userInitiated
@@ -412,19 +394,4 @@ export function useTranscriptStickToBottom({
     setPinned,
     resetForSession,
   };
-}
-
-function resolveAutoFollowScrollTop(
-  viewport: HTMLDivElement,
-  bottomInsetPx: number,
-  consumedBottomInsetPx: number,
-): number {
-  const remainingManualInsetPx = Math.max(0, bottomInsetPx - consumedBottomInsetPx);
-  if (remainingManualInsetPx <= 0) {
-    // Preserve the established write-to-scrollHeight behavior: browsers clamp
-    // this to their exact maximum scrollTop without subpixel bookkeeping.
-    return viewport.scrollHeight;
-  }
-  const hardBottom = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
-  return Math.max(0, hardBottom - remainingManualInsetPx);
 }

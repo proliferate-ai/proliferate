@@ -273,6 +273,41 @@ describe("useTranscriptStickToBottom ownership markers (PRO-187)", () => {
     expect(handle.current.api.isPinnedToBottom).toBe(false);
   });
 
+  it("unpins on an UPWARD drag during growth even while pinned (content-size hold is direction-gated)", () => {
+    // Round-3 should-fix: the content-size hold must not swallow a genuine
+    // upward scrollbar-thumb DRAG that streams past the classifier without the
+    // synchronous wheel/key intent listener firing. Here the content grows
+    // (1000 -> 1400) AND the same coalesced event carries the reader upward
+    // (scrollTop 700 -> 500, a -200 delta clear of the bottom). The hold is now
+    // gated on downward-or-flat movement OR being at the hard bottom, so this
+    // upward, off-bottom event UNPINS.
+    //
+    // Negative control: dropping the `(movingDownOrFlat || atHardBottom)` gate
+    // (holding on scrollHeightChanged alone) keeps the pin TRUE here and strands
+    // the reader glued to the bottom against their own drag — this assertion
+    // then fails.
+    const onScrollSample = vi.fn();
+    const handle = renderHarness(onScrollSample);
+    const { viewport } = handle.current;
+    setMetrics(viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 700 });
+
+    act(() => {
+      handle.current.api.notifyProgrammaticScroll(() => {
+        viewport.scrollTop = 700;
+      });
+    });
+    // Expire the marker so the event reaches the pin logic unattributed.
+    act(() => {
+      flushRafRound();
+    });
+    // Content grew to 1400 AND the drag pulled scrollTop UP to 500: 600px from
+    // the bottom, upward delta, no marker. Direction gate => unpin.
+    setMetrics(viewport, { scrollHeight: 1400, clientHeight: 300, scrollTop: 500 });
+    dispatchScroll(handle);
+    expect(onScrollSample).toHaveBeenLastCalledWith({ programmatic: false });
+    expect(handle.current.api.isPinnedToBottom).toBe(false);
+  });
+
   it("holds the pin when a content SHRINK clamps scrollTop down at the bottom (no false unpin)", () => {
     // WebKit regression seen in the scroll-physics tier: while pinned at the
     // bottom, the virtualizer re-measures a row shorter, scrollHeight drops, and
