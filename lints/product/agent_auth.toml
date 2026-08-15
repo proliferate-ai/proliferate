@@ -1,0 +1,33 @@
+# Agent-auth cross-surface rules (PROD-AGENTAUTH-*). Reserved family segment:
+# AGENTAUTH (see lints/README.md "Rule ID allocation"). This file holds the one
+# rule that spans owners — the secret-log ban covers both the server cloud
+# gateway and the AnyHarness render/snapshot planes, so it lives with the
+# cross-owner records. The B20 custody item from the Agent Auth ADR.
+
+[[rule]]
+id = "PROD-AGENTAUTH-001"
+title = "Agent-auth secrets never reach a log call"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_agent_auth_secret_logs.py"
+mode = "lint"
+scope = "server/proliferate/server/cloud/agent_gateway/**, anyharness/crates/anyharness-lib/src/domains/agents/route_auth/**, anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/**"
+
+rule = """A structured-log or tracing call in the agent-auth surfaces must not
+contain a live secret identifier — the provider env-var secret names
+(PROLIFERATE_GATEWAY_KEY, ANTHROPIC_AUTH_TOKEN, XAI_API_KEY, CURSOR_API_KEY,
+OPENAI_API_KEY) or the raw secret bindings `virtual_key` and
+`value_ciphertext`."""
+alternative = """Log the opaque handle (`virtual_key_id`), a redacted hint, or a
+boolean presence flag instead of the secret. A reviewed redaction site that must
+name the binding carries an inline `agent-auth:allow-secret-log` pragma inside
+the call."""
+why = """These surfaces move minted gateway keys and decrypted provider
+credentials through their hot paths; a single credential written to a log ships
+to the collector and is leaked irreversibly the moment the line runs. `_id`
+handles and ciphertext references are safe; the raw key and plaintext are not.
+(Agent Auth ADR custody item B20.)"""
+
+[rule.example]
+bad = "logger.info(\"minted gateway key %s\", virtual_key)"
+good = "logger.info(\"minted gateway key %s\", virtual_key_id)"

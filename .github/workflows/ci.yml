@@ -69,6 +69,11 @@ jobs:
           python3 -m unittest scripts/test_check_toast_copy.py
           python3 scripts/check_toast_copy.py
 
+      - name: Check agent-auth secret logs
+        run: |
+          python3 -m unittest scripts/test_check_agent_auth_secret_logs.py
+          python3 scripts/check_agent_auth_secret_logs.py
+
       - name: Check frontend structure drift
         run: python3 scripts/report_frontend_structure.py --strict --summary-only
 
