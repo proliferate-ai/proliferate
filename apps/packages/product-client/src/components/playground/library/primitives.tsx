@@ -14,6 +14,7 @@ import { FixedPositionLayer } from "#product/primitives/FixedPositionLayer";
 import { IconButton } from "#product/primitives/IconButton";
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
+import { LoadingBoundary, type LoadingBoundaryState } from "#product/primitives/LoadingBoundary";
 import { PaneIconButton } from "#product/primitives/PaneIconButton";
 import { Popover, PopoverContent, PopoverTrigger } from "#product/primitives/Popover";
 import { PopoverButton } from "#product/primitives/PopoverButton";
@@ -53,6 +54,32 @@ function TypewriterRevealTextDemo() {
   return (
     <Button variant="secondary" size="sm" onClick={() => setName(name ? null : "Named session")}>
       <TypewriterRevealText text={name ?? "Untitled"} revealOnFirstAssignment={name !== null} />
+    </Button>
+  );
+}
+
+function LoadingBoundaryDemo() {
+  // The shared loading gate: `pending | empty | ready`. Clicking re-enters
+  // `pending`, so the 200ms show-delay suppresses a fast resolve and the 300ms
+  // min-display floor holds a treatment that did mount, before the one
+  // sanctioned content fade-in reveals the resolved content.
+  const [state, setState] = useState<LoadingBoundaryState>("ready");
+  return (
+    <Button
+      variant="secondary"
+      size="sm"
+      onClick={() => {
+        setState("pending");
+        window.setTimeout(() => setState("ready"), 600);
+      }}
+    >
+      <LoadingBoundary
+        state={state}
+        diagnostics={{ flow: "library.loading-boundary" }}
+        treatment={<Spinner className="icon-paired" />}
+      >
+        <span className="text-ui-sm text-foreground">Resolved content</span>
+      </LoadingBoundary>
     </Button>
   );
 }
@@ -301,6 +328,7 @@ export const PRIMITIVES_ENTRIES: LibraryEntry[] = [
   ICON_TILE_LIBRARY_ENTRY,
   { name: "Input", subpath: "#product/primitives/Input", render: () => <Input placeholder="Input" defaultValue="" /> },
   { name: "Label", subpath: "#product/primitives/Label", render: () => <Label>Label</Label> },
+  { name: "LoadingBoundary", subpath: "#product/primitives/LoadingBoundary", render: LoadingBoundaryDemo },
   { name: "PaneIconButton", subpath: "#product/primitives/PaneIconButton", render: () => (
     <PaneIconButton label="Delete" onClick={noop}><Trash className="icon-paired" /></PaneIconButton>
   ) },
