@@ -15,7 +15,8 @@ import { useWorkspaceSidebarResize } from "#product/hooks/preferences/ui/use-wor
 import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/derived/use-hot-paint-gate";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
-import { shouldMountWorkspaceShell } from "#product/lib/domain/chat/surface/chat-surface";
+import { launchIntentOwnsShell, shouldMountWorkspaceShell } from "#product/lib/domain/chat/surface/chat-surface";
+import { resolveLaunchIntentScope } from "#product/lib/domain/chat/launch/launch-intent";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
@@ -118,10 +119,21 @@ export function useMainScreenState(): MainScreenState {
   const { data: workspaceCollections } = useWorkspaces();
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
   const repoRoots = workspaceCollections?.repoRoots ?? [];
+  // An intent only mounts the shell for its own workspace: a selected
+  // workspace or pending entry always mounts the shell on their own, and an
+  // active intent additionally mounts it only when the intent scopes to this
+  // shell (or is unscoped and nothing is selected yet). This stops one
+  // workspace's launch intent from hijacking an unrelated shell (PRO-230).
   const activeLaunchIntentIdForShell =
     selectedWorkspaceId || pendingWorkspaceEntry
       ? activeLaunchIntent?.id ?? null
-      : null;
+      : activeLaunchIntent && launchIntentOwnsShell({
+        scope: resolveLaunchIntentScope(activeLaunchIntent),
+        shellLogicalWorkspaceId: selectedLogicalWorkspaceId,
+        shellWorkspaceId: selectedWorkspaceId,
+      })
+        ? activeLaunchIntent.id
+        : null;
   const hasLaunchIntentOnlyShell = false;
   const hasWorkspaceShell = shouldMountWorkspaceShell({
     selectedWorkspaceId,

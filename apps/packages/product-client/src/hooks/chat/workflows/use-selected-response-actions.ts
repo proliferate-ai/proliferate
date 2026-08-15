@@ -19,18 +19,28 @@ export function useSelectedResponseActions() {
   const addSelectedResponseContext = useChatInputStore(
     (state) => state.addSelectedResponseContext,
   );
+  const setSelectedResponseContextComment = useChatInputStore(
+    (state) => state.setSelectedResponseContextComment,
+  );
   const requestComposerFocus = useChatInputStore((state) => state.requestFocus);
   const showToast = useToastStore((state) => state.show);
   const currentChat = useChatPromptActions();
-  const sideChat = useChatPromptActions({ forceNewSession: true });
 
+  // Composer focus is NOT requested here: the annotation comment editor takes
+  // focus first and hands it to the composer once the comment is settled.
   const addToChat = useCallback((text: string) => {
+    if (!workspaceUiKey) {
+      return null;
+    }
+    return addSelectedResponseContext(workspaceUiKey, text);
+  }, [addSelectedResponseContext, workspaceUiKey]);
+
+  const setAnnotationComment = useCallback((id: string, comment: string) => {
     if (!workspaceUiKey) {
       return;
     }
-    addSelectedResponseContext(workspaceUiKey, text);
-    requestComposerFocus();
-  }, [addSelectedResponseContext, requestComposerFocus, workspaceUiKey]);
+    setSelectedResponseContextComment(workspaceUiKey, id, comment);
+  }, [setSelectedResponseContextComment, workspaceUiKey]);
 
   const moreDetails = useCallback((text: string) => {
     const payload = buildPromptWithSelectedResponseContexts(
@@ -47,24 +57,10 @@ export function useSelectedResponseActions() {
     });
   }, [currentChat.handleSubmit, currentChat.submitDisabledReason, showToast]);
 
-  const askInSideChat = useCallback((text: string) => {
-    const payload = buildPromptWithSelectedResponseContexts(
-      CHAT_SELECTED_RESPONSE_ACTIONS.sideChatPrompt,
-      [{ text }],
-    );
-    void sideChat.handleSubmit({
-      ...payload,
-      preserveDraft: true,
-    }).then((submitted) => {
-      if (!submitted && sideChat.submitDisabledReason) {
-        showToast(sideChat.submitDisabledReason);
-      }
-    });
-  }, [showToast, sideChat.handleSubmit, sideChat.submitDisabledReason]);
-
   return {
     addToChat,
     moreDetails,
-    askInSideChat,
+    setAnnotationComment,
+    focusComposer: requestComposerFocus,
   };
 }

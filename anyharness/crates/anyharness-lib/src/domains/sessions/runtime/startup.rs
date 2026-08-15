@@ -451,10 +451,33 @@ impl SessionRuntime {
         ) {
             Ok(launch) => launch,
             Err(SessionMcpLaunchAssemblyError::WorkspaceAttachment(error)) => {
+                // Point of detection. Downstream this becomes one generic HTTP
+                // incident that has lost both the phase and the error class,
+                // and the cleanup branch below can replace the root cause
+                // outright — so record both here before either happens.
+                let original_phase = error.phase();
+                tracing::warn!(
+                    target: "anyharness.workspace_mcp.attachment_failed",
+                    session_id = %record.id,
+                    phase = original_phase.as_str(),
+                    source_error_class = error.source_class(),
+                    "Workspace MCP attachment failed"
+                );
                 let error = match self.clear_workspace_mcp_binding_summary(record) {
                     Ok(()) => error,
                     Err(cleanup_error) => {
-                        WorkspaceMcpAttachmentError::summary_cleanup(cleanup_error)
+                        let error = WorkspaceMcpAttachmentError::summary_cleanup(cleanup_error);
+                        // Attachment failed AND its cleanup failed: the stale
+                        // Applied binding summary survives, which violates the
+                        // fail-closed contract.
+                        tracing::error!(
+                            target: "anyharness.workspace_mcp.cleanup_failed",
+                            session_id = %record.id,
+                            original_phase = original_phase.as_str(),
+                            cleanup_error_class = error.source_class(),
+                            "Workspace MCP binding summary cleanup failed after attachment failure"
+                        );
+                        error
                     }
                 };
                 return Err(StartSessionError::WorkspaceMcpAttachmentFailed(error));

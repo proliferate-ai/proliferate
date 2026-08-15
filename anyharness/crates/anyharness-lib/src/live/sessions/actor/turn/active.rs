@@ -101,6 +101,13 @@ impl SessionActor {
                             // Retain the durable queue head and retire this
                             // actor. Only a later explicit activation may
                             // re-resolve context and retry it.
+                            tracing::warn!(
+                                target: "anyharness.session.queue_drain_halted",
+                                session_id = %self.session_id,
+                                incident_id,
+                                action = "unload_pending_retry",
+                                "queued prompt drain halted; session unloaded pending retry"
+                            );
                             exit_after_prompt = Some(ActorExitDisposition::Unload);
                         }
                     }

@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  ConnectedSelectedResponseActionMenu,
   SelectedResponseActionMenu,
   type SelectedResponseAction,
 } from "#product/components/workspace/chat/transcript/SelectedResponseActionMenu";
@@ -10,9 +11,10 @@ import type { SelectedResponseSelection } from "#product/domain/chats/transcript
 
 vi.mock("#product/hooks/chat/workflows/use-selected-response-actions", () => ({
   useSelectedResponseActions: () => ({
-    addToChat: vi.fn(),
+    addToChat: vi.fn(() => ({ id: "annotation-9", ordinal: 3 })),
     moreDetails: vi.fn(),
-    askInSideChat: vi.fn(),
+    setAnnotationComment: vi.fn(),
+    focusComposer: vi.fn(),
   }),
 }));
 
@@ -22,14 +24,13 @@ afterEach(() => {
 });
 
 describe("SelectedResponseActionMenu", () => {
-  it("exposes all three actions in order as menu items", async () => {
+  it("exposes both actions in order as menu items", async () => {
     renderMenu();
 
     const items = await screen.findAllByRole("menuitem");
     expect(items.map((item) => item.textContent)).toEqual([
       "Add to chat",
       "More details",
-      "Ask in side chat",
     ]);
   });
 
@@ -63,13 +64,11 @@ describe("SelectedResponseActionMenu", () => {
     fireEvent.keyDown(items[0]!, { key: "ArrowDown" });
     await waitFor(() => expect(document.activeElement).toBe(items[1]));
     fireEvent.keyDown(items[1]!, { key: "ArrowDown" });
-    await waitFor(() => expect(document.activeElement).toBe(items[2]));
-    fireEvent.keyDown(items[2]!, { key: "ArrowDown" });
     await waitFor(() => expect(document.activeElement).toBe(items[0]));
 
     // Backward off the first item wraps onto the last.
     fireEvent.keyDown(items[0]!, { key: "ArrowUp" });
-    await waitFor(() => expect(document.activeElement).toBe(items[2]));
+    await waitFor(() => expect(document.activeElement).toBe(items[1]));
   });
 
   it("supports Home and End", async () => {
@@ -78,9 +77,9 @@ describe("SelectedResponseActionMenu", () => {
     await waitFor(() => expect(document.activeElement).toBe(items[0]));
 
     fireEvent.keyDown(items[0]!, { key: "End" });
-    await waitFor(() => expect(document.activeElement).toBe(items[2]));
+    await waitFor(() => expect(document.activeElement).toBe(items[1]));
 
-    fireEvent.keyDown(items[2]!, { key: "Home" });
+    fireEvent.keyDown(items[1]!, { key: "Home" });
     await waitFor(() => expect(document.activeElement).toBe(items[0]));
   });
 
@@ -91,10 +90,10 @@ describe("SelectedResponseActionMenu", () => {
     await waitFor(() => expect(document.activeElement).toBe(items[0]));
 
     fireEvent.keyDown(items[0]!, { key: "End" });
-    await waitFor(() => expect(document.activeElement).toBe(items[2]));
-    fireEvent.keyDown(items[2]!, { key: "Enter" });
+    await waitFor(() => expect(document.activeElement).toBe(items[1]));
+    fireEvent.keyDown(items[1]!, { key: "Enter" });
 
-    expect(onAction).toHaveBeenCalledWith("side-chat");
+    expect(onAction).toHaveBeenCalledWith("more-details");
   });
 
   it("activates the focused item with Space", async () => {
@@ -150,6 +149,74 @@ describe("SelectedResponseActionMenu", () => {
     expect(onAction).toHaveBeenCalledWith("more-details");
     expect(document.getSelection()?.isCollapsed).toBe(false);
     paragraph.remove();
+  });
+
+  it("cancels hover pointer events so Radix cannot move focus into the menu", async () => {
+    renderMenu();
+    const items = await screen.findAllByRole("menuitem");
+
+    // jsdom never moves focus on hover, so asserting focus stays put cannot
+    // fail on its own — the assertion that actually holds the guard is that
+    // the item CANCELS pointer-move and pointer-leave (React derives leave
+    // from pointerout), which is what makes Radix skip the hover focus moves
+    // that collapse the window selection on WebKit and unmount the menu
+    // before a click can land.
+    for (const item of items) {
+      const pointerMove = new window.PointerEvent("pointermove", {
+        bubbles: true,
+        cancelable: true,
+      });
+      fireEvent(item, pointerMove);
+      expect(pointerMove.defaultPrevented).toBe(true);
+
+      const pointerOut = new window.PointerEvent("pointerout", {
+        bubbles: true,
+        cancelable: true,
+        relatedTarget: document.body,
+      });
+      fireEvent(item, pointerOut);
+      expect(pointerOut.defaultPrevented).toBe(true);
+    }
+  });
+
+  it("stays open when focus lands outside the menu", async () => {
+    const onDismiss = vi.fn();
+    renderMenu({ onDismiss });
+    await screen.findAllByRole("menuitem");
+
+    // WKWebView's native mouse-down focus fixup parks focus outside the
+    // portalled menu mid-press (the cancelled pointerdown does not stop it).
+    // The focus-outside close must be prevented or the menu unmounts before
+    // pointerup and no item can ever activate.
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    outside.focus();
+    await Promise.resolve();
+
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(screen.queryAllByRole("menuitem")).toHaveLength(2);
+    outside.remove();
+  });
+
+  it("reports the added annotation with its anchor rect from Add to chat", async () => {
+    const onAnnotationAdded = vi.fn();
+    render(
+      <ConnectedSelectedResponseActionMenu
+        selection={selection}
+        focusRequestNonce={0}
+        onDismiss={vi.fn()}
+        onAnnotationAdded={onAnnotationAdded}
+      />,
+    );
+    const items = await screen.findAllByRole("menuitem");
+
+    fireEvent.click(items[0]!);
+
+    expect(onAnnotationAdded).toHaveBeenCalledWith({
+      id: "annotation-9",
+      ordinal: 3,
+      anchorRect: selection.anchorRect,
+    });
   });
 
   it("keeps the dismissal-suppression hook reachable from every item", async () => {

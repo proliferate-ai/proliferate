@@ -109,6 +109,11 @@ export function useHomeNextLaunch() {
       },
       materializedWorkspaceId: null,
       materializedSessionId: null,
+      // The pending-workspace attempt (if any) isn't created until after this
+      // intent begins; it gets threaded in once known via
+      // markHomeLaunchIntentMaterializedFromPendingWorkspace.
+      attemptId: null,
+      targetWorkspaceId: target.kind === "local" ? target.existingWorkspaceId : null,
       createdAt: Date.now(),
       sendAttemptedAt: null,
       failure: null,
@@ -124,6 +129,13 @@ export function useHomeNextLaunch() {
           draftText: null,
           sourceWorkspaceId: null,
         });
+        // createThreadFromSelection runs its synchronous prefix (including
+        // beginPendingWorkspace) before its first await, so the pending
+        // attempt already exists in the store here. Scope the intent to it
+        // now instead of waiting for the catch block, so the launch-intent
+        // pane owns its own shell for the whole in-flight window instead of
+        // falling through to session-empty (PRO-230 review finding 1).
+        markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId);
         const queuedProjectedSessionId = await promptProjectedPendingWorkspaceSession({
           text: prompt,
           promptId,
@@ -167,6 +179,12 @@ export function useHomeNextLaunch() {
             repoGroupKeyToExpand: target.sourceRoot,
             initialSession,
           });
+        if (createdWorkspacePromise) {
+          // Same reasoning as the cowork branch: the create call's synchronous
+          // prefix (beginPendingWorkspace) has already run, so scope the
+          // intent to the pending attempt now rather than only on failure.
+          markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId);
+        }
         const queuedProjectedSessionId = createdWorkspacePromise
           ? await promptProjectedPendingWorkspaceSession({
             text: prompt,
@@ -225,6 +243,9 @@ export function useHomeNextLaunch() {
         }, {
           initialSession,
         });
+        // Same reasoning as the cowork/local branches above: the pending
+        // attempt already exists synchronously, so scope the intent now.
+        markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId);
         const queuedProjectedSessionId = await promptProjectedPendingWorkspaceSession({
           text: prompt,
           promptId,

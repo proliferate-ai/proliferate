@@ -79,8 +79,10 @@ impl SessionActor {
             Err(error) => {
                 let incident_id = uuid::Uuid::new_v4().to_string();
                 tracing::warn!(
+                    target: "anyharness.product_context.resolve_failed",
                     session_id = %self.session_id,
                     incident_id,
+                    error_class = error.class(),
                     failure_code = crate::domains::sessions::prompt::AGENT_PRODUCT_CONTEXT_UNAVAILABLE_CODE,
                     "agent product context resolution failed"
                 );

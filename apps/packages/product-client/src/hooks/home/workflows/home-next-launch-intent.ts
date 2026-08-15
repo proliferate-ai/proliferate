@@ -1,5 +1,6 @@
 import {
   resolveChatLaunchRetryMode,
+  resolveLaunchIntentPendingAttemptId,
   resolveLaunchIntentPendingWorkspaceId,
   type ChatLaunchRetryMode,
 } from "#product/lib/domain/chat/launch/launch-intent";
@@ -69,16 +70,20 @@ export function markHomeLaunchIntentMaterializedFromPendingWorkspace(intentId: s
     return;
   }
 
-  const workspaceId = resolveLaunchIntentPendingWorkspaceId(
-    activeIntent,
-    useSessionSelectionStore.getState().pendingWorkspaceEntry,
-  );
-  if (!workspaceId) {
+  const pendingWorkspaceEntry = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+  const workspaceId = resolveLaunchIntentPendingWorkspaceId(activeIntent, pendingWorkspaceEntry);
+  // The attempt id is known as soon as the pending entry exists, well before
+  // (or even absent) a resolved workspaceId — scoping on it here is what lets
+  // a launch that fails before materializing still own only its own shell
+  // instead of overriding every workspace's transcript (PRO-230).
+  const attemptId = resolveLaunchIntentPendingAttemptId(activeIntent, pendingWorkspaceEntry);
+  if (!workspaceId && !attemptId) {
     return;
   }
 
   useChatLaunchIntentStore.getState().markMaterializedIfActive(intentId, {
-    workspaceId,
+    ...(workspaceId ? { workspaceId } : {}),
+    ...(attemptId ? { attemptId } : {}),
   });
 }
 

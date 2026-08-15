@@ -16,6 +16,8 @@ import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-aut
  * (the Account pane's Connect/Reconnect GitHub buttons) read the GitHub OAuth
  * availability probe directly instead of these flags.
  */
+let lastLoggedCloudAvailabilityState: string | null = null;
+
 export function useCloudAvailabilityState() {
   const authStatus = useProductAuthStatus();
   const { cloudEnabled, cloudComputeEnabled } = useAppCapabilities();
@@ -32,7 +34,7 @@ export function useCloudAvailabilityState() {
   const cloudRequiresSignIn = cloudEnabled && authStatus === "anonymous";
 
   useEffect(() => {
-    logStartupDebug("cloud.availability.derived_state", {
+    const derivedState = {
       authStatus,
       cloudEnabled,
       cloudUnavailable,
@@ -40,7 +42,17 @@ export function useCloudAvailabilityState() {
       cloudSignInAvailable,
       cloudActive,
       cloudComputeEnabled,
-    });
+    };
+    // This hook has many concurrent consumers, and each mount re-ran the log
+    // with identical values: it produced 909 of the 1,196 records in the
+    // 2026-08-13 dogfood run. The dedupe is module-scoped because the
+    // duplication is across hook instances, which a component ref cannot see.
+    const derivedStateKey = JSON.stringify(derivedState);
+    if (derivedStateKey === lastLoggedCloudAvailabilityState) {
+      return;
+    }
+    lastLoggedCloudAvailabilityState = derivedStateKey;
+    logStartupDebug("cloud.availability.derived_state", derivedState);
   }, [
     authStatus,
     cloudActive,

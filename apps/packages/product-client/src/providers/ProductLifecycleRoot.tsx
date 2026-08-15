@@ -27,6 +27,7 @@ import { useShortcutDispatcher } from "#product/hooks/shortcuts/lifecycle/use-sh
 import { useCrashRecoverySupportAction } from "#product/hooks/support/workflows/use-crash-recovery-support-action"
 import { useSupportReportRetentionLifecycle } from "#product/hooks/support/lifecycle/use-support-report-retention"
 import { useTurnEndSound } from "#product/hooks/sessions/lifecycle/use-turn-end-sound"
+import { useTurnEndDiagnostics } from "#product/hooks/sessions/lifecycle/use-turn-end-diagnostics"
 import { useWorkspaceGitStatusPersistence } from "#product/hooks/workspaces/lifecycle/use-workspace-git-status-persistence"
 import {
   elapsedStartupMs,
@@ -163,6 +164,7 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
   recordBootDiagnosticOnce("app_runtime.render.before.use_turn_end_sound")
   useTurnEndSound()
   recordBootDiagnosticOnce("app_runtime.render.after.use_turn_end_sound")
+  useTurnEndDiagnostics()
   recordBootDiagnosticOnce("app_runtime.render.before.use_agent_auto_reconcile")
   useAgentAutoReconcile()
   recordBootDiagnosticOnce("app_runtime.render.after.use_agent_auto_reconcile")
