@@ -70,6 +70,15 @@ export async function runWorkspaceSelection(
     return;
   }
 
+  // UX Latency ADR §4.6, Rung 10 (Q12): warm the global agent catalog now, in
+  // parallel with the connection resolution and the blocking session-directory
+  // fetch that follow. It has no data dependency on this workspace's connection,
+  // so racing it off the critical path removes it as a serial contributor to
+  // switch latency. Fire-and-forget: selection never awaits it (the composer
+  // submit gate awaits catalog readiness at send time), and it is global so a
+  // superseded selection cannot paint wrong-workspace content from it.
+  deps.prefetchAgentCatalog?.();
+
   const logicalWorkspace = findLogicalWorkspace(deps.logicalWorkspaces, request.workspaceId);
   if (!logicalWorkspace) {
     const targetWorkspace = parseTargetWorkspaceSyntheticId(request.workspaceId);

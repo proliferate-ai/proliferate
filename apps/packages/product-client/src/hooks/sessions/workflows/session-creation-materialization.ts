@@ -36,6 +36,7 @@ import {
   pendingConfigValuesForSession,
 } from "#product/hooks/sessions/workflows/session-creation-materialization-helpers";
 import { buildDesktopLaunchModelRegistries } from "#product/lib/domain/agents/cloud-launch-catalog";
+import { resolveSubmitAgentCatalog } from "#product/lib/domain/agents/agent-catalog-submit-gate";
 import type { CreateSessionWithResolvedConfigOptions } from "#product/hooks/sessions/workflows/session-creation-types";
 import { resolveDesktopRuntimeUrlForWorkspace } from "#product/hooks/sessions/workflows/session-creation-runtime";
 import { annotateLatencyFlow } from "#product/lib/infra/measurement/measurement-port";
@@ -269,7 +270,7 @@ async function runSessionCreationMaterialization({
   const queuedConfigValuesBeforeDefaults = pendingConfigValuesForSession(pendingSessionId);
   const catalogStep = await runInterruptibleSessionCreationStep({
     sessionId: pendingSessionId,
-    step: ensureCloudAgentCatalog().catch(() => null),
+    step: resolveSubmitAgentCatalog(ensureCloudAgentCatalog),
     onSuperseded: () => discardIfSuperseded(pendingSessionId, lifecycle),
   });
   if (catalogStep.discarded) {
