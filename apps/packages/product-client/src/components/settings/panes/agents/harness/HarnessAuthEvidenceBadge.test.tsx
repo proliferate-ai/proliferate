@@ -65,6 +65,22 @@ describe("HarnessAuthEvidenceBadge", () => {
     }
   });
 
+  it("renders an unknown future display non-green without crashing", () => {
+    const future = "some_future_state" as AgentAuthDisplay;
+    render(
+      <HarnessAuthEvidenceBadge
+        authState={stateFor(future, { evidenceAgeSeconds: 60 })}
+        refreshing={false}
+        onRefresh={() => {}}
+      />,
+    );
+    const badge = document.querySelector("[data-harness-display]");
+    expect(badge?.getAttribute("data-harness-display")).toBe(future);
+    // Neutral tone, never the success (green) treatment; no faked evidence age.
+    expect((badge?.className ?? "").includes("success")).toBe(false);
+    expect(screen.queryByText(/verified/)).toBeNull();
+  });
+
   it("shows the evidence age on a green badge", () => {
     render(
       <HarnessAuthEvidenceBadge

@@ -44,6 +44,11 @@ export function toneForDisplay(display: AgentAuthDisplay): AuthEvidenceTone {
     case "unsupported":
     case "installed":
       return "neutral";
+    default:
+      // Forward-compat: an unknown display from a newer runtime is never green.
+      // Keeping this arm neutral (not success) is the invariant a reviewer must
+      // hold if the display union grows.
+      return "neutral";
   }
 }
 

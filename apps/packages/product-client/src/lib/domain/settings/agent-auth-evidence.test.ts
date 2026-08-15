@@ -82,6 +82,17 @@ describe("agent-auth-evidence", () => {
     expect(labelForNextAction("fix_config")).toBe("Fix configuration");
   });
 
+  it("treats an unknown future display as non-green with a neutral fallback tone", () => {
+    const future = "some_future_state" as AgentAuthDisplay;
+    expect(isEvidenceGreen(future)).toBe(false);
+    expect(toneForDisplay(future)).toBe("neutral");
+    // A green-only evidence line must not appear for an unknown display even
+    // if it somehow carried an age.
+    expect(
+      evidenceAgeLine(stateFor(future, { evidenceAgeSeconds: 60 })),
+    ).toBeNull();
+  });
+
   it("presents handoff states with in-flight and retry affordances", () => {
     expect(presentHandoff("awaiting_browser").inFlight).toBe(true);
     expect(presentHandoff("initiated").inFlight).toBe(true);
