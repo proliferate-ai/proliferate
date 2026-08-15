@@ -1,0 +1,32 @@
+# Agent-auth frontend rules (FE-AGENTAUTH-*). Reserved family segment: AGENTAUTH
+# (see lints/README.md "Rule ID allocation"). The product-client mirror's share
+# of the Agent Auth ADR FR-4 registry-authority invariant.
+
+# FR-4 (2, TS): the product-client's gateway-capable set must not drift from the
+# registry. The vitest mirror-drift guard lands with the FR-4 code ladder; it is
+# not wired on this foundation branch, so the record is honest tracked debt.
+[[rule]]
+id = "FE-AGENTAUTH-001"
+title = "The product-client gateway-capable set mirrors the registry"
+owner = "frontend"
+status = "leaks"
+gap = "#1939"
+enforced_by = "review"
+mode = "review"
+scope = "apps/packages/product-client/src/**"
+
+rule = """The product-client's notion of which harness kinds are gateway-capable
+must be derived from / pinned to the agent registry
+(`catalogs/agents/registry.json`), never a separately hand-maintained TS list
+that can disagree with the authority."""
+alternative = """Source the gateway-capable set from the shared registry-derived
+contract and assert it against the registry in a product-client vitest, rather
+than hardcoding the kinds in the UI."""
+why = """FR-4 makes the registry the one authority with every language binding a
+checked mirror. The TS mirror-drift vitest guard lands with the FR-4 code ladder
+(#1939); until it is wired on this branch the TS mirror is unenforced, so this is
+tracked debt rather than a silent law."""
+
+[rule.example]
+bad = "a TS const GATEWAY_CAPABLE = [\"claude\", ...] maintained independently"
+good = "the gateway-capable set derived from the registry contract under a vitest"
