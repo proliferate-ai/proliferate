@@ -1,7 +1,9 @@
 import { ChevronRight } from "#product/primitives/icons/core";
+import { ArrowUpRight } from "#product/primitives/icons/core";
 import { Button } from "#product/primitives/Button";
 import { IconTile } from "#product/primitives/IconTile";
 import { Input } from "#product/primitives/Input";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import {
   getProviderSecretEnvVar,
@@ -68,6 +70,7 @@ export function ProviderRow({
   onRemove: () => void;
 }) {
   const envVarName = getProviderSecretEnvVar(provider);
+  const { links } = useProductHost();
   return (
     // Disclosure is deferred here (frozen spec §4.3 pattern): the modal keeps
     // only ONE row's form mounted at a time and several tests assert true
@@ -121,11 +124,42 @@ export function ProviderRow({
               </Button>
             </div>
           ) : null}
-          {/* Plain guidance until a per-provider console-URL registry exists —
-              no arrow/link styling on a non-interactive element. */}
-          <p className="text-ui-sm text-muted-foreground">
-            {HARNESS_PANE_COPY.getApiKey}
-          </p>
+          {/* PRO-206: the hand-curated doc/console overlay (rung 5) now carries
+              per-provider links for the featured tier. Render them as external
+              links via the host's openExternal affordance when present; fall
+              back to plain guidance for providers with no curated URLs. */}
+          {provider.consoleUrl || provider.docsUrl ? (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-ui-sm">
+              {provider.consoleUrl ? (
+                <button
+                  type="button"
+                  className="flex items-center gap-1 text-foreground hover:underline"
+                  onClick={() => {
+                    void links.openExternal(provider.consoleUrl as string);
+                  }}
+                >
+                  {HARNESS_PANE_COPY.providerConsoleLink}
+                  <ArrowUpRight className="icon-compact" />
+                </button>
+              ) : null}
+              {provider.docsUrl ? (
+                <button
+                  type="button"
+                  className="flex items-center gap-1 text-muted-foreground hover:underline"
+                  onClick={() => {
+                    void links.openExternal(provider.docsUrl as string);
+                  }}
+                >
+                  {HARNESS_PANE_COPY.providerDocsLink}
+                  <ArrowUpRight className="icon-compact" />
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-ui-sm text-muted-foreground">
+              {HARNESS_PANE_COPY.getApiKey}
+            </p>
+          )}
           <form
             className="flex items-center gap-2"
             onSubmit={(event) => {

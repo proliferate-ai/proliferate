@@ -85,6 +85,9 @@ export const HARNESS_PANE_COPY = {
   allModelsFreshRefreshedAgo: (ago: string) =>
     ago === "just now" ? "refreshed just now" : `refreshed ${ago} ago`,
   getApiKey: "Get an API key",
+  // PRO-206 — external links from the curated provider doc/console overlay.
+  providerConsoleLink: "Get an API key",
+  providerDocsLink: "Docs",
   // Method card labels.
   methodGateway: "Proliferate gateway",
   methodGatewayDescription: "Use managed model access.",
