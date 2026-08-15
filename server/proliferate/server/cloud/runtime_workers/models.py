@@ -61,6 +61,11 @@ class WorkerHeartbeatRequest(_CamelModel):
     # Column-width bounds, as on WorkerEnrollRequest.
     worker_version: str | None = Field(default=None, max_length=64)
     anyharness_version: str | None = Field(default=None, max_length=64)
+    # Telemetry only (Update Flow ADR, FR-1): last-observed agent catalog
+    # version, polled by the worker from its runtime's read-only
+    # `GET /v1/catalogs/agents/version`. Never desired state, never pushed
+    # back to the runtime.
+    catalog_version: str | None = Field(default=None, max_length=64)
 
 
 class WorkerDesiredVersions(_CamelModel):

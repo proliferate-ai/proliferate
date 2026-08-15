@@ -73,6 +73,7 @@ async def worker_heartbeat_endpoint(
         worker_id=auth.worker_id,
         worker_version=body.worker_version,
         anyharness_version=body.anyharness_version,
+        catalog_version=body.catalog_version,
     )
 
 

@@ -401,6 +401,13 @@ class Settings(BaseSettings):
     cloud_mcp_google_workspace_oauth_client_id: str = ""
     cloud_mcp_google_workspace_oauth_client_secret: str = ""
     # Agent LLM gateway (LiteLLM proxy)
+    # Publisher lane (Update Flow ADR, FR-1): when set, the server advertises
+    # these on GET /meta so a desktop shell or cloud worker launches its
+    # runtime sidecar with ANYHARNESS_CATALOG_ARTIFACT_BASE_URL/_CHANNEL
+    # populated. Absent (default) => `agentCatalog` is null and every runtime
+    # this deployment launches stays on the compiled-in floor, by design.
+    agent_catalog_artifact_base_url: str = ""
+    agent_catalog_channel: str = "stable"
     agent_gateway_enabled: bool = False
     agent_gateway_litellm_base_url: str = "http://127.0.0.1:14000"
     agent_gateway_litellm_public_base_url: str = ""

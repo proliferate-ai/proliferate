@@ -74,7 +74,7 @@ def test_meta_shape_and_types_without_env(monkeypatch) -> None:  # type: ignore[
 
     body = _client().get("/meta").json()
 
-    assert set(body) == set(_VERSION_FIELDS) | {"capabilities", "desktopUpdater"}
+    assert set(body) == set(_VERSION_FIELDS) | {"capabilities", "desktopUpdater", "agentCatalog"}
     for field in _VERSION_FIELDS:
         assert isinstance(body[field], str) and body[field]
     assert isinstance(body["capabilities"], dict)
@@ -98,6 +98,7 @@ _META_GOLDEN_FIELDS = [
     # Additive (FR-2): optional desktop updater cadence override, null unless
     # the deployment configured it.
     "desktopUpdater",
+    "agentCatalog",
 ]
 
 
@@ -598,3 +599,41 @@ def test_desktop_updater_cadence_builder_is_env_driven(monkeypatch) -> None:  # 
     monkeypatch.setenv("DESKTOP_UPDATER_CHECK_INTERVAL_MS", "not-a-number")
     monkeypatch.setenv("DESKTOP_UPDATER_STALL_THRESHOLD_MS", "0")
     assert _desktop_updater_cadence() is None
+# --- Publisher lane channel (Update Flow ADR, FR-1) --------------------------
+
+
+def test_agent_catalog_channel_is_none_by_default() -> None:
+    cfg = Settings(agent_catalog_artifact_base_url="", agent_catalog_channel="stable")
+    assert meta_module._agent_catalog_channel(cfg) is None
+
+
+def test_agent_catalog_channel_reports_configured_base_url_and_channel() -> None:
+    cfg = Settings(
+        agent_catalog_artifact_base_url="https://downloads.proliferate.com",
+        agent_catalog_channel="canary",
+    )
+    channel = meta_module._agent_catalog_channel(cfg)
+    assert channel is not None
+    assert channel.artifactBaseUrl == "https://downloads.proliferate.com"
+    assert channel.channel == "canary"
+
+
+def test_agent_catalog_channel_defaults_channel_to_stable_when_blank() -> None:
+    cfg = Settings(
+        agent_catalog_artifact_base_url="https://downloads.proliferate.com",
+        agent_catalog_channel="  ",
+    )
+    channel = meta_module._agent_catalog_channel(cfg)
+    assert channel is not None
+    assert channel.channel == "stable"
+
+
+def test_meta_endpoint_agent_catalog_is_null_without_operator_configuration(
+    monkeypatch,
+) -> None:  # type: ignore[no-untyped-def]
+    _clear_pin_env(monkeypatch)
+    monkeypatch.delenv("AGENT_CATALOG_ARTIFACT_BASE_URL", raising=False)
+
+    body = _client().get("/meta").json()
+
+    assert body["agentCatalog"] is None
