@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState, type DragEvent } from "react";
+import { useCallback, useMemo, useRef, useState, type DragEvent } from "react";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { HomeComposerForm } from "#product/components/home/screen/HomeComposerForm";
 import { HomeOnboardingCards } from "#product/components/home/screen/HomeOnboardingCards";
 import { HomeProjectMenu } from "#product/components/home/screen/HomeProjectMenu";
@@ -85,14 +86,50 @@ export function HomeNextScreen() {
   // home-scoped controller with optimistic pre-session capabilities and ride
   // the launch as prompt snapshots — see useHomeNextComposerState.submit).
   const homeAgentKind = homeNext.effectiveModelSelection?.kind ?? null;
-  // Drops attach by bytes only (no drag-pasteboard path recovery): home's
-  // launch target is still changeable, so a local path captured here could
-  // outlive the local target that made it meaningful.
+  const host = useProductHost();
+  const desktopFiles = host.desktop?.files ?? null;
+  // Dropped-path recovery mirrors ChatView: local path references are only
+  // meaningful when the launched agent will share this machine's filesystem.
+  // cowork/local/worktree run here; cloud does not, and an unresolved target
+  // (including ssh) gets no local refs either. The attachment scope keys off
+  // the same split so flipping the target across the local/remote boundary
+  // clears drafts instead of letting a stale local path ride into a runtime
+  // that cannot read it.
+  const launchTargetKind = homeNext.launchTarget?.kind ?? null;
+  const isLocalRuntimeTarget = launchTargetKind === "cowork"
+    || launchTargetKind === "local"
+    || launchTargetKind === "worktree";
+  // One promise per drag session (see ChatView): a promise's value cannot be
+  // clobbered by a later session's capture, and a drop that lands before the
+  // capture resolves awaits it instead of skipping the comparison.
+  const dragSessionChangeCountRef = useRef<Promise<number> | null>(null);
+  const pendingDropChangeCountRef = useRef<Promise<number> | null>(null);
+  const resolveDroppedPaths = useMemo(() => {
+    if (!desktopFiles || !isLocalRuntimeTarget) {
+      return null;
+    }
+    return async () => {
+      const expectedChangeCount = pendingDropChangeCountRef.current;
+      pendingDropChangeCountRef.current = null;
+      // No captured drag session means the snapshot cannot be attributed;
+      // empty entries route the drop to byte uploads.
+      if (!expectedChangeCount) {
+        return [];
+      }
+      const [snapshot, expected] = await Promise.all([
+        desktopFiles.readDroppedPaths(),
+        expectedChangeCount,
+      ]);
+      // A different drag session wrote the pasteboard after this drop's drag
+      // entered the surface.
+      return snapshot.changeCount === expected ? snapshot.entries : [];
+    };
+  }, [desktopFiles, isLocalRuntimeTarget]);
   const attachments = useChatPromptAttachments({
-    scopeKey: "home",
+    scopeKey: isLocalRuntimeTarget ? "home:local" : "home:remote",
     promptCapabilities: HOME_COMPOSER_PROMPT_CAPABILITIES,
     canAttachFiles: true,
-    resolveDroppedPaths: null,
+    resolveDroppedPaths,
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileDragOver, setFileDragOver] = useState(false);
@@ -104,7 +141,12 @@ export function HomeNextScreen() {
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
     setFileDragOver(true);
-  }, []);
+    if (dragSessionChangeCountRef.current === null && desktopFiles && resolveDroppedPaths) {
+      // Arm once per drag session; the count identifies the session that
+      // will deliver the drop.
+      dragSessionChangeCountRef.current = desktopFiles.getDragPasteboardChangeCount();
+    }
+  }, [desktopFiles, resolveDroppedPaths]);
   const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
     if (!isFileDrag(readFileDragInput(event.dataTransfer))) {
       return;
@@ -112,6 +154,11 @@ export function HomeNextScreen() {
     event.preventDefault();
     event.stopPropagation();
     setFileDragOver(false);
+    const sessionChangeCount = dragSessionChangeCountRef.current;
+    dragSessionChangeCountRef.current = null;
+    pendingDropChangeCountRef.current = sessionChangeCount;
+    // No files.length gate: WebKit can surface folder-only drops with an
+    // empty FileList, and the host path resolver still recovers those items.
     addDroppedFiles(event.dataTransfer.files);
   }, [addDroppedFiles]);
   const handleDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
@@ -120,6 +167,7 @@ export function HomeNextScreen() {
       return;
     }
     setFileDragOver(false);
+    dragSessionChangeCountRef.current = null;
   }, []);
   const homeSessionConfigControls = buildHomeSessionConfigControls({
     destination,

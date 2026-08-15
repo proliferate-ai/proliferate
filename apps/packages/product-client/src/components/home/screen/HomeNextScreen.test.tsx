@@ -538,6 +538,57 @@ describe("HomeNextScreen composer attachments", () => {
     expect(screen.getByText("attachment:drop.png")).toBeTruthy();
   });
 
+  it("recovers dropped local paths as path references when the target runs on this machine", async () => {
+    screenMocks.productHost.desktop = {
+      files: {
+        getDragPasteboardChangeCount: async () => 7,
+        readDroppedPaths: async () => ({
+          changeCount: 7,
+          entries: [
+            { path: "/tmp/big-archive.zip", name: "big-archive.zip", isDirectory: false, size: 33 },
+          ],
+        }),
+      },
+    };
+    const { container } = render(<HomeNextScreen />);
+    const root = container.firstElementChild as HTMLElement;
+    const zip = new File(["x".repeat(33)], "big-archive.zip", { type: "application/zip" });
+
+    fireEvent.dragEnter(root, { dataTransfer: { types: ["Files"], files: [] } });
+    fireEvent.drop(root, { dataTransfer: { types: ["Files"], files: [zip] } });
+
+    await waitFor(() => {
+      expect(screen.getByText("attachment:big-archive.zip")).toBeTruthy();
+    });
+
+    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "inspect the archive" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+    expect(screenMocks.launch).toHaveBeenCalledWith(expect.objectContaining({
+      attachmentSnapshots: [
+        expect.objectContaining({ kind: "local_ref", localPath: "/tmp/big-archive.zip" }),
+      ],
+    }));
+  });
+
+  it("clears draft attachments when the target flips off this machine", () => {
+    const { rerender } = render(<HomeNextScreen />);
+    fireEvent.change(homeFileInput(), {
+      target: { files: [new File(["notes"], "notes.txt", { type: "text/plain" })] },
+    });
+    expect(screen.getByText("attachment:notes.txt")).toBeTruthy();
+
+    screenMocks.homeNext.launchTarget = {
+      kind: "cloud",
+      gitOwner: "acme",
+      gitRepoName: "app",
+      baseBranch: "main",
+    };
+    rerender(<HomeNextScreen />);
+
+    expect(screen.queryByText("attachment:notes.txt")).toBeNull();
+  });
+
   it("removes an attachment from the draft list", () => {
     render(<HomeNextScreen />);
 
