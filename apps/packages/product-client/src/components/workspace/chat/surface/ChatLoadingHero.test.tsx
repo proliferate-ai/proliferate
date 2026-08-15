@@ -50,14 +50,24 @@ describe("ChatLoadingHero", () => {
     expect(screen.getByText("acme/widgets")).not.toBeNull();
   });
 
-  it("keeps ThinkingText, not the mark, for the awaiting-first-turn substep", () => {
+  it("renders ThinkingText immediately for the awaiting-first-turn substep, bypassing the show-delay", () => {
     substepState.substep = "awaiting-first-turn";
     substepState.caption = null;
     substepState.workspaceName = null;
 
     render(<ChatLoadingHero />);
+
+    // Positive assertion: the thinking copy is present before any timers run,
+    // because this branch is agent-activity feedback, not a loading
+    // treatment, and must not be withheld behind the show-delay.
+    expect(document.querySelector("[data-thinking-text]")).not.toBeNull();
+    expect(screen.getAllByText("Thinking").length).toBeGreaterThan(0);
+    expect(document.querySelector("[data-brand-mark]")).toBeNull();
+    expect(document.querySelector("[data-dot-cell-loader]")).toBeNull();
+
     advance(motion.loading.showDelayMs);
 
+    expect(document.querySelector("[data-thinking-text]")).not.toBeNull();
     expect(document.querySelector("[data-brand-mark]")).toBeNull();
     expect(document.querySelector("[data-dot-cell-loader]")).toBeNull();
   });

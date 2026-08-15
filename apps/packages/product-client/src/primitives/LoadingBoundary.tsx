@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type HTMLAttributes,
@@ -93,11 +94,30 @@ export function LoadingBoundary({
   const [phase, setPhase] = useState<Phase>(
     state === "pending" ? "waiting" : "resolved",
   );
+  const [prevState, setPrevState] = useState<LoadingBoundaryState>(state);
   const shownAtRef = useRef<number | null>(null);
   const startedAtRef = useRef<number>(nowMs());
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const flow = diagnostics?.flow;
   const correlation = diagnostics?.correlation ?? {};
+
+  // Derived-state reset (React's "adjust state while rendering" pattern). A
+  // single mounted instance is reused across many load cycles (Rung 3 routes
+  // the persistent chat pane through here), so whenever `state` transitions
+  // back into `pending` from any resolved outcome we re-arm a fresh `waiting`
+  // cycle synchronously: clear the prior cycle's shown timestamp and restart
+  // the elapsed clock. Timers from the previous cycle are torn down by the
+  // effect cleanups below when `phase`/`state` change, so no min-display hold
+  // or diagnostic from cycle N can bleed into cycle N+1.
+  if (state !== prevState) {
+    setPrevState(state);
+    if (state === "pending" && prevState !== "pending") {
+      shownAtRef.current = null;
+      startedAtRef.current = nowMs();
+      setPhase("waiting");
+    }
+  }
 
   // Show-delay: mount the treatment only if the wait outlives the window.
   useEffect(() => {
@@ -177,6 +197,26 @@ export function LoadingBoundary({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, phase, minDisplayMs, showDelayMs]);
 
+  // Restart the one sanctioned reveal (`content-fade-in`) once per visible
+  // phase without remounting the wrapper. A key that flips treatment/content
+  // would remount the resolved subtree on every reveal and destroy the live
+  // children's scroll/focus/component state (Rung 3's chat pane). Instead the
+  // wrapper stays mounted and we re-trigger the CSS animation with a reflow-safe
+  // remove/reflow/add so child identity is preserved across the swap.
+  useLayoutEffect(() => {
+    if (phase === "waiting") {
+      return;
+    }
+    const el = contentRef.current;
+    if (!el) {
+      return;
+    }
+    el.classList.remove("animate-content-fade-in");
+    // Force a reflow so the browser treats the re-added class as a fresh run.
+    void el.offsetWidth;
+    el.classList.add("animate-content-fade-in");
+  }, [phase]);
+
   if (phase === "waiting") {
     // Inside the show-delay window: nothing renders. A sub-show-delay resolution
     // reaches `resolved` without ever passing through `treatment`.
@@ -191,13 +231,7 @@ export function LoadingBoundary({
       : children;
 
   return (
-    <div
-      // Remount across the treatment -> content swap so `content-fade-in` runs
-      // once per reveal rather than only on first mount.
-      key={showTreatment ? "treatment" : "content"}
-      className={`animate-content-fade-in${className ? ` ${className}` : ""}`}
-      {...rest}
-    >
+    <div ref={contentRef} className={className} {...rest}>
       {slot}
     </div>
   );

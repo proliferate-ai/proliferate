@@ -79,4 +79,34 @@ describe("HarnessProvidersSection", () => {
     expect(await screen.findByTestId("provider-picker-modal")).not.toBeNull();
     expect(trigger.disabled).toBe(false);
   });
+
+  it("resets the trigger and surfaces an error when the chunk import rejects", async () => {
+    vi.resetModules();
+    vi.doMock(
+      "#product/components/settings/panes/agents/harness/ProviderPickerModal",
+      () =>
+        new Promise((_resolve, reject) => {
+          setTimeout(() => reject(new Error("chunk load failed")), 20);
+        }),
+    );
+    const { HarnessProvidersSection: SectionWithRejectingImport } = await import(
+      "./HarnessProvidersSection"
+    );
+
+    render(<SectionWithRejectingImport editor={makeEditor()} />);
+
+    const trigger = screen.getByRole("button", { name: /configure/i }) as HTMLButtonElement;
+    fireEvent.click(trigger);
+    expect(trigger.disabled).toBe(true);
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+
+    // The button must reset so a retry is possible, and the modal must never
+    // have appeared.
+    expect(trigger.disabled).toBe(false);
+    expect(screen.queryByTestId("provider-picker-modal")).toBeNull();
+    expect(screen.getByRole("alert")).not.toBeNull();
+  });
 });

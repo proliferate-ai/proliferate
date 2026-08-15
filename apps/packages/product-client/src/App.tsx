@@ -3,8 +3,8 @@ import { Navigate, Route } from "react-router-dom"
 import { BootstrappedRoute, PublicOnlyRoute } from "#product/components/auth/AuthGate"
 import { UserPreferencesGate } from "#product/components/app/UserPreferencesGate"
 import { ToastHost } from "#product/primitives/patterns/toast/ToastHost"
-import { DelayedMount } from "#product/primitives/DelayedMount"
 import { ProliferateLivingMark } from "#product/components/brand/ProliferateLivingMark"
+import { LoadingBoundary } from "#product/primitives/LoadingBoundary"
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
 import { MacWindowControlsSafeArea } from "#product/components/app/chrome/MacWindowControlsSafeArea"
 import { SupportModalHost } from "#product/components/support/SupportModalHost"
@@ -144,18 +144,25 @@ export function App({ RoutesComponent }: AppProps) {
                 path="*"
                 element={
                   // App-root cold-chunk boundary (UX Latency + Transitions ADR
-                  // §4.3, Rung 3): the fallback is the Class A living mark, but
-                  // `Suspense` swaps its whole subtree on resolve rather than
-                  // handing `LoadingBoundary` a `pending -> ready` transition,
-                  // so `DelayedMount` reproduces the show-delay half of that
-                  // contract instead (see DelayedMount.tsx).
+                  // §4.3, Rung 3): the fallback is the Class A living mark,
+                  // routed through `LoadingBoundary` in `state="pending"` so
+                  // the show-delay window is honored. Known limitation: a
+                  // `Suspense` fallback is unmounted the instant the chunk
+                  // resolves, so `LoadingBoundary` never gets a `ready`
+                  // transition here and its min-display hold cannot engage;
+                  // a resolve inside the 200-500ms window can still flash the
+                  // mark briefly. See PR #1926 for the residual-flicker note.
                   <Suspense
                     fallback={
-                      <DelayedMount>
-                        <div className="flex min-h-screen items-center justify-center bg-background">
-                          <ProliferateLivingMark />
-                        </div>
-                      </DelayedMount>
+                      <LoadingBoundary
+                        state="pending"
+                        diagnostics={{ flow: "app_root" }}
+                        treatment={
+                          <div className="flex min-h-screen items-center justify-center bg-background">
+                            <ProliferateLivingMark />
+                          </div>
+                        }
+                      />
                     }
                   >
                     <AuthenticatedProductClient />
