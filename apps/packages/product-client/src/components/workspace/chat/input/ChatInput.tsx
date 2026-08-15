@@ -7,6 +7,7 @@ import {
   type ChangeEvent,
   type MouseEvent,
 } from "react";
+import { CHAT_INPUT_ATTACHMENT_ACCEPT } from "#product/config/chat";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import {
   useActiveSessionId,
@@ -57,9 +58,6 @@ import { usePromptAttachmentPreviewActions } from "#product/hooks/chat/workflows
 import { useChatInputPaste } from "#product/hooks/chat/ui/use-chat-input-paste";
 import { useChatComposerFocusRequest } from "#product/hooks/chat/ui/use-chat-composer-focus-request";
 import type { PromptAttachmentPreviewHandler } from "#product/components/workspace/chat/content/PromptContentRenderer";
-
-const CHAT_INPUT_ATTACHMENT_ACCEPT =
-  "image/*,text/*,.md,.json,.ts,.tsx,.js,.jsx,.py,.rs,.go,.java,.css,.html,.xml,.yaml,.yml,.toml,.sql,.sh";
 
 export function ChatInput({
   attachments,

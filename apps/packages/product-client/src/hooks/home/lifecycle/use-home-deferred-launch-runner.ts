@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { promptAttachmentSendFields } from "#product/domain/chats/composer/prompt-attachment-content-parts";
 import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
@@ -108,6 +109,7 @@ export function useHomeDeferredLaunchRunner() {
           promptId: readyLaunch.promptId,
           launchIntentId: readyLaunch.launchIntentId,
           launchControlValues: readyLaunch.launchControlValues,
+          ...promptAttachmentSendFields(readyLaunch.promptText, readyLaunch.attachmentSnapshots),
           ...(readyLaunch.modeId ? { modeId: readyLaunch.modeId } : {}),
         });
         // Clear even if the hook re-ran mid-flight; the prompt was sent, so a remount must not retry it.
