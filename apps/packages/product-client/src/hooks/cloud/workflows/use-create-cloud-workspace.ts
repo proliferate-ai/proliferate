@@ -33,6 +33,7 @@ import { ensureRepoGroupExpanded } from "#product/stores/preferences/workspace-u
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import type { AuthUser } from "#product/lib/domain/auth/auth-user";
 import { useProductAuthUser } from "#product/hooks/auth/facade/use-product-auth";
+import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
 import { useWorkspaceCollectionsCache } from "#product/hooks/workspaces/cache/use-workspace-collections-cache";
 import { useWorkspaceCollectionsMutationCache } from "#product/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { useProductTelemetry } from "#product/hooks/telemetry/facade/use-product-telemetry";
@@ -43,6 +44,11 @@ import {
 } from "#product/lib/infra/measurement/measurement-port";
 
 const MAX_CLOUD_CREATE_ATTEMPTS = 3;
+
+// Matches the message used at the command-surface gate
+// (use-app-new-workspace-command-actions.ts) so the two gates read as one
+// consistent unavailability story regardless of which entry point tripped.
+const CLOUD_WORKSPACE_UNAVAILABLE_MESSAGE = "Cloud workspaces are temporarily unavailable.";
 
 interface CreateCloudWorkspaceAndEnterOptions {
   repoGroupKeyToExpand?: string | null;
@@ -115,6 +121,7 @@ export function useCreateCloudWorkspace() {
         : null,
     [hostAuthUser],
   );
+  const { cloudComputeEnabled } = useAppCapabilities();
   const { selectWorkspace } = useWorkspaceSelection();
   const { beginPendingWorkspace, failPendingEntry, finalizeSelection } = useWorkspaceEntryFlow();
   const invalidateCloudBillingState = useInvalidateCloudBillingState();
@@ -203,6 +210,20 @@ export function useCreateCloudWorkspace() {
         return { status: "dismissed" };
       }
       currentEntry = nextEntry;
+
+      // Defense in depth: the command surface already gates fresh creates on
+      // this capability, but the receipt's Retry path (PRO-10 round-3 finding)
+      // reaches this flow directly and has no gate of its own. Fail the same
+      // way a server-rejected create fails, before the mutation is ever
+      // invoked, so a workspace never gets created out from under a disabled
+      // capability.
+      if (!cloudComputeEnabled) {
+        failPendingEntry(
+          getPendingWorkspaceEntry(attemptId) ?? currentEntry,
+          CLOUD_WORKSPACE_UNAVAILABLE_MESSAGE,
+        );
+        return { status: "interrupted", failureMessage: CLOUD_WORKSPACE_UNAVAILABLE_MESSAGE };
+      }
 
       try {
         const requestStartedAt = startLatencyTimer();
@@ -329,6 +350,7 @@ export function useCreateCloudWorkspace() {
     authUser,
     beginPendingWorkspace,
     branchPrefixType,
+    cloudComputeEnabled,
     createCloudWorkspaceMutation,
     failPendingEntry,
     finalizeSelection,
