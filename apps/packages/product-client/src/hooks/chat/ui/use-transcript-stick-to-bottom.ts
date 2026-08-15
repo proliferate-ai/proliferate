@@ -20,6 +20,15 @@ function interactionNow(): number {
   return typeof performance === "undefined" ? Date.now() : performance.now();
 }
 
+// How long after an older-history prepend the single frame pass keeps absorbing
+// the freshly-mounted rows' estimate-to-measured height corrections into
+// scrollTop, so the reading row stays fixed. The corrections arrive over several
+// frames (more, and more spread out, on a slow/throttled runner) via the content
+// ResizeObserver, so compensation must survive past the forced-glue window's
+// eager quiet-frame termination — it is bounded by this deadline instead, after
+// which later below-the-viewport growth must be free to move the reader again.
+const ABOVE_CHANGE_COMPENSATION_MAX_MS = 500;
+
 export interface UseTranscriptStickToBottomOptions {
   /** The real scroll element ref (AutoHideScrollArea forwards its viewport here). */
   scrollRef: RefObject<HTMLDivElement | null>;
@@ -79,8 +88,9 @@ export interface TranscriptStickToBottom {
   /**
    * Hold anchored content in place while a freshly-inserted row above it
    * measures in, routed through the single frame pipeline instead of an
-   * independent rAF delta loop. Applies the measured scrollHeight delta each
-   * glued frame while unpinned; a no-op while pinned.
+   * independent rAF delta loop. Applies the measured scrollHeight delta on every
+   * frame pass while unpinned until the compensation deadline lapses; a no-op
+   * while pinned.
    */
   startAboveChangeCompensation: (anchor: ContentHeightScrollAnchor) => void;
   /**
@@ -124,8 +134,17 @@ export function useTranscriptStickToBottom({
   // compensation rAF loop with a single owned scheduler and ONE snap writer.
   const pipelineRef = useRef(new TranscriptFramePipeline());
   // Active above-change compensation anchor, applied by the single frame writer
-  // while unpinned and gluing (was the standalone compensation rAF loop).
+  // while unpinned until its deadline lapses (was the standalone compensation rAF
+  // loop). The deadline, not the glue window, bounds its life so a correction
+  // arriving after the glue window ends is still absorbed.
   const compensationAnchorRef = useRef<ContentHeightScrollAnchor | null>(null);
+  // Deadline (interactionNow ms) past which the active above-change anchor is
+  // stale: the single frame pass compensates each measurement correction that
+  // arrives before it, then stops so ordinary below-the-viewport growth is free
+  // to move the reader again. Bounds compensation by wall-clock instead of the
+  // glue window's fragile quiet-frame termination, which ends a frame early on a
+  // slow runner and loses the last estimate-to-measured correction.
+  const compensationDeadlineRef = useRef(0);
   const autoFollowBottomInsetRef = useRef(Math.max(0, autoFollowBottomInsetPx));
   const consumedAutoFollowBottomInsetRef = useRef(0);
   const userScrollIntentUntilRef = useRef(0);
@@ -341,6 +360,7 @@ export function useTranscriptStickToBottom({
   // anchor stays put as the estimate corrects) until the height settles.
   const startAboveChangeCompensation = useCallback((anchor: ContentHeightScrollAnchor) => {
     compensationAnchorRef.current = anchor;
+    compensationDeadlineRef.current = interactionNow() + ABOVE_CHANGE_COMPENSATION_MAX_MS;
     beginGlue();
   }, [beginGlue]);
 
@@ -364,6 +384,7 @@ export function useTranscriptStickToBottom({
   const resetForSession = useCallback(() => {
     clearAllMarkers();
     compensationAnchorRef.current = null;
+    compensationDeadlineRef.current = 0;
     lastScrollTopRef.current = 0;
     lastContentHeightRef.current = 0;
     consumedAutoFollowBottomInsetRef.current = 0;
@@ -384,6 +405,7 @@ export function useTranscriptStickToBottom({
     scrollRef,
     pinnedRef,
     compensationAnchorRef,
+    compensationDeadlineRef,
     scrollToBottom,
     notifyProgrammaticScroll,
     clearAllMarkers,
