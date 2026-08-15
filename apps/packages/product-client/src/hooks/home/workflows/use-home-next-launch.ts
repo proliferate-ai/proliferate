@@ -67,7 +67,7 @@ export function useHomeNextLaunch() {
     target,
   }: HomeNextLaunchInput): Promise<boolean> => {
     const prompt = text.trim();
-    if (!prompt || inFlightRef.current) {
+    if ((!prompt && !attachmentSnapshots?.length) || inFlightRef.current) {
       return false;
     }
     if (!desktopTargetsAvailable && target.kind !== "cloud") {
@@ -103,10 +103,16 @@ export function useHomeNextLaunch() {
       modeId,
       launchControlValues: resolvedLaunchControlValues,
       promptId,
-      queuedPromptBlocks: [{ type: "text", text: prompt }],
-      optimisticContentParts: [{ type: "text", text: prompt }, ...attachmentContentParts],
+      queuedPromptBlocks: prompt ? [{ type: "text", text: prompt }] : [],
+      optimisticContentParts: [
+        ...(prompt ? [{ type: "text" as const, text: prompt }] : []),
+        ...attachmentContentParts,
+      ],
       text: prompt,
-      contentParts: [{ type: "text", text: prompt }, ...attachmentContentParts],
+      contentParts: [
+        ...(prompt ? [{ type: "text" as const, text: prompt }] : []),
+        ...attachmentContentParts,
+      ],
       targetKind: target.kind,
       retryInput: {
         text: prompt,

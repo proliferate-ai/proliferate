@@ -218,7 +218,7 @@ export function HomeComposerForm({
                 action={(
                   <ChatComposerActions
                     isRunning={false}
-                    isEmpty={composer.draft.trim().length === 0}
+                    isEmpty={composer.isEmpty}
                     isDisabled={!composer.canSubmit}
                     onSubmit={() => { void composer.submit(); }}
                     onCancel={composer.cancel}

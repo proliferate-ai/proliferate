@@ -49,11 +49,12 @@ export function useHomeNextComposerState({
     }
   }, [clearRestoredDraftText, restoredDraftText]);
 
-  const submitDisabledReason = draft.trim().length === 0
-    ? null
-    : targetDisabledReason;
+  // Attachment-only submits are legal, matching the chat composer: supported
+  // attachments count as prompt content.
+  const isEmpty = draft.trim().length === 0 && !attachments.hasSupportedAttachments;
+  const submitDisabledReason = isEmpty ? null : targetDisabledReason;
   const canSubmit =
-    draft.trim().length > 0
+    !isEmpty
     && modelAvailabilityState === "launchable"
     && canLaunchTarget
     && !!modelSelection
@@ -147,6 +148,7 @@ export function useHomeNextComposerState({
     setDraft,
     submitDisabledReason,
     canSubmit,
+    isEmpty,
     isLaunching,
     submit,
     cancel,

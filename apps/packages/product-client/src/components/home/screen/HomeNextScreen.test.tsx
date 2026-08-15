@@ -488,6 +488,27 @@ describe("HomeNextScreen composer attachments", () => {
     });
   });
 
+  it("submits attachment-only launches without any draft text", async () => {
+    render(<HomeNextScreen />);
+
+    fireEvent.change(homeFileInput(), {
+      target: { files: [new File(["png"], "shot.png", { type: "image/png" })] },
+    });
+    const submit = screen.getByRole("button", { name: "Submit" }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(false);
+    fireEvent.click(submit);
+
+    expect(screenMocks.launch).toHaveBeenCalledWith(expect.objectContaining({
+      text: "",
+      attachmentSnapshots: [
+        expect.objectContaining({ name: "shot.png", kind: "image" }),
+      ],
+    }));
+    await waitFor(() => {
+      expect(screen.queryByText("attachment:shot.png")).toBeNull();
+    });
+  });
+
   it("keeps attachments alongside the restored draft when launch fails", async () => {
     screenMocks.launch.mockResolvedValue(false);
     render(<HomeNextScreen />);
