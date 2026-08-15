@@ -1,9 +1,11 @@
 import {
   clearSessionReconnectTimer,
+  currentSessionReconnectAttempt,
   nextSessionReconnectDelayMs,
   registerOfflineSessionReconnect,
   scheduleSessionReconnectTimer,
 } from "#product/lib/workflows/sessions/session-reconnect-state";
+import { recordSessionStreamReconnectScheduled } from "#product/lib/infra/diagnostics/renderer-diagnostics-connection";
 import { isConnectivityOnline } from "#product/stores/infra/connectivity-store";
 import { shouldReconnectStream } from "#product/hooks/sessions/lifecycle/session-runtime-helpers";
 import type {
@@ -74,5 +76,12 @@ export function scheduleSessionStreamReconnect({
   }
 
   const backoffDelay = nextSessionReconnectDelayMs(sessionId, delayMs);
+  recordSessionStreamReconnectScheduled({
+    sessionId,
+    // nextSessionReconnectDelayMs has already counted this attempt, so the
+    // post-increment value is the 1-based number of the reconnect being armed.
+    attempt: currentSessionReconnectAttempt(sessionId),
+    delayMs: backoffDelay,
+  });
   scheduleSessionReconnectTimer(sessionId, runner, backoffDelay);
 }

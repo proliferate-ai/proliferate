@@ -9,6 +9,24 @@ import {
   isDocumentVisibleAndFocused,
   useDocumentFocusVisibilityNonce,
 } from "#product/hooks/ui/document/use-document-focus-visibility";
+import { recordSessionErrorBanner } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+
+// Module-scoped so a banner yields one record per phase even when more than one
+// chat view is mounted; component refs would count per instance.
+const recordedErrorBannerPhases = new Set<string>();
+
+function recordErrorBannerPhaseOnce(
+  sessionId: string,
+  errorAttentionKey: string,
+  phase: "shown" | "acknowledged",
+): void {
+  const dedupeKey = `${sessionId}:${errorAttentionKey}:${phase}`;
+  if (recordedErrorBannerPhases.has(dedupeKey)) {
+    return;
+  }
+  recordedErrorBannerPhases.add(dedupeKey);
+  recordSessionErrorBanner({ sessionId, phase });
+}
 
 export function useSessionErrorAcknowledgement(): void {
   const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
@@ -42,6 +60,13 @@ export function useSessionErrorAcknowledgement(): void {
   const focusVisibilityNonce = useDocumentFocusVisibilityNonce();
 
   useEffect(() => {
+    if (!activeSessionId || !errorAttentionKey) {
+      return;
+    }
+    recordErrorBannerPhaseOnce(activeSessionId, errorAttentionKey, "shown");
+  }, [activeSessionId, errorAttentionKey]);
+
+  useEffect(() => {
     if (!activeSessionId || !isChatActiveShellTab || !errorAttentionKey) {
       return;
     }
@@ -50,6 +75,7 @@ export function useSessionErrorAcknowledgement(): void {
     }
 
     markSessionErrorViewed(activeSessionId, errorAttentionKey);
+    recordErrorBannerPhaseOnce(activeSessionId, errorAttentionKey, "acknowledged");
   }, [
     activeSessionId,
     errorAttentionKey,

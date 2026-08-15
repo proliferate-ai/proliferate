@@ -38,5 +38,5 @@ ANYHARNESS_CLIENT_OUTSIDE_ACCESS apps/packages/product-client/src/hooks/workspac
 ANYHARNESS_CLIENT_OUTSIDE_ACCESS apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-git-reconciliation-actions.ts 1 workflow imports raw AnyHarness client
 
 # Zustand stores must expose owned actions rather than external raw writes.
-PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap.ts 10 runtime bootstrap mutates imported connection store
+PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap.ts 3 runtime bootstrap mutates imported connection store (down from 10: the transition recorder made setRuntimeConnectionState the single writer)
 PRODUCT_CLIENT_STORE_SET_STATE_OUTSIDE_OWNER apps/packages/product-client/src/hooks/workspaces/lifecycle/use-workspace-header-tabs-preference-effects.ts 1 lifecycle hook mutates imported workspace UI store

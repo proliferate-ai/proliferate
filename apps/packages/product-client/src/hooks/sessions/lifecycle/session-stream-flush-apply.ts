@@ -10,6 +10,10 @@ import {
   logDevSSEEvent,
 } from "#product/lib/infra/debug/dev-sse-event-log";
 import { logDevSessionRuntimeEvent } from "#product/lib/infra/debug/dev-session-runtime-log";
+import {
+  recordSessionSyncBatchApplied,
+  recordSessionSyncGapDetected,
+} from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import {
   finishOrCancelMeasurementOperation,
@@ -128,12 +132,13 @@ export function applySessionStreamFlushBatch(
     },
     envelopes,
   );
+  const reducerElapsedMs = performance.now() - reducerStartedAt;
   for (const operationId of streamApplyOperationIds) {
     recordMeasurementMetric({
       type: "reducer",
       category: "session.stream",
       operationId,
-      durationMs: performance.now() - reducerStartedAt,
+      durationMs: reducerElapsedMs,
       count: envelopes.length,
     });
   }
@@ -172,6 +177,20 @@ export function applySessionStreamFlushBatch(
     lastSeqAfter: result.state.transcript.lastSeq,
     lastObservedSeq,
   });
+  // Reuses the reducer duration measured above rather than timing the batch a
+  // second time.
+  recordSessionSyncBatchApplied({
+    sessionId: input.sessionId,
+    applied: result.appliedEnvelopes.length,
+    duplicates: result.duplicateEnvelopes.length,
+    elapsedMs: Math.round(reducerElapsedMs),
+  });
+  if (result.gapEnvelope) {
+    recordSessionSyncGapDetected({
+      sessionId: input.sessionId,
+      gapAfterSeq: result.state.transcript.lastSeq,
+    });
+  }
 
   if (result.appliedEnvelopes.length === 0 && !result.gapEnvelope) {
     // Duplicate envelopes were applied through another path (e.g. a history
