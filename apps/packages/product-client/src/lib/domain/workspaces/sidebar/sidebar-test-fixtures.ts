@@ -339,6 +339,7 @@ export function buildGroups(args: {
   sessionLastViewedAt?: Record<string, string>;
   suppressActiveNeedsReview?: boolean;
   gitStatusesByLogicalId?: Record<string, WorkspaceGitStatus>;
+  cloudComputeEnabled?: boolean;
 }) {
   return buildSidebarGroupStates({
     repoRoots: args.repoRoots ?? [],
@@ -362,5 +363,6 @@ export function buildGroups(args: {
     sessionLastInteracted: args.sessionLastInteracted,
     sessionLastViewedAt: args.sessionLastViewedAt,
     suppressActiveNeedsReview: args.suppressActiveNeedsReview,
+    cloudComputeEnabled: args.cloudComputeEnabled ?? true,
   });
 }

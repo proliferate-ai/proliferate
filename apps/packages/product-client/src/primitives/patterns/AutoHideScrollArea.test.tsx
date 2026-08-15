@@ -43,6 +43,25 @@ function flushFrames() {
   }
 }
 
+function setScrollMetrics(
+  element: HTMLElement,
+  metrics: { clientHeight: number; scrollHeight: number; scrollTop: number },
+) {
+  Object.defineProperty(element, "clientHeight", {
+    configurable: true,
+    value: metrics.clientHeight,
+  });
+  Object.defineProperty(element, "scrollHeight", {
+    configurable: true,
+    value: metrics.scrollHeight,
+  });
+  Object.defineProperty(element, "scrollTop", {
+    configurable: true,
+    writable: true,
+    value: metrics.scrollTop,
+  });
+}
+
 describe("AutoHideScrollArea", () => {
   it("keeps one observer and coalesces thumb geometry during scroll bursts", () => {
     const firstScroll = vi.fn();
@@ -121,6 +140,62 @@ describe("AutoHideScrollArea", () => {
     expect(remountedThumb?.style.height).toBe("30px");
     expect(remountedThumb?.style.transform).toBe("translateY(30px)");
     expect(remountedThumb?.style.pointerEvents).toBe("auto");
+  });
+
+  it("chains wheel deltas to a scrollable ancestor at the scroll edge by default", () => {
+    const rendered = render(
+      <div style={{ overflowY: "auto" }} data-testid="outer">
+        <AutoHideScrollArea className="h-80">
+          <div>content</div>
+        </AutoHideScrollArea>
+      </div>,
+    );
+    const outer = rendered.getByTestId("outer");
+    const viewport = rendered.container.querySelector<HTMLDivElement>(".scrollbar-none")!;
+    setScrollMetrics(outer, { clientHeight: 400, scrollHeight: 2_000, scrollTop: 0 });
+    setScrollMetrics(viewport, { clientHeight: 300, scrollHeight: 3_000, scrollTop: 2_700 });
+
+    // React registers wheel listeners passively, so the chain's effect is the
+    // ancestor scroll itself, never a cancelled event.
+    fireEvent.wheel(viewport, { deltaY: 40 });
+
+    expect(outer.scrollTop).toBe(40);
+  });
+
+  it("does not chain while the viewport can still scroll", () => {
+    const rendered = render(
+      <div style={{ overflowY: "auto" }} data-testid="outer">
+        <AutoHideScrollArea className="h-80">
+          <div>content</div>
+        </AutoHideScrollArea>
+      </div>,
+    );
+    const outer = rendered.getByTestId("outer");
+    const viewport = rendered.container.querySelector<HTMLDivElement>(".scrollbar-none")!;
+    setScrollMetrics(outer, { clientHeight: 400, scrollHeight: 2_000, scrollTop: 0 });
+    setScrollMetrics(viewport, { clientHeight: 300, scrollHeight: 3_000, scrollTop: 100 });
+
+    fireEvent.wheel(viewport, { deltaY: 40 });
+
+    expect(outer.scrollTop).toBe(0);
+  });
+
+  it("keeps the wheel uncancelled when chaining is opted out", () => {
+    const rendered = render(
+      <div style={{ overflowY: "auto" }} data-testid="outer">
+        <AutoHideScrollArea className="h-80" chainVerticalWheel={false}>
+          <div>content</div>
+        </AutoHideScrollArea>
+      </div>,
+    );
+    const outer = rendered.getByTestId("outer");
+    const viewport = rendered.container.querySelector<HTMLDivElement>(".scrollbar-none")!;
+    setScrollMetrics(outer, { clientHeight: 400, scrollHeight: 2_000, scrollTop: 0 });
+    setScrollMetrics(viewport, { clientHeight: 300, scrollHeight: 3_000, scrollTop: 2_700 });
+
+    fireEvent.wheel(viewport, { deltaY: 40 });
+
+    expect(outer.scrollTop).toBe(0);
   });
 
   it("reports custom scrollbar intent on grab and drag", () => {

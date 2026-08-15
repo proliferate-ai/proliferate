@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "#product/primitives/Button";
+import { useChainedVerticalWheel } from "#product/primitives/utils/use-chained-vertical-wheel";
 import { CodeBlockTokenContent } from "#product/components/content/ui/CodeBlockTokenContent";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useHighlightedTokens } from "#product/hooks/ui/highlighting/use-highlighted-tokens";
@@ -33,6 +34,7 @@ export function HighlightedCodeBlock({
 }: HighlightedCodeBlockProps) {
   const [copied, setCopied] = useState(false);
   const { writeText } = useProductHost().clipboard;
+  const handleContentWheel = useChainedVerticalWheel();
 
   const resolvedLang = language ?? filename ?? "text";
   const displayLang = language ?? filename?.split(".").pop() ?? "";
@@ -66,7 +68,10 @@ export function HighlightedCodeBlock({
         </div>
       )}
 
-      <div className={`overflow-x-auto overflow-y-auto p-2 font-mono text-readable-code font-medium ${contentClassName}`}>
+      <div
+        onWheel={handleContentWheel}
+        className={`overscroll-none overflow-x-auto overflow-y-auto p-2 font-mono text-readable-code font-medium ${contentClassName}`}
+      >
         {tokens ? (
           <CodeBlockTokenContent
             lines={tokens}

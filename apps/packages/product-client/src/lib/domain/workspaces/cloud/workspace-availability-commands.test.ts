@@ -35,8 +35,13 @@ const HYDRATED_LOCAL = {
   lastReportedAt: null,
 };
 
-function kinds(input: WorkspaceAvailabilityInput): string[] {
-  return resolveWorkspaceAvailabilityCommands(input).map((c) => c.kind);
+function kinds(input: Omit<WorkspaceAvailabilityInput, "cloudComputeEnabled"> & {
+  cloudComputeEnabled?: boolean;
+}): string[] {
+  return resolveWorkspaceAvailabilityCommands({
+    cloudComputeEnabled: true,
+    ...input,
+  }).map((c) => c.kind);
 }
 
 describe("resolveWorkspaceAvailabilityCommands", () => {
@@ -51,6 +56,7 @@ describe("resolveWorkspaceAvailabilityCommands", () => {
       linkCandidate: true,
       localMaterializationNeedsRepair: false,
       unsupportedGitBlocker: null,
+      cloudComputeEnabled: true,
     }).map((command) => command.kind)).toEqual(["link-copies"]);
   });
   it("offers Add Cloud copy for a local-only workspace", () => {
@@ -152,6 +158,7 @@ describe("deriveWorkspaceAvailabilityInput", () => {
       cloudWorkspace: null,
       desktopInstallId: "mac-a",
       localGitStatus: { ...CLEAN_PUBLISHED, dirty: true },
+      cloudComputeEnabled: true,
     });
     expect(resolveWorkspaceAvailabilityCommands(input).map((c) => c.kind)).toEqual([
       "reconcile-git-state",
@@ -164,10 +171,22 @@ describe("deriveWorkspaceAvailabilityInput", () => {
       cloudWorkspace: null,
       desktopInstallId: "mac-a",
       localGitStatus: CLEAN_PUBLISHED,
+      cloudComputeEnabled: true,
     });
     expect(resolveWorkspaceAvailabilityCommands(input).map((c) => c.kind)).toEqual([
       "add-cloud-copy",
     ]);
+  });
+
+  it("omits Add Cloud copy for a clean published local source when cloud compute is disabled", () => {
+    const input = deriveWorkspaceAvailabilityInput({
+      localWorkspace: { id: "ws-1" },
+      cloudWorkspace: null,
+      desktopInstallId: "mac-a",
+      localGitStatus: CLEAN_PUBLISHED,
+      cloudComputeEnabled: false,
+    });
+    expect(resolveWorkspaceAvailabilityCommands(input).map((c) => c.kind)).toEqual([]);
   });
 
   it("never blocks a Cloud-only Open on this Mac on local git status", () => {
@@ -176,6 +195,7 @@ describe("deriveWorkspaceAvailabilityInput", () => {
       cloudWorkspace: { materializations: [] },
       desktopInstallId: "mac-a",
       localGitStatus: null,
+      cloudComputeEnabled: true,
     });
     expect(resolveWorkspaceAvailabilityCommands(input).map((c) => c.kind)).toEqual([
       "open-on-this-mac",
@@ -203,11 +223,36 @@ describe("deriveWorkspaceAvailabilityInput", () => {
       },
       desktopInstallId: "mac-a",
       localGitStatus: null,
+      cloudComputeEnabled: true,
     });
     expect(resolveWorkspaceAvailabilityCommands(input).map((c) => c.kind)).toEqual([
       "relink-existing",
       "recreate-on-this-mac",
       "unlink-this-mac",
     ]);
+  });
+});
+
+describe("resolveWorkspaceAvailabilityCommands cloudComputeEnabled gate (PRO-10)", () => {
+  it("omits add-cloud-copy for a local-only workspace when cloud compute is disabled", () => {
+    expect(
+      kinds({
+        hasLocalWorkspace: true,
+        cloudWorkspace: null,
+        desktopInstallId: "mac-a",
+        cloudComputeEnabled: false,
+      }),
+    ).toEqual([]);
+  });
+
+  it("still offers add-cloud-copy for a local-only workspace when cloud compute is enabled", () => {
+    expect(
+      kinds({
+        hasLocalWorkspace: true,
+        cloudWorkspace: null,
+        desktopInstallId: "mac-a",
+        cloudComputeEnabled: true,
+      }),
+    ).toEqual(["add-cloud-copy"]);
   });
 });
