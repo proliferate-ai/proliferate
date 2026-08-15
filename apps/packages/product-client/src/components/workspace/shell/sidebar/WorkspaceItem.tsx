@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
 import { Archive } from "#product/primitives/icons/core";
+import { Pin } from "#product/primitives/icons/workspace";
 import { SidebarActionButton } from "#product/primitives/patterns/sidebar/SidebarActionButton";
 import { useWorkspaceSidebarNativeContextMenu } from "#product/hooks/workspaces/ui/use-workspace-sidebar-native-context-menu";
 import type {
@@ -174,11 +175,24 @@ export function WorkspaceItem({
     availabilityCommands,
     onAvailabilityCommand,
   });
-  // Archive rides the row's hover-action slot directly (no three-dot menu):
-  // every other action the old menu carried is already on the DOM context
-  // menu below and the native menu (`useWorkspaceSidebarNativeContextMenu`).
-  // Not offered on an already-archived (cloud) entry — that row's exit is
-  // Unarchive, reachable from either context menu.
+  // Pin/Unpin and Archive ride the row's hover-action slot directly (no
+  // three-dot menu): every other action the old menu carried is already on
+  // the DOM context menu below and the native menu
+  // (`useWorkspaceSidebarNativeContextMenu`). Neither is offered on an
+  // already-archived (cloud) entry — that row's exit is Unarchive, reachable
+  // from either context menu.
+  const pinHoverAction = !archived && (pinned ? onUnpin : onPin) ? (
+    <SidebarActionButton
+      title={pinned ? "Unpin workspace" : "Pin workspace"}
+      onClick={(event) => {
+        event.stopPropagation();
+        if (pinned) handleUnpinCommand();
+        else handlePinCommand();
+      }}
+    >
+      <Pin />
+    </SidebarActionButton>
+  ) : null;
   const archiveHoverAction = onArchive && !archived ? (
     <SidebarActionButton
       title="Archive workspace (⌘⇧A)"
@@ -189,6 +203,12 @@ export function WorkspaceItem({
     >
       <Archive />
     </SidebarActionButton>
+  ) : null;
+  const hoverActions = pinHoverAction || archiveHoverAction ? (
+    <>
+      {pinHoverAction}
+      {archiveHoverAction}
+    </>
   ) : null;
 
   const { onPointerEnter, onPointerLeave, peekCard } = useWorkspacePeek({
@@ -209,7 +229,7 @@ export function WorkspaceItem({
       unreadDot={needsReview}
       shortcutLabel={shortcutLabel}
       shortcutRevealVisible={shortcutRevealVisible}
-      hoverAction={archiveHoverAction}
+      hoverAction={hoverActions}
       onSelect={onSelect}
       onContextMenuCapture={onContextMenuCapture}
       onPointerEnter={(event) => {
