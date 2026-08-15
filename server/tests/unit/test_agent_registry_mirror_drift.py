@@ -32,9 +32,7 @@ def test_harness_kinds_mirror_matches_registry() -> None:
 
 
 def test_gateway_capable_mirror_matches_registry() -> None:
-    assert set(AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS) == set(
-        registry_gateway_capable_kinds()
-    )
+    assert set(AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS) == set(registry_gateway_capable_kinds())
 
 
 def test_single_source_mirror_matches_registry() -> None:
