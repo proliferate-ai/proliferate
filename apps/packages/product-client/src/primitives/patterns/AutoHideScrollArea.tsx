@@ -7,10 +7,12 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
-  type WheelEvent as ReactWheelEvent,
 } from "react";
 import { motion } from "@proliferate/design/motion";
-import { chainVerticalWheelScroll } from "#product/primitives/utils/scroll-chain";
+import {
+  buildOverscrollStyle,
+  useChainedVerticalWheel,
+} from "#product/primitives/utils/use-chained-vertical-wheel";
 
 interface AutoHideScrollAreaProps {
   children: ReactNode;
@@ -51,7 +53,7 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
       overscrollBehavior = "none",
       overscrollBehaviorX,
       overscrollBehaviorY,
-      chainVerticalWheel = false,
+      chainVerticalWheel = true,
       onViewportScroll,
       onUserScrollIntent,
     },
@@ -254,19 +256,12 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
       event.preventDefault();
       event.stopPropagation();
     };
-    const viewportStyle = {
+    const viewportStyle = buildOverscrollStyle(
       overscrollBehavior,
-      ...(overscrollBehaviorX ? { overscrollBehaviorX } : {}),
-      ...(overscrollBehaviorY ? { overscrollBehaviorY } : {}),
-    } as CSSProperties;
-    const handleViewportWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
-      if (!chainVerticalWheel) {
-        return;
-      }
-      if (chainVerticalWheelScroll(event.currentTarget, event.deltaY)) {
-        event.preventDefault();
-      }
-    };
+      overscrollBehaviorX,
+      overscrollBehaviorY,
+    );
+    const handleViewportWheel = useChainedVerticalWheel(chainVerticalWheel);
 
     return (
       <div className={`relative min-h-0 overflow-hidden ${className}`}>
