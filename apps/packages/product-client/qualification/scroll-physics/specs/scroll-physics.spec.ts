@@ -53,6 +53,53 @@ async function settle(page: Page, ms = 350): Promise<void> {
   await page.waitForTimeout(ms);
 }
 
+// Frame-aligned metrics read. `settle`'s wall clock elapses even on a starved
+// CI renderer that painted ZERO frames, so a probe taken right after it can
+// sample the transient state that exists between a DOM growth mutation and the
+// pre-paint ResizeObserver snap the engine applies before the next paint — a
+// state no painted frame ever shows (this is the source of the load-dependent
+// bottomDistance 132 CI caught). FR-1's follow invariant is defined per painted
+// frame, so growth-then-measure assertions must read a frame that actually
+// rendered. This captures the metrics snapshot INSIDE the evaluate, phased to
+// land after a frame's ResizeObserver snap AND paint (see the per-line note on
+// the read hop below). The read must be INSIDE the same evaluate: a separate
+// `metrics()` call after a bare settle runs on a later task and can land on a
+// fresh frame whose pre-paint RO snap has not yet run, reopening the exact gap
+// this closes (verified: the separate-read form still samples 132; this form
+// does not). Bounded so a genuinely frozen renderer fails rather than hangs.
+async function metricsAfterFrame(page: Page, timeoutMs = 4000): Promise<Metrics> {
+  return page.evaluate(
+    (timeout) =>
+      new Promise<Metrics>((resolve) => {
+        const read = () =>
+          (
+            window.__scrollPhysics as unknown as { getMetrics: () => Metrics }
+          ).getMetrics();
+        const bail = setTimeout(() => resolve(read()), timeout);
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            // Read AFTER the frame's ResizeObserver delivery + paint, not just
+            // after the frame boundary: rAF callbacks run BEFORE RO delivery in
+            // the rendering steps, and the product's stick-to-bottom snap writes
+            // scrollTop during RO delivery. Reading inside the rAF callback
+            // therefore samples the pre-snap leading edge of the frame — the
+            // exact transient (bottomDistance 132) that no frame actually paints
+            // — so this hops one setTimeout(0) macrotask, which lands after the
+            // frame's RO snap and paint have completed, reflecting the snapped,
+            // painted state. (Verified: reading inside the rAF callback still
+            // sampled 132; the post-paint hop does not, with zero frame-budget
+            // timeouts.)
+            setTimeout(() => {
+              clearTimeout(bail);
+              resolve(read());
+            }, 0);
+          }),
+        );
+      }),
+    timeoutMs,
+  );
+}
+
 async function waitForViewport(page: Page): Promise<void> {
   await page.waitForFunction(() => window.__scrollPhysics.hasViewport());
 }
@@ -198,7 +245,10 @@ test.describe("transcript scroll physics", () => {
     for (let batch = 0; batch < 25; batch += 1) {
       await drive(page, "streamChunk");
       await settle(page, 60);
-      const m = await metrics(page);
+      // Read a frame that actually painted: `settle`'s wall clock can elapse on
+      // a starved CI renderer between the growth mutation and the pre-paint RO
+      // snap, sampling a mid-growth bottomDistance no rendered frame shows.
+      const m = await metricsAfterFrame(page);
       // Pinned follow: the viewport stays glued near the growing bottom, the
       // distance stays bounded and never runs away. (The pin FLAG can flicker
       // for a frame on WebKit as a growth scroll is classified, so the physical
@@ -338,9 +388,13 @@ test.describe("transcript scroll physics", () => {
     }
     await settle(page, 1000);
     // Re-pinned, so streaming growth is followed again (pin holds, distance
-    // stays bounded near the bottom) once settled.
+    // stays bounded near the bottom) once settled. Read a painted frame so a
+    // starved renderer cannot leave the probe sampling the mid-growth transient
+    // between the last mutation and its pre-paint RO snap.
     await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
-    expect((await metrics(page)).bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
+    expect((await metricsAfterFrame(page)).bottomDistance).toBeLessThanOrEqual(
+      PIN_FOLLOW_MAX_DISTANCE_PX,
+    );
     await drive(page, "finalizeStreamingTurn");
   });
 
@@ -562,7 +616,11 @@ test.describe("transcript scroll physics", () => {
       "getLastPrependEvidence",
     );
     expect(evidence, "a prepend should have been triggered by scrolling to the top").not.toBeNull();
-    const after = await metrics(page);
+    // Read a painted frame: the prepend's estimate-to-measured corrections land
+    // over several frames, and `settle`'s wall clock can elapse on a starved
+    // (here CPU-throttled) renderer mid-correction, sampling a scrollTop no
+    // painted frame shows.
+    const after = await metricsAfterFrame(page);
 
     // Anchor invariant: scrollTop absorbs essentially all of the height added
     // above, so the reading row stays put. The anchoring signature is
