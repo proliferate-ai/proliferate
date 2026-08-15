@@ -20,7 +20,15 @@ import {
   clearMeasuredRowHeightsForTests,
   recordMeasuredRowHeight,
 } from "#product/hooks/chat/ui/transcript-row-height-cache";
-import { getRowCompositionToken } from "#product/hooks/chat/ui/transcript-row-height-estimate";
+import {
+  estimateRenderableRowHeight,
+  getRowCompositionToken,
+  getRowEstimateBucketKey,
+} from "#product/hooks/chat/ui/transcript-row-height-estimate";
+import {
+  clearRowHeightCalibrationForTests,
+  recordBucketMeasurement,
+} from "#product/hooks/chat/ui/transcript-row-height-calibration";
 
 type TurnRow = Extract<TranscriptRenderableRow, { kind: "transcript" }>;
 
@@ -185,5 +193,81 @@ describe("useTranscriptVirtualMeasurementModel measured-height supersedes estima
     // Once measured, the total is the sum of MEASURED heights (552), not the sum
     // of composition estimates (240).
     expect(total).toBe(552);
+  });
+});
+
+describe("useTranscriptVirtualMeasurementModel per-bucket calibration (PRO-187, r5)", () => {
+  beforeEach(() => {
+    clearMeasuredRowHeightsForTests();
+    clearRowHeightCalibrationForTests();
+  });
+  afterEach(() => {
+    clearMeasuredRowHeightsForTests();
+    clearRowHeightCalibrationForTests();
+  });
+
+  // A never-measured tall turn: two plain blocks, static composition estimate
+  // 220. In a session whose turns of this shape really render ~430px, the static
+  // guess undershoots by ~210px per row — the honest-heights inversion this rung
+  // addresses.
+  function tallPlainTurn(key: string) {
+    return turnRow(key, [
+      { kind: "item", itemId: `${key}-user` },
+      { kind: "item", itemId: `${key}-assistant` },
+    ]) as TranscriptRenderableRow;
+  }
+
+  it("borrows the session bucket average for a never-measured row of the same shape", () => {
+    const measuredSibling = tallPlainTurn("turn:a:block:content");
+    const neverMeasured = tallPlainTurn("turn:z:block:content");
+    const bucketKey = getRowEstimateBucketKey(measuredSibling);
+    expect(bucketKey).toBe("turn:plain:2-3");
+
+    // Two sibling rows of this bucket measured for real at ~430px feed the
+    // running average (as measureElement does on real measurement).
+    recordBucketMeasurement("w1:s1", bucketKey, 420);
+    recordBucketMeasurement("w1:s1", bucketKey, 440);
+
+    const { result } = renderHook(
+      (p) => useTranscriptVirtualMeasurementModel(p),
+      {
+        initialProps: {
+          activeSessionId: "s1",
+          selectedWorkspaceId: "w1",
+          renderableRows: [neverMeasured],
+        },
+      },
+    );
+
+    // The never-measured row is estimated from the session's observed bucket
+    // heights (430), NOT the static composition estimate.
+    //
+    // NEGATIVE CONTROL: with calibration removed from estimateSize, this reads
+    // the static composition estimate (220) — the undershoot that fails the
+    // honest-heights estimate-accuracy bound in the scroll-physics suite.
+    expect(result.current.estimateSize(0)).toBe(430);
+    expect(estimateRenderableRowHeight(neverMeasured)).toBe(220);
+  });
+
+  it("prefers a row's own persisted measurement over the bucket average", () => {
+    const row = tallPlainTurn("turn:a:block:content");
+    const bucketKey = getRowEstimateBucketKey(row);
+    recordBucketMeasurement("w1:s1", bucketKey, 430);
+    // This exact row measured 300 for real: its persisted height wins over both
+    // the bucket average (430) and the static estimate (220).
+    recordMeasuredRowHeight("w1:s1", row.key, 300, getRowCompositionToken(row));
+
+    const { result } = renderHook(
+      (p) => useTranscriptVirtualMeasurementModel(p),
+      {
+        initialProps: {
+          activeSessionId: "s1",
+          selectedWorkspaceId: "w1",
+          renderableRows: [row],
+        },
+      },
+    );
+
+    expect(result.current.estimateSize(0)).toBe(300);
   });
 });

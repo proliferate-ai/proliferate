@@ -6,10 +6,16 @@ import {
   getRowCompositionToken,
   type TranscriptRenderableRow,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
+import { getRowEstimateBucketKey } from "#product/hooks/chat/ui/transcript-row-height-estimate";
 import {
   getMeasuredRowHeight,
   recordMeasuredRowHeight,
 } from "#product/hooks/chat/ui/transcript-row-height-cache";
+import {
+  getCalibratedBucketHeight,
+  getCalibrationGeneration,
+  recordBucketMeasurement,
+} from "#product/hooks/chat/ui/transcript-row-height-calibration";
 
 type VirtualMeasurementEntry = readonly [key: string, estimatedSize: number];
 
@@ -26,6 +32,11 @@ export function useTranscriptVirtualMeasurementModel({
   // the rung 5 measured-height cache to remounts of the SAME session (see
   // transcript-row-height-cache.ts). Never persisted beyond this runtime.
   const sessionKey = `${selectedWorkspaceId ?? ""}:${activeSessionId}`;
+  // Read fresh each render (TanStack notifies -> re-render on every measurement):
+  // bumps only when a bucket first calibrates, so folding it into estimateSize's
+  // identity re-derives the still-estimated off-screen rows exactly once per
+  // newly-calibrated bucket, then holds identity stable.
+  const calibrationGeneration = getCalibrationGeneration(sessionKey);
   // Live row snapshot read at call time by the referentially-stable accessors
   // below. estimateSize/measureElement need the current row (for its
   // composition token) without themselves rotating on every content-only
@@ -100,9 +111,24 @@ export function useTranscriptVirtualMeasurementModel({
         key,
         getRowCompositionToken(row),
       );
-      return persisted ?? estimateRenderableRowHeight(row);
+      if (persisted != null) {
+        return persisted;
+      }
+      // No real measurement for THIS row yet: borrow this session's running
+      // average for the row's composition bucket if one exists, so a
+      // never-measured row is estimated from real heights observed for rows of
+      // the same shape this session, falling back to the static composition
+      // estimate only until a bucket has any measurements.
+      const calibrated = getCalibratedBucketHeight(
+        sessionKey,
+        getRowEstimateBucketKey(row),
+      );
+      return calibrated ?? estimateRenderableRowHeight(row);
     },
-    [orderedKeys, sessionKey],
+    // calibrationGeneration rotates identity only when a bucket first calibrates
+    // (bounded per session), forcing TanStack to re-derive off-screen rows that
+    // would otherwise keep their cached pre-calibration estimate.
+    [orderedKeys, sessionKey, calibrationGeneration],
   );
   const estimatedRowsHeight = useMemo(
     () => renderableRows.reduce((sum, row) => sum + estimateRenderableRowHeight(row), 0),
@@ -125,6 +151,9 @@ export function useTranscriptVirtualMeasurementModel({
       const row = renderableRows[index];
       if (row) {
         recordMeasuredRowHeight(sessionKey, row.key, measured, getRowCompositionToken(row));
+        // Fold the real measurement into this session's per-bucket running
+        // average so never-measured rows of the same composition borrow it.
+        recordBucketMeasurement(sessionKey, getRowEstimateBucketKey(row), measured);
       }
       return measured;
     },
