@@ -15,21 +15,34 @@ import {
   writeDevUpdaterMock,
   type DevUpdaterMockState,
 } from "./updater-dev-mock";
-import { runDownloadAndPrepareRestart } from "./updater-download";
+import { abortOwnedDownload, runDownloadAndPrepareRestart } from "./updater-download";
 import {
   attachAutoCheckScheduler,
+  persistUpdaterMetadataSnapshot,
   runUpdateCheck,
   type UpdaterSchedulerDeps,
 } from "./updater-check";
+import { readUpdaterFlags } from "./updater-flags";
 import { isDownloadStalled } from "#product/lib/domain/updates/download-stall";
+import { isOfficialHostedApiBaseUrl } from "#product/lib/infra/proliferate-api";
 
 /** How often the stall clock is read. Well under the 8s threshold it tests. */
 const STALL_POLL_INTERVAL_MS = 1_000;
 
 export function useUpdater() {
-  const updater = useProductHost().desktop?.updater ?? null;
+  const host = useProductHost();
+  const updater = host.desktop?.updater ?? null;
   const telemetry = useProductTelemetry();
   const storageContext = useProductStorageContext();
+  const apiBaseUrl = host.deployment?.apiBaseUrl ?? null;
+  // The owned check's endpoint-override candidate: a connected non-official
+  // server's redirect manifest. Only consumed when the redirect flag is ON.
+  const serverUpdaterEndpoint = useMemo<string | null>(() => {
+    if (!apiBaseUrl || isOfficialHostedApiBaseUrl(apiBaseUrl)) {
+      return null;
+    }
+    return `${apiBaseUrl.replace(/\/$/, "")}/desktop/updater/latest.json`;
+  }, [apiBaseUrl]);
   // Arm the module-level scheduler's host facades (ruling G1). Held in a ref so
   // the auto-check effect and the action callbacks keep their existing
   // dependency arrays (host is a stable per-mount snapshot, so deps never
@@ -40,8 +53,9 @@ export function useUpdater() {
       captureException: (error, context) =>
         telemetry.captureException(error, context),
       storage: storageContext,
+      serverUpdaterEndpoint,
     }),
-    [telemetry, storageContext],
+    [telemetry, storageContext, serverUpdaterEndpoint],
   );
   const depsRef = useRef(deps);
   depsRef.current = deps;
@@ -172,7 +186,12 @@ export function useUpdater() {
     if (!isPackaged || updater === null) {
       return;
     }
-    await runDownloadAndPrepareRestart(updater, depsRef.current);
+    const owned = (await readUpdaterFlags(depsRef.current.storage))
+      .ownedUpdaterEnabled;
+    await runDownloadAndPrepareRestart(updater, depsRef.current, {
+      owned,
+      storage: depsRef.current.storage,
+    });
   }, [devMock, isPackaged, updater]);
 
   /**
@@ -225,18 +244,32 @@ export function useUpdater() {
     if (!isPackaged || updater === null) {
       return;
     }
+    // Abort-first: a retry must cancel any live (stalled) download and await the
+    // ack before starting a new one, so there is never more than one live
+    // download.
+    await abortOwnedDownload(updater);
+    const owned = (await readUpdaterFlags(depsRef.current.storage))
+      .ownedUpdaterEnabled;
     useUpdaterStore.getState().retryDownload();
-    await runDownloadAndPrepareRestart(updater, depsRef.current);
+    await runDownloadAndPrepareRestart(updater, depsRef.current, {
+      owned,
+      storage: depsRef.current.storage,
+    });
   }, [devMock, isPackaged, updater]);
 
   /** Abandon this update entirely; the pill and any toast go away. */
-  const cancelUpdate = useCallback(() => {
+  const cancelUpdate = useCallback(async () => {
     if (devMock) {
       writeDevUpdaterMock(null);
       return;
     }
+    // Abort-first: tear down any live owned download before resetting, so a
+    // reset can never strand a still-running transfer.
+    if (updater !== null) {
+      await abortOwnedDownload(updater);
+    }
     useUpdaterStore.getState().reset();
-  }, [devMock]);
+  }, [devMock, updater]);
 
   const skipVersion = useCallback(() => {
     const version = availableVersion;
@@ -244,6 +277,9 @@ export function useUpdater() {
       return;
     }
     useUpdaterStore.getState().skipVersion(version);
+    // Persist so the skip survives relaunch (the store's skip list is seeded
+    // from this on the next boot).
+    void persistUpdaterMetadataSnapshot(depsRef.current.storage);
   }, [availableVersion, devMock]);
 
   const cancelRestartCountdown = useCallback(() => {
@@ -303,6 +339,21 @@ export function useUpdater() {
       return;
     }
     useUpdaterStore.getState().setRestartPromptOpen(false);
+    // Owned path: `ready` means staged + verified, not yet installed. Install
+    // the staged bytes now (re-verified natively), then relaunch. The legacy
+    // path already installed during download, so it only relaunches.
+    const update = useUpdaterStore.getState()._update;
+    const owned = (await readUpdaterFlags(depsRef.current.storage))
+      .ownedUpdaterEnabled;
+    if (owned && update !== null && typeof updater.installStaged === "function") {
+      try {
+        await updater.installStaged(update);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        useUpdaterStore.getState().setError(message, "download");
+        return;
+      }
+    }
     await updater.relaunch();
   }, [devMock, isPackaged, updater]);
 

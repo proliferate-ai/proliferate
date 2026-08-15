@@ -17,6 +17,8 @@ type ProductionSurfacePreview =
   | "downloading"
   | "stalled"
   | "stalled-no-total"
+  | "verifying"
+  | "reusing-staged"
   | "ready-reminder"
   | "restart-dialog"
   | "ready-armed"
@@ -40,6 +42,8 @@ const PRODUCTION_SURFACE_PREVIEWS: {
   { id: "downloading", label: "Downloading" },
   { id: "stalled", label: "Stalled" },
   { id: "stalled-no-total", label: "Stalled (no size)" },
+  { id: "verifying", label: "Verifying" },
+  { id: "reusing-staged", label: "Reusing staged" },
   { id: "ready-reminder", label: "Ready reminder" },
   { id: "restart-dialog", label: "Restart dialog" },
   { id: "ready-armed", label: "Restart armed" },
@@ -117,6 +121,29 @@ function buildProductionSurfaceMock(preview: ProductionSurfacePreview): DevUpdat
       phase: "stalled",
       downloadTotalBytes: null,
       lastProgressAt: Date.now() - PREVIEW_STALL_SILENCE_MS,
+    };
+  }
+
+  // All bytes are staged; the native side is recomputing sha256 + re-checking
+  // minisign. A full bar with "verifying" copy.
+  if (preview === "verifying") {
+    return {
+      ...baseState,
+      phase: "verifying",
+      downloadProgress: 100,
+      downloadReceivedBytes: PREVIEW_DOWNLOAD_TOTAL_BYTES,
+      downloadTotalBytes: PREVIEW_DOWNLOAD_TOTAL_BYTES,
+      downloadStartedAt: Date.now() - 45_000,
+      lastProgressAt: Date.now(),
+    };
+  }
+
+  // A verified artifact for this version was already staged (e.g. from a prior
+  // session), so there is nothing to download on the way to ready.
+  if (preview === "reusing-staged") {
+    return {
+      ...baseState,
+      phase: "reusingStaged",
     };
   }
 
