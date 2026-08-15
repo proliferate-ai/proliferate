@@ -79,6 +79,12 @@ jobs:
             minisign -S -s /tmp/agent-catalog.key -m catalogs/agents/catalog.json -x catalog.json.minisig
           printf '%s\n' "$AGENT_CATALOG_SIGNING_PASSWORD" | \
             minisign -S -s /tmp/agent-catalog.key -m catalogs/agents/registry.json -x registry.json.minisig
+          # M3 (downgrade resistance): sign the manifest itself, with the SAME
+          # key, so the runtime can verify `catalogVersion`/`registryVersion`
+          # came from us before trusting the versioned URLs it builds from
+          # them — not just the two documents those URLs point at.
+          printf '%s\n' "$AGENT_CATALOG_SIGNING_PASSWORD" | \
+            minisign -S -s /tmp/agent-catalog.key -m manifest.json -x manifest.json.minisig
           shred -u /tmp/agent-catalog.key || rm -f /tmp/agent-catalog.key
 
       - name: Configure AWS credentials
@@ -110,7 +116,7 @@ jobs:
           BUCKET="${{ vars.AGENT_CATALOG_S3_BUCKET || vars.DESKTOP_DOWNLOADS_S3_BUCKET }}"
           : "${CATALOG_VERSION:?Missing catalog version.}"
           PREFIX="catalogs/agents/${CATALOG_VERSION}"
-          for file in catalogs/agents/catalog.json catalogs/agents/registry.json catalog.json.minisig registry.json.minisig manifest.json; do
+          for file in catalogs/agents/catalog.json catalogs/agents/registry.json catalog.json.minisig registry.json.minisig manifest.json manifest.json.minisig; do
             aws s3api put-object \
               --bucket "${BUCKET}" \
               --key "${PREFIX}/$(basename "$file")" \
@@ -129,9 +135,17 @@ jobs:
             "s3://${BUCKET}/catalogs/agents/${CHANNEL}/manifest.json" \
             --content-type "application/json" \
             --cache-control "max-age=300"
+          # The runtime verifies the manifest's minisign signature before
+          # trusting catalogVersion/registryVersion (M3); the rolling pointer
+          # it fetches at boot needs the signature published alongside it,
+          # not just the immutable versioned copy above.
+          aws s3 cp manifest.json.minisig \
+            "s3://${BUCKET}/catalogs/agents/${CHANNEL}/manifest.json.minisig" \
+            --content-type "application/octet-stream" \
+            --cache-control "max-age=300"
 
       - name: Invalidate CloudFront cache (rolling pointer only)
         run: |
           aws cloudfront create-invalidation \
             --distribution-id "${{ vars.AGENT_CATALOG_CLOUDFRONT_DISTRIBUTION_ID || vars.DESKTOP_CLOUDFRONT_DISTRIBUTION_ID }}" \
-            --paths "/catalogs/agents/stable/manifest.json"
+            --paths "/catalogs/agents/stable/manifest.json" "/catalogs/agents/stable/manifest.json.minisig"
