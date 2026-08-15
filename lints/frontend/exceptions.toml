@@ -451,13 +451,13 @@ reason = "pre-existing direct router subscription; not yet moved to the app-navi
 rule = "FE-NAV-1"
 path = "apps/packages/product-client/src/hooks/workspaces/workflows/right-panel/use-right-panel-entry-actions.ts"
 site = "type SetStateAction::useNavigate"
-reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; live on origin/main"
+reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; ALREADY FIXED on origin/main via navigateApp, so this entry goes stale at the #1722 rebase onto main and must be deleted then (see PR body reconciliation checklist)"
 
 [[exception]]
 rule = "FE-NAV-1"
 path = "apps/packages/product-client/src/hooks/workspaces/workflows/right-panel/use-right-panel-entry-actions.ts"
 site = "const navigate::useNavigate"
-reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; live on origin/main"
+reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; ALREADY FIXED on origin/main via navigateApp, so this entry goes stale at the #1722 rebase onto main and must be deleted then (see PR body reconciliation checklist)"
 
 [[exception]]
 rule = "FE-NAV-1"
@@ -487,43 +487,43 @@ reason = "pre-existing direct router subscription in a shell workflow hook; broa
 rule = "FE-NAV-1"
 path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-arrival-actions.ts"
 site = "useNavigate"
-reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; live on origin/main"
+reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; this path does not exist on origin/main (logic renamed/merged into use-workspace-archive-actions.ts, which has a live useNavigate there), so at the #1722 rebase this entry must be re-pointed to the main-side path, not carried forward (see PR body reconciliation checklist)"
 
 [[exception]]
 rule = "FE-NAV-1"
 path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-arrival-actions.ts"
 site = "const navigate::useNavigate"
-reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; live on origin/main"
+reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; this path does not exist on origin/main (logic renamed/merged into use-workspace-archive-actions.ts, which has a live useNavigate there), so at the #1722 rebase this entry must be re-pointed to the main-side path, not carried forward (see PR body reconciliation checklist)"
 
 [[exception]]
 rule = "FE-NAV-1"
 path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-navigation-workflow.ts"
 site = "useLocation"
-reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; live on origin/main"
+reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; ALREADY FIXED on origin/main via navigateApp, so this entry goes stale at the #1722 rebase onto main and must be deleted then (see PR body reconciliation checklist)"
 
 [[exception]]
 rule = "FE-NAV-1"
 path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-navigation-workflow.ts"
 site = "const location::useLocation"
-reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; live on origin/main"
+reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; ALREADY FIXED on origin/main via navigateApp, so this entry goes stale at the #1722 rebase onto main and must be deleted then (see PR body reconciliation checklist)"
 
 [[exception]]
 rule = "FE-NAV-1"
 path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-navigation-workflow.ts"
 site = "const navigate::useNavigate"
-reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; live on origin/main"
+reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; ALREADY FIXED on origin/main via navigateApp, so this entry goes stale at the #1722 rebase onto main and must be deleted then (see PR body reconciliation checklist)"
 
 [[exception]]
 rule = "FE-NAV-1"
 path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-retire-actions.ts"
 site = "useNavigate"
-reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; live on origin/main"
+reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; this path does not exist on origin/main (logic renamed/merged into use-workspace-archive-actions.ts, which has a live useNavigate there), so at the #1722 rebase this entry must be re-pointed to the main-side path, not carried forward (see PR body reconciliation checklist)"
 
 [[exception]]
 rule = "FE-NAV-1"
 path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-retire-actions.ts"
 site = "const navigate::useNavigate"
-reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; live on origin/main"
+reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; this path does not exist on origin/main (logic renamed/merged into use-workspace-archive-actions.ts, which has a live useNavigate there), so at the #1722 rebase this entry must be re-pointed to the main-side path, not carried forward (see PR body reconciliation checklist)"
 
 # NOT YET GRANDFATHERED (documented, deliberately not shipped in this ledger):
 # apps/packages/product-client/src/components/workspace/shell/sidebar/SidebarScrollingNavigationSection.tsx
