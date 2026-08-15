@@ -9,15 +9,23 @@ export function ProductSidebarFrame({
   footer = null,
   className = "",
   showRightBorder = true,
+  glassBackground = false,
 }: {
   children: ReactNode;
   footer?: ReactNode;
   className?: string;
   showRightBorder?: boolean;
+  /**
+   * When the enclosing shell panel owns the sidebar background (the
+   * translucent glass treatment), the frame must not paint its own opaque
+   * bg-sidebar over it — that layer would sit above the panel's and turn
+   * the glass solid again.
+   */
+  glassBackground?: boolean;
 }) {
   return (
     <div
-      className={`flex h-full flex-col gap-2 ${showRightBorder ? "border-r border-border" : ""} bg-sidebar text-sidebar-foreground select-none ${className}`}
+      className={`flex h-full flex-col gap-2 ${showRightBorder ? "border-r border-border" : ""} ${glassBackground ? "bg-transparent" : "bg-sidebar"} text-sidebar-foreground select-none ${className}`}
     >
       {children}
       {footer}

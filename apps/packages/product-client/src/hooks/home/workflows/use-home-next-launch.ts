@@ -1,5 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { promptAttachmentSnapshotsToContentParts } from "#product/domain/chats/composer/prompt-attachment-content-parts";
+import type { PromptAttachmentSnapshot } from "#product/domain/chats/composer/prompt-attachment-snapshot";
 import { useCreateCloudWorkspace } from "#product/hooks/cloud/workflows/use-create-cloud-workspace";
 import { useHomeNextLaunchPromptActions } from "#product/hooks/home/workflows/use-home-next-launch-prompt-actions";
 import { useWorkspaceEntryActions } from "#product/hooks/workspaces/workflows/use-workspace-entry-actions";
@@ -22,6 +24,7 @@ import {
 
 interface HomeNextLaunchInput {
   text: string;
+  attachmentSnapshots?: PromptAttachmentSnapshot[];
   modelSelection: HomeNextModelSelection;
   modeId: string | null;
   launchControlValues?: Record<string, string>;
@@ -57,13 +60,14 @@ export function useHomeNextLaunch() {
 
   const launch = useCallback(async ({
     text,
+    attachmentSnapshots,
     modelSelection,
     modeId,
     launchControlValues,
     target,
   }: HomeNextLaunchInput): Promise<boolean> => {
     const prompt = text.trim();
-    if (!prompt || inFlightRef.current) {
+    if ((!prompt && !attachmentSnapshots?.length) || inFlightRef.current) {
       return false;
     }
     if (!desktopTargetsAvailable && target.kind !== "cloud") {
@@ -87,6 +91,10 @@ export function useHomeNextLaunch() {
       modeId,
       launchControlValues: resolvedLaunchControlValues,
     });
+    // Blocks stay text-only here: prompt dispatch rebuilds them from the
+    // snapshots at send time (see preparePromptBlocks).
+    const attachmentContentParts =
+      promptAttachmentSnapshotsToContentParts(attachmentSnapshots ?? []);
     beginLaunchIntent({
       id: launchIntentId,
       catalogSnapshotId: null,
@@ -95,13 +103,20 @@ export function useHomeNextLaunch() {
       modeId,
       launchControlValues: resolvedLaunchControlValues,
       promptId,
-      queuedPromptBlocks: [{ type: "text", text: prompt }],
-      optimisticContentParts: [{ type: "text", text: prompt }],
+      queuedPromptBlocks: prompt ? [{ type: "text", text: prompt }] : [],
+      optimisticContentParts: [
+        ...(prompt ? [{ type: "text" as const, text: prompt }] : []),
+        ...attachmentContentParts,
+      ],
       text: prompt,
-      contentParts: [{ type: "text", text: prompt }],
+      contentParts: [
+        ...(prompt ? [{ type: "text" as const, text: prompt }] : []),
+        ...attachmentContentParts,
+      ],
       targetKind: target.kind,
       retryInput: {
         text: prompt,
+        attachmentSnapshots,
         modelSelection,
         modeId,
         launchControlValues: resolvedLaunchControlValues,
@@ -109,6 +124,11 @@ export function useHomeNextLaunch() {
       },
       materializedWorkspaceId: null,
       materializedSessionId: null,
+      // The pending-workspace attempt (if any) isn't created until after this
+      // intent begins; it gets threaded in once known via
+      // markHomeLaunchIntentMaterializedFromPendingWorkspace.
+      attemptId: null,
+      targetWorkspaceId: target.kind === "local" ? target.existingWorkspaceId : null,
       createdAt: Date.now(),
       sendAttemptedAt: null,
       failure: null,
@@ -124,8 +144,16 @@ export function useHomeNextLaunch() {
           draftText: null,
           sourceWorkspaceId: null,
         });
+        // createThreadFromSelection runs its synchronous prefix (including
+        // beginPendingWorkspace) before its first await, so the pending
+        // attempt already exists in the store here. Scope the intent to it
+        // now instead of waiting for the catch block, so the launch-intent
+        // pane owns its own shell for the whole in-flight window instead of
+        // falling through to session-empty (PRO-230 review finding 1).
+        markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId);
         const queuedProjectedSessionId = await promptProjectedPendingWorkspaceSession({
           text: prompt,
+          attachmentSnapshots,
           promptId,
           launchIntentId,
           waitUntil: resultPromise,
@@ -151,6 +179,7 @@ export function useHomeNextLaunch() {
           await promptExistingSession({
             sessionId: projectedSessionId ?? result.session.id,
             text: prompt,
+            attachmentSnapshots,
             workspaceId: result.workspace.id,
             promptId,
             launchIntentId,
@@ -167,9 +196,16 @@ export function useHomeNextLaunch() {
             repoGroupKeyToExpand: target.sourceRoot,
             initialSession,
           });
+        if (createdWorkspacePromise) {
+          // Same reasoning as the cowork branch: the create call's synchronous
+          // prefix (beginPendingWorkspace) has already run, so scope the
+          // intent to the pending attempt now rather than only on failure.
+          markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId);
+        }
         const queuedProjectedSessionId = createdWorkspacePromise
           ? await promptProjectedPendingWorkspaceSession({
             text: prompt,
+            attachmentSnapshots,
             promptId,
             launchIntentId,
             waitUntil: createdWorkspacePromise,
@@ -207,6 +243,7 @@ export function useHomeNextLaunch() {
             modeId,
             launchControlValues: resolvedLaunchControlValues,
             text: prompt,
+            attachmentSnapshots,
             promptId,
             launchIntentId,
             allowFreshFallback: target.existingWorkspaceId !== null,
@@ -225,8 +262,12 @@ export function useHomeNextLaunch() {
         }, {
           initialSession,
         });
+        // Same reasoning as the cowork/local branches above: the pending
+        // attempt already exists synchronously, so scope the intent now.
+        markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId);
         const queuedProjectedSessionId = await promptProjectedPendingWorkspaceSession({
           text: prompt,
+          attachmentSnapshots,
           promptId,
           launchIntentId,
           waitUntil: createdWorkspacePromise,
@@ -252,6 +293,7 @@ export function useHomeNextLaunch() {
             modeId,
             launchControlValues: resolvedLaunchControlValues,
             text: prompt,
+            attachmentSnapshots,
             promptId,
             launchIntentId,
             allowFreshFallback: false,
@@ -264,6 +306,7 @@ export function useHomeNextLaunch() {
       return await launchHomeCloudTarget({
         target,
         prompt,
+        attachmentSnapshots,
         promptId,
         launchIntentId,
         modelSelection,

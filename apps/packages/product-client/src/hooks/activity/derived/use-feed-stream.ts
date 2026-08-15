@@ -3,6 +3,11 @@ import { connectFeed, type FeedStreamHandle } from "@anyharness/sdk";
 import type { FeedRefWire } from "#product/domain/activity/process";
 import { useTerminalWorkspaceConnection } from "#product/hooks/terminals/workflows/use-terminal-workspace-connection";
 import { appendCappedFeedContent } from "#product/hooks/activity/derived/feed-content-buffer";
+import {
+  recordTerminalStreamClosed,
+  recordTerminalStreamError,
+  recordTerminalStreamOpened,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-connection";
 
 export interface FeedStreamState {
   /** Accumulated feed content (terminal bytes decoded as UTF-8, or text lines). */
@@ -52,6 +57,11 @@ export function useFeedStream(
           authToken: connection.authToken,
           webSocketAuthTransport: connection.webSocketAuthTransport,
           onOpen: () => {
+            recordTerminalStreamOpened({
+              kind: "feed",
+              workspaceId,
+              targetId: feedId,
+            });
             if (!cancelled) {
               setState((prev) => ({ ...prev, connected: true, error: null }));
             }
@@ -74,11 +84,21 @@ export function useFeedStream(
             }
           },
           onError: () => {
+            recordTerminalStreamError({
+              kind: "feed",
+              workspaceId,
+              targetId: feedId,
+            });
             if (!cancelled) {
               setState((prev) => ({ ...prev, error: "Feed stream error" }));
             }
           },
           onClose: () => {
+            recordTerminalStreamClosed({
+              kind: "feed",
+              workspaceId,
+              targetId: feedId,
+            });
             if (!cancelled) {
               setState((prev) => ({ ...prev, connected: false }));
             }

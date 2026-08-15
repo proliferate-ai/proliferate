@@ -41,7 +41,9 @@ interface SessionStreamCallbacks {
   onHandle?: (handle: SessionStreamHandle) => void;
   onOpen: () => void;
   onEvent: (envelope: SessionEventEnvelope) => void;
-  onError: () => void;
+  // Widened from `() => void` so the transport failure reaches the product-client
+  // call site, which classifies it for diagnostics (never logging the message).
+  onError: (error?: unknown) => void;
   onClose: () => void;
   measurementOperationId?: MeasurementOperationId | null;
 }

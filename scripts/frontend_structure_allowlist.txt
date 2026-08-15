@@ -18,7 +18,7 @@
 # max-lines entries.
 
 apps/packages/product-client/src/components/workspace/chat/input/ChatInput.tsx 447 blocked-status composer takeover branch (textarea/control-row swap + focus restore); split on next growth
-apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx 521 connected sidebar host; main's pinned-section split landed alongside R7's lifecycle archive handlers (resolver, instant archive, optimistic-hide over groups+pinned, scenario dialog) in the merge; extraction pending
+apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx 524 connected sidebar host; main's pinned-section split landed alongside R7's lifecycle archive handlers (resolver, instant archive, optimistic-hide over groups+pinned, scenario dialog) in the merge; +3 from #1856's transparent-chrome vibrancy pass-through; extraction pending
 apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-archive-actions.ts 464 R7 lifecycle archive/unarchive orchestrator: verb posts, undo toasts, 409 scenario flow, optimistic-hide set with pending reconciliation; grew past 400 with the flicker-regression rider
 apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-bootstrap-actions.ts 425 workspace bootstrap actions + gateway billing-block capture into the status screen (C8); split on next growth
 apps/packages/product-client/src/components/workspace/chat/transcript/MarkdownBody.tsx 525 existing markdown transcript renderer pending split
@@ -39,3 +39,4 @@ apps/packages/product-client/src/components/playground/GitReviewV2Playground.tsx
 apps/packages/design/src/tokens.ts 2143 single token authority: one entry per token with provenance by design; shape is a flat manifest, not logic
 apps/packages/product-client/src/hooks/agents/workflows/use-harness-auth-editor.ts 410 harness auth editor grew with v2 single-PUT replace semantics + provider-hint rows; split pending
 apps/packages/product-client/src/primitives/icons/core.tsx 483 existing consolidated icon module pending split
+apps/packages/product-client/src/lib/infra/terminals/terminal-stream-registry.ts 417 terminal/feed stream registry (+open/close/error records woven into the existing callbacks; no seam short of splitting the registry itself)

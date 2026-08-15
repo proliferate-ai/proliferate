@@ -80,7 +80,13 @@ interface SidebarArchiveTarget {
   name: string;
 }
 
-export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }: { showRightBorder?: boolean }) {
+export const MainSidebar = memo(function MainSidebar({
+  showRightBorder = true,
+  glassBackground = false,
+}: {
+  showRightBorder?: boolean;
+  glassBackground?: boolean;
+}) {
   useDebugRenderCount("workspace-sidebar");
   useSessionActivityReconciler();
   const { notice, dismissNotice, openChangelog } = useReleaseNotice();
@@ -402,7 +408,7 @@ export const MainSidebar = memo(function MainSidebar({ showRightBorder = true }:
 
   return (
     <DebugProfiler id="workspace-sidebar">
-      <ProductSidebarFrame showRightBorder={showRightBorder} footer={(
+      <ProductSidebarFrame showRightBorder={showRightBorder} glassBackground={glassBackground} footer={(
           <DebugProfiler id="workspace-sidebar-footer">
             {sidebarOpen && notice ? (
               <ReleaseNoticeCard

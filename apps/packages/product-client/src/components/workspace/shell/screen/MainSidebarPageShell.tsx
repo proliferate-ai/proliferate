@@ -2,11 +2,16 @@ import type { ReactNode } from "react";
 import { IconButton } from "#product/primitives/IconButton";
 import { SplitPanelLeft } from "#product/primitives/icons/app-shell";
 import { useWorkspaceSidebarResize } from "#product/hooks/preferences/ui/use-workspace-sidebar-resize";
-import { useMacWindowControlsInsetClass } from "#product/hooks/ui/layout/use-mac-window-controls";
+import {
+  useHasMacWindowControls,
+  useMacWindowControlsInsetClass,
+} from "#product/hooks/ui/layout/use-mac-window-controls";
+import { useGlassChromeCanvas } from "#product/hooks/theme/derived/use-glass-chrome-canvas";
 import { useTransparentChromeEnabled } from "#product/hooks/theme/derived/use-transparent-chrome";
 import {
   resolveMainSidebarEdgeClassName,
   resolveStandardWorkspaceChromeClasses,
+  SIDEBAR_GLASS_CLASS,
 } from "#product/lib/domain/preferences/workspace-chrome";
 import { useProductHost } from "#product/host/ProductHostProvider";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
@@ -29,7 +34,14 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
   const desktopHost = useProductHost().desktop !== null;
   // Only a host that actually paints macOS window buttons reserves room for
   // them; on Web (and non-Mac desktop) the inset was dead space above the nav.
+  const hasMacWindowControls = useHasMacWindowControls();
   const macWindowControlsInsetClass = useMacWindowControlsInsetClass();
+  // Vibrancy only exists behind the window on macOS Desktop (apply_vibrancy
+  // in src-tauri/src/lib.rs); elsewhere a translucent sidebar would expose
+  // the bare window fill. Matches WorkspaceShellSidebar so the main sidebar
+  // keeps one look across route shells.
+  const glassSidebar = transparentChromeEnabled && hasMacWindowControls;
+  useGlassChromeCanvas(glassSidebar);
   const chromeClasses = resolveStandardWorkspaceChromeClasses({
     transparent: transparentChromeEnabled,
     sidebarOpen,
@@ -45,7 +57,9 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
         id="main-sidebar"
         // isolate: keeps sidebar-internal z-indexes below the resize
         // separator's overlapping hit strip (z-10 in the page context).
-        className={`isolate flex shrink-0 flex-col overflow-hidden bg-sidebar ${
+        className={`isolate flex shrink-0 flex-col overflow-hidden ${
+          glassSidebar ? SIDEBAR_GLASS_CLASS : "bg-sidebar"
+        } ${
           sidebarResizing
             ? "transition-none"
             : "transition-[width] duration-panel ease-in-out"
@@ -69,7 +83,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-hidden">
-          <MainSidebar />
+          <MainSidebar glassBackground={glassSidebar} />
         </div>
       </div>
 

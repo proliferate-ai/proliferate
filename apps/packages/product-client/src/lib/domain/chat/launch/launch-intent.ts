@@ -1,9 +1,11 @@
 import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
+import type { PromptAttachmentSnapshot } from "#product/domain/chats/composer/prompt-attachment-snapshot";
 import type {
   HomeLaunchTarget,
   HomeNextModelSelection,
 } from "#product/lib/domain/home/home-next-launch";
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
+import { buildPendingWorkspaceUiKey } from "#product/lib/domain/workspaces/creation/pending-entry";
 import type { DesktopAgentLaunchAgent } from "#product/lib/domain/agents/cloud-launch-catalog";
 
 export type ChatLaunchTargetKind = HomeLaunchTarget["kind"];
@@ -15,6 +17,7 @@ export type ChatLaunchRetryMode =
 
 export interface ChatLaunchRetryInput {
   text: string;
+  attachmentSnapshots?: PromptAttachmentSnapshot[];
   modelSelection: HomeNextModelSelection;
   modeId: string | null;
   launchControlValues?: Record<string, string>;
@@ -53,9 +56,35 @@ export interface ChatLaunchIntent {
   retryInput: ChatLaunchRetryInput;
   materializedWorkspaceId: string | null;
   materializedSessionId: string | null;
+  /** The pending-workspace attempt this launch created, once known. */
+  attemptId: string | null;
+  /** The existing workspace this launch targets, when launching into one. */
+  targetWorkspaceId: string | null;
   createdAt: number;
   sendAttemptedAt: number | null;
   failure: ChatLaunchIntentFailure | null;
+}
+
+/** The workspace UI identities a launch intent is allowed to own the surface of. */
+export interface LaunchIntentScope {
+  pendingUiKey: string | null;
+  workspaceId: string | null;
+}
+
+/**
+ * An intent only owns the launch-intent pane / shell for its own workspace.
+ * Before anything materializes, that scope is the pending-workspace UI key of
+ * its own attempt; once a workspace is targeted or materialized, it is that
+ * workspace's id. A `null` scope in both fields means the intent has not
+ * attached to any workspace yet (the Home first-paint window).
+ */
+export function resolveLaunchIntentScope(intent: ChatLaunchIntent): LaunchIntentScope {
+  return {
+    pendingUiKey: intent.attemptId
+      ? buildPendingWorkspaceUiKey({ attemptId: intent.attemptId })
+      : null,
+    workspaceId: intent.materializedWorkspaceId ?? intent.targetWorkspaceId,
+  };
 }
 
 export interface ChatLaunchIntentViewModel {
@@ -85,6 +114,26 @@ export function resolveChatLaunchRetryMode(
   return "safe";
 }
 
+function pendingWorkspaceMatchesLaunchTarget(
+  target: ChatLaunchRetryInput["target"],
+  pending: PendingWorkspaceEntry,
+): boolean {
+  if (target.kind === "cowork") {
+    return pending.source === "cowork-created";
+  }
+  if (target.kind === "worktree") {
+    return pending.source === "worktree-created";
+  }
+  if (target.kind === "cloud") {
+    return pending.source === "cloud-created";
+  }
+  if (target.kind === "local") {
+    return !target.existingWorkspaceId && pending.source === "local-created";
+  }
+
+  return false;
+}
+
 export function resolveLaunchIntentPendingWorkspaceId(
   intent: ChatLaunchIntent,
   pending: PendingWorkspaceEntry | null,
@@ -93,23 +142,28 @@ export function resolveLaunchIntentPendingWorkspaceId(
     return null;
   }
 
-  const target = intent.retryInput.target;
-  if (target.kind === "cowork") {
-    return pending.source === "cowork-created" ? pending.workspaceId : null;
-  }
-  if (target.kind === "worktree") {
-    return pending.source === "worktree-created" ? pending.workspaceId : null;
-  }
-  if (target.kind === "cloud") {
-    return pending.source === "cloud-created" ? pending.workspaceId : null;
-  }
-  if (target.kind === "local") {
-    return !target.existingWorkspaceId && pending.source === "local-created"
-      ? pending.workspaceId
-      : null;
+  return pendingWorkspaceMatchesLaunchTarget(intent.retryInput.target, pending)
+    ? pending.workspaceId
+    : null;
+}
+
+/**
+ * The attempt id becomes known as soon as the pending workspace entry exists,
+ * well before its `workspaceId` (or a failure) resolves. Callers use this to
+ * scope an intent to its own attempt even when the launch never produces a
+ * workspace at all.
+ */
+export function resolveLaunchIntentPendingAttemptId(
+  intent: ChatLaunchIntent,
+  pending: PendingWorkspaceEntry | null,
+): string | null {
+  if (!pending) {
+    return null;
   }
 
-  return null;
+  return pendingWorkspaceMatchesLaunchTarget(intent.retryInput.target, pending)
+    ? pending.attemptId
+    : null;
 }
 
 export function resolveChatLaunchIntentView(

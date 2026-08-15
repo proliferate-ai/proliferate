@@ -10,6 +10,30 @@ import {
  * submit path renders this projection — keeping it out of the login-route
  * chunk, which carries the snapshot model via prompt dispatch.
  */
+/**
+ * The send-time fields a prompt gains when attachments ride along. Empty
+ * snapshots return `{}` so attachment-free sends keep their exact text-only
+ * payload shape.
+ */
+export function promptAttachmentSendFields(
+  text: string,
+  snapshots: readonly PromptAttachmentSnapshot[] | undefined,
+): {
+  attachmentSnapshots?: PromptAttachmentSnapshot[];
+  optimisticContentParts?: ContentPart[];
+} {
+  if (!snapshots?.length) {
+    return {};
+  }
+  return {
+    attachmentSnapshots: [...snapshots],
+    optimisticContentParts: [
+      ...(text ? [{ type: "text" as const, text }] : []),
+      ...promptAttachmentSnapshotsToContentParts(snapshots),
+    ],
+  };
+}
+
 export function promptAttachmentSnapshotsToContentParts(
   snapshots: readonly PromptAttachmentSnapshot[],
 ): ContentPart[] {
