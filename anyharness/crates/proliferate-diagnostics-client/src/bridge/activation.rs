@@ -93,12 +93,16 @@ pub struct DesktopDiagnosticsDegradedBootstrap {
 /// records. Given the collector's loopback endpoint and capability in the
 /// environment, this bootstrap talks to the same collector directly.
 ///
-/// It deliberately carries no bridge: this producer never learns of a
-/// collector generation change, so a collector restart ends its delivery until
-/// the runtime is restarted with fresh values. Debug builds only.
+/// It carries no bridge; instead, when the host also published the snippet's
+/// own path ([`DEV_ENV_PATH_ENV`]), the producer keeps re-reading that file
+/// (`producer::dev_refresh`) and re-attaches to the new collector generation
+/// after a restart — a file-backed twin of the fd bridge's `GenerationReady`
+/// path. Without the path (an old app build's 3-line file) a collector restart
+/// still ends delivery until the runtime restarts. Debug builds only.
 #[cfg(debug_assertions)]
 pub struct DevEnvDiagnosticsBootstrap {
     pub(crate) initial_state: InitialCollectorState,
+    pub(crate) env_path: Option<std::path::PathBuf>,
 }
 
 /// Collector ingest endpoint, e.g. `http://127.0.0.1:53421/`.
@@ -119,13 +123,21 @@ pub const DEV_COLLECTOR_BOOT_ID_ENV: &str = "PROLIFERATE_DIAGNOSTICS_BRIDGE_COLL
 #[cfg(debug_assertions)]
 pub const DEV_ENV_PATH_ENV: &str = "PROLIFERATE_DIAGNOSTICS_DEV_ENV_PATH";
 
-/// Fixed: with no bridge there is nothing to advance the generation.
+/// Initial generation for the dev path. With no bridge nothing pushes newer
+/// generations; the file-backed refresh loop advances its own locally owned
+/// counter past this on every re-attach.
 #[cfg(debug_assertions)]
-const DEV_COLLECTOR_GENERATION: u64 = 1;
+pub(crate) const DEV_COLLECTOR_GENERATION: u64 = 1;
 /// Matches the transport's own capability bound; longer values are rejected
 /// there anyway.
 #[cfg(debug_assertions)]
 const DEV_CAPABILITY_MAX_BYTES: usize = 256;
+/// Generous filesystem-path bound for the snippet's self-path line.
+#[cfg(debug_assertions)]
+const DEV_ENV_PATH_MAX_BYTES: usize = 4096;
+/// The whole snippet is four short lines; anything larger is not ours.
+#[cfg(all(unix, debug_assertions))]
+const DEV_ENV_FILE_MAX_BYTES: usize = 8192;
 
 pub(crate) struct FallbackDirectoryHandle {
     #[cfg(unix)]
@@ -210,6 +222,61 @@ fn dev_env_activation() -> DesktopDiagnosticsActivation {
             collector_boot_id,
             client: std::sync::Arc::new(client),
         }),
+        // Optional: absent with an old app build's 3-line snippet, which
+        // freezes the producer on the boot-time generation as before.
+        env_path: bounded_env(DEV_ENV_PATH_ENV, DEV_ENV_PATH_MAX_BYTES)
+            .map(std::path::PathBuf::from),
+    })
+}
+
+/// The three collector values parsed back out of the published snippet.
+#[cfg(all(unix, debug_assertions))]
+pub(crate) struct ParsedDevEnv {
+    pub(crate) endpoint: String,
+    pub(crate) capability: String,
+    pub(crate) collector_boot_id: String,
+}
+
+/// Parses the host-published dev env snippet with the same bounds as
+/// [`dev_env_activation`]. Rejects missing keys and out-of-bound values.
+/// The file is 0600 and the capability is a secret: callers must never log
+/// values, only the endpoint.
+#[cfg(all(unix, debug_assertions))]
+pub(crate) fn parse_dev_env_file(path: &std::path::Path) -> Option<ParsedDevEnv> {
+    use proliferate_diagnostics_protocol::v1::limits::MAX_ID_BYTES;
+
+    let content = std::fs::read_to_string(path).ok()?;
+    if content.len() > DEV_ENV_FILE_MAX_BYTES {
+        return None;
+    }
+    let (mut endpoint, mut capability, mut collector_boot_id) = (None, None, None);
+    for line in content.lines() {
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let slot = match key {
+            DEV_ENDPOINT_ENV => &mut endpoint,
+            DEV_CAPABILITY_ENV => &mut capability,
+            DEV_COLLECTOR_BOOT_ID_ENV => &mut collector_boot_id,
+            _ => continue,
+        };
+        *slot = Some(value.trim().to_owned());
+    }
+    let bounded = |value: &Option<String>, limit: usize| {
+        value
+            .as_deref()
+            .is_some_and(|value| !value.is_empty() && value.len() <= limit)
+    };
+    if !bounded(&endpoint, MAX_ID_BYTES)
+        || !bounded(&capability, DEV_CAPABILITY_MAX_BYTES)
+        || !bounded(&collector_boot_id, MAX_ID_BYTES)
+    {
+        return None;
+    }
+    Some(ParsedDevEnv {
+        endpoint: endpoint?,
+        capability: capability?,
+        collector_boot_id: collector_boot_id?,
     })
 }
 

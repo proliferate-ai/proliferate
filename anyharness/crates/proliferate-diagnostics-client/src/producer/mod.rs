@@ -18,6 +18,8 @@ mod admission;
 #[cfg(unix)]
 mod bridge_runtime;
 mod delivery_log;
+#[cfg(all(unix, debug_assertions))]
+mod dev_refresh;
 mod emit;
 mod fallback_runtime;
 pub(crate) mod record;
@@ -25,6 +27,9 @@ pub(crate) mod status;
 pub(crate) mod transport;
 mod worker;
 
+#[cfg(all(test, unix, debug_assertions))]
+#[path = "tests_dev_refresh.rs"]
+mod tests_dev_refresh;
 #[cfg(all(test, unix))]
 #[path = "tests_delivery_end.rs"]
 mod tests_delivery_end;
@@ -166,6 +171,8 @@ pub(crate) fn install(
     release: &str,
     environment: &str,
 ) -> Result<DiagnosticsInstallation, InstallError> {
+    #[cfg(all(unix, debug_assertions))]
+    let mut dev_env_path: Option<std::path::PathBuf> = None;
     #[cfg(unix)]
     let (initial_state, fallback_handle, degraded, platform_channels) = match activation {
         BundledDesktopDiagnosticsBootstrap::Ready(bootstrap) => (
@@ -185,8 +192,13 @@ pub(crate) fn install(
             bootstrap.bridge.zip(bootstrap.shutdown),
         ),
         // No inherited descriptors: no bridge thread, no fallback authority.
+        // The file-backed refresh task below stands in for the bridge's
+        // generation updates when the host published the snippet's path.
         #[cfg(debug_assertions)]
-        BundledDesktopDiagnosticsBootstrap::DevEnv(dev) => (dev.initial_state, None, None, None),
+        BundledDesktopDiagnosticsBootstrap::DevEnv(dev) => {
+            dev_env_path = dev.env_path;
+            (dev.initial_state, None, None, None)
+        }
     };
     #[cfg(not(unix))]
     let (initial_state, fallback_handle, degraded) = match activation {
@@ -203,7 +215,11 @@ pub(crate) fn install(
             Some(bootstrap.classification),
         ),
         #[cfg(debug_assertions)]
-        BundledDesktopDiagnosticsBootstrap::DevEnv(dev) => (dev.initial_state, None, None),
+        BundledDesktopDiagnosticsBootstrap::DevEnv(dev) => {
+            // The file-backed refresh is unix-only, like the fd bridge.
+            let _ = &dev.env_path;
+            (dev.initial_state, None, None)
+        }
     };
     if degraded.is_some() {
         eprintln!("[desktop-diagnostics] bundled bootstrap degraded");
@@ -275,6 +291,13 @@ pub(crate) fn install(
         })
         .transpose()
         .map_err(|_| InstallError::WorkerUnavailable)?;
+    #[cfg(all(unix, debug_assertions))]
+    if let Some(path) = dev_env_path {
+        runtime.spawn(dev_refresh::dev_generation_refresh(
+            Arc::clone(&inner),
+            path,
+        ));
+    }
     let join = runtime.spawn(worker::run(Arc::clone(&inner)));
     let handle = DiagnosticsProducerHandle {
         inner: Arc::clone(&inner),
@@ -391,6 +414,82 @@ impl ProducerInner {
             delivery_fence_eligible: state.delivery_fence_eligible,
             last_failure: state.last_failure,
         }
+    }
+
+    #[cfg(unix)]
+    pub(crate) fn replace_generation(
+        &self,
+        generation: crate::bridge::activation::CollectorGenerationHandle,
+    ) {
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        let current = match &state.collector {
+            CollectorAvailability::Ready(current)
+            | CollectorAvailability::Cooldown {
+                generation: current,
+                ..
+            } => current.generation,
+            CollectorAvailability::Unavailable { generation } => *generation,
+        };
+        if generation.generation <= current {
+            return;
+        }
+        for record in &mut state.queue {
+            record.fallback_reason = Some(FallbackReason::GenerationChanged);
+        }
+        if !state.in_flight.is_empty() {
+            state.delivery_fence_eligible = false;
+        }
+        state.collector = CollectorAvailability::Ready(Arc::new(generation));
+        drop(state);
+        self.notify.notify_one();
+    }
+
+    /// Boot id of the current generation, ready or cooling down. `None` while
+    /// unavailable so a re-published snippet for the same (dead) collector can
+    /// still be retried by the dev refresh loop.
+    #[cfg(all(unix, debug_assertions))]
+    pub(crate) fn current_collector_boot_id(&self) -> Option<String> {
+        let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        match &state.collector {
+            CollectorAvailability::Ready(generation)
+            | CollectorAvailability::Cooldown { generation, .. } => {
+                Some(generation.collector_boot_id.clone())
+            }
+            CollectorAvailability::Unavailable { .. } => None,
+        }
+    }
+
+    #[cfg(all(unix, debug_assertions))]
+    pub(crate) fn is_terminal(&self) -> bool {
+        self.state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .terminal
+    }
+
+    #[cfg(unix)]
+    pub(crate) fn mark_generation_unavailable(&self, generation: u64) {
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        let current = match &state.collector {
+            CollectorAvailability::Ready(current)
+            | CollectorAvailability::Cooldown {
+                generation: current,
+                ..
+            } => current.generation,
+            CollectorAvailability::Unavailable { generation } => *generation,
+        };
+        if generation <= current {
+            return;
+        }
+        for record in &mut state.queue {
+            record.fallback_reason = Some(FallbackReason::GenerationChanged);
+        }
+        state.collector = CollectorAvailability::Unavailable { generation };
+        if !state.in_flight.is_empty() {
+            state.delivery_fence_eligible = false;
+        }
+        drop(state);
+        self.notify.notify_one();
     }
 
     #[cfg(unix)]
