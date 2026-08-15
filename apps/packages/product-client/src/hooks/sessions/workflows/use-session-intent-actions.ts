@@ -157,7 +157,7 @@ export function useSessionIntentActions() {
   }, []);
 
   const setActiveSessionConfigOption = useCallback(async (
-    configId: string,
+    rawConfigId: string,
     value: string,
     options?: SessionConfigOptionUpdateOptions,
   ) => {
@@ -179,7 +179,8 @@ export function useSessionIntentActions() {
       clientSessionId: sessionId,
       materializedSessionId: slot.materializedSessionId ?? null,
       workspaceId,
-      configId,
+      configId: rawConfigId,
+      controlKey: options?.controlKey ?? rawConfigId,
       value,
       persistDefaultPreference: options?.persistDefaultPreference !== false,
     });

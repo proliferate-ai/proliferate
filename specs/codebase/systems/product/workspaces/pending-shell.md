@@ -308,7 +308,11 @@ Home submit
   -> select real workspace while preserving pending shell
   -> remap projected session to real workspace
   -> create real AnyHarness session for the same client session id
-  -> dispatch ordered session intents
+  -> snapshot queued pre-materialization config intents
+  -> apply each latest applicable config value as a launch default
+  -> settle that exact snapshot from authoritative live config
+  -> publish and bind the materialized session
+  -> dispatch only later ordered session intents
   -> reconcile from transcript/config/interaction stream state
   -> clear pending workspace state after handoff is complete
 ```
@@ -325,8 +329,9 @@ user opens/sends to a new session
   -> write shell tab intent and active session id
   -> enqueue session intents immediately
   -> create real AnyHarness session in the background
+  -> apply and authoritatively settle creation-owned config intents
   -> bind materialized session id
-  -> dispatch and reconcile
+  -> dispatch and reconcile later live intents
 ```
 
 The same model also applies when selecting an existing workspace with remembered
@@ -547,6 +552,12 @@ projection path.
   state match or it would stay stuck. Optimism is therefore held through intent
   `accepted` (so a real switch never reverts to the not-yet-updated value
   mid-flight) and dropped the moment the authoritative value equals it.
+- Session creation snapshots queued pre-materialization config intents before
+  applying launch defaults. The final authoritative live config settles only
+  those exact records before the session is published: the latest confirmed
+  value reconciles, superseded values become stale, unsupported values become
+  stale, and an applicable unconfirmed latest value fails silently. A newer
+  intent outside the snapshot remains a normal ordered live change.
 - If the projected session has no materialized runtime yet, display labels must
   still use the same label mapping as the final session.
 - Do not mix raw ids and presentation labels. For example, a reasoning setting
@@ -680,13 +691,19 @@ Rules:
   values, so an earlier request's echo can match a later click's value, and
   terminating that click before dispatch silently drops it (PRO-261).
 - A session with no materialized AnyHarness id keeps intents queued.
+- Creation temporarily owns the exact pre-materialization config-intent
+  snapshot it consumes. It applies only each semantic control's latest value
+  through the authoritative raw config id, then settles the captured records
+  in one transaction before materialization or binding can expose them to the
+  dispatcher.
 - A config update may unblock later intents after AnyHarness accepts it as
   `applied` or `queued`; runtime config ordering is authoritative after that.
 - A prompt intent renders immediately, dispatches after materialization, and
   reconciles when a renderable user-message echo appears in the transcript.
-- A config intent projects pending config over live config until the stream or
-  API response reconciles it. Normal queued config must not produce rollback
-  toasts.
+- A later live config intent projects pending config over live config until the
+  stream or API response reconciles it. Creation-owned config intents settle
+  from launch output without a live-change toast. Normal queued config must not
+  produce rollback toasts.
 - Interaction response intents are valid only for interactions the UI has
   already seen. If the request is gone by dispatch time, mark the intent stale
   instead of showing a user-visible failure.
@@ -715,6 +732,13 @@ The dispatcher should mark API acceptance quickly enough to unblock later
 intents when AnyHarness owns subsequent ordering internally. It should not wait
 for unrelated UI hydration, history loading, or shell selection completion once
 the materialized session id exists.
+
+Creation-consumed config intents never enter this loop. Publication settles
+their exact frozen IDs before it materializes or binds the session record.
+Compatible existing-session adoption instead resolves launch-only semantic
+keys against that session's authoritative normalized controls before binding;
+applicable records remain ordered live work and unsupported records become
+stale.
 
 ### Attachment Conversion
 
@@ -886,6 +910,10 @@ Minimum coverage by concern:
   closed UUID cannot be resurrected by a stale ledger entry
 - session intents: prompts/config/interaction responses preserve order, render
   immediately where visible, and dispatch only after materialized session id
+- creation-owned config intents: semantic and harness ids stay distinct,
+  rapid selections preserve order, only the latest applicable value is applied,
+  authoritative settlement precedes publication, and a post-snapshot live
+  change dispatches once
 - queued prompt controls: icons reserve immediately while disabled, then enable
   without remounting when local cancel or runtime seq is available
 - latency stability: no infinite Zustand snapshot loops and no render-heavy

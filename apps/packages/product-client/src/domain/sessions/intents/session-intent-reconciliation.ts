@@ -99,7 +99,7 @@ export function reconcileOutboxFromEnvelopes(
           // reverts (PRO-261). "dispatching" stays reconcilable: that
           // intent's own echo may legitimately beat its HTTP response.
           && (intent.status === "accepted" || intent.status === "dispatching")
-          && getAuthoritativeConfigValue(event.liveConfig, intent.configId) === intent.value
+          && getAuthoritativeConfigValue(event.liveConfig, intent.rawConfigId) === intent.value
         ) {
           nextState = patchPromptOutboxEntry(nextState, intent.intentId, {
             status: "reconciled",

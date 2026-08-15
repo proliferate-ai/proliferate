@@ -3,6 +3,7 @@ import type {
   SessionLiveConfigSnapshot,
   SetSessionConfigOptionResponse,
 } from "@anyharness/sdk";
+import { AnyHarnessError } from "@anyharness/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CONFIG_INTENT_DISPATCH_TIMEOUT_MS,
@@ -53,25 +54,48 @@ describe("dispatchConfigIntent", () => {
     vi.useRealTimers();
   });
 
-  it("drops the optimistic intent and reports runtime rejection language", async () => {
+  it("uses the raw id and reports one genuine typed runtime rejection", async () => {
+    putSessionRecord(createEmptySessionRecord("session-1", "codex", {
+      workspaceId: "workspace-1",
+      materializedSessionId: "runtime-session-1",
+      liveConfig: codexLiveConfig("high", "off", 1),
+      modelId: "gpt-5.6-sol",
+    }));
     const intent = useSessionIntentStore.getState().enqueueConfig({
       intentId: "config-plan",
       clientSessionId: "session-1",
       materializedSessionId: "runtime-session-1",
       workspaceId: "workspace-1",
-      configId: "collaboration_mode",
-      value: "plan",
+      configId: "reasoning_effort",
+      controlKey: "effort",
+      value: "max",
     });
     const onFailure = vi.fn();
-    mocks.mutateAsync.mockRejectedValue(new Error("request timed out"));
+    mocks.mutateAsync.mockRejectedValue(new AnyHarnessError({
+      type: "urn:proliferate:anyharness:problem:config-change-rejected",
+      title: "Config change rejected",
+      status: 422,
+      detail: "The runtime rejected the requested config change.",
+    }));
 
     await dispatchConfigIntent(intent, createDeps(onFailure));
 
     expect(useSessionIntentStore.getState().entriesById[intent.intentId]).toMatchObject({
       status: "failed",
-      errorMessage: "request timed out",
+      errorMessage: "The runtime rejected the requested config change.",
     });
-    expect(onFailure).toHaveBeenCalledWith("request timed out");
+    expect(mocks.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(mocks.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({
+      request: { configId: "reasoning_effort", value: "max" },
+    }));
+    expect(onFailure).toHaveBeenCalledTimes(1);
+    expect(onFailure).toHaveBeenCalledWith(
+      "The runtime rejected the requested config change.",
+    );
+    expect(
+      useSessionDirectoryStore.getState().entriesById["session-1"]
+        ?.liveConfig?.normalizedControls.effort?.currentValue,
+    ).toBe("high");
   });
 
   it("times out a stalled request, rolls back once, and ignores its late completion", async () => {

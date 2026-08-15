@@ -34,6 +34,7 @@ export interface LaunchPromptInput extends SessionLatencyFlowOptions {
 }
 
 export interface SessionConfigOptionUpdateOptions {
+  controlKey?: string;
   persistDefaultPreference?: boolean;
 }
 

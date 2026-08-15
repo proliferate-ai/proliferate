@@ -59,6 +59,14 @@ export async function dispatchConfigIntent(
   // be superseded in place (tail coalescing) after the dispatcher selects it,
   // and the wire payload must carry the superseding value.
   const intent = current;
+  if (!intent.rawConfigId) {
+    useSessionIntentStore.getState().patchIntent(intent.intentId, {
+      status: "stale",
+      errorMessage: null,
+    });
+    return;
+  }
+  const rawConfigId = intent.rawConfigId;
   const dispatchedAt = new Date().toISOString();
   useSessionIntentStore.getState().patchIntent(intent.intentId, {
     status: "dispatching",
@@ -84,7 +92,7 @@ export async function dispatchConfigIntent(
         const response = await deps.setSessionConfigOptionMutation.mutateAsync({
           workspaceId: target.workspaceId,
           sessionId: target.materializedSessionId,
-          request: { configId: intent.configId, value: intent.value },
+          request: { configId: rawConfigId, value: intent.value },
           requestOptions: { signal },
           awaitInvalidations: false,
         });
@@ -108,9 +116,9 @@ export async function dispatchConfigIntent(
         ? responseLiveConfig
         : latestSlot.liveConfig;
       const isModelConfigIntent =
-        intent.configId === "model"
-        || responseLiveConfig?.normalizedControls.model?.rawConfigId === intent.configId
-        || latestSlot.liveConfig?.normalizedControls.model?.rawConfigId === intent.configId;
+        intent.controlKey === "model"
+        || responseLiveConfig?.normalizedControls.model?.rawConfigId === rawConfigId
+        || latestSlot.liveConfig?.normalizedControls.model?.rawConfigId === rawConfigId;
       const nextPatch = {
         agentKind: response.session.agentKind,
         executionSummary: response.session.executionSummary ?? latestSlot.executionSummary ?? null,
@@ -156,7 +164,7 @@ export async function dispatchConfigIntent(
         persistDefaultSessionControlPreference({
           agentKind: response.session.agentKind ?? latestSlot.agentKind,
           liveConfig: effectiveLiveConfig,
-          rawConfigId: intent.configId,
+          rawConfigId,
           requestedValue: intent.value,
           workspaceSurface: deps.getWorkspaceSurface(workspaceId),
         });
@@ -175,10 +183,10 @@ export async function dispatchConfigIntent(
       clientSessionId: intent.clientSessionId,
       workspaceId,
       materializedSessionId: response.session.id,
-      configId: intent.configId,
+      configId: rawConfigId,
       applyState: response.applyState,
     });
-    if (intent.configId === "mode") {
+    if (intent.controlKey === "mode") {
       // UX-latency R12: commit mark, only reached once a superseding dispatch
       // hasn't raced past this one (isCurrentConfigDispatch check above).
       finishRendererFlow({
@@ -196,7 +204,7 @@ export async function dispatchConfigIntent(
       status: "failed",
       errorMessage: message,
     });
-    if (intent.configId === "mode") {
+    if (intent.controlKey === "mode") {
       abandonRendererFlow({
         kind: "mode_switch",
         correlationKey: intent.intentId,

@@ -45,13 +45,13 @@ export function upsertSessionIntent(
 export function findSupersedableTailConfigIntent(
   state: SessionIntentStateShape,
   clientSessionId: string,
-  configId: string,
+  controlKey: string,
 ): SessionUpdateConfigIntent | null {
   const intentIds = state.intentIdsByClientSessionId[clientSessionId] ?? [];
   const tailId = intentIds[intentIds.length - 1];
   const tail = tailId ? state.entriesById[tailId] : undefined;
   return tail?.kind === "update_config"
-    && tail.configId === configId
+    && tail.controlKey === controlKey
     && tail.status === "queued"
     ? tail
     : null;

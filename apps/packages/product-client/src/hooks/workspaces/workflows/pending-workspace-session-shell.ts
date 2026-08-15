@@ -43,14 +43,15 @@ export function ensurePendingWorkspaceSessionShell(input: {
     status: "starting",
     transcriptHydrated: true,
   });
-  for (const [configId, value] of Object.entries(initialSession.launchControlValues ?? {})) {
+  for (const [controlKey, value] of Object.entries(initialSession.launchControlValues ?? {})) {
     if (value.trim().length === 0) {
       continue;
     }
     useSessionIntentStore.getState().enqueueConfig({
       clientSessionId,
       workspaceId: pendingWorkspaceUiKey,
-      configId,
+      configId: null,
+      controlKey,
       value,
       persistDefaultPreference: false,
     });

@@ -33,8 +33,16 @@ import {
 import { buildLatencyRequestOptions } from "#product/hooks/sessions/workflows/session-creation-request-options";
 import {
   materializeExistingSession,
-  pendingConfigValuesForSession,
 } from "#product/hooks/sessions/workflows/session-creation-materialization-helpers";
+import {
+  sessionIntentsForSession,
+} from "#product/domain/sessions/intents/session-intent-state";
+import {
+  configValuesFromIntentSnapshot,
+  planCreationConfigIntentSettlement,
+  snapshotPreMaterializationConfigIntents,
+} from "#product/lib/domain/sessions/creation/config-intent-settlement";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 import { buildDesktopLaunchModelRegistries } from "#product/lib/domain/agents/cloud-launch-catalog";
 import { resolveSubmitAgentCatalog } from "#product/lib/domain/agents/agent-catalog-submit-gate";
 import type { CreateSessionWithResolvedConfigOptions } from "#product/hooks/sessions/workflows/session-creation-types";
@@ -267,7 +275,6 @@ async function runSessionCreationMaterialization({
     targetSessionId: session.id,
   });
 
-  const queuedConfigValuesBeforeDefaults = pendingConfigValuesForSession(pendingSessionId);
   const catalogStep = await runInterruptibleSessionCreationStep({
     sessionId: pendingSessionId,
     step: resolveSubmitAgentCatalog(ensureCloudAgentCatalog),
@@ -280,10 +287,13 @@ async function runSessionCreationMaterialization({
   const modelRegistries = buildDesktopLaunchModelRegistries(
     cloudLaunchCatalog?.agents ?? [],
   );
+  const configIntentSnapshot = snapshotPreMaterializationConfigIntents(
+    sessionIntentsForSession(useSessionIntentStore.getState(), pendingSessionId),
+  );
   const liveDefaultsForLaunch = mergeLiveDefaultLaunchControls({
     defaults: frozenDefaultLiveSessionControlValuesByAgentKind,
     agentKind: options.agentKind,
-    values: queuedConfigValuesBeforeDefaults,
+    values: configValuesFromIntentSnapshot(configIntentSnapshot),
   });
   const launchDefaultsStep = await runInterruptibleSessionCreationStep({
     sessionId: pendingSessionId,
@@ -308,6 +318,10 @@ async function runSessionCreationMaterialization({
     ...launchedSession,
     liveConfig: launchedLiveConfig,
   };
+  const configIntentSettlement = planCreationConfigIntentSettlement({
+    snapshot: configIntentSnapshot,
+    liveConfig: launchedLiveConfig,
+  });
   if (await discardIfSuperseded(pendingSessionId, lifecycle)) {
     return pendingSessionId;
   }
@@ -345,6 +359,7 @@ async function runSessionCreationMaterialization({
         fallbackModeId: resolvedModeId,
         fallbackModelId: options.modelId,
         launchIntentId: options.launchIntentId,
+        configIntentSettlement,
         pendingSessionId,
         record: realRecord,
         session: launchedSession,

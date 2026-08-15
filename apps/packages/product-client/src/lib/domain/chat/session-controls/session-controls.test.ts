@@ -90,7 +90,30 @@ describe("buildLiveSessionControlDescriptors", () => {
     ]);
 
     controls[0]?.onSelect("low");
-    expect(onSelect).toHaveBeenCalledWith("effort", "low");
+    expect(onSelect).toHaveBeenCalledWith("effort", "effort", "low");
+  });
+
+  it("passes semantic and harness identities separately for an asymmetric live control", () => {
+    const onSelect = vi.fn();
+    const [effort] = buildLiveSessionControlDescriptors(
+      {
+        ...NORMALIZED_CONTROLS,
+        effort: {
+          ...NORMALIZED_CONTROLS.effort!,
+          rawConfigId: "reasoning_effort",
+        },
+      },
+      null,
+      onSelect,
+    );
+
+    effort?.onSelect("medium");
+
+    expect(onSelect).toHaveBeenCalledWith(
+      "effort",
+      "reasoning_effort",
+      "medium",
+    );
   });
 
   it("shows the latest pending value for the same raw config id", () => {

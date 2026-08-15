@@ -107,7 +107,12 @@ function launchControlToDescriptor(input: {
   ) {
     return [];
   }
-  const rawConfigId = input.control.createField === "modeId" ? "mode" : input.control.key;
+  const rawConfigId = input.control.createField === "modeId"
+    ? "mode"
+    : input.control.apply.liveConfigId?.trim();
+  if (!rawConfigId) {
+    return [];
+  }
   // Scope control values to what the selected model actually supports (the
   // agent-level vocabulary is a superset — e.g. gateway/bedrock models reject
   // `auto`; sonnet's effort caps at `max` while opus adds `xhigh`). Fall back
@@ -124,6 +129,9 @@ function launchControlToDescriptor(input: {
   const pendingChange = getPendingSessionConfigChange(
     input.pendingConfigChanges,
     rawConfigId,
+  ) ?? getPendingSessionConfigChange(
+    input.pendingConfigChanges,
+    key,
   );
 
   // Only honour a stored/default preference if the selected model still

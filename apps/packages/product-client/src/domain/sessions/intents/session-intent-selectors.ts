@@ -61,7 +61,7 @@ export function pendingConfigChangesForSessionIntents(
     const pendingChange = pendingConfigChangeFromIntent(intent);
     if (pendingChange) {
       pendingConfigChanges ??= {};
-      pendingConfigChanges[intent.configId] = pendingChange;
+      pendingConfigChanges[intent.rawConfigId ?? intent.controlKey] = pendingChange;
     }
   }
   return pendingConfigChanges ?? EMPTY_INTENT_PENDING_CONFIG_CHANGES;
@@ -300,7 +300,10 @@ function pendingConfigChangeFromIntent(
 ): PendingSessionConfigChange | null {
   if (intent.status === "queued" || intent.status === "preparing" || intent.status === "dispatching") {
     return {
-      rawConfigId: intent.configId,
+      // Pending projection may use the semantic key while a launch-only
+      // intent has no authoritative harness target yet. Dispatch never reads
+      // this projection key.
+      rawConfigId: intent.rawConfigId ?? intent.controlKey,
       value: intent.value,
       // Pre-dispatch "queued" is a transient store state, not a turn-blocked
       // change — surfacing it as pending-"queued" flashes the clock glyph on
@@ -320,7 +323,7 @@ function pendingConfigChangeFromIntent(
   // value matches the requested one.
   if (intent.status === "accepted") {
     return {
-      rawConfigId: intent.configId,
+      rawConfigId: intent.rawConfigId ?? intent.controlKey,
       value: intent.value,
       // applyState "queued" is still pending at the backend (mid-turn) → clock.
       // Otherwise the backend already applied it and we are only holding the

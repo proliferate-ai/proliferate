@@ -18,6 +18,12 @@ import {
   type SessionUpdateConfigIntent,
 } from "#product/domain/sessions/intents/session-intent-model";
 import {
+  applyAdoptedSessionConfigIntentResolutionPlan,
+  applyConfigIntentSettlementPlan,
+  type AdoptedSessionConfigIntentResolutionPlan,
+  type ConfigIntentSettlementPlan,
+} from "#product/lib/domain/sessions/creation/config-intent-settlement";
+import {
   pruneEchoedOutboxTombstones,
   pruneEchoedOutboxTombstonesForTranscript,
   reconcileOutboxFromEnvelopes,
@@ -39,9 +45,7 @@ import { now as measurementNow } from "#product/lib/infra/measurement/measuremen
 interface SessionIntentStoreState extends SessionIntentStateShape {
   dispatchVersion: number;
   enqueuePrompt: (input: PromptOutboxCreateInput) => PromptOutboxEntry;
-  enqueueConfig: (input: Omit<Parameters<typeof createUpdateConfigIntent>[0], "intentId"> & {
-    intentId?: string;
-  }) => SessionUpdateConfigIntent;
+  enqueueConfig: (input: SessionConfigIntentEnqueueInput) => SessionUpdateConfigIntent;
   enqueueInteraction: (input: Omit<Parameters<typeof createResolveInteractionIntent>[0], "intentId"> & {
     intentId?: string;
   }) => SessionResolveInteractionIntent;
@@ -54,6 +58,10 @@ interface SessionIntentStoreState extends SessionIntentStateShape {
   patchIntent: (intentId: string, patch: Partial<SessionIntent>) => void;
   removeIntent: (intentId: string) => void;
   bindMaterializedSession: (clientSessionId: string, materializedSessionId: string) => void;
+  applyConfigIntentSettlement: (plan: ConfigIntentSettlementPlan) => void;
+  applyAdoptedSessionConfigIntentResolution: (
+    plan: AdoptedSessionConfigIntentResolutionPlan,
+  ) => void;
   reassignClientSession: (clientSessionId: string, nextClientSessionId: string) => void;
   reconcileFromEnvelopes: (
     clientSessionId: string,
@@ -64,6 +72,16 @@ interface SessionIntentStoreState extends SessionIntentStateShape {
   clearSession: (clientSessionId: string) => void;
   clear: () => void;
 }
+
+type SessionConfigIntentEnqueueInput = Omit<
+  Parameters<typeof createUpdateConfigIntent>[0],
+  "intentId" | "controlKey" | "rawConfigId"
+> & {
+  intentId?: string;
+} & (
+  | { configId: string; controlKey?: string }
+  | { configId: null; controlKey: string }
+);
 
 const EMPTY_SESSION_INTENT_STATE: SessionIntentStateShape = {
   entriesById: {},
@@ -94,6 +112,10 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
 
   enqueueConfig: (input) => {
     const debugStartedAtMs = startSessionIntentStoreActionTrace();
+    const controlKey = input.controlKey ?? input.configId;
+    if (!controlKey) {
+      throw new Error("A semantic control key is required for a launch-only config intent");
+    }
     // Same intent id and queue position: the burst reads as one selection
     // whose value kept changing, and ordering against any later intents is
     // untouched. Skipped when the caller pins an explicit intentId.
@@ -102,11 +124,12 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
       : findSupersedableTailConfigIntent(
         useSessionIntentStore.getState(),
         input.clientSessionId,
-        input.configId,
+        controlKey,
       );
     const intent: SessionUpdateConfigIntent = supersedable
       ? {
         ...supersedable,
+        rawConfigId: input.configId,
         value: input.value,
         materializedSessionId: input.materializedSessionId ?? supersedable.materializedSessionId,
         workspaceId: input.workspaceId ?? supersedable.workspaceId,
@@ -114,14 +137,22 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
         updatedAt: new Date().toISOString(),
       }
       : createUpdateConfigIntent({
-        ...input,
+        clientSessionId: input.clientSessionId,
+        materializedSessionId: input.materializedSessionId,
+        workspaceId: input.workspaceId,
+        controlKey,
+        rawConfigId: input.configId,
+        value: input.value,
+        persistDefaultPreference: input.persistDefaultPreference,
+        now: input.now,
         intentId: input.intentId ?? createSessionIntentId("config"),
       });
     set((state) => {
       const next = withDispatchVersion(state, upsertSessionIntent(state, intent));
       recordSessionIntentStoreAction("enqueueConfig", state, next, {
         clientSessionId: intent.clientSessionId,
-        configId: intent.configId,
+        controlKey: intent.controlKey,
+        rawConfigId: intent.rawConfigId,
         intentKind: intent.kind,
         superseded: Boolean(supersedable),
         workspaceId: intent.workspaceId,
@@ -228,6 +259,44 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
         clientSessionId,
         materializedSessionId,
       }, debugStartedAtMs);
+      return next;
+    });
+  },
+
+  applyConfigIntentSettlement: (plan) => {
+    if (plan.patches.length === 0) {
+      return;
+    }
+    const debugStartedAtMs = startSessionIntentStoreActionTrace();
+    set((state) => {
+      const next = withDispatchVersion(
+        state,
+        applyConfigIntentSettlementPlan(state, plan),
+      );
+      recordSessionIntentStoreAction("applyConfigIntentSettlement", state, next, {
+        patchCount: plan.patches.length,
+      }, debugStartedAtMs);
+      return next;
+    });
+  },
+
+  applyAdoptedSessionConfigIntentResolution: (plan) => {
+    if (plan.patches.length === 0) {
+      return;
+    }
+    const debugStartedAtMs = startSessionIntentStoreActionTrace();
+    set((state) => {
+      const next = withDispatchVersion(
+        state,
+        applyAdoptedSessionConfigIntentResolutionPlan(state, plan),
+      );
+      recordSessionIntentStoreAction(
+        "applyAdoptedSessionConfigIntentResolution",
+        state,
+        next,
+        { patchCount: plan.patches.length },
+        debugStartedAtMs,
+      );
       return next;
     });
   },
