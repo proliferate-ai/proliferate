@@ -85,7 +85,13 @@ export function HomeTargetPicker({
   // Cloud compute is culled from Desktop (PRO-10): the Desktop picker offers
   // only local / worktree (+ SSH targets below), never cloud and never empty.
   // Web keeps its cloud offering, gated by `desktopTargetsAvailable` (the host
-  // capability), not by a deleted branch.
+  // capability), not by a deleted branch. `repoLaunchKind` is normalized to a
+  // desktop-valid value at the selection source
+  // (normalizeDesktopTargetAvailability in
+  // use-home-next-target-selection-state.ts), so a "cloud" value should never
+  // reach here from that path; this coercion is kept as a display-only
+  // defense in depth for any caller that renders the picker directly with a
+  // stale prop.
   const effectiveRepoLaunchKind = desktopTargetsAvailable
     ? (repoLaunchKind === "cloud" ? "worktree" : repoLaunchKind)
     : "cloud";

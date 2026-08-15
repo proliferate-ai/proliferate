@@ -48,7 +48,7 @@ export function RepoEnvironmentPane({
       <PageHeader
         variant="flat"
         title="Environment"
-        description="Variables and files synced to this repo's cloud workspaces."
+        description="Variables and files synced to this repo's workspaces."
       />
       {context === "cloud" ? (
         <EnvironmentCloud
