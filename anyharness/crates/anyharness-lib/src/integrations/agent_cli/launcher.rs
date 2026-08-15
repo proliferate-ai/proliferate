@@ -38,7 +38,10 @@ pub(crate) fn generate_launcher_script_atomic(
 /// in a `.{name}.previous` sibling until the promotion succeeds, then removing
 /// it. Running sessions holding the old inode are unaffected.
 fn promote_launcher(staged: &Path, live: &Path) -> Result<(), LauncherError> {
-    let previous = staged_launcher_sibling(live, "previous")?;
+    // Deliberately NOT `.{name}.previous`: that sibling belongs to the
+    // journaled ArchiveTreeActivation, and a crash between our two renames must
+    // not leave a journal-less backup that wedges its recovery path.
+    let previous = staged_launcher_sibling(live, "launcher-previous")?;
     let _ = std::fs::remove_file(&previous);
     if live.exists() {
         std::fs::rename(live, &previous)?;
