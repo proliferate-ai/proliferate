@@ -1,0 +1,42 @@
+{
+  "rejectedBy": "structure",
+  "expectedIssuePath": "edges",
+  "note": "A full cycle carries n edges for n nodes, so the edge-count arity rule rejects it first; this fixture pins arity, while v2-invalid-disconnected-chain pins the reachability walk (the rule a cycle off the head would otherwise evade).",
+  "definition": {
+    "schemaVersion": 2,
+    "nodes": [
+      {
+        "id": "n_a",
+        "type": "agent",
+        "title": "Step n_a",
+        "prompt": "Run step n_a."
+      },
+      {
+        "id": "n_b",
+        "type": "agent",
+        "title": "Step n_b",
+        "prompt": "Run step n_b."
+      },
+      {
+        "id": "n_c",
+        "type": "agent",
+        "title": "Step n_c",
+        "prompt": "Run step n_c."
+      }
+    ],
+    "edges": [
+      {
+        "from": "n_a",
+        "to": "n_b"
+      },
+      {
+        "from": "n_b",
+        "to": "n_c"
+      },
+      {
+        "from": "n_c",
+        "to": "n_a"
+      }
+    ]
+  }
+}

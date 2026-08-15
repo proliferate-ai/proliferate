@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Button } from "#product/primitives/Button";
 import { Check, ChevronDown, Copy } from "#product/primitives/icons/core";
+import { useChainedVerticalWheel } from "#product/primitives/utils/use-chained-vertical-wheel";
 import { PlanMarkdownBody } from "./PlanMarkdownBody";
 import type {
   MarkdownCodeBlockRenderer,
@@ -52,6 +53,7 @@ export function CollapsiblePlanCard({
 }: CollapsiblePlanCardProps) {
   const [expanded, setExpanded] = useState(initialExpanded);
   const [copied, setCopied] = useState(false);
+  const handleExpandedBodyWheel = useChainedVerticalWheel();
   const hasContent = content.length > 0;
   const renderedContent = stripDuplicatePlanHeading(content, title);
   const compact = density === "compact";
@@ -126,7 +128,10 @@ export function CollapsiblePlanCard({
         </div>
       ) : expanded ? (
         <div
-          className={compact ? "overflow-y-auto px-3 py-2" : "overflow-y-auto px-4 py-3"}
+          onWheel={handleExpandedBodyWheel}
+          className={compact
+            ? "overscroll-none overflow-y-auto px-3 py-2"
+            : "overscroll-none overflow-y-auto px-4 py-3"}
           style={{ maxHeight: EXPANDED_MAX_HEIGHT }}
         >
           <PlanMarkdownBody

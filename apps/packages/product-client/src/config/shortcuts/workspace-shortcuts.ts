@@ -29,16 +29,6 @@ export const WORKSPACE_SHORTCUTS = {
     match: { kind: "fixed-code", code: "KeyN", meta: true, shift: true, alt: false },
     allowInInputs: true,
   },
-  newCloud: {
-    id: "workspace.new-cloud",
-    label: "⌘⌃N",
-    nonMacLabel: "Ctrl+Alt+N",
-    description: "New cloud workspace",
-    owner: "js",
-    match: { kind: "fixed-code", code: "KeyN", meta: true, ctrl: true, shift: false, alt: false },
-    nonMacMatch: { kind: "fixed-code", code: "KeyN", meta: true, shift: false, alt: true },
-    allowInInputs: true,
-  },
   addRepository: {
     id: "workspace.add-repository",
     label: "⌘O",

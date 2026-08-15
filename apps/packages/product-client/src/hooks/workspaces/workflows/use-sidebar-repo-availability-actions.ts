@@ -24,7 +24,8 @@ export function useSidebarRepoAvailabilityActions() {
   const host = useProductHost();
   const files = host.desktop?.files ?? null;
   const isDesktopHost = Boolean(host.desktop);
-  const managedCloudAvailable = capabilities.managedCloudStatus !== "disabled";
+  const managedCloudAvailable = capabilities.cloudComputeEnabled
+    && capabilities.managedCloudStatus !== "disabled";
   const showToast = useToastStore((state) => state.show);
   const { addRepoFromPath } = useAddRepo();
   const beginCloudRepositoryIntent = useCloudRepositoryIntentStore((state) => state.begin);

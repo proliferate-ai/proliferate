@@ -6,9 +6,9 @@ export const CAPABILITY_COPY = {
   cloudDisabledTooltip:
     "Cloud workspaces are unavailable because the configured control plane could not be reached.",
   cloudSignInDescription:
-    "Cloud workspaces and credential sync are available when you're signed in.",
+    "Credential sync is available when you're signed in.",
   cloudSignInDetails:
-    "This control plane is reachable. Sign in to create cloud workspaces and sync credentials.",
+    "This control plane is reachable. Sign in to sync credentials.",
   cloudSignInTooltip:
     "Sign in to create cloud workspaces.",
   cloudAuthUnavailableDescription:

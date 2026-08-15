@@ -359,19 +359,6 @@ async fn lifecycle_routes_preserve_identity_are_idempotent_and_hide_non_targets(
     assert_eq!(repeat_status, StatusCode::NOT_FOUND, "{repeat_payload}");
     assert_eq!(repeat_payload["code"], "AGENT_NOT_FOUND");
 
-    let workflow_service = WorkflowRunService::new(WorkflowRunStore::new(state.db.clone()));
-    let run_id = uuid::Uuid::new_v4().to_string();
-    workflow_service
-        .accept(
-            &run_id,
-            super::super::workflow_runs_tests::domain_input_for_workspace(WS),
-        )
-        .expect("accept workflow run");
-    assert!(workflow_service.begin_run(&run_id).expect("begin run"));
-    assert!(workflow_service
-        .bind_session(&run_id, &controlled_child)
-        .expect("bind controlled child"));
-
     for action in ["close", "open", "promote"] {
         let hidden_targets = [
             (
@@ -385,7 +372,7 @@ async fn lifecycle_routes_preserve_identity_are_idempotent_and_hide_non_targets(
                 closed_promote_child.as_str(),
             ),
             (
-                "wrong-parent workflow",
+                "wrong-parent running",
                 wrong_parent.as_str(),
                 controlled_child.as_str(),
             ),

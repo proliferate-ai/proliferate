@@ -475,10 +475,11 @@ for raw_line in sys.stdin:
                 },
             },
         })
+        stop_reason = "refusal" if "PLEASE-REFUSE" in text else "end_turn"
         emit({
             "jsonrpc": "2.0",
             "id": request_id,
-            "result": {"stopReason": "end_turn"},
+            "result": {"stopReason": stop_reason},
         })
     else:
         emit({

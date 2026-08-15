@@ -40,9 +40,16 @@ export function useAppShortcuts(actions: AppCommandActions): void {
     actions.goHome.execute("shortcut");
   });
 
-  useShortcutHandler("app.go-automations", () => {
-    actions.goWorkflows.execute("shortcut");
-  });
+  // Unregistered rather than bound to a no-op while the workflows_v2 gate is
+  // off, same as the support shortcut below: no entry point may reach the
+  // dark gen-2 surface.
+  useShortcutHandler(
+    "app.go-automations",
+    () => {
+      actions.goWorkflows.execute("shortcut");
+    },
+    { enabled: !actions.goWorkflows.hidden },
+  );
 
   useShortcutHandler("app.open-web", () => {
     actions.openWebApp.execute("shortcut");
@@ -141,10 +148,6 @@ export function useAppShortcuts(actions: AppCommandActions): void {
 
   useShortcutHandler("workspace.new-worktree", () => {
     actions.newWorktreeWorkspace.execute("shortcut");
-  });
-
-  useShortcutHandler("workspace.new-cloud", () => {
-    actions.newCloudWorkspace.execute("shortcut");
   });
 
   useShortcutHandler("workspace.add-repository", () => {

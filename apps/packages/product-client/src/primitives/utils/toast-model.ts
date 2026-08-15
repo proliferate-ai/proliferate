@@ -45,9 +45,11 @@ interface ToastCommon {
   id?: string;
   tone?: ToastTone;
   /**
-   * Shorten the default dwell. Only shortening is possible in practice: the
-   * persistence rule below still forces Infinity for anything carrying an error
-   * or an action, so this cannot be used to auto-close a decision.
+   * Shorten the default dwell. The persistence rule below still forces
+   * Infinity for anything carrying an error — a failure never answers itself
+   * by disappearing. On a non-error announcement with actions, an explicit
+   * duration is the caller ruling the offer expirable (an Undo that lapses),
+   * not a way to auto-close a decision that must be made.
    */
   duration?: number;
   /**
@@ -233,6 +235,8 @@ export function isStatusToast(input: ToastInput): input is StatusToastInput {
  * Anything carrying an error, an action, or a payload stays until dismissed —
  * an auto-dismissing toast that asked for a decision loses the decision, and
  * a `detail` toast exists to be read, which takes longer than any dwell.
+ * One exception: a non-error announcement with an explicit `duration` expires
+ * on schedule even with actions, for offers that are meant to lapse (Undo).
  */
 export function resolveToastDuration(input: ToastInput): number {
   if (isStatusToast(input)) {
@@ -241,15 +245,15 @@ export function resolveToastDuration(input: ToastInput): number {
     }
     return input.duration ?? STATUS_TOAST_DURATION_MS;
   }
-  if (input.weight === "detail") {
+  if (input.weight === "detail" || input.isError) {
     return Number.POSITIVE_INFINITY;
+  }
+  if (input.duration !== undefined) {
+    return input.duration;
   }
   const hasAction =
     input.commit !== undefined
     || input.secondary !== undefined
     || (input.details !== undefined && input.details.kind !== "none");
-  if (input.isError || hasAction) {
-    return Number.POSITIVE_INFINITY;
-  }
-  return input.duration ?? ANNOUNCEMENT_TOAST_DURATION_MS;
+  return hasAction ? Number.POSITIVE_INFINITY : ANNOUNCEMENT_TOAST_DURATION_MS;
 }

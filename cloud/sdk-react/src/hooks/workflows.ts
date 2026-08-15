@@ -22,6 +22,7 @@ import {
   type ManagedWorkflowInvocationResponse,
   type WorkflowDefinitionCreateRequest,
   type WorkflowDefinitionListResponse,
+  type WorkflowDefinitionAnyResponse,
   type WorkflowDefinitionResponse,
   type WorkflowDefinitionUpdateRequest,
   type WorkflowInvocationCreateRequest,
@@ -77,7 +78,7 @@ export function useWorkflowDefinition(
   enabled = true,
 ) {
   const client = useCloudClient();
-  return useQuery<WorkflowDefinitionResponse>({
+  return useQuery<WorkflowDefinitionAnyResponse>({
     queryKey: workflowDefinitionDetailKey(
       client.baseUrl,
       authCacheScope,

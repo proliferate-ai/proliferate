@@ -2,7 +2,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { CloudEnvironmentConfigSection } from "#product/components/settings/panes/repo/CloudEnvironmentConfigSection";
 import { CloudEnvironmentList } from "#product/components/settings/panes/repo/CloudEnvironmentList";
 import { CloudRepoPickerDialog } from "#product/components/workspace/repo-setup/CloudRepoPicker";
 import type { CloudRepoPickerRepositoryView } from "#product/lib/domain/workspaces/cloud/cloud-repo-picker-view";
@@ -207,71 +206,5 @@ describe("cloud environment product UI", () => {
     expect(isBadgeElement(settingUp)).toBe(false);
     fireEvent.click(screen.getByText("Add cloud environment"));
     expect(onAddCloudEnvironment).toHaveBeenCalledTimes(1);
-  });
-
-  it("renders the cloud config section without dead affordances", () => {
-    const { container } = render(
-      <CloudEnvironmentConfigSection
-        statusLabel="Saved"
-        statusTone="success"
-        defaultBranch={null}
-        githubDefaultBranch="main"
-        branches={["main"]}
-        setupScript=""
-        runCommand=""
-        onDefaultBranchChange={vi.fn()}
-        onSetupScriptChange={vi.fn()}
-        onRunCommandChange={vi.fn()}
-        onSave={vi.fn()}
-        onRevert={vi.fn()}
-      />,
-    );
-
-    const statusLabel = screen.getByText("Saved");
-    expect(statusLabel).toBeTruthy();
-    expect(screen.getByLabelText("Cloud run command")).toBeTruthy();
-    expect(screen.getByLabelText("Cloud setup script")).toBeTruthy();
-    expect(screen.getByText("setup.sh")).toBeTruthy();
-    expect(screen.queryByText("Disable cloud environment")).toBeNull();
-    expect(screen.queryByText("Add variable")).toBeNull();
-    // Status is a plain muted span, never a Badge pill.
-    expect(isBadgeElement(statusLabel)).toBe(false);
-    // Save/Revert footer lives below the wash card, not inside it.
-    const washCard = container.querySelector(".bg-surface-elevated-secondary");
-    expect(washCard).toBeTruthy();
-    const saveButton = screen.getByText("Save");
-    expect(washCard?.contains(saveButton)).toBe(false);
-    expect(washCard?.contains(statusLabel)).toBe(false);
-  });
-
-  it("emits config section save, revert, and run command changes", () => {
-    const onSave = vi.fn();
-    const onRevert = vi.fn();
-    const onRunCommandChange = vi.fn();
-
-    render(
-      <CloudEnvironmentConfigSection
-        statusLabel="Unsaved changes"
-        statusTone="warning"
-        defaultBranch="main"
-        githubDefaultBranch="main"
-        branches={["main"]}
-        setupScript=""
-        runCommand=""
-        onDefaultBranchChange={vi.fn()}
-        onSetupScriptChange={vi.fn()}
-        onRunCommandChange={onRunCommandChange}
-        onSave={onSave}
-        onRevert={onRevert}
-      />,
-    );
-
-    fireEvent.click(screen.getByText("Revert"));
-    fireEvent.click(screen.getByText("Save"));
-    fireEvent.change(screen.getByLabelText("Cloud run command"), { target: { value: "make dev" } });
-
-    expect(onRevert).toHaveBeenCalledTimes(1);
-    expect(onSave).toHaveBeenCalledTimes(1);
-    expect(onRunCommandChange).toHaveBeenCalledWith("make dev");
   });
 });

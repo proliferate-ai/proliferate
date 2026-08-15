@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
   authorityStatus: "ready" as string,
   managedCloud: "ready" as string,
   githubAccess: "ready" as string,
+  cloudComputeEnabled: true,
   configured: false,
   reflectSaveInRepositories: true,
   authorityEnabled: false,
@@ -104,6 +105,7 @@ vi.mock("#product/domain/environments/cloud-environments", () => ({
 
 vi.mock("#product/hooks/capabilities/derived/use-app-capabilities", () => ({
   useAppCapabilities: () => ({
+    cloudComputeEnabled: state.cloudComputeEnabled,
     managedCloudStatus: state.managedCloud,
     githubRepositoryAccessStatus: state.githubAccess,
     githubRepositoryAccessDisplayName: "proliferate-app",
@@ -192,6 +194,7 @@ function resetState() {
   state.authorityStatus = "ready";
   state.managedCloud = "ready";
   state.githubAccess = "ready";
+  state.cloudComputeEnabled = true;
   state.configured = false;
   state.reflectSaveInRepositories = true;
   state.authorityEnabled = false;
@@ -317,6 +320,30 @@ describe("CloudRepoActionDialogHost", () => {
 
   it("does not query repository authority while either managed-cloud operator capability is incomplete (PR2-AUTHORITY-06)", () => {
     state.githubAccess = "operator_configuration_required";
+    render(<CloudRepoActionDialogHost />);
+    act(() => {
+      useCloudRepositoryIntentStore.getState().begin(setupIntent);
+    });
+    expect(state.authorityEnabled).toBe(false);
+  });
+
+  it("does not query repository authority when cloud compute is disabled even with every other gate ready (PRO-10)", () => {
+    // Negative control: with cloudComputeEnabled left at its default true and
+    // every other gate ready, authority IS queried (proves the assertion below
+    // is actually keyed on cloudComputeEnabled, not some other flag).
+    state.cloudComputeEnabled = true;
+    const { unmount } = render(<CloudRepoActionDialogHost />);
+    act(() => {
+      useCloudRepositoryIntentStore.getState().begin(setupIntent);
+    });
+    expect(state.authorityEnabled).toBe(true);
+    unmount();
+    useCloudRepositoryIntentStore.setState({ activeIntent: null });
+
+    // Now flip only cloudComputeEnabled to false: the belt-and-braces gate in
+    // requiredOperatorReady must block authority the same way an incomplete
+    // operator capability does.
+    state.cloudComputeEnabled = false;
     render(<CloudRepoActionDialogHost />);
     act(() => {
       useCloudRepositoryIntentStore.getState().begin(setupIntent);
