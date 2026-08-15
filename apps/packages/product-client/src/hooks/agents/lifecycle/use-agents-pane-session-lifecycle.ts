@@ -9,10 +9,10 @@ import {
 import { useLinkedSessionMounting } from "#product/hooks/chat/workflows/subagents/use-linked-session-mounting";
 import { useSessionRuntimeActions } from "#product/hooks/sessions/workflows/use-session-runtime-actions";
 import {
-  closeSessionStreamHandle,
   getSessionStreamHandle,
   type ManagedSessionStreamHandle,
 } from "#product/lib/access/anyharness/session-stream-handles";
+import { closePaneStreamHandles } from "#product/hooks/agents/lifecycle/use-agents-pane-session-lifecycle-handles";
 import { isHotSessionClientId } from "#product/lib/workflows/sessions/hot-session-ingest-manager";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import {
@@ -176,26 +176,7 @@ export function useAgentsPaneSessionLifecycle(
       return;
     }
 
-    const handlesToClose = new Map<string, ManagedSessionStreamHandle>();
-    if (lease) {
-      handlesToClose.set(lease.materializedSessionId, lease.handle);
-    }
-    if (attempt?.mayOwnOpenedHandle && attempt.materializedSessionId) {
-      const currentHandle = getSessionStreamHandle(attempt.materializedSessionId);
-      if (currentHandle && currentHandle !== attempt.baselineHandle) {
-        handlesToClose.set(attempt.materializedSessionId, currentHandle);
-      }
-    }
-
-    let closed = false;
-    for (const [materializedSessionId, handle] of handlesToClose) {
-      closed = closeSessionStreamHandle(materializedSessionId, handle) || closed;
-    }
-    if (closed && getSessionRecord(sessionId)) {
-      useSessionDirectoryStore.getState().patchEntry(sessionId, {
-        streamConnectionState: "disconnected",
-      });
-    }
+    closePaneStreamHandles(sessionId, lease, attempt);
   }, [clearPaneReconnectTimer]);
 
   const connectPaneStream = useCallback((sessionId: string) => {
