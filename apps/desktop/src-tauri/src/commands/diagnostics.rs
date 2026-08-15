@@ -281,6 +281,37 @@ fn expand_home_path(path: &str) -> Result<PathBuf, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::diagnostics_collector::supervisor::SupervisorUnavailable;
+
+    #[test]
+    fn renderer_ingest_errors_carry_a_stable_string_per_unavailable_variant() {
+        // The renderer loss classifier parses these strings verbatim
+        // (renderer-diagnostics-native-error.ts); changing one silently
+        // demotes that loss reason to `invoke_failure`.
+        let cases = [
+            (SupervisorUnavailable::Starting, "renderer_ingest_collector_starting"),
+            (
+                SupervisorUnavailable::Unsupported,
+                "renderer_ingest_collector_unsupported",
+            ),
+            (SupervisorUnavailable::Degraded, "renderer_ingest_collector_degraded"),
+            (SupervisorUnavailable::Stopped, "renderer_ingest_collector_stopped"),
+            (SupervisorUnavailable::Replaced, "renderer_ingest_collector_replaced"),
+            (
+                SupervisorUnavailable::ShuttingDown,
+                "renderer_ingest_broker_shutting_down",
+            ),
+            (
+                SupervisorUnavailable::CollectorRejected,
+                "renderer_ingest_collector_rejected",
+            ),
+            (SupervisorUnavailable::Deadline, "renderer_ingest_deadline_exceeded"),
+            (SupervisorUnavailable::Protocol, "renderer_ingest_protocol_error"),
+        ];
+        for (error, expected) in cases {
+            assert_eq!(format!("renderer_ingest_{}", error.classification()), expected);
+        }
+    }
 
     #[test]
     fn renderer_ingest_is_main_window_only_with_a_stable_error() {
