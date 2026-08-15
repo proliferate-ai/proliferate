@@ -158,15 +158,24 @@ async def run_verification(db: AsyncSession) -> VerificationResult:
             observed = await litellm.list_models(virtual_key=virtual_key)
         except Exception as exc:  # noqa: BLE001 - one bad key must not abort the tick
             errored += 1
-            report_critical(
-                _sanitized(exc, virtual_key),
-                tags={
-                    "domain": "agent_gateway",
-                    "action": "verification",
-                    "harness_kind": key.harness_kind,
-                    "enrollment_key_id": str(key.id),
-                },
-            )
+            # report_critical calls logger.exception, which formats the AMBIENT
+            # exception (sys.exc_info) traceback. Inside this block that is the raw
+            # exc, whose message/traceback can carry the decrypted virtual key. So
+            # re-raise the sanitized stand-in as the ambient exception (``from None``
+            # severs __context__ back to exc) and report from THAT block, so both
+            # the Sentry object and the logged traceback are key-redacted.
+            try:
+                raise _sanitized(exc, virtual_key) from None
+            except RuntimeError as clean_exc:
+                report_critical(
+                    clean_exc,
+                    tags={
+                        "domain": "agent_gateway",
+                        "action": "verification",
+                        "harness_kind": key.harness_kind,
+                        "enrollment_key_id": str(key.id),
+                    },
+                )
             continue
         status, delta = _diff_verdict(key.harness_kind, observed, expected_map)
         await record_enrollment_key_verification(

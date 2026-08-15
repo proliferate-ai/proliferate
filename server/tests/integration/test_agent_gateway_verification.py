@@ -8,6 +8,7 @@ error-means-no-overwrite, key-material redaction, and the worker's flag gating.
 
 from __future__ import annotations
 
+import logging
 import uuid
 
 import pytest
@@ -210,7 +211,7 @@ async def test_error_does_not_overwrite_a_prior_verdict(
 
 
 @pytest.mark.asyncio
-async def test_reported_error_redacts_the_virtual_key(
+async def test_reported_error_redacts_the_virtual_key_everywhere(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     enrollment_id = await _create_enrollment(db_session)
@@ -222,19 +223,42 @@ async def test_reported_error_redacts_the_virtual_key(
     leaky = RuntimeError("401 from https://gw with header Bearer sk-litellm-claude")
     _fake_list_models(monkeypatch, {"sk-litellm-claude": leaky})
 
-    captured: list[str] = []
+    # Exercise the REAL report_critical logging path (not a stub) by capturing on
+    # its own logger ("proliferate.critical" does not propagate). report_critical
+    # calls logger.exception, which formats the AMBIENT exception's traceback, so
+    # the key must be absent from the message, the exc_info-formatted traceback,
+    # AND any chained __context__/__cause__.
+    records: list[logging.LogRecord] = []
 
-    def _capture(exc: Exception, *, tags: dict[str, str]) -> None:  # noqa: ARG001
-        captured.append(str(exc))
+    class _Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
 
-    monkeypatch.setattr(verification, "report_critical", _capture)
+    critical_logger = logging.getLogger("proliferate.critical")
+    handler = _Capture(level=logging.NOTSET)
+    critical_logger.addHandler(handler)
+    previous_level = critical_logger.level
+    previous_disabled = critical_logger.disabled
+    critical_logger.setLevel(logging.NOTSET)
+    # An app-side logging config may have set disable_existing_loggers, which marks
+    # this named logger .disabled and short-circuits its handle(); re-enable it so
+    # the real emit path (the one carrying the exc_info traceback) actually runs.
+    critical_logger.disabled = False
+    try:
+        await verification.run_verification(db_session)
+    finally:
+        critical_logger.removeHandler(handler)
+        critical_logger.setLevel(previous_level)
+        critical_logger.disabled = previous_disabled
 
-    await verification.run_verification(db_session)
-
-    assert captured, "an errored key must be reported"
-    message = captured[0]
-    assert "sk-litellm-claude" not in message, "the virtual key must be redacted"
-    assert "[redacted]" in message
+    critical_records = [r for r in records if "CRITICAL_FAILURE" in r.getMessage()]
+    assert critical_records, "an errored key must reach the critical logger"
+    for record in critical_records:
+        rendered = record.getMessage()
+        if record.exc_info is not None:
+            rendered += "\n" + logging.Formatter().formatException(record.exc_info)
+        assert "sk-litellm-claude" not in rendered, "the virtual key must never be logged"
+        assert "[redacted]" in record.getMessage()
 
 
 @pytest.mark.asyncio
