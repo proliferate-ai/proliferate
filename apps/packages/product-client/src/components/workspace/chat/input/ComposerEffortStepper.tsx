@@ -1,7 +1,13 @@
 import { useLocation } from "react-router-dom";
 import { APP_ROUTES } from "#product/config/app-routes";
-import { resolveReasoningEffortPresentation } from "#product/lib/domain/chat/session-controls/session-reasoning-effort-control";
-import { resolveSessionControlTooltip } from "#product/lib/domain/chat/session-controls/session-toggle-control";
+import {
+  getSteppedReasoningEffortValue,
+  resolveReasoningEffortPresentation,
+} from "#product/lib/domain/chat/session-controls/session-reasoning-effort-control";
+import {
+  appendSessionControlStepHint,
+  resolveSessionControlTooltip,
+} from "#product/lib/domain/chat/session-controls/session-toggle-control";
 import { COMPOSER_COMPACT_HIDDEN_CLASSNAME } from "#product/config/chat-layout";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 import { Tooltip } from "#product/primitives/Tooltip";
@@ -43,31 +49,38 @@ export function ComposerEffortStepper({ control }: ComposerEffortStepperProps) {
   const currentLevel =
     currentPresentation.shortLabel ?? control.detail ?? control.label;
   const ariaLabel = `Reasoning: ${currentLevel}`;
-  const tooltip = resolveSessionControlTooltip(
-    "Reasoning",
-    currentLevel,
-    currentOption?.description ?? null,
-  ) + ". Click to step.";
+  const tooltip = appendSessionControlStepHint(
+    resolveSessionControlTooltip(
+      "Reasoning",
+      currentLevel,
+      currentOption?.description ?? null,
+    ),
+    "step",
+  );
 
   // A one-rung ladder has nowhere to step: stepping it would re-select the
   // level that is already selected. Same guard shape as ComposerModeBadge's
   // `nextValue` — the control renders, reads, and is disabled.
   const canStep = control.options.length >= 2;
 
-  const handleStep = () => {
-    const nextIndex = (effectiveIndex + 1) % control.options.length;
-    const nextValue = control.options[nextIndex]?.value;
-    if (nextValue !== undefined) {
-      control.onSelect(nextValue);
+  const handleStep = (direction: 1 | -1) => {
+    const steppedValue = getSteppedReasoningEffortValue(control.options, direction);
+    if (steppedValue !== null) {
+      control.onSelect(steppedValue);
     }
   };
 
   // ⌃⇧E steps the same transition as clicking the ladder, dispatched through
   // the global shortcut registry so it works wherever focus sits — the same
-  // main-screen gate as the model selector's ⌃⇧M.
+  // main-screen gate as the model selector's ⌃⇧M. ⌃⌥⇧E mirrors it backward.
   const location = useLocation();
-  useShortcutHandler("workspace.cycle-reasoning-effort", handleStep, {
-    enabled: location.pathname === APP_ROUTES.home && control.settable && canStep,
+  const shortcutEnabled = location.pathname === APP_ROUTES.home && control.settable && canStep;
+  useShortcutHandler("workspace.cycle-reasoning-effort", () => handleStep(1), {
+    enabled: shortcutEnabled,
+    priority: "contextual",
+  });
+  useShortcutHandler("workspace.cycle-reasoning-effort-back", () => handleStep(-1), {
+    enabled: shortcutEnabled,
     priority: "contextual",
   });
 
@@ -90,7 +103,9 @@ export function ComposerEffortStepper({ control }: ComposerEffortStepperProps) {
         aria-label={ariaLabel}
         data-reasoning-effort-trigger=""
         data-reasoning-effort-selected={currentOption?.value ?? ""}
-        onClick={canStep ? handleStep : undefined}
+        onClick={canStep
+          ? (event) => handleStep(event.metaKey || event.ctrlKey ? -1 : 1)
+          : undefined}
       />
     </Tooltip>
   );

@@ -74,6 +74,22 @@ describe("ComposerEffortStepper", () => {
     expect(control.onSelect).toHaveBeenCalledWith("low");
   });
 
+  it("steps backward on a modifier click", () => {
+    const control = createEffortControl("medium");
+    renderStepper(control);
+
+    fireEvent.click(screen.getByRole("button", { name: "Reasoning: Medium" }), { metaKey: true });
+    expect(control.onSelect).toHaveBeenCalledWith("low");
+  });
+
+  it("wraps backward from the bottom level to the top on a modifier click", () => {
+    const control = createEffortControl("low");
+    renderStepper(control);
+
+    fireEvent.click(screen.getByRole("button", { name: "Reasoning: Low" }), { ctrlKey: true });
+    expect(control.onSelect).toHaveBeenCalledWith("high");
+  });
+
   it("steps the same transition through the cycle-reasoning-effort shortcut", () => {
     const control = createEffortControl("medium");
     renderStepper(control);
@@ -81,6 +97,15 @@ describe("ComposerEffortStepper", () => {
     expect(runShortcutHandler("workspace.cycle-reasoning-effort", { source: "keyboard" }))
       .toBe(true);
     expect(control.onSelect).toHaveBeenCalledWith("high");
+  });
+
+  it("steps backward through the cycle-reasoning-effort-back shortcut", () => {
+    const control = createEffortControl("medium");
+    renderStepper(control);
+
+    expect(runShortcutHandler("workspace.cycle-reasoning-effort-back", { source: "keyboard" }))
+      .toBe(true);
+    expect(control.onSelect).toHaveBeenCalledWith("low");
   });
 
   it("does not register the shortcut away from the main screen", () => {

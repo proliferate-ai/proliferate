@@ -265,6 +265,16 @@ export const WORKSPACE_SHORTCUTS = {
     nonMacMatch: { kind: "fixed-code", code: "KeyE", meta: true, shift: true, alt: false },
     allowInInputs: true,
   },
+  cycleReasoningEffortBack: {
+    id: "workspace.cycle-reasoning-effort-back",
+    label: "⌃⌥⇧E",
+    nonMacLabel: "Ctrl+Alt+Shift+E",
+    description: "Cycle reasoning effort back",
+    owner: "js",
+    match: { kind: "fixed-code", code: "KeyE", meta: false, ctrl: true, shift: true, alt: true },
+    nonMacMatch: { kind: "fixed-code", code: "KeyE", meta: true, shift: true, alt: true },
+    allowInInputs: true,
+  },
   openTerminal: {
     id: "workspace.open-terminal",
     label: "⌘J",
