@@ -26,6 +26,13 @@ import {
   startMeasurementOperation,
 } from "#product/lib/infra/measurement/measurement-port";
 import type { MeasurementFinishReason } from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import {
+  abandonRendererFlow,
+  beginRendererFlow,
+  finishRendererFlow,
+  markRendererFlowDataReady,
+  markRendererFlowShellCommitted,
+} from "#product/lib/infra/diagnostics/renderer-flow-timing";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import {
   clearLastViewedSession,
@@ -132,6 +139,12 @@ export function useWorkspaceBootstrapActions() {
     });
     let measurementFinishReason: MeasurementFinishReason = "completed";
     let sessions: WorkspaceSession[] = [];
+    // UX-latency R1 canonical flow marks (intent -> shell -> data -> stable).
+    beginRendererFlow({
+      kind: "workspace_open",
+      correlationKey: workspaceId,
+      correlation: { workspaceId },
+    });
     cancelDeferredFileTreePrefetch();
     const unbindMeasurementCategories = measurementOperationId
       ? bindMeasurementCategories({
@@ -170,6 +183,10 @@ export function useWorkspaceBootstrapActions() {
         authToken: workspaceConnection.authToken ?? undefined,
       };
       prepareFileWorkspace(fileWorkspaceArgs);
+      markRendererFlowShellCommitted({
+        kind: "workspace_open",
+        correlationKey: workspaceId,
+      });
       recordMeasurementWorkflowStep({
         operationId: measurementOperationId,
         step: "workspace.bootstrap.file_tree_init",
@@ -255,6 +272,10 @@ export function useWorkspaceBootstrapActions() {
       }
       useCloudWorkspaceBillingBlockStore.getState().clearBillingBlock(workspaceId);
       sessions = sessionsLoadResult.sessions;
+      markRendererFlowDataReady({
+        kind: "workspace_open",
+        correlationKey: workspaceId,
+      });
 
       if (!isCurrent()) {
         return { sessions };
@@ -383,6 +404,11 @@ export function useWorkspaceBootstrapActions() {
       }
       return { sessions };
     } finally {
+      if (measurementFinishReason === "completed") {
+        finishRendererFlow({ kind: "workspace_open", correlationKey: workspaceId });
+      } else {
+        abandonRendererFlow({ kind: "workspace_open", correlationKey: workspaceId });
+      }
       unbindMeasurementCategories();
       if (measurementOperationId) {
         markOperationForNextCommit(measurementOperationId, [

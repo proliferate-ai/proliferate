@@ -14,6 +14,13 @@ import { isTerminalIntentionalClose } from "#product/lib/infra/terminals/termina
 import { createTerminalRuntimeIdentity } from "#product/lib/infra/terminals/terminal-stream-key";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useTerminalStore } from "#product/stores/terminal/terminal-store";
+import {
+  abandonRendererFlow,
+  beginRendererFlow,
+  finishRendererFlow,
+  markRendererFlowDataReady,
+  markRendererFlowShellCommitted,
+} from "#product/lib/infra/diagnostics/renderer-flow-timing";
 
 // Owns terminal stream attachment and reconnect wiring. Rendering stays in components.
 export function useTerminalStreamController() {
@@ -40,6 +47,12 @@ export function useTerminalStreamController() {
       return null;
     }
 
+    // UX-latency R1 canonical flow marks (intent -> shell -> data -> stable).
+    beginRendererFlow({
+      kind: "terminal_attach",
+      correlationKey: terminalId,
+      correlation: { workspaceId, targetId: terminalId },
+    });
     const resolvedConnection =
       workspaceConnection ?? await resolveTerminalWorkspaceConnection(workspaceId);
     const identity: TerminalStreamIdentity = {
@@ -51,15 +64,24 @@ export function useTerminalStreamController() {
         runtimeGeneration: resolvedConnection.runtimeGeneration,
       }),
     };
+    // The terminal shell is present once its runtime connection is resolved.
+    markRendererFlowShellCommitted({ kind: "terminal_attach", correlationKey: terminalId });
     let sawExitEvent = false;
+    let sawFirstData = false;
     const didConnect = ensureConnected({
       identity,
       baseUrl: resolvedConnection.runtimeUrl,
       authToken: resolvedConnection.authToken,
       webSocketAuthTransport: resolvedConnection.webSocketAuthTransport,
       readOnly: options?.readOnlyReplay,
-      onOpen: () => {},
+      onOpen: () => {
+        markRendererFlowDataReady({ kind: "terminal_attach", correlationKey: terminalId });
+      },
       onData: () => {
+        if (!sawFirstData) {
+          sawFirstData = true;
+          finishRendererFlow({ kind: "terminal_attach", correlationKey: terminalId });
+        }
         const state = useTerminalStore.getState();
         const activeWsId = useSessionSelectionStore.getState().selectedWorkspaceId;
         const activeTerminalId = activeWsId
@@ -75,6 +97,7 @@ export function useTerminalStreamController() {
         void invalidateWorkspaceTerminals(workspaceId);
       },
       onError: () => {
+        abandonRendererFlow({ kind: "terminal_attach", correlationKey: terminalId });
         bumpConnectionVersion(terminalId);
         if (!options?.readOnlyReplay && !isTerminalIntentionalClose(terminalId)) {
           triggerSelectedCloudReconnect(workspaceId);

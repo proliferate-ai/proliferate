@@ -31,6 +31,13 @@ import {
   SESSION_HISTORY_APPLY_MAX_DURATION_MS,
 } from "#product/hooks/sessions/lifecycle/session-history-hydration-helpers";
 import { useSessionHistorySubagentAuthority } from "#product/hooks/sessions/lifecycle/use-session-history-subagent-authority";
+import {
+  abandonRendererFlow,
+  beginRendererFlow,
+  finishRendererFlow,
+  markRendererFlowDataReady,
+  markRendererFlowShellCommitted,
+} from "#product/lib/infra/diagnostics/renderer-flow-timing";
 
 export interface SessionHistoryHydrationOptions {
   afterSeq?: number;
@@ -71,6 +78,19 @@ export function useSessionHistoryHydration() {
 
       const afterSeq = options?.replace ? undefined : options?.afterSeq;
       const beforeSeq = options?.replace || afterSeq != null ? undefined : options?.beforeSeq;
+      // UX-latency R1: a full (non-incremental) hydration is the session_open
+      // flow. Incremental append/prepend fetches are not a fresh open.
+      const isSessionOpenFlow = afterSeq == null && beforeSeq == null;
+      if (isSessionOpenFlow) {
+        beginRendererFlow({
+          kind: "session_open",
+          correlationKey: sessionId,
+          correlation: { sessionId },
+        });
+        // The transcript slot already exists, so the shell is committed by the
+        // time a full hydration begins.
+        markRendererFlowShellCommitted({ kind: "session_open", correlationKey: sessionId });
+      }
       standaloneMeasurementOperationId = startMeasurementOperation({
         kind: resolveHistoryApplyOperationKind({ afterSeq, beforeSeq }),
         surfaces: SESSION_APPLY_MEASUREMENT_SURFACES,
@@ -131,9 +151,15 @@ export function useSessionHistoryHydration() {
           count: events.length,
         });
       }
+      if (isSessionOpenFlow) {
+        markRendererFlowDataReady({ kind: "session_open", correlationKey: sessionId });
+      }
       const currentSlot = getSessionRecord(sessionId);
       if (!currentSlot || (options?.isCurrent && !options.isCurrent())) {
         finishStandaloneApplyOperation(standaloneMeasurementOperationId, "aborted");
+        if (isSessionOpenFlow) {
+          abandonRendererFlow({ kind: "session_open", correlationKey: sessionId });
+        }
         return false;
       }
 
@@ -336,8 +362,12 @@ export function useSessionHistoryHydration() {
         appended: false,
         elapsedMs: Math.round(performance.now() - startedAt),
       });
+      if (isSessionOpenFlow) {
+        finishRendererFlow({ kind: "session_open", correlationKey: sessionId });
+      }
       return true;
     } catch (error) {
+      abandonRendererFlow({ kind: "session_open", correlationKey: sessionId });
       reportSessionHistoryRehydrateFailure({
         error,
         sessionId,
