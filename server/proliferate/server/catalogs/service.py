@@ -75,6 +75,69 @@ def _read_registry_document(path: Path = REGISTRY_PATH) -> dict[str, object]:
     return document
 
 
+def _registry_agents(path: Path = REGISTRY_PATH) -> list[dict[str, object]]:
+    document = _read_registry_document(path)
+    agents = document.get("agents") if isinstance(document, dict) else None
+    if not isinstance(agents, list):
+        return []
+    return [agent for agent in agents if isinstance(agent, dict)]
+
+
+def registry_harness_kinds(*, path: Path = REGISTRY_PATH) -> tuple[str, ...]:
+    """The harness-kind allow-list registry.json declares (agent-auth.md FR-4).
+
+    The declared authority behind ``AGENT_AUTH_HARNESS_KINDS`` — a drift test
+    asserts the hand-tuple equals this derivation, so the constant stays a
+    literal (no store->server import-boundary break) while registry.json remains
+    the single source of truth. Order follows the registry document.
+    """
+    return tuple(
+        agent["kind"]
+        for agent in _registry_agents(path)
+        if isinstance(agent.get("kind"), str)
+    )
+
+
+def registry_gateway_capable_kinds(*, path: Path = REGISTRY_PATH) -> tuple[str, ...]:
+    """Harness kinds whose registry auth block declares a ``gateway`` slot.
+
+    Gateway capability is the presence of an auth slot with id ``gateway``
+    (cursor has none — no gateway route exists for it). The declared authority
+    behind ``AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS`` and the LiteLLM
+    access-group contract.
+    """
+    kinds: list[str] = []
+    for agent in _registry_agents(path):
+        kind = agent.get("kind")
+        auth = agent.get("auth")
+        slots = auth.get("slots") if isinstance(auth, dict) else None
+        if not isinstance(kind, str) or not isinstance(slots, list):
+            continue
+        if any(isinstance(slot, dict) and slot.get("id") == "gateway" for slot in slots):
+            kinds.append(kind)
+    return tuple(kinds)
+
+
+def registry_single_source_kinds(*, path: Path = REGISTRY_PATH) -> tuple[str, ...]:
+    """Harness kinds registry.json marks ``authCardinality: "single"`` (radio)."""
+    return tuple(
+        agent["kind"]
+        for agent in _registry_agents(path)
+        if isinstance(agent.get("kind"), str)
+        and agent.get("authCardinality") == "single"
+    )
+
+
+def registry_multi_source_kinds(*, path: Path = REGISTRY_PATH) -> tuple[str, ...]:
+    """Harness kinds registry.json marks ``authCardinality: "multi"`` (additive)."""
+    return tuple(
+        agent["kind"]
+        for agent in _registry_agents(path)
+        if isinstance(agent.get("kind"), str)
+        and agent.get("authCardinality") == "multi"
+    )
+
+
 def supported_provider_config_kinds(
     harness_kind: str,
     *,
