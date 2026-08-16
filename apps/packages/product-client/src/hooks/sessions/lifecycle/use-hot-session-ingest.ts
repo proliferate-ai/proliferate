@@ -3,6 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import {
   resolveHotSessionTargets,
 } from "#product/lib/domain/sessions/hot-session-policy";
+import { resolveSessionViewState } from "#product/domain/sessions/activity";
 import {
   reconcileHotSessions,
   type HotSessionIngestManagerDeps,
@@ -45,15 +46,50 @@ export function useHotSessionIngest(): void {
       ? state.sessionIdsByWorkspaceId[selectedWorkspaceId] ?? EMPTY_SESSION_IDS
       : EMPTY_SESSION_IDS
   );
+  // Streaming continuity (ADR Q15): sessions with in-flight work in other
+  // workspaces stay hot so their store slots keep ingesting deltas while
+  // backgrounded. The pending-prompt check catches a prompt sent immediately
+  // before switching away, before the directory reflects the run.
+  const pendingPromptSessionIds = useSessionTranscriptStore(useShallow((state) =>
+    Object.entries(state.entriesById)
+      .filter(([, entry]) =>
+        !!entry
+        && (!!entry.optimisticPrompt || entry.transcript.pendingPrompts.length > 0))
+      .map(([sessionId]) => sessionId)
+      .sort()
+  ));
+  const workingSessionIds = useSessionDirectoryStore(useShallow((state) =>
+    Object.entries(state.entriesById)
+      .filter(([, entry]) =>
+        !!entry?.workspaceId
+        && resolveSessionViewState({
+          status: entry.status,
+          executionSummary: entry.executionSummary,
+          streamConnectionState: entry.streamConnectionState,
+          transcript: {
+            isStreaming: entry.activity.isStreaming,
+            pendingInteractions: entry.activity.pendingInteractions,
+          },
+        }) === "working")
+      .map(([sessionId]) => sessionId)
+      .sort()
+  ));
+  const backgroundSessionIds = useMemo(() =>
+    uniqueSessionIds([...workingSessionIds, ...pendingPromptSessionIds]), [
+    pendingPromptSessionIds,
+    workingSessionIds,
+  ]);
   const relevantSessionIds = useMemo(() =>
     uniqueSessionIds([
       activeSessionId,
       ...visibleChatSessionIds,
       ...workspaceSessionIds,
+      ...backgroundSessionIds,
     ]), [
     activeSessionId,
     visibleChatSessionIds,
     workspaceSessionIds,
+    backgroundSessionIds,
   ]);
   const directoryEntriesById = useSessionDirectoryStore(useShallow((state) =>
     Object.fromEntries(
@@ -74,6 +110,7 @@ export function useHotSessionIngest(): void {
   ));
   const targets = useMemo(() => resolveHotSessionTargets({
     activeSessionId,
+    backgroundSessionIds,
     directoryEntriesById,
     promptActivityBySessionId,
     selectedWorkspaceId,
@@ -81,6 +118,7 @@ export function useHotSessionIngest(): void {
     workspaceSessionIds,
   }), [
     activeSessionId,
+    backgroundSessionIds,
     directoryEntriesById,
     promptActivityBySessionId,
     selectedWorkspaceId,
