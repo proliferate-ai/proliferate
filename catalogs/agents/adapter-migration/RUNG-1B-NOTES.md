@@ -12,6 +12,29 @@ fork repositories (below) and the live catalog pin flip is gated (see §3).
 | Claude | github.com/agentclientprotocol/claude-agent-acp v0.66.0 | `6b405138fc82be947964612fac04e56654827b66` | `proliferate-ai/claude-agent-acp@81a4d52e6bfe8f636d6818c6c48c29be28dca35d` | `v0.66.0-proliferate.1` |
 | Codex | github.com/agentclientprotocol/codex-acp v1.1.14 | `5faefec5d55ded33c54b68ffec93def4f6c547f5` | `proliferate-ai/codex-acp@219738c9dd4205d3c70ab950f5f22cc3b28103c4` | `v1.1.14-proliferate.1` |
 
+### Canonical tag-peel provenance (pin by peeled commit, never tag-object SHA)
+
+Rule: the catalog and any locks pin the **peeled commit**, never a tag-object
+SHA. Resolution tooling MUST peel annotated tags (`refs/tags/<v>^{}`) before
+pinning. Provenance for each canonical ref (`git ls-remote`):
+
+- **codex-acp v1.1.14 — ANNOTATED tag.** Tag object
+  `c82ecc31a5b73014e13a91fa1c3251252ce55f94` peels (`^{}`) to commit
+  `5faefec5d55ded33c54b68ffec93def4f6c547f5`. Pin the peeled commit
+  `5faefec5d55ded33c54b68ffec93def4f6c547f5`, NEVER the tag-object SHA
+  `c82ecc31a5b73014e13a91fa1c3251252ce55f94`.
+  ```
+  $ git ls-remote https://github.com/agentclientprotocol/codex-acp 'refs/tags/v1.1.14' 'refs/tags/v1.1.14^{}'
+  c82ecc31a5b73014e13a91fa1c3251252ce55f94	refs/tags/v1.1.14
+  5faefec5d55ded33c54b68ffec93def4f6c547f5	refs/tags/v1.1.14^{}
+  ```
+- **claude-agent-acp v0.66.0 — LIGHTWEIGHT tag.** No `^{}` deref; the tag ref
+  points directly at commit `6b405138fc82be947964612fac04e56654827b66`.
+  ```
+  $ git ls-remote https://github.com/agentclientprotocol/claude-agent-acp 'refs/tags/v0.66.0' 'refs/tags/v0.66.0^{}'
+  6b405138fc82be947964612fac04e56654827b66	refs/tags/v0.66.0
+  ```
+
 - Claude fork PR: proliferate-ai/claude-agent-acp#50 (draft).
 - Codex fork PR: proliferate-ai/codex-acp#19 (draft, based on a pushed
   `canonical-1.1.14-base` branch because the old Rust `main` shares no history
