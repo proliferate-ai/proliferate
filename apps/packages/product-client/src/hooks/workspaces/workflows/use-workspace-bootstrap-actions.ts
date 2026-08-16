@@ -124,10 +124,9 @@ export function useWorkspaceBootstrapActions() {
     // signal). Superseded/stale exits set this so no false content_stable fires.
     let rendererFlowAbandonReason: string | null = null;
     // UX-latency R14: when set, content_stable is DEFERRED to the transcript
-    // pane (the session whose committed transcript is the real stable signal),
-    // so the finally must neither finish nor abandon the flow — it hands the
-    // mark off. Null => finish/abandon here as before (empty workspace, error,
-    // stale: no transcript to wait for).
+    // pane (its committed transcript is the real stable signal), so the finally
+    // neither finishes nor abandons the flow; it hands the mark off. Null =>
+    // finish/abandon here as before (empty workspace, error, stale).
     let deferContentStableSessionId: string | null = null;
     let sessions: WorkspaceSession[] = [];
     // UX-latency R1 canonical flow marks (intent -> shell -> data -> stable).
