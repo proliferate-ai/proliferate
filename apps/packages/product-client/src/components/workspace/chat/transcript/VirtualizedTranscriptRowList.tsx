@@ -274,6 +274,13 @@ export function VirtualizedTranscriptRowList({
     notifyProgrammaticScroll(() => {
       viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
     });
+    // eslint-disable-next-line no-console -- TEMP r10-diag, removed before merge.
+    console.error("[r10-diag] prepend-effect", {
+      anchorScrollTop: anchor.scrollTop,
+      anchorScrollHeight: anchor.scrollHeight,
+      viewportScrollHeight: viewport.scrollHeight,
+      writtenScrollTop: viewport.scrollTop,
+    });
     // The synchronous write above lands against the CURRENT scrollHeight, still
     // the estimate for the freshly-mounted older rows (overflow-anchor: none
     // means the browser won't silently correct it). Re-apply the delta each

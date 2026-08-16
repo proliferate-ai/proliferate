@@ -208,6 +208,13 @@ test.describe("transcript scroll physics", () => {
       if (message.type() === "error" && /ResizeObserver loop/i.test(text)) {
         pageErrors.push(text);
       }
+      // TEMP r10-diag, removed before merge.
+      if (/\[r10-diag\]/.test(text)) {
+        void Promise.all(message.args().map((arg) => arg.jsonValue().catch(() => "<unserializable>")))
+          .then((values) => {
+            console.log("[r10-diag-node]", ...values); // eslint-disable-line no-console
+          });
+      }
     });
   });
   test.afterEach(() => {
