@@ -95,11 +95,6 @@ reason = "product-owned measurement port barrel (R1 ruling) mirroring the retain
 # whose file dropped back under the soft threshold or is gone.
 
 [[frontend_structure]]
-path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-bootstrap-actions.ts"
-max_lines = 425
-reason = "workspace bootstrap actions + gateway billing-block capture into the status screen (C8); split on next growth"
-
-[[frontend_structure]]
 path = "apps/packages/product-client/src/components/workspace/chat/transcript/MarkdownBody.tsx"
 max_lines = 525
 reason = "existing markdown transcript renderer pending split"

@@ -2,13 +2,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { activitySnapshotFromDirectoryEntry } from "#product/lib/domain/sessions/directory/directory-activity";
 import type { SessionStreamConnectionState } from "#product/lib/domain/sessions/directory/directory-entry";
 import { resolveSessionViewState, type SessionViewState } from "#product/domain/sessions/activity";
+import {
+  advanceReconnectBackoff,
+  type ReconnectBackoffState,
+} from "#product/lib/domain/sessions/stream/reconnect-backoff-policy";
 import { useLinkedSessionMounting } from "#product/hooks/chat/workflows/subagents/use-linked-session-mounting";
 import { useSessionRuntimeActions } from "#product/hooks/sessions/workflows/use-session-runtime-actions";
 import {
-  closeSessionStreamHandle,
   getSessionStreamHandle,
   type ManagedSessionStreamHandle,
 } from "#product/lib/access/anyharness/session-stream-handles";
+import { closePaneStreamHandles } from "#product/hooks/agents/lifecycle/use-agents-pane-session-lifecycle-handles";
 import { isHotSessionClientId } from "#product/lib/workflows/sessions/hot-session-ingest-manager";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import {
@@ -19,11 +23,6 @@ import {
 } from "#product/stores/sessions/session-records";
 
 export type AgentsPaneHistoryPhase = "loading" | "ready" | "error";
-
-// Modest fixed-then-doubling backoff for the pane's own stream reconnect,
-// capped low: this is a foreground detail pane, not a background poller.
-const PANE_STREAM_RECONNECT_BASE_DELAY_MS = 750;
-const PANE_STREAM_RECONNECT_MAX_DELAY_MS = 6_000;
 
 export interface AgentsPaneSessionLifecycleInput {
   workspaceId: string | null;
@@ -47,6 +46,13 @@ export interface AgentsPaneSessionLifecycleState {
   sessionViewState: SessionViewState;
   retryHistory: () => void;
   reconnect: () => void;
+  /**
+   * Shared reconnect-backoff shape (same curve as the primary session
+   * stream: base 350ms, factor 2, capped at 15s). Rung 7 wires this through
+   * for both consumers to surface consistently; it does not change any
+   * existing visual treatment on its own.
+   */
+  reconnectState: ReconnectBackoffState;
 }
 
 interface PaneStreamLease {
@@ -101,7 +107,12 @@ export function useAgentsPaneSessionLifecycle(
     sessionId: string;
     timer: ReturnType<typeof setTimeout>;
   } | null>(null);
-  const paneReconnectAttemptsRef = useRef<Map<string, number>>(new Map());
+  const paneReconnectBackoffRef = useRef<Map<string, ReconnectBackoffState>>(new Map());
+  const [reconnectState, setReconnectState] = useState<ReconnectBackoffState>({
+    attempt: 0,
+    nextDelayMs: 0,
+    reconnecting: false,
+  });
 
   const clearPaneReconnectTimer = useCallback((sessionId?: string) => {
     const pending = paneReconnectTimerRef.current;
@@ -138,7 +149,13 @@ export function useAgentsPaneSessionLifecycle(
     // A closed or unmounted child must never keep retrying: cancel any
     // pending pane-owned reconnect and drop its backoff count.
     clearPaneReconnectTimer(sessionId);
-    paneReconnectAttemptsRef.current.delete(sessionId);
+    paneReconnectBackoffRef.current.delete(sessionId);
+    // reconnectState is per-hook-instance, not a shared/session-keyed map, so it
+    // must be reset unconditionally on release. The isCurrent guard used to skip
+    // this exactly on a session switch (isPaneRouteActive flips before
+    // clientSessionId changes), leaving stale "reconnecting" state visible until
+    // the next session connected.
+    setReconnectState({ attempt: 0, nextDelayMs: 0, reconnecting: false });
 
     const lease = paneStreamLeaseRef.current?.clientSessionId === sessionId
       ? paneStreamLeaseRef.current
@@ -159,26 +176,7 @@ export function useAgentsPaneSessionLifecycle(
       return;
     }
 
-    const handlesToClose = new Map<string, ManagedSessionStreamHandle>();
-    if (lease) {
-      handlesToClose.set(lease.materializedSessionId, lease.handle);
-    }
-    if (attempt?.mayOwnOpenedHandle && attempt.materializedSessionId) {
-      const currentHandle = getSessionStreamHandle(attempt.materializedSessionId);
-      if (currentHandle && currentHandle !== attempt.baselineHandle) {
-        handlesToClose.set(attempt.materializedSessionId, currentHandle);
-      }
-    }
-
-    let closed = false;
-    for (const [materializedSessionId, handle] of handlesToClose) {
-      closed = closeSessionStreamHandle(materializedSessionId, handle) || closed;
-    }
-    if (closed && getSessionRecord(sessionId)) {
-      useSessionDirectoryStore.getState().patchEntry(sessionId, {
-        streamConnectionState: "disconnected",
-      });
-    }
+    closePaneStreamHandles(sessionId, lease, attempt);
   }, [clearPaneReconnectTimer]);
 
   const connectPaneStream = useCallback((sessionId: string) => {
@@ -233,16 +231,14 @@ export function useAgentsPaneSessionLifecycle(
           // Closed or no-longer-current (unmounted/navigated-away) children
           // must not keep retrying.
           clearPaneReconnectTimer(sessionId);
-          paneReconnectAttemptsRef.current.delete(sessionId);
+          paneReconnectBackoffRef.current.delete(sessionId);
           return;
         }
         clearPaneReconnectTimer(sessionId);
-        const attemptCount = paneReconnectAttemptsRef.current.get(sessionId) ?? 0;
-        const delayMs = Math.min(
-          PANE_STREAM_RECONNECT_BASE_DELAY_MS * 2 ** attemptCount,
-          PANE_STREAM_RECONNECT_MAX_DELAY_MS,
-        );
-        paneReconnectAttemptsRef.current.set(sessionId, attemptCount + 1);
+        const nextBackoff = advanceReconnectBackoff(paneReconnectBackoffRef.current.get(sessionId));
+        paneReconnectBackoffRef.current.set(sessionId, nextBackoff);
+        setReconnectState(nextBackoff);
+        const delayMs = nextBackoff.nextDelayMs;
         const timer = setTimeout(() => {
           if (paneReconnectTimerRef.current?.sessionId === sessionId) {
             paneReconnectTimerRef.current = null;
@@ -264,7 +260,8 @@ export function useAgentsPaneSessionLifecycle(
       }
       // A successful (non-throwing) resolution means the pane's own retry
       // policy no longer needs to escalate its backoff.
-      paneReconnectAttemptsRef.current.delete(sessionId);
+      paneReconnectBackoffRef.current.delete(sessionId);
+      setReconnectState({ attempt: 0, nextDelayMs: 0, reconnecting: false });
       if (!attempt.mayOwnOpenedHandle || isHotSessionClientId(sessionId)) {
         return;
       }
@@ -393,6 +390,9 @@ export function useAgentsPaneSessionLifecycle(
     historyPhase,
     streamConnectionState: isClosed ? null : streamConnectionState,
     streamRequestPending: isClosed ? false : streamRequestPending,
+    reconnectState: isClosed
+      ? { attempt: 0, nextDelayMs: 0, reconnecting: false }
+      : reconnectState,
     sessionViewState,
     retryHistory,
     reconnect,

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion } from "@proliferate/design/motion";
 import { Button } from "#product/primitives/Button";
 import { useChainedVerticalWheel } from "#product/primitives/utils/use-chained-vertical-wheel";
 import { CodeBlockTokenContent } from "#product/components/content/ui/CodeBlockTokenContent";
@@ -43,7 +44,7 @@ export function HighlightedCodeBlock({
   const handleCopy = () => {
     void writeText(code);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), motion.feedback.copiedResetMs);
   };
 
   return (

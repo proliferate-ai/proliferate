@@ -4,6 +4,7 @@ import {
   type WorkspaceUnarchiveScenarioBody,
 } from "@anyharness/sdk";
 import { useCallback, useMemo, useRef, useState } from "react";
+import { motion } from "@proliferate/design/motion";
 import { useNavigate } from "react-router-dom";
 import { useArchivedWorkspacesInvalidation } from "#product/hooks/workspaces/cache/use-archived-workspaces-invalidation";
 import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
@@ -30,13 +31,12 @@ import { useUserPreferencesStore } from "#product/stores/preferences/user-prefer
 import { showToast } from "#product/primitives/utils/show-toast";
 
 /**
- * A settled POST is a definite outcome (success or a typed/generic failure).
- * Past this bound the outcome is genuinely unknown — a huge untracked
- * payload can push a real snapshot past any fixed timeout — so the row
- * stays hidden and the pending reconciler (`use-archive-pending-reconciler`)
- * becomes the decider instead of a false failure toast.
+ * A settled POST is a definite outcome (success or a typed/generic failure). Past
+ * this bound the outcome is genuinely unknown — a huge untracked payload can push
+ * a real snapshot past any fixed timeout — so the row stays hidden and the pending
+ * reconciler (`use-archive-pending-reconciler`) becomes the decider, not a false failure toast.
  */
-const ARCHIVE_SETTLE_TIMEOUT_MS = 12_000;
+const ARCHIVE_SETTLE_TIMEOUT_MS = motion.delay.optimisticSettleTimeoutMs;
 
 /** T7 ("busy") auto-dismisses; every other failure toast here is persistent
  * (via `isError`) because it is one. */

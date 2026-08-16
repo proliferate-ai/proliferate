@@ -5,6 +5,7 @@ import {
   getLastKnownControlPlaneReachable,
 } from "#product/lib/access/cloud/health";
 import { controlPlaneHealthKey } from "#product/hooks/access/cloud/query-keys";
+import { cadence } from "@proliferate/design/cadence";
 
 // Core probe keyed on an explicitly-supplied deployment base URL. Callers under
 // the host use `useControlPlaneHealth`; the host provider, which builds the host
@@ -16,8 +17,10 @@ export function useControlPlaneHealthFor(apiBaseUrl: string) {
     queryKey: controlPlaneHealthKey(apiBaseUrl),
     queryFn: () => checkControlPlaneReachable(apiBaseUrl),
     initialData: initialReachable ?? undefined,
-    staleTime: 15_000,
-    refetchInterval: 15_000,
+    // Was raw 15_000ms literals, already exactly `cadence.relaxedMs` (UX
+    // Latency + Transitions ADR §4.7, Rung 6, Q8).
+    staleTime: cadence.relaxedMs,
+    refetchInterval: cadence.relaxedMs,
     retry: 1,
   });
 }

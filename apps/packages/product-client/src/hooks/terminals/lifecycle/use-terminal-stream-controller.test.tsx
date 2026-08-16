@@ -9,6 +9,12 @@ import type { ProductHost } from "@proliferate/product-client/host/product-host"
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { resetTerminalStreamRegistryForTests } from "#product/lib/infra/terminals/terminal-stream-registry";
 import { useTerminalStreamController } from "#product/hooks/terminals/lifecycle/use-terminal-stream-controller";
+import {
+  resetRendererDiagnosticsSinkForTest,
+  setRendererDiagnosticsSink,
+  type RendererDiagnosticInput,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
+import { resetRendererFlowsForTest } from "#product/lib/infra/diagnostics/renderer-flow-timing";
 
 const mockState = vi.hoisted(() => ({
   token: "token-a",
@@ -145,6 +151,67 @@ describe("useTerminalStreamController terminal stream identity", () => {
   afterEach(() => {
     cleanup();
     resetTerminalStreamRegistryForTests();
+  });
+
+  describe("renderer flow marks", () => {
+    let emitted: RendererDiagnosticInput[];
+
+    beforeEach(() => {
+      emitted = [];
+      setRendererDiagnosticsSink({ emit: (input) => emitted.push(input) });
+      resetRendererFlowsForTest();
+    });
+
+    afterEach(() => {
+      resetRendererDiagnosticsSinkForTest();
+      resetRendererFlowsForTest();
+    });
+
+    it("emits shell_committed on a fresh attach but NOT on a keep-alive reattach onto an exited entry", async () => {
+      const { result } = renderActions();
+
+      // First attach: connects normally, marks shell_committed once.
+      const identity = await result.current.ensureTabConnection(
+        "terminal-1",
+        "workspace-1",
+        "exited",
+      );
+      const shellCommittedAfterFirstAttach = emitted.filter(
+        (entry) => entry.name === "renderer.flow.shell_committed",
+      );
+      expect(shellCommittedAfterFirstAttach).toHaveLength(1);
+
+      // Stream closes without an explicit exit event: the readOnlyReplay
+      // onClose handler marks the registry entry exited, clearing its handle.
+      mockState.connections[0]!.options.onClose?.(new Event("close") as CloseEvent);
+
+      // Second call: hasActiveHandle is now false (handle cleared), so this
+      // reaches attachTerminalStream again. But the entry is marked
+      // `exited`, so ensureConnected returns didConnect === false (a
+      // keep-alive reattach onto a dead entry). This must abandon the flow
+      // with reason "already_connected" and must NOT add another
+      // shell_committed sample (that would contaminate terminal_attach
+      // aggregations with a spurious near-0ms reading).
+      const secondIdentity = await result.current.ensureTabConnection(
+        "terminal-1",
+        "workspace-1",
+        "exited",
+      );
+      expect(secondIdentity).toEqual(identity);
+
+      const shellCommittedAfterReattach = emitted.filter(
+        (entry) => entry.name === "renderer.flow.shell_committed",
+      );
+      expect(shellCommittedAfterReattach).toHaveLength(1);
+
+      const abandoned = emitted.filter((entry) => entry.name === "renderer.flow.abandoned");
+      expect(abandoned).toHaveLength(1);
+      expect(
+        Object.fromEntries(
+          Object.entries(abandoned[0]!.fields ?? {}).map(([key, field]) => [key, field.value]),
+        ),
+      ).toMatchObject({ reason: "already_connected" });
+    });
   });
 
   it("keeps an active stream identity stable across credential refreshes", async () => {

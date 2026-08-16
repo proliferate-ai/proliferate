@@ -22,6 +22,17 @@ import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/c
 import { useWorkspaceCollectionsMutationCache } from "#product/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { withFreshCloudSandboxGatewayAccessToken } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 
+// Named exception (does not sit on the `cadence` scale, and is well below
+// `cadence.fastMs`): the ADR ruling on this poll is that it "must either
+// justify itself as a named exception or move to sync-layer push." It is
+// justified here rather than snapped: this is a tight foreground loop, gated
+// to only run while the selected workspace's active session is `working` and
+// the runtime is ready, driving live git-status feedback (diff stat, file
+// tree) during an active turn. Loosening it to `cadence.fastMs` (1s) would be
+// user-visible staleness during the exact moment the user is watching a
+// session work. The real fix is moving this to a sync-layer push instead of
+// polling at all; that is out of scope for this PR and is tracked as a
+// follow-up (UX Latency + Transitions ADR §4.7, Rung 6, Q8).
 const WORKSPACE_METADATA_POLL_INTERVAL_MS = 250;
 
 // Owns mounted metadata synchronization for the selected workspace.
