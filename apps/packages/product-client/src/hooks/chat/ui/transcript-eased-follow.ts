@@ -1,3 +1,8 @@
+import {
+  resolveTranscriptEasedFollowEnabled,
+  TRANSCRIPT_EASED_FOLLOW_STORAGE_KEY,
+} from "#product/domain/chats/transcript/transcript-eased-follow-config";
+
 /**
  * The eased-follow motion policy (PRO-168, design question Q16, rung 12).
  *
@@ -45,4 +50,19 @@ export function resolveEasedFollowStep(currentTop: number, targetTop: number): E
     return { nextTop: targetTop, converged: true };
   }
   return { nextTop: currentTop + delta * TRANSCRIPT_EASED_FOLLOW_RATE, converged: false };
+}
+
+/**
+ * Read the flag once at mount (same convention as the virtualization-mode
+ * flag). `window` access stays out of domain/ (the tsconfig.domain.json
+ * DOM-free gate), so this reader lives in the hook layer, not alongside the
+ * pure parser in transcript-eased-follow-config.ts.
+ */
+export function readTranscriptEasedFollowEnabled(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return resolveTranscriptEasedFollowEnabled(
+    window.localStorage.getItem(TRANSCRIPT_EASED_FOLLOW_STORAGE_KEY),
+  );
 }

@@ -1,9 +1,17 @@
-import { describe, expect, it } from "vitest";
+/* @vitest-environment jsdom */
+
+import { afterEach, describe, expect, it } from "vitest";
+import { TRANSCRIPT_EASED_FOLLOW_STORAGE_KEY } from "#product/domain/chats/transcript/transcript-eased-follow-config";
 import {
+  readTranscriptEasedFollowEnabled,
   resolveEasedFollowStep,
   TRANSCRIPT_EASED_FOLLOW_CONVERGE_PX,
   TRANSCRIPT_EASED_FOLLOW_RATE,
 } from "#product/hooks/chat/ui/transcript-eased-follow";
+
+afterEach(() => {
+  window.localStorage.removeItem(TRANSCRIPT_EASED_FOLLOW_STORAGE_KEY);
+});
 
 describe("resolveEasedFollowStep (PRO-168, rung 12)", () => {
   it("steps toward the target by the fixed rate, not converged, while the remaining distance is large", () => {
@@ -46,5 +54,16 @@ describe("resolveEasedFollowStep (PRO-168, rung 12)", () => {
     expect(top).toBe(target);
     // At a 0.25/frame rate the geometric tail converges well under 200 frames.
     expect(frames).toBeLessThan(60);
+  });
+});
+
+describe("readTranscriptEasedFollowEnabled (PRO-168, rung 12, Q16)", () => {
+  it("reads OFF when the key is unset", () => {
+    expect(readTranscriptEasedFollowEnabled()).toBe(false);
+  });
+
+  it("reads ON once the flag is explicitly set", () => {
+    window.localStorage.setItem(TRANSCRIPT_EASED_FOLLOW_STORAGE_KEY, "on");
+    expect(readTranscriptEasedFollowEnabled()).toBe(true);
   });
 });
