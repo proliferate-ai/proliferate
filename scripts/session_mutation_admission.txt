@@ -118,3 +118,4 @@ workflow_run_commands::flip_workflow_node_type workflow-plane flips a pending no
 workflow_run_commands::undo_workflow_advance workflow-plane the one command that reaches into an existing session (ADR): parks node N back to awaiting_human through the engine
 workflow_run_commands::resume_workflow_run workflow-plane resumes an interrupted run through the actor's transition table
 workflow_run_commands::add_workflow_adhoc_node workflow-plane appends an adhoc node row beside the chain; session starts only via the engine's StartNode effect
+workflow_run_commands::cancel_workflow_run workflow-plane dispatches Cancel through the actor's transition table; disposes every running row's session via the engine's own side-effect seam (mirrors fail_redo_workflow_node's Ruling L disposal)
