@@ -71,6 +71,7 @@ export function VirtualizedTranscriptRowList({
     notifyProgrammaticScroll,
     setPinned,
     resetForSession,
+    userScrollUpIntentAtRef,
   } = useTranscriptStickToBottom({
     scrollRef,
     onScrollSample,
@@ -227,6 +228,7 @@ export function VirtualizedTranscriptRowList({
     scrollRef,
     pinnedRef,
     notifyProgrammaticScroll,
+    userScrollUpIntentAtRef,
   });
 
   useLayoutEffect(() => {
@@ -264,8 +266,10 @@ export function VirtualizedTranscriptRowList({
     // the reading row would drift down by the estimate-to-measured difference.
     // Re-apply the same delta each frame while the prepended rows settle (a no-op
     // once pinned or height-stable), so scrollTop absorbs the full added-above
-    // height and the reading row stays fixed on every engine.
-    startAboveChangeCompensation(anchor);
+    // height and the reading row stays fixed on every engine. NOT cancelable by
+    // upward intent: the reader requested this prepend by scrolling to the top,
+    // so the reading row must hold even as that same upward gesture continues.
+    startAboveChangeCompensation(anchor, false);
     // Open the blank-fallback grace window: the anchored scrollTop sits ahead of the still-estimated mounted range until those rows measure taller.
     prependSettleUntilRef.current = (typeof performance === "undefined" ? Date.now() : performance.now()) + PREPEND_BLANK_FALLBACK_GRACE_MS;
   }, [notifyProgrammaticScroll, olderHistoryCursor, rows.length, setPinned, startAboveChangeCompensation]);
