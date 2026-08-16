@@ -10,13 +10,3 @@ export const TRANSCRIPT_EASED_FOLLOW_STORAGE_KEY = "proliferate:transcriptEasedF
 export function resolveTranscriptEasedFollowEnabled(value: string | null): boolean {
   return value === "on";
 }
-
-/** Read the flag once at mount (same convention as the virtualization-mode flag). */
-export function readTranscriptEasedFollowEnabled(): boolean {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  return resolveTranscriptEasedFollowEnabled(
-    window.localStorage.getItem(TRANSCRIPT_EASED_FOLLOW_STORAGE_KEY),
-  );
-}

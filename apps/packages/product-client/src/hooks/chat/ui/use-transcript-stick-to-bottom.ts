@@ -1,6 +1,9 @@
 import { useCallback, useRef, useState } from "react";
 import { resolveVirtualBottomDistance } from "#product/domain/chats/transcript/transcript-virtual-rows";
-import { readTranscriptEasedFollowEnabled } from "#product/domain/chats/transcript/transcript-eased-follow-config";
+import {
+  resolveTranscriptEasedFollowEnabled,
+  TRANSCRIPT_EASED_FOLLOW_STORAGE_KEY,
+} from "#product/domain/chats/transcript/transcript-eased-follow-config";
 import {
   DIRECTION_EPSILON_PX,
   REPIN_BOTTOM_THRESHOLD_PX,
@@ -34,6 +37,18 @@ export type { TranscriptStickToBottom, UseTranscriptStickToBottomOptions };
 
 function interactionNow(): number {
   return typeof performance === "undefined" ? Date.now() : performance.now();
+}
+
+// PRO-168 (rung 12, Q16): read once at mount, same convention as the
+// virtualization-mode flag. `window` access stays out of domain/ (the
+// tsconfig.domain.json DOM-free gate), so this lives in the hook layer.
+function readTranscriptEasedFollowEnabled(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return resolveTranscriptEasedFollowEnabled(
+    window.localStorage.getItem(TRANSCRIPT_EASED_FOLLOW_STORAGE_KEY),
+  );
 }
 
 // FR-2 (rung 6): how long the single frame pass re-resolves the saved reading
