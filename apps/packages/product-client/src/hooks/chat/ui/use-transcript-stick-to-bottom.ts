@@ -160,7 +160,7 @@ export function useTranscriptStickToBottom({
   // FR-2 restore (rung 6): the single frame writer re-resolves this to a
   // scrollTop each glued frame so the saved reading row holds as heights settle.
   // Null except during a restore; a user scroll clears it.
-  const restoreResolverRef = useRef<(() => number | null) | null>(null);
+  const restoreResolverRef = useRef<((viewport: HTMLElement) => number | null) | null>(null);
   const restoreDeadlineRef = useRef(0);
   const userScrollIntentUntilRef = useRef(0);
 

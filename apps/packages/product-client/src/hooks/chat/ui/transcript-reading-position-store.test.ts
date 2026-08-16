@@ -68,9 +68,40 @@ describe("transcript-reading-position-store", () => {
       { kind: "transcript" as const, key: "turn:1:block:content" },
     ];
 
-    it("inverts a saved anchor to a scrollTop against live measured geometry", () => {
-      // Row index 1 now starts at 640 (measured), + 60px offset = 700.
+    // A viewport whose mounted rows are absent, forcing the coarse absolute
+    // fallback path (the target row is not yet in the render window).
+    function noMountedRowsViewport(scrollTop = 0): HTMLElement {
+      return {
+        scrollTop,
+        querySelector: () => null,
+        getBoundingClientRect: () => ({ top: 0 }) as unknown as DOMRect,
+      } as unknown as HTMLElement;
+    }
+
+    it("estimate-immune path: seats the saved offset under the top edge from the row's real rect", () => {
+      // The saved row is mounted 300px below the viewport top edge; to seat 60px
+      // of it under the top edge the viewport must scroll to 200 + 300 + 60.
+      const rowEl = {
+        getBoundingClientRect: () => ({ top: 340 }) as unknown as DOMRect,
+      } as unknown as HTMLElement;
+      const viewport = {
+        scrollTop: 200,
+        querySelector: (sel: string) => (sel === '[data-index="1"]' ? rowEl : null),
+        getBoundingClientRect: () => ({ top: 40 }) as unknown as DOMRect,
+      } as unknown as HTMLElement;
       const target = resolveTranscriptRestoreTargetTop(
+        viewport,
+        () => 999_999, // absolute estimate deliberately wrong; must be ignored.
+        rows,
+        { rowKey: "turn:1:block:content", offsetWithinRowPx: 60 },
+      );
+      expect(target).toBe(200 + (340 - 40) + 60);
+    });
+
+    it("coarse fallback: inverts a saved anchor via the absolute estimate when the row is not mounted", () => {
+      // Row index 1 estimated to start at 640, + 60px offset = 700.
+      const target = resolveTranscriptRestoreTargetTop(
+        noMountedRowsViewport(),
         (index) => (index === 1 ? 640 : 0),
         rows,
         { rowKey: "turn:1:block:content", offsetWithinRowPx: 60 },
@@ -80,6 +111,7 @@ describe("transcript-reading-position-store", () => {
 
     it("returns null when the saved row no longer exists (saved-row-gone)", () => {
       const target = resolveTranscriptRestoreTargetTop(
+        noMountedRowsViewport(),
         () => 0,
         rows,
         { rowKey: "turn:99:block:content", offsetWithinRowPx: 10 },
@@ -87,8 +119,9 @@ describe("transcript-reading-position-store", () => {
       expect(target).toBeNull();
     });
 
-    it("returns null when the row start is unavailable", () => {
+    it("returns null when the row start is unavailable and the row is not mounted", () => {
       const target = resolveTranscriptRestoreTargetTop(
+        noMountedRowsViewport(),
         () => null,
         rows,
         { rowKey: "turn:0:block:content", offsetWithinRowPx: 10 },
@@ -103,7 +136,7 @@ describe("transcript-reading-position-store", () => {
       return {
         viewport,
         scrollRef: { current: viewport },
-        restoreResolverRef: { current: null as (() => number | null) | null },
+        restoreResolverRef: { current: null as ((viewport: HTMLElement) => number | null) | null },
         restoreDeadlineRef: { current: 0 },
       };
     }

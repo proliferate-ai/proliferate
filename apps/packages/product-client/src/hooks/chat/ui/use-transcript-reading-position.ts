@@ -75,8 +75,9 @@ export function useTranscriptReadingPosition({
     }
     return {
       kind: "restore",
-      resolveTargetTop: () =>
+      resolveTargetTop: (viewport) =>
         resolveTranscriptRestoreTargetTop(
+          viewport,
           (index) => virtualizer.getOffsetForIndex(index, "start")?.[0] ?? null,
           renderableRowsRef.current,
           saved,

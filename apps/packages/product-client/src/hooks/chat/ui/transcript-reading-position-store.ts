@@ -46,9 +46,11 @@ export type TranscriptSessionRestorePlan =
      * the current measured geometry, or null when the saved row no longer
      * exists (the engine then falls back to bottom-pin, the conservative
      * default). Re-invoked each glued frame so a late measurement correction
-     * refines the placement without a visible crawl.
+     * refines the placement without a visible crawl. Takes the viewport so it
+     * can read the mounted anchor row's real rendered position (estimate-immune)
+     * once the coarse placement has brought it into the render window.
      */
-    resolveTargetTop: () => number | null;
+    resolveTargetTop: (viewport: HTMLElement) => number | null;
   };
 
 const readingPositionsBySession = new Map<string, TranscriptReadingPosition>();
@@ -115,13 +117,22 @@ export function resolveTranscriptReadingAnchor(
 }
 
 /**
- * Invert a saved reading position back to a scrollTop against the CURRENT
- * measured geometry. `getRowStartOffset` returns the virtualizer's measured
- * start offset for a row index (rung-5 warms this to near-true on revisit), so
- * target = rowStart + offsetWithinRow places the same reading row under the top
- * edge regardless of estimate error. Returns null when the saved row is gone.
+ * Invert a saved reading position back to a scrollTop.
+ *
+ * Estimate-immune primary path: once the coarse placement below has brought the
+ * saved row into the render window, its element is mounted, so we read its REAL
+ * rendered top from the DOM and solve for the scrollTop that seats the saved
+ * offset under the viewport's top edge. This holds the exact reading row even
+ * when the never-measured rows ABOVE it are estimated to a wrong total (the skew
+ * FR-2 exists to avoid): `getRowStartOffset` (a sum from index 0) cannot be
+ * accurate for rows the reader never scrolled through on the prior visit, so it
+ * serves ONLY as the coarse first-frame fallback that gets the row mounted.
+ *
+ * Returns null when the saved row no longer exists (saved-row-gone), so the
+ * engine falls back to the conservative bottom-pin default.
  */
 export function resolveTranscriptRestoreTargetTop(
+  viewport: HTMLElement,
   getRowStartOffset: (index: number) => number | null,
   renderableRows: readonly ReadingAnchorRow[],
   saved: TranscriptReadingPosition,
@@ -131,6 +142,17 @@ export function resolveTranscriptRestoreTargetTop(
   );
   if (index < 0) {
     return null;
+  }
+  const rowEl = viewport.querySelector<HTMLElement>(`[data-index="${index}"]`);
+  if (rowEl) {
+    const rowTop = rowEl.getBoundingClientRect().top;
+    const viewportTop = viewport.getBoundingClientRect().top;
+    // Current gap from the viewport top edge to the row top, in viewport space;
+    // seat `offsetWithinRowPx` of the row under the top edge.
+    return Math.max(
+      0,
+      viewport.scrollTop + (rowTop - viewportTop) + saved.offsetWithinRowPx,
+    );
   }
   const start = getRowStartOffset(index);
   if (start == null || !Number.isFinite(start)) {
@@ -152,7 +174,7 @@ export function beginSessionRestorePlacement(
   deadlineMs: number,
   refs: {
     scrollRef: RefObject<HTMLDivElement | null>;
-    restoreResolverRef: MutableRefObject<(() => number | null) | null>;
+    restoreResolverRef: MutableRefObject<((viewport: HTMLElement) => number | null) | null>;
     restoreDeadlineRef: MutableRefObject<number>;
   },
   setPinned: (pinned: boolean) => void,
@@ -161,14 +183,16 @@ export function beginSessionRestorePlacement(
   if (plan.kind !== "restore") {
     return false;
   }
-  const initialTop = plan.resolveTargetTop();
+  const viewport = refs.scrollRef.current;
+  // No viewport yet means no geometry to read; a saved row that resolves to null
+  // (gone) also bottom-pins. Either way, do not claim a restore.
+  const initialTop = viewport ? plan.resolveTargetTop(viewport) : null;
   if (initialTop == null) {
     return false;
   }
   setPinned(false);
   refs.restoreResolverRef.current = plan.resolveTargetTop;
   refs.restoreDeadlineRef.current = deadlineMs;
-  const viewport = refs.scrollRef.current;
   if (viewport) {
     notifyProgrammaticScroll(() => {
       viewport.scrollTop = initialTop;
