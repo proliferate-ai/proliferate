@@ -178,7 +178,7 @@ describe("useTranscriptStickToBottom above-change compensation (PRO-187, r4)", (
 
     act(() => {
       api.setPinned(false);
-      api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 1000 });
+      api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 1000 }, false);
     });
     // Let the forced-glue window run and terminate on its quiet frame (height
     // held at 2000, delta 0). Subsequent corrections then drive isolated frame
@@ -250,7 +250,7 @@ describe("useTranscriptStickToBottom above-change compensation (PRO-187, r4)", (
       act(() => {
         api.setPinned(false);
         // Initial deadline = 0 + 500ms (ABOVE_CHANGE_COMPENSATION_MAX_MS).
-        api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 1000 });
+        api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 1000 }, false);
       });
       // Two rounds so the forced-glue window terminates on its quiet frame;
       // corrections then drive isolated frame passes via the content
@@ -315,7 +315,7 @@ describe("useTranscriptStickToBottom above-change compensation (PRO-187, r4)", (
 
       act(() => {
         api.setPinned(false);
-        api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 1000 });
+        api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 1000 }, false);
       });
       act(() => {
         flushRafRound();
@@ -450,6 +450,38 @@ describe("above-change compensation cancels on upward user intent (PRO-187, r4)"
     // NEGATIVE CONTROL: arm this window cancelable (true) and the upward intent
     // clears the anchor, leaving scrollTop at 1000 — the exact webkit prepend
     // regression (reader stranded near the newly prepended top).
+    expect(viewport.scrollTop).toBe(1400);
+  });
+
+  it("kills the r5 extension window on upward intent for a CANCELABLE window (a later correction is not re-anchored)", () => {
+    const handle = renderHarness();
+    const { viewport, api } = handle.current;
+    setContentHeight(viewport, 2000);
+    viewport.scrollTop = 1000;
+
+    // Cancelable (completed-turn) window.
+    act(() => {
+      api.setPinned(false);
+      api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 1000 }, true);
+    });
+    act(() => { flushRafRound(); });
+    act(() => { flushRafRound(); });
+
+    // A first correction absorbs and EXTENDS the compensation window (the r5
+    // quiet-extension path).
+    setContentHeight(viewport, 2400);
+    act(() => { api.notifyContentResize(); });
+    expect(viewport.scrollTop).toBe(1400);
+
+    // The reader now scrolls UP: the anchor is dropped, which also ends the
+    // extension window — a later, still-arriving correction must NOT re-anchor.
+    act(() => { api.notifyUserScrollIntent(-1); });
+
+    setContentHeight(viewport, 2800);
+    act(() => { api.notifyContentResize(); });
+
+    // NEGATIVE CONTROL: without the upward-intent clear the extended window is
+    // still live and this correction lands at 1000 + (2800 - 2000) = 1800.
     expect(viewport.scrollTop).toBe(1400);
   });
 });
