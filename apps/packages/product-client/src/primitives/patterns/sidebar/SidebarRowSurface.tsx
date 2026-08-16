@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from "react";
 import type { ButtonHTMLAttributes, HTMLAttributes, KeyboardEvent, ReactNode } from "react";
 
 import { twMerge } from "#product/primitives/utils/tw-merge";
@@ -11,34 +10,6 @@ interface SidebarRowSurfaceProps extends Omit<HTMLAttributes<HTMLElement>, "onCl
   onPress?: () => void;
 }
 
-/**
- * Rapid successive selections can flip `active` true/false/true across several
- * React commits that land faster than the browser paints a frame in between,
- * so the transition's start and end styles are identical at the next paint
- * and it silently never runs. Settling the value one animation frame behind
- * `active` guarantees the previous state is actually painted before we ever
- * commit the flip to the new one, so the transition always has two distinct
- * frames to animate between.
- */
-function useSettledActive(active: boolean): boolean {
-  const [settled, setSettled] = useState(active);
-  const frameRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (active === settled) {
-      return undefined;
-    }
-    frameRef.current = requestAnimationFrame(() => setSettled(active));
-    return () => {
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current);
-      }
-    };
-  }, [active, settled]);
-
-  return settled;
-}
-
 export function SidebarRowSurface({
   children,
   as = "div",
@@ -48,22 +19,39 @@ export function SidebarRowSurface({
   className = "",
   ...props
 }: SidebarRowSurfaceProps) {
-  const settledActive = useSettledActive(active);
   const interactive = typeof onPress === "function" && !disabled;
   // Hover sits one step below the selected row so a committed selection reads
   // stronger than a transient hover (previously both used the same accent, so
   // hovering any row looked identical to the active one).
-  const stateClass = settledActive
+  const stateClass = active
     ? "bg-selected text-sidebar-foreground"
     : disabled
       ? "text-sidebar-muted-foreground"
       : "text-sidebar-foreground hover:bg-hover active:bg-active";
 
+  // A rapid sweep through many rows (e.g. holding a next/prev-workspace
+  // shortcut) pins the main thread with a long task per switch, so the
+  // browser only manages a handful of paints across the whole sweep. At
+  // ~5fps every painted frame catches a still-fading-in bg-selected at
+  // ~0 alpha (duration-hover is 120ms) -- the highlight never becomes
+  // visible until the sweep stops and a fade finally gets enough frames to
+  // finish. There is no frame budget a settle/defer trick can buy back here:
+  // an earlier version of this file deferred the active class by one
+  // rAF to fix a *different* bug (same-row net-zero flips suppressing the
+  // transition entirely), but under this frame-starved path that deferral
+  // made things worse -- its own rAF callback could be starved for the same
+  // reason, delaying the highlight even further. Instead, activating a row
+  // never transitions background-color at all: it paints solid on the very
+  // first available frame, so it's visible even at 5fps. Deactivating a row
+  // is unaffected by the starvation (it doesn't need to be seen instantly)
+  // and keeps the fade so hover/deselect still feels soft.
+  const colorTransition = active ? "transition-[color,opacity]" : "transition-[background-color,color,opacity]";
+
   // Sidebar row geometry (retune): 30px rows, 10px radius (--radius-lg).
   // twMerge so a caller-provided size token (text-sidebar-nav etc.) actually
   // replaces a baseline size instead of fighting it on stylesheet order.
   const rowClassName = twMerge(
-    `group relative flex w-full min-w-0 items-center rounded-lg text-left font-control transition-[background-color,color,opacity] duration-hover ${
+    `group relative flex w-full min-w-0 items-center rounded-lg text-left font-control ${colorTransition} duration-hover ${
       interactive ? "cursor-pointer select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring" : ""
     } ${
       disabled ? "cursor-not-allowed opacity-60" : ""
