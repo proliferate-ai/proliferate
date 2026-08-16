@@ -488,6 +488,10 @@ export interface ScrollPhysicsDriver {
   // aria-hidden exactly when pinned to bottom. Returns null if the control is
   // not present.
   isPinned(): boolean | null;
+  // Rung 9 (PRO-187, Q18): the new-content accent's own marker element, and a
+  // real click on the button's click target.
+  hasNewContentIndicator(): boolean;
+  clickScrollToBottom(): void;
   getLastPrependEvidence(): { preScrollTop: number; preScrollHeight: number } | null;
   getScrollSamples(): ScrollSample[];
   clearScrollSamples(): void;
@@ -866,6 +870,22 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
       return null;
     }
     return btn.getAttribute("aria-hidden") === "true";
+  },
+
+  // Rung 9 (PRO-187, Q18): whether the new-content accent is showing on the
+  // scroll-to-latest button right now, read from its own marker element
+  // rather than inferred from any other DOM state.
+  hasNewContentIndicator(): boolean {
+    return document.querySelector("[data-transcript-new-content-indicator]") !== null;
+  },
+
+  // Rung 9 (PRO-187, Q18): a real click on the floating "Scroll to bottom"
+  // control (untrusted synthetic clicks still run addEventListener/React
+  // onClick handlers), so this exercises the product's own click handler
+  // end-to-end rather than calling an engine method directly.
+  clickScrollToBottom(): void {
+    const btn = document.querySelector<HTMLElement>('[aria-label="Scroll to bottom"]');
+    btn?.click();
   },
 
   getLastPrependEvidence(): { preScrollTop: number; preScrollHeight: number } | null {
