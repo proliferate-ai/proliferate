@@ -36,6 +36,7 @@ export function useTranscriptVirtualizerBlankFallback({
   lastBlankReportSignatureRef,
   onFallback,
   prependSettleUntilRef,
+  compensationDeadlineRef,
   renderableRowCount,
   rowCount,
   scrollRef,
@@ -54,9 +55,26 @@ export function useTranscriptVirtualizerBlankFallback({
    * Interaction-clock (performance.now) deadline until which a just-applied
    * older-history prepend is still reconciling its freshly-mounted rows from
    * estimate to measured height. Blank detection is suppressed until it lapses
-   * (see inspect). 0 (or absent) means no prepend is settling.
+   * (see inspect). 0 (or absent) means no prepend is settling. Bounded-ceiling
+   * fallback for the (should-not-happen) case where no compensation deadline
+   * got armed; see compensationDeadlineRef below for the primary signal.
    */
   prependSettleUntilRef?: RefObject<number>;
+  /**
+   * Ruling 3(c) (rung 10, PRO-187): the SAME deadline the engine's own
+   * above-change compensation anchor is live against (compensationDeadlineRef
+   * from use-transcript-stick-to-bottom.ts), read LIVE every inspection frame
+   * rather than snapshotted once. This is the real reason blank detection
+   * must stay suppressed during a prepend: the compensation window itself
+   * EXTENDS (up to a ~3s absolute ceiling) every time a fresh above-anchor
+   * correction lands on a slow runner, and a snapshotted suppression window
+   * would close before those late corrections finish, misreading normal
+   * mid-settle non-overlap as a broken virtualizer (a regression this rung's
+   * negative control caught: the r2/r5 webkit prepend fixture returned to its
+   * pre-fix `scrollTop 0` failure once the window stopped tracking the
+   * extension live).
+   */
+  compensationDeadlineRef?: RefObject<number>;
   renderableRowCount: number;
   rowCount: number;
   scrollRef: RefObject<HTMLDivElement | null>;
@@ -102,7 +120,11 @@ export function useTranscriptVirtualizerBlankFallback({
       // structural guarantee is rung 10; this is the minimal correct guard for
       // the prepend anchor path.)
       const nowMs = typeof performance === "undefined" ? Date.now() : performance.now();
-      if (nowMs < (prependSettleUntilRef?.current ?? 0)) {
+      const settleUntil = Math.max(
+        prependSettleUntilRef?.current ?? 0,
+        compensationDeadlineRef?.current ?? 0,
+      );
+      if (nowMs < settleUntil) {
         suspicionRef.current = null;
         frame = window.requestAnimationFrame(inspect);
         return;
@@ -243,6 +265,7 @@ export function useTranscriptVirtualizerBlankFallback({
     lastBlankReportSignatureRef,
     onFallback,
     prependSettleUntilRef,
+    compensationDeadlineRef,
     renderableRowCount,
     rowCount,
     scrollRef,

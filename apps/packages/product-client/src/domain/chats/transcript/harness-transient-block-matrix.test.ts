@@ -4,12 +4,18 @@ import {
   HARNESS_TRANSIENT_BLOCK_MATRIX,
   type HarnessKind,
 } from "./harness-transient-block-matrix";
-import { CLOUD_AGENT_KIND_ORDER } from "#product/domain/chats/cloud/harness-availability";
+
+// Mirrors CLOUD_AGENT_KIND_ORDER (domain/chats/cloud/harness-availability.ts)
+// by value rather than importing it: ProductClient domain modules may not
+// cross into the cloud domain (PRODUCT_CLIENT_DOMAIN_FORBIDDEN_IMPORT), so
+// this list is kept in sync by hand — a mismatch here means a harness was
+// added/removed there without updating the Q13 static matrix.
+const EXPECTED_HARNESS_KINDS: readonly HarnessKind[] = ["claude", "codex", "opencode", "grok"];
 
 describe("HARNESS_TRANSIENT_BLOCK_MATRIX (Q13, rung 10)", () => {
   it("covers every launchable cloud harness kind exactly once", () => {
     const covered = HARNESS_TRANSIENT_BLOCK_MATRIX.map((entry) => entry.harness).sort();
-    const expected = [...CLOUD_AGENT_KIND_ORDER].sort();
+    const expected = [...EXPECTED_HARNESS_KINDS].sort();
     expect(covered).toEqual(expected);
   });
 
