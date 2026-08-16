@@ -110,6 +110,7 @@ export function WorkflowTriggerDialog({
       title={definitionRecord.title}
       description={WORKFLOW_TRIGGER_COPY.description}
       sizeClassName="max-w-lg"
+      telemetryBlocked
       footer={(
         <>
           <Button

@@ -60,6 +60,12 @@ afterEach(() => {
 });
 
 describe("WorkflowTriggerDialog", () => {
+  it("blocks workflow context from telemetry replay", () => {
+    renderDialog();
+
+    expect(screen.getByRole("dialog").getAttribute("data-telemetry-block")).toBe("true");
+  });
+
   it("gates Confirm on required inputs only", () => {
     renderDialog();
 
