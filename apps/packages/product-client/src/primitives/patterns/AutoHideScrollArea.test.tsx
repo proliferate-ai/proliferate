@@ -160,4 +160,77 @@ describe("AutoHideScrollArea", () => {
     expect(onUserScrollIntent).toHaveBeenNthCalledWith(1, -1);
     expect(onUserScrollIntent).toHaveBeenNthCalledWith(2, 1);
   });
+
+  // Rung 8 (PRO-187, PRO-258): `overscroll-behavior` must flip to "auto" when
+  // chaining is on, because touch/momentum deltas never reach the wheel
+  // handler and rely entirely on this CSS property to keep moving into the
+  // ancestor once the inner region is exhausted. The default without chaining
+  // stays "none" (unchanged behavior for every other consumer of the shared
+  // primitive: settings panels, the file tree, the publish dialog, etc.).
+  it("defaults overscroll-behavior to auto only when chainVerticalWheel is on", () => {
+    const chained = render(
+      <AutoHideScrollArea className="h-80" chainVerticalWheel>
+        <div>content</div>
+      </AutoHideScrollArea>,
+    );
+    const chainedViewport = chained.container.querySelector<HTMLDivElement>(".scrollbar-none")!;
+    expect(chainedViewport.style.overscrollBehavior).toBe("auto");
+    chained.unmount();
+
+    const unchained = render(
+      <AutoHideScrollArea className="h-80">
+        <div>content</div>
+      </AutoHideScrollArea>,
+    );
+    const unchainedViewport = unchained.container.querySelector<HTMLDivElement>(".scrollbar-none")!;
+    expect(unchainedViewport.style.overscrollBehavior).toBe("none");
+  });
+
+  // An explicit `overscrollBehavior` prop still wins over the chaining-derived
+  // default in either direction — the flip is a default, not a forced value.
+  it("lets an explicit overscrollBehavior override the chaining-derived default", () => {
+    const rendered = render(
+      <AutoHideScrollArea className="h-80" chainVerticalWheel overscrollBehavior="contain">
+        <div>content</div>
+      </AutoHideScrollArea>,
+    );
+    const viewport = rendered.container.querySelector<HTMLDivElement>(".scrollbar-none")!;
+    expect(viewport.style.overscrollBehavior).toBe("contain");
+  });
+
+  // Rung 8 core mechanism: a wheel event at the inner scroll edge chains onto
+  // the first scrollable ancestor. This is the same `chainVerticalWheelScroll`
+  // the nested code-block / tool-output physics fixture exercises in real
+  // Chromium and WebKit; this unit test pins the wiring (chainVerticalWheel ->
+  // onWheel -> chainVerticalWheelScroll -> preventDefault) at the jsdom tier,
+  // where a real scrollable-ancestor lookup and scrollTop write are still
+  // observable even though jsdom has no real layout.
+  it("chains a wheel event at the inner edge onto the first scrollable ancestor when chainVerticalWheel is on", () => {
+    const ancestor = document.createElement("div");
+    Object.defineProperty(ancestor, "scrollHeight", { value: 2_000, configurable: true });
+    Object.defineProperty(ancestor, "clientHeight", { value: 400, configurable: true });
+    ancestor.style.overflowY = "auto";
+    ancestor.scrollTop = 0;
+    document.body.appendChild(ancestor);
+
+    const rendered = render(
+      <AutoHideScrollArea className="h-80" chainVerticalWheel>
+        <div>content</div>
+      </AutoHideScrollArea>,
+      { container: ancestor },
+    );
+    const viewport = rendered.container.querySelector<HTMLDivElement>(".scrollbar-none")!;
+    // Already at its own bottom edge, matching real chain-past-inner-scroller
+    // state (scrollHeight === clientHeight => isAtVerticalScrollEdge is true
+    // for either direction).
+    Object.defineProperty(viewport, "scrollHeight", { value: 300, configurable: true });
+    Object.defineProperty(viewport, "clientHeight", { value: 300, configurable: true });
+    viewport.scrollTop = 0;
+
+    fireEvent.wheel(viewport, { deltaY: 120, cancelable: true });
+    // The load-bearing side effect: the ancestor absorbed the delta.
+    expect(ancestor.scrollTop).toBe(120);
+
+    document.body.removeChild(ancestor);
+  });
 });

@@ -54,6 +54,7 @@ export function SubagentLaunchLedger({
                 <AutoHideScrollArea
                   className="w-full"
                   viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
+                  chainVerticalWheel
                 >
                   <div className="px-3 py-2 text-chat leading-relaxed text-muted-foreground">
                     <MarkdownBody

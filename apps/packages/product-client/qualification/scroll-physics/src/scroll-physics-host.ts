@@ -473,6 +473,12 @@ export interface ScrollPhysicsDriver {
   // Rung 7 (Q6): drive the manual-only overlay (non-displacing) inset.
   setOverlayInset(nonDisplacingInsetPx: number): void;
   getMetrics(): ViewportMetrics;
+  // Rung 8 (PRO-187, PRO-258): drives a wheel gesture against the nested
+  // code-block scroller already at ITS OWN bottom edge and reports the outer
+  // transcript viewport's scrollTop before/after. Chaining means `after` is
+  // measurably greater than `before`. Returns null if no code-block viewport
+  // is mounted.
+  chainWheelPastNestedCodeBlock(deltaY?: number): { before: number; after: number } | null;
   getTopVisibleText(): string | null;
   scrollToBottomInstant(): void;
   scrollToTopInstant(): void;
@@ -714,6 +720,40 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
 
   getMetrics(): ViewportMetrics {
     return metrics();
+  },
+
+  // Rung 8 (PRO-187, PRO-258) nested-scroll-chaining probe. Playwright's
+  // `page.mouse.wheel` is unreliable on WebKit for this gesture (real wheel
+  // physics differ per engine and momentum/edge-detection timing is not
+  // portable), so this drives the SAME mechanics used elsewhere in this file
+  // (`gestureScrollToBottomDistance`): a direct scrollTop write establishes
+  // ground truth (the nested code-block viewport is already at ITS OWN
+  // bottom edge, exactly the state a real user's prior scrolling would leave
+  // it in), then a real `WheelEvent` dispatched on that inner element is
+  // trusted by the product's own onWheel handler (untrusted synthetic events
+  // still run addEventListener/React onWheel handlers) without depending on
+  // the browser's default wheel-scroll action, which a JS-dispatched
+  // WheelEvent does not trigger. `chainVerticalWheelScroll` reads the inner
+  // element's edge state (now at the bottom, matching the deltaY>0 direction)
+  // and writes the delta onto the first scrollable ancestor directly — the
+  // outer transcript viewport — which is the literal chaining behavior under
+  // test, engine-portable because no engine-specific wheel-physics scaling is
+  // involved on either side of the chain.
+  chainWheelPastNestedCodeBlock(deltaY = 400): { before: number; after: number } | null {
+    const inner = document.querySelector<HTMLElement>(
+      '[data-markdown-code-content="true"]',
+    );
+    if (!inner) {
+      return null;
+    }
+    inner.scrollTop = Math.max(0, inner.scrollHeight - inner.clientHeight);
+    const outer = viewport();
+    const before = outer ? outer.scrollTop : 0;
+    inner.dispatchEvent(
+      new WheelEvent("wheel", { deltaY, bubbles: true, cancelable: true }),
+    );
+    const after = outer ? outer.scrollTop : 0;
+    return { before, after };
   },
 
   // Estimate-immune reading-position probe: the text of the transcript row
