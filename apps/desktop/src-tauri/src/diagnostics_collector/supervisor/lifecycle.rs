@@ -5,6 +5,7 @@ use std::time::Instant;
 use proliferate_diagnostics_protocol::v1::limits::CURRENT_SCHEMA_VERSION;
 use proliferate_diagnostics_protocol::v1::types::{HealthStatusV1, TerminalOutcomeV1};
 
+use super::death_certificate::CollectorDeathCertificate;
 use super::{
     accept_restart_budget_at, classification_for_launch_error, reset_restart_budget_after_health,
     retryable, CollectorClientError, CollectorLaunchError, CollectorLaunchErrorKind,
@@ -68,7 +69,7 @@ impl DiagnosticsCollectorSupervisor {
 
     pub(crate) async fn stop_collector(&self) -> Result<(), SupervisorUnavailable> {
         let _decision = self.decisions.lock().await;
-        let stop_operation = self.producer.begin_lifecycle("desktop.collector.stop");
+        let mut stop_operation = self.producer.begin_lifecycle("desktop.collector.stop");
         let _ = self.producer.drain(PRODUCER_DRAIN_TIMEOUT).await;
         let (mut process, retained_launch) = {
             let mut inner = self
@@ -124,9 +125,10 @@ impl DiagnosticsCollectorSupervisor {
             };
         }
         match process.observe_exit() {
-            Ok(Some(_)) => {
+            Ok(Some(status)) => {
                 process.finish_reaped();
                 self.invalidate_generation();
+                stop_operation.append_arguments(self.child_exited_arguments(status));
                 stop_operation.terminal(TerminalOutcomeV1::Failed, Some("child_exited"));
                 self.publish_state(DesktopDiagnosticsSupervisorStateV1::Stopped { orderly: false });
                 return Ok(());
@@ -171,7 +173,10 @@ impl DiagnosticsCollectorSupervisor {
         }
     }
 
-    pub(super) async fn restart_burst_locked(self: &Arc<Self>) -> bool {
+    pub(super) async fn restart_burst_locked(
+        self: &Arc<Self>,
+        certificate: Option<CollectorDeathCertificate>,
+    ) -> bool {
         for (index, delay) in AUTOMATIC_RESTART_DELAYS.iter().copied().enumerate() {
             if self.shutdown_armed.load(Ordering::Acquire) {
                 self.publish_degraded("shutdown_armed", false);
@@ -186,7 +191,7 @@ impl DiagnosticsCollectorSupervisor {
                 self.publish_degraded("restart_exhausted", true);
                 return false;
             }
-            let restart_operation = self.producer.begin_lifecycle("desktop.collector.restart");
+            let restart_operation = self.begin_restart_lifecycle(certificate);
             self.publish_starting(CollectorLaunchKindV1::AutomaticRestart, (index + 1) as u8);
             let launcher = match &self.launcher {
                 Ok(launcher) => launcher,
@@ -267,12 +272,13 @@ impl DiagnosticsCollectorSupervisor {
                 return;
             };
             match child_state {
-                Ok(Some(_)) => {
-                    self.fail_generation(generation, "child_exited", true).await;
+                Ok(Some(status)) => {
+                    self.fail_generation(generation, "child_exited", true, Some(status))
+                        .await;
                     return;
                 }
                 Err(_) => {
-                    self.fail_generation(generation, "child_inspection_failed", false)
+                    self.fail_generation(generation, "child_inspection_failed", false, None)
                         .await;
                     return;
                 }
@@ -304,13 +310,13 @@ impl DiagnosticsCollectorSupervisor {
                 SteadyHealthAssessment::TransientFailure => {
                     failed_probes = failed_probes.saturating_add(1);
                     if failed_probes >= HEALTH_FAILURE_THRESHOLD {
-                        self.fail_generation(generation, "health_unavailable", true)
+                        self.fail_generation(generation, "health_unavailable", true, None)
                             .await;
                         return;
                     }
                 }
                 SteadyHealthAssessment::LatchedFailure(classification) => {
-                    self.fail_generation(generation, classification, false)
+                    self.fail_generation(generation, classification, false, None)
                         .await;
                     return;
                 }
@@ -323,6 +329,7 @@ impl DiagnosticsCollectorSupervisor {
         generation: u64,
         classification: &'static str,
         may_retry: bool,
+        mut exit_status: Option<std::process::ExitStatus>,
     ) {
         let _decision = self.decisions.lock().await;
         if !self.generation_is_current(generation) || self.shutdown_armed.load(Ordering::Acquire) {
@@ -336,7 +343,12 @@ impl DiagnosticsCollectorSupervisor {
             .and_then(|mut inner| inner.process.take());
         if let Some(mut process) = process {
             match process.observe_exit() {
-                Ok(Some(_)) => process.finish_reaped(),
+                Ok(Some(status)) => {
+                    // A health-triggered failure can find the child exited by
+                    // now; the reap observation still belongs on the record.
+                    exit_status = exit_status.or(Some(status));
+                    process.finish_reaped();
+                }
                 Ok(None) => {
                     if process.terminate_and_reap().await.is_err() {
                         if let Ok(mut inner) = self.inner.lock() {
@@ -355,7 +367,14 @@ impl DiagnosticsCollectorSupervisor {
                 }
             }
         }
-        if may_retry && self.restart_burst_locked().await {
+        if may_retry
+            && self
+                .restart_burst_locked(Some(CollectorDeathCertificate::new(
+                    classification,
+                    exit_status,
+                )))
+                .await
+        {
             self.spawn_monitor();
         }
     }

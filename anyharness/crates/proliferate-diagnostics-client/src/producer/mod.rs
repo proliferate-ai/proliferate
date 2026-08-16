@@ -17,6 +17,7 @@ use crate::{
 mod admission;
 #[cfg(unix)]
 mod bridge_runtime;
+mod delivery_log;
 mod emit;
 mod fallback_runtime;
 pub(crate) mod record;
@@ -24,6 +25,9 @@ pub(crate) mod status;
 pub(crate) mod transport;
 mod worker;
 
+#[cfg(all(test, unix))]
+#[path = "tests_delivery_end.rs"]
+mod tests_delivery_end;
 #[cfg(all(test, unix))]
 #[path = "tests_fallback_deadline.rs"]
 mod tests_fallback_deadline;
@@ -135,6 +139,7 @@ pub(crate) struct AdmissionState {
     pending_loss_total: u64,
     pending_loss_range: PendingLossRange,
     open_loss_snapshot: Option<LossSnapshot>,
+    delivery_end_warned_generation: Option<u64>,
 }
 
 pub(crate) enum CollectorAvailability {
@@ -251,6 +256,7 @@ pub(crate) fn install(
             pending_loss_total: 0,
             pending_loss_range: PendingLossRange::Empty,
             open_loss_snapshot: None,
+            delivery_end_warned_generation: None,
         }),
         fallback: Arc::new(fallback_runtime::FallbackController::new(fallback)),
         notify: tokio::sync::Notify::new(),
@@ -385,59 +391,6 @@ impl ProducerInner {
             delivery_fence_eligible: state.delivery_fence_eligible,
             last_failure: state.last_failure,
         }
-    }
-
-    #[cfg(unix)]
-    pub(crate) fn replace_generation(
-        &self,
-        generation: crate::bridge::activation::CollectorGenerationHandle,
-    ) {
-        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-        let current = match &state.collector {
-            CollectorAvailability::Ready(current)
-            | CollectorAvailability::Cooldown {
-                generation: current,
-                ..
-            } => current.generation,
-            CollectorAvailability::Unavailable { generation } => *generation,
-        };
-        if generation.generation <= current {
-            return;
-        }
-        for record in &mut state.queue {
-            record.fallback_reason = Some(FallbackReason::GenerationChanged);
-        }
-        if !state.in_flight.is_empty() {
-            state.delivery_fence_eligible = false;
-        }
-        state.collector = CollectorAvailability::Ready(Arc::new(generation));
-        drop(state);
-        self.notify.notify_one();
-    }
-
-    #[cfg(unix)]
-    pub(crate) fn mark_generation_unavailable(&self, generation: u64) {
-        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-        let current = match &state.collector {
-            CollectorAvailability::Ready(current)
-            | CollectorAvailability::Cooldown {
-                generation: current,
-                ..
-            } => current.generation,
-            CollectorAvailability::Unavailable { generation } => *generation,
-        };
-        if generation <= current {
-            return;
-        }
-        for record in &mut state.queue {
-            record.fallback_reason = Some(FallbackReason::GenerationChanged);
-        }
-        state.collector = CollectorAvailability::Unavailable { generation };
-        if !state.in_flight.is_empty() {
-            state.delivery_fence_eligible = false;
-        }
-        drop(state);
-        self.notify.notify_one();
     }
 
     #[cfg(unix)]
