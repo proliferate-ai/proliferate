@@ -237,8 +237,8 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         include_str!("sql/0070_fork_operations.sql"),
     ),
     (
-        "0070_session_adapter_markers",
-        include_str!("sql/0070_session_adapter_markers.sql"),
+        "0071_session_adapter_markers",
+        include_str!("sql/0071_session_adapter_markers.sql"),
     ),
 ];
 
