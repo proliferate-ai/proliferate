@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type { ButtonHTMLAttributes, HTMLAttributes, KeyboardEvent, ReactNode } from "react";
 
 import { twMerge } from "#product/primitives/utils/tw-merge";
@@ -10,6 +11,34 @@ interface SidebarRowSurfaceProps extends Omit<HTMLAttributes<HTMLElement>, "onCl
   onPress?: () => void;
 }
 
+/**
+ * Rapid successive selections can flip `active` true/false/true across several
+ * React commits that land faster than the browser paints a frame in between,
+ * so the transition's start and end styles are identical at the next paint
+ * and it silently never runs. Settling the value one animation frame behind
+ * `active` guarantees the previous state is actually painted before we ever
+ * commit the flip to the new one, so the transition always has two distinct
+ * frames to animate between.
+ */
+function useSettledActive(active: boolean): boolean {
+  const [settled, setSettled] = useState(active);
+  const frameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (active === settled) {
+      return undefined;
+    }
+    frameRef.current = requestAnimationFrame(() => setSettled(active));
+    return () => {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current);
+      }
+    };
+  }, [active, settled]);
+
+  return settled;
+}
+
 export function SidebarRowSurface({
   children,
   as = "div",
@@ -19,11 +48,12 @@ export function SidebarRowSurface({
   className = "",
   ...props
 }: SidebarRowSurfaceProps) {
+  const settledActive = useSettledActive(active);
   const interactive = typeof onPress === "function" && !disabled;
   // Hover sits one step below the selected row so a committed selection reads
   // stronger than a transient hover (previously both used the same accent, so
   // hovering any row looked identical to the active one).
-  const stateClass = active
+  const stateClass = settledActive
     ? "bg-selected text-sidebar-foreground"
     : disabled
       ? "text-sidebar-muted-foreground"
