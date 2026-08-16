@@ -49,13 +49,15 @@ import type { CreateSessionWithResolvedConfigOptions } from "#product/hooks/sess
 import { resolveDesktopRuntimeUrlForWorkspace } from "#product/hooks/sessions/workflows/session-creation-runtime";
 import { annotateLatencyFlow } from "#product/lib/infra/measurement/measurement-port";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
-import {
-  publishSessionCreationIfCurrent,
-  shouldDiscardSupersededSessionCreation,
-} from "#product/hooks/sessions/workflows/session-creation-supersession";
+import { publishSessionCreationIfCurrent } from "#product/hooks/sessions/workflows/session-creation-supersession";
 import { filterReplacedSessionTombstones } from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 import { scheduleCreatedRuntimeSessionCleanup } from "#product/hooks/sessions/workflows/session-created-runtime-cleanup";
-import { runInterruptibleSessionCreationStep } from "#product/hooks/sessions/workflows/session-creation-materialization-interruption";
+import {
+  discardCreatedRuntimeSession,
+  discardIfSuperseded,
+  runInterruptibleSessionCreationStep,
+  type MaterializationLifecycle,
+} from "#product/hooks/sessions/workflows/session-creation-materialization-interruption";
 import {
   publishCreatedSessionMaterialization,
   type TrackChatSessionCreated,
@@ -88,11 +90,6 @@ interface MaterializeSessionCreationInput {
   ) => void;
   workspaceId: string;
   onRuntimeSessionCreated?: (session: Session) => Promise<void> | void;
-}
-
-interface MaterializationLifecycle {
-  discardCreatedSession: (() => Promise<boolean>) | null;
-  retainCreatedSession: (() => void) | null;
 }
 
 export async function materializeSessionCreation(
@@ -377,39 +374,4 @@ async function runSessionCreationMaterialization({
   lifecycle.discardCreatedSession = null;
   lifecycle.retainCreatedSession = null;
   return pendingSessionId;
-}
-
-async function discardIfSuperseded(
-  sessionId: string,
-  lifecycle: MaterializationLifecycle,
-): Promise<boolean> {
-  if (!await shouldDiscardSupersededSessionCreation(sessionId)) {
-    return false;
-  }
-  const discardCreatedSession = lifecycle.discardCreatedSession;
-  lifecycle.discardCreatedSession = null;
-  if (!discardCreatedSession || await discardCreatedSession()) {
-    lifecycle.retainCreatedSession = null;
-    return true;
-  }
-  // The successor already committed, but this created runtime could not be retired safely. Publish it honestly and stop this older materializer here.
-  const retainCreatedSession = lifecycle.retainCreatedSession;
-  lifecycle.retainCreatedSession = null;
-  retainCreatedSession?.();
-  return true;
-}
-
-async function discardCreatedRuntimeSession(
-  lifecycle: MaterializationLifecycle,
-): Promise<boolean> {
-  const discardCreatedSession = lifecycle.discardCreatedSession;
-  lifecycle.discardCreatedSession = null;
-  if (!discardCreatedSession || await discardCreatedSession()) {
-    lifecycle.retainCreatedSession = null;
-    return true;
-  }
-  const retainCreatedSession = lifecycle.retainCreatedSession;
-  lifecycle.retainCreatedSession = null;
-  retainCreatedSession?.();
-  return false;
 }

@@ -427,7 +427,7 @@ describe("session intents", () => {
       ...createUpdateConfigIntent({
         intentId: "config-1",
         clientSessionId: "session-1",
-        configId: "mode",
+        controlKey: "mode", rawConfigId: "mode",
         value: "plan",
       }),
       status: "accepted" as const,
@@ -441,7 +441,7 @@ describe("session intents", () => {
       state = upsertSessionIntent(state, createUpdateConfigIntent({
         intentId,
         clientSessionId: "session-1",
-        configId: "mode",
+        controlKey: "mode", rawConfigId: "mode",
         value,
       }));
     }

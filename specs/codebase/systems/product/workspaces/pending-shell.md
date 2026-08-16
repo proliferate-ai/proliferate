@@ -557,8 +557,12 @@ projection path.
   config settles only those exact generations before the session is published:
   the latest confirmed value reconciles, superseded values become stale,
   unsupported values become stale, and an applicable unconfirmed latest value
-  fails silently. A newer intent outside the snapshot remains a normal ordered
-  live change.
+  fails silently. If creation returns no live-config snapshot, authority is not
+  yet available: captured intents remain queued and dispatch after binding.
+  Pending-shell inputs retain their raw harness IDs so settlement can resolve a
+  semantic control by raw identity when the producer did not carry that
+  semantic mapping. A newer intent outside the snapshot remains a normal
+  ordered live change.
 - If the projected session has no materialized runtime yet, display labels must
   still use the same label mapping as the final session.
 - Do not mix raw ids and presentation labels. For example, a reasoning setting
@@ -740,8 +744,9 @@ their exact frozen IDs and generations before it materializes or binds the
 session record.
 Compatible existing-session adoption instead resolves launch-only semantic
 keys against that session's authoritative normalized controls before binding;
-applicable records remain ordered live work and unsupported records become
-stale.
+applicable records remain ordered live work, unsupported records become stale,
+and an absent live-config snapshot leaves raw-addressable records queued for
+dispatch after binding.
 
 ### Attachment Conversion
 

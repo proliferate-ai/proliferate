@@ -79,6 +79,10 @@ export function planCreationConfigIntentSettlement(input: {
   snapshot: PreMaterializationConfigIntentSnapshot;
   liveConfig: SessionLiveConfigSnapshot | null;
 }): ConfigIntentSettlementPlan {
+  const liveConfig = input.liveConfig;
+  if (!liveConfig) {
+    return { patches: [] };
+  }
   const entriesByControlKey = new Map<
     string,
     PreMaterializationConfigIntentSnapshotEntry[]
@@ -90,12 +94,12 @@ export function planCreationConfigIntentSettlement(input: {
   }
 
   const patches: Array<ConfigIntentSettlementPatch & { order: number }> = [];
-  for (const [controlKey, entries] of entriesByControlKey) {
+  for (const entries of entriesByControlKey.values()) {
     const latest = entries[entries.length - 1];
     if (!latest) {
       continue;
     }
-    const control = findNormalizedControlBySemanticKey(input.liveConfig, controlKey);
+    const control = findNormalizedControl(liveConfig, latest);
     const rawConfigId = control?.rawConfigId?.trim() || null;
     const applicable = isApplicableControlValue(control, latest.value);
     for (const entry of entries) {
@@ -125,12 +129,13 @@ export function planAdoptedSessionConfigIntentResolution(input: {
   snapshot: PreMaterializationConfigIntentSnapshot;
   liveConfig: SessionLiveConfigSnapshot | null;
 }): AdoptedSessionConfigIntentResolutionPlan {
+  const liveConfig = input.liveConfig;
+  if (!liveConfig) {
+    return { patches: [] };
+  }
   return {
     patches: input.snapshot.flatMap((entry) => {
-      const control = findNormalizedControlBySemanticKey(
-        input.liveConfig,
-        entry.controlKey,
-      );
+      const control = findNormalizedControl(liveConfig, entry);
       const rawConfigId = control?.rawConfigId?.trim() || null;
       return [{
         intentId: entry.intentId,
@@ -207,13 +212,10 @@ export function applyAdoptedSessionConfigIntentResolutionPlan(
   return changed ? { ...state, entriesById } : state;
 }
 
-function findNormalizedControlBySemanticKey(
-  liveConfig: SessionLiveConfigSnapshot | null,
-  controlKey: string,
+function findNormalizedControl(
+  liveConfig: SessionLiveConfigSnapshot,
+  identity: Pick<PreMaterializationConfigIntentSnapshotEntry, "controlKey" | "rawConfigId">,
 ): NormalizedSessionControl | null {
-  if (!liveConfig) {
-    return null;
-  }
   const normalized = liveConfig.normalizedControls;
   const controls: Array<NormalizedSessionControl | null | undefined> = [
     normalized.model,
@@ -224,7 +226,12 @@ function findNormalizedControlBySemanticKey(
     normalized.fastMode,
     ...normalized.extras,
   ];
-  return controls.find((control) => control?.key === controlKey) ?? null;
+  const rawConfigId = identity.rawConfigId?.trim() || null;
+  return controls.find((control) => control?.key === identity.controlKey)
+    ?? (rawConfigId
+      ? controls.find((control) => control?.rawConfigId === rawConfigId)
+      : null)
+    ?? null;
 }
 
 function isApplicableControlValue(

@@ -38,9 +38,10 @@ import {
   type SessionConfigIntentEnqueueInput,
   type SessionIntentStateShape,
 } from "#product/domain/sessions/intents/session-intent-state";
-import { recordStoreActionDebugActivity } from "#product/lib/infra/measurement/measurement-port";
-import { isDebugMeasurementEnabled } from "#product/lib/infra/measurement/measurement-port";
-import { now as measurementNow } from "#product/lib/infra/measurement/measurement-port";
+import {
+  recordSessionIntentStoreAction,
+  startSessionIntentStoreActionTrace,
+} from "#product/stores/sessions/session-intent-store-measurement";
 
 interface SessionIntentStoreState extends SessionIntentStateShape {
   dispatchVersion: number;
@@ -377,44 +378,4 @@ function withDispatchVersion<T extends SessionIntentStoreState>(
 function createSessionIntentId(prefix: string): string {
   nextSessionIntentId += 1;
   return `session-intent:${prefix}:${Date.now()}:${nextSessionIntentId}`;
-}
-
-function startSessionIntentStoreActionTrace(): number | null {
-  return isDebugMeasurementEnabled() ? measurementNow() : null;
-}
-
-function recordSessionIntentStoreAction(
-  action: string,
-  before: SessionIntentStateShape,
-  after: SessionIntentStateShape,
-  metadata: Record<string, unknown>,
-  startedAtMs: number | null,
-): void {
-  if (startedAtMs === null) {
-    return;
-  }
-  const clientSessionId = typeof metadata.clientSessionId === "string"
-    ? metadata.clientSessionId
-    : null;
-  recordStoreActionDebugActivity({
-    label: `session-intent-store.${action}`,
-    startedAtMs,
-    metadata: {
-      ...metadata,
-      afterCount: countSessionIntents(after, clientSessionId),
-      beforeCount: countSessionIntents(before, clientSessionId),
-      totalAfterCount: Object.keys(after.entriesById).length,
-      totalBeforeCount: Object.keys(before.entriesById).length,
-    },
-  });
-}
-
-function countSessionIntents(
-  state: SessionIntentStateShape,
-  clientSessionId: string | null,
-): number | null {
-  if (!clientSessionId) {
-    return null;
-  }
-  return state.intentIdsByClientSessionId[clientSessionId]?.length ?? 0;
 }

@@ -43,15 +43,18 @@ export function ensurePendingWorkspaceSessionShell(input: {
     status: "starting",
     transcriptHydrated: true,
   });
-  for (const [controlKey, value] of Object.entries(initialSession.launchControlValues ?? {})) {
+  for (const [rawConfigId, value] of Object.entries(initialSession.launchControlValues ?? {})) {
     if (value.trim().length === 0) {
       continue;
     }
     useSessionIntentStore.getState().enqueueConfig({
       clientSessionId,
       workspaceId: pendingWorkspaceUiKey,
-      configId: null,
-      controlKey,
+      configId: rawConfigId,
+      // Pending-workspace input is keyed by the harness ID. Settlement
+      // resolves the semantic identity from authoritative live config while
+      // retaining this raw identity for post-materialization dispatch.
+      controlKey: rawConfigId,
       value,
       persistDefaultPreference: false,
     });
