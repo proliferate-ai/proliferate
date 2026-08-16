@@ -135,3 +135,56 @@ is exactly what condition #2 forbids.
 Revert path: the pre-flip pins above are all restorable — restore
 `agentProcess.version`/`source` and `native` for both agents to the "From"
 column and re-run the validator.
+
+---
+
+## AS-RUN (2026-08-16, rung-1d GO grant) — supersedes the fail-closed status above
+
+The orchestrator ratified the amendment voiding the "node-only" condition and
+authorized the live probe regeneration. Under that grant:
+
+### BLOCKER 2 — RESOLVED and cross-verified (node/shell only, no build)
+
+The codex native `rust-v0.144.5 → 0.147.0` archive move is fully resolved. The
+official release is `openai/codex@rust-v0.147.0`; the three assets match the
+current pin's naming exactly. Downloaded and hashed locally:
+
+| Target | Asset | downloadSizeBytes | sha256 |
+| --- | --- | --- | --- |
+| macos_arm64 | `codex-aarch64-apple-darwin.tar.gz` | 87984231 | `75984b81f92a71b0c0f4b3b5cad80e5c57177e4d8c8b4b1e13db703b20dc4358` |
+| macos_x64 | `codex-x86_64-apple-darwin.tar.gz` | 95851149 | `36e782f71d8164cc37c2b89c64948f2180e9a2f8456b27e660da75bc6b5574e2` |
+| linux_x64 | `codex-x86_64-unknown-linux-musl.tar.gz` | 98970270 | `0246e2e773834e07f0fb5249ed6ebad12e4591e608f8c7bb97dd6a9690544c36` |
+
+URL scheme: `https://github.com/openai/codex/releases/download/rust-v0.147.0/<asset>`.
+Authenticity cross-check: extracting the aarch64 archive and hashing its inner
+`codex-aarch64-apple-darwin` binary yields
+`19c4f144c5226a9f17c58e6f0fa854843b0f77a6eb420f40e2745a12f10f5d37`, an EXACT
+match to the fixture README's attested 0.147.0 aarch64 binary — so the archive
+is the genuine 0.147.0 build. `expectedBinary` for the two darwin/linux targets
+follows the current pin's convention (`codex-<triple>`).
+
+### BLOCKER 1 — HELD at the build gate (swap thin), fail-closed per condition #1
+
+The one runtime build (`cargo build -p anyharness`, mandated by run-probes.sh)
+was NOT started. Build-gate reading at grant time:
+
+```
+cargo: empty        rustc: empty        pressure: 1  (< 3, OK)
+vm.swapusage: total 14336M  used ~13330M  free ~1000M   (THIN — < 1 GB)
+PhysMem: 23G used, 108M unused, 6042M compressor   (RAM effectively exhausted)
+```
+
+cargo slot and pressure pass, but **swap headroom fails** (~1 GB free, 108 MB
+RAM unused). Per binding condition #1 / the closing "if swap thin, HOLD — do
+not force it", the heavy anyharness build is held: starting it here risks the
+OOM/swap-death the hard machine limit forbids and would take the sibling
+rung-2 merge-train agent down with it. Awaiting swap recovery (or a different
+box) before running steps 4–7 of the completion recipe. Everything else (auth,
+pins, blocker-2 hashes, gate proofs) is ready; only the build window is missing.
+
+### Pin coordinates verified live for the flip (ls-remote)
+
+Claude `81a4d52e6bfe8f636d6818c6c48c29be28dca35d` (tag v0.66.0-proliferate.1,
+merged via 99a990c4 on canonical-0.66.0-base, #50); Codex `219738c9…` (tag
+v1.1.14-proliferate.1, merged via bb3c8866 on canonical-1.1.14-base, #19).
+Rollback anchor: claude `v0.59.0-proliferate.1 @ 26f9ee7a0049507bff5476ce390695515ce92840`.
