@@ -95,11 +95,10 @@ describe("WorkflowBuilderSurface", () => {
       />,
     );
 
-    // Both steps sit on the canvas as selectable cards; the inspector under
-    // it opens on the first step and edits exactly one at a time.
+    // Both steps sit on the canvas as selectable cards; the inspector on the
+    // right opens on the first step and edits exactly one at a time.
     expect(screen.getByRole("button", { name: /Research/ })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Step 1" })).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "Step 2" })).toBeNull();
+    expect(screen.getByLabelText("Step name")).toHaveProperty("value", "Research");
     // Step 1 heads the chain, so it cannot move up.
     expect(screen.getByRole("button", { name: "Move step 1 up" }))
       .toHaveProperty("disabled", true);
@@ -108,8 +107,7 @@ describe("WorkflowBuilderSurface", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Review the findings/ }));
 
-    expect(screen.getByRole("heading", { name: "Step 2" })).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "Step 1" })).toBeNull();
+    expect(screen.getByLabelText("Step name")).toHaveProperty("value", "Review the findings");
     // Step 2 tails the chain, so it cannot move down.
     expect(screen.getByRole("button", { name: "Move step 2 down" }))
       .toHaveProperty("disabled", true);
@@ -124,11 +122,14 @@ describe("WorkflowBuilderSurface", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Human in the loop" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add a human-in-the-loop step" }));
 
-    expect(screen.getByRole("heading", { name: "Step 3" })).toBeTruthy();
-    // The palette's second entry mints a gated step, not an agent.
+    // The palette's second entry mints a gated step, not an agent, and the
+    // just-added step opens in the inspector.
+    expect(screen.getByLabelText("Step name")).toHaveProperty("value", "");
     expect(screen.getByLabelText("Requires approval").getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("button", { name: "Move step 3 down" }))
+      .toHaveProperty("disabled", true);
   });
 
   it("gates Save on a title and creates through the access seam", async () => {
@@ -276,7 +277,10 @@ describe("WorkflowBuilderSurface", () => {
       />,
     );
 
-    expect(screen.getByText("2-step").getAttribute("data-invalid")).toBe("true");
+    // The refused id has no badge of its own anymore — the validator's message
+    // lands in the inspector's alert block, and the save gate holds.
+    const alerts = screen.getAllByRole("alert").map((node) => node.textContent ?? "");
+    expect(alerts.some((text) => text.includes("2-step"))).toBe(true);
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Renamed" } });
     expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", true);
   });

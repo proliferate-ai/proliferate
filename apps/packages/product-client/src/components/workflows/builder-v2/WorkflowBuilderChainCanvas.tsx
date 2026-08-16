@@ -1,17 +1,13 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, type CSSProperties, type ReactNode } from "react";
 import type { WorkflowNodeV2 } from "@proliferate/cloud-sdk";
 
 import {
   layoutWorkflowChainGraph,
-  WORKFLOW_GRAPH_NODE_HEIGHT,
-  WORKFLOW_GRAPH_NODE_WIDTH,
+  WORKFLOW_BUILDER_NODE_WIDTH,
 } from "#product/domain/workflows/graph-layout";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
 import { WORKFLOW_NODE_CARD_COPY } from "#product/copy/workflows/workflow-node-card-copy";
 import type { WorkflowBuilderHarnessOption } from "#product/lib/domain/workflows/workflow-builder-authoring";
-import { Button } from "#product/primitives/Button";
-import { CircleAlert } from "#product/primitives/icons/status";
-import { StatusDot } from "#product/primitives/StatusDot";
 import { WorkflowCanvas } from "#product/components/workflows/canvas/WorkflowCanvas";
 
 /**
@@ -21,6 +17,13 @@ import { WorkflowCanvas } from "#product/components/workflows/canvas/WorkflowCan
  */
 const INPUT_KEY = "-input-";
 
+/** The design's kind vocabulary: accent ink and card label per node kind. */
+const KIND = {
+  input: { label: "Input", accent: "var(--color-faint)" },
+  agent: { label: "Agent", accent: "var(--color-info)" },
+  human_in_loop: { label: "Human in the loop", accent: "var(--color-compute-target-amber)" },
+} as const;
+
 export interface WorkflowBuilderChainCanvasProps {
   nodes: readonly WorkflowNodeV2[];
   /** Catalog vocabulary, for spelling a card's model line in display names. */
@@ -28,8 +31,6 @@ export interface WorkflowBuilderChainCanvasProps {
   selectedNodeId: string | null;
   /** The structural input card is selected (workflow details in the inspector). */
   inputSelected: boolean;
-  /** Nodes the validator currently has an issue on; marked, not explained — the inspector owns the message. */
-  issueNodeIds: ReadonlySet<string>;
   /** Bottom-left readout (step counts, validity). */
   statusSlot?: ReactNode;
   onSelectNode(nodeId: string): void;
@@ -39,18 +40,18 @@ export interface WorkflowBuilderChainCanvasProps {
 
 /**
  * The draft chain drawn on the workflows canvas, headed by the structural
- * input card (the trigger payload every run starts from). Presentation of the
- * card order only: the chain IS the order `useWorkflowBuilder` keeps, so the
- * canvas draws the implied edges and offers no edge editing — selecting a
- * card opens it in the inspector, where every edit (including reordering)
- * lives.
+ * input card — a direct port of the design's authoring cards: 208×84, radius
+ * 12, kind dot + mono index + kind label header, prompt summary, model line,
+ * and the in/out ports on the card's spine. Presentation of the card order
+ * only: the chain IS the order `useWorkflowBuilder` keeps, so the canvas
+ * draws the implied edges and offers no edge editing — selecting a card opens
+ * it in the inspector, where every edit (including reordering) lives.
  */
 export function WorkflowBuilderChainCanvas({
   nodes,
   harnesses,
   selectedNodeId,
   inputSelected,
-  issueNodeIds,
   statusSlot,
   onSelectNode,
   onSelectInput,
@@ -71,41 +72,28 @@ export function WorkflowBuilderChainCanvas({
       contentHeight={layout.height}
       edges={layout.edges}
       ariaLabel={WORKFLOW_BUILDER_COPY.chainCanvasLabel}
+      zoomChrome="builder"
       statusSlot={statusSlot}
       className={className}
     >
       {layout.nodes.map((placed, index) => {
-        const cardStyle = {
-          left: placed.x,
-          top: placed.y,
-          width: WORKFLOW_GRAPH_NODE_WIDTH,
-          height: WORKFLOW_GRAPH_NODE_HEIGHT,
-        };
         if (placed.key === INPUT_KEY) {
           return (
-            <Button
+            <BuilderCanvasCard
               key={placed.key}
-              type="button"
-              variant="unstyled"
-              size="unstyled"
-              aria-pressed={inputSelected}
-              onClick={onSelectInput}
-              className={cardClassName(inputSelected)}
-              style={cardStyle}
-            >
-              <span className="flex w-full min-w-0 items-center gap-1.5">
-                <StatusDot tone="muted" />
-                <span className="truncate font-mono text-ui-sm uppercase tracking-wide text-muted-foreground">
-                  {WORKFLOW_BUILDER_COPY.inputNodeKindLabel}
-                </span>
-              </span>
-              <span className="w-full truncate text-ui font-medium text-foreground">
-                {WORKFLOW_BUILDER_COPY.inputNodeTitle}
-              </span>
-              <span className="line-clamp-2 w-full text-ui-sm text-muted-foreground">
-                {WORKFLOW_BUILDER_COPY.inputNodeSubtitle}
-              </span>
-            </Button>
+              x={placed.x}
+              y={placed.y}
+              accent={KIND.input.accent}
+              selected={inputSelected}
+              kindLabel={KIND.input.label}
+              indexLabel={null}
+              title={WORKFLOW_BUILDER_COPY.inputNodeTitle}
+              summary={WORKFLOW_BUILDER_COPY.inputNodeSubtitle}
+              summaryPresent={false}
+              modelLine={null}
+              hasInPort={false}
+              onSelect={onSelectInput}
+            />
           );
         }
 
@@ -113,64 +101,159 @@ export function WorkflowBuilderChainCanvas({
         if (!node) {
           return null;
         }
-        const selected = placed.key === selectedNodeId;
-        const modelLine = nodeModelLine(node, harnesses);
+        const kind = node.type === "human_in_loop" ? KIND.human_in_loop : KIND.agent;
+        const promptLine = firstLine(node.prompt);
         return (
-          <Button
+          <BuilderCanvasCard
             key={placed.key}
-            type="button"
-            variant="unstyled"
-            size="unstyled"
-            aria-pressed={selected}
-            onClick={() => onSelectNode(placed.key)}
-            className={cardClassName(selected)}
-            style={cardStyle}
-          >
-            <span className="flex w-full min-w-0 items-center gap-1.5">
-              <span className="font-mono text-ui-sm text-muted-foreground">
-                {WORKFLOW_NODE_CARD_COPY.nodeIndexLabel(index - 1)}
-              </span>
-              <StatusDot tone={node.type === "human_in_loop" ? "warning" : "info"} />
-              <span className="truncate font-mono text-ui-sm uppercase tracking-wide text-muted-foreground">
-                {WORKFLOW_NODE_CARD_COPY.kindLine(node.type, "defined")}
-              </span>
-              {issueNodeIds.has(node.id) ? (
-                <CircleAlert
-                  className="icon-compact ml-auto shrink-0 text-destructive"
-                  aria-label={WORKFLOW_BUILDER_COPY.canvasIssueMarkLabel}
-                />
-              ) : null}
-            </span>
-            <span className="w-full truncate text-ui font-medium text-foreground">
-              {node.title.trim() || WORKFLOW_BUILDER_COPY.canvasUntitledStep}
-            </span>
-            {modelLine ? (
-              <span className="w-full truncate font-mono text-ui-sm text-muted-foreground">
-                {modelLine}
-              </span>
-            ) : node.prompt.trim().length > 0 ? (
-              <span className="line-clamp-2 w-full text-ui-sm text-muted-foreground">
-                {node.prompt}
-              </span>
-            ) : null}
-          </Button>
+            x={placed.x}
+            y={placed.y}
+            accent={kind.accent}
+            selected={placed.key === selectedNodeId}
+            kindLabel={kind.label}
+            indexLabel={WORKFLOW_NODE_CARD_COPY.nodeIndexLabel(index - 1)}
+            title={node.title.trim() || WORKFLOW_BUILDER_COPY.canvasUntitledStep}
+            summary={promptLine ?? WORKFLOW_BUILDER_COPY.canvasNoPrompt}
+            summaryPresent={promptLine !== null}
+            modelLine={nodeModelLine(node, harnesses)}
+            hasInPort
+            onSelect={() => onSelectNode(placed.key)}
+          />
         );
       })}
     </WorkflowCanvas>
   );
 }
 
-function cardClassName(selected: boolean): string {
-  return [
-    "absolute flex flex-col items-start justify-start gap-1 overflow-hidden rounded-lg border bg-surface-elevated p-2.5 text-left shadow-subtle transition-colors",
-    selected ? "border-info ring-2 ring-info/30" : "border-border hover:border-border-heavy",
-  ].join(" ");
+function firstLine(prompt: string): string | null {
+  const line = prompt.split("\n").map((part) => part.trim()).find((part) => part.length > 0);
+  return line ?? null;
+}
+
+function BuilderCanvasCard({
+  x,
+  y,
+  accent,
+  selected,
+  kindLabel,
+  indexLabel,
+  title,
+  summary,
+  summaryPresent,
+  modelLine,
+  hasInPort,
+  onSelect,
+}: {
+  x: number;
+  y: number;
+  accent: string;
+  selected: boolean;
+  kindLabel: string;
+  indexLabel: string | null;
+  title: string;
+  summary: string;
+  /** A written summary reads muted; a placeholder reads faint. */
+  summaryPresent: boolean;
+  modelLine: string | null;
+  hasInPort: boolean;
+  onSelect: () => void;
+}) {
+  const cardStyle: CSSProperties = {
+    position: "absolute",
+    left: x,
+    top: y,
+    width: WORKFLOW_BUILDER_NODE_WIDTH,
+    minHeight: 84,
+    zIndex: selected ? 3 : 1,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 5,
+    padding: "9px 11px 11px",
+    borderRadius: 12,
+    border: `1px solid ${selected ? accent : "var(--color-border)"}`,
+    background: "var(--color-surface-elevated)",
+    boxShadow: selected ? "0 0 0 3px var(--color-highlight)" : "0 1px 2px rgba(0,0,0,0.16)",
+    userSelect: "none",
+    font: "inherit",
+    textAlign: "left",
+    cursor: "pointer",
+  };
+  return (
+    <button type="button" aria-pressed={selected} style={cardStyle} onClick={onSelect}>
+      {hasInPort ? (
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            top: -4,
+            left: "50%",
+            marginLeft: -4,
+            width: 8,
+            height: 8,
+            borderRadius: 999,
+            background: "var(--color-surface)",
+            border: "1px solid var(--color-border-heavy)",
+          }}
+        />
+      ) : null}
+      <span className="flex min-w-0 items-center" style={{ gap: 7 }}>
+        <span
+          aria-hidden
+          style={{ width: 7, height: 7, borderRadius: 999, flex: "none", background: accent }}
+        />
+        {indexLabel !== null ? (
+          <span className="text-ui-sm font-mono text-faint" style={{ flex: "none" }}>
+            {indexLabel}
+          </span>
+        ) : null}
+        <span
+          className="text-ui-sm min-w-0 truncate font-mono uppercase text-faint"
+          style={{ letterSpacing: "0.06em" }}
+        >
+          {kindLabel}
+        </span>
+      </span>
+      <span className="text-ui truncate font-medium text-foreground">{title}</span>
+      <span
+        className={`text-ui-sm ${summaryPresent ? "text-muted-foreground" : "text-faint"}`}
+        style={{
+          margin: 0,
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}
+      >
+        {summary}
+      </span>
+      {modelLine ? (
+        <span className="text-ui-sm truncate font-mono text-faint">
+          {modelLine}
+        </span>
+      ) : null}
+      <span
+        aria-hidden
+        style={{
+          position: "absolute",
+          bottom: -6,
+          left: "50%",
+          marginLeft: -6,
+          width: 12,
+          height: 12,
+          borderRadius: 999,
+          background: "var(--color-surface)",
+          border: `1.5px solid ${accent}`,
+        }}
+      />
+    </button>
+  );
 }
 
 /**
  * "Claude · Sonnet" — the card's model line in catalog display names, or the
  * raw ids while the catalog has no word for them. `null` when the node rides
- * the run's default, so the prompt preview takes the line instead.
+ * the run's default, so the summary keeps the space.
  */
 function nodeModelLine(
   node: WorkflowNodeV2,

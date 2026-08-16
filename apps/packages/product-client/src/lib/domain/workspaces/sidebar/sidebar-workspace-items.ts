@@ -1,4 +1,4 @@
-import type { GitStatusSnapshot } from "@anyharness/sdk";
+import type { GitStatusSnapshot, WorkflowRunStatusV2 } from "@anyharness/sdk";
 import type { SidebarSessionActivityState } from "#product/domain/sessions/activity";
 import {
   latestLogicalWorkspaceTimestamp,
@@ -16,6 +16,7 @@ import {
   activeWorkspaceActivity,
   sidebarGitAttentionIndicator,
   sidebarStatusIndicatorFromActivity,
+  sidebarWorkflowRunIndicator,
   sidebarWorkspaceVariantForLogicalWorkspace,
   worktreeMissingStatusIndicator,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
@@ -60,6 +61,9 @@ export function buildSidebarWorkspaceItems(args: {
    * `add-cloud-copy` availability command the same way fresh-create is
    * gated. */
   cloudComputeEnabled: boolean;
+  /** Latest workflow-run status per materialized runtime workspace id; a
+   * terminal status draws the run-outcome graph glyph in the status cell. */
+  workflowRunStatusByWorkspaceId?: Record<string, WorkflowRunStatusV2>;
 }): SidebarWorkspaceItemState[] {
   const linkCandidateCloudWorkspaceIds = collectCloudWorkspaceLinkCandidates(
     args.workspaces,
@@ -153,6 +157,7 @@ function buildSidebarWorkspaceItem(
     desktopInstallId?: string | null;
     linkCandidateCloudWorkspaceIds: ReadonlySet<string>;
     cloudComputeEnabled: boolean;
+    workflowRunStatusByWorkspaceId?: Record<string, WorkflowRunStatusV2>;
   },
 ): SidebarWorkspaceItemWithWorkspace {
   const active = logicalWorkspaceMatchesId(entry, args.selectedLogicalWorkspaceId);
@@ -234,8 +239,9 @@ function buildSidebarWorkspaceItem(
     : null;
 
   // The status cell's whole precedence, in one place: a missing checkout
-  // outranks everything, then live session activity, then whatever git
-  // attention the identity glyph's state dot does not already carry.
+  // outranks everything, then live session activity, then a terminal
+  // workflow-run outcome, then whatever git attention the identity glyph's
+  // state dot does not already carry.
   const statusIndicator = entry.localWorkspace
       && isWorkspaceDirectoryMissing(entry.localWorkspace)
     ? worktreeMissingStatusIndicator(
@@ -246,7 +252,13 @@ function buildSidebarWorkspaceItem(
       activity,
       pendingPromptCount: logicalWorkspaceRelatedCount(args.pendingPromptCounts, entry),
       errorAction: { kind: "open_workspace", workspaceId: entry.id },
-    }) ?? sidebarGitAttentionIndicator(gitStatus));
+    })
+      ?? sidebarWorkflowRunIndicator(
+        entry.localWorkspace
+          ? args.workflowRunStatusByWorkspaceId?.[entry.localWorkspace.id]
+          : undefined,
+      )
+      ?? sidebarGitAttentionIndicator(gitStatus));
 
   return {
     workspace: entry,

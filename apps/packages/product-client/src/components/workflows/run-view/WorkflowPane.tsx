@@ -89,7 +89,7 @@ export function WorkflowPane({ workspaceId }: { workspaceId: string }) {
         right={<WorkflowRunStatusChip run={pane.run} />}
       />
       <div
-        className={`min-h-0 flex-1 px-3 py-3 ${pane.status === "ready" ? "flex flex-col" : "overflow-y-auto"}`}
+        className={`min-h-0 flex-1 ${pane.status === "ready" ? "flex flex-col" : "overflow-y-auto px-3 py-3"}`}
       >
         {pane.status === "loading" ? (
           <div
@@ -113,7 +113,7 @@ export function WorkflowPane({ workspaceId }: { workspaceId: string }) {
             description={WORKFLOW_RUN_VIEW_COPY.emptyDescription}
           />
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <div className="flex min-h-0 flex-1 flex-col">
             {pane.interrupted ? (
               <NoticeBanner
                 tone="warning"
@@ -136,7 +136,7 @@ export function WorkflowPane({ workspaceId }: { workspaceId: string }) {
             ) : null}
 
             <WorkflowGraphView
-              className="min-h-48 flex-1"
+              className="min-h-48 flex-1 border-b border-border/70"
               slots={pane.slots}
               needsInputNodeRowIds={pane.needsInputNodeRowIds}
               selectedNodeRowId={selectedNodeRowId}
@@ -144,7 +144,7 @@ export function WorkflowPane({ workspaceId }: { workspaceId: string }) {
             />
 
             {selectedVm ? (
-              <section className="flex shrink-0 flex-col gap-1">
+              <section className="flex shrink-0 flex-col gap-1 px-3 pt-3">
                 <div className="flex items-center justify-between px-1">
                   <h3 className="text-ui font-medium text-foreground">
                     {WORKFLOW_RUN_VIEW_COPY.inspectorTitle}
@@ -171,7 +171,7 @@ export function WorkflowPane({ workspaceId }: { workspaceId: string }) {
               </section>
             ) : null}
 
-            <section className="flex max-h-44 shrink-0 flex-col gap-2 overflow-y-auto">
+            <section className="flex max-h-44 shrink-0 flex-col gap-2 overflow-y-auto p-3">
               <h3 className="px-1 text-ui font-medium text-foreground">
                 {WORKFLOW_RUN_VIEW_COPY.docsSectionTitle}
               </h3>

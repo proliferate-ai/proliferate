@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRepoRootsQuery } from "@anyharness/sdk-react";
 import type { WorkflowStarterTemplateV2 } from "#product/config/workflows/starter-templates";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
+import { WORKFLOW_MAIN_COPY } from "#product/copy/workflows/workflow-main-copy";
 import { useCloudLaunchModelRegistries } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import { useWorkflowDefinitionV2MutationsAccess } from "#product/hooks/access/cloud/workflows/use-workflow-definitions-v2-access";
 import { useWorkflowBuilder, type WorkflowBuilderDraft } from "#product/hooks/workflows/facade/use-workflow-builder";
 import { workflowBuilderHarnessOptions } from "#product/lib/domain/workflows/workflow-builder-authoring";
 import { workflowRepoRootOptions } from "#product/lib/domain/workflows/workflow-repo-root-options";
@@ -10,14 +12,11 @@ import { WorkflowBuilderChainCanvas } from "#product/components/workflows/builde
 import { WorkflowBuilderDetailsCard } from "#product/components/workflows/builder-v2/WorkflowBuilderDetailsCard";
 import { WorkflowBuilderDocInspector } from "#product/components/workflows/builder-v2/WorkflowBuilderDocInspector";
 import { WorkflowBuilderInputsPanel } from "#product/components/workflows/builder-v2/WorkflowBuilderInputsPanel";
-import { WorkflowBuilderNodeCard } from "#product/components/workflows/builder-v2/WorkflowBuilderNodeCard";
+import { WorkflowBuilderNodeInspector } from "#product/components/workflows/builder-v2/WorkflowBuilderNodeInspector";
 import { WorkflowBuilderRail } from "#product/components/workflows/builder-v2/WorkflowBuilderRail";
+import { WorkflowMainDeleteDialog } from "#product/components/workflows/main/WorkflowMainDeleteDialog";
 import { WorkflowResourceState } from "#product/components/workflows/WorkflowResourceState";
-import { Button } from "#product/primitives/Button";
-import { IconButton } from "#product/primitives/IconButton";
-import { Input } from "#product/primitives/Input";
-import { ArrowLeft } from "#product/primitives/icons/core";
-import { StatusDot } from "#product/primitives/StatusDot";
+import { ChevronRight } from "#product/primitives/icons/core";
 import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
 
 export interface WorkflowBuilderSurfaceProps {
@@ -63,9 +62,10 @@ function resolveSelection(
 }
 
 /**
- * The gen-2 builder as the design's three-pane graph page: the step palette
- * and context-docs roster on the left, the chain drawn full-bleed on the
- * canvas in the middle, and an inspector on the right editing exactly the
+ * The gen-2 builder as the design's three-pane graph page: the 46px top bar
+ * (back, the mono workflow-name field, Saved/Delete/Save Workflow), the step
+ * palette and context-docs roster in the left rail, the chain drawn
+ * full-bleed on the canvas, and the 312px inspector editing exactly the
  * selected object. There is still no edge editing — the chain is the card
  * order, and `useWorkflowBuilder` renders it as the linear edge list a save
  * sends. Every rule the surface enforces comes from `validateDefinitionV2`
@@ -103,6 +103,8 @@ export function WorkflowBuilderSurface({
     () => workflowBuilderHarnessOptions(registriesQuery.data),
     [registriesQuery.data],
   );
+  const { deleteWorkflowDefinitionV2, deletingWorkflowDefinitionV2 } =
+    useWorkflowDefinitionV2MutationsAccess(authCacheScope);
 
   const { draft, issues, actions } = builder;
   const inputNames = useMemo(
@@ -115,6 +117,8 @@ export function WorkflowBuilderSurface({
   );
 
   const [selection, setSelection] = useState<BuilderSelection | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   // A just-added step selects itself so the palette lands the user in the
   // fields they came for. Docs do the same, but synchronously in the add
   // handler (the new doc's index is known there).
@@ -130,10 +134,6 @@ export function WorkflowBuilderSurface({
     ? draft.nodes.find((node) => node.id === active.id) ?? null
     : null;
   const selectedDoc = active.kind === "doc" ? draft.docTemplates[active.index] : null;
-  const issueNodeIds = useMemo(
-    () => new Set(issues.flatMap((issue) => (issue.nodeId ? [issue.nodeId] : []))),
-    [issues],
-  );
 
   if (builder.status !== "ready") {
     return (
@@ -155,16 +155,25 @@ export function WorkflowBuilderSurface({
     });
   };
 
+  const confirmDelete = () => {
+    if (definitionId === null || builder.record === null) {
+      return;
+    }
+    setDeleteError(null);
+    void deleteWorkflowDefinitionV2({
+      workflowDefinitionId: definitionId,
+      expectedRevision: builder.record.revision,
+    })
+      .then(() => {
+        setDeleteOpen(false);
+        onBack?.();
+      })
+      .catch(() => setDeleteError(WORKFLOW_MAIN_COPY.deleteErrorMessage));
+  };
+
   const banners = [
     builder.error
       ? <NoticeBanner key="error" tone="destructive">{builder.error}</NoticeBanner>
-      : null,
-    issues.length > 0
-      ? (
-          <NoticeBanner key="issues" tone="destructive">
-            {WORKFLOW_BUILDER_COPY.issuesBanner(issues.length, issues[0].message)}
-          </NoticeBanner>
-        )
       : null,
     registriesQuery.isError
       ? <NoticeBanner key="catalog" tone="warning">{WORKFLOW_BUILDER_COPY.catalogUnavailable}</NoticeBanner>
@@ -174,48 +183,97 @@ export function WorkflowBuilderSurface({
       : null,
   ].filter((banner) => banner !== null);
 
+  const saveDisabled = !builder.canSave;
+  const saveStyle: CSSProperties = {
+    flex: "none",
+    padding: "4px 11px",
+    borderRadius: 7,
+    border: `1px solid ${saveDisabled ? "var(--color-border)" : "var(--color-border-heavy)"}`,
+    background: saveDisabled ? "var(--color-surface-elevated)" : "var(--color-surface-elevated-secondary)",
+    color: saveDisabled ? "var(--color-faint)" : "var(--color-foreground)",
+    font: "inherit",
+    fontWeight: 500,
+    cursor: saveDisabled ? "not-allowed" : "pointer",
+    whiteSpace: "nowrap",
+  };
+
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background" data-telemetry-block>
-      {/* `MainSidebarPageShell` draws an absolute, always-on-top 46px window-
-          drag strip over its content area (see that file), so any real
-          control in a directly-nested page's own top 46px is unreachable —
-          the same reason `ProductPageShell` reserves `pt-14` for the list
-          page next to this one. This surface has its own header instead of
-          going through that shell, so it reserves the identical clearance
-          itself. The pixel height comes from that same shared native-chrome
-          constant, not a one-off measurement, so it is set inline rather
-          than through the (sealed-zero, arbitrary-bracket-banned) class
-          scale this directory enforces. */}
-      <div className="shrink-0" style={{ height: 46 }} data-tauri-drag-region="true" />
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border/70 px-3">
-        <IconButton
-          size="md"
-          aria-label={WORKFLOW_BUILDER_COPY.backLabel}
+      <header
+        className="flex shrink-0 items-center border-b border-border bg-background"
+        style={{ gap: 12, height: 46, padding: "0 12px" }}
+      >
+        <button
+          type="button"
           title={WORKFLOW_BUILDER_COPY.backLabel}
+          aria-label={WORKFLOW_BUILDER_COPY.backLabel}
           disabled={builder.saving}
+          className="grid shrink-0 cursor-pointer place-items-center border-0 bg-transparent text-faint hover:bg-hover hover:text-foreground"
+          style={{ width: 24, height: 24, borderRadius: 7, transform: "rotate(180deg)" }}
           onClick={() => onBack?.()}
         >
-          <ArrowLeft className="icon-compact" aria-hidden />
-        </IconButton>
-        <Input
-          aria-label={WORKFLOW_BUILDER_COPY.titleLabel}
+          <ChevronRight className="icon-paired" aria-hidden />
+        </button>
+        <input
+          type="text"
           value={draft.title}
-          disabled={builder.saving}
+          aria-label={WORKFLOW_BUILDER_COPY.titleLabel}
           placeholder={WORKFLOW_BUILDER_COPY.titlePlaceholder}
-          className="h-7 w-72 max-w-full border-0 bg-transparent px-1 font-mono text-ui shadow-none focus:ring-0"
+          spellCheck={false}
+          disabled={builder.saving}
+          className="text-ui font-mono outline-none transition-colors hover:bg-hover focus:border-border-heavy focus:bg-surface-elevated"
+          style={{
+            flex: "0 1 210px",
+            minWidth: 96,
+            padding: "3px 8px",
+            marginLeft: -8,
+            borderRadius: 7,
+            border: "1px solid transparent",
+            background: "transparent",
+            color: "var(--color-foreground)",
+          }}
           onChange={(event) => actions.setTitle(event.currentTarget.value)}
         />
-        <div className="ml-auto">
-          <Button
+        <div className="flex min-w-0 flex-1 items-center justify-end" style={{ gap: 10 }}>
+          {builder.saved ? (
+            <span className="text-ui-sm min-w-0 truncate text-muted-foreground">
+              {WORKFLOW_BUILDER_COPY.savedLabel}
+            </span>
+          ) : null}
+          {definitionId !== null ? (
+            <button
+              type="button"
+              title={WORKFLOW_BUILDER_COPY.deleteDefinitionTitle}
+              disabled={builder.saving || deletingWorkflowDefinitionV2}
+              className="text-ui-sm hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+              style={{
+                flex: "none",
+                padding: "4px 9px",
+                borderRadius: 7,
+                border: "1px solid var(--color-border)",
+                background: "transparent",
+                color: "var(--color-destructive)",
+                font: "inherit",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+              onClick={() => {
+                setDeleteError(null);
+                setDeleteOpen(true);
+              }}
+            >
+              {WORKFLOW_BUILDER_COPY.deleteDefinitionLabel}
+            </button>
+          ) : null}
+          <button
             type="button"
-            variant="primary"
-            size="md"
-            loading={builder.saving}
-            disabled={!builder.canSave}
+            disabled={saveDisabled || builder.saving}
+            className="text-ui-sm"
+            style={saveStyle}
             onClick={submit}
           >
-            {saveLabel(builder.saving, builder.saved)}
-          </Button>
+            {builder.saving ? WORKFLOW_BUILDER_COPY.savingLabel : WORKFLOW_BUILDER_COPY.saveLabel}
+          </button>
         </div>
       </header>
 
@@ -223,7 +281,7 @@ export function WorkflowBuilderSurface({
         <div className="flex shrink-0 flex-col gap-2 px-3 pt-3">{banners}</div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         <WorkflowBuilderRail
           docTemplates={draft.docTemplates}
           selectedDocIndex={active.kind === "doc" ? active.index : null}
@@ -237,33 +295,60 @@ export function WorkflowBuilderSurface({
           onSelectDoc={(index) => setSelection({ kind: "doc", index })}
         />
 
-        <div className="min-w-0 flex-1 p-3">
-          <WorkflowBuilderChainCanvas
-            className="h-full"
-            nodes={draft.nodes}
-            harnesses={harnesses}
-            selectedNodeId={selectedNode?.id ?? null}
-            inputSelected={active.kind === "input"}
-            issueNodeIds={issueNodeIds}
-            statusSlot={(
-              <div className="flex flex-col gap-1">
-                <span className="text-ui-sm text-muted-foreground">
-                  {WORKFLOW_BUILDER_COPY.statusSummary(draft.nodes.length, draft.nodes.length + 1)}
+        <WorkflowBuilderChainCanvas
+          className="min-w-0 flex-1"
+          nodes={draft.nodes}
+          harnesses={harnesses}
+          selectedNodeId={selectedNode?.id ?? null}
+          inputSelected={active.kind === "input"}
+          statusSlot={(
+            <>
+              <span className="text-ui-sm whitespace-nowrap text-faint">
+                {WORKFLOW_BUILDER_COPY.statusSummary(draft.nodes.length, draft.nodes.length + 1)}
+              </span>
+              {issues.length === 0 ? (
+                <span className="flex flex-none items-center" style={{ gap: 6 }}>
+                  <span
+                    aria-hidden
+                    style={{ width: 6, height: 6, borderRadius: 999, background: "var(--color-success)", flex: "none" }}
+                  />
+                  <span className="text-ui-sm whitespace-nowrap text-muted-foreground">
+                    {WORKFLOW_BUILDER_COPY.statusValid}
+                  </span>
                 </span>
-                <span className="flex items-center gap-1.5 text-ui-sm text-foreground">
-                  <StatusDot tone={issues.length > 0 ? "warning" : "success"} />
-                  {issues.length > 0
-                    ? WORKFLOW_BUILDER_COPY.statusIssues(issues.length)
-                    : WORKFLOW_BUILDER_COPY.statusValid}
+              ) : (
+                <span className="flex w-full items-start" style={{ gap: 6 }}>
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: 999,
+                      background: "var(--color-compute-target-amber)",
+                      flex: "none",
+                      marginTop: 5,
+                    }}
+                  />
+                  <span className="text-ui-sm flex-1 text-muted-foreground" style={{ textWrap: "pretty" }}>
+                    {issues[0].message}{" "}
+                    {issues.length > 1 ? (
+                      <span className="text-faint">
+                        {WORKFLOW_BUILDER_COPY.statusMoreIssues(issues.length - 1)}
+                      </span>
+                    ) : null}
+                  </span>
                 </span>
-              </div>
-            )}
-            onSelectNode={(id) => setSelection({ kind: "node", id })}
-            onSelectInput={() => setSelection({ kind: "input" })}
-          />
-        </div>
+              )}
+            </>
+          )}
+          onSelectNode={(id) => setSelection({ kind: "node", id })}
+          onSelectInput={() => setSelection({ kind: "input" })}
+        />
 
-        <aside className="flex w-80 shrink-0 flex-col gap-3 overflow-y-auto border-l border-border/70 p-3">
+        <aside
+          className="flex shrink-0 flex-col overflow-y-auto border-l border-border bg-sidebar-background"
+          style={{ width: 312, gap: 14, padding: 14 }}
+        >
           {active.kind === "input" ? (
             <>
               <WorkflowBuilderDetailsCard
@@ -288,7 +373,7 @@ export function WorkflowBuilderSurface({
           ) : null}
 
           {selectedNode ? (
-            <WorkflowBuilderNodeCard
+            <WorkflowBuilderNodeInspector
               key={selectedNode.id}
               node={selectedNode}
               position={draft.nodes.findIndex((node) => node.id === selectedNode.id) + 1}
@@ -313,21 +398,24 @@ export function WorkflowBuilderSurface({
               nodes={draft.nodes}
               issues={issues}
               disabled={builder.saving}
+              onClose={() => setSelection(null)}
               onRemove={() => actions.removeDocTemplate(active.index)}
               onChange={(patch) => actions.updateDocTemplate(active.index, patch)}
             />
           ) : null}
         </aside>
       </div>
+
+      <WorkflowMainDeleteDialog
+        open={deleteOpen}
+        title={draft.title}
+        deleting={deletingWorkflowDefinitionV2}
+        error={deleteError}
+        onCancel={() => setDeleteOpen(false)}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
-}
-
-function saveLabel(saving: boolean, saved: boolean): string {
-  if (saving) {
-    return WORKFLOW_BUILDER_COPY.savingLabel;
-  }
-  return saved ? WORKFLOW_BUILDER_COPY.savedLabel : WORKFLOW_BUILDER_COPY.saveLabel;
 }
 
 function resourceStateTitle(status: "loading" | "missing" | "unsupported"): string {

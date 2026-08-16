@@ -5,9 +5,12 @@ import {
   parsePromptTokens,
   type PromptToken,
 } from "#product/domain/workflows/definition-v2";
+import {
+  INSPECTOR_EYEBROW_CLASS,
+  INSPECTOR_EYEBROW_STYLE,
+  INSPECTOR_TEXTAREA_STYLE,
+} from "#product/components/workflows/builder-v2/WorkflowBuilderNodeInspector";
 import { Badge } from "#product/primitives/Badge";
-import { Label } from "#product/primitives/Label";
-import { Textarea } from "#product/primitives/Textarea";
 
 export interface WorkflowBuilderPromptFieldProps {
   fieldId: string;
@@ -50,18 +53,26 @@ export function WorkflowBuilderPromptField({
   const hasReferences = tokens.some((token) => token.kind !== "text");
 
   return (
-    <div>
-      <Label htmlFor={fieldId}>{WORKFLOW_BUILDER_COPY.promptLabel}</Label>
-      <Textarea
+    <div className="flex flex-col" style={{ gap: 6 }}>
+      <label
+        htmlFor={fieldId}
+        className={INSPECTOR_EYEBROW_CLASS}
+        style={INSPECTOR_EYEBROW_STYLE}
+      >
+        {WORKFLOW_BUILDER_COPY.promptLabel}
+      </label>
+      <textarea
         id={fieldId}
         value={value}
         rows={5}
         disabled={disabled}
         aria-invalid={invalid ? "true" : undefined}
         placeholder={WORKFLOW_BUILDER_COPY.promptPlaceholder}
+        className="text-ui-sm"
+        style={INSPECTOR_TEXTAREA_STYLE}
         onChange={(event) => onChange(event.currentTarget.value)}
       />
-      <p className="mt-1 text-ui-sm text-muted-foreground">
+      <p className="text-ui-sm m-0 text-faint" style={{ textWrap: "pretty" }}>
         {WORKFLOW_BUILDER_COPY.promptHelp}
       </p>
       {hasReferences ? (

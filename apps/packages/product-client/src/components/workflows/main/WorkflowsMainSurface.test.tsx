@@ -185,11 +185,11 @@ describe("WorkflowsMainSurface", () => {
       <WorkflowsMainSurface authCacheScope="user-1" onEdit={onEdit} onNew={vi.fn()} />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit Issue triage" }));
+    fireEvent.click(screen.getByText("Issue triage").closest("[role=button]")!);
     expect(onEdit).toHaveBeenCalledWith("wf-1");
   });
 
-  it("shows both starter templates and a start-blank path in the empty state", () => {
+  it("offers the blank-graph row and both starter templates in the create section", () => {
     mocks.listQuery.data = { workflows: [] };
     const onNew = vi.fn();
 
@@ -200,27 +200,24 @@ describe("WorkflowsMainSurface", () => {
     for (const template of WORKFLOW_STARTER_TEMPLATES_V2) {
       expect(screen.getByText(template.title)).toBeTruthy();
     }
-    expect(screen.getAllByRole("button", { name: "Use template" })).toHaveLength(
-      WORKFLOW_STARTER_TEMPLATES_V2.length,
-    );
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Use template" })[0]);
+    fireEvent.click(screen.getByText(WORKFLOW_STARTER_TEMPLATES_V2[0].title));
     expect(onNew).toHaveBeenCalledWith(WORKFLOW_STARTER_TEMPLATES_V2[0]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Start blank" }));
+    fireEvent.click(screen.getByText("Create a new workflow"));
     expect(onNew).toHaveBeenCalledWith(null);
   });
 
   it("deletes through the access action once the confirm dialog is confirmed", async () => {
-    mocks.listQuery.data = { workflows: [listRow({ id: "wf-1", revision: 4 })] };
+    mocks.listQuery.data = {
+      workflows: [listRow({ id: "wf-1", revision: 4, schemaVersion: 1 })],
+    };
 
     render(
       <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
     );
 
-    // Radix's dropdown trigger opens on pointerdown, not a synthetic click.
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Issue triage actions" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete..." }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete Issue triage" }));
 
     expect(screen.getByText("Delete this workflow?")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
@@ -232,14 +229,13 @@ describe("WorkflowsMainSurface", () => {
   });
 
   it("does not delete when the confirm dialog is cancelled", async () => {
-    mocks.listQuery.data = { workflows: [listRow()] };
+    mocks.listQuery.data = { workflows: [listRow({ schemaVersion: 1 })] };
 
     render(
       <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
     );
 
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Issue triage actions" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete..." }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete Issue triage" }));
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(screen.queryByText("Delete this workflow?")).toBeNull();
@@ -270,9 +266,8 @@ describe("WorkflowsMainSurface legacy group", () => {
       <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
     );
 
-    expect(screen.getByRole("heading", { name: "Legacy" })).toBeTruthy();
+    expect(screen.getByText("Legacy")).toBeTruthy();
     expect(screen.getByText("Legacy workflow")).toBeTruthy();
-    expect(screen.getByText("Saved on the old editor.")).toBeTruthy();
     expect(screen.getByText("v1")).toBeTruthy();
   });
 
@@ -291,9 +286,8 @@ describe("WorkflowsMainSurface legacy group", () => {
     expect(screen.getAllByRole("button", { name: /Legacy workflow/ })).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Delete Legacy workflow" })).toBeTruthy();
 
-    // The v2 row keeps its full action set alongside.
+    // The v2 row keeps its Run affordance (editing is the row itself).
     expect(screen.getByRole("button", { name: "Run Issue triage" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Edit Issue triage" })).toBeTruthy();
   });
 
   it("deletes a legacy definition through the shared definitions mutation", async () => {
@@ -320,10 +314,10 @@ describe("WorkflowsMainSurface legacy group", () => {
       <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
     );
 
-    expect(screen.queryByRole("heading", { name: "Legacy" })).toBeNull();
+    expect(screen.queryByText("Legacy")).toBeNull();
   });
 
-  it("keeps the legacy group and softens the empty headline when only gen-1 rows exist", () => {
+  it("keeps the legacy group and the create section when only gen-1 rows exist", () => {
     mocks.listQuery.data = {
       workflows: [listRow({ id: "wf-legacy", title: "Legacy workflow", schemaVersion: 1 })],
     };
@@ -332,11 +326,10 @@ describe("WorkflowsMainSurface legacy group", () => {
       <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
     );
 
-    expect(screen.getByText("Nothing rebuilt yet")).toBeTruthy();
-    expect(screen.queryByText("No workflows yet")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Legacy" })).toBeTruthy();
+    expect(screen.getByText("Legacy")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Delete Legacy workflow" })).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "Use template" }).length).toBeGreaterThan(0);
+    // The create section stays reachable above the legacy group.
+    expect(screen.getByText("Create a new workflow")).toBeTruthy();
   });
 });
 
@@ -369,7 +362,7 @@ describe("WorkflowsMainSurface executions group", () => {
       <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
     );
 
-    expect(screen.getByRole("heading", { name: "Executions" })).toBeTruthy();
+    expect(screen.getByText("Executions")).toBeTruthy();
     // definitionJson carries no title today, so the row wears the fallback.
     expect(screen.getByText("Workflow run")).toBeTruthy();
     expect(screen.getByText("Succeeded · 1m 40s")).toBeTruthy();
@@ -414,7 +407,7 @@ describe("WorkflowsMainSurface filter", () => {
     expect(screen.queryByText("Executions")).toBeNull();
   });
 
-  it("says so when nothing matches the filter", () => {
+  it("empties the saved group when nothing matches the filter", () => {
     mocks.listQuery.data = { workflows: [listRow()] };
 
     render(
@@ -425,6 +418,9 @@ describe("WorkflowsMainSurface filter", () => {
       target: { value: "zzz" },
     });
 
-    expect(screen.getByText("Nothing here matches this filter.")).toBeTruthy();
+    expect(screen.queryByText("Issue triage")).toBeNull();
+    // The caption stays, wearing its zero count, the way the design's index reads.
+    expect(screen.getByText("Saved Workflows")).toBeTruthy();
+    expect(screen.getByText("0")).toBeTruthy();
   });
 });

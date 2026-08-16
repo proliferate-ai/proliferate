@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type CSSProperties } from "react";
 
 import type {
   WorkflowGraphNodeVM,
@@ -12,28 +12,27 @@ import {
 } from "#product/domain/workflows/graph-layout";
 import { WORKFLOW_NODE_CARD_COPY } from "#product/copy/workflows/workflow-node-card-copy";
 import { WORKFLOW_RUN_VIEW_COPY } from "#product/copy/workflows/workflow-run-view-copy";
-import { Badge } from "#product/primitives/Badge";
-import { Button } from "#product/primitives/Button";
-import { StatusDot, type StatusDotTone } from "#product/primitives/StatusDot";
+import { Robot } from "#product/primitives/icons/product";
+import { UsersRound } from "#product/primitives/icons/platform";
 import { WorkflowCanvas } from "#product/components/workflows/canvas/WorkflowCanvas";
 
 /**
- * Same tone floor the node card keeps: `StatusDot` throws on a tone outside
- * its map, so an unknown domain tone lands on `muted` instead of taking the
- * app to crash recovery.
+ * The design's per-tone dot inks for the run cards' status dot. Same
+ * partial-read floor the rest of the run view keeps: an unknown tone renders
+ * the muted ink rather than throwing.
  */
-const WORKFLOW_NODE_STATUS_DOT_TONE: Record<WorkflowNodeTone, StatusDotTone> = {
-  muted: "muted",
-  current: "current",
-  info: "info",
-  success: "success",
-  warning: "warning",
-  danger: "danger",
+const TONE_DOT_INK: Record<WorkflowNodeTone, string> = {
+  muted: "var(--color-border-heavy)",
+  current: "var(--color-info)",
+  info: "var(--color-info)",
+  success: "var(--color-success)",
+  warning: "var(--color-compute-target-amber)",
+  danger: "var(--color-destructive)",
 };
 
-function statusDotToneFor(tone: WorkflowNodeTone): StatusDotTone {
-  const byTone: Partial<Record<string, StatusDotTone>> = WORKFLOW_NODE_STATUS_DOT_TONE;
-  return byTone[tone] ?? "muted";
+function toneDotInk(tone: WorkflowNodeTone): string {
+  const byTone: Partial<Record<string, string>> = TONE_DOT_INK;
+  return byTone[tone] ?? TONE_DOT_INK.muted;
 }
 
 export interface WorkflowGraphViewProps {
@@ -45,11 +44,12 @@ export interface WorkflowGraphViewProps {
 }
 
 /**
- * The run's chain drawn as a real graph on the workflows canvas: one rank per
+ * The run's chain drawn as the design's graph: 200×92 cards (index chip,
+ * status dot, type glyph and label, title, two-line prompt), one rank per
  * chain slot, retries widening their rank, ad hoc side nodes hanging off a
- * dashed branch edge in the lane beside their anchor. Every card is a button
- * that selects its node — the inspector the pane docks under the canvas owns
- * the controls and the session hand-off, so the canvas stays presentation.
+ * dashed branch edge beside their anchor. Every card is a button that selects
+ * its node — the inspector the pane docks under the canvas owns the controls
+ * and the session hand-off, so the canvas stays presentation.
  */
 export function WorkflowGraphView({
   slots,
@@ -75,6 +75,7 @@ export function WorkflowGraphView({
       contentHeight={layout.height}
       edges={layout.edges}
       ariaLabel={WORKFLOW_RUN_VIEW_COPY.graphCanvasLabel}
+      zoomChrome="run"
       className={className}
     >
       {layout.nodes.map((placed) => {
@@ -83,53 +84,141 @@ export function WorkflowGraphView({
           return null;
         }
         const selected = placed.key === selectedNodeRowId;
+        const human = vm.node.nodeType === "human_in_loop";
+        const needsInput = needsInputNodeRowIds.has(placed.key);
+        const wrapStyle: CSSProperties = {
+          position: "absolute",
+          left: placed.x,
+          top: placed.y,
+          width: WORKFLOW_GRAPH_NODE_WIDTH,
+          height: WORKFLOW_GRAPH_NODE_HEIGHT,
+          zIndex: selected ? 3 : 1,
+          padding: 0,
+          border: 0,
+          background: "transparent",
+          font: "inherit",
+          textAlign: "left",
+          cursor: "pointer",
+          opacity: vm.tone === "muted" ? 0.5 : 1,
+        };
+        const cardStyle: CSSProperties = {
+          position: "relative",
+          boxSizing: "border-box",
+          width: WORKFLOW_GRAPH_NODE_WIDTH,
+          height: WORKFLOW_GRAPH_NODE_HEIGHT,
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+          padding: "10px 12px",
+          borderRadius: 11,
+          border: "1px solid var(--color-border)",
+          background: "var(--color-card)",
+          boxShadow: selected
+            ? "0 0 0 2px var(--color-info), 0 0 0 7px var(--color-highlight)"
+            : "var(--shadow-subtle)",
+        };
         return (
-          <Button
+          <button
             key={placed.key}
             type="button"
-            variant="unstyled"
-            size="unstyled"
             aria-pressed={selected}
+            style={wrapStyle}
             onClick={() => onSelectNode(placed.key)}
-            className={[
-              "absolute flex flex-col items-start justify-start gap-1 overflow-hidden rounded-lg border p-2.5 text-left shadow-subtle transition-colors",
-              placed.branch ? "bg-surface-tint" : "bg-surface-elevated",
-              selected
-                ? "border-info ring-2 ring-info/30"
-                : "border-border hover:border-border-heavy",
-              vm.tone === "muted" ? "opacity-60" : "",
-            ].join(" ")}
-            style={{
-              left: placed.x,
-              top: placed.y,
-              width: WORKFLOW_GRAPH_NODE_WIDTH,
-              height: WORKFLOW_GRAPH_NODE_HEIGHT,
-            }}
           >
-            <span className="flex w-full min-w-0 items-center gap-1.5">
-              <span className="font-mono text-ui-sm text-muted-foreground">
-                {WORKFLOW_NODE_CARD_COPY.nodeIndexLabel(vm.node.chainIndex)}
+            <span style={cardStyle}>
+              <span className="flex items-center justify-between" style={{ gap: 8 }}>
+                <span className="flex min-w-0 items-center text-faint" style={{ gap: 6 }}>
+                  <span
+                    className="text-ui-sm grid flex-none place-items-center font-mono text-muted-foreground"
+                    style={{
+                      minWidth: 18,
+                      height: 16,
+                      padding: "0 4px",
+                      borderRadius: 5,
+                      border: "1px solid var(--color-border-light)",
+                      background: "var(--color-surface-elevated-secondary)",
+                      lineHeight: 1,
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    {WORKFLOW_NODE_CARD_COPY.nodeIndexLabel(vm.node.chainIndex)}
+                  </span>
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: 999,
+                      flex: "none",
+                      background: toneDotInk(vm.tone),
+                    }}
+                  />
+                  {human ? (
+                    <span className="flex" style={{ color: "var(--color-compute-target-amber)" }}>
+                      <UsersRound className="icon-tight" aria-hidden />
+                    </span>
+                  ) : (
+                    <Robot className="icon-tight" aria-hidden />
+                  )}
+                  <span
+                    className="text-ui-sm whitespace-nowrap font-mono uppercase"
+                    style={{ letterSpacing: "0.07em" }}
+                  >
+                    {WORKFLOW_NODE_CARD_COPY.kindLine(vm.node.nodeType, vm.node.kind)}
+                  </span>
+                </span>
+                {needsInput ? (
+                  <span
+                    className="text-ui-sm whitespace-nowrap text-faint"
+                  >
+                    {WORKFLOW_NODE_CARD_COPY.needsInputBadge}
+                  </span>
+                ) : null}
               </span>
-              <StatusDot tone={statusDotToneFor(vm.tone)} />
-              <span className="truncate font-mono text-ui-sm uppercase tracking-wide text-muted-foreground">
-                {WORKFLOW_NODE_CARD_COPY.kindLine(vm.node.nodeType, vm.node.kind)}
+              <span
+                className={`text-ui truncate text-foreground ${vm.isCurrent ? "font-semibold" : "font-medium"}`}
+              >
+                {vm.node.title}
+              </span>
+              <span
+                className="text-ui-sm text-muted-foreground"
+                style={{
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                }}
+              >
+                {vm.node.prompt}
               </span>
             </span>
             <span
-              className={`w-full truncate text-ui text-foreground ${vm.isCurrent ? "font-semibold" : "font-medium"}`}
-            >
-              {vm.node.title}
-            </span>
-            {needsInputNodeRowIds.has(placed.key) ? (
-              <Badge tone="info" size="micro">
-                {WORKFLOW_NODE_CARD_COPY.needsInputBadge}
-              </Badge>
-            ) : vm.node.prompt.trim().length > 0 ? (
-              <span className="line-clamp-2 w-full text-ui-sm text-muted-foreground">
-                {vm.node.prompt}
-              </span>
-            ) : null}
-          </Button>
+              aria-hidden
+              style={{
+                position: "absolute",
+                left: 95,
+                top: -5,
+                width: 10,
+                height: 10,
+                borderRadius: 999,
+                background: "var(--color-surface-under)",
+                border: "2px solid var(--color-border-heavy)",
+              }}
+            />
+            <span
+              aria-hidden
+              style={{
+                position: "absolute",
+                left: 95,
+                bottom: -5,
+                width: 10,
+                height: 10,
+                borderRadius: 999,
+                background: "var(--color-surface-under)",
+                border: "2px solid var(--color-border-heavy)",
+              }}
+            />
+          </button>
         );
       })}
     </WorkflowCanvas>

@@ -404,6 +404,19 @@ export function Fork({ className, ...props }: IconProps) {
   );
 }
 
+/** Three-node graph mark for workflow-run rows — GitMerge only carries two nodes. */
+export function NodeTree({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M12 7.2 6.6 15.6" />
+      <path d="M12 7.2 17.4 15.6" />
+      <circle cx="12" cy="4.5" r="2.6" />
+      <circle cx="5" cy="18.5" r="2.6" />
+      <circle cx="19" cy="18.5" r="2.6" />
+    </svg>
+  );
+}
+
 export function Undo({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>

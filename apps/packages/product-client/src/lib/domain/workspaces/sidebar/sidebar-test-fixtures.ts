@@ -1,4 +1,4 @@
-import type { RepoRoot, Workspace } from "@anyharness/sdk";
+import type { RepoRoot, WorkflowRunStatusV2, Workspace } from "@anyharness/sdk";
 import type { RepoConfigResponse, RepoEnvironmentResponse } from "@proliferate/cloud-sdk";
 import type { SidebarSessionActivityState } from "#product/domain/sessions/activity";
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
@@ -340,6 +340,7 @@ export function buildGroups(args: {
   suppressActiveNeedsReview?: boolean;
   gitStatusesByLogicalId?: Record<string, WorkspaceGitStatus>;
   cloudComputeEnabled?: boolean;
+  workflowRunStatusByWorkspaceId?: Record<string, WorkflowRunStatusV2>;
 }) {
   return buildSidebarGroupStates({
     repoRoots: args.repoRoots ?? [],
@@ -364,5 +365,6 @@ export function buildGroups(args: {
     sessionLastViewedAt: args.sessionLastViewedAt,
     suppressActiveNeedsReview: args.suppressActiveNeedsReview,
     cloudComputeEnabled: args.cloudComputeEnabled ?? true,
+    workflowRunStatusByWorkspaceId: args.workflowRunStatusByWorkspaceId,
   });
 }

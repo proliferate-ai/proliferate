@@ -531,3 +531,71 @@ describe("sidebarGitAttentionIndicator", () => {
     expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("iterating");
   });
 });
+
+describe("workflow run indicators", () => {
+  function runWorkspace(id: string) {
+    return makeLocalLogicalWorkspace({
+      id,
+      repoKey: "/tmp/repo-a",
+      repoName: "repo-a",
+      kind: "worktree",
+    });
+  }
+
+  it("draws the succeeded glyph for a completed run's workspace", () => {
+    const workspace = runWorkspace("wf-run-completed");
+    const groups = buildGroups({
+      logicalWorkspaces: [workspace],
+      workflowRunStatusByWorkspaceId: {
+        [workspace.localWorkspace?.id ?? ""]: "completed",
+      },
+    });
+
+    expect(groups[0]?.items[0]?.statusIndicator).toEqual({
+      kind: "workflow_run_succeeded",
+      tooltip: "Run succeeded",
+    });
+  });
+
+  it("draws the failed glyph in the failure ink for a failed run", () => {
+    const workspace = runWorkspace("wf-run-failed");
+    const groups = buildGroups({
+      logicalWorkspaces: [workspace],
+      workflowRunStatusByWorkspaceId: {
+        [workspace.localWorkspace?.id ?? ""]: "failed",
+      },
+    });
+
+    expect(groups[0]?.items[0]?.statusIndicator).toEqual({
+      kind: "workflow_run_failed",
+      tooltip: "Run failed",
+    });
+  });
+
+  it("stays quiet while the run is still moving — live activity owns the cell", () => {
+    const workspace = runWorkspace("wf-run-moving");
+    const groups = buildGroups({
+      logicalWorkspaces: [workspace],
+      workflowRunStatusByWorkspaceId: {
+        [workspace.localWorkspace?.id ?? ""]: "running",
+      },
+    });
+
+    expect(groups[0]?.items[0]?.statusIndicator).toBeNull();
+  });
+
+  it("lets a reopened workspace's live activity outrank the terminal outcome", () => {
+    const workspace = runWorkspace("wf-run-reopened");
+    const groups = buildGroups({
+      logicalWorkspaces: [workspace],
+      workspaceActivities: {
+        [workspace.localWorkspace?.id ?? ""]: "iterating",
+      },
+      workflowRunStatusByWorkspaceId: {
+        [workspace.localWorkspace?.id ?? ""]: "completed",
+      },
+    });
+
+    expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("iterating");
+  });
+});

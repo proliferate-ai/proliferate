@@ -1,11 +1,27 @@
+import type { CSSProperties } from "react";
 import type { WorkflowDocTemplateV2 } from "@proliferate/cloud-sdk";
 
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
-import { Button } from "#product/primitives/Button";
-import { IconButton } from "#product/primitives/IconButton";
 import { Plus } from "#product/primitives/icons/core";
 import { FileCode } from "#product/primitives/icons/workspace";
-import { StatusDot } from "#product/primitives/StatusDot";
+
+/** The design's rail eyebrow: mono, 0.07em tracking, uppercase, faint. */
+const EYEBROW_STYLE: CSSProperties = { letterSpacing: "0.07em" };
+const EYEBROW_CLASS = "text-ui-sm font-mono uppercase text-faint";
+
+const RAIL_BUTTON_STYLE: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  justifyContent: "flex-start",
+  padding: "8px 9px",
+  borderRadius: 9,
+  border: "1px solid var(--color-border)",
+  background: "var(--color-surface-elevated)",
+  font: "inherit",
+  cursor: "pointer",
+  textAlign: "left",
+};
 
 export interface WorkflowBuilderRailProps {
   docTemplates: readonly WorkflowDocTemplateV2[];
@@ -20,9 +36,10 @@ export interface WorkflowBuilderRailProps {
 }
 
 /**
- * The builder's left rail: the step palette and the context-docs roster. It
- * only ever appends and selects — every edit happens in the inspector on the
- * other side of the canvas, so this stays a launcher, not a form.
+ * The builder's left rail, ported from the design: the step palette (kind
+ * dot + label buttons), the numbering hint, and the context-docs roster with
+ * its + affordance. It only ever appends and selects — every edit happens in
+ * the inspector on the other side of the canvas.
  */
 export function WorkflowBuilderRail({
   docTemplates,
@@ -34,85 +51,122 @@ export function WorkflowBuilderRail({
   onSelectDoc,
 }: WorkflowBuilderRailProps) {
   return (
-    <div className="flex w-56 shrink-0 flex-col gap-4 overflow-y-auto border-r border-border/70 px-3 py-3">
-      <section className="flex flex-col gap-2">
-        <h2 className="font-mono text-ui-sm uppercase tracking-wide text-muted-foreground">
+    <div
+      className="flex shrink-0 flex-col overflow-y-auto overflow-x-hidden border-r border-border bg-sidebar-background"
+      style={{ width: 184, gap: 14, padding: "14px 12px" }}
+    >
+      <div className="flex flex-col" style={{ gap: 6 }}>
+        <span className={EYEBROW_CLASS} style={EYEBROW_STYLE}>
           {WORKFLOW_BUILDER_COPY.addStepHeading}
-        </h2>
-        <Button
+        </span>
+        <button
           type="button"
-          variant="secondary"
-          size="sm"
-          className="justify-start"
+          title={WORKFLOW_BUILDER_COPY.addAgentStepTitle}
+          aria-label={WORKFLOW_BUILDER_COPY.addAgentStepTitle}
           disabled={disabled}
+          className="text-ui-sm text-foreground hover:border-border-heavy hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+          style={RAIL_BUTTON_STYLE}
           onClick={() => onAddStep("agent")}
         >
-          <StatusDot tone="info" />
-          {WORKFLOW_BUILDER_COPY.addAgentStepLabel}
-        </Button>
-        <Button
+          <span
+            aria-hidden
+            style={{ width: 7, height: 7, borderRadius: 999, flex: "none", background: "var(--color-info)" }}
+          />
+          <span>{WORKFLOW_BUILDER_COPY.addAgentStepLabel}</span>
+        </button>
+        <button
           type="button"
-          variant="secondary"
-          size="sm"
-          className="justify-start"
+          title={WORKFLOW_BUILDER_COPY.addHumanStepTitle}
+          aria-label={WORKFLOW_BUILDER_COPY.addHumanStepTitle}
           disabled={disabled}
+          className="text-ui-sm text-foreground hover:border-border-heavy hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+          style={RAIL_BUTTON_STYLE}
           onClick={() => onAddStep("human_in_loop")}
         >
-          <StatusDot tone="warning" />
-          {WORKFLOW_BUILDER_COPY.addHumanStepLabel}
-        </Button>
-        <p className="text-ui-sm text-muted-foreground">
-          {WORKFLOW_BUILDER_COPY.railHelp}
-        </p>
-      </section>
+          <span
+            aria-hidden
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: 999,
+              flex: "none",
+              background: "var(--color-compute-target-amber)",
+            }}
+          />
+          <span>{WORKFLOW_BUILDER_COPY.addHumanStepLabel}</span>
+        </button>
+      </div>
 
-      <section className="flex flex-col gap-1">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="min-w-0 truncate font-mono text-ui-sm uppercase tracking-wide text-muted-foreground">
+      <p className="text-ui-sm m-0 text-faint" style={{ textWrap: "pretty" }}>
+        {WORKFLOW_BUILDER_COPY.railHelp}
+      </p>
+
+      <div className="flex flex-col border-t border-border" style={{ gap: 6, paddingTop: 12 }}>
+        <div className="flex w-full items-center" style={{ gap: 6 }}>
+          <span className={EYEBROW_CLASS} style={EYEBROW_STYLE}>
             {WORKFLOW_BUILDER_COPY.contextDocsHeading}
-            {docTemplates.length > 0 ? (
-              <span className="ml-1.5 normal-case tracking-normal">
-                {WORKFLOW_BUILDER_COPY.contextDocsCount(docTemplates.length)}
-              </span>
-            ) : null}
-          </h2>
-          <IconButton
-            size="sm"
+          </span>
+          {docTemplates.length > 0 ? (
+            <span className="text-ui-sm font-mono text-faint">
+              {WORKFLOW_BUILDER_COPY.contextDocsCount(docTemplates.length)}
+            </span>
+          ) : null}
+          <span className="flex-1" />
+          <button
+            type="button"
             aria-label={WORKFLOW_BUILDER_COPY.addDocLabel}
             title={addDocDisabled ? WORKFLOW_BUILDER_COPY.docsNeedStep : WORKFLOW_BUILDER_COPY.addDocLabel}
             disabled={disabled || addDocDisabled}
+            className="grid shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-faint hover:bg-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ width: 20, height: 20 }}
             onClick={onAddDoc}
           >
-            <Plus className="icon-compact" aria-hidden />
-          </IconButton>
+            <Plus className="icon-paired" aria-hidden />
+          </button>
         </div>
         {docTemplates.length === 0 ? (
-          <p className="text-ui-sm text-muted-foreground">
+          <p className="text-ui-sm m-0 text-faint" style={{ textWrap: "pretty" }}>
             {WORKFLOW_BUILDER_COPY.contextDocsEmpty}
           </p>
         ) : (
-          docTemplates.map((doc, index) => (
-            <Button
-              key={index}
-              type="button"
-              variant="unstyled"
-              size="unstyled"
-              aria-pressed={index === selectedDocIndex}
-              className={`flex min-w-0 items-center justify-start gap-1.5 rounded-md border px-2 py-1.5 text-left transition-colors ${
-                index === selectedDocIndex
-                  ? "border-info ring-2 ring-info/30"
-                  : "border-transparent hover:bg-hover"
-              }`}
-              onClick={() => onSelectDoc(index)}
-            >
-              <FileCode className="icon-compact shrink-0 text-muted-foreground" aria-hidden />
-              <span className="truncate font-mono text-ui-sm text-foreground">
-                {doc.slug.trim() || WORKFLOW_BUILDER_COPY.docUntitledRow}
-              </span>
-            </Button>
-          ))
+          <div className="flex flex-col" style={{ gap: 2 }}>
+            {docTemplates.map((doc, index) => {
+              const selected = index === selectedDocIndex;
+              return (
+                <button
+                  key={index}
+                  type="button"
+                  aria-pressed={selected}
+                  className="text-ui-sm hover:bg-hover hover:text-foreground"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 7,
+                    justifyContent: "flex-start",
+                    padding: "5px 7px",
+                    width: "100%",
+                    borderRadius: 8,
+                    border: `1px solid ${selected ? "var(--color-border-heavy)" : "transparent"}`,
+                    background: selected ? "var(--color-surface-elevated)" : "transparent",
+                    color: "var(--color-muted-foreground)",
+                    font: "inherit",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                  onClick={() => onSelectDoc(index)}
+                >
+                  <span className="flex shrink-0 text-faint">
+                    <FileCode className="icon-paired" aria-hidden />
+                  </span>
+                  <span className="min-w-0 truncate">
+                    {doc.slug.trim() || WORKFLOW_BUILDER_COPY.docUntitledRow}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         )}
-      </section>
+      </div>
     </div>
   );
 }

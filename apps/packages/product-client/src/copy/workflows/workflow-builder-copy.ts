@@ -37,25 +37,24 @@ export const WORKFLOW_BUILDER_COPY = {
   repositoriesLoadFailed:
     "Repositories could not be loaded from the runtime. Reconnect to change this workflow's default repository.",
 
-  issuesBanner: (count: number, firstMessage: string) =>
-    `Fix ${count} ${count === 1 ? "issue" : "issues"} before saving. ${firstMessage}`,
   catalogUnavailable:
     "The agent catalog could not be loaded. Steps save without a model and use the run's default.",
 
-  stepHeading: (position: number) => `Step ${position}`,
   /** Accessible name of the pannable chain canvas. */
   chainCanvasLabel: "Workflow chain",
   /** A canvas card whose title is still blank. */
   canvasUntitledStep: "Untitled step",
-  /** The destructive mark on a canvas card the validator has an issue on. */
-  canvasIssueMarkLabel: "This step has issues",
+  /** A step card's summary line while its prompt is still empty. */
+  canvasNoPrompt: "No prompt written yet",
 
   /** The left rail's step palette. */
   addStepHeading: "Add step",
   addAgentStepLabel: "Agent",
+  addAgentStepTitle: "Add an agent step",
   addHumanStepLabel: "Human in the loop",
+  addHumanStepTitle: "Add a human-in-the-loop step",
   railHelp:
-    "Steps run top to bottom from the input. Select a card to edit it in the inspector, and reorder from there.",
+    "Steps run top to bottom and are numbered outward from the input. Select a card to edit it in the inspector.",
 
   /** The left rail's context-docs section. */
   contextDocsHeading: "Context docs",
@@ -72,14 +71,19 @@ export const WORKFLOW_BUILDER_COPY = {
   statusSummary: (steps: number, nodes: number) =>
     `${steps} ${steps === 1 ? "step" : "steps"} · ${nodes} ${nodes === 1 ? "node" : "nodes"}`,
   statusValid: "Valid",
-  statusIssues: (count: number) => (count === 1 ? "1 issue" : `${count} issues`),
-  removeStepLabel: (position: number) => `Remove step ${position}`,
+  statusMoreIssues: (count: number) => `+${count} more`,
+
+  /** The top bar's destructive definition delete. */
+  deleteDefinitionLabel: "Delete",
+  deleteDefinitionTitle: "Delete this workflow definition",
   moveStepUpLabel: (position: number) => `Move step ${position} up`,
   moveStepDownLabel: (position: number) => `Move step ${position} down`,
-  stepTitleLabel: "Title",
+  stepTitleLabel: "Step name",
   stepTitlePlaceholder: "Draft the research questions",
   requiresApprovalLabel: "Requires approval",
   humanStepNote: "The run pauses here until someone approves the step.",
+  modelSectionHeading: "Model",
+  deleteNodeLabel: "Delete node",
   harnessLabel: "Harness",
   harnessDefaultOption: "Run default",
   harnessUnavailableOption: (agentKind: string) => `Unavailable harness (${agentKind})`,
@@ -113,6 +117,11 @@ export const WORKFLOW_BUILDER_COPY = {
   addDocLabel: "Add document",
   removeDocLabel: (slug: string) => `Remove document ${slug}`,
   removeDocButtonLabel: "Remove doc",
+  docKindLabel: "Markdown",
+  docCloseLabel: "Close",
+  docContentsLabel: "Contents",
+  /** "Markdown · 12 words" — the doc's meta line under its slug. */
+  docMeta: (words: number) => `Markdown · ${words} ${words === 1 ? "word" : "words"}`,
   docSlugLabel: "Slug",
   docSlugPlaceholder: "findings",
   docProducingNodeLabel: "Written by",
@@ -120,6 +129,5 @@ export const WORKFLOW_BUILDER_COPY = {
   docProducingNodeOption: (position: number, title: string) =>
     title.trim().length > 0 ? `Step ${position} — ${title}` : `Step ${position}`,
   docProducingNodeUnavailableOption: (nodeId: string) => `Unavailable step (${nodeId})`,
-  docBodyLabel: "Starting body",
   docBodyPlaceholder: "# Findings\n\n## Answers\n",
 } as const;

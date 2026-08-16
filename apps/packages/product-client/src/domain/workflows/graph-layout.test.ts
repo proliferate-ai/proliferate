@@ -5,6 +5,7 @@ import type { WorkflowGraphNodeVM, WorkflowGraphSlotVM } from "./run-view-model"
 import {
   layoutWorkflowChainGraph,
   layoutWorkflowRunGraph,
+  WORKFLOW_BUILDER_NODE_HEIGHT,
   WORKFLOW_GRAPH_NODE_HEIGHT,
   WORKFLOW_GRAPH_NODE_WIDTH,
 } from "./graph-layout";
@@ -104,7 +105,7 @@ describe("layoutWorkflowChainGraph", () => {
       "two->three",
     ]);
     expect(layout.height).toBe(
-      layout.nodes[2].y + WORKFLOW_GRAPH_NODE_HEIGHT,
+      layout.nodes[2].y + WORKFLOW_BUILDER_NODE_HEIGHT,
     );
   });
 

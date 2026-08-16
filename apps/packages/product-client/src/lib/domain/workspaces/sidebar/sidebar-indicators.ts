@@ -1,4 +1,4 @@
-import type { Workspace } from "@anyharness/sdk";
+import type { WorkflowRunStatusV2, Workspace } from "@anyharness/sdk";
 import { recordMeasurementMetric } from "#product/lib/infra/measurement/measurement-port";
 import { isMainThreadMeasurementEnabled } from "#product/lib/infra/measurement/measurement-port";
 import type { SidebarSessionActivityState } from "#product/domain/sessions/activity";
@@ -62,6 +62,14 @@ export type SidebarStatusIndicator =
   }
   | {
     kind: "git_changes_requested";
+    tooltip: string;
+  }
+  | {
+    kind: "workflow_run_succeeded";
+    tooltip: string;
+  }
+  | {
+    kind: "workflow_run_failed";
     tooltip: string;
   };
 
@@ -152,6 +160,26 @@ export function sidebarStatusIndicatorFromActivity(args: {
   }
 
   return null;
+}
+
+/**
+ * A terminal workflow run reads as a graph in the sidebar, not a duration:
+ * the run's materialized workspace row carries a graph glyph tinted by
+ * outcome. Non-terminal statuses return null on purpose — a moving run
+ * already lights the row through its sessions' live activity, and this
+ * indicator slots BELOW activity so a reopened workspace's new work wins.
+ */
+export function sidebarWorkflowRunIndicator(
+  status: WorkflowRunStatusV2 | undefined,
+): SidebarStatusIndicator | null {
+  switch (status) {
+    case "completed":
+      return { kind: "workflow_run_succeeded", tooltip: "Run succeeded" };
+    case "failed":
+      return { kind: "workflow_run_failed", tooltip: "Run failed" };
+    default:
+      return null;
+  }
 }
 
 export const SIDEBAR_GIT_CONFLICTS_LABEL = "Merge conflicts in worktree";
