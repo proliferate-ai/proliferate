@@ -471,7 +471,19 @@ function metrics(): ViewportMetrics {
 
 // Per-frame scrollTop trace recorder: capture scrollTop on every rAF between
 // start and stop, so a spec can assert "no visible motion" (a flat trace).
+//
+// scrollTop alone conflates two different things: a real backward displacement
+// of the pinned reader's view, and the single writer correctly following a
+// content area that just got SMALLER (an estimate-to-measured height
+// correction shrinking the calibrated content, mid-stream). Both look like a
+// backward scrollTop step; only the first one is a bug. `bottomDistanceFrames`
+// is captured in the SAME rAF tick as `traceFrames` (frame-aligned, not a
+// second independent loop) so a spec can assert on the quantity the reader
+// actually perceives — distance from true bottom — which stays flat when
+// scrollHeight and scrollTop shrink together and only moves for a real
+// displacement.
 let traceFrames: number[] = [];
+let bottomDistanceFrames: number[] = [];
 let traceRafId = 0;
 let traceActive = false;
 
@@ -500,6 +512,7 @@ function traceTick(): void {
   }
   const el = viewport();
   traceFrames.push(el ? el.scrollTop : Number.NaN);
+  bottomDistanceFrames.push(el ? el.scrollHeight - el.clientHeight - el.scrollTop : Number.NaN);
   traceRafId = requestAnimationFrame(traceTick);
 }
 
@@ -564,6 +577,13 @@ export interface ScrollPhysicsDriver {
   clearScrollSamples(): void;
   startScrollTrace(): void;
   stopScrollTrace(): number[];
+  // Frame-aligned with startScrollTrace/stopScrollTrace: the same rAF ticks,
+  // reporting bottomDistance (scrollHeight - clientHeight - scrollTop)
+  // instead of raw scrollTop. Use this to assert "the pinned reader never saw
+  // backward motion," which raw scrollTop cannot distinguish from the single
+  // writer legitimately following a content area that just shrank (an
+  // estimate-to-measured correction).
+  stopBottomDistanceTrace(): number[];
   startContentHeightTrace(): void;
   stopContentHeightTrace(): number[];
   hasViewport(): boolean;
@@ -1001,6 +1021,7 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
 
   startScrollTrace(): void {
     traceFrames = [];
+    bottomDistanceFrames = [];
     traceActive = true;
     traceRafId = requestAnimationFrame(traceTick);
   },
@@ -1012,6 +1033,15 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
       traceRafId = 0;
     }
     return traceFrames.slice();
+  },
+
+  stopBottomDistanceTrace(): number[] {
+    traceActive = false;
+    if (traceRafId) {
+      cancelAnimationFrame(traceRafId);
+      traceRafId = 0;
+    }
+    return bottomDistanceFrames.slice();
   },
 
   startContentHeightTrace(): void {
