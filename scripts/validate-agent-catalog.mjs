@@ -280,6 +280,34 @@ function validateRegistryPairing(catalog, registry) {
   }
 }
 
+// registry.json is the declared allow-list authority (agent-auth.md FR-4): the
+// Python/Rust/TS mirrors derive their harness-kind, gateway-capable, and
+// single-vs-multi sets from it. This gate keeps the fields those derivations
+// read well-formed so a bad registry fails here rather than in a mirror drift
+// test with a less obvious message.
+const VALID_AUTH_CARDINALITIES = new Set(["single", "multi"]);
+
+function validateRegistryAuthority(registry) {
+  for (const agent of registry.agents ?? []) {
+    if (!VALID_AUTH_CARDINALITIES.has(agent.authCardinality)) {
+      fail(
+        `registry agent '${agent.kind}' authCardinality '${agent.authCardinality}' `
+        + `must be one of ${[...VALID_AUTH_CARDINALITIES].join(", ")}`,
+      );
+    }
+    // A gateway-capable harness declares a slot with id "gateway"; a
+    // multi-source harness must be gateway-capable (the additive set is
+    // gateway + api_key rows), so a "multi" harness without a gateway slot is
+    // a contradiction the mirrors would silently paper over.
+    const hasGatewaySlot = (agent.auth?.slots ?? []).some((slot) => slot.id === "gateway");
+    if (agent.authCardinality === "multi" && !hasGatewaySlot) {
+      fail(
+        `registry agent '${agent.kind}' is authCardinality 'multi' but declares no gateway slot`,
+      );
+    }
+  }
+}
+
 function versionCore(value) {
   return typeof value === "string"
     ? value.match(/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/)?.[0]
@@ -362,6 +390,7 @@ const catalog = JSON.parse(catalogRaw);
 const registry = JSON.parse(fs.readFileSync(REGISTRY_PATH, "utf8"));
 validateCatalog(catalog);
 validateRegistryPairing(catalog, registry);
+validateRegistryAuthority(registry);
 validateSnapshotEvidence(catalog);
 
 if (errors.length > 0) {
