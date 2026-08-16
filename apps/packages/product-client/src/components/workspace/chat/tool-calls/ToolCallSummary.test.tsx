@@ -62,7 +62,13 @@ describe("ToolCallSummary", () => {
 
     fireEvent.click(disclosure);
     act(() => {
-      pendingFrames.shift()?.(0);
+      // The first click left a cancelled ledger frame at the head of the
+      // queue (its effect cleanup ran but the stale callback is still
+      // enqueued); drain the queue rather than shifting once so the fresh
+      // divider frame scheduled by this click actually flushes.
+      while (pendingFrames.length > 0) {
+        pendingFrames.shift()?.(0);
+      }
     });
     const collapsedDivider = container.querySelector("[data-completed-work-divider]");
     expect(collapsedDivider).not.toBeNull();
