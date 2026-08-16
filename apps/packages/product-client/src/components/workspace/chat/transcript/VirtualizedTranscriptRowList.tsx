@@ -78,7 +78,8 @@ export function VirtualizedTranscriptRowList({
   } = useTranscriptStickToBottom({
     scrollRef,
     onScrollSample,
-    autoFollowBottomInsetPx: effectiveNonDisplacingBottomInsetPx,
+    structuralBottomInsetPx,
+    nonDisplacingBottomInsetPx: effectiveNonDisplacingBottomInsetPx,
     lastPromptSubmittedAtMs,
     sessionKey: `${selectedWorkspaceId ?? ""}:${activeSessionId}`,
   });

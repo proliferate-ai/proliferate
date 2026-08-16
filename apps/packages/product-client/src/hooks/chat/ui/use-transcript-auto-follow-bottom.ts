@@ -10,17 +10,32 @@ import {
   DIRECTION_EPSILON_PX,
   PROGRAMMATIC_MATCH_TOL_PX,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
-import { resolveAutoFollowScrollTop } from "#product/hooks/chat/ui/transcript-auto-follow-target";
+import { resolveTranscriptFollowTarget } from "#product/hooks/chat/ui/transcript-follow-target";
+import {
+  initialTranscriptInsetState,
+  reduceTranscriptInset,
+  type TranscriptInsetEvent,
+  type TranscriptInsetState,
+  type TranscriptInsetTransition,
+} from "#product/hooks/chat/ui/transcript-consumed-inset";
 
 export interface UseTranscriptAutoFollowBottomOptions {
   /** The real scroll element ref (AutoHideScrollArea forwards its viewport here). */
   scrollRef: RefObject<HTMLDivElement | null>;
   /**
+   * Structural (displacing) dock inset: composer height, status bar, footer.
+   * Reflected in scrollHeight as the virtualizer's paddingEnd. Declared here so
+   * the consumed-inset machine can mark the upward clamp a structural shrink
+   * (composer collapse) queues while pinned, instead of letting it be misread as
+   * a user scroll (rung 7 / Q6).
+   */
+  structuralBottomInsetPx: number;
+  /**
    * Manual-only scroll range created by cards overlaying the transcript. Auto
    * follow stops before this range until the user explicitly reaches the hard
    * bottom or clicks the scroll-to-bottom button.
    */
-  autoFollowBottomInsetPx: number;
+  nonDisplacingBottomInsetPx: number;
   /** Live pin state. */
   pinnedRef: RefObject<boolean>;
   setPinned: (pinned: boolean) => void;
@@ -34,13 +49,18 @@ export interface UseTranscriptAutoFollowBottomOptions {
 
 export interface TranscriptAutoFollowBottom {
   /**
-   * How much of the manual-only overlay range the user has deliberately
-   * consumed by scrolling past it (0 = none). Exposed so the caller's scroll
-   * classification can clear it on unpin and read it on re-pin.
+   * The consumed-inset state (dock inset split + consumed overlay range). The
+   * caller's scroll classification reads it (follow target) and drives its
+   * transitions through `dispatchInsetEvent`. See transcript-consumed-inset.ts.
    */
-  consumedAutoFollowBottomInsetRef: MutableRefObject<number>;
-  /** Consume the full remaining inset (a repin that reaches the hard bottom). */
-  consumeFullInset: () => void;
+  insetStateRef: MutableRefObject<TranscriptInsetState>;
+  /**
+   * Apply a named consumed-inset transition (leave_band, consume_full,
+   * submit_repin, reset). `dock_inset_changed` is dispatched internally by the
+   * dock-geometry layout effect below. Returns the transition so a caller that
+   * needs the structural-shrink-clamp signal can act on it.
+   */
+  dispatchInsetEvent: (event: TranscriptInsetEvent) => TranscriptInsetTransition;
   /** Snap to the active follow target (soft overlay bottom or user-chosen hard bottom). */
   scrollToBottom: () => void;
   /** Snap + re-pin, for the scroll-to-bottom button. */
@@ -48,70 +68,99 @@ export interface TranscriptAutoFollowBottom {
 }
 
 /**
- * Owns the auto-follow-bottom inset: the manual-only scroll range a card
- * overlaying the transcript creates, and the scrollTop math (see
- * transcript-auto-follow-target.ts) that keeps the pinned follow above it
- * until the user deliberately consumes it. Split out of
- * useTranscriptStickToBottom as a cohesive, independently-testable seam.
+ * Owns the consumed-inset state machine: the dock inset split (structural vs
+ * manual-only overlay) and how much of the overlay range the user has consumed,
+ * plus the follow-target math (see transcript-follow-target.ts) that keeps the
+ * pinned follow above the overlay until the user deliberately consumes it. Split
+ * out of useTranscriptStickToBottom as a cohesive, independently-testable seam
+ * (PRO-187, rung 7 / Q6).
  */
 export function useTranscriptAutoFollowBottom({
   scrollRef,
-  autoFollowBottomInsetPx,
+  structuralBottomInsetPx,
+  nonDisplacingBottomInsetPx,
   pinnedRef,
-  setPinned,
   lastScrollTopRef,
   markNonUserScrollPosition,
   notifyProgrammaticScroll,
+  setPinned,
 }: UseTranscriptAutoFollowBottomOptions): TranscriptAutoFollowBottom {
-  const autoFollowBottomInsetRef = useRef(Math.max(0, autoFollowBottomInsetPx));
-  const consumedAutoFollowBottomInsetRef = useRef(0);
+  const insetStateRef = useRef<TranscriptInsetState>(
+    initialTranscriptInsetState({
+      structuralInsetPx: structuralBottomInsetPx,
+      nonDisplacingInsetPx: nonDisplacingBottomInsetPx,
+    }),
+  );
 
-  // Registered before consumer layout effects. Preserve however much of an
-  // existing overlay range the user deliberately consumed; if another card is
-  // stacked above the composer, only the NEW height remains manual-only.
+  const dispatchInsetEvent = useCallback(
+    (event: TranscriptInsetEvent): TranscriptInsetTransition => {
+      const transition = reduceTranscriptInset(insetStateRef.current, event);
+      insetStateRef.current = transition.state;
+      return transition;
+    },
+    [],
+  );
+
+  // Registered before consumer layout effects. Routes the new dock geometry
+  // through the consumed-inset machine (which caps the consumed range and flags
+  // a structural shrink) and, while pinned, marks the upward clamp a shrink
+  // queues so it cannot be misread as the user scrolling up or wrongly consume
+  // the overlay (rung 7 / Q6: an inset that appears/disappears does not fight
+  // the reader or double-compensate).
   useLayoutEffect(() => {
-    const previousInset = autoFollowBottomInsetRef.current;
-    const previousConsumedInset = consumedAutoFollowBottomInsetRef.current;
-    const nextInset = Math.max(0, autoFollowBottomInsetPx);
+    const previous = insetStateRef.current;
+    const transition = dispatchInsetEvent({
+      type: "dock_inset_changed",
+      structuralInsetPx: structuralBottomInsetPx,
+      nonDisplacingInsetPx: nonDisplacingBottomInsetPx,
+    });
     const viewport = scrollRef.current;
-
-    // Removing consumed overlay range can make the browser clamp scrollTop
-    // upward to the new hard bottom. Mark that queued scroll event as
-    // non-user so its negative delta cannot disable pinned auto-follow.
-    if (
-      nextInset < previousInset &&
-      previousConsumedInset > 0 &&
-      pinnedRef.current &&
-      viewport
-    ) {
-      const top = viewport.scrollTop;
-      const distanceFromHardBottom = resolveVirtualBottomDistance({
-        scrollOffset: top,
-        viewportSize: viewport.clientHeight,
-        totalVirtualSize: viewport.scrollHeight,
-      });
-      if (
-        top < lastScrollTopRef.current - DIRECTION_EPSILON_PX &&
-        distanceFromHardBottom <= PROGRAMMATIC_MATCH_TOL_PX
-      ) {
-        markNonUserScrollPosition(viewport);
-      }
+    if (!viewport || !pinnedRef.current) {
+      return;
     }
-
-    consumedAutoFollowBottomInsetRef.current = Math.min(previousConsumedInset, nextInset);
-    autoFollowBottomInsetRef.current = nextInset;
-  }, [autoFollowBottomInsetPx, lastScrollTopRef, markNonUserScrollPosition, pinnedRef, scrollRef]);
+    const overlayShrankConsumed =
+      transition.state.nonDisplacingInsetPx < previous.nonDisplacingInsetPx &&
+      previous.consumedNonDisplacingInsetPx > 0;
+    if (!(transition.structuralShrinkClamp || overlayShrankConsumed)) {
+      return;
+    }
+    const top = viewport.scrollTop;
+    const distanceFromHardBottom = resolveVirtualBottomDistance({
+      scrollOffset: top,
+      viewportSize: viewport.clientHeight,
+      totalVirtualSize: viewport.scrollHeight,
+    });
+    if (
+      top < lastScrollTopRef.current - DIRECTION_EPSILON_PX &&
+      distanceFromHardBottom <= PROGRAMMATIC_MATCH_TOL_PX
+    ) {
+      markNonUserScrollPosition(viewport);
+    }
+  }, [
+    dispatchInsetEvent,
+    lastScrollTopRef,
+    markNonUserScrollPosition,
+    nonDisplacingBottomInsetPx,
+    pinnedRef,
+    scrollRef,
+    structuralBottomInsetPx,
+  ]);
 
   const scrollToBottom = useCallback(() => {
     const viewport = scrollRef.current;
     if (!viewport) {
       return;
     }
-    const requestedTop = resolveAutoFollowScrollTop(
-      viewport,
-      autoFollowBottomInsetRef.current,
-      consumedAutoFollowBottomInsetRef.current,
-    );
+    const state = insetStateRef.current;
+    const requestedTop = resolveTranscriptFollowTarget({
+      scrollHeight: viewport.scrollHeight,
+      clientHeight: viewport.clientHeight,
+      dockInset: {
+        structuralInsetPx: state.structuralInsetPx,
+        nonDisplacingInsetPx: state.nonDisplacingInsetPx,
+      },
+      consumedNonDisplacingInsetPx: state.consumedNonDisplacingInsetPx,
+    });
     const reachableTop = Math.min(
       requestedTop,
       Math.max(0, viewport.scrollHeight - viewport.clientHeight),
@@ -134,18 +183,14 @@ export function useTranscriptAutoFollowBottom({
   }, [lastScrollTopRef, notifyProgrammaticScroll, scrollRef]);
 
   const handleScrollToBottomClick = useCallback(() => {
-    consumedAutoFollowBottomInsetRef.current = autoFollowBottomInsetRef.current;
+    dispatchInsetEvent({ type: "consume_full" });
     setPinned(true);
     scrollToBottom();
-  }, [scrollToBottom, setPinned]);
-
-  const consumeFullInset = useCallback(() => {
-    consumedAutoFollowBottomInsetRef.current = autoFollowBottomInsetRef.current;
-  }, []);
+  }, [dispatchInsetEvent, scrollToBottom, setPinned]);
 
   return {
-    consumedAutoFollowBottomInsetRef,
-    consumeFullInset,
+    insetStateRef,
+    dispatchInsetEvent,
     scrollToBottom,
     handleScrollToBottomClick,
   };
