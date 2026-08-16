@@ -101,6 +101,9 @@ jobs:
       - name: Check managed Workflow legacy-plane boundary
         run: python3 scripts/check_workflow_managed_boundaries.py
 
+      - name: Check Update Flow lints
+        run: python3 scripts/check_update_flow_lints.py
+
       - name: Check documentation integrity
         run: |
           python3 -m unittest scripts/test_check_docs.py
