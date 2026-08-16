@@ -45,7 +45,7 @@ const RUN_COMMAND_INPUT_CLASS = "h-8 w-full rounded-lg px-2.5 font-mono text-ui-
 export function RepoActionsPane({
   repository,
   context,
-  cloudEnabled,
+  controlPlaneReachable,
   cloudActive,
   cloudSignInChecking,
   cloudSignInAvailable,
@@ -70,7 +70,7 @@ export function RepoActionsPane({
       {context === "cloud" ? (
         <ActionsCloud
           repository={repository}
-          cloudEnabled={cloudEnabled}
+          controlPlaneReachable={controlPlaneReachable}
           cloudActive={cloudActive}
           cloudSignInChecking={cloudSignInChecking}
           cloudSignInAvailable={cloudSignInAvailable}
@@ -88,13 +88,13 @@ export function RepoActionsPane({
 
 function ActionsCloud({
   repository,
-  cloudEnabled,
+  controlPlaneReachable,
   cloudActive,
   cloudSignInChecking,
   cloudSignInAvailable,
 }: {
   repository: SettingsRepositoryEntry;
-  cloudEnabled: boolean;
+  controlPlaneReachable: boolean;
   cloudActive: boolean;
   cloudSignInChecking: boolean;
   cloudSignInAvailable: boolean;
@@ -105,7 +105,7 @@ function ActionsCloud({
   return (
     <RepoCloudGate
       editor={editor}
-      cloudEnabled={cloudEnabled}
+      controlPlaneReachable={controlPlaneReachable}
       cloudActive={cloudActive}
       cloudSignInChecking={cloudSignInChecking}
       cloudSignInAvailable={cloudSignInAvailable}

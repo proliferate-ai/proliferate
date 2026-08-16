@@ -119,11 +119,11 @@ export function useHarnessAuthEditor(
   displayName: string,
   surface: AgentAuthSurface,
 ): HarnessAuthEditorApi {
-  const { authStatus, cloudEnabled } = useCloudAvailabilityState();
+  const { authStatus, controlPlaneReachable } = useCloudAvailabilityState();
   // Auth-plane readiness: signed in + control plane reachable. Cloud compute is
   // deliberately NOT part of this — model-auth surfaces must work for a
   // local-only / self-hosted user who never provisioned E2B.
-  const authReady = authStatus === "authenticated" && cloudEnabled;
+  const authReady = authStatus === "authenticated" && controlPlaneReachable;
   const showToast = useToastStore((state) => state.show);
 
   // Org policy is the server's hard gate; here it also drives client-side

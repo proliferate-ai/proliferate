@@ -17,7 +17,7 @@ import type {
  * reachability. A self-managed server exposes only the capabilities its
  * operator configured; an older server (no contract) degrades conservatively.
  *
- * `cloudEnabled` intentionally stays reachability-based: a self-managed server
+ * `controlPlaneReachable` intentionally stays reachability-based: a self-managed server
  * is a control plane you sign into just like Cloud, so sign-in must not be
  * gated on deployment mode. Vendor/cloud *surfaces* are gated on the more
  * specific flags below.
@@ -26,7 +26,7 @@ export interface AppCapabilities {
   /** The connected control plane answered a health check. */
   reachable: boolean;
   /** Control plane usable for sign-in. True whenever reachable. */
-  cloudEnabled: boolean;
+  controlPlaneReachable: boolean;
   /** Vendor billing / credits / Stripe / pricing surfaces are usable. */
   billingEnabled: boolean;
   /** Consumption / usage-metering surfaces (usage bars) are meaningful. */
@@ -134,7 +134,7 @@ export function deriveAppCapabilities(
   if (!contract) {
     return {
       reachable,
-      cloudEnabled: reachable,
+      controlPlaneReachable: reachable,
       billingEnabled: false,
       usageMeteringEnabled: false,
       cloudComputeEnabled: false,
@@ -159,7 +159,7 @@ export function deriveAppCapabilities(
 
   return {
     reachable,
-    cloudEnabled: reachable,
+    controlPlaneReachable: reachable,
     billingEnabled: reachable && contract.billing,
     usageMeteringEnabled: reachable && contract.usageMetering,
     cloudComputeEnabled:
