@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import type { ContentHeightScrollAnchor } from "#product/hooks/chat/ui/transcript-row-list-model";
 import type { TranscriptFramePipeline } from "#product/hooks/chat/ui/transcript-frame-pipeline";
+import type { TranscriptRestoreResolution } from "#product/hooks/chat/ui/transcript-reading-position-store";
 
 // While an above-change compensation anchor is live, each estimate-to-measured
 // correction of a freshly-prepended older row grows the total above the reader
@@ -44,7 +45,7 @@ export interface UseTranscriptFramePipelineLifecycleOptions {
    * reading row stays put as freshly-mounted rows correct their heights, until
    * the deadline below lapses.
    */
-  restoreResolverRef: RefObject<((viewport: HTMLElement) => number | null) | null>;
+  restoreResolverRef: RefObject<((viewport: HTMLElement) => TranscriptRestoreResolution | null) | null>;
   /** Deadline (interactionNow ms) past which the restore anchor is released. */
   restoreDeadlineRef: RefObject<number>;
   /** Snap to the active follow target (the pinned write). */
@@ -55,6 +56,15 @@ export interface UseTranscriptFramePipelineLifecycleOptions {
   clearAllMarkers: () => void;
   /** Start a forced-glue window (used by the tab/window resume path here). */
   beginGlue: () => void;
+  /**
+   * Founder Ruling 3 (rung 10, PRO-187): fires when a restore's deadline lapses
+   * having NEVER once resolved through the estimate-immune mounted-row path —
+   * the saved row never mounted within the deadline, so the coarse index-sum
+   * estimate (which can be arbitrarily wrong) would otherwise strand the
+   * reader at a frozen, unproven scrollTop. The engine wires this to bottom-pin
+   * (the conservative FR-2 default) instead of leaving the viewport there.
+   */
+  onRestoreStranded: () => void;
 }
 
 /**
@@ -80,6 +90,7 @@ export function useTranscriptFramePipelineLifecycle({
   notifyProgrammaticScroll,
   clearAllMarkers,
   beginGlue,
+  onRestoreStranded,
 }: UseTranscriptFramePipelineLifecycleOptions): void {
   // Running maximum of the viewport's reported total content height within the
   // CURRENT compensation anchor's window, so the compensation delta can be
@@ -92,6 +103,15 @@ export function useTranscriptFramePipelineLifecycle({
     // Hard ceiling (interactionNow ms) for the extended window of THIS anchor.
     absoluteDeadline: number;
   }>({ anchor: null, maxScrollHeight: 0, absoluteDeadline: 0 });
+
+  // Founder Ruling 3 (rung 10): whether the CURRENT restore resolver has ever
+  // resolved through the estimate-immune mounted-row path. Keyed by resolver
+  // identity so a fresh restore (a new session switch installs a new resolver
+  // function) starts unproven again.
+  const restoreMountedTrackingRef = useRef<{
+    resolver: ((viewport: HTMLElement) => TranscriptRestoreResolution | null) | null;
+    everMounted: boolean;
+  }>({ resolver: null, everMounted: false });
 
   const runFramePass = useCallback(() => {
     const viewport = scrollRef.current;
@@ -109,14 +129,32 @@ export function useTranscriptFramePipelineLifecycle({
     // rung-5's warmed heights, stable frame-to-frame (zero visible motion).
     const restore = restoreResolverRef.current;
     if (restore) {
+      const tracking = restoreMountedTrackingRef.current;
+      if (tracking.resolver !== restore) {
+        tracking.resolver = restore;
+        tracking.everMounted = false;
+      }
       const restoreNow = typeof performance === "undefined" ? Date.now() : performance.now();
       if (restoreNow >= restoreDeadlineRef.current) {
         restoreResolverRef.current = null;
+        // Founder Ruling 3 (rung 10): the deadline lapsed without the saved row
+        // ever mounting, so every placement this window rested on the coarse
+        // index-sum estimate — never proven against the row's real geometry.
+        // Freezing scrollTop there would strand the reader at an unverified
+        // position (the theoretical never-mounting-saved-row strand rung 6
+        // left open); bottom-pin instead, the same conservative default a
+        // vanished saved row already falls back to.
+        if (!tracking.everMounted) {
+          onRestoreStranded();
+        }
       } else {
-        const target = restore(viewport);
-        if (target == null) {
+        const resolved = restore(viewport);
+        if (resolved == null) {
           restoreResolverRef.current = null;
         } else {
+          if (resolved.mounted) {
+            tracking.everMounted = true;
+          }
           const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
           // Only place when the saved anchor's scrollTop is actually reachable.
           // Once the anchor row is mounted the resolver returns an estimate-immune
@@ -129,9 +167,9 @@ export function useTranscriptFramePipelineLifecycle({
           // the carried-over scroll position keeps the anchor row in the render
           // window so the estimate-immune path takes over), so the restore lands
           // in a single instant cut with zero intermediate motion.
-          if (target <= maxTop + 1) {
+          if (resolved.top <= maxTop + 1) {
             notifyProgrammaticScroll(() => {
-              viewport.scrollTop = target;
+              viewport.scrollTop = resolved.top;
             });
           }
         }
@@ -235,6 +273,7 @@ export function useTranscriptFramePipelineLifecycle({
     restoreResolverRef,
     restoreDeadlineRef,
     notifyProgrammaticScroll,
+    onRestoreStranded,
     pinnedRef,
     scrollRef,
     scrollToBottom,

@@ -453,7 +453,7 @@ describe("useTranscriptStickToBottom", () => {
     act(() => {
       handle.current.api.resetForSession({
         kind: "restore",
-        resolveTargetTop: () => resolved,
+        resolveTargetTop: () => ({ top: resolved, mounted: true }),
       });
     });
     // Placed pre-paint at the saved anchor, unpinned (a finalized revisit is a
@@ -495,7 +495,7 @@ describe("useTranscriptStickToBottom", () => {
     act(() => {
       handle.current.api.resetForSession({
         kind: "restore",
-        resolveTargetTop: () => 450,
+        resolveTargetTop: () => ({ top: 450, mounted: true }),
       });
     });
     expect(viewport.scrollTop).toBe(450);

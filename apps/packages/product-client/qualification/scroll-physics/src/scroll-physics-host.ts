@@ -116,6 +116,60 @@ function assistantCompleted(
   });
 }
 
+// Q13 (rung 10, PRO-187): a "thought" item mid-turn, the normalized item kind
+// every harness's reasoning/thinking events reduce into (see
+// harness-transient-block-matrix.ts). Its trailing status renders inside the
+// SAME reserved ASSISTANT_ACTION_SLOT_HEIGHT slot as the working gleam and
+// the tool-call label (TranscriptTurnChrome.tsx); it must never add its own
+// row height while streaming, or the reserved-slot invariant is broken.
+function thoughtStarted(
+  sessionId: string,
+  turnId: string,
+  itemId: string,
+  text: string,
+): SessionEventEnvelope {
+  return envelope(sessionId, turnId, itemId, {
+    type: "item_started",
+    item: {
+      kind: "reasoning",
+      status: "in_progress",
+      sourceAgentKind: "claude",
+      isTransient: true,
+      contentParts: [{ type: "reasoning", text, visibility: "private" }],
+    },
+  });
+}
+
+function thoughtDelta(
+  sessionId: string,
+  turnId: string,
+  itemId: string,
+  appendReasoning: string,
+): SessionEventEnvelope {
+  return envelope(sessionId, turnId, itemId, {
+    type: "item_delta",
+    delta: { appendReasoning },
+  });
+}
+
+function thoughtCompleted(
+  sessionId: string,
+  turnId: string,
+  itemId: string,
+  text: string,
+): SessionEventEnvelope {
+  return envelope(sessionId, turnId, itemId, {
+    type: "item_completed",
+    item: {
+      kind: "reasoning",
+      status: "completed",
+      sourceAgentKind: "claude",
+      isTransient: true,
+      contentParts: [{ type: "reasoning", text, visibility: "private" }],
+    },
+  });
+}
+
 // Closes a turn the way production hydration does: a real finalized turn always
 // carries a `turn_ended`, which is what stamps `completedAt` on the turn record.
 // The renderer reads `completedAt` to decide `wasLive` (use-assistant-reveal-
@@ -336,6 +390,8 @@ const scrollSamples: ScrollSample[] = [];
 
 // Streaming bookkeeping for the currently-open assistant item.
 let openStream: { sessionId: string; turnId: string; itemId: string; text: string } | null = null;
+// Q13 (rung 10): the currently-open thought item within an open stream, if any.
+let openThought: { sessionId: string; turnId: string; itemId: string; text: string } | null = null;
 
 // A reservoir of older turns to reveal on prepend, keyed per session.
 let olderReservoir = 0;
@@ -457,6 +513,17 @@ export interface ScrollPhysicsDriver {
   beginStreamingTurn(): void;
   streamChunk(text?: string): void;
   streamChunks(count: number, textPerChunk?: string): void;
+  /**
+   * Q13 (rung 10): within the currently-open streaming turn, start a thought
+   * (a `reasoning` item, the normalized kind every harness's thinking events
+   * reduce into) and stream it a couple of deltas. Its trailing-status label
+   * renders inside the reserved slot; it must cost zero row height.
+   */
+  streamThoughtStart(): void;
+  /** Ends the open thought (Q13). Its label survives the stream closing (see transcript-trailing-status.ts) until the next visible item replaces it. */
+  streamThoughtStop(): void;
+  /** A single small completed tool call inside the open streaming turn (Q13 tool-only class). */
+  streamToolCall(): void;
   finalizeStreamingTurn(): void;
   appendLargeToolOutput(): void;
   appendCodeBlockTurn(): void;
@@ -510,6 +577,7 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
     resetCounter += 1;
     currentSessionId = sessionId ?? `${PRIMARY_SESSION}-${resetCounter}`;
     openStream = null;
+    openThought = null;
     olderReservoir = 0;
     lastPrependEvidence = null;
     scrollSamples.length = 0;
@@ -528,6 +596,7 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
     const id = sessionId ?? currentSessionId;
     currentSessionId = id;
     openStream = null;
+    openThought = null;
     commit({
       ...snapshot,
       transcript: buildFinalizedConversation(id, turns),
@@ -549,6 +618,7 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
   seedConversationWithToolLedger(leadingTurns: number, trailingTurns: number, toolCallCount = 30): void {
     const id = currentSessionId;
     openStream = null;
+    openThought = null;
     let state = createTranscriptState(id);
     const batch: SessionEventEnvelope[] = [];
     for (let t = 0; t < leadingTurns; t += 1) {
@@ -611,6 +681,34 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
     }
   },
 
+  streamThoughtStart(): void {
+    if (!openStream) {
+      this.beginStreamingTurn();
+    }
+    const stream = openStream!;
+    const itemId = `${stream.turnId}-thought`;
+    openThought = { sessionId: stream.sessionId, turnId: stream.turnId, itemId, text: "Considering the approach" };
+    apply([thoughtStarted(stream.sessionId, stream.turnId, itemId, openThought.text)]);
+    apply([thoughtDelta(stream.sessionId, stream.turnId, itemId, " and weighing tradeoffs.")]);
+  },
+
+  streamThoughtStop(): void {
+    if (!openThought) {
+      return;
+    }
+    const thought = openThought;
+    apply([thoughtCompleted(thought.sessionId, thought.turnId, thought.itemId, `${thought.text} and weighing tradeoffs.`)]);
+    openThought = null;
+  },
+
+  streamToolCall(): void {
+    if (!openStream) {
+      this.beginStreamingTurn();
+    }
+    const stream = openStream!;
+    apply(smallToolCall(stream.sessionId, stream.turnId, nextSeq()));
+  },
+
   finalizeStreamingTurn(): void {
     if (!openStream) {
       return;
@@ -618,6 +716,7 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
     const stream = openStream;
     apply([assistantCompleted(stream.sessionId, stream.turnId, stream.itemId, stream.text)]);
     openStream = null;
+    openThought = null;
     commit({ ...snapshot, sessionBusy: false });
   },
 

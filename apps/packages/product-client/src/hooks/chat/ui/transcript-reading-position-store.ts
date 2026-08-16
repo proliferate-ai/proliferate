@@ -33,6 +33,23 @@ export interface TranscriptReadingPosition {
 }
 
 /**
+ * A single resolution of the saved reading anchor against live geometry.
+ * `mounted` is rung 10's constructibility signal for Founder Ruling 3 (PRO-187):
+ * true only when the saved row's own DOM element was found and its rendered
+ * rect was used (the estimate-immune path); false when the coarse index-sum
+ * fallback was used because the row is not yet in the render window. A restore
+ * that reaches its deadline having NEVER seen `mounted: true` is the
+ * never-mounting-saved-row strand rung 6 left theoretical: the coarse estimate
+ * can be arbitrarily wrong (it sums never-visited rows' 360px estimates), so
+ * freezing scrollTop there would strand the reader. See
+ * use-transcript-frame-pipeline-lifecycle.ts's onRestoreStranded.
+ */
+export interface TranscriptRestoreResolution {
+  top: number;
+  mounted: boolean;
+}
+
+/**
  * How a session switch should place the viewport, produced by the row list from
  * live streaming/finalized state and any saved reading position, consumed by the
  * stick-to-bottom engine's resetForSession.
@@ -50,7 +67,7 @@ export type TranscriptSessionRestorePlan =
      * can read the mounted anchor row's real rendered position (estimate-immune)
      * once the coarse placement has brought it into the render window.
      */
-    resolveTargetTop: (viewport: HTMLElement) => number | null;
+    resolveTargetTop: (viewport: HTMLElement) => TranscriptRestoreResolution | null;
   };
 
 const readingPositionsBySession = new Map<string, TranscriptReadingPosition>();
@@ -136,7 +153,7 @@ export function resolveTranscriptRestoreTargetTop(
   getRowStartOffset: (index: number) => number | null,
   renderableRows: readonly ReadingAnchorRow[],
   saved: TranscriptReadingPosition,
-): number | null {
+): TranscriptRestoreResolution | null {
   const index = renderableRows.findIndex(
     (row) => row.kind === "transcript" && row.key === saved.rowKey,
   );
@@ -149,16 +166,16 @@ export function resolveTranscriptRestoreTargetTop(
     const viewportTop = viewport.getBoundingClientRect().top;
     // Current gap from the viewport top edge to the row top, in viewport space;
     // seat `offsetWithinRowPx` of the row under the top edge.
-    return Math.max(
-      0,
-      viewport.scrollTop + (rowTop - viewportTop) + saved.offsetWithinRowPx,
-    );
+    return {
+      top: Math.max(0, viewport.scrollTop + (rowTop - viewportTop) + saved.offsetWithinRowPx),
+      mounted: true,
+    };
   }
   const start = getRowStartOffset(index);
   if (start == null || !Number.isFinite(start)) {
     return null;
   }
-  return Math.max(0, start + saved.offsetWithinRowPx);
+  return { top: Math.max(0, start + saved.offsetWithinRowPx), mounted: false };
 }
 
 /**
@@ -174,7 +191,9 @@ export function beginSessionRestorePlacement(
   deadlineMs: number,
   refs: {
     scrollRef: RefObject<HTMLDivElement | null>;
-    restoreResolverRef: MutableRefObject<((viewport: HTMLElement) => number | null) | null>;
+    restoreResolverRef: MutableRefObject<
+      ((viewport: HTMLElement) => TranscriptRestoreResolution | null) | null
+    >;
     restoreDeadlineRef: MutableRefObject<number>;
   },
   setPinned: (pinned: boolean) => void,
@@ -201,9 +220,9 @@ export function beginSessionRestorePlacement(
     // writing it then would clamp. The single frame writer re-resolves the
     // estimate-immune anchor each glued frame and lands the exact position.
     const maxTop = Math.max(0, viewportEl.scrollHeight - viewportEl.clientHeight);
-    if (initialTop <= maxTop + 1) {
+    if (initialTop.top <= maxTop + 1) {
       notifyProgrammaticScroll(() => {
-        viewportEl.scrollTop = initialTop;
+        viewportEl.scrollTop = initialTop.top;
       });
     }
   }

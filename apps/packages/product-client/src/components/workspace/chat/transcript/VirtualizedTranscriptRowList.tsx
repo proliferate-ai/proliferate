@@ -77,6 +77,7 @@ export function VirtualizedTranscriptRowList({
     notifyContentResize,
     startAboveChangeCompensation,
     cancelFramePipeline,
+    compensationDeadlineRef,
   } = useTranscriptStickToBottom({
     scrollRef,
     onScrollSample,
@@ -280,21 +281,20 @@ export function VirtualizedTranscriptRowList({
     notifyProgrammaticScroll(() => {
       viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
     });
-    // The synchronous write above lands against the CURRENT scrollHeight, which
-    // still reflects the virtualizer's 360px estimate for the freshly-mounted
-    // older rows. On Chromium the transcript runs with `overflow-anchor: none`
-    // (the single-writer ruling), so the browser no longer silently corrects
-    // that shortfall as the real, taller row heights measure in a frame later —
-    // the reading row would drift down by the estimate-to-measured difference.
-    // Re-apply the same delta each frame while the prepended rows settle (a no-op
-    // once pinned or height-stable), so scrollTop absorbs the full added-above
-    // height and the reading row stays fixed on every engine. NOT cancelable by
-    // upward intent: the reader requested this prepend by scrolling to the top,
-    // so the reading row must hold even as that same upward gesture continues.
+    // The synchronous write above lands against the CURRENT scrollHeight, still
+    // the estimate for the freshly-mounted older rows (overflow-anchor: none
+    // means the browser won't silently correct it). Re-apply the delta each
+    // frame while those rows settle so scrollTop absorbs the full added-above
+    // height; NOT cancelable by upward intent since the reader asked for this
+    // prepend by scrolling to the top.
     startAboveChangeCompensation(anchor, false);
-    // Open the blank-fallback grace window: the anchored scrollTop sits ahead of the still-estimated mounted range until those rows measure taller.
-    prependSettleUntilRef.current = (typeof performance === "undefined" ? Date.now() : performance.now()) + PREPEND_BLANK_FALLBACK_GRACE_MS;
-  }, [notifyProgrammaticScroll, olderHistoryCursor, rows.length, setPinned, startAboveChangeCompensation]);
+    // Ruling 3(c) (rung 10): subordinate to the real compensation deadline just
+    // armed above, not an independent timer (fixed grace only backstops the
+    // unexpected case of no deadline set).
+    prependSettleUntilRef.current = compensationDeadlineRef.current > 0
+      ? compensationDeadlineRef.current
+      : (typeof performance === "undefined" ? Date.now() : performance.now()) + PREPEND_BLANK_FALLBACK_GRACE_MS;
+  }, [compensationDeadlineRef, notifyProgrammaticScroll, olderHistoryCursor, rows.length, setPinned, startAboveChangeCompensation]);
 
   useEffect(() => {
     const anchor = pendingPrependAnchorRef.current;

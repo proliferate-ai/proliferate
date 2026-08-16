@@ -1019,4 +1019,69 @@ test.describe("transcript scroll physics", () => {
       expect(trace[i]).toBeGreaterThanOrEqual(trace[i - 1] - 1);
     }
   });
+
+  // Rung 10 (PRO-187, Q13): the reserved-slot invariant — "no live-turn slot
+  // may change height as a function of item lifecycle, only as a function of
+  // revealed content" — extended across a thought (start/delta/stop), a tool
+  // call, and prose resuming, all inside one streaming turn, while pinned.
+  // Every transition must cost zero displacement: a broken invariant shows up
+  // as either a scrollTop jump (a phantom row briefly occupying its own
+  // height) or a double-scroll (two corrective snaps for one content change).
+  test("Q13 thinking/tool interleave: transient block lifecycle never displaces the pinned reader", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 6);
+    await waitForViewport(page);
+    await settle(page);
+    await wheelToBottom(page);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+
+    await drive(page, "beginStreamingTurn");
+    await settle(page);
+    const baseline = await metricsAfterFrame(page);
+    expect(baseline.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
+
+    await drive(page, "startScrollTrace");
+
+    // Thought starts and streams a couple of deltas: private, reserved-slot
+    // only, must not move the pinned reader.
+    await drive(page, "streamThoughtStart");
+    await settle(page, 80);
+    const afterThoughtStart = await metricsAfterFrame(page);
+    expect(afterThoughtStart.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
+
+    // Thought yields to a tool call mid-turn (thinking -> tool -> thinking is
+    // the exact class the ADR's Cell 6 names); still reserved-slot only.
+    await drive(page, "streamThoughtStop");
+    await drive(page, "streamToolCall");
+    await settle(page, 80);
+    const afterTool = await metricsAfterFrame(page);
+    expect(afterTool.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
+
+    // Prose resumes and grows the turn for real; THIS is content growth (not
+    // lifecycle), so the follow continues to track it, still pinned.
+    await drive(page, "streamChunks", 5);
+    await settle(page, 200);
+    const afterProse = await metricsAfterFrame(page);
+    expect(afterProse.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+
+    const trace = (await drive<number[]>(page, "stopScrollTrace")).filter((v) =>
+      Number.isFinite(v),
+    );
+    // No double-scroll: a pinned follow only ever moves scrollTop forward
+    // (down) as content grows; a lifecycle-driven phantom height would show up
+    // as a forward JUMP followed by a corrective snap BACK, i.e. a value below
+    // a previous one by more than trivial jitter.
+    for (let i = 1; i < trace.length; i += 1) {
+      expect(trace[i]).toBeGreaterThanOrEqual(trace[i - 1] - 2);
+    }
+
+    await drive(page, "finalizeStreamingTurn");
+    await settle(page);
+    expect((await metrics(page)).bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
+  });
 });
