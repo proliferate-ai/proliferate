@@ -637,6 +637,19 @@ primitive is the single owner of that state machine. Surfaces never hand-roll a
   as the Rung 1 `renderer.flow.*` family, so the show-delay suppression and the
   min-display hold are observable in telemetry.
 
+> **Skeletons are a carve-out, not a default (ADR §4 Rung 4, FR-1).** A
+> placeholder-shape skeleton (`SkeletonBlock`, `.skeleton-shimmer`) is sanctioned
+> only for a small fixed-shape row list whose final geometry is genuinely known,
+> and only at two named surfaces: the sidebar workspace list
+> (`SidebarWorkspaceContent`) and the repo picker rows (`CloudRepoPicker`). Both
+> route their skeleton through `LoadingBoundary` as the treatment slot so the
+> Class C show-delay still governs it. Every other loading surface is Class C:
+> the stable shell stays put and the body shows nothing until content resolves,
+> with a Class B `Spinner` reserved for a single named slow region inside that
+> shell. Settings pane bodies, the git review body, and any other big-surface
+> placeholder are Class C and carry no skeleton. New skeleton sites are a review
+> failure unless they are one of the two carve-out surfaces.
+
 > **Raw time literals are illegal in the design CSS.** `check-theme.mjs`'s
 > `checkRawMotionAuthority` walks `product.css` and the generated
 > theme and fails any `animation`/`transition` declaration carrying a numeric
@@ -914,7 +927,7 @@ index is the closed set, not a sample of it. Closure is mechanical in both direc
 | `SegmentedControl` | [SegmentedControl.tsx](../apps/packages/product-client/src/primitives/SegmentedControl.tsx) | Segmented tab-like control. |
 | `Select` | [Select.tsx](../apps/packages/product-client/src/primitives/Select.tsx) | Native select styled to tokens. |
 | `ShortcutBadge` | [ShortcutBadge.tsx](../apps/packages/product-client/src/primitives/ShortcutBadge.tsx) | Keyboard-shortcut badge. |
-| `Skeleton` | [Skeleton.tsx](../apps/packages/product-client/src/primitives/Skeleton.tsx) | Shimmer loading placeholder block. |
+| `Skeleton` | [Skeleton.tsx](../apps/packages/product-client/src/primitives/Skeleton.tsx) | Shimmer loading placeholder block. Carve-out only (ADR §4 Rung 4, FR-1): the sidebar workspace list and repo picker rows, both routed through `LoadingBoundary`. Every other surface is Class C (no skeleton). |
 | `Sonner` | [Sonner.tsx](../apps/packages/product-client/src/primitives/Sonner.tsx) | Sole toast treatment, split in two: `Sonner` is the transparent positioner (stacking, swipe, 3-visible cap), and the toast body pattern ([ToastBody.tsx](../apps/packages/product-client/src/primitives/patterns/toast/ToastBody.tsx)) paints the whole card — popover frame, always-visible corner close, 28px action cluster with only the primary filled, and the in-place Details expansion (356→480px). |
 | `Spinner` | [Spinner.tsx](../apps/packages/product-client/src/primitives/Spinner.tsx) | Inline loading spinner. |
 | `StatusDot` | [StatusDot.tsx](../apps/packages/product-client/src/primitives/StatusDot.tsx) | Round semantic-status glyph sized by the `icon-status` tier, `tone` × `fill` (solid disc / hollow ring). The union of two hand-rolled dots (`PrStatusDot`, `RecentWorkStatusDot`) and a dozen inline `icon-status rounded-full bg-*` spans; every tone is an opaque ink, so `warning` maps to `warning-foreground`. `PrStatusDot` composes it, as do the workspace tab strip, the settings sidebar and the workflow run/detail lists. `RecentWorkStatusDot` and the inline spans have not migrated: the ones that remain each want a pulsing `live` state, a halo ring, or the `sidebar-status-unseen` tone, and each of those would be the third axis this row rules out. |

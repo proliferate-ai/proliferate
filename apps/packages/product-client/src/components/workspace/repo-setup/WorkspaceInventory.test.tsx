@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { motion } from "@proliferate/design/motion";
 
 import {
   WorkspaceInventory,
   type WorkspaceInventoryItemView,
 } from "#product/components/workspace/repo-setup/WorkspaceInventory";
+
+const { showDelayMs, minDisplayMs } = motion.loading;
 
 describe("WorkspaceInventory", () => {
   afterEach(cleanup);
@@ -138,6 +141,48 @@ describe("WorkspaceInventory", () => {
     expect(content?.hidden).toBe(true);
     expect(screen.queryByRole("button", { name: /Hidden dispatch workspace/u })).toBeNull();
     expect(screen.queryByText("Hidden dispatch workspace")).toBeNull();
+  });
+  describe("loading vs empty split (Rung 4 / Q19)", () => {
+    it("shows no empty copy while pending, before the show-delay window", () => {
+      vi.useFakeTimers();
+      try {
+        render(<WorkspaceInventory groups={[]} loading />);
+
+        // Inside the Class C show-delay window: nothing renders, and crucially
+        // the resolved 'No workspaces' empty copy must not be shown while the
+        // fetch is still in flight (the pending-vs-empty conflation bug).
+        act(() => {
+          vi.advanceTimersByTime(showDelayMs - 1);
+        });
+        expect(screen.queryByText("No workspaces")).toBeNull();
+
+        // Even after the show-delay elapses, a pending Class C surface shows
+        // nothing (treatment is null); still no empty copy.
+        act(() => {
+          vi.advanceTimersByTime(showDelayMs + minDisplayMs + 50);
+        });
+        expect(screen.queryByText("No workspaces")).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("renders the empty state only after the fetch resolves empty", () => {
+      const { rerender } = render(<WorkspaceInventory groups={[]} loading />);
+      expect(screen.queryByText("No workspaces")).toBeNull();
+
+      // Fetch resolves with zero items: now, and only now, the empty state is
+      // an allowed, truthful outcome.
+      rerender(<WorkspaceInventory groups={[]} loading={false} />);
+      expect(screen.getByText("No workspaces")).toBeTruthy();
+      expect(screen.getByText("Workspaces will appear here when they are available.")).toBeTruthy();
+    });
+
+    it("renders the error state without waiting on the loading gate", () => {
+      render(<WorkspaceInventory groups={[]} error />);
+      expect(screen.getByRole("alert")).toBeTruthy();
+      expect(screen.getByText("Could not load workspaces")).toBeTruthy();
+    });
   });
 });
 

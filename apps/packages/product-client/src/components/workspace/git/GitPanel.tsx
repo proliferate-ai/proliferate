@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRevertGitPatchesMutation } from "@anyharness/sdk-react";
 import { GitPanelHeader } from "./GitPanelHeader";
-import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
+import { LoadingBoundary } from "#product/primitives/LoadingBoundary";
 import { GitPanelReviewBody } from "./GitPanelReviewBody";
 import { formatGitPanelUndoError } from "./GitPanelReviewChrome";
 import { useDiffReviewMeasurement } from "#product/hooks/workspaces/ui/files/use-diff-review-measurement";
@@ -49,63 +49,22 @@ export function GitPanel() {
 }
 
 /**
- * Reshaped, not converted (spec §2.1 site 16 / §6 acceptance criteria): the
- * loaded review document is a flat list of sections (`GitPanelReviewSections`
- * — `flex flex-col gap-0.5`, no section boxes), but this skeleton used to draw
- * each placeholder as a bordered, rounded, tinted card
- * (`overflow-clip rounded-lg bg-[var(--color-diff-panel-surface)]`) — a card
- * look the shipped state doesn't have. Deleting that card wrapper is not a
- * `Card` conversion (this is a loading placeholder, not a bordered/tinted
- * container in the C1 sense); it's matching `GitReviewFileSectionShell`'s own
- * flat, sticky-header-over-body anatomy so the loading and loaded states
- * agree.
+ * Class C big-surface treatment (UX Latency + Transitions ADR §4 Rung 4,
+ * FR-1): the deferred-mount gate for the review document retired its
+ * bordered/tinted placeholder-card skeleton. The panel header above is the
+ * stable shell, so the body shows nothing until the diff query mounts; the
+ * Class C show-delay keeps a sub-200ms defer from flashing anything at all.
  */
 function GitPanelLoadingSkeleton() {
   return (
-    <div
+    <LoadingBoundary
+      state="pending"
+      diagnostics={{ flow: "git_panel_defer_mount" }}
+      treatment={null}
       className="flex flex-col gap-0.5 px-2 pt-2"
       role="status"
       aria-label="Loading changes"
-    >
-      {[0, 1, 2].map((index) => (
-        <div
-          key={index}
-          // C4: the review document's base surface — same token
-          // `GitReviewFileSectionShell` paints its section wrapper with, kept
-          // here as a raw var() for the identical reason: the diff body
-          // beneath composites its own token stack against this exact
-          // custom property.
-          className="bg-[var(--color-background)]"
-        >
-          <div
-            // C4: the same near-opaque color-mix over the same diff-header
-            // surface token `GitReviewFileSectionShell`'s sticky header uses
-            // — matching it here keeps the loading placeholder from flashing
-            // a different header tint than the row it resolves into.
-            className="flex min-h-9 items-center gap-2.5 bg-[color-mix(in_srgb,var(--color-diff-sidebar-file-header-surface)_97%,transparent)] px-5 py-1.5"
-          >
-            <SkeletonBlock
-              className="h-3 w-40 bg-surface-control"
-              style={shimmerDelay(index)}
-            />
-            <SkeletonBlock
-              className="ms-auto h-3 w-12 bg-surface-control"
-              style={shimmerDelay(index + 1)}
-            />
-          </div>
-          <div className="space-y-2 px-5 py-3">
-            <SkeletonBlock
-              className="h-2.5 w-3/4 bg-surface-control"
-              style={shimmerDelay(index + 1)}
-            />
-            <SkeletonBlock
-              className="h-2.5 w-1/2 bg-surface-control"
-              style={shimmerDelay(index + 2)}
-            />
-          </div>
-        </div>
-      ))}
-    </div>
+    />
   );
 }
 

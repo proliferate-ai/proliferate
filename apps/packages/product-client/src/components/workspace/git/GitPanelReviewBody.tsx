@@ -1,6 +1,9 @@
 import { useEffect } from "react";
 import type { AnyHarnessQueryTimingOptions } from "@anyharness/sdk-react";
-import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
+import {
+  LoadingBoundary,
+  type LoadingBoundaryState,
+} from "#product/primitives/LoadingBoundary";
 import {
   GitLastTurnUndoAction,
   GitReviewDiffPolicyNotice,
@@ -88,65 +91,73 @@ export function GitPanelReviewBody({
           data-app-action-review-metrics-probe=""
           className="pointer-events-none absolute left-0 top-0 size-px opacity-0"
         />
-        {isLoading && (
-          <div className="space-y-2 px-4 py-4" role="status" aria-label="Loading changes">
-            <SkeletonBlock className="h-3 w-32 bg-surface-control" style={shimmerDelay(0)} />
-            <SkeletonBlock className="h-3 w-48 bg-surface-control" style={shimmerDelay(1)} />
-            <SkeletonBlock className="h-3 w-40 bg-surface-control" style={shimmerDelay(2)} />
-          </div>
-        )}
-        {errorMessage && (
+        {errorMessage ? (
           <p className="px-4 py-4 text-ui text-destructive">{errorMessage}</p>
-        )}
-        {!errorMessage && runtimeBlockedReason && (
+        ) : runtimeBlockedReason ? (
           <p className="px-4 py-4 text-ui-sm text-sidebar-muted-foreground">
             {runtimeBlockedReason}
           </p>
-        )}
-        {!isLoading && !errorMessage && !runtimeBlockedReason && !hasReviewEntries && (
-          <div className="px-2 pt-2">
-            <GitReviewNoChangesState
-              mode={changesFilter}
-              baseRef={baseRef}
-              onRefresh={onRefresh}
-            />
-          </div>
-        )}
-
-        {!isLoading && !errorMessage && !runtimeBlockedReason && hasReviewEntries && (
-          <div className="flex flex-col gap-0.5">
-            {(changesFilter === "last_turn" || diffPolicySummary.total > 0) && (
-              <div className="flex flex-col gap-1.5 px-2 pt-2">
-                {changesFilter === "last_turn" && (
-                  <GitLastTurnUndoAction
-                    fileCount={lastTurnPatchFileCount}
-                    disabledReason={lastTurnUndoDisabledReason}
-                    busy={lastTurnUndoBusy}
-                    onUndo={onUndoLastTurn}
-                  />
-                )}
-                {diffPolicySummary.total > 0 && (
-                  <GitReviewDiffPolicyNotice summary={diffPolicySummary} />
-                )}
+        ) : (
+          // Class C big-surface treatment (UX Latency + Transitions ADR §4 Rung
+          // 4, FR-1): the review body retired its placeholder-row skeleton. It
+          // now shows nothing until the Class C show-delay window, and the
+          // "no changes" state may only render once the diff query resolves
+          // (`state="empty"`), never while the fetch is still in flight (Q19
+          // empty split).
+          <LoadingBoundary
+            state={
+              (isLoading
+                ? "pending"
+                : hasReviewEntries
+                  ? "ready"
+                  : "empty") satisfies LoadingBoundaryState
+            }
+            diagnostics={{ flow: "git_review_body" }}
+            treatment={null}
+            emptyContent={
+              <div className="px-2 pt-2">
+                <GitReviewNoChangesState
+                  mode={changesFilter}
+                  baseRef={baseRef}
+                  onRefresh={onRefresh}
+                />
               </div>
-            )}
-            <GitPanelReviewSections
-              changesFilter={changesFilter}
-              sections={sections}
-              activeWorkspaceId={activeWorkspaceId}
-              baseRef={baseRef}
-              layout={layout}
-              wrapLongLines={wrapLongLines}
-              collapsedFiles={collapsedFiles}
-              isRuntimeReady={isRuntimeReady}
-              permittedDiffFetchKeys={permittedDiffFetchKeys}
-              openFile={openFile}
-              onToggleFileCollapsed={onToggleFileCollapsed}
-              onDiffFetchSettled={onDiffFetchSettled}
-              diffTimingOptions={diffTimingOptions}
-              measurementOperationId={measurementOperationId}
-            />
-          </div>
+            }
+          >
+            <div className="flex flex-col gap-0.5">
+              {(changesFilter === "last_turn" || diffPolicySummary.total > 0) && (
+                <div className="flex flex-col gap-1.5 px-2 pt-2">
+                  {changesFilter === "last_turn" && (
+                    <GitLastTurnUndoAction
+                      fileCount={lastTurnPatchFileCount}
+                      disabledReason={lastTurnUndoDisabledReason}
+                      busy={lastTurnUndoBusy}
+                      onUndo={onUndoLastTurn}
+                    />
+                  )}
+                  {diffPolicySummary.total > 0 && (
+                    <GitReviewDiffPolicyNotice summary={diffPolicySummary} />
+                  )}
+                </div>
+              )}
+              <GitPanelReviewSections
+                changesFilter={changesFilter}
+                sections={sections}
+                activeWorkspaceId={activeWorkspaceId}
+                baseRef={baseRef}
+                layout={layout}
+                wrapLongLines={wrapLongLines}
+                collapsedFiles={collapsedFiles}
+                isRuntimeReady={isRuntimeReady}
+                permittedDiffFetchKeys={permittedDiffFetchKeys}
+                openFile={openFile}
+                onToggleFileCollapsed={onToggleFileCollapsed}
+                onDiffFetchSettled={onDiffFetchSettled}
+                diffTimingOptions={diffTimingOptions}
+                measurementOperationId={measurementOperationId}
+              />
+            </div>
+          </LoadingBoundary>
         )}
       </div>
     </div>

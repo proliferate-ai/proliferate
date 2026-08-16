@@ -11,7 +11,7 @@ import { Checkbox } from "#product/primitives/Checkbox";
 import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
 import { Switch } from "#product/primitives/Switch";
-import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
+import { LoadingBoundary } from "#product/primitives/LoadingBoundary";
 import { RunCommandHelp } from "#product/components/settings/shared/RunCommandHelp";
 import { useCloudRepoEnvironmentEditor } from "#product/hooks/settings/workflows/use-cloud-repo-environment-editor";
 import { useRepositorySettings } from "#product/hooks/settings/workflows/use-repository-settings";
@@ -218,10 +218,15 @@ function ActionsLocalEditor({ repository }: { repository: SettingsRepositoryEntr
             className="sm:flex-col sm:items-stretch"
           >
             {isDetecting ? (
-              <div className="flex flex-col gap-2" role="status" aria-label="Detecting setup commands">
-                <SkeletonBlock className="h-4 w-32" style={shimmerDelay(0)} />
-                <SkeletonBlock className="h-4 w-56" style={shimmerDelay(1)} />
-              </div>
+              // Class C big-surface treatment (UX Latency + Transitions ADR §4
+              // Rung 4, FR-1): retired the placeholder-line skeleton. The
+              // Suggestions row label is the stable shell; detection shows
+              // nothing until it resolves.
+              <LoadingBoundary
+                state="pending"
+                diagnostics={{ flow: "repo_setup_detect" }}
+                treatment={null}
+              />
             ) : (
               <div className="w-full space-y-4">
                 <SetupHintRows
