@@ -187,6 +187,27 @@ export function useTranscriptStickToBottom({
       return;
     }
 
+    // A NON-cancelable compensation (history prepend) must never let scrollTop
+    // fall below where the reader stood pre-prepend. The frame pipeline only
+    // re-applies its write on a growth-driven pass, never on a scroll EVENT; a
+    // physical wheel gesture moves scrollTop natively between passes, and once
+    // content plateaus nothing schedules another pass to counter it (CI webkit
+    // "prepend anchoring ... scrollTop Received 0"). Clamp synchronously here
+    // to the anchor's pre-prepend floor, already proven safe.
+    const activeCompensationAnchor = compensationAnchorRef.current;
+    if (
+      activeCompensationAnchor != null
+      && !compensationCancelableRef.current
+      && interactionNow() < compensationDeadlineRef.current
+      && top < activeCompensationAnchor.scrollTop
+    ) {
+      notifyProgrammaticScroll(() => {
+        viewport.scrollTop = activeCompensationAnchor.scrollTop;
+      });
+      onScrollSample({ programmatic: true });
+      return;
+    }
+
     // No live marker: user scroll (intent-attributed below) or unattributed; the
     // user-scroll-wins pin logic runs unchanged either way.
     const distance = resolveVirtualBottomDistance({
@@ -231,7 +252,17 @@ export function useTranscriptStickToBottom({
         ? { programmatic: false, userInitiated: true }
         : { programmatic: false },
     );
-  }, [dispatchInsetEvent, onScrollSample, pinnedRef, repinThresholdPx, setPinned]);
+  }, [
+    compensationAnchorRef,
+    compensationCancelableRef,
+    compensationDeadlineRef,
+    dispatchInsetEvent,
+    notifyProgrammaticScroll,
+    onScrollSample,
+    pinnedRef,
+    repinThresholdPx,
+    setPinned,
+  ]);
 
   // Session re-entry / submit / tab-resume "glue": snap each frame while a
   // freshly mounted or resumed measurement backlog lands, terminating when the
