@@ -216,6 +216,17 @@ export function useTranscriptFramePipelineLifecycle({
     // re-raise below has not run against the recovered height yet.
     const seatedTarget = anchor.scrollTop + (floor.maxScrollHeight - anchor.scrollHeight);
     const displacedAboveTarget = seatedTarget - viewport.scrollTop > 1;
+    // eslint-disable-next-line no-console -- TEMP r10-diag, removed before merge.
+    console.error("[r10-diag] runFramePass-compensation", {
+      now,
+      deadline: compensationDeadlineRef.current,
+      anchorScrollTop: anchor.scrollTop,
+      anchorScrollHeight: anchor.scrollHeight,
+      floorMaxScrollHeight: floor.maxScrollHeight,
+      liveScrollHeight: viewport.scrollHeight,
+      seatedTarget,
+      currentScrollTop: viewport.scrollTop,
+    });
     if (now >= compensationDeadlineRef.current) {
       // Release the anchor once the growth deadline lapses — UNLESS the reader
       // is still displaced above the already-established seat. On a slow
