@@ -36,13 +36,10 @@ function interactionNow(): number {
   return typeof performance === "undefined" ? Date.now() : performance.now();
 }
 
-// FR-2 (rung 6): how long the single frame pass re-resolves the saved reading
-// anchor after a finalized-session revisit so residual corrections land.
+// FR-2 (rung 6): how long the frame pass re-resolves the saved reading anchor after a finalized-session revisit.
 const RESTORE_MAX_MS = 500;
 
-// How long the frame pass keeps absorbing a prepend's estimate-to-measured
-// corrections into scrollTop, bounded by wall-clock (not the glue window's
-// quiet-frame termination) so a post-glue correction still lands.
+// How long the frame pass keeps absorbing a prepend's estimate-to-measured corrections, bounded by wall-clock.
 const ABOVE_CHANGE_COMPENSATION_MAX_MS = 500;
 
 /**
@@ -83,16 +80,11 @@ export function useTranscriptStickToBottom({
   // session-entry / submit / tab-resume / above-change rAF loops with one
   // owned scheduler and ONE snap writer.
   const pipelineRef = useRef(new TranscriptFramePipeline());
-  // Active above-change compensation anchor, applied while unpinned until its
-  // deadline lapses (so a post-glue correction is still absorbed).
+  // Active above-change compensation anchor, applied while unpinned until its deadline lapses.
   const compensationAnchorRef = useRef<ContentHeightScrollAnchor | null>(null);
-  // Whether the active compensation cancels on upward intent: true for a
-  // completed-turn split, false for a history prepend (reader-asked).
+  // Cancels on upward intent: true for a completed-turn split, false for a history prepend (reader-asked).
   const compensationCancelableRef = useRef(false);
-  // Deadline (interactionNow ms) past which the active above-change anchor is
-  // stale: compensated each correction before it, then released so
-  // below-viewport growth can move the reader. Wall-clock, not the glue
-  // window's quiet-frame termination (which can end a frame early).
+  // Deadline (interactionNow ms) past which the anchor is stale and released; wall-clock, not glue's quiet-frame end.
   const compensationDeadlineRef = useRef(0);
   // FR-2 restore (rung 6): frame writer re-resolves this each glued frame so the saved reading row holds as heights settle.
   const restoreResolverRef = useRef<((viewport: HTMLElement) => TranscriptRestoreResolution | null) | null>(null);
@@ -196,11 +188,10 @@ export function useTranscriptStickToBottom({
       return;
     }
 
-    // NON-cancelable compensation (history prepend): never let scrollTop fall
-    // below the pre-prepend floor. The pipeline only re-applies its write on a
-    // growth-driven pass, not a scroll EVENT; once content plateaus, a live
-    // wheel gesture erodes scrollTop unopposed (CI webkit "prepend anchoring
-    // ... scrollTop Received 0"). Clamp synchronously to the proven-safe floor.
+    // NON-cancelable compensation (history prepend): never drop scrollTop below
+    // the pre-prepend floor. The pipeline only re-applies on a growth-driven
+    // pass, not a scroll EVENT, so a wheel gesture can erode it unopposed once
+    // content plateaus (CI webkit "prepend anchoring ... scrollTop Received 0").
     const activeCompensationAnchor = compensationAnchorRef.current;
     if (
       activeCompensationAnchor != null
