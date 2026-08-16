@@ -1107,6 +1107,12 @@ test.describe("transcript scroll physics", () => {
     // WITHOUT a matching scrollHeight change. Assert on bottomDistance, not
     // scrollTop, so the bound stays meaningful regardless of which frame the
     // legitimate convergence lands on.
+    //
+    // Direction note: this asserts on bottomDistance, not scrollTop, and the
+    // two move in OPPOSITE directions for the pinned reader. A backward
+    // bounce (the reader pushed away from the true bottom) shows up as
+    // bottomDistance going UP, not down, so the bound below caps how far
+    // bottomDistance may INCREASE between samples, not decrease.
     function assertNoBackwardBounce(
       trace: number[],
       maxBouncePx: number,
@@ -1114,7 +1120,7 @@ test.describe("transcript scroll physics", () => {
     ): void {
       for (let i = 1; i < trace.length; i += 1) {
         const bound = i === 1 ? leadingBouncePx : maxBouncePx;
-        expect(trace[i]).toBeGreaterThanOrEqual(trace[i - 1] - bound);
+        expect(trace[i]).toBeLessThanOrEqual(trace[i - 1] + bound);
       }
     }
 
