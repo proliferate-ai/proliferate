@@ -18,6 +18,11 @@ import {
  * holds `state="pending"` for its whole life; the parent unmounts it on resolve.
  * Rung 3 (UX Latency + Transitions ADR §4.3) swaps the treatment visual from
  * `DotCellLoader` to the Class A `ProliferateLivingMark`.
+ *
+ * No visible label beside the mark (founder ruling, R16): `label` is
+ * accessibility text only, surfaced as the `aria-label` on the outer
+ * `role="status"` container. Sighted users get the mark alone; screen readers
+ * still get the label.
  */
 export function TranscriptSwitchingPlaceholder({
   label = "Loading chat",
@@ -37,12 +42,7 @@ export function TranscriptSwitchingPlaceholder({
           diagnostics={{ flow: "transcript_switch" }}
           className={`${CHAT_COLUMN_CLASSNAME} flex flex-1 flex-col items-center justify-center gap-3`}
           aria-hidden="true"
-          treatment={
-            <>
-              <ProliferateLivingMark />
-              <p className="text-chat font-medium text-muted-foreground">{label}</p>
-            </>
-          }
+          treatment={<ProliferateLivingMark />}
         />
       </div>
     </DebugProfiler>

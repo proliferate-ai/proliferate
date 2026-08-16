@@ -89,6 +89,15 @@ export const motion = {
      * to both ready and empty resolutions.
      */
     minDisplayMs: 300,
+    /**
+     * Hero-tier minimum display (R16, UX Latency + Transitions ADR). The chat
+     * loading hero's DotCellLoader mark holds for this long once shown, even
+     * if the surface resolves sooner, so a resolve mid-mount cannot cut the
+     * mark off and read as a flicker. Longer than the generic `minDisplayMs`
+     * because the hero is a larger, more prominent mark. Pairs with
+     * `duration.exitMs` for the hand-off fade into resolved content.
+     */
+    heroMinDisplayMs: 420,
   },
   /** UI choreography delays; these are not animation durations. */
   delay: {

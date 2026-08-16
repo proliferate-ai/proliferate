@@ -69,6 +69,13 @@ export interface LoadingBoundaryProps
     flow?: string;
     correlation?: LoadingDiagnosticsCorrelation;
   };
+  /**
+   * Fires the instant the treatment actually mounts (show-delay elapsed).
+   * For callers that need to hold their own exit choreography past this
+   * boundary's own lifetime (e.g. a parent that keeps the treatment mounted
+   * through an unmount-driven exit fade).
+   */
+  onTreatmentShown?: () => void;
 }
 
 function nowMs(): number {
@@ -97,6 +104,7 @@ export function LoadingBoundary({
   showDelayMs = motion.loading.showDelayMs,
   minDisplayMs = motion.loading.minDisplayMs,
   diagnostics,
+  onTreatmentShown,
   className,
   ...rest
 }: LoadingBoundaryProps) {
@@ -143,9 +151,11 @@ export function LoadingBoundary({
         minDisplayMs,
       });
       setPhase("treatment");
+      onTreatmentShown?.();
     }, showDelayMs);
     return () => window.clearTimeout(timer);
-    // `correlation`/`flow` are diagnostic-only and stable per surface.
+    // `correlation`/`flow`/`onTreatmentShown` are diagnostic/notification-only
+    // and stable per surface.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, phase, showDelayMs, minDisplayMs]);
 

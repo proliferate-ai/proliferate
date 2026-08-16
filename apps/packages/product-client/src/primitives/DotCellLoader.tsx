@@ -1,7 +1,7 @@
 import type { HTMLAttributes } from "react";
 
 export type DotCellLoaderVariant = "wave" | "orbit" | "scan" | "helix" | "breathe";
-export type DotCellLoaderSize = "compact" | "default";
+export type DotCellLoaderSize = "compact" | "default" | "hero";
 
 export interface DotCellLoaderProps extends Omit<HTMLAttributes<HTMLSpanElement>, "children"> {
   variant?: DotCellLoaderVariant;

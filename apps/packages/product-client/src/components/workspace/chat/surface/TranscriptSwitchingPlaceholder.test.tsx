@@ -51,12 +51,14 @@ describe("TranscriptSwitchingPlaceholder", () => {
     expect(gutter.firstElementChild?.className).toContain("animate-content-fade-in");
   });
 
-  it("shows the Class A living mark with its label instead of message skeletons (PRO-182)", () => {
+  it("shows the Class A living mark alone instead of message skeletons (PRO-182); label is accessibility-only", () => {
     render(<TranscriptSwitchingPlaceholder label="Switching chat" />);
     advance(motion.loading.showDelayMs);
 
     const gutter = screen.getByRole("status", { name: "Switching chat" });
     expect(gutter.querySelector("[data-brand-mark]")).not.toBeNull();
-    expect(gutter.textContent).toContain("Switching chat");
+    // No visible label beside the mark (founder ruling, R16): the label is
+    // the aria-label on the status region, not visible text.
+    expect(gutter.textContent).not.toContain("Switching chat");
   });
 });
