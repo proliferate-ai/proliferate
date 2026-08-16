@@ -120,10 +120,9 @@ export function VirtualizedTranscriptRowList({
     paddingEnd: structuralBottomInsetPx,
     initialOffset: () => estimatedInitialBottomOffset,
     // Q12 (rung 4): kept true. EVALUATED false vs true; false desynchronizes
-    // TanStack's internal re-measure from our snap and destabilized the
-    // pinned-follow / repin / prepend physics scenarios. True preserves the
-    // proven measurement cadence; the owned content ResizeObserver still routes
-    // every growth through the one frame pipeline at zero RO-loop cost.
+    // TanStack's re-measure from our snap and destabilized the pinned-follow /
+    // repin / prepend physics scenarios. True keeps the proven cadence; the owned
+    // content ResizeObserver still routes every growth at zero RO-loop cost.
     useAnimationFrameWithResizeObserver: true,
   });
   const { captureReadingPosition, buildSessionRestorePlan } = useTranscriptReadingPosition({
