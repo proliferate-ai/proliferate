@@ -281,13 +281,12 @@ export function VirtualizedTranscriptRowList({
     // height; NOT cancelable by upward intent since the reader asked for this
     // prepend by scrolling to the top.
     startAboveChangeCompensation(anchor, false);
-    // Ruling 3(c) (rung 10): subordinate to the real compensation deadline just
-    // armed above, not an independent timer (fixed grace only backstops the
-    // unexpected case of no deadline set).
-    prependSettleUntilRef.current = compensationDeadlineRef.current > 0
-      ? compensationDeadlineRef.current
-      : (typeof performance === "undefined" ? Date.now() : performance.now()) + PREPEND_BLANK_FALLBACK_GRACE_MS;
-  }, [compensationDeadlineRef, notifyProgrammaticScroll, olderHistoryCursor, rows.length, setPinned, startAboveChangeCompensation]);
+    // Ruling 3(c) (rung 10): bounded ceiling fallback only — the blank-fallback
+    // hook reads compensationDeadlineRef LIVE (see below), which is the real
+    // signal and tracks the compensation window's own extensions as late
+    // corrections keep arriving on a slow runner.
+    prependSettleUntilRef.current = (typeof performance === "undefined" ? Date.now() : performance.now()) + PREPEND_BLANK_FALLBACK_GRACE_MS;
+  }, [notifyProgrammaticScroll, olderHistoryCursor, rows.length, setPinned, startAboveChangeCompensation]);
 
   useEffect(() => {
     const anchor = pendingPrependAnchorRef.current;
@@ -363,7 +362,7 @@ export function VirtualizedTranscriptRowList({
     activeSessionId, bottomSpacerHeight,
     firstVirtualItem, lastVirtualItem,
     lastBlankReportSignatureRef, rowCount: rows.length,
-    onFallback, prependSettleUntilRef, renderableRowCount: renderableRows.length,
+    onFallback, prependSettleUntilRef, compensationDeadlineRef, renderableRowCount: renderableRows.length,
     scrollRef, selectedWorkspaceId,
     topSpacerHeight, totalContentHeight,
     virtualItemCount: virtualItems.length,

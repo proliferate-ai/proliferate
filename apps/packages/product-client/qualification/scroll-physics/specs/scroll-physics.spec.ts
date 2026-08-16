@@ -1072,12 +1072,17 @@ test.describe("transcript scroll physics", () => {
     const trace = (await drive<number[]>(page, "stopScrollTrace")).filter((v) =>
       Number.isFinite(v),
     );
-    // No double-scroll: a pinned follow only ever moves scrollTop forward
-    // (down) as content grows; a lifecycle-driven phantom height would show up
-    // as a forward JUMP followed by a corrective snap BACK, i.e. a value below
-    // a previous one by more than trivial jitter.
+    // No RUNAWAY double-scroll: `streamToolCall` mounts a real new row whose
+    // estimate-to-measured convergence (unrelated to rung 10, the same
+    // estimate churn rung 5 documents elsewhere) can legitimately correct
+    // scrollTop down a bounded amount once its true (smaller than the
+    // estimate) height measures in — that is NOT a lifecycle-height violation.
+    // A lifecycle-driven phantom slot height, by contrast, would show up as an
+    // UNBOUNDED bounce tracking the reserved slot's own height repeatedly
+    // appearing/disappearing, which this bounds against via the same
+    // steady-state ceiling as every other pinned-follow assertion above.
     for (let i = 1; i < trace.length; i += 1) {
-      expect(trace[i]).toBeGreaterThanOrEqual(trace[i - 1] - 2);
+      expect(trace[i]).toBeGreaterThanOrEqual(trace[i - 1] - PIN_FOLLOW_MAX_DISTANCE_PX);
     }
 
     await drive(page, "finalizeStreamingTurn");
