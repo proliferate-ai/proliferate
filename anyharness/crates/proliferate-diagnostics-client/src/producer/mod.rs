@@ -28,40 +28,30 @@ pub(crate) mod transport;
 mod worker;
 
 #[cfg(all(test, unix))]
-#[path = "tests_delivery_end.rs"]
 mod tests_delivery_end;
 #[cfg(all(test, unix))]
-#[path = "tests_fallback_deadline.rs"]
 mod tests_fallback_deadline;
 #[cfg(test)]
-#[path = "tests_filter.rs"]
 mod tests_filter;
 #[cfg(all(test, unix))]
-#[path = "tests_generation.rs"]
 mod tests_generation;
 #[cfg(test)]
-#[path = "tests_loss.rs"]
 mod tests_loss;
 #[cfg(test)]
-#[path = "tests_queue.rs"]
 mod tests_queue;
+#[cfg(all(test, unix))]
+mod tests_reattach;
 #[cfg(test)]
-#[path = "tests_receipt.rs"]
 mod tests_receipt;
 #[cfg(test)]
-#[path = "tests_sequence.rs"]
 mod tests_sequence;
 #[cfg(test)]
-#[path = "tests_status.rs"]
 mod tests_status;
 #[cfg(test)]
-#[path = "tests_support.rs"]
 mod tests_support;
 #[cfg(test)]
-#[path = "tests_terminal.rs"]
 mod tests_terminal;
 #[cfg(test)]
-#[path = "tests_transport.rs"]
 mod tests_transport;
 
 use admission::{LossSnapshot, PendingLossRange};
