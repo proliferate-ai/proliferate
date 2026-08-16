@@ -5,6 +5,8 @@ import {
   type RendererFlowKind,
   abandonRendererFlow,
   beginRendererFlow,
+  deferWorkspaceOpenContentStable,
+  finishDeferredWorkspaceOpenForSession,
   finishRendererFlow,
   markRendererFlowDataReady,
   markRendererFlowShellCommitted,
@@ -176,5 +178,57 @@ describe("renderer flow timing", () => {
       finishRendererFlow({ kind: "workspace_open", correlationKey: "missing" }),
     ).not.toThrow();
     expect(emitted).toHaveLength(0);
+  });
+
+  // UX-latency R14: content_stable hand-off to the transcript pane.
+  describe("deferred workspace_open content_stable", () => {
+    it("finishes only when the transcript pane commits the deferred session", () => {
+      beginRendererFlow({ kind: "workspace_open", correlationKey: "ws-1", correlation: { workspaceId: "ws-1" } });
+      nowValue = 5;
+      markRendererFlowShellCommitted({ kind: "workspace_open", correlationKey: "ws-1" });
+      nowValue = 40;
+      markRendererFlowDataReady({ kind: "workspace_open", correlationKey: "ws-1" });
+      // Bootstrap defers: content_stable must NOT fire at bootstrap completion.
+      deferWorkspaceOpenContentStable({ sessionId: "session-a", correlationKey: "ws-1" });
+      expect(emitted.some((e) => e.name === "renderer.flow.content_stable")).toBe(false);
+
+      // A different session committing does not resolve this flow.
+      finishDeferredWorkspaceOpenForSession("session-other");
+      expect(emitted.some((e) => e.name === "renderer.flow.content_stable")).toBe(false);
+
+      // The deferred session's transcript commits -> honest content_stable.
+      nowValue = 100;
+      finishDeferredWorkspaceOpenForSession("session-a", { content_stable_source: "transcript_committed" });
+      const stable = fieldsOf("renderer.flow.content_stable");
+      expect(stable.flow_kind).toBe("workspace_open");
+      expect(stable.data_to_stable_ms).toBe(60);
+      expect(stable.content_stable_source).toBe("transcript_committed");
+      expect(stable.budget_metric).toBe(RENDERER_FLOW_BUDGETS.workspace_open.metric);
+    });
+
+    it("no-ops for a session with no deferred workspace_open flow", () => {
+      finishDeferredWorkspaceOpenForSession("plain-switch");
+      expect(emitted).toHaveLength(0);
+    });
+
+    it("finishes a deferred session at most once", () => {
+      beginRendererFlow({ kind: "workspace_open", correlationKey: "ws-1" });
+      deferWorkspaceOpenContentStable({ sessionId: "session-a", correlationKey: "ws-1" });
+      finishDeferredWorkspaceOpenForSession("session-a");
+      finishDeferredWorkspaceOpenForSession("session-a");
+      expect(emitted.filter((e) => e.name === "renderer.flow.content_stable")).toHaveLength(1);
+    });
+
+    it("drops a prior deferral for the same flow when the settled session changes", () => {
+      beginRendererFlow({ kind: "workspace_open", correlationKey: "ws-1" });
+      deferWorkspaceOpenContentStable({ sessionId: "session-a", correlationKey: "ws-1" });
+      // Selection settled on a different session for the same workspace flow.
+      deferWorkspaceOpenContentStable({ sessionId: "session-b", correlationKey: "ws-1" });
+      // The superseded session must not resolve the flow.
+      finishDeferredWorkspaceOpenForSession("session-a");
+      expect(emitted.some((e) => e.name === "renderer.flow.content_stable")).toBe(false);
+      finishDeferredWorkspaceOpenForSession("session-b");
+      expect(emitted.filter((e) => e.name === "renderer.flow.content_stable")).toHaveLength(1);
+    });
   });
 });

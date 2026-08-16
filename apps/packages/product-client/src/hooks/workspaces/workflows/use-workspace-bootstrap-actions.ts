@@ -19,6 +19,7 @@ import {
 import {
   abandonRendererFlow,
   beginRendererFlow,
+  deferWorkspaceOpenContentStable,
   finishRendererFlow,
   markRendererFlowDataReady,
   markRendererFlowShellCommitted,
@@ -124,6 +125,12 @@ export function useWorkspaceBootstrapActions() {
     // abandon (the truthful replacement for the old cancelLatencyFlow staleness
     // signal). Superseded/stale exits set this so no false content_stable fires.
     let rendererFlowAbandonReason: string | null = null;
+    // UX-latency R14: when set, content_stable is DEFERRED to the transcript
+    // pane (the session whose committed transcript is the real stable signal),
+    // so the finally must neither finish nor abandon the flow — it hands the
+    // mark off. Null => finish/abandon here as before (empty workspace, error,
+    // stale: no transcript to wait for).
+    let deferContentStableSessionId: string | null = null;
     let sessions: WorkspaceSession[] = [];
     // UX-latency R1 canonical flow marks (intent -> shell -> data -> stable).
     // COVERAGE LIMIT (honest): this intent mark fires here, after the caller
@@ -330,6 +337,9 @@ export function useWorkspaceBootstrapActions() {
           setActiveSessionId: (sessionId) =>
             useSessionSelectionStore.getState().setActiveSessionId(sessionId),
         });
+        if (rememberedBootstrap.contentStableSessionId) {
+          deferContentStableSessionId = rememberedBootstrap.contentStableSessionId;
+        }
         if (rememberedBootstrap.shouldReturn) {
           return { sessions };
         }
@@ -358,14 +368,23 @@ export function useWorkspaceBootstrapActions() {
       }
       return { sessions };
     } finally {
-      if (rendererFlowAbandonReason === null) {
-        finishRendererFlow({ kind: "workspace_open", correlationKey: workspaceId });
-      } else {
+      if (rendererFlowAbandonReason !== null) {
         abandonRendererFlow({
           kind: "workspace_open",
           correlationKey: workspaceId,
           reason: rendererFlowAbandonReason,
         });
+      } else if (deferContentStableSessionId !== null) {
+        // Transcript hydration moved off the critical path (R14): the pane
+        // finishes this flow when the selected session's transcript commits.
+        // Emitting content_stable here would lie — the transcript is not yet
+        // on screen. Never emit a stable mark before the user can see it.
+        deferWorkspaceOpenContentStable({
+          sessionId: deferContentStableSessionId,
+          correlationKey: workspaceId,
+        });
+      } else {
+        finishRendererFlow({ kind: "workspace_open", correlationKey: workspaceId });
       }
     }
   }, [

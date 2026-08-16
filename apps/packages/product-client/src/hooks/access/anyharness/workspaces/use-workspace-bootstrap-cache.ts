@@ -5,7 +5,7 @@ import {
   useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import {
   dismissSession,
   listWorkspaceSessions,
@@ -20,6 +20,12 @@ import {
 import {
   runTrackedReplacementDismissal,
 } from "#product/hooks/sessions/workflows/session-replacement-dismissals";
+import {
+  addReplacedSessionTombstoneCommitListener,
+} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
+import {
+  pinWorkspaceSessionsQueryWarm,
+} from "#product/hooks/access/anyharness/workspaces/workspace-session-directory-keepalive";
 
 export type CacheDecision = "hit" | "stale" | "miss";
 
@@ -144,6 +150,19 @@ export function useWorkspaceBootstrapCache() {
   const queryClient = useQueryClient();
   const cacheScopeKey = useAnyHarnessCacheScopeKey();
 
+  // UX-latency R14: keep warm-pinned session-directory entries truthful. When a
+  // replaced session's tombstone durably commits, invalidate the affected
+  // workspace's sessions query so a warm entry cannot keep showing a retired
+  // session; default refetchType lets any live list observer revalidate
+  // immediately (founder ruling: not stale-tolerant, fetch immediately).
+  useEffect(() => {
+    return addReplacedSessionTombstoneCommitListener((workspaceId) => {
+      void queryClient.invalidateQueries({
+        queryKey: anyHarnessSessionsKey(cacheScopeKey, workspaceId),
+      });
+    });
+  }, [cacheScopeKey, queryClient]);
+
   const getWorkspaceSessionsCacheDecision = useCallback((
     workspaceId: string,
   ): CacheDecision => {
@@ -162,6 +181,28 @@ export function useWorkspaceBootstrapCache() {
     input: LoadWorkspaceSessionsInput,
   ): Promise<WorkspaceSession[]> => {
     const queryKey = anyHarnessSessionsKey(cacheScopeKey, input.workspaceId);
+    // UX-latency R14: pin this workspace's session query warm (bounded LRU) so
+    // an intra-run revisit finds it in cache instead of a cold miss.
+    pinWorkspaceSessionsQueryWarm(queryClient, queryKey);
+    const fetchAndSeed = async (): Promise<WorkspaceSession[]> => {
+      // Bootstrap/reconcile own workspace activation. Fetch directly instead of
+      // joining a possibly hung automatic session-list query triggered by
+      // selectedWorkspaceId subscribers, then seed React Query for those
+      // surfaces.
+      const sessions = await fetchWorkspaceSessionsWithConnection({
+        workspaceConnection: input.workspaceConnection,
+        workspaceId: input.workspaceId,
+        requestOptions: input.requestOptions,
+        timeoutMs: input.timeoutMs,
+        isResultOwned: input.isCurrent,
+      });
+      if (input.isCurrent?.() === false) {
+        return sessions;
+      }
+      queryClient.setQueryData(queryKey, sessions);
+      return sessions;
+    };
+
     const cacheState = queryClient.getQueryState(queryKey);
     const cachedSessions = queryClient.getQueryData<WorkspaceSession[]>(queryKey);
     if (
@@ -170,27 +211,19 @@ export function useWorkspaceBootstrapCache() {
       && cacheState?.dataUpdatedAt
       && !cacheState.isInvalidated
     ) {
-      // Cache hits are not authoritative and must never reconcile staged
-      // suppression into destructive cleanup. They still need filtering so an
-      // intentionally retained rollback record cannot be reselected/reingested.
+      // Warm serve for first paint. Founder ruling: NOT stale-tolerant SWR —
+      // kick an immediate background revalidation so the list stays genuinely
+      // up to date, but return the warm list without blocking first paint on
+      // the network. Cache hits are not authoritative and must never reconcile
+      // staged suppression into destructive cleanup, so the synchronous serve
+      // only filters (an intentionally retained rollback record must not be
+      // reselected/reingested); the background fetch does the authoritative
+      // reconcile.
+      void fetchAndSeed().catch(() => undefined);
       return filterReplacedSessionTombstones(input.workspaceId, cachedSessions) ?? [];
     }
 
-    // Bootstrap/reconcile own workspace activation. Fetch directly instead of
-    // joining a possibly hung automatic session-list query triggered by
-    // selectedWorkspaceId subscribers, then seed React Query for those surfaces.
-    const sessions = await fetchWorkspaceSessionsWithConnection({
-      workspaceConnection: input.workspaceConnection,
-      workspaceId: input.workspaceId,
-      requestOptions: input.requestOptions,
-      timeoutMs: input.timeoutMs,
-      isResultOwned: input.isCurrent,
-    });
-    if (input.isCurrent?.() === false) {
-      return sessions;
-    }
-    queryClient.setQueryData(queryKey, sessions);
-    return sessions;
+    return fetchAndSeed();
   }, [cacheScopeKey, queryClient]);
 
   return {

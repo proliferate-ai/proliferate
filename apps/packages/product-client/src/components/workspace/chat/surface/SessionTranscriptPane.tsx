@@ -11,6 +11,7 @@ import { useWorkspaceCreationReceiptKey } from "#product/hooks/workspaces/derive
 import { TranscriptSwitchingPlaceholder } from "#product/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
 import type { GoalTranscriptEvent } from "#product/domain/activity/goal-transcript-events";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
+import { finishDeferredWorkspaceOpenForSession } from "#product/lib/infra/diagnostics/renderer-flow-timing";
 import {
   ensureSessionTranscriptEntry,
   patchSessionRecord,
@@ -123,6 +124,23 @@ export function SessionTranscriptPane({
     selectedWorkspaceId,
     transcript,
   ]);
+
+  // UX-latency R14: honest workspace_open content_stable. The bootstrap no
+  // longer finishes that flow at its own completion — transcript hydration is
+  // off its critical path. It DEFERS the mark to here: once the selected
+  // session's transcript is actually committed (non-null transcript, deferred
+  // id caught up so MessageList is rendering), we finish the flow. This is the
+  // first moment the user can truly see the transcript. finishDeferred… no-ops
+  // when there is no deferred workspace_open flow for this session (a plain
+  // in-workspace switch), so it is safe to run on every committed transcript.
+  useEffect(() => {
+    if (transcriptDeferred || !activeSessionId || !transcript) {
+      return;
+    }
+    finishDeferredWorkspaceOpenForSession(activeSessionId, {
+      content_stable_source: "transcript_committed",
+    });
+  }, [activeSessionId, transcript, transcriptDeferred]);
 
   const loadOlderHistory = useCallback(() => {
     if (!activeSessionId || !selectedWorkspaceId || !hasOlderHistory || isLoadingOlderHistory) {

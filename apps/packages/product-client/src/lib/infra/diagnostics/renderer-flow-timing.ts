@@ -315,6 +315,63 @@ export function abandonRendererFlow(input: {
   });
 }
 
+/**
+ * UX-latency R14: content_stable hand-off for workspace_open.
+ *
+ * The workspace-open flow no longer awaits transcript hydration on its critical
+ * path (that fetch moved to SessionTranscriptPane's self-hydration). So the
+ * bootstrap can no longer honestly finish the flow at its own completion — the
+ * transcript is not yet on screen. Instead the bootstrap DEFERS content_stable:
+ * it records the target session id whose committed transcript is the real
+ * "user can see it" signal, and the transcript pane finishes the flow when it
+ * actually commits that session's transcript.
+ *
+ * The founder's rule: never emit a stable mark before the user can see the
+ * transcript. A deferred flow that never commits (selection superseded before
+ * the pane mounts) simply ages out via pruneStaleFlows — no false milestone.
+ *
+ * The registry maps a session id -> the workspace_open flow correlation key the
+ * bootstrap opened for it. The bootstrap owns this mapping (it knows both the
+ * correlationKey it began the flow with AND the session it selected), so the
+ * pane never has to reconstruct the correlation key from workspace ids that may
+ * differ from the selected/materialized id.
+ */
+const deferredWorkspaceOpenBySession = new Map<string, string>();
+
+export function deferWorkspaceOpenContentStable(input: {
+  sessionId: string;
+  correlationKey: string;
+}): void {
+  // A single workspace_open flow settles on exactly one session. Drop any prior
+  // deferral pointing at the same flow so a superseded session can't leak an
+  // entry that never resolves.
+  for (const [sessionId, correlationKey] of deferredWorkspaceOpenBySession) {
+    if (correlationKey === input.correlationKey && sessionId !== input.sessionId) {
+      deferredWorkspaceOpenBySession.delete(sessionId);
+    }
+  }
+  deferredWorkspaceOpenBySession.set(input.sessionId, input.correlationKey);
+}
+
+/**
+ * Finish a deferred workspace_open flow because the transcript pane committed
+ * the session's transcript (the real content_stable signal). No-ops when the
+ * session has no deferred workspace_open flow (a plain in-workspace session
+ * switch, or an already-finished flow), so it is safe to call on every commit.
+ */
+export function finishDeferredWorkspaceOpenForSession(
+  sessionId: string,
+  detail?: RendererFlowDetail,
+): void {
+  const correlationKey = deferredWorkspaceOpenBySession.get(sessionId);
+  if (correlationKey === undefined) {
+    return;
+  }
+  deferredWorkspaceOpenBySession.delete(sessionId);
+  finishRendererFlow({ kind: "workspace_open", correlationKey, detail });
+}
+
 export function resetRendererFlowsForTest(): void {
   activeFlows.clear();
+  deferredWorkspaceOpenBySession.clear();
 }

@@ -45,6 +45,25 @@ import {
   markSessionOpenFlowAbandoned,
 } from "#product/hooks/sessions/lifecycle/session-open-flow-marks";
 
+/**
+ * UX-latency R14: in-flight dedupe for full session-open (non-incremental)
+ * hydrations, keyed by session id. Two callers can now race for the same
+ * session's transcript — the workspace-open bootstrap fires a fire-and-forget
+ * kickoff (hydration moved off the critical path) and SessionTranscriptPane's
+ * self-hydration effect fires independently. Without dedupe both would fetch
+ * AND both would apply history to the stores and emit the session_open flow
+ * marks twice. Sharing the whole operation (fetch + replay + store + marks)
+ * guarantees exactly one fetch and one apply; the second caller receives the
+ * first caller's result. Only full opens dedupe here — incremental
+ * append/prepend fetches (afterSeq/beforeSeq) target different ranges and must
+ * not share.
+ */
+const inFlightSessionOpenHydrations = new Map<string, Promise<boolean>>();
+
+export function resetSessionHistoryHydrationInFlightForTest(): void {
+  inFlightSessionOpenHydrations.clear();
+}
+
 export interface SessionHistoryHydrationOptions {
   afterSeq?: number;
   beforeSeq?: number;
@@ -67,7 +86,7 @@ export function useSessionHistoryHydration() {
   const cloudClient = host.cloud.client;
   const reconcileHydratedSubagents = useSessionHistorySubagentAuthority();
 
-  const rehydrateSessionSlotFromHistory = useCallback(async (
+  const runHydration = useCallback(async (
     sessionId: string,
     options?: SessionHistoryHydrationOptions,
   ): Promise<boolean> => {
@@ -392,6 +411,30 @@ export function useSessionHistoryHydration() {
       return false;
     }
   }, [cloudClient, reconcileHydratedSubagents, ssh]);
+
+  const rehydrateSessionSlotFromHistory = useCallback((
+    sessionId: string,
+    options?: SessionHistoryHydrationOptions,
+  ): Promise<boolean> => {
+    // Only full session-open hydrations dedupe (see inFlightSessionOpenHydrations).
+    const isSessionOpenHydration =
+      (options?.afterSeq ?? null) === null && (options?.beforeSeq ?? null) === null;
+    if (!isSessionOpenHydration) {
+      return runHydration(sessionId, options);
+    }
+    const inFlight = inFlightSessionOpenHydrations.get(sessionId);
+    if (inFlight) {
+      return inFlight;
+    }
+    const promise = runHydration(sessionId, options);
+    inFlightSessionOpenHydrations.set(sessionId, promise);
+    void promise.finally(() => {
+      if (inFlightSessionOpenHydrations.get(sessionId) === promise) {
+        inFlightSessionOpenHydrations.delete(sessionId);
+      }
+    });
+    return promise;
+  }, [runHydration]);
 
   return {
     rehydrateSessionSlotFromHistory,

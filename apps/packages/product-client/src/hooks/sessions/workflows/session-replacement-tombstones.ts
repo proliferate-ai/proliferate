@@ -32,6 +32,31 @@ const retiredSuppressionByWorkspaceId = new Map<string, WorkspaceTombstones>();
 const retiredClientAliasesByWorkspaceId = new Map<string, Set<string>>();
 let latestCommittedGeneration = 0;
 
+// UX-latency R14: notify listeners when a replaced-session tombstone durably
+// commits, so warm-kept session-directory query entries can be invalidated and
+// refreshed. Before R14 the sessions query was garbage-collected on navigate
+// away, so a stale warm entry could never outlive a replacement; now that we
+// pin the last N visited entries (workspace-session-directory-keepalive.ts), a
+// committed replacement must invalidate the pinned entry so it can never keep
+// showing a retired session.
+type ReplacedSessionTombstoneCommitListener = (workspaceId: string) => void;
+const tombstoneCommitListeners = new Set<ReplacedSessionTombstoneCommitListener>();
+
+export function addReplacedSessionTombstoneCommitListener(
+  listener: ReplacedSessionTombstoneCommitListener,
+): () => void {
+  tombstoneCommitListeners.add(listener);
+  return () => {
+    tombstoneCommitListeners.delete(listener);
+  };
+}
+
+function notifyReplacedSessionTombstoneCommitted(workspaceId: string): void {
+  for (const listener of tombstoneCommitListeners) {
+    listener(workspaceId);
+  }
+}
+
 export function stageReplacedClientSessionAlias(
   workspaceId: string,
   sessionId: string,
@@ -103,6 +128,7 @@ export function commitReplacedSessionTombstone(
   removeEntry(stagedByWorkspaceId, workspaceId, runtimeSessionId);
   replaceTombstoneSource(committedByWorkspaceId, nextCommitted);
   latestCommittedGeneration = commitGeneration;
+  notifyReplacedSessionTombstoneCommitted(workspaceId);
   return true;
 }
 
@@ -283,6 +309,7 @@ export function resetReplacedSessionTombstonesForTests(): void {
   retiredSuppressionByWorkspaceId.clear();
   retiredClientAliasesByWorkspaceId.clear();
   latestCommittedGeneration = 0;
+  tombstoneCommitListeners.clear();
   persistCommittedTombstones();
 }
 
