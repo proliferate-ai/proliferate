@@ -10,6 +10,6 @@
 - [Session Selection](session-selection.md) — active-session restoration, the
   visible-session tab invariant, and bounded empty-workspace recovery.
 - [Terminals](terminals.md) — current user-facing terminal behavior.
-- [UX Latency + Transitions](../ux-latency-transitions.md) (Status: target)
-  — held-key sidebar workspace switching, the sidebar row activation
+- [UX Latency + Transitions](../ux-latency-transitions.md) (Status: target):
+  held-key sidebar workspace switching, the sidebar row activation
   transition, and the chat loading hero.

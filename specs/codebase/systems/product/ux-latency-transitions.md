@@ -73,15 +73,17 @@ otherwise-ready content, not a wait state.
 ([DotCellLoader.tsx](../../../../apps/packages/product-client/src/primitives/DotCellLoader.tsx)),
 styled via `.dot-cell-loader[data-size="hero"]` in
 [product.css](../../../../apps/packages/design/src/css/product.css) with its
-own `--dot-cell-size`/`--dot-cell-gap` pair, smaller and tighter than the
-default tier.
+own `--dot-cell-size`/`--dot-cell-gap` pair: `0.375rem`/`0.25rem` (6px dots,
+4px gap), against the default tier's `0.1875rem`/`0.125rem` (3px dots, 2px
+gap) and the `compact` tier's `0.15625rem`/`0.09375rem`. The 3x3 grid this
+produces is 26px square, the largest of the three tiers.
 
 Because `ChatLoadingHero` hardcodes `state="pending"` for its whole life
 (the parent `ChatView` mounts it only while a wait mode is active and
 unmounts it synchronously on resolve), `LoadingBoundary`'s own min-display
-and fade-out machinery never fires from inside it — that machinery only
-engages on a local transition away from `pending`, and this component never
-makes one. Resolution here is `ChatView` switching `mode.kind` and tearing
+and fade-out machinery never fires from inside it, because that machinery
+only engages on a local transition away from `pending`, and this component
+never makes one. Resolution here is `ChatView` switching `mode.kind` and tearing
 this component down, not a state change this component owns.
 
 `ChatLoadingHero` instead reports the instant its treatment becomes visible
