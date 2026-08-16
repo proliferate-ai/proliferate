@@ -1,10 +1,23 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToolCallSummary } from "#product/components/workspace/chat/tool-calls/ToolCallSummary";
 
-afterEach(cleanup);
+let pendingFrames: FrameRequestCallback[];
+
+beforeEach(() => {
+  pendingFrames = [];
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+    pendingFrames.push(callback);
+    return pendingFrames.length;
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe("ToolCallSummary", () => {
   it("keeps the completed-work divider mounted and collapses it in step with the disclosure", () => {
@@ -48,6 +61,9 @@ describe("ToolCallSummary", () => {
     expect((expandedDividerShell as HTMLElement | null)?.style.gridTemplateRows).toBe("0fr");
 
     fireEvent.click(disclosure);
+    act(() => {
+      pendingFrames.shift()?.(0);
+    });
     const collapsedDivider = container.querySelector("[data-completed-work-divider]");
     expect(collapsedDivider).not.toBeNull();
     const collapsedDividerShell = collapsedDivider?.closest("[data-animated-collapsible-content]");
