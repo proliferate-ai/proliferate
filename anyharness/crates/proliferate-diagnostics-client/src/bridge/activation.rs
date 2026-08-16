@@ -112,6 +112,12 @@ pub const DEV_CAPABILITY_ENV: &str = "PROLIFERATE_DIAGNOSTICS_BRIDGE_TOKEN";
 /// delivery after the first batch.
 #[cfg(debug_assertions)]
 pub const DEV_COLLECTOR_BOOT_ID_ENV: &str = "PROLIFERATE_DIAGNOSTICS_BRIDGE_COLLECTOR_BOOT_ID";
+/// Absolute path of the env snippet itself. The host rewrites that file on
+/// every new collector generation, so a producer that keeps re-reading it can
+/// re-attach after a collector restart instead of staying pinned to a dead
+/// generation.
+#[cfg(debug_assertions)]
+pub const DEV_ENV_PATH_ENV: &str = "PROLIFERATE_DIAGNOSTICS_DEV_ENV_PATH";
 
 /// Fixed: with no bridge there is nothing to advance the generation.
 #[cfg(debug_assertions)]
