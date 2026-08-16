@@ -9,14 +9,14 @@
     "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
-    "e2b": "^2.38.0"
+    "e2b": "^2.38.2"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
-    "@types/pg": "^8.20.3",
-    "pg": "^8.13.1",
+    "@types/pg": "^8.21.0",
+    "pg": "^8.23.0",
     "playwright": "^1.62.1",
-    "tsx": "^4.23.5",
+    "tsx": "^4.23.12",
     "typescript": "^5.7.0"
   }
 }
