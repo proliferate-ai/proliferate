@@ -1235,7 +1235,7 @@ class ShippedAllowlistTest(unittest.TestCase):
             # differs per rung if later rungs edit the file; each rung's branch
             # pins its own value.
             ("DOMAIN_SQL_OUTSIDE_STORE",
-             "domains/workflows/policy.rs", 34,
+             "domains/workflows/policy.rs", 35,
              "bare SELECT head, FROM on the next line"),
             # A DROP TABLE line, inside a cfg(test) mod the engine cannot see
             # past — the checker still flags the line itself. Carried forward

@@ -107,7 +107,7 @@ API_LIVE_RUNTIME_IMPORT anyharness/crates/anyharness-lib/src/api/http/workflow_r
 # the DOMAIN_SQL_OUTSIDE_STORE row below.
 
 # Rule: SQL in domains/** lives in the store.
-# 2 files, 3 occurrences.
+# 2 files, 9 occurrences.
 #
 # activity/feeds.rs, plans/decision_op.rs, plans/service.rs, and
 # sessions/links/completions.rs dropped out entirely (grid plan PR 5b):
@@ -122,7 +122,7 @@ API_LIVE_RUNTIME_IMPORT anyharness/crates/anyharness-lib/src/api/http/workflow_r
 # unchanged). Of the remaining two rows, access_gate.rs is an
 # engine-invisible cfg(test) boundary; the workflows gen-2 policy row is a
 # real engine-visible read that belongs in the store.
-DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workflows/policy.rs 2 the gen-2 destruction-controller policy's controlling-run lookup runs its SELECT inline over a raw Db handle instead of through WorkflowStore; target = move the query into store.rs and pass facts in (journaled ADR wart, cleanup PR TBD)
+DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workflows/policy.rs 8 the gen-2 destruction-controller policy's controlling-run lookup runs its SELECT inline over a raw Db handle instead of through WorkflowStore (1 real occurrence, target = move into store.rs); the other 7 are inside the file's own cfg(test) mod tests (fix/wf2-run-cancel adds the first direct coverage for this policy) seeding workflow_runs/workflow_run_nodes rows with raw INSERTs, an engine-invisible cfg(test) boundary like access_gate.rs below
 DOMAIN_SQL_OUTSIDE_STORE anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs 1 inside the inline cfg(test) mod the engine cannot see (DROP TABLE workspace_access_modes); the repo_roots INSERT that used to sit alongside it moved to the shared repo_roots test_support helper (grid plan PR 8c); target = none, engine-invisible cfg boundary
 
 # Rule: the runtime valve holds live/ powers but never re-exports them
