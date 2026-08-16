@@ -116,6 +116,19 @@ AGENT_GATEWAY_FREE_CREDIT_PERIOD_KEY = "registration"
 AGENT_USAGE_EVENT_STATUS_IMPORTED = "imported"
 AGENT_USAGE_EVENT_STATUS_NEEDS_REVIEW = "needs_review"
 
+# Per-enrollment-key gateway-enablement verification verdict (agent-auth.md
+# FR-3). `ok` means the key saw a non-empty model list (the access-group grant
+# for its harness_kind is live); `misconfigured` means it saw an empty list.
+# An error inside the loop records NO verdict (the prior verdict stands), so
+# there is no `error` status here — a transient LiteLLM blip must not overwrite a
+# last-known-good.
+AGENT_GATEWAY_VERIFICATION_STATUS_OK = "ok"
+AGENT_GATEWAY_VERIFICATION_STATUS_MISCONFIGURED = "misconfigured"
+AGENT_GATEWAY_VERIFICATION_STATUSES = (
+    AGENT_GATEWAY_VERIFICATION_STATUS_OK,
+    AGENT_GATEWAY_VERIFICATION_STATUS_MISCONFIGURED,
+)
+
 # The snapshot table has no ``source`` column (model-catalog.md §Storage): every
 # row is a machine observation the Worker uploaded, so there is nothing to
 # discriminate. Only the soft-versioning status survives.

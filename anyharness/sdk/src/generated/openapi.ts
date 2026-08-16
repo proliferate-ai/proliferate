@@ -2202,7 +2202,7 @@ export interface components {
             unsupportedRoute: boolean;
         };
         /** @enum {string} */
-        AgentAuthGatewayHealth: "reachable" | "unreachable" | "budget_exhausted";
+        AgentAuthGatewayHealth: "reachable" | "unreachable" | "unauthorized" | "models_drifted" | "budget_exhausted";
         /** @enum {string} */
         AgentAuthLoginHandoff: "initiated" | "awaiting_browser" | "completed" | "cancelled" | "timed_out";
         /** @enum {string} */
