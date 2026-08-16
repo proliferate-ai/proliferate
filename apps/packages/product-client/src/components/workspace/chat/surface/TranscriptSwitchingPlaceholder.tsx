@@ -1,5 +1,5 @@
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
-import { DotCellLoader } from "#product/primitives/DotCellLoader";
+import { ProliferateLivingMark } from "#product/components/brand/ProliferateLivingMark";
 import { LoadingBoundary } from "#product/primitives/LoadingBoundary";
 import {
   CHAT_COLUMN_CLASSNAME,
@@ -16,8 +16,8 @@ import {
  * Transitions ADR §4.2, Rung 2), which owns the 200ms show-delay so sub-200ms
  * switches stay loader-free. The component is only mounted while switching, so it
  * holds `state="pending"` for its whole life; the parent unmounts it on resolve.
- * Rung 3 swaps the treatment visual to the living mark; this rung keeps the
- * existing DotCellLoader.
+ * Rung 3 (UX Latency + Transitions ADR §4.3) swaps the treatment visual from
+ * `DotCellLoader` to the Class A `ProliferateLivingMark`.
  */
 export function TranscriptSwitchingPlaceholder({
   label = "Loading chat",
@@ -39,7 +39,7 @@ export function TranscriptSwitchingPlaceholder({
           aria-hidden="true"
           treatment={
             <>
-              <DotCellLoader className="text-muted-foreground" variant="wave" />
+              <ProliferateLivingMark />
               <p className="text-chat font-medium text-muted-foreground">{label}</p>
             </>
           }
