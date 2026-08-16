@@ -6,6 +6,13 @@ import {
 import { isTerminalIntegrationOauthFlowStatus } from "#product/lib/domain/cloud/integrations";
 import { cloudIntegrationOauthFlowKey } from "#product/hooks/access/cloud/integrations/query-keys";
 
+// Named exception (does not sit on the `cadence` scale): 2s falls strictly
+// between `cadence.fastMs` (1s) and `cadence.standardMs` (5s). Snapping down
+// to fast would tighten this active-watch poll (forbidden); snapping up to
+// standard would more than double the wait while the user has a browser tab
+// open mid-OAuth-handoff watching for the flow to resolve, which is not an
+// inconsequential loosening. Kept as its own named constant instead of
+// force-fitting a token (UX Latency + Transitions ADR §4.7, Rung 6, Q8).
 const OAUTH_FLOW_POLL_INTERVAL_MS = 2_000;
 
 /**

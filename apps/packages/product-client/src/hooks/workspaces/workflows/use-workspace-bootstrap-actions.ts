@@ -12,20 +12,17 @@ import { useSessionSelectionActions } from "#product/hooks/sessions/facade/use-s
 import { useSessionSummaryActions } from "#product/hooks/sessions/workflows/use-session-summary-actions";
 import { workspaceFileTreeStateKey } from "#product/lib/domain/workspaces/cloud/collections";
 import {
-  bindMeasurementCategories,
-  elapsedMs,
-  finishOrCancelMeasurementOperation,
   getLatencyFlowRequestHeaders,
   getMeasurementRequestOptions,
-  hashMeasurementScope,
-  logLatency,
-  markOperationForNextCommit,
-  recordMeasurementMetric,
-  recordMeasurementWorkflowStep,
   startLatencyTimer,
-  startMeasurementOperation,
 } from "#product/lib/infra/measurement/measurement-port";
-import type { MeasurementFinishReason } from "#product/lib/domain/telemetry/debug-measurement-catalog";
+import {
+  abandonRendererFlow,
+  beginRendererFlow,
+  finishRendererFlow,
+  markRendererFlowDataReady,
+  markRendererFlowShellCommitted,
+} from "#product/lib/infra/diagnostics/renderer-flow-timing";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import {
   clearLastViewedSession,
@@ -41,7 +38,6 @@ import {
   clearInvalidOptimisticActiveSession,
   findLoadedSessionForClientSession,
 } from "#product/hooks/workspaces/workflows/workspace-bootstrap-session-state";
-import { isOptimisticWorkspaceSessionPlaceholder } from "#product/lib/domain/workspaces/selection/optimistic-session-shell";
 import { handleEmptyWorkspaceBootstrapWithRecovery } from "#product/hooks/workspaces/workflows/workspace-bootstrap-empty-session";
 import { handleRememberedWorkspaceSessionBootstrap } from "#product/hooks/workspaces/workflows/workspace-bootstrap-remembered-session";
 import { shouldPreserveStagedReplacementShell } from "#product/hooks/sessions/workflows/session-replacement-tombstones";
@@ -115,44 +111,33 @@ export function useWorkspaceBootstrapActions() {
     forceSessionDirectoryRefresh,
     isCurrent, signal,
   }: BootstrapWorkspaceInput): Promise<{ sessions: WorkspaceSession[] }> => {
-    const measurementOperationId = startMeasurementOperation({
-      kind: "workspace_open",
-      surfaces: [
-        "workspace-shell",
-        "workspace-sidebar",
-        "global-header",
-        "header-tabs",
-        "chat-surface",
-        "session-transcript-pane",
-        "transcript-list",
-        "file-tree",
-      ],
-      linkedLatencyFlowId: latencyFlowId ?? undefined,
-      maxDurationMs: 30_000,
-    });
-    let measurementFinishReason: MeasurementFinishReason = "completed";
+    // UX-latency R1 (Q17): workspace_open emits ONLY through the renderer
+    // flow-timing family. The old `startMeasurementOperation({kind:"workspace_open"})`
+    // measurement operation and its `logLatency("workspace.select.*")` emits in
+    // this function were the parallel layer the ADR gate forbids; both are gone.
+    // `measurementOperationId` is now null so the downstream measurement
+    // recorders no-op, while the latency-flow REQUEST HEADERS
+    // (getLatencyFlowRequestHeaders/getMeasurementRequestOptions) are kept — they
+    // are server-side correlation, not a renderer-side instrumentation layer.
+    const measurementOperationId = null;
+    // Renderer-flow outcome: null => finish (content_stable); a reason =>
+    // abandon (the truthful replacement for the old cancelLatencyFlow staleness
+    // signal). Superseded/stale exits set this so no false content_stable fires.
+    let rendererFlowAbandonReason: string | null = null;
     let sessions: WorkspaceSession[] = [];
+    // UX-latency R1 canonical flow marks (intent -> shell -> data -> stable).
+    // COVERAGE LIMIT (honest): this intent mark fires here, after the caller
+    // has already resolved which connection/workspace to bootstrap. Upstream
+    // work in run-workspace-selection.ts and selection/* (click handling,
+    // connection resolution, dedupe against the current selection) runs
+    // BEFORE this callback, so intent_to_shell_ms and the rest of this flow
+    // under-measure the true click-to-settled latency by that upstream phase.
+    beginRendererFlow({
+      kind: "workspace_open",
+      correlationKey: workspaceId,
+      correlation: { workspaceId },
+    });
     cancelDeferredFileTreePrefetch();
-    const unbindMeasurementCategories = measurementOperationId
-      ? bindMeasurementCategories({
-        operationId: measurementOperationId,
-        categories: [
-          "session.list",
-          "session.get",
-          "session.events.list",
-          "session.resume",
-          "session.stream",
-          "file.list",
-          "git.status",
-          "workspace.session_launch",
-          "workspace.setup_status",
-        ],
-        scope: {
-          runtimeUrlHash: hashMeasurementScope(workspaceConnection.runtimeUrl),
-        },
-        ttlMs: 30_000,
-      })
-      : () => undefined;
     try {
       const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
       const workspace = workspaces.find((entry) => entry.id === workspaceId);
@@ -170,10 +155,9 @@ export function useWorkspaceBootstrapActions() {
         authToken: workspaceConnection.authToken ?? undefined,
       };
       prepareFileWorkspace(fileWorkspaceArgs);
-      recordMeasurementWorkflowStep({
-        operationId: measurementOperationId,
-        step: "workspace.bootstrap.file_tree_init",
-        startedAt: initWorkspaceStartedAt,
+      markRendererFlowShellCommitted({
+        kind: "workspace_open",
+        correlationKey: workspaceId,
       });
       scheduleDeferredFileTreePrefetch({
         workspaceId,
@@ -186,18 +170,12 @@ export function useWorkspaceBootstrapActions() {
         startedAt: initWorkspaceStartedAt,
         isCurrent,
       });
-      if (measurementOperationId) {
-        recordMeasurementMetric({
-          type: "cache",
-          category: "session.list",
-          operationId: measurementOperationId,
-          decision: getWorkspaceSessionsCacheDecision(workspaceId),
-          source: "react_query",
-        });
-      }
+      // The session-list cache decision used to be a measurement-metric; it is
+      // now the one piece of step detail rerouted onto the renderer flow (as a
+      // data_ready field below), keeping it in the single instrumentation family.
+      const sessionListCacheDecision = getWorkspaceSessionsCacheDecision(workspaceId);
       const requestHeaders = getLatencyFlowRequestHeaders(latencyFlowId) ?? undefined;
       const sessionRequestOptions = getMeasurementRequestOptions({
-        operationId: measurementOperationId,
         category: "session.list",
         headers: requestHeaders,
       });
@@ -226,10 +204,14 @@ export function useWorkspaceBootstrapActions() {
         loadWorkspaceSessions,
       });
       if (sessionsLoadResult.kind === "stale") {
+        // Superseded selection: abandon (via finally) instead of finishing, so
+        // this stale bootstrap never emits a false content_stable for a
+        // workspace the user already navigated away from.
+        rendererFlowAbandonReason = "workspace_selection_stale";
         return { sessions };
       }
       if (sessionsLoadResult.kind === "failed") {
-        measurementFinishReason = "error_sanitized";
+        rendererFlowAbandonReason = "workspace_bootstrap_error";
         const billingBlock = getCloudWorkspaceBillingBlockFromError(sessionsLoadResult.error);
         if (billingBlock) {
           useCloudWorkspaceBillingBlockStore
@@ -256,8 +238,18 @@ export function useWorkspaceBootstrapActions() {
       }
       useCloudWorkspaceBillingBlockStore.getState().clearBillingBlock(workspaceId);
       sessions = sessionsLoadResult.sessions;
+      markRendererFlowDataReady({
+        kind: "workspace_open",
+        correlationKey: workspaceId,
+        detail: { session_list_cache: sessionListCacheDecision },
+      });
 
       if (!isCurrent()) {
+        // Selection was superseded after the session directory loaded; abandon
+        // rather than finalize a content_stable for the abandoned workspace
+        // (previously this returned with a "completed" reason and the finally
+        // emitted a false content_stable).
+        rendererFlowAbandonReason = "workspace_selection_stale";
         return { sessions };
       }
       if (await resumePendingEmptySessionCreationForBootstrap({
@@ -281,18 +273,7 @@ export function useWorkspaceBootstrapActions() {
         ? findLoadedSessionForClientSession(activeSessionIdAfterLoad, sessions)
         : null;
       if (activeSessionIdAfterLoad && loadedActiveSession) {
-        const wasOptimisticPlaceholder =
-          isOptimisticWorkspaceSessionPlaceholder(activeSessionRecordAfterLoad);
         applySessionSummary(activeSessionIdAfterLoad, loadedActiveSession, workspaceId);
-        if (wasOptimisticPlaceholder) {
-          logLatency("workspace.select.optimistic_session_validated", {
-            workspaceId,
-            logicalWorkspaceId,
-            sessionId: activeSessionIdAfterLoad,
-            title: loadedActiveSession.title ?? null,
-            agentKind: loadedActiveSession.agentKind,
-          });
-        }
       } else if (!preserveStagedReplacementShell) {
         clearInvalidOptimisticActiveSession({
           workspaceId,
@@ -302,12 +283,6 @@ export function useWorkspaceBootstrapActions() {
 
       if (sessions.length === 0) {
         if (preserveStagedReplacementShell) {
-          logLatency("workspace.select.initial_session_open.skipped", {
-            workspaceId,
-            sessionId: activeSessionIdAfterLoad,
-            reason: "staged_session_replacement",
-            totalElapsedMs: elapsedMs(startedAt),
-          });
           if (isCurrent()) {
             markWorkspaceBootstrappedInSession(workspaceId);
           }
@@ -329,7 +304,7 @@ export function useWorkspaceBootstrapActions() {
           isCurrent,
         }, emptyWorkspaceBootstrapDeps);
         if (emptyBootstrap.enteredRecovery) {
-          measurementFinishReason = "error_sanitized";
+          rendererFlowAbandonReason = "workspace_bootstrap_error";
         }
         if (emptyBootstrap.shouldReturn) {
           return { sessions };
@@ -367,7 +342,7 @@ export function useWorkspaceBootstrapActions() {
 
       return { sessions };
     } catch (error) {
-      measurementFinishReason = "error_sanitized";
+      rendererFlowAbandonReason = "workspace_bootstrap_error";
       if (isCurrent()) {
         const billingBlock = getCloudWorkspaceBillingBlockFromError(error);
         if (billingBlock) {
@@ -384,19 +359,14 @@ export function useWorkspaceBootstrapActions() {
       }
       return { sessions };
     } finally {
-      unbindMeasurementCategories();
-      if (measurementOperationId) {
-        markOperationForNextCommit(measurementOperationId, [
-          "workspace-shell",
-          "workspace-sidebar",
-          "global-header",
-          "header-tabs",
-          "chat-surface",
-          "session-transcript-pane",
-          "transcript-list",
-          "file-tree",
-        ]);
-        finishOrCancelMeasurementOperation(measurementOperationId, measurementFinishReason);
+      if (rendererFlowAbandonReason === null) {
+        finishRendererFlow({ kind: "workspace_open", correlationKey: workspaceId });
+      } else {
+        abandonRendererFlow({
+          kind: "workspace_open",
+          correlationKey: workspaceId,
+          reason: rendererFlowAbandonReason,
+        });
       }
     }
   }, [

@@ -38,6 +38,12 @@ import { useWorkspaceSidebarResize } from "#product/hooks/preferences/ui/use-wor
 import { useUpdater } from "#product/hooks/access/tauri/use-updater";
 import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
+import {
+  SETTINGS_NAV_FLOW_KEY,
+  finishRendererFlow,
+  markRendererFlowDataReady,
+  markRendererFlowShellCommitted,
+} from "#product/lib/infra/diagnostics/renderer-flow-timing";
 
 interface SettingsScreenProps {
   activeSection: SettingsSection;
@@ -106,6 +112,32 @@ export function SettingsScreen({
     (scope) => !isSettingsAdminOnlyScope(scope) || showAdminSettings,
   );
   const redirectedAdminSectionRef = useRef<SettingsSection | null>(null);
+
+  // UX-latency R1 settings_nav flow: the screen mounting is the shell; the
+  // settle happens once admin/org gating data resolves. Fires once per mount.
+  const settingsFlowSettledRef = useRef(false);
+  useEffect(() => {
+    markRendererFlowShellCommitted({
+      kind: "settings_nav",
+      correlationKey: SETTINGS_NAV_FLOW_KEY,
+    });
+  }, []);
+  // COVERAGE LIMIT (honest): when admin/org access is already resolved at mount
+  // (adminAccessLoading === false on the first pass — the common warm case), the
+  // shell/data/stable marks fire back-to-back in the same tick, so
+  // shell_to_data_ms and data_to_stable_ms collapse to ~0. The non-trivial
+  // signal only appears on a cold open where useIsAdmin is still loading.
+  useEffect(() => {
+    if (adminAccessLoading || settingsFlowSettledRef.current) {
+      return;
+    }
+    settingsFlowSettledRef.current = true;
+    markRendererFlowDataReady({
+      kind: "settings_nav",
+      correlationKey: SETTINGS_NAV_FLOW_KEY,
+    });
+    finishRendererFlow({ kind: "settings_nav", correlationKey: SETTINGS_NAV_FLOW_KEY });
+  }, [adminAccessLoading]);
 
   useEffect(() => {
     if (!shouldRedirectAdminSection) {

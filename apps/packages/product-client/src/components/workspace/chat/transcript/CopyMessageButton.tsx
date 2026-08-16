@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion } from "@proliferate/design/motion";
 import { Check, Copy } from "#product/primitives/icons/core";
 import { IconButton } from "#product/primitives/IconButton";
 
@@ -26,7 +27,7 @@ export function CopyMessageButton({
   const handleCopy = () => {
     void navigator.clipboard.writeText(content).then(() => {
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
+      window.setTimeout(() => setCopied(false), motion.feedback.copiedResetMs);
     }).catch(() => {});
   };
 

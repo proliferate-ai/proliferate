@@ -4,6 +4,7 @@ import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
 import type { CreateSessionWithResolvedConfigOptions } from "#product/hooks/sessions/workflows/session-creation-types";
+import { createPromptAttachmentSnapshot } from "#product/domain/chats/composer/prompt-attachment-snapshot";
 import {
   buildPendingWorkspaceUiKey,
 } from "#product/lib/domain/workspaces/creation/pending-entry";
@@ -205,6 +206,38 @@ describe("useHomeDeferredLaunchRunner", () => {
     });
     expect(useDeferredHomeLaunchStore.getState().launches["cloud-2:attempt-2"]?.status)
       .toBe("pending");
+  });
+
+  it("forwards the queued attachment snapshots when the prompt replays", async () => {
+    // PRO-230 remainder (#1893) dropped `attachmentSnapshots` from this call,
+    // silently discarding any file attached while the cloud workspace was
+    // still provisioning. Every other launch path threads it through
+    // `promptAttachmentSendFields`; this asserts the deferred path does too.
+    mocks.workspaceCollections.cloudWorkspaces = [cloudWorkspace({ status: "ready" })];
+    const attachment = createPromptAttachmentSnapshot({
+      id: "attachment-1",
+      name: "notes.txt",
+      mimeType: "text/plain",
+      size: 42,
+      kind: "text_resource",
+      source: "upload",
+    }, { tag: "file" });
+    enqueueLaunch(deferredLaunch({ attachmentSnapshots: [attachment] }));
+
+    renderHook(() => useHomeDeferredLaunchRunner());
+
+    await waitFor(() => {
+      expect(mocks.createSessionWithResolvedConfig).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "run the migration",
+          attachmentSnapshots: [attachment],
+          optimisticContentParts: expect.arrayContaining([
+            expect.objectContaining({ type: "text", text: "run the migration" }),
+            expect.objectContaining({ type: "resource", name: "notes.txt" }),
+          ]),
+        }),
+      );
+    });
   });
 
   it("announces a background send failure with its workspace instead of the composer copy", async () => {
