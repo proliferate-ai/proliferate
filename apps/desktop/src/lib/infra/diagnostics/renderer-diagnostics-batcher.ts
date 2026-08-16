@@ -23,7 +23,7 @@ import {
   settleAcknowledgement,
 } from "./renderer-diagnostics-batcher-waiters";
 import { RendererLossLedger } from "./renderer-diagnostics-loss-ledger";
-import { isRendererIngestProtocolError } from "./renderer-diagnostics-native-error";
+import { classifyRendererIngestError } from "./renderer-diagnostics-native-error";
 import type { QueuedRecord } from "./renderer-diagnostics-queue";
 import { RendererRecordQueue } from "./renderer-diagnostics-queue";
 
@@ -251,12 +251,7 @@ export class RendererDiagnosticsBatcher {
       })
       .catch((error: unknown) => {
         this.records.releaseDetached(detached);
-        this.handleInvokeFailure(
-          detached,
-          isRendererIngestProtocolError(error)
-            ? "invalid_receipt"
-            : "invoke_failure",
-        );
+        this.handleInvokeFailure(detached, classifyRendererIngestError(error));
       })
       .finally(() => {
         this.records.releaseDetached(detached);
@@ -300,7 +295,7 @@ export class RendererDiagnosticsBatcher {
 
   private handleInvokeFailure(
     detached: QueuedRecord[],
-    reason: "invoke_failure" | "invalid_receipt",
+    reason: RendererLossReason,
   ): void {
     for (const entry of detached) {
       this.noteLoss(reason, entry.record.severity);
