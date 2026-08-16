@@ -193,10 +193,19 @@ export function beginSessionRestorePlacement(
   setPinned(false);
   refs.restoreResolverRef.current = plan.resolveTargetTop;
   refs.restoreDeadlineRef.current = deadlineMs;
-  if (viewport) {
-    notifyProgrammaticScroll(() => {
-      viewport.scrollTop = initialTop;
-    });
+  const viewportEl = viewport;
+  if (viewportEl) {
+    // Pre-paint placement (FR-2: place before first paint). Only when the saved
+    // target is reachable in the current content: the coarse index-sum estimate
+    // can exceed the freshly-switched content's not-yet-measured height, and
+    // writing it then would clamp. The single frame writer re-resolves the
+    // estimate-immune anchor each glued frame and lands the exact position.
+    const maxTop = Math.max(0, viewportEl.scrollHeight - viewportEl.clientHeight);
+    if (initialTop <= maxTop + 1) {
+      notifyProgrammaticScroll(() => {
+        viewportEl.scrollTop = initialTop;
+      });
+    }
   }
   return true;
 }
