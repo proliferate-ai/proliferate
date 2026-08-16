@@ -279,7 +279,25 @@ export function VirtualizedTranscriptRowList({
 
     setPinned(false);
     notifyProgrammaticScroll(() => {
-      viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
+      // Forward-clamp this FIRST write the same way the frame-pass writer
+      // (use-transcript-frame-pipeline-lifecycle.ts) forward-clamps every
+      // later one: a prepend only ever ADDS height above the reader, so
+      // scrollTop can never legitimately need to move below anchor.scrollTop.
+      // TanStack's own total for the just-committed DOM can transiently
+      // undershoot anchor.scrollHeight at this exact synchronous tick (the
+      // freshly-mounted older rows are still on estimate-coordinate sizing
+      // one frame before layout/measurement lands), which without a clamp
+      // yields a negative delta the browser silently clamps to scrollTop 0 —
+      // a full loss of the reading position indistinguishable, from the
+      // reader's seat, from the blank-fallback remount this same file guards
+      // against elsewhere. The r5 fix only guarded the recurring frame-pass
+      // write; this initial write ran unclamped and is the actual source of
+      // the CI webkit "prepend anchoring ... scrollTop Received 0" bimodal
+      // failure (confirmed against trace.zip evidence from #1992/#1993: both
+      // failures landed exactly at scrollTop 0 well inside the 3s
+      // blank-fallback grace window, ruling out a remount).
+      const rawScrollHeightDelta = viewport.scrollHeight - anchor.scrollHeight;
+      viewport.scrollTop = anchor.scrollTop + Math.max(rawScrollHeightDelta, 0);
     });
     // The synchronous write above lands against the CURRENT scrollHeight, still
     // the estimate for the freshly-mounted older rows (overflow-anchor: none

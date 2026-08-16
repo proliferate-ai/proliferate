@@ -284,6 +284,53 @@ describe("VirtualizedTranscriptRowList", () => {
     expect(button?.getAttribute("aria-hidden")).toBe("true");
   });
 
+  // Regression coverage for the CI webkit bimodal failure (PRO-187, r10 CI
+  // round: "prepend anchoring: older-history prepend keeps the reading row
+  // fixed", trace evidence from #1992/#1993 both showing scrollTop hard-reset
+  // to exactly 0 well inside the 3s blank-fallback grace window, ruling out a
+  // virtualizer remount as the cause — see trace timeline in the PR comment).
+  // The FIRST synchronous prepend-anchor write
+  // (`viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight -
+  // anchor.scrollHeight)`) ran unclamped: on a slow/loaded runner the
+  // just-committed DOM's scrollHeight can transiently undershoot
+  // anchor.scrollHeight (the freshly-mounted older rows are still
+  // estimate-coordinate one frame before layout/measurement lands), producing
+  // a negative delta the browser silently clamps to 0 — a full loss of the
+  // reading position. This never showed up as a negative scrollTop in the
+  // trace because the browser clamp masks it; it shows up as scrollTop 0
+  // regardless of how negative the raw delta was.
+  it("prepend anchor write never drops scrollTop below its pre-prepend value even if scrollHeight transiently undershoots", () => {
+    const props = { ...makeProps(), hasOlderHistory: true, olderHistoryCursor: 1 };
+    const { container, rerender } = render(<VirtualizedTranscriptRowList {...props} />);
+    const viewport = getViewport(container);
+    Object.defineProperty(viewport, "clientHeight", { value: 400, configurable: true });
+    Object.defineProperty(viewport, "scrollHeight", { value: 5_552, configurable: true });
+    viewport.scrollTop = 464;
+
+    // Cross the older-history prefetch threshold: arms pendingPrependAnchorRef
+    // with { scrollTop: 464, scrollHeight: 5552 } and fires onLoadOlderHistory.
+    act(() => {
+      fireEvent.scroll(viewport);
+    });
+    expect(props.onLoadOlderHistory).toHaveBeenCalledTimes(1);
+
+    // The prepend lands: rowCount grows AND, on this exact commit, the
+    // virtualizer's just-committed total transiently reports LESS than the
+    // anchor's captured pre-prepend scrollHeight (the pathological case this
+    // guard exists for). Negative control: remove the `Math.max(delta, 0)`
+    // clamp in VirtualizedTranscriptRowList.tsx and this assertion fails with
+    // scrollTop 0 instead of 464.
+    Object.defineProperty(viewport, "scrollHeight", { value: 5_000, configurable: true });
+    rerender(
+      <VirtualizedTranscriptRowList
+        {...props}
+        rows={[...ROWS, { kind: "pending_prompt", key: "pending-prompt:session-1-older" }]}
+      />,
+    );
+
+    expect(viewport.scrollTop).toBe(464);
+  });
+
   it("adds an overlay spacer without changing the current scroll position", () => {
     const props = makeProps();
     const { container, rerender } = render(
