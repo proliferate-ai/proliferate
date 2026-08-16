@@ -154,6 +154,7 @@ export function SubagentCreationGroupBlock({
             <AutoHideScrollArea
               className="w-full"
               viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
+              chainVerticalWheel
             >
               <div className="divide-y divide-border/60">
                 {visibleReceipts.map((receipt) => (

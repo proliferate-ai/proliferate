@@ -2,7 +2,8 @@ import { useState, type ReactNode } from "react";
 import { motion } from "@proliferate/design/motion";
 import { Button } from "#product/primitives/Button";
 import { Check, Copy } from "#product/primitives/icons/core";
-import { useChainedVerticalWheel } from "#product/primitives/utils/use-chained-vertical-wheel";
+import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
+import { CODE_BLOCK_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-call-layout";
 
 /**
  * Code block card: bordered rounded shell with a header carrying
@@ -20,7 +21,6 @@ export function MarkdownCodeBlockShell({
   children?: ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
-  const handleContentWheel = useChainedVerticalWheel();
 
   function copyCode() {
     void writeClipboardText(code)
@@ -58,10 +58,21 @@ export function MarkdownCodeBlockShell({
           {copied ? <Check className="icon-paired" /> : <Copy className="icon-paired" />}
         </Button>
       </div>
-      <div
-        onWheel={handleContentWheel}
-        className="overscroll-none overflow-x-auto overflow-y-auto p-3 font-mono text-chat font-normal [&_pre]:!m-0 [&_pre]:!p-0 [&_pre]:!bg-transparent [&_code]:text-chat"
-        data-markdown-code-content="true"
+      {/*
+        Brought into the shared AutoHideScrollArea primitive (rung 8, PRO-258):
+        this used to be a bare `overflow-x-auto overflow-y-auto` div, which
+        chained scroll natively (the inverse inconsistency the ADR calls out —
+        every OTHER nested scroller inside a transcript row trapped wheel
+        deltas at its edge, while this one bubbled by default). Routing it
+        through the primitive with `chainVerticalWheel` makes a long fenced
+        code block behave exactly like every other nested tool-output region:
+        the transcript scroll continues past it on wheel, touch, and momentum.
+      */}
+      <AutoHideScrollArea
+        allowHorizontal
+        viewportClassName={`${CODE_BLOCK_MAX_HEIGHT_CLASS} p-3 font-mono text-chat font-normal [&_pre]:!m-0 [&_pre]:!p-0 [&_pre]:!bg-transparent [&_code]:text-chat`}
+        chainVerticalWheel
+        viewportDataAttributes={{ "data-markdown-code-content": "true" }}
       >
         {children ?? (
           <pre className="m-0 p-0">
@@ -70,7 +81,7 @@ export function MarkdownCodeBlockShell({
             </code>
           </pre>
         )}
-      </div>
+      </AutoHideScrollArea>
     </div>
   );
 }

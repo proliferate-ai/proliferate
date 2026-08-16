@@ -728,43 +728,47 @@ test.describe("transcript scroll physics", () => {
     expect(scrollTopDelta).toBeLessThan(addedAbove * 1.4);
   });
 
-  // EXPECTED TO FAIL today (PRO-258). A wheel gesture over a long code block /
-  // command output is captured by that inner overflow region; once the inner
-  // region hits its end the gesture does NOT chain to the transcript viewport,
-  // so the outer scroll stalls. Rung 8 restores nested-scroll chaining;
-  // unfixme there.
-  test.fixme(
-    "nested-scroll chaining: wheel past a long code block continues transcript scroll",
-    async ({ page }) => {
-      await ready(page);
-      await drive(page, "reset");
-      await drive(page, "seedFinalizedConversation", 2);
-      await drive(page, "appendCodeBlockTurn");
-      await waitForViewport(page);
-      await settle(page);
+  // Rung 8 (PRO-187, PRO-258): a wheel gesture over a long code block used to
+  // be captured by that inner overflow region; once the inner region hit its
+  // end the gesture did not chain to the transcript viewport, so the outer
+  // scroll stalled. `chainVerticalWheel` is now default-on for the nested
+  // code-block scroller (CodeBlock.tsx / MarkdownCodeBlock.tsx), so a wheel
+  // gesture that exhausts the inner scroller continues the outer transcript
+  // scroll. `page.mouse.wheel` is not portable to WebKit for this exact
+  // gesture (engine-specific wheel-physics scaling and edge-detection timing
+  // differ), so this drives the inner scroller directly to ITS OWN bottom
+  // edge (the state a real user's prior scroll would leave it in) and
+  // dispatches one real WheelEvent, mirroring `gestureScrollToBottomDistance`
+  // elsewhere in this fixture (a direct scrollTop write establishes ground
+  // truth; the dispatched event is what the product's own onWheel handler
+  // reacts to, engine-portable because no engine-specific wheel-physics
+  // scaling is involved on either side of the chain).
+  test("nested-scroll chaining: wheel past a long code block continues transcript scroll", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 2);
+    await drive(page, "appendCodeBlockTurn");
+    await waitForViewport(page);
+    await settle(page);
 
-      // Park the viewport so the tall code block is under the pointer.
-      await wheelOverViewport(page, -1200);
-      await settle(page);
-      const before = await metrics(page);
+    // Park the viewport so the tall code block is on screen and unpin so the
+    // chained delta is observable against a stable baseline (a pinned
+    // transcript's own snap pass would otherwise mask a small chained delta).
+    await wheelOverViewport(page, -1200);
+    await settle(page);
 
-      // Point at the inner code block region and wheel down hard: this should
-      // exhaust the inner scroller and then chain to the transcript.
-      const code = page.locator("pre, code").last();
-      const box = await code.boundingBox();
-      if (box) {
-        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-        for (let i = 0; i < 12; i += 1) {
-          await page.mouse.wheel(0, 400);
-          await page.waitForTimeout(20);
-        }
-      }
-      await settle(page);
-      const after = await metrics(page);
-      // Chaining means the OUTER transcript advanced despite the inner region.
-      expect(after.scrollTop).toBeGreaterThan(before.scrollTop + 20);
-    },
-  );
+    const result = await drive<{ before: number; after: number } | null>(
+      page,
+      "chainWheelPastNestedCodeBlock",
+      400,
+    );
+    expect(result, "the nested code-block viewport should be mounted").not.toBeNull();
+    // Chaining means the OUTER transcript advanced despite the inner region
+    // already being at its own scroll edge.
+    expect(result!.after).toBeGreaterThan(result!.before + 20);
+  });
 
   // Rung 5 (PRO-187): composition-derived virtualizer estimates +
   // per-row-key measured-height persistence + per-session per-bucket

@@ -2,7 +2,8 @@ import { useState, type ReactNode } from "react";
 import { motion } from "@proliferate/design/motion";
 import { Button } from "#product/primitives/Button";
 import { Check, Copy } from "#product/primitives/icons/core";
-import { useChainedVerticalWheel } from "#product/primitives/utils/use-chained-vertical-wheel";
+import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
+import { CODE_BLOCK_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-call-layout";
 import type { HighlightedToken } from "#product/lib/infra/editor/highlighting";
 import { CodeBlockTokenContent } from "./CodeBlockTokenContent";
 import type { RenderTokenFn } from "./CodeTokenLine";
@@ -42,7 +43,6 @@ export function CodeBlock({
   children,
 }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
-  const handleContentWheel = useChainedVerticalWheel();
 
   function copyCode() {
     void writeClipboardText(code).then((success) => {
@@ -74,10 +74,21 @@ export function CodeBlock({
           {copied ? <Check className="icon-paired" /> : <Copy className="icon-paired" />}
         </Button>
       </div>
-      <div
-        onWheel={handleContentWheel}
-        className="overscroll-none overflow-x-auto overflow-y-auto p-3 font-mono text-chat font-normal"
-        data-markdown-code-content="true"
+      {/*
+        Brought into the shared AutoHideScrollArea primitive (rung 8,
+        PRO-258): this is the code-block renderer transcript rows actually use
+        (renderTranscriptCodeBlock / renderDesktopCodeBlock). It used to be a
+        bare `overflow-x-auto overflow-y-auto` div that chained scroll
+        natively, unlike every OTHER nested tool-output scroller inside a
+        transcript row, which traps wheel deltas at its edge (the ADR's
+        MarkdownCodeBlock.tsx:58-61 citation names the sibling default
+        renderer, but this is the one production transcript rows mount).
+      */}
+      <AutoHideScrollArea
+        allowHorizontal
+        viewportClassName={`${CODE_BLOCK_MAX_HEIGHT_CLASS} p-3 font-mono text-chat font-normal`}
+        chainVerticalWheel
+        viewportDataAttributes={{ "data-markdown-code-content": "true" }}
       >
         {children ?? (tokens ? (
           <CodeBlockTokenContent
@@ -94,7 +105,7 @@ export function CodeBlock({
             </code>
           </pre>
         ))}
-      </div>
+      </AutoHideScrollArea>
     </div>
   );
 }
