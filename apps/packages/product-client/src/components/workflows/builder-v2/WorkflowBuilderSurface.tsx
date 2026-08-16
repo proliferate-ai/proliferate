@@ -3,19 +3,22 @@ import { useRepoRootsQuery } from "@anyharness/sdk-react";
 import type { WorkflowStarterTemplateV2 } from "#product/config/workflows/starter-templates";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
 import { useCloudLaunchModelRegistries } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
-import { useWorkflowBuilder } from "#product/hooks/workflows/facade/use-workflow-builder";
+import { useWorkflowBuilder, type WorkflowBuilderDraft } from "#product/hooks/workflows/facade/use-workflow-builder";
 import { workflowBuilderHarnessOptions } from "#product/lib/domain/workflows/workflow-builder-authoring";
 import { workflowRepoRootOptions } from "#product/lib/domain/workflows/workflow-repo-root-options";
 import { WorkflowBuilderChainCanvas } from "#product/components/workflows/builder-v2/WorkflowBuilderChainCanvas";
 import { WorkflowBuilderDetailsCard } from "#product/components/workflows/builder-v2/WorkflowBuilderDetailsCard";
-import { WorkflowBuilderDocsPanel } from "#product/components/workflows/builder-v2/WorkflowBuilderDocsPanel";
+import { WorkflowBuilderDocInspector } from "#product/components/workflows/builder-v2/WorkflowBuilderDocInspector";
 import { WorkflowBuilderInputsPanel } from "#product/components/workflows/builder-v2/WorkflowBuilderInputsPanel";
 import { WorkflowBuilderNodeCard } from "#product/components/workflows/builder-v2/WorkflowBuilderNodeCard";
+import { WorkflowBuilderRail } from "#product/components/workflows/builder-v2/WorkflowBuilderRail";
 import { WorkflowResourceState } from "#product/components/workflows/WorkflowResourceState";
 import { Button } from "#product/primitives/Button";
-import { Plus } from "#product/primitives/icons/core";
+import { IconButton } from "#product/primitives/IconButton";
+import { Input } from "#product/primitives/Input";
+import { ArrowLeft } from "#product/primitives/icons/core";
+import { StatusDot } from "#product/primitives/StatusDot";
 import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
-import { ProductPageShell } from "#product/primitives/patterns/ProductPageShell";
 
 export interface WorkflowBuilderSurfaceProps {
   /** `null` = a new workflow, blank or seeded from `template`. */
@@ -28,13 +31,45 @@ export interface WorkflowBuilderSurfaceProps {
 }
 
 /**
- * The gen-2 builder: a vertical chain of step cards, the inputs they read, and
- * the documents they hand forward.
- *
- * There is no canvas and no edge editing — the chain is the card order, and
- * `useWorkflowBuilder` renders it as the linear edge list a save sends. Every
- * rule the surface enforces comes from `validateDefinitionV2` through that
- * hook; this component only decides where each issue is shown.
+ * What the inspector edits: one chain step, one context doc, or — through the
+ * structural input card that heads the chain — the workflow itself
+ * (description, default repository, declared inputs).
+ */
+type BuilderSelection =
+  | { kind: "node"; id: string }
+  | { kind: "doc"; index: number }
+  | { kind: "input" };
+
+/**
+ * A stale selection (removed step, removed doc) falls back to the first step,
+ * then to the input card — the inspector always edits something real.
+ */
+function resolveSelection(
+  selection: BuilderSelection | null,
+  draft: WorkflowBuilderDraft,
+): BuilderSelection {
+  if (selection?.kind === "node" && draft.nodes.some((node) => node.id === selection.id)) {
+    return selection;
+  }
+  if (selection?.kind === "doc" && selection.index < draft.docTemplates.length) {
+    return selection;
+  }
+  if (selection?.kind === "input") {
+    return selection;
+  }
+  return draft.nodes.length > 0
+    ? { kind: "node", id: draft.nodes[0].id }
+    : { kind: "input" };
+}
+
+/**
+ * The gen-2 builder as the design's three-pane graph page: the step palette
+ * and context-docs roster on the left, the chain drawn full-bleed on the
+ * canvas in the middle, and an inspector on the right editing exactly the
+ * selected object. There is still no edge editing — the chain is the card
+ * order, and `useWorkflowBuilder` renders it as the linear edge list a save
+ * sends. Every rule the surface enforces comes from `validateDefinitionV2`
+ * through that hook; this component only decides where each issue is shown.
  */
 export function WorkflowBuilderSurface({
   definitionId,
@@ -79,25 +114,24 @@ export function WorkflowBuilderSurface({
     [draft.docTemplates],
   );
 
-  // Canvas selection is presentation state: the inspector under the canvas
-  // edits exactly one step. It falls back to the first step (a chain always
-  // reads top-down), and a just-added step selects itself so "Add step" lands
-  // the user in the fields they came for.
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<BuilderSelection | null>(null);
+  // A just-added step selects itself so the palette lands the user in the
+  // fields they came for. Docs do the same, but synchronously in the add
+  // handler (the new doc's index is known there).
   const previousNodeCountRef = useRef(draft.nodes.length);
   useEffect(() => {
     if (draft.nodes.length > previousNodeCountRef.current) {
-      setSelectedNodeId(draft.nodes[draft.nodes.length - 1].id);
+      setSelection({ kind: "node", id: draft.nodes[draft.nodes.length - 1].id });
     }
     previousNodeCountRef.current = draft.nodes.length;
   }, [draft.nodes]);
-  const selectedNode = draft.nodes.find((node) => node.id === selectedNodeId)
-    ?? draft.nodes[0]
-    ?? null;
+  const active = resolveSelection(selection, draft);
+  const selectedNode = active.kind === "node"
+    ? draft.nodes.find((node) => node.id === active.id) ?? null
+    : null;
+  const selectedDoc = active.kind === "doc" ? draft.docTemplates[active.index] : null;
   const issueNodeIds = useMemo(
-    () => new Set(
-      issues.flatMap((issue) => (issue.nodeId ? [issue.nodeId] : [])),
-    ),
+    () => new Set(issues.flatMap((issue) => (issue.nodeId ? [issue.nodeId] : []))),
     [issues],
   );
 
@@ -121,23 +155,46 @@ export function WorkflowBuilderSurface({
     });
   };
 
+  const banners = [
+    builder.error
+      ? <NoticeBanner key="error" tone="destructive">{builder.error}</NoticeBanner>
+      : null,
+    issues.length > 0
+      ? (
+          <NoticeBanner key="issues" tone="destructive">
+            {WORKFLOW_BUILDER_COPY.issuesBanner(issues.length, issues[0].message)}
+          </NoticeBanner>
+        )
+      : null,
+    registriesQuery.isError
+      ? <NoticeBanner key="catalog" tone="warning">{WORKFLOW_BUILDER_COPY.catalogUnavailable}</NoticeBanner>
+      : null,
+    repoRootsQuery.isError
+      ? <NoticeBanner key="repos" tone="warning">{WORKFLOW_BUILDER_COPY.repositoriesLoadFailed}</NoticeBanner>
+      : null,
+  ].filter((banner) => banner !== null);
+
   return (
-    <ProductPageShell
-      title={draft.title.trim() || (definitionId === null
-        ? WORKFLOW_BUILDER_COPY.newPageTitle
-        : WORKFLOW_BUILDER_COPY.untitledPageTitle)}
-      description={WORKFLOW_BUILDER_COPY.pageDescription}
-      actions={(
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="md"
-            disabled={builder.saving}
-            onClick={() => onBack?.()}
-          >
-            {WORKFLOW_BUILDER_COPY.backLabel}
-          </Button>
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background" data-telemetry-block>
+      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border/70 px-3">
+        <IconButton
+          size="md"
+          aria-label={WORKFLOW_BUILDER_COPY.backLabel}
+          title={WORKFLOW_BUILDER_COPY.backLabel}
+          disabled={builder.saving}
+          onClick={() => onBack?.()}
+        >
+          <ArrowLeft className="icon-compact" aria-hidden />
+        </IconButton>
+        <Input
+          aria-label={WORKFLOW_BUILDER_COPY.titleLabel}
+          value={draft.title}
+          disabled={builder.saving}
+          placeholder={WORKFLOW_BUILDER_COPY.titlePlaceholder}
+          className="h-7 w-72 max-w-full border-0 bg-transparent px-1 font-mono text-ui shadow-none focus:ring-0"
+          onChange={(event) => actions.setTitle(event.currentTarget.value)}
+        />
+        <div className="ml-auto">
           <Button
             type="button"
             variant="primary"
@@ -149,68 +206,74 @@ export function WorkflowBuilderSurface({
             {saveLabel(builder.saving, builder.saved)}
           </Button>
         </div>
-      )}
-      maxWidthClassName="max-w-4xl"
-      telemetryBlocked
-    >
-      <div className="space-y-4">
-        {builder.error ? (
-          <NoticeBanner tone="destructive">{builder.error}</NoticeBanner>
-        ) : null}
-        {issues.length > 0 ? (
-          <NoticeBanner tone="destructive">
-            {WORKFLOW_BUILDER_COPY.issuesBanner(issues.length, issues[0].message)}
-          </NoticeBanner>
-        ) : null}
-        {registriesQuery.isError ? (
-          <NoticeBanner tone="warning">
-            {WORKFLOW_BUILDER_COPY.catalogUnavailable}
-          </NoticeBanner>
-        ) : null}
-        {repoRootsQuery.isError ? (
-          <NoticeBanner tone="warning">
-            {WORKFLOW_BUILDER_COPY.repositoriesLoadFailed}
-          </NoticeBanner>
-        ) : null}
+      </header>
 
-        <WorkflowBuilderDetailsCard
-          title={draft.title}
-          description={draft.description}
-          defaultRepoConfigId={draft.defaultRepoConfigId}
-          repositories={repositories}
-          repositoriesLoading={repoRootsQuery.isLoading}
-          repoDefaultUnavailable={builder.repoDefaultUnavailable}
+      {banners.length > 0 ? (
+        <div className="flex shrink-0 flex-col gap-2 px-3 pt-3">{banners}</div>
+      ) : null}
+
+      <div className="flex min-h-0 flex-1">
+        <WorkflowBuilderRail
+          docTemplates={draft.docTemplates}
+          selectedDocIndex={active.kind === "doc" ? active.index : null}
           disabled={builder.saving}
-          onTitleChange={actions.setTitle}
-          onDescriptionChange={actions.setDescription}
-          onDefaultRepoConfigIdChange={actions.setDefaultRepoConfigId}
+          addDocDisabled={draft.nodes.length === 0}
+          onAddStep={(type) => actions.addNode(type)}
+          onAddDoc={() => {
+            actions.addDocTemplate();
+            setSelection({ kind: "doc", index: draft.docTemplates.length });
+          }}
+          onSelectDoc={(index) => setSelection({ kind: "doc", index })}
         />
 
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-heading font-medium text-foreground">
-              {WORKFLOW_BUILDER_COPY.stepsHeading}
-            </h2>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={builder.saving}
-              onClick={actions.addNode}
-            >
-              <Plus className="icon-paired" aria-hidden />
-              {WORKFLOW_BUILDER_COPY.addStepLabel}
-            </Button>
-          </div>
+        <div className="min-w-0 flex-1 p-3">
+          <WorkflowBuilderChainCanvas
+            className="h-full"
+            nodes={draft.nodes}
+            harnesses={harnesses}
+            selectedNodeId={selectedNode?.id ?? null}
+            inputSelected={active.kind === "input"}
+            issueNodeIds={issueNodeIds}
+            statusSlot={(
+              <div className="flex flex-col gap-1">
+                <span className="text-ui-sm text-muted-foreground">
+                  {WORKFLOW_BUILDER_COPY.statusSummary(draft.nodes.length, draft.nodes.length + 1)}
+                </span>
+                <span className="flex items-center gap-1.5 text-ui-sm text-foreground">
+                  <StatusDot tone={issues.length > 0 ? "warning" : "success"} />
+                  {issues.length > 0
+                    ? WORKFLOW_BUILDER_COPY.statusIssues(issues.length)
+                    : WORKFLOW_BUILDER_COPY.statusValid}
+                </span>
+              </div>
+            )}
+            onSelectNode={(id) => setSelection({ kind: "node", id })}
+            onSelectInput={() => setSelection({ kind: "input" })}
+          />
+        </div>
 
-          {draft.nodes.length > 0 ? (
-            <WorkflowBuilderChainCanvas
-              className="h-96"
-              nodes={draft.nodes}
-              selectedNodeId={selectedNode?.id ?? null}
-              issueNodeIds={issueNodeIds}
-              onSelectNode={setSelectedNodeId}
-            />
+        <aside className="flex w-80 shrink-0 flex-col gap-3 overflow-y-auto border-l border-border/70 p-3">
+          {active.kind === "input" ? (
+            <>
+              <WorkflowBuilderDetailsCard
+                description={draft.description}
+                defaultRepoConfigId={draft.defaultRepoConfigId}
+                repositories={repositories}
+                repositoriesLoading={repoRootsQuery.isLoading}
+                repoDefaultUnavailable={builder.repoDefaultUnavailable}
+                disabled={builder.saving}
+                onDescriptionChange={actions.setDescription}
+                onDefaultRepoConfigIdChange={actions.setDefaultRepoConfigId}
+              />
+              <WorkflowBuilderInputsPanel
+                inputs={draft.inputs}
+                issues={issues}
+                disabled={builder.saving}
+                onAdd={actions.addInput}
+                onRemove={actions.removeInput}
+                onChange={actions.updateInput}
+              />
+            </>
           ) : null}
 
           {selectedNode ? (
@@ -230,28 +293,22 @@ export function WorkflowBuilderSurface({
               onMoveDown={() => actions.moveNodeDown(selectedNode.id)}
             />
           ) : null}
-        </section>
 
-        <WorkflowBuilderInputsPanel
-          inputs={draft.inputs}
-          issues={issues}
-          disabled={builder.saving}
-          onAdd={actions.addInput}
-          onRemove={actions.removeInput}
-          onChange={actions.updateInput}
-        />
-
-        <WorkflowBuilderDocsPanel
-          docTemplates={draft.docTemplates}
-          nodes={draft.nodes}
-          issues={issues}
-          disabled={builder.saving}
-          onAdd={actions.addDocTemplate}
-          onRemove={actions.removeDocTemplate}
-          onChange={actions.updateDocTemplate}
-        />
+          {selectedDoc && active.kind === "doc" ? (
+            <WorkflowBuilderDocInspector
+              key={active.index}
+              doc={selectedDoc}
+              index={active.index}
+              nodes={draft.nodes}
+              issues={issues}
+              disabled={builder.saving}
+              onRemove={() => actions.removeDocTemplate(active.index)}
+              onChange={(patch) => actions.updateDocTemplate(active.index, patch)}
+            />
+          ) : null}
+        </aside>
       </div>
-    </ProductPageShell>
+    </div>
   );
 }
 

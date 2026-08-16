@@ -124,9 +124,11 @@ describe("WorkflowBuilderSurface", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Add step" }));
+    fireEvent.click(screen.getByRole("button", { name: "Human in the loop" }));
 
     expect(screen.getByRole("heading", { name: "Step 3" })).toBeTruthy();
+    // The palette's second entry mints a gated step, not an agent.
+    expect(screen.getByLabelText("Requires approval").getAttribute("aria-checked")).toBe("true");
   });
 
   it("gates Save on a title and creates through the access seam", async () => {
@@ -140,12 +142,12 @@ describe("WorkflowBuilderSurface", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", true);
 
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", false);
 
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Workflow" }));
 
     await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(1));
     expect(onSaved).toHaveBeenCalledWith("wf-new");
@@ -165,7 +167,7 @@ describe("WorkflowBuilderSurface", () => {
       target: { value: "Write @doc:findings." },
     });
 
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", true);
     const alerts = screen.getAllByRole("alert").map((node) => node.textContent ?? "");
     expect(alerts.some((text) => text.includes("@doc:findings"))).toBe(true);
   });
@@ -209,7 +211,7 @@ describe("WorkflowBuilderSurface", () => {
     expect(screen.getByLabelText("Harness")).toHaveProperty("disabled", false);
     expect(screen.getByLabelText("Model")).toHaveProperty("value", "opus");
 
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Workflow" }));
     await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(1));
     // The wire shape is unchanged by design: the saved node carries both the
     // gate and the model.
@@ -240,7 +242,7 @@ describe("WorkflowBuilderSurface", () => {
     });
 
     expect(screen.getByText("@doc:plan.md").getAttribute("data-malformed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", true);
     const alerts = screen.getAllByRole("alert").map((node) => node.textContent ?? "");
     expect(alerts.some((text) => text.includes("malformed reference “@doc:plan.md”"))).toBe(true);
 
@@ -251,7 +253,7 @@ describe("WorkflowBuilderSurface", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Add document" }));
     fireEvent.change(screen.getByLabelText("Slug"), { target: { value: "plan" } });
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", false);
   });
 
   it("marks a node id the grammar refuses on the id itself", () => {
@@ -276,7 +278,7 @@ describe("WorkflowBuilderSurface", () => {
 
     expect(screen.getByText("2-step").getAttribute("data-invalid")).toBe("true");
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Renamed" } });
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", true);
   });
 
   it("reports a declared input name against its own row and blocks Save", () => {
@@ -289,6 +291,7 @@ describe("WorkflowBuilderSurface", () => {
     );
 
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
+    fireEvent.click(screen.getByRole("button", { name: /Trigger payload/ }));
     fireEvent.click(screen.getByRole("button", { name: "Add input" }));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "my input" } });
 
@@ -299,12 +302,12 @@ describe("WorkflowBuilderSurface", () => {
     const alerts = screen.getAllByRole("alert").map((node) => node.textContent ?? "");
     expect(alerts.some((text) => text.includes("Input name “my input” must start with a letter")))
       .toBe(true);
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", true);
 
     // Negative control: one grammatical name away from savable.
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "my_input" } });
     expect(screen.getByLabelText("Name").getAttribute("aria-invalid")).toBeNull();
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", false);
   });
 
   it("lowercases a doc slug as it is typed and reports what it cannot rescue", () => {
@@ -321,13 +324,13 @@ describe("WorkflowBuilderSurface", () => {
     fireEvent.change(screen.getByLabelText("Slug"), { target: { value: " Research-Findings " } });
 
     expect(screen.getByLabelText("Slug")).toHaveProperty("value", "research-findings");
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", false);
 
     fireEvent.change(screen.getByLabelText("Slug"), { target: { value: "My_Doc" } });
 
     expect(screen.getByLabelText("Slug")).toHaveProperty("value", "my_doc");
     expect(screen.getByLabelText("Slug").getAttribute("aria-invalid")).toBe("true");
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", true);
   });
 
   it("offers the runtime's repo roots as the default repository", () => {
@@ -339,6 +342,7 @@ describe("WorkflowBuilderSurface", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: /Trigger payload/ }));
     const picker = screen.getByLabelText("Default repository");
     expect([...(picker as HTMLSelectElement).options].map((option) => [
       option.value,
@@ -360,10 +364,11 @@ describe("WorkflowBuilderSurface", () => {
     );
 
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
+    fireEvent.click(screen.getByRole("button", { name: /Trigger payload/ }));
     fireEvent.change(screen.getByLabelText("Default repository"), {
       target: { value: "root-2" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Workflow" }));
 
     await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(1));
     // The runtime repo-root id travels verbatim: the trigger dialog seeds
@@ -383,14 +388,15 @@ describe("WorkflowBuilderSurface", () => {
     // Edit something first: an untouched record has nothing to save either way.
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Renamed" } });
 
+    fireEvent.click(screen.getByRole("button", { name: /Trigger payload/ }));
     expect(screen.getByText("Saved repository unavailable (repo-config-9)")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", true);
 
     // Negative control: the same edit saves once a listed root is picked.
     fireEvent.change(screen.getByLabelText("Default repository"), {
       target: { value: "root-1" },
     });
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", false);
   });
 
   it("says so when the runtime's repositories cannot be loaded", () => {
@@ -410,7 +416,7 @@ describe("WorkflowBuilderSurface", () => {
     )).toBeTruthy();
     // A workflow that names no repository is still savable: the run picks one.
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", false);
   });
 
   it("refuses to open a definition that is not schema version 2", () => {

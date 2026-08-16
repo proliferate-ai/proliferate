@@ -30,6 +30,8 @@ export interface WorkflowCanvasProps {
   /** Absolutely-positioned node cards, in the same content coordinates. */
   children: ReactNode;
   ariaLabel: string;
+  /** Optional readout pinned to the bottom-left corner (validity, counts). */
+  statusSlot?: ReactNode;
   className?: string;
 }
 
@@ -53,6 +55,7 @@ export function WorkflowCanvas({
   edges,
   children,
   ariaLabel,
+  statusSlot,
   className = "",
 }: WorkflowCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -201,7 +204,13 @@ export function WorkflowCanvas({
         {children}
       </div>
 
-      <div className="absolute bottom-2 left-2 flex items-center gap-0.5 rounded-md border border-border bg-surface-elevated px-1 py-0.5 shadow-subtle">
+      {statusSlot ? (
+        <div className="absolute bottom-2 left-2 rounded-md border border-border bg-surface-elevated px-2.5 py-1.5 shadow-subtle">
+          {statusSlot}
+        </div>
+      ) : null}
+
+      <div className="absolute bottom-2 right-2 flex items-center gap-0.5 rounded-md border border-border bg-surface-elevated px-1 py-0.5 shadow-subtle">
         <IconButton
           size="sm"
           aria-label={WORKFLOW_CANVAS_COPY.zoomOutLabel}

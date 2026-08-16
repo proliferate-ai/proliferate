@@ -8,12 +8,8 @@
  * only decides the words around it.
  */
 export const WORKFLOW_BUILDER_COPY = {
-  newPageTitle: "New workflow",
-  untitledPageTitle: "Untitled workflow",
-  pageDescription:
-    "One linear chain: each step runs after the one above it. Steps hand work forward through documents and read the values a run is started with.",
   backLabel: "Back",
-  saveLabel: "Save",
+  saveLabel: "Save Workflow",
   savingLabel: "Saving",
   savedLabel: "Saved",
 
@@ -28,7 +24,6 @@ export const WORKFLOW_BUILDER_COPY = {
   detailsHeading: "Details",
   titleLabel: "Workflow title",
   titlePlaceholder: "Issue triage",
-  titleRequiredHint: "A title is required before this workflow can be saved.",
   descriptionLabel: "Description",
   descriptionPlaceholder: "What this workflow does and when to run it.",
   defaultRepositoryLabel: "Default repository",
@@ -47,15 +42,37 @@ export const WORKFLOW_BUILDER_COPY = {
   catalogUnavailable:
     "The agent catalog could not be loaded. Steps save without a model and use the run's default.",
 
-  stepsHeading: "Steps",
   stepHeading: (position: number) => `Step ${position}`,
-  addStepLabel: "Add step",
   /** Accessible name of the pannable chain canvas. */
   chainCanvasLabel: "Workflow chain",
   /** A canvas card whose title is still blank. */
   canvasUntitledStep: "Untitled step",
   /** The destructive mark on a canvas card the validator has an issue on. */
   canvasIssueMarkLabel: "This step has issues",
+
+  /** The left rail's step palette. */
+  addStepHeading: "Add step",
+  addAgentStepLabel: "Agent",
+  addHumanStepLabel: "Human in the loop",
+  railHelp:
+    "Steps run top to bottom from the input. Select a card to edit it in the inspector, and reorder from there.",
+
+  /** The left rail's context-docs section. */
+  contextDocsHeading: "Context docs",
+  contextDocsCount: (count: number) => (count === 1 ? "1 doc" : `${count} docs`),
+  contextDocsEmpty: "Documents steps write and later steps read.",
+  docUntitledRow: "untitled",
+
+  /** The structural input node heading the chain. */
+  inputNodeKindLabel: "Input",
+  inputNodeTitle: "Inputs",
+  inputNodeSubtitle: "Trigger payload entering the workflow",
+
+  /** The canvas's bottom-left status readout. */
+  statusSummary: (steps: number, nodes: number) =>
+    `${steps} ${steps === 1 ? "step" : "steps"} · ${nodes} ${nodes === 1 ? "node" : "nodes"}`,
+  statusValid: "Valid",
+  statusIssues: (count: number) => (count === 1 ? "1 issue" : `${count} issues`),
   removeStepLabel: (position: number) => `Remove step ${position}`,
   moveStepUpLabel: (position: number) => `Move step ${position} up`,
   moveStepDownLabel: (position: number) => `Move step ${position} down`,
@@ -92,13 +109,10 @@ export const WORKFLOW_BUILDER_COPY = {
   inputDescriptionPlaceholder: "What this value is for.",
   inputRequiredLabel: "Required",
 
-  docsHeading: "Documents",
-  docsDescription:
-    "Shared documents steps write and later steps read. Prompts reference them as @doc:slug.",
-  docsEmpty: "This workflow has no documents.",
   docsNeedStep: "Add a step before adding a document.",
   addDocLabel: "Add document",
   removeDocLabel: (slug: string) => `Remove document ${slug}`,
+  removeDocButtonLabel: "Remove doc",
   docSlugLabel: "Slug",
   docSlugPlaceholder: "findings",
   docProducingNodeLabel: "Written by",

@@ -42,7 +42,7 @@ export interface WorkflowBuilderActions {
   setTitle: (title: string) => void;
   setDescription: (description: string) => void;
   setDefaultRepoConfigId: (repoConfigId: string) => void;
-  addNode: () => void;
+  addNode: (type?: WorkflowNodeV2["type"]) => void;
   removeNode: (nodeId: string) => void;
   updateNode: (nodeId: string, patch: Partial<Omit<WorkflowNodeV2, "id">>) => void;
   moveNodeUp: (nodeId: string) => void;
@@ -172,11 +172,11 @@ export function workflowBuilderActions(
     setDescription: (description) => editDraft((draft) => ({ ...draft, description })),
     setDefaultRepoConfigId: (defaultRepoConfigId) =>
       editDraft((draft) => ({ ...draft, defaultRepoConfigId })),
-    addNode: () => editDraft((draft) => ({
+    addNode: (type = "agent") => editDraft((draft) => ({
       ...draft,
       nodes: [...draft.nodes, {
         id: nextNodeId(draft.nodes),
-        type: "agent",
+        type,
         title: "",
         prompt: "",
       }],
