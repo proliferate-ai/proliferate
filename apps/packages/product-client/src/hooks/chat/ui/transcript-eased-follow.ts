@@ -9,7 +9,7 @@ import {
  * v1 ships instant glue: the pinned single writer (see
  * use-transcript-frame-pipeline-lifecycle.ts) snaps straight to the follow
  * target every pass. Founder Ruling Q16 keeps that as the default and specs the
- * motion layer as a PLUGGABLE writer policy so an eased, ChatGPT-style follower
+ * motion layer as a PLUGGABLE writer policy so an eased, smoothed follower
  * can be swapped in later without touching classification (FR-1): this module
  * is that policy, a pure step function with no DOM or React dependency, so it
  * composes with the same single per-frame pipeline rather than adding a

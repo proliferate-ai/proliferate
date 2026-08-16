@@ -152,4 +152,51 @@ describe("useTranscriptStickToBottom eased-follow writer (PRO-168, rung 12, flag
     expect(handle.current.api.isPinnedToBottom).toBe(true);
     expect(viewport.scrollTop).toBe(5_000 - 300);
   });
+
+  it("does not leave a stale pending-motion frame running after the user unpins mid-catch-up", () => {
+    // Regression: hasPendingMotion is written ONLY by the pinned branch of
+    // runFramePass; unpinning mid-catch-up (before convergence) must not
+    // leave it stuck true, or every later content resize would keep
+    // re-arming a motion continuation frame forever with nothing pinned to
+    // drive it.
+    const handle = renderHarness();
+    const { viewport } = handle.current;
+    setMetrics(viewport, { scrollHeight: 5_000, clientHeight: 300, scrollTop: 0 });
+
+    act(() => {
+      handle.current.api.notifyContentResize();
+    });
+    // One eased step ran; far from converged, so a continuation frame is
+    // queued (a real pending-motion state, not yet resolved).
+    expect(rafCallbacks.some((cb) => cb != null)).toBe(true);
+
+    // The user scrolls up before the eased catch-up finished: unpin.
+    act(() => {
+      handle.current.api.setPinned(false);
+    });
+    expect(handle.current.api.isPinnedToBottom).toBe(false);
+
+    // Drain every frame the unpin left queued.
+    for (let i = 0; i < 10 && rafCallbacks.some((cb) => cb != null); i += 1) {
+      act(() => {
+        flushRafRound();
+      });
+    }
+    // Content keeps growing while the reader is unpinned reading (no anchor
+    // installed here, so the unpinned branch is a no-op) — this is the
+    // trigger that would perpetually re-arm the continuation if the pending
+    // flag had gone stale.
+    setMetrics(viewport, { scrollHeight: 6_000, clientHeight: 300, scrollTop: viewport.scrollTop });
+    act(() => {
+      handle.current.api.notifyContentResize();
+    });
+
+    for (let i = 0; i < 10 && rafCallbacks.some((cb) => cb != null); i += 1) {
+      act(() => {
+        flushRafRound();
+      });
+    }
+    // The pipeline must go quiet: no frame left queued.
+    expect(rafCallbacks.every((cb) => cb == null)).toBe(true);
+  });
 });

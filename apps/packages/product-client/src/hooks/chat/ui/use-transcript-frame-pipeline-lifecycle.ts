@@ -162,6 +162,12 @@ export function useTranscriptFramePipelineLifecycle({
       }
       return;
     }
+    // PRO-168 (rung 12): unpinned takes over from here; the eased writer's
+    // pending flag only ever describes a PINNED catch-up, so clear it rather
+    // than leave it stale until the reader re-pins (the `hasPendingMotion`
+    // hook above also gates on `pinnedRef.current`, so this is defense in
+    // depth, not the only thing preventing a stale-true leak).
+    easedMotionPendingRef.current = false;
     // FR-2 restore (rung 6): re-resolve the saved reading anchor to scrollTop
     // each frame until the deadline, so the reading row holds under the top edge
     // as freshly-mounted rows settle their heights. Writing the resolved target
@@ -328,8 +334,13 @@ export function useTranscriptFramePipelineLifecycle({
       measureContentHeight: () => scrollRef.current?.scrollHeight ?? -1,
       // PRO-168 (rung 12): only the eased writer ever reports pending motion;
       // the instant path never sets the ref, so this stays a permanent no-op
-      // with the flag off.
-      hasPendingMotion: () => easedFollowEnabled && easedMotionPendingRef.current,
+      // with the flag off. Gated on `pinnedRef.current` too, not just the
+      // ref: the ref is written ONLY from the pinned branch above, so it can
+      // go stale (stay true) if the user unpins mid-catch-up — the unpinned
+      // branch never revisits it. Without this gate a stale `true` would have
+      // the motion continuation re-arm forever on any later resize, even
+      // though nothing pinned is asking for another eased step.
+      hasPendingMotion: () => easedFollowEnabled && pinnedRef.current && easedMotionPendingRef.current,
       shouldContinueGlue: () => {
         const viewport = scrollRef.current;
         if (!viewport) {
