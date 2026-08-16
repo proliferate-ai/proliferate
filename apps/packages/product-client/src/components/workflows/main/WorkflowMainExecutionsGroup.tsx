@@ -1,4 +1,6 @@
+import { useRef } from "react";
 import type { WorkflowRunV2 } from "@anyharness/sdk";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { WORKFLOW_MAIN_COPY } from "#product/copy/workflows/workflow-main-copy";
 import { WORKFLOW_RUN_VIEW_COPY } from "#product/copy/workflows/workflow-run-view-copy";
 import {
@@ -11,6 +13,11 @@ import { Clock } from "#product/primitives/icons/core";
 import { Card } from "#product/primitives/patterns/Card";
 import { RosterRow } from "#product/primitives/patterns/RosterRow";
 import { formatRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
+
+/** Comfortable-density `RosterRow`'s resting height, used as the virtualizer's estimate. */
+const EXECUTION_ROW_ESTIMATE_PX = 52;
+/** Caps the group's own scroll so a long execution history never grows the page past a few rows tall. */
+const EXECUTIONS_LIST_MAX_HEIGHT_PX = 420;
 
 /**
  * The runs recorded from this runtime's workflows, as the main page's second
@@ -43,19 +50,73 @@ export function WorkflowMainExecutionsGroup({
         </div>
       )}
     >
-      {runs.map((run) => (
-        <RosterRow
-          key={run.id}
-          density="comfortable"
-          leading={<WorkflowExecutionGlyph status={run.status} />}
-          title={workflowRunDefinitionTitle(run.definitionJson)
-            ?? WORKFLOW_MAIN_COPY.executionFallbackTitle}
-          secondary={executionMetaLine(run)}
-          trailing={formatRelativeTime(run.createdAt)}
-          onSelect={() => onOpen(run)}
-        />
-      ))}
+      <VirtualizedExecutionRows runs={runs} onOpen={onOpen} />
     </Card>
+  );
+}
+
+/**
+ * The executions list virtualized over its own bounded scrollport (the
+ * repository's virtualization path — see `FileTreeDirectory`'s
+ * `VirtualizedTree` for the same `@tanstack/react-virtual` shape), so an
+ * unbounded run history never renders every row at once.
+ */
+function VirtualizedExecutionRows({
+  runs,
+  onOpen,
+}: {
+  runs: readonly WorkflowRunV2[];
+  onOpen: (run: WorkflowRunV2) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: runs.length,
+    getScrollElement: () => scrollRef.current,
+    getItemKey: (index) => runs[index]?.id ?? index,
+    estimateSize: () => EXECUTION_ROW_ESTIMATE_PX,
+    overscan: 10,
+    // jsdom (tests) and pre-layout frames report a zero-height scroll
+    // element; seed a viewport so initial rows render.
+    initialRect: { width: 400, height: EXECUTIONS_LIST_MAX_HEIGHT_PX },
+    measureElement: (element) => element.getBoundingClientRect().height || EXECUTION_ROW_ESTIMATE_PX,
+  });
+
+  return (
+    <div
+      ref={scrollRef}
+      className="overflow-y-auto"
+      style={{ maxHeight: EXECUTIONS_LIST_MAX_HEIGHT_PX }}
+    >
+      <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+        {virtualizer.getVirtualItems().map((virtualItem) => {
+          const run = runs[virtualItem.index]!;
+          return (
+            <div
+              key={virtualItem.key}
+              ref={virtualizer.measureElement}
+              data-index={virtualItem.index}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                transform: `translateY(${virtualItem.start}px)`,
+              }}
+            >
+              <RosterRow
+                density="comfortable"
+                leading={<WorkflowExecutionGlyph status={run.status} />}
+                title={workflowRunDefinitionTitle(run.definitionJson)
+                  ?? WORKFLOW_MAIN_COPY.executionFallbackTitle}
+                secondary={executionMetaLine(run)}
+                trailing={formatRelativeTime(run.createdAt)}
+                onSelect={() => onOpen(run)}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
