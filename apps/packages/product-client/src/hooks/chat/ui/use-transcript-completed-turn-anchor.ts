@@ -14,7 +14,7 @@ export interface UseTranscriptCompletedTurnAnchorOptions {
   renderableRows: TranscriptRenderableRow[];
   virtualizer: Virtualizer<HTMLDivElement, Element>;
   notifyProgrammaticScroll: (write: () => void) => void;
-  startAboveChangeCompensation: (anchor: ContentHeightScrollAnchor) => void;
+  startAboveChangeCompensation: (anchor: ContentHeightScrollAnchor, cancelableByUpwardIntent: boolean) => void;
 }
 
 /**
@@ -53,7 +53,9 @@ export function useTranscriptCompletedTurnAnchor({
     }
 
     if (nextIndex > anchor.rowIndex) {
-      startAboveChangeCompensation(anchor);
+      // Completed-turn split: cancelable by upward intent (the reader is not
+      // driving this insertion, so an active upward gesture must win).
+      startAboveChangeCompensation(anchor, true);
       return;
     }
 

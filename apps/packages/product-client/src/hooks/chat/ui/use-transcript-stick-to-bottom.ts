@@ -66,6 +66,7 @@ export interface TranscriptStickToBottom {
   handleScrollToBottomClick: () => void;
   /** Wrap ANY external scrollTop/scrollToOffset write so its scroll event is excluded from pin/direction. */
   notifyProgrammaticScroll: (write: () => void) => void;
+  userScrollUpIntentAtRef: RefObject<number>; // last UPWARD-intent `performance.now`; use-above-change-compensation cancels on it
   /** Force the pin state (history prepend / anchor restore intentionally unpin to hold the user's position). */
   setPinned: (pinned: boolean) => void;
   /** Reset all tracking and re-pin for a session/workspace switch. */
@@ -104,6 +105,7 @@ export function useTranscriptStickToBottom({
   const autoFollowBottomInsetRef = useRef(Math.max(0, autoFollowBottomInsetPx));
   const consumedAutoFollowBottomInsetRef = useRef(0);
   const userScrollIntentUntilRef = useRef(0);
+  const userScrollUpIntentAtRef = useRef(0);
 
   const setPinned = useCallback((next: boolean) => {
     if (pinnedRef.current === next) {
@@ -140,13 +142,12 @@ export function useTranscriptStickToBottom({
   }, [markNonUserScrollPosition, scrollRef]);
 
   const notifyUserScrollIntent = useCallback((direction: -1 | 1) => {
-    userScrollIntentUntilRef.current =
-      interactionNow() + TRANSCRIPT_USER_SCROLL_SETTLE_MS;
+    userScrollIntentUntilRef.current = interactionNow() + TRANSCRIPT_USER_SCROLL_SETTLE_MS;
     if (direction < 0) {
+      userScrollUpIntentAtRef.current = interactionNow();
       setPinned(false);
     }
-    // Claim the frame at input time instead of waiting for the browser's later
-    // scroll event, which can otherwise race a stream/reveal animation frame.
+    // Claim the frame at input time so it can't race a stream/reveal animation frame.
     onScrollSample({ programmatic: false, userInitiated: true });
   }, [onScrollSample, setPinned]);
 
@@ -342,6 +343,7 @@ export function useTranscriptStickToBottom({
     lastContentHeightRef.current = 0;
     consumedAutoFollowBottomInsetRef.current = 0;
     userScrollIntentUntilRef.current = 0;
+    userScrollUpIntentAtRef.current = 0;
     setPinned(true);
     scrollToBottom();
     startGlueLoop();
@@ -393,5 +395,6 @@ export function useTranscriptStickToBottom({
     notifyProgrammaticScroll,
     setPinned,
     resetForSession,
+    userScrollUpIntentAtRef,
   };
 }

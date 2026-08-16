@@ -23,6 +23,16 @@ interface UseAboveChangeCompensationParams {
   scrollRef: RefObject<HTMLDivElement | null>;
   pinnedRef: RefObject<boolean>;
   notifyProgrammaticScroll: (write: () => void) => void;
+  /**
+   * Timestamp of the last genuine upward user scroll intent (see
+   * use-transcript-stick-to-bottom). For a CANCELABLE compensation window (a
+   * completed-turn split, see below), an upward gesture arriving AFTER the
+   * window opens cancels the remaining per-frame re-anchoring so an unpinned
+   * reader scrolling up is never dragged back per-frame; the active gesture
+   * wins (platform precedent: CSS scroll anchoring suppresses adjustments
+   * during user scroll). Intent predating the window does not cancel.
+   */
+  userScrollUpIntentAtRef: RefObject<number>;
 }
 
 // Hold the anchored content in place while a freshly-inserted row above it
@@ -33,20 +43,40 @@ export function useAboveChangeCompensation({
   scrollRef,
   pinnedRef,
   notifyProgrammaticScroll,
+  userScrollUpIntentAtRef,
 }: UseAboveChangeCompensationParams) {
   const compensateFrameRef = useRef<number | null>(null);
 
-  const startAboveChangeCompensation = useCallback((anchor: ContentHeightScrollAnchor) => {
+  // `cancelableByUpwardIntent` is true ONLY for the completed-turn split: an
+  // autonomous insertion above an unpinned reader, where an active upward
+  // gesture must win over per-frame re-anchoring. It is FALSE for a history
+  // prepend, which the reader REQUESTED by scrolling to the top: there the
+  // added-above content must keep the reading row fixed even as the same
+  // upward gesture continues (the reader is loading and reading older history),
+  // so the window is immune to the upward-intent cancel.
+  const startAboveChangeCompensation = useCallback((
+    anchor: ContentHeightScrollAnchor,
+    cancelableByUpwardIntent: boolean,
+  ) => {
     if (typeof window === "undefined") {
       return;
     }
     if (compensateFrameRef.current != null) {
       cancelAnimationFrame(compensateFrameRef.current);
     }
-    const deadline = compensationNow() + ABOVE_CHANGE_COMPENSATION_MAX_MS;
+    const startedAt = compensationNow();
+    const deadline = startedAt + ABOVE_CHANGE_COMPENSATION_MAX_MS;
     const tick = () => {
       const viewport = scrollRef.current;
       if (!viewport || pinnedRef.current) {
+        compensateFrameRef.current = null;
+        return;
+      }
+      // Genuine upward user intent that arrived AFTER this window opened wins
+      // for a cancelable (completed-turn) window: stop re-anchoring so the
+      // active gesture is never fought per-frame. Intent predating the window
+      // never cancels; a prepend window is never cancelable.
+      if (cancelableByUpwardIntent && userScrollUpIntentAtRef.current > startedAt) {
         compensateFrameRef.current = null;
         return;
       }
@@ -60,7 +90,7 @@ export function useAboveChangeCompensation({
       compensateFrameRef.current = requestAnimationFrame(tick);
     };
     compensateFrameRef.current = requestAnimationFrame(tick);
-  }, [notifyProgrammaticScroll, pinnedRef, scrollRef]);
+  }, [notifyProgrammaticScroll, pinnedRef, scrollRef, userScrollUpIntentAtRef]);
 
   useEffect(() => () => {
     if (compensateFrameRef.current != null) {
