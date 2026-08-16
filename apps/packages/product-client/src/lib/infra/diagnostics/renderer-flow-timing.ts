@@ -94,15 +94,16 @@ export const RENDERER_FLOW_BUDGETS: Record<RendererFlowKind, RendererFlowBudget>
     metric: "renderer.flow.session_open.data_to_stable_ms",
     thresholdMs: null,
   },
-  // composer_submit and mode_switch are two-stage flows (intent -> stable,
-  // no shell/data-ready midpoints): the ADR budget slot is still named per
-  // the same convention so aggregation treats every flow_kind uniformly.
+  // composer_submit and mode_switch are two-point flows (intent -> stable,
+  // no shell/data-ready midpoints, so no data_to_stable_ms field is ever
+  // emitted for them): the budget metric names intent_to_stable_ms, the
+  // field these flows actually produce.
   composer_submit: {
-    metric: "renderer.flow.composer_submit.data_to_stable_ms",
+    metric: "renderer.flow.composer_submit.intent_to_stable_ms",
     thresholdMs: null,
   },
   mode_switch: {
-    metric: "renderer.flow.mode_switch.data_to_stable_ms",
+    metric: "renderer.flow.mode_switch.intent_to_stable_ms",
     thresholdMs: null,
   },
 };
@@ -269,10 +270,6 @@ export function finishRendererFlow(input: {
   const fields: Record<string, RendererDiagnosticField> = {
     flow_kind: diagnosticField(input.kind, "operational"),
     stages_completed: diagnosticField(stagesCompleted, "operational"),
-    data_to_stable_ms: diagnosticField(
-      round(now - (flow.dataAt ?? flow.shellAt ?? flow.startedAt)),
-      "operational",
-    ),
     intent_to_stable_ms: diagnosticField(round(now - flow.startedAt), "operational"),
     budget_metric: diagnosticField(budget.metric, "operational"),
     budget_threshold_ms: diagnosticField(budget.thresholdMs, "operational"),
@@ -289,6 +286,11 @@ export function finishRendererFlow(input: {
       round(flow.dataAt - (flow.shellAt ?? flow.startedAt)),
       "operational",
     );
+    // data_to_stable_ms is the "last-mile paint stage" that Honeycomb queries
+    // aggregate on; it's only meaningful once data_ready was actually
+    // reached. composer_submit/mode_switch (two-point flows, no data_ready)
+    // omit it rather than aliasing it to the whole-intent duration.
+    fields.data_to_stable_ms = diagnosticField(round(now - flow.dataAt), "operational");
   }
   recordRendererDiagnostic({
     name: "renderer.flow.content_stable",

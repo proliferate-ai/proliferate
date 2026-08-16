@@ -34,6 +34,10 @@ import {
 } from "#product/domain/sessions/intents/session-intent-state";
 import { turnHasAssistantRenderableTranscriptContent } from "#product/domain/chats/pending-prompts/pending-prompts";
 import { finishRendererFlow } from "#product/lib/infra/diagnostics/renderer-flow-timing";
+import {
+  clearComposerSubmitTargetTurn,
+  resolveComposerSubmitTargetTurnId,
+} from "#product/hooks/sessions/lifecycle/session-stream-flush-composer-submit-turn";
 import { buildSessionStreamBatchPatch } from "#product/lib/domain/sessions/stream-patch";
 import { shouldClearOptimisticPendingPromptForEnvelope } from "#product/domain/chats/pending-prompts/pending-prompts";
 import {
@@ -234,25 +238,32 @@ export function applySessionStreamFlushBatch(
     : { transcript: slotState.transcript };
   // UX-latency R12: composer_submit's finish mark. First-visible-token isn't
   // observable here (no paint hook), so this uses the cheapest truthful proxy
-  // already computed by this reducer: the latest turn gaining its first
-  // renderable assistant item. Fires once (finishRendererFlow no-ops if the
-  // flow already finished or was never begun for this sessionId).
-  if (streamPatch.transcript.turnOrder.length > 0) {
-    const latestTurnId =
-      streamPatch.transcript.turnOrder[streamPatch.transcript.turnOrder.length - 1];
-    const latestTurnHadAssistantContentBefore = turnHasAssistantRenderableTranscriptContent(
-      slotState.transcript.turnsById[latestTurnId],
+  // already computed by this reducer: the SUBMITTED turn gaining its first
+  // renderable assistant item. Scoped to the actual submitted turn (not just
+  // whatever is turnOrder's last entry) so a reconnect/gap-fill batch that
+  // completes an older turn can't satisfy this check before the new turn has
+  // even started. Fires once (finishRendererFlow no-ops if the flow already
+  // finished or was never begun for this sessionId).
+  const composerSubmitTargetTurnId = resolveComposerSubmitTargetTurnId(
+    input.sessionId,
+    slotState.transcript,
+    streamPatch.transcript,
+  );
+  if (composerSubmitTargetTurnId) {
+    const targetTurnHadAssistantContentBefore = turnHasAssistantRenderableTranscriptContent(
+      slotState.transcript.turnsById[composerSubmitTargetTurnId],
       slotState.transcript,
     );
-    const latestTurnHasAssistantContentAfter = turnHasAssistantRenderableTranscriptContent(
-      streamPatch.transcript.turnsById[latestTurnId],
+    const targetTurnHasAssistantContentAfter = turnHasAssistantRenderableTranscriptContent(
+      streamPatch.transcript.turnsById[composerSubmitTargetTurnId],
       streamPatch.transcript,
     );
-    if (!latestTurnHadAssistantContentBefore && latestTurnHasAssistantContentAfter) {
+    if (!targetTurnHadAssistantContentBefore && targetTurnHasAssistantContentAfter) {
       finishRendererFlow({
         kind: "composer_submit",
         correlationKey: input.sessionId,
       });
+      clearComposerSubmitTargetTurn(input.sessionId);
     }
   }
   const shouldDisconnectForGap = !!result.gapEnvelope;
