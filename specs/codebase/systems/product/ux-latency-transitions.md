@@ -26,9 +26,12 @@ Fences, one owner per concern:
 - **Session selection** ([workspaces/session-selection.md](workspaces/session-selection.md))
   owns which session is visible inside an already-open workspace; this
   document owns switching which workspace is open.
-- **Chat lifecycle** ([chat/lifecycle.md](chat/lifecycle.md)) owns the
-  `mode.kind` state machine the chat pane dispatches on; this document owns
-  what renders while a `workspace-status`/`session-loading` mode is active.
+- The `mode.kind` union the chat pane dispatches on (`workspace-status`,
+  `session-loading`, `session-transcript`) is defined in
+  [chat-surface.ts](../../../../apps/packages/product-client/src/lib/domain/chat/surface/chat-surface.ts),
+  already on `main`; no spec owns that state machine today. This document
+  owns only what renders while a `workspace-status`/`session-loading` mode
+  is active, not the state machine itself.
 
 ## Loading treatments
 
