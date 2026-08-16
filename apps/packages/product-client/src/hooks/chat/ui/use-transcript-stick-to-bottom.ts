@@ -1,11 +1,10 @@
-import { useCallback, useRef, useState, type RefObject } from "react";
+import { useCallback, useRef, useState } from "react";
 import { resolveVirtualBottomDistance } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import {
   DIRECTION_EPSILON_PX,
   REPIN_BOTTOM_THRESHOLD_PX,
   TRANSCRIPT_USER_SCROLL_SETTLE_MS,
   type ContentHeightScrollAnchor,
-  type TranscriptScrollSample,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
 import { decideTranscriptScrollPin } from "#product/hooks/chat/ui/transcript-scroll-pin-decision";
 import { TranscriptFramePipeline } from "#product/hooks/chat/ui/transcript-frame-pipeline";
@@ -13,8 +12,15 @@ import { useTranscriptFramePipelineLifecycle } from "#product/hooks/chat/ui/use-
 import { TranscriptScrollOwnershipMarkers } from "#product/hooks/chat/ui/transcript-scroll-ownership";
 import { useTranscriptAutoFollowBottom } from "#product/hooks/chat/ui/use-transcript-auto-follow-bottom";
 import { useTranscriptSubmitStampRepin } from "#product/hooks/chat/ui/use-transcript-submit-stamp-repin";
+import { useTranscriptNewContentSignal } from "#product/hooks/chat/ui/use-transcript-new-content-signal";
 import { useTranscriptUserScrollIntent } from "#product/hooks/chat/ui/use-transcript-user-scroll-intent";
 import { beginSessionRestorePlacement, type TranscriptSessionRestorePlan } from "#product/hooks/chat/ui/transcript-reading-position-store";
+import type {
+  TranscriptStickToBottom,
+  UseTranscriptStickToBottomOptions,
+} from "#product/hooks/chat/ui/use-transcript-stick-to-bottom-types";
+
+export type { TranscriptStickToBottom, UseTranscriptStickToBottomOptions };
 
 function interactionNow(): number {
   return typeof performance === "undefined" ? Date.now() : performance.now();
@@ -30,82 +36,6 @@ const RESTORE_MAX_MS = 500;
 // is bounded by this deadline (not the glue window's quiet-frame termination);
 // after it, below-viewport growth is free to move the reader again.
 const ABOVE_CHANGE_COMPENSATION_MAX_MS = 500;
-
-export interface UseTranscriptStickToBottomOptions {
-  /** The real scroll element ref (AutoHideScrollArea forwards its viewport here). */
-  scrollRef: RefObject<HTMLDivElement | null>;
-  /** Perf probe; must run on every scroll, user or programmatic. */
-  onScrollSample: (sample?: TranscriptScrollSample) => void;
-  /** px from the bottom within which a user scroll re-pins. */
-  repinThresholdPx?: number;
-  /**
-   * Structural (displacing) dock inset (composer, status bar, footer), reflected
-   * in scrollHeight as the virtualizer paddingEnd. Fed to the consumed-inset
-   * machine so a structural shrink marks its clamp while pinned (rung 7 / Q6).
-   */
-  structuralBottomInsetPx?: number;
-  /**
-   * Manual-only overlay range created by cards overlaying the transcript. Auto
-   * follow stops before it until the user reaches the hard bottom.
-   */
-  nonDisplacingBottomInsetPx?: number;
-  /**
-   * Epoch ms of the newest prompt submission (outbox enqueue or session-level
-   * optimistic prompt). A monotonic increase re-pins: sending is an explicit
-   * return-to-bottom intent. Entries leaving the outbox (delivery, dismissal)
-   * can only lower the stamp and must not re-pin.
-   */
-  lastPromptSubmittedAtMs?: number | null;
-  /**
-   * Identity of the session/workspace currently mounted. Row lists never remount
-   * across a session switch, so `lastPromptSubmittedAtMs` alone can't tell "fresh
-   * submit here" from "incoming session's own stamp carried over"; a change here
-   * re-baselines submit-stamp tracking instead of comparing across the switch.
-   */
-  sessionKey?: string;
-}
-
-export interface TranscriptStickToBottom {
-  /** True while pinned to the bottom; drives the scroll-to-bottom button. */
-  isPinnedToBottom: boolean;
-  /** Live pin state for synchronous reads inside effects/cleanup (no re-render). */
-  pinnedRef: RefObject<boolean>;
-  /** Wire to AutoHideScrollArea's onViewportScroll. Owns stickiness + direction + onScrollSample. */
-  onViewportScroll: (viewport: HTMLDivElement) => void;
-  /** Mark positive wheel/key/touch/scrollbar intent before its scroll event arrives. */
-  notifyUserScrollIntent: (direction: -1 | 1) => void;
-  /** Snap to the active follow target (soft overlay bottom or user-chosen hard bottom). */
-  scrollToBottom: () => void;
-  /** Snap + re-pin, for the scroll-to-bottom button. */
-  handleScrollToBottomClick: () => void;
-  /** Wrap ANY external scrollTop/scrollToOffset write so its scroll event is excluded from pin/direction. */
-  notifyProgrammaticScroll: (write: () => void) => void;
-  /** Force the pin state (history prepend / anchor restore intentionally unpin to hold the user's position). */
-  setPinned: (pinned: boolean) => void;
-  /**
-   * Reset tracking for a session switch and place the viewport before first
-   * paint: bottom-pin a streaming session, or restore a finalized session to its
-   * saved reading anchor (FR-2, rung 6).
-   */
-  resetForSession: (plan?: TranscriptSessionRestorePlan) => void;
-  /**
-   * Mutation source for the single content ResizeObserver: request the one
-   * per-frame snap pass. Coalesces with every other source into ONE snap.
-   */
-  notifyContentResize: () => void;
-  /**
-   * Hold anchored content in place while a freshly-inserted row above measures
-   * in, via the single frame pipeline: applies the measured scrollHeight delta
-   * each frame while unpinned until the compensation deadline lapses (no-op pinned).
-   */
-  startAboveChangeCompensation: (anchor: ContentHeightScrollAnchor, cancelableByUpwardIntent: boolean) => void;
-  /**
-   * Cancel the pending frame pass / glue window. Registered as the transcript's
-   * synchronous scroll-pause listener so a user scroll inside the input event's
-   * call stack pre-empts any queued programmatic snap.
-   */
-  cancelFramePipeline: () => void;
-}
 
 /**
  * Single stick-to-bottom engine shared by the full and virtualized transcript
@@ -124,6 +54,13 @@ export function useTranscriptStickToBottom({
 }: UseTranscriptStickToBottomOptions): TranscriptStickToBottom {
   const pinnedRef = useRef(true);
   const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
+  // Q18 (rung 9): see use-transcript-new-content-signal.ts.
+  const {
+    hasNewContentWhileUnpinned,
+    clearNewContentSignal,
+    notifyContentGrew,
+    reset: resetNewContentSignal,
+  } = useTranscriptNewContentSignal();
   const lastScrollTopRef = useRef(0);
   // Last observed content height: lets a scroll event tell a genuine user
   // displacement (same-size content) apart from our snap lagging a growing stream
@@ -155,12 +92,18 @@ export function useTranscriptStickToBottom({
   const userScrollIntentUntilRef = useRef(0);
 
   const setPinned = useCallback((next: boolean) => {
+    if (next) {
+      // Re-pinning (any path: repin band, submit, button click) means the
+      // reader is at the bottom seeing the new content, so the announcement
+      // is done regardless of whether pin state itself changed.
+      clearNewContentSignal();
+    }
     if (pinnedRef.current === next) {
       return;
     }
     pinnedRef.current = next;
     setIsPinnedToBottom(next);
-  }, []);
+  }, [clearNewContentSignal]);
 
   const clearAllMarkers = useCallback(() => {
     ownershipMarkersRef.current.clear();
@@ -297,8 +240,15 @@ export function useTranscriptStickToBottom({
   }, []);
 
   const notifyContentResize = useCallback(() => {
+    // Q18 (rung 9): the single content ResizeObserver (rung 4) feeds the
+    // new-content signal too, so it is derived from the model's own measured
+    // geometry rather than a separate scroll listener or DOM poll.
+    const viewport = scrollRef.current;
+    if (viewport) {
+      notifyContentGrew(viewport.scrollHeight, pinnedRef.current);
+    }
     pipelineRef.current.requestFrame();
-  }, []);
+  }, [notifyContentGrew, scrollRef]);
 
   const cancelFramePipeline = useCallback(() => {
     pipelineRef.current.cancel();
@@ -342,6 +292,7 @@ export function useTranscriptStickToBottom({
     restoreDeadlineRef.current = 0;
     lastScrollTopRef.current = 0;
     lastContentHeightRef.current = 0;
+    resetNewContentSignal();
     dispatchInsetEvent({ type: "reset" });
     userScrollIntentUntilRef.current = 0;
     // FR-2 (rung 6): restore a finalized session's saved reading position before
@@ -360,7 +311,7 @@ export function useTranscriptStickToBottom({
       scrollToBottom();
     }
     beginGlue();
-  }, [beginGlue, clearAllMarkers, dispatchInsetEvent, notifyProgrammaticScroll, scrollRef, scrollToBottom, setPinned]);
+  }, [beginGlue, clearAllMarkers, dispatchInsetEvent, notifyProgrammaticScroll, resetNewContentSignal, scrollRef, scrollToBottom, setPinned]);
 
   // Establish input ownership before the visibility lifecycle can resume the
   // pinned glue loop.
@@ -384,6 +335,7 @@ export function useTranscriptStickToBottom({
 
   return {
     isPinnedToBottom,
+    hasNewContentWhileUnpinned,
     pinnedRef,
     onViewportScroll,
     notifyUserScrollIntent,
