@@ -44,7 +44,7 @@ export interface UseTranscriptFramePipelineLifecycleOptions {
    * reading row stays put as freshly-mounted rows correct their heights, until
    * the deadline below lapses.
    */
-  restoreResolverRef: RefObject<(() => number | null) | null>;
+  restoreResolverRef: RefObject<((viewport: HTMLElement) => number | null) | null>;
   /** Deadline (interactionNow ms) past which the restore anchor is released. */
   restoreDeadlineRef: RefObject<number>;
   /** Snap to the active follow target (the pinned write). */
@@ -113,7 +113,7 @@ export function useTranscriptFramePipelineLifecycle({
       if (restoreNow >= restoreDeadlineRef.current) {
         restoreResolverRef.current = null;
       } else {
-        const target = restore();
+        const target = restore(viewport);
         if (target == null) {
           restoreResolverRef.current = null;
         } else {
