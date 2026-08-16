@@ -1169,8 +1169,30 @@ test.describe("transcript scroll physics", () => {
     const afterProse = await metricsAfterFrame(page);
     expect(afterProse.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
     await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+    // TEMP diagnostic (CI round 6, PR #1980): dump both traces unconditionally
+    // so a failure's per-frame scrollTop/bottomDistance/implied-scrollHeight
+    // sequence is visible in the CI log, not just the single offending delta.
+    // Remove once the round-6 investigation concludes.
+    const proseScrollTopTrace = (await drive<number[]>(page, "stopScrollTrace")).filter((v) =>
+      Number.isFinite(v),
+    );
+    const proseBottomDistanceTrace = (
+      await drive<number[]>(page, "stopBottomDistanceTrace")
+    ).filter((v) => Number.isFinite(v));
+    const proseClientHeight = (await metrics(page)).clientHeight;
+    // eslint-disable-next-line no-console
+    console.log(
+      "[Q13 round-6 diag] scrollTop:",
+      JSON.stringify(proseScrollTopTrace),
+      "bottomDistance:",
+      JSON.stringify(proseBottomDistanceTrace),
+      "impliedScrollHeight:",
+      JSON.stringify(
+        proseScrollTopTrace.map((st, i) => st + proseClientHeight + proseBottomDistanceTrace[i]),
+      ),
+    );
     assertNoBackwardBounce(
-      (await drive<number[]>(page, "stopBottomDistanceTrace")).filter((v) => Number.isFinite(v)),
+      proseBottomDistanceTrace,
       INTERLEAVE_MAX_BACKWARD_BOUNCE_PX,
       TOOL_ROW_ESTIMATE_CONVERGENCE_MAX_PX,
     );
