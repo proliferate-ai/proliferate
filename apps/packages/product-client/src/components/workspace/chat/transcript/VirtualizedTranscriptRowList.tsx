@@ -278,22 +278,22 @@ export function VirtualizedTranscriptRowList({
     }
 
     setPinned(false);
-    // Lands against the CURRENT (still estimate-coordinate) scrollHeight;
-    // forward-clamped like every later frame-pass write (r5) since a
-    // transient undershoot here yields the CI webkit "scrollTop Received 0"
-    // bimodal prepend failure (trace-confirmed #1992/#1993). Re-applied each
-    // frame below until the rows settle; NOT cancelable by upward intent.
+    // A prepend shifts every row's index up, indistinguishable to
+    // useTranscriptCompletedTurnAnchor (runs after, below) from its OWN
+    // completed-turn-split case; unguarded, it re-arms compensation from its
+    // stale pre-prepend capture as cancelableByUpwardIntent=true, which
+    // wheelToTop's still-in-flight gesture then cancels, stranding scrollTop
+    // at 0 (the CI webkit bimodal prepend failure). Invalidate its capture.
+    pendingAnchorRef.current = null;
+    // Forward-clamped like every later frame-pass write (r5): never yield a
+    // negative delta. NOT cancelable — the reader asked for this by scrolling up.
     notifyProgrammaticScroll(() => {
       const rawScrollHeightDelta = viewport.scrollHeight - anchor.scrollHeight;
       viewport.scrollTop = anchor.scrollTop + Math.max(rawScrollHeightDelta, 0);
     });
     startAboveChangeCompensation(anchor, false);
-    // Ruling 3(c) (rung 10): bounded ceiling fallback only — the blank-fallback
-    // hook reads compensationDeadlineRef LIVE (see below), which is the real
-    // signal and tracks the compensation window's own extensions as late
-    // corrections keep arriving on a slow runner.
-    prependSettleUntilRef.current = (typeof performance === "undefined" ? Date.now() : performance.now()) + PREPEND_BLANK_FALLBACK_GRACE_MS;
-  }, [notifyProgrammaticScroll, olderHistoryCursor, rows.length, setPinned, startAboveChangeCompensation]);
+    prependSettleUntilRef.current = (typeof performance === "undefined" ? Date.now() : performance.now()) + PREPEND_BLANK_FALLBACK_GRACE_MS; // Ruling 3(c): bounded ceiling only.
+  }, [notifyProgrammaticScroll, olderHistoryCursor, pendingAnchorRef, rows.length, setPinned, startAboveChangeCompensation]);
 
   useEffect(() => {
     const anchor = pendingPrependAnchorRef.current;

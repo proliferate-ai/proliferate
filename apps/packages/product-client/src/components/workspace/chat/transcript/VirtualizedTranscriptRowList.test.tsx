@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { createRef } from "react";
+import { createRef, useLayoutEffect } from "react";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
@@ -29,12 +29,49 @@ vi.mock("@tanstack/react-virtual", async (importOriginal) => {
   };
 });
 
+// jsdom surfaces no virtual items, so the real useTranscriptVirtualAnchorCapture
+// never populates its ref there, and the real useTranscriptCompletedTurnAnchor
+// nulls whatever it reads regardless of outcome — so observing the ref's final
+// value can't distinguish "invalidated by the prepend fix" from "consumed by
+// the completed-turn-split branch this fix must prevent." Replace the
+// CONSUMER with a fake that has its OWN useLayoutEffect (same hook-order
+// contract as the real one: it runs after the prepend effect above it in
+// VirtualizedTranscriptRowList.tsx) and records exactly what it saw.
+const completedTurnAnchorObservations = vi.hoisted(() => [] as Array<{ key: string } | null>);
+vi.mock("#product/hooks/chat/ui/use-transcript-completed-turn-anchor", () => ({
+  useTranscriptCompletedTurnAnchor: ({
+    pendingAnchorRef,
+  }: {
+    pendingAnchorRef: { current: { key: string } | null };
+  }) => {
+    useLayoutEffect(() => {
+      completedTurnAnchorObservations.push(pendingAnchorRef.current);
+      pendingAnchorRef.current = null;
+    });
+  },
+}));
+
+const completedTurnAnchorRef = vi.hoisted(
+  () => ({ current: null }) as { current: { key: string } | null },
+);
+vi.mock("#product/hooks/chat/ui/use-transcript-virtual-anchor-capture", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("#product/hooks/chat/ui/use-transcript-virtual-anchor-capture")
+  >();
+  return {
+    ...actual,
+    useTranscriptVirtualAnchorCapture: () => completedTurnAnchorRef,
+  };
+});
+
 const ROWS: TranscriptVirtualRow[] = [
   { kind: "pending_prompt", key: "pending-prompt:session-1" },
 ];
 
 beforeEach(() => {
   observedVirtualizerOptions.length = 0;
+  completedTurnAnchorRef.current = null;
+  completedTurnAnchorObservations.length = 0;
   class TestResizeObserver {
     observe() {}
     unobserve() {}
@@ -329,6 +366,55 @@ describe("VirtualizedTranscriptRowList", () => {
     );
 
     expect(viewport.scrollTop).toBe(464);
+  });
+
+  // Second regression, found AFTER the above fix landed and the identical CI
+  // webkit failure (scrollTop Received 0) recurred at the exact same trace
+  // numbers: useTranscriptCompletedTurnAnchor runs its own layout effect right
+  // after this one (both fire on the same prepend commit, since a prepend also
+  // shifts every existing row to a higher index — indistinguishable, to that
+  // hook, from its own completed-turn-split case). Left with a stale
+  // pre-prepend capture in its ref, it re-arms compensationAnchorRef with
+  // cancelableByUpwardIntent=true, clobbering the correctly non-cancelable
+  // anchor this effect just installed; wheelToTop's still-in-flight upward
+  // gesture then cancels it via notifyUserScrollIntent, and nothing is left to
+  // hold scrollTop as the older rows measure in. The fix invalidates that
+  // hook's stale capture (`pendingAnchorRef.current = null`) so it no-ops on a
+  // prepend commit. Negative control: comment out that line and this
+  // assertion regresses to `false` (the completed-turn anchor branch fires).
+  it("invalidates the completed-turn-anchor's stale capture on a prepend so it cannot re-arm a cancelable compensation", () => {
+    const props = { ...makeProps(), hasOlderHistory: true, olderHistoryCursor: 1 };
+    const { container, rerender } = render(<VirtualizedTranscriptRowList {...props} />);
+    const viewport = getViewport(container);
+    Object.defineProperty(viewport, "clientHeight", { value: 400, configurable: true });
+    Object.defineProperty(viewport, "scrollHeight", { value: 5_552, configurable: true });
+    viewport.scrollTop = 464;
+
+    act(() => {
+      fireEvent.scroll(viewport);
+    });
+    expect(props.onLoadOlderHistory).toHaveBeenCalledTimes(1);
+
+    // Simulate useTranscriptVirtualAnchorCapture's cleanup having captured a
+    // stale pre-prepend anchor for the same row the prepend is about to shift
+    // to a higher index — exactly what happens on a real prepend commit.
+    completedTurnAnchorRef.current = { key: ROWS[0].key };
+
+    act(() => {
+      rerender(
+        <VirtualizedTranscriptRowList
+          {...props}
+          rows={[{ kind: "pending_prompt", key: "pending-prompt:session-1-older" }, ...ROWS]}
+        />,
+      );
+    });
+
+    // The fake consumer's layout effect ran once for this commit (after the
+    // real prepend effect above it, same hook-order contract) and must have
+    // observed the ref already nulled out by the prepend fix — never the
+    // stale captured anchor, which would let it re-arm a cancelable
+    // compensation and reproduce the CI webkit "scrollTop Received 0" bug.
+    expect(completedTurnAnchorObservations.at(-1)).toBeNull();
   });
 
   it("adds an overlay spacer without changing the current scroll position", () => {
