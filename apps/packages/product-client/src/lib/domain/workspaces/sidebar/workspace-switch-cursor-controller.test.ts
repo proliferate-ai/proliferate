@@ -3,7 +3,6 @@ import {
   createWorkspaceSwitchCursorController,
   WORKSPACE_CURSOR_COMMIT_FALLBACK_MS,
   WORKSPACE_CURSOR_SETTLE_MS,
-  WORKSPACE_CURSOR_STEP_MIN_MS,
   type WorkspaceSwitchCursorDeps,
 } from "#product/lib/domain/workspaces/sidebar/workspace-switch-cursor-controller";
 
@@ -108,17 +107,21 @@ describe("workspace-switch-cursor-controller", () => {
   it("drops key repeats inside the throttle window instead of queueing them", () => {
     const h = makeHarness({ committed: "a" });
 
+    // Advances use LITERAL millisecond values (not the exported constants) so
+    // this test pins the designed 60ms/180ms cadence rather than tracking
+    // whatever the constants happen to be. A constant-zeroing mutant must fail
+    // here instead of coincidentally surviving a negative-going advance.
     h.controller.step(1); // accepted at now=0 -> cursor b
-    h.clock.advance(WORKSPACE_CURSOR_STEP_MIN_MS - 1); // now=59
+    h.clock.advance(59); // now=59, inside the 60ms throttle window
     h.controller.step(1); // dropped (within throttle), cursor unchanged
     h.controller.step(1); // dropped again
     expect(h.getCursor()).toBe("b");
 
-    h.clock.advance(2); // now=61, next step now accepted
+    h.clock.advance(1); // now=60, at the throttle boundary, next step accepted
     h.controller.step(1); // cursor c
     expect(h.getCursor()).toBe("c");
 
-    h.clock.advance(WORKSPACE_CURSOR_SETTLE_MS);
+    h.clock.advance(180); // past the 180ms settle window
     // Exactly one commit for the whole burst, landing on the final cursor.
     expect(h.commits).toEqual(["c"]);
   });
@@ -216,13 +219,15 @@ describe("workspace-switch-cursor-controller", () => {
   it("does not re-commit when the cursor settles back on the committed row", () => {
     const h = makeHarness({ committed: "a" });
 
+    // Literal millisecond advances (see the throttle-drop test) so a
+    // constant-zeroing mutant cannot survive on a negative-going advance.
     h.controller.step(1); // cursor b
-    h.controller.step(-1); // dropped (throttle) — cursor still b
-    h.clock.advance(WORKSPACE_CURSOR_STEP_MIN_MS + 1);
+    h.controller.step(-1); // dropped (throttle, same tick), cursor still b
+    h.clock.advance(61); // now=61, past the 60ms throttle window
     h.controller.step(-1); // back to a (the committed row)
     expect(h.getCursor()).toBe("a");
 
-    h.clock.advance(WORKSPACE_CURSOR_SETTLE_MS);
+    h.clock.advance(180); // past the 180ms settle window
     expect(h.commits).toEqual([]);
     expect(h.getCursor()).toBeNull();
   });
