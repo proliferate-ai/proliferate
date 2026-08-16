@@ -2,7 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { makeTestProductHost } from "#product/test/product-host-test-utils";
 import { HarnessPane } from "#product/components/settings/panes/agents/harness/HarnessPane";
@@ -306,17 +306,12 @@ function renderPane(harnessKind = "claude") {
   );
 }
 
-/**
- * §7's model list opens collapsed behind its own status row (agent-auth.md pane
- * anatomy §7), so the model toggles are aria-hidden until the row is clicked.
- */
-let pendingFrames: FrameRequestCallback[];
-
+// §7's model list opens collapsed until clicked; flush the reveal's rAF.
 function expandModelList() {
+  const frames: FrameRequestCallback[] = [];
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => (frames.push(cb), frames.length));
   fireEvent.click(screen.getByRole("button", { name: "Models" }));
-  act(() => {
-    pendingFrames.shift()?.(0);
-  });
+  act(() => { while (frames.length > 0) frames.shift()?.(0); });
 }
 
 // One persisted opencode api_key selection — enough for the API-key detail
@@ -340,14 +335,6 @@ function seededOpencodeApiKeySelection() {
 function gatewayCard() {
   return screen.getByRole("button", { name: "Proliferate gateway" }) as HTMLButtonElement;
 }
-
-beforeEach(() => {
-  pendingFrames = [];
-  vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-    pendingFrames.push(callback);
-    return pendingFrames.length;
-  });
-});
 
 afterEach(() => {
   cleanup();
