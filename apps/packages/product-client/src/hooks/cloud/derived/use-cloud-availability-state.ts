@@ -20,23 +20,23 @@ let lastLoggedCloudAvailabilityState: string | null = null;
 
 export function useCloudAvailabilityState() {
   const authStatus = useProductAuthStatus();
-  const { cloudEnabled, cloudComputeEnabled } = useAppCapabilities();
-  const cloudUnavailable = !cloudEnabled;
+  const { controlPlaneReachable, cloudComputeEnabled } = useAppCapabilities();
+  const cloudUnavailable = !controlPlaneReachable;
   // "Checking" means the product session itself is still resolving, not a
   // GitHub OAuth probe.
-  const cloudSignInChecking = cloudEnabled && authStatus === "loading";
+  const cloudSignInChecking = controlPlaneReachable && authStatus === "loading";
   // A reachable control plane always offers product sign-in.
-  const cloudSignInAvailable = cloudEnabled;
+  const cloudSignInAvailable = controlPlaneReachable;
   // The GitHub-OAuth-gated "sign-in unavailable" state is gone: a reachable
   // control plane always has a product sign-in path, so this is never true.
   const cloudAuthUnavailable = false;
   const cloudActive = cloudComputeEnabled && authStatus === "authenticated";
-  const cloudRequiresSignIn = cloudEnabled && authStatus === "anonymous";
+  const cloudRequiresSignIn = controlPlaneReachable && authStatus === "anonymous";
 
   useEffect(() => {
     const derivedState = {
       authStatus,
-      cloudEnabled,
+      controlPlaneReachable,
       cloudUnavailable,
       cloudSignInChecking,
       cloudSignInAvailable,
@@ -57,7 +57,7 @@ export function useCloudAvailabilityState() {
     authStatus,
     cloudActive,
     cloudComputeEnabled,
-    cloudEnabled,
+    controlPlaneReachable,
     cloudSignInAvailable,
     cloudSignInChecking,
     cloudUnavailable,
@@ -66,7 +66,7 @@ export function useCloudAvailabilityState() {
   return useMemo(() => {
     return {
       authStatus,
-      cloudEnabled,
+      controlPlaneReachable,
       cloudComputeEnabled,
       cloudUnavailable,
       cloudSignInChecking,
@@ -80,7 +80,7 @@ export function useCloudAvailabilityState() {
     cloudActive,
     cloudComputeEnabled,
     cloudAuthUnavailable,
-    cloudEnabled,
+    controlPlaneReachable,
     cloudRequiresSignIn,
     cloudSignInAvailable,
     cloudSignInChecking,

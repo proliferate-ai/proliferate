@@ -22,6 +22,10 @@ import {
 import {
   resetSessionReplacementDismissalsForTests,
 } from "#product/hooks/sessions/workflows/session-replacement-dismissals";
+import {
+  resetWorkspaceSessionsWarmPinsForTest,
+  warmWorkspaceSessionsPinCountForTest,
+} from "#product/hooks/access/anyharness/workspaces/workspace-session-directory-keepalive";
 
 const mocks = vi.hoisted(() => ({
   dismissSession: vi.fn(async () => undefined),
@@ -48,6 +52,7 @@ beforeEach(() => {
   mocks.writeSessionReplacementTombstones.mockReturnValue(true);
   resetReplacedSessionTombstonesForTests();
   resetSessionReplacementDismissalsForTests();
+  resetWorkspaceSessionsWarmPinsForTest();
 });
 
 describe("replacement tombstone reconciliation", () => {
@@ -85,7 +90,14 @@ describe("replacement tombstone reconciliation", () => {
     expect(isReplacedSessionTombstoned("workspace-1", "client-old")).toBe(true);
   });
 
-  it("filters staged replacements from cache hits without reconciling them", async () => {
+  it("filters staged replacements from the warm first-paint serve without destructively reconciling them", async () => {
+    // R14: a warm serve now kicks a background revalidation (founder ruling:
+    // not stale-tolerant). It must still NOT destructively reconcile a STAGED
+    // (uncommitted) replacement — dismissSession must never fire for it.
+    mocks.listWorkspaceSessions.mockResolvedValueOnce([
+      { id: "runtime-old" },
+      { id: "runtime-new" },
+    ]);
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
@@ -103,9 +115,74 @@ describe("replacement tombstone reconciliation", () => {
       workspaceId: "workspace-1",
     });
 
+    // First-paint serve is the warm, filtered cache — returned synchronously
+    // without blocking on the network.
     expect(sessions).toEqual([{ id: "runtime-new", workspaceId: "workspace-1" }]);
-    expect(mocks.listWorkspaceSessions).not.toHaveBeenCalled();
+    // A staged replacement is never dismissed, even by the background fetch.
+    await vi.waitFor(() =>
+      expect(mocks.listWorkspaceSessions).toHaveBeenCalledTimes(1),
+    );
     expect(mocks.dismissSession).not.toHaveBeenCalled();
+  });
+
+  it("keeps the sessions query warm and reports a hit after a fresh load", async () => {
+    mocks.listWorkspaceSessions.mockResolvedValueOnce([{ id: "s1" }]);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const wrapper = createWrapper(queryClient, "http://runtime.test");
+    const { result } = renderHook(() => useWorkspaceBootstrapCache(), { wrapper });
+
+    expect(result.current.getWorkspaceSessionsCacheDecision("workspace-1")).toBe("miss");
+    await result.current.loadWorkspaceSessions({
+      workspaceConnection: {} as never,
+      workspaceId: "workspace-1",
+    });
+
+    // The query was pinned warm (bounded LRU) and now reports a truthful hit.
+    expect(warmWorkspaceSessionsPinCountForTest()).toBeGreaterThan(0);
+    expect(result.current.getWorkspaceSessionsCacheDecision("workspace-1")).toBe("hit");
+  });
+
+  it("revalidates a warm serve in the background and updates the cache", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const queryKey = anyHarnessSessionsKey(CACHE_SCOPE_KEY, "workspace-1");
+    queryClient.setQueryData(queryKey, [{ id: "stale-1", workspaceId: "workspace-1" }]);
+    mocks.listWorkspaceSessions.mockResolvedValueOnce([{ id: "fresh-1" }]);
+    const wrapper = createWrapper(queryClient, "http://runtime.test");
+    const { result } = renderHook(() => useWorkspaceBootstrapCache(), { wrapper });
+
+    const served = await result.current.loadWorkspaceSessions({
+      workspaceConnection: {} as never,
+      workspaceId: "workspace-1",
+    });
+    // Warm value served for first paint.
+    expect(served).toEqual([{ id: "stale-1", workspaceId: "workspace-1" }]);
+    // Background revalidation fetched and seeded the fresh list.
+    await vi.waitFor(() => {
+      expect(queryClient.getQueryData(queryKey)).toEqual([
+        { id: "fresh-1", workspaceId: "workspace-1" },
+      ]);
+    });
+  });
+
+  it("invalidates a warm entry when a replaced-session tombstone commits", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const queryKey = anyHarnessSessionsKey(CACHE_SCOPE_KEY, "workspace-1");
+    queryClient.setQueryData(queryKey, [{ id: "runtime-old", workspaceId: "workspace-1" }]);
+    const wrapper = createWrapper(queryClient, "http://runtime.test");
+    const { result } = renderHook(() => useWorkspaceBootstrapCache(), { wrapper });
+    expect(result.current.getWorkspaceSessionsCacheDecision("workspace-1")).toBe("hit");
+
+    commitReplacedSessionTombstone("workspace-1", "runtime-old");
+
+    await vi.waitFor(() =>
+      expect(result.current.getWorkspaceSessionsCacheDecision("workspace-1")).toBe("stale"),
+    );
   });
 
   it("does not cache a forced response after its selection ownership becomes stale", async () => {

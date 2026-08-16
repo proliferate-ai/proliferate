@@ -5,6 +5,23 @@ end-to-end cloud workspace experience: what the user sees and does from
 create to delete. The body is written in the ideal state. Every difference
 from `main` today is listed in [Current gaps](#current-gaps).
 
+## Cloud surfaces culled on the desktop client (PRO-10), backend dormant
+
+Every user-facing cloud-workspace surface on the desktop client (`apps/desktop`
+and `apps/packages/product-client`) is removed or host-gated to web. The backend
+provisioning machinery, the shared runtime providers, and the local/cloud
+reconciliation bridge stay in place but dormant: no desktop surface reaches
+them, so the journeys below describe the destination and the still-live web
+surface, not what the desktop client presents today.
+
+- Existing `cloud_workspace` rows and cloud-only repos are filtered out of every
+  client list at a single data-source seam, so legacy state never resurrects a
+  surface.
+- Cloud deep links resolve to a neutral not-found state.
+- Cloud-target automations the user authored stay listed, badged "target no
+  longer available"; the picker no longer offers a fresh cloud target.
+- Web keeps its cloud affordances, gated by the host capability.
+
 ## Purpose
 
 This is the system document that stitches the cloud-sandbox platform specs

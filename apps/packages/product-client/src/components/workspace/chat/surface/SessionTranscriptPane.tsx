@@ -11,6 +11,7 @@ import { useWorkspaceCreationReceiptKey } from "#product/hooks/workspaces/derive
 import { TranscriptSwitchingPlaceholder } from "#product/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
 import type { GoalTranscriptEvent } from "#product/domain/activity/goal-transcript-events";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
+import { finishDeferredWorkspaceOpenForSession } from "#product/lib/infra/diagnostics/renderer-flow-timing";
 import {
   ensureSessionTranscriptEntry,
   patchSessionRecord,
@@ -123,6 +124,38 @@ export function SessionTranscriptPane({
     selectedWorkspaceId,
     transcript,
   ]);
+
+  // UX-latency R14: honest workspace_open content_stable. The bootstrap no
+  // longer finishes that flow at its own completion — transcript hydration is
+  // off its critical path. It DEFERS the mark to here: once the selected
+  // session's transcript is actually HYDRATED, we finish the flow. This is the
+  // first moment the user can truly see the real transcript. finishDeferred…
+  // no-ops when there is no deferred workspace_open flow for this session (a
+  // plain in-workspace switch), so it is safe to run on every hydration.
+  //
+  // The gate is the directory entry's `transcriptHydrated` flag, NOT object
+  // presence of `transcript`. On cold open selectSession synchronously seeds
+  // createEmptySessionRecord with an empty-but-truthy TranscriptState scaffold;
+  // gating on `transcript` would fire content_stable ~0ms against that scaffold
+  // (lying: data_to_stable_ms would read ~0 for the exact case that used to
+  // measure 1.2–1.8s) and the real content would pop in AFTER we reported
+  // stable. Both hydration call sites (this pane's self-hydration and the
+  // bootstrap kickoff) patch transcriptHydrated=true only once history has been
+  // fetched and applied, so a hydrated-empty session (new workspace, zero
+  // messages) still counts as stable while the scaffold-empty state does not.
+  const transcriptHydrated = useSessionDirectoryStore((state) =>
+    activeSessionId
+      ? state.entriesById[activeSessionId]?.transcriptHydrated ?? false
+      : false
+  );
+  useEffect(() => {
+    if (transcriptDeferred || !activeSessionId || !transcriptHydrated) {
+      return;
+    }
+    finishDeferredWorkspaceOpenForSession(activeSessionId, {
+      content_stable_source: "transcript_committed",
+    });
+  }, [activeSessionId, transcriptHydrated, transcriptDeferred]);
 
   const loadOlderHistory = useCallback(() => {
     if (!activeSessionId || !selectedWorkspaceId || !hasOlderHistory || isLoadingOlderHistory) {

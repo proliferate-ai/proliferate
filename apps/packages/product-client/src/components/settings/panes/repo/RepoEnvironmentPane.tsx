@@ -8,6 +8,7 @@ import { useCloudSecretsPanel } from "#product/hooks/access/cloud/use-cloud-secr
 import { useCloudRepoEnvironmentEditor } from "#product/hooks/settings/workflows/use-cloud-repo-environment-editor";
 import { type RepoSettingsContext } from "#product/lib/domain/settings/repo-scope-selection";
 import { type SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { RepoCloudGate } from "#product/components/settings/panes/repo/RepoCloudGate";
 import {
   RepoScopeEmptyState,
@@ -24,7 +25,7 @@ import {
 export function RepoEnvironmentPane({
   repository,
   context,
-  cloudEnabled,
+  controlPlaneReachable,
   cloudActive,
   cloudSignInChecking,
   cloudSignInAvailable,
@@ -47,12 +48,12 @@ export function RepoEnvironmentPane({
       <PageHeader
         variant="flat"
         title="Environment"
-        description="Variables and files synced to this repo's cloud workspaces."
+        description="Variables and files synced to this repo's workspaces."
       />
       {context === "cloud" ? (
         <EnvironmentCloud
           repository={repository}
-          cloudEnabled={cloudEnabled}
+          controlPlaneReachable={controlPlaneReachable}
           cloudActive={cloudActive}
           cloudSignInChecking={cloudSignInChecking}
           cloudSignInAvailable={cloudSignInAvailable}
@@ -66,13 +67,13 @@ export function RepoEnvironmentPane({
 
 function EnvironmentCloud({
   repository,
-  cloudEnabled,
+  controlPlaneReachable,
   cloudActive,
   cloudSignInChecking,
   cloudSignInAvailable,
 }: {
   repository: SettingsRepositoryEntry;
-  cloudEnabled: boolean;
+  controlPlaneReachable: boolean;
   cloudActive: boolean;
   cloudSignInChecking: boolean;
   cloudSignInAvailable: boolean;
@@ -83,7 +84,7 @@ function EnvironmentCloud({
   return (
     <RepoCloudGate
       editor={editor}
-      cloudEnabled={cloudEnabled}
+      controlPlaneReachable={controlPlaneReachable}
       cloudActive={cloudActive}
       cloudSignInChecking={cloudSignInChecking}
       cloudSignInAvailable={cloudSignInAvailable}
@@ -121,19 +122,26 @@ function EnvironmentLocal({
 }: {
   onSelectRepoContext: (context: RepoSettingsContext) => void;
 }) {
+  // The cross-navigation to the cloud context is culled from desktop (ADR
+  // Q3/FR-2): only web reaches the cloud repo environment, so desktop shows the
+  // explanatory state without a dead "View Cloud environment" affordance.
+  const host = useProductHost();
+  const cloudContextReachable = host.surface === "web";
   return (
     <SettingsEmptyState
       icon={<KeyRound aria-hidden="true" />}
-      title="Cloud only"
-      description="Local workspaces inherit variables from your shell and checkout; managed variables and files are available in Cloud."
+      title="Local environment"
+      description="Local workspaces inherit variables from your shell and checkout."
       action={
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => onSelectRepoContext("cloud")}
-        >
-          View Cloud environment
-        </Button>
+        cloudContextReachable ? (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => onSelectRepoContext("cloud")}
+          >
+            View Cloud environment
+          </Button>
+        ) : undefined
       }
     />
   );

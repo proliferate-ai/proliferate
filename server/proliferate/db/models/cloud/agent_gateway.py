@@ -387,6 +387,14 @@ class AgentGatewayEnrollmentKey(Base):
         nullable=True,
     )
     sync_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Gateway-enablement verification verdict (agent-auth.md FR-3): the
+    # control-plane loop records here whether this key can see its access-group's
+    # models. All three are nullable — a never-verified key carries no verdict, and
+    # the delta is a small JSON string ({"reason": ..., "models": [...]}) surfaced
+    # additively to clients, never key material.
+    verification_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    verification_delta: Mapped[str | None] = mapped_column(Text, nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

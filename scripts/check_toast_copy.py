@@ -16,12 +16,12 @@ retry })``, where ``cause`` carries the exception and is reachable only through
 Details. This guard makes the old shape unwritable in the two places it can
 reappear:
 
-``interpolated-headline``
+``PROD-COPY-1``
     A ``headline:`` whose value is a template literal or a concatenation. The
     headline is the one line a person reads; it is a written sentence, always,
     so a literal is the only legal value.
 
-``error-in-toast-message``
+``PROD-COPY-2``
     A toast raised with a string that interpolates an error-ish binding. This is
     the pre-migration shape itself. Interpolation into a toast string is *not*
     banned in general — ``show(`Joined ${org.name}.`)`` is a fine status line —
@@ -29,15 +29,32 @@ reappear:
 
 Both censuses are empty, so both are absolute bans rather than ratchets: the
 sweep that introduced them fixed every existing site.
+
+The rules themselves are records under `lints/product/toast-copy.toml`; this file
+is only the engine. Diagnostics are rendered from the record (rule sentence,
+legal alternative, record path) via `scripts/lint_records.py`.
 """
 
 from __future__ import annotations
 
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    # Run as `python3 scripts/check_toast_copy.py` from the repo root,
+    # sys.path[0] is scripts/ — the shared loader lives one level up.
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts import lint_records  # noqa: E402  (path shim must precede the import)
+
+CHECKER = "scripts/check_toast_copy.py"
+RULES = lint_records.load("product")
+OWNED_RULE_IDS = frozenset(
+    rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER
+)
 
 SCANNED_ROOTS = [
     "apps/packages/product-client/src",
@@ -67,9 +84,9 @@ ERROR_BINDING = (
     r")"
 )
 
-PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
+PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
-        "interpolated-headline",
+        "PROD-COPY-1",
         # headline: `…${x}…`  /  headline: "a" + b
         re.compile(
             # `[^,]` rather than `[^,\n]` for the concatenation arms: the value
@@ -77,21 +94,46 @@ PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
             # so this still cannot wander into the next one.
             r"\bheadline\s*:\s*(?:`[^`]*\$\{|[^,]{0,200}?[\"'`]\s*\+|\w+\s*\+)",
         ),
-        "a headline is a written line, not a built string — put the dynamic text in `consequence` or the exception in `cause`",
     ),
     (
-        "error-in-toast-message",
+        "PROD-COPY-2",
         # showToast(`… ${errorMessage(error)}`) and its concatenated form
         re.compile(
             rf"{TOAST_CALL}\s*\(\s*(?:`[^`]*\$\{{\s*{ERROR_BINDING}\b"
             rf"|[\"'][^\"']*[\"']\s*\+\s*{ERROR_BINDING}\b)",
         ),
-        "raise it with toastError({ headline, consequence, cause }) so the exception reaches Details, not the headline",
     ),
 ]
 
 
-def scan_file(path: Path) -> list[tuple[int, str, str, str]]:
+@dataclass(frozen=True)
+class Finding:
+    """One toast-copy violation, reported through its record."""
+
+    lineno: int
+    rule_id: str
+    snippet: str
+    path: Path | None = None
+
+    @property
+    def relative_path(self) -> str:
+        if self.path is None:
+            return "<unknown>"
+        try:
+            return str(self.path.relative_to(REPO_ROOT))
+        except ValueError:
+            return str(self.path)
+
+    def format(self) -> str:
+        """The record-generated diagnostic: rule, alternative, record path."""
+        return lint_records.render_diagnostic(
+            RULES.rule(self.rule_id),
+            f"{self.relative_path}:{self.lineno}",
+            repr(self.snippet),
+        )
+
+
+def scan_file(path: Path) -> list[Finding]:
     try:
         text = path.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
@@ -109,13 +151,13 @@ def scan_file(path: Path) -> list[tuple[int, str, str, str]]:
     # negated (`[^`]`, `[^,]`), which match newlines, so they span the wrap
     # without needing DOTALL and still cannot run past the delimiter that ends
     # the value they are reading.
-    findings: list[tuple[int, str, str, str]] = []
-    for rule, pattern, hint in PATTERNS:
+    findings: list[Finding] = []
+    for rule_id, pattern in PATTERNS:
         for match in pattern.finditer(text):
             lineno = text.count("\n", 0, match.start()) + 1
             snippet = " ".join(match.group(0).split())
-            findings.append((lineno, rule, snippet, hint))
-    return sorted(findings)
+            findings.append(Finding(lineno, rule_id, snippet, path))
+    return sorted(findings, key=lambda finding: (finding.lineno, finding.rule_id))
 
 
 def iter_source_files() -> list[Path]:
@@ -134,11 +176,9 @@ def iter_source_files() -> list[Path]:
 
 
 def main() -> int:
-    violations: list[str] = []
+    violations: list[Finding] = []
     for path in sorted(iter_source_files()):
-        for lineno, rule, snippet, hint in scan_file(path):
-            rel = path.relative_to(REPO_ROOT)
-            violations.append(f"  {rel}:{lineno} [{rule}] {snippet!r} — {hint}")
+        violations.extend(scan_file(path))
 
     if not violations:
         print("Toast copy check passed.")
@@ -146,7 +186,8 @@ def main() -> int:
 
     print("A toast headline is written, not concatenated:")
     for violation in violations:
-        print(violation)
+        print(violation.format())
+        print()
     print(
         "\ntoastError({ headline, consequence, cause, retry }) exists so the human"
         "\noutcome and the raw exception occupy different fields. `headline` is one"

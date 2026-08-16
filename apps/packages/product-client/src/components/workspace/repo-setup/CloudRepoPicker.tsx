@@ -14,6 +14,10 @@ import { Button } from "#product/primitives/Button";
 import { Input } from "#product/primitives/Input";
 import { PopoverSearchField } from "#product/primitives/PopoverSearchField";
 import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
+import {
+  LoadingBoundary,
+  type LoadingBoundaryState,
+} from "#product/primitives/LoadingBoundary";
 import type {
   CloudRepoPickerDialogProps,
   CloudRepoPickerProps,
@@ -104,20 +108,33 @@ export function CloudRepoPicker({
       ) : null}
 
       <div className="max-h-[300px] overflow-y-auto py-1">
-        {loading && repositories.length === 0 ? (
-          <LoadingRepositoryRows />
-        ) : repositories.length === 0 ? (
-          <EmptyRepositoryState query={query} />
-        ) : (
-          repositories.map((repo) => (
+        {/* FR-1 carve-out (UX Latency + Transitions ADR §4 Rung 4): the repo
+            picker keeps its fixed-geometry row skeleton as the treatment slot.
+            Routing through `LoadingBoundary` buys the Class C show-delay and
+            enforces the Q19 empty split. "No repositories found" may only
+            render once the repository query resolves, never while it is still
+            loading. */}
+        <LoadingBoundary
+          state={
+            (loading && repositories.length === 0
+              ? "pending"
+              : repositories.length === 0
+                ? "empty"
+                : "ready") satisfies LoadingBoundaryState
+          }
+          diagnostics={{ flow: "cloud_repo_picker" }}
+          treatment={<LoadingRepositoryRows />}
+          emptyContent={<EmptyRepositoryState query={query} />}
+        >
+          {repositories.map((repo) => (
             <RepositoryRow
               key={repo.id}
               repo={repo}
               adding={addingRepoId === repo.id}
               onAdd={onAddRepository}
             />
-          ))
-        )}
+          ))}
+        </LoadingBoundary>
         {nextCursor ? (
           <Button
             type="button"

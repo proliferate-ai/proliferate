@@ -68,6 +68,102 @@ describe("resolveHotSessionTargets", () => {
     expect(targets.map((target) => target.clientSessionId)).toEqual(["c", "a"]);
   });
 
+  it("keeps a running session in a backgrounded workspace hot", () => {
+    const state = fixtures(["selected"]);
+    state.directory["background-running"] = backgroundEntry("background-running", {
+      status: "running",
+    });
+    state.directory["background-idle"] = backgroundEntry("background-idle", {
+      status: "idle",
+    });
+    state.promptActivity["background-running"] = 0;
+    state.promptActivity["background-idle"] = 0;
+
+    const targets = resolveHotSessionTargets({
+      activeSessionId: "selected",
+      backgroundSessionIds: ["background-running", "background-idle"],
+      directoryEntriesById: state.directory,
+      promptActivityBySessionId: state.promptActivity,
+      selectedWorkspaceId: "workspace-1",
+      visibleChatSessionIds: ["selected"],
+      workspaceSessionIds: ["selected"],
+    });
+
+    expect(targets.map((target) => [target.clientSessionId, target.reason])).toEqual([
+      ["selected", "selected"],
+      ["background-running", "background_running"],
+    ]);
+  });
+
+  it("keeps a backgrounded session with a queued prompt hot", () => {
+    const state = fixtures(["selected"]);
+    state.directory["background-queued"] = backgroundEntry("background-queued", {
+      status: "idle",
+    });
+    state.promptActivity["background-queued"] = 1;
+
+    const targets = resolveHotSessionTargets({
+      activeSessionId: "selected",
+      backgroundSessionIds: ["background-queued"],
+      directoryEntriesById: state.directory,
+      promptActivityBySessionId: state.promptActivity,
+      selectedWorkspaceId: "workspace-1",
+      visibleChatSessionIds: ["selected"],
+      workspaceSessionIds: ["selected"],
+    });
+
+    expect(targets.map((target) => [target.clientSessionId, target.reason])).toEqual([
+      ["selected", "selected"],
+      ["background-queued", "background_running"],
+    ]);
+  });
+
+  it("keeps background running sessions hot with no workspace selected", () => {
+    const state = fixtures([]);
+    state.directory["background-running"] = backgroundEntry("background-running", {
+      status: "running",
+    });
+    state.promptActivity["background-running"] = 0;
+
+    const targets = resolveHotSessionTargets({
+      activeSessionId: null,
+      backgroundSessionIds: ["background-running"],
+      directoryEntriesById: state.directory,
+      promptActivityBySessionId: state.promptActivity,
+      selectedWorkspaceId: null,
+      visibleChatSessionIds: [],
+      workspaceSessionIds: [],
+    });
+
+    expect(targets.map((target) => [target.clientSessionId, target.reason])).toEqual([
+      ["background-running", "background_running"],
+    ]);
+  });
+
+  it("drops background sessions before selected-workspace targets under the cap", () => {
+    const state = fixtures(["selected", "visible"]);
+    state.directory["background-running"] = backgroundEntry("background-running", {
+      status: "running",
+    });
+    state.promptActivity["background-running"] = 0;
+
+    const targets = resolveHotSessionTargets({
+      activeSessionId: "selected",
+      backgroundSessionIds: ["background-running"],
+      directoryEntriesById: state.directory,
+      maxHotSessionStreams: 2,
+      promptActivityBySessionId: state.promptActivity,
+      selectedWorkspaceId: "workspace-1",
+      visibleChatSessionIds: ["selected", "visible"],
+      workspaceSessionIds: ["selected", "visible"],
+    });
+
+    expect(targets.map((target) => target.clientSessionId)).toEqual([
+      "selected",
+      "visible",
+    ]);
+  });
+
   it("keeps projected targets hot but non-streamable", () => {
     const state = fixtures(["projected"], { materialized: false });
 
@@ -88,6 +184,23 @@ describe("resolveHotSessionTargets", () => {
     }]);
   });
 });
+
+function backgroundEntry(
+  sessionId: string,
+  options: { status: HotSessionDirectoryEntry["status"] },
+): HotSessionDirectoryEntry {
+  return {
+    materializedSessionId: sessionId,
+    workspaceId: "workspace-2",
+    status: options.status,
+    executionSummary: null,
+    streamConnectionState: "disconnected",
+    activity: {
+      isStreaming: false,
+      pendingInteractions: [],
+    },
+  };
+}
 
 function fixtures(
   sessionIds: string[],

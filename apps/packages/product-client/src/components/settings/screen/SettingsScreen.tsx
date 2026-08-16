@@ -32,11 +32,18 @@ import { SettingsScopeTabs } from "#product/primitives/patterns/settings/Setting
 import { ArrowLeft } from "#product/primitives/icons/core";
 import { SETTINGS_COPY } from "#product/copy/settings/settings-copy";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useMacWindowControlsInsetClass } from "#product/hooks/ui/layout/use-mac-window-controls";
 import { useWorkspaceSidebarResize } from "#product/hooks/preferences/ui/use-workspace-sidebar-resize";
 import { useUpdater } from "#product/hooks/access/tauri/use-updater";
 import { useIsAdmin } from "#product/hooks/access/cloud/organizations/use-is-admin";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
+import {
+  SETTINGS_NAV_FLOW_KEY,
+  finishRendererFlow,
+  markRendererFlowDataReady,
+  markRendererFlowShellCommitted,
+} from "#product/lib/infra/diagnostics/renderer-flow-timing";
 
 interface SettingsScreenProps {
   activeSection: SettingsSection;
@@ -61,7 +68,7 @@ export function SettingsScreen({
   onSelectRepoContext,
   onSelectCloudEnvironment,
 }: SettingsScreenProps) {
-  const { authStatus, cloudActive, cloudEnabled, cloudSignInAvailable, cloudSignInChecking } = useCloudAvailabilityState();
+  const { authStatus, cloudActive, controlPlaneReachable, cloudSignInAvailable, cloudSignInChecking } = useCloudAvailabilityState();
   const authenticated = authStatus === "authenticated";
   const { activeOrganizationId, organizationsQuery } = useActiveOrganization();
   const admin = useIsAdmin(activeOrganizationId);
@@ -70,11 +77,21 @@ export function SettingsScreen({
     checkNow,
     updatesSupported,
   } = useUpdater();
-  const repoSelection = resolveRepoScopeSelection({
+  // Host-capability gating (ADR Q3, FR-2/FR-3): the Cloud|Local scope toggles
+  // and cloud repo context are culled from desktop. Only web keeps the cloud
+  // settings surface reachable. Desktop always resolves to the Local context so
+  // no repo-scope pane ever renders its cloud arm (RepoCloudGate and the GitHub
+  // App authorization affordances stay dormant, web-only).
+  const host = useProductHost();
+  const cloudSettingsReachable = host.surface === "web";
+  const resolvedRepoSelection = resolveRepoScopeSelection({
     repositories,
     activeRepoSourceRoot,
     focus,
   });
+  const repoSelection = cloudSettingsReachable
+    ? resolvedRepoSelection
+    : { ...resolvedRepoSelection, context: "local" as const };
   const activeSectionIsAdminOnly = isSettingsAdminOnlySection(activeSection);
   const adminAccessLoading = organizationsQuery.isLoading || admin.isLoading;
   const isAdminConfirmed = admin.isAdmin === true;
@@ -95,6 +112,32 @@ export function SettingsScreen({
     (scope) => !isSettingsAdminOnlyScope(scope) || showAdminSettings,
   );
   const redirectedAdminSectionRef = useRef<SettingsSection | null>(null);
+
+  // UX-latency R1 settings_nav flow: the screen mounting is the shell; the
+  // settle happens once admin/org gating data resolves. Fires once per mount.
+  const settingsFlowSettledRef = useRef(false);
+  useEffect(() => {
+    markRendererFlowShellCommitted({
+      kind: "settings_nav",
+      correlationKey: SETTINGS_NAV_FLOW_KEY,
+    });
+  }, []);
+  // COVERAGE LIMIT (honest): when admin/org access is already resolved at mount
+  // (adminAccessLoading === false on the first pass — the common warm case), the
+  // shell/data/stable marks fire back-to-back in the same tick, so
+  // shell_to_data_ms and data_to_stable_ms collapse to ~0. The non-trivial
+  // signal only appears on a cold open where useIsAdmin is still loading.
+  useEffect(() => {
+    if (adminAccessLoading || settingsFlowSettledRef.current) {
+      return;
+    }
+    settingsFlowSettledRef.current = true;
+    markRendererFlowDataReady({
+      kind: "settings_nav",
+      correlationKey: SETTINGS_NAV_FLOW_KEY,
+    });
+    finishRendererFlow({ kind: "settings_nav", correlationKey: SETTINGS_NAV_FLOW_KEY });
+  }, [adminAccessLoading]);
 
   useEffect(() => {
     if (!shouldRedirectAdminSection) {
@@ -166,11 +209,14 @@ export function SettingsScreen({
                 repositories={repositories}
                 activeRepoSourceRoot={activeRepoSourceRoot}
                 focus={focus}
+                showContextToggle={cloudSettingsReachable}
                 onSelectRepo={onSelectRepo}
                 onSelectRepoContext={onSelectRepoContext}
                 onSelectCloudEnvironment={onSelectCloudEnvironment}
               />
-            ) : activeScope === "agents" && (isSettingsHarnessSection(effectiveActiveSection) || effectiveActiveSection === "agent-api-keys") ? (
+            ) : activeScope === "agents"
+              && cloudSettingsReachable
+              && (isSettingsHarnessSection(effectiveActiveSection) || effectiveActiveSection === "agent-api-keys") ? (
               <AgentScopeHeaderControls />
             ) : null}
           </div>
@@ -192,12 +238,12 @@ export function SettingsScreen({
             }}
             onSelectSection={onSelectSection}
             disabledSections={{
-              integrations: !cloudEnabled,
-              "organization-integrations": !cloudEnabled,
-              "agent-api-keys": !cloudEnabled,
-              "organization-secrets": !cloudEnabled,
-              "organization-sso": !cloudEnabled,
-              "personal-secrets": !cloudEnabled,
+              integrations: !controlPlaneReachable,
+              "organization-integrations": !controlPlaneReachable,
+              "agent-api-keys": !controlPlaneReachable,
+              "organization-secrets": !controlPlaneReachable,
+              "organization-sso": !controlPlaneReachable,
+              "personal-secrets": !controlPlaneReachable,
             }}
             onCheckForUpdates={() => { void checkNow(); }}
             updateActionState={{
@@ -229,7 +275,7 @@ export function SettingsScreen({
                 {renderSettingsSection(
                   effectiveActiveSection,
                   repoSelection,
-                  cloudEnabled,
+                  controlPlaneReachable,
                   cloudActive,
                   cloudSignInChecking,
                   cloudSignInAvailable,

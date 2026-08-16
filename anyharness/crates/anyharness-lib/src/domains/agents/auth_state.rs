@@ -123,13 +123,25 @@ impl Default for ProbeLifecycle {
     }
 }
 
-/// Gateway health for a gateway-sourced slot. Placeholder slot filled by the
-/// gateway-verification rung; modeled now as an `Option` so the derivation's
-/// `Unavailable` arm exists.
+/// Gateway health for a gateway-sourced slot, filled by the runtime data-plane
+/// health check (ADR FR-3): one `GET /v1/models` per poke, shared with the
+/// tier-1 trial, classified into orthogonal verdicts.
+///
+/// - `Reachable`: the gateway answered 2xx and its model list matches the
+///   last-known list for this harness (or this is the first observation).
+/// - `Unreachable`: a network/timeout error — the derivation reads `Unavailable`.
+/// - `Unauthorized`: the gateway answered 401/403 — the derivation reads
+///   `Expired` (the credential lapsed).
+/// - `ModelsDrifted`: reachable AND authorized, but the model-list hash differs
+///   from the last-known list — the derivation reads `Misconfigured`.
+/// - `BudgetExhausted`: delivered via `state.json` (the budget fact), kept so the
+///   derivation's `Unavailable` arm can fold it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GatewayHealth {
     Reachable,
     Unreachable,
+    Unauthorized,
+    ModelsDrifted,
     BudgetExhausted,
 }
 
@@ -292,23 +304,43 @@ pub fn derive_agent_auth_state(facts: &AgentAuthFacts) -> DerivedState {
         };
     }
 
-    // A gateway-sourced slot whose gateway is unreachable or out of budget.
+    // A gateway-sourced slot, folded by its health verdict (ADR FR-3). A drifted
+    // model list is a config delta (Misconfigured); a 401/403 is a lapsed
+    // credential (Expired); an unreachable or budget-exhausted gateway is
+    // Unavailable. The order below matches the display precedence
+    // (Misconfigured < Expired < Unavailable).
     let gateway_selected = facts
         .credential
         .as_ref()
         .is_some_and(|c| c.source == CredentialSource::Gateway);
-    if gateway_selected
-        && matches!(
-            facts.gateway,
-            Some(GatewayHealth::Unreachable) | Some(GatewayHealth::BudgetExhausted)
-        )
-    {
-        return DerivedState {
-            display: AuthDisplay::Unavailable,
-            next_action: NextAction::TopUpOrRetry,
-            evidence_ref: None,
-            evidence_age_seconds: None,
-        };
+    if gateway_selected {
+        match facts.gateway {
+            Some(GatewayHealth::ModelsDrifted) => {
+                return DerivedState {
+                    display: AuthDisplay::Misconfigured,
+                    next_action: NextAction::FixConfig,
+                    evidence_ref: None,
+                    evidence_age_seconds: None,
+                };
+            }
+            Some(GatewayHealth::Unauthorized) => {
+                return DerivedState {
+                    display: AuthDisplay::Expired,
+                    next_action: NextAction::LogInOrPasteKey,
+                    evidence_ref: None,
+                    evidence_age_seconds: None,
+                };
+            }
+            Some(GatewayHealth::Unreachable) | Some(GatewayHealth::BudgetExhausted) => {
+                return DerivedState {
+                    display: AuthDisplay::Unavailable,
+                    next_action: NextAction::TopUpOrRetry,
+                    evidence_ref: None,
+                    evidence_age_seconds: None,
+                };
+            }
+            Some(GatewayHealth::Reachable) | None => {}
+        }
     }
 
     // A probe in flight.
@@ -398,6 +430,10 @@ pub enum Tier1TrialFact {
 pub struct AuthRuntimeInputs {
     pub probe: ProbeLifecycle,
     pub trial: Option<Tier1TrialFact>,
+    /// The runtime data-plane gateway health verdict (ADR FR-3), when the
+    /// gateway-health check has an observation for this harness. Folded onto the
+    /// facts only for a gateway-sourced credential.
+    pub gateway: Option<GatewayHealth>,
 }
 
 /// Build [`AgentAuthFacts`] from a resolved agent, using ONLY the data the
@@ -488,6 +524,16 @@ pub fn facts_from_resolved_with_runtime(
         None
     };
 
+    // The gateway health verdict is only meaningful for a gateway-sourced
+    // credential: a health check runs against the harness's gateway virtual key,
+    // so folding it onto a native-login or pasted-key slot would attach a verdict
+    // to a credential the check never observed. The derivation guards on the same
+    // condition, but scrubbing it here keeps the facts honest for any reader.
+    let gateway = match credential.as_ref() {
+        Some(evidence) if evidence.source == CredentialSource::Gateway => runtime.gateway,
+        _ => None,
+    };
+
     AgentAuthFacts {
         installed,
         unsupported_route,
@@ -496,7 +542,7 @@ pub fn facts_from_resolved_with_runtime(
         credential,
         selection,
         probe: runtime.probe.clone(),
-        gateway: None,
+        gateway,
         handoff: None,
     }
 }

@@ -148,7 +148,17 @@ async fn the_global_cap_bounds_concurrency_across_harnesses() {
     for kind in harnesses {
         home.write_manifest(kind, Some("1.0.0"), Some("sha-1"), "pinned_archive");
     }
-    let runner = Arc::new(FakeRunner::new());
+    // A GATED runner is the barrier that makes "simultaneous" deterministic: the
+    // first winner parks INSIDE the runner (holding the sole semaphore permit)
+    // until we release it. That gives every one of the twelve pokes time to enter
+    // `probe_on_event` and stamp its `poked_at` BEFORE any attempt completes, so
+    // the two losers per harness are genuinely racing a live attempt and must
+    // coalesce onto it. Without the gate the coalesce depends on scheduler luck:
+    // a loser polled only after the winner's attempt already finished is, by the
+    // engine's (correct) "an event after the last attempt earns a fresh probe"
+    // rule, a second probe — which is what made this test flaky under a loaded CI
+    // runner (four expected, eight observed).
+    let (runner, release) = FakeRunner::gated();
     let plan = Arc::new(CountingPlanProducer::new(vec!["m-1"], vec!["seed"]));
     let mut targets = FixedTargets::single("claude");
     for kind in &harnesses[1..] {
@@ -173,6 +183,14 @@ async fn the_global_cap_bounds_concurrency_across_harnesses() {
             }));
         }
     }
+
+    // The first winner has reached the gated runner: it holds the only permit, so
+    // every other task is now parked (winners on the semaphore, losers on their
+    // per-harness attempt gate) with its `poked_at` already stamped. Releasing
+    // now lets the attempts drain one at a time.
+    wait_until("the first probe reaches the gated runner", || runner.count() >= 1).await;
+    release.send(true).expect("release the gated runner");
+
     for handle in handles {
         handle.await.expect("join");
     }

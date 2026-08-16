@@ -269,6 +269,20 @@ pub struct WorkflowRunNodeRecord {
     pub completed_at: Option<String>,
 }
 
+impl WorkflowRunNodeRecord {
+    /// The node's session title: the graph card's own index line — one-based
+    /// chain position, zero-padded to two digits, "--" for a row with no
+    /// position — so the header tab, the roster, and the card all name the
+    /// node identically (`nodeIndexTitle` in the client's node-card copy).
+    pub fn session_title(&self) -> String {
+        let index_label = match self.chain_index {
+            Some(index) => format!("{:02}", index + 1),
+            None => "--".to_string(),
+        };
+        format!("{index_label} · {}", self.title)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowRunDocRecord {
     pub id: String,

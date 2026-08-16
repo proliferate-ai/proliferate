@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Prove Mobile reaches only ProductClient's built, headless domain graph."""
+"""Prove Mobile reaches only ProductClient's built, headless domain graph.
+
+The rules themselves are records under `lints/frontend/exports.toml`
+(FE-EXPORT-1..9); this file is only the engine that proves them. Every
+diagnostic is rendered from its record, so rule wording lives with the rule.
+"""
 
 from __future__ import annotations
 
@@ -15,13 +20,28 @@ from urllib.parse import unquote
 
 try:
     from scripts.frontend_imports import collect_module_specifiers
+    from scripts import lint_records
 except ModuleNotFoundError:  # Direct `python3 scripts/...` execution.
     from frontend_imports import collect_module_specifiers
+    import lint_records
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+RULES = lint_records.load("frontend")
 PRODUCT_CLIENT_DOMAIN_PREFIX = "@proliferate/product-client/internal/domain/"
 PRODUCT_CLIENT_PACKAGE = "@proliferate/product-client"
+
+
+def display_path(path: Path, repo_root: Path = REPO_ROOT) -> str:
+    """Repo-relative when possible; absolute otherwise (tests use temp roots)."""
+    try:
+        return path.relative_to(repo_root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def diagnostic(rule_id: str, location: str, detail: str) -> str:
+    return lint_records.render_diagnostic(RULES.rule(rule_id), location, detail)
 
 EXPECTED_METRO_CONDITIONS = {
     "ios": ["react-native"],
@@ -49,12 +69,9 @@ class MobileEdge:
     source: str
     type_only: bool
 
-    def format(self, message: str, *, repo_root: Path) -> str:
-        try:
-            display_path = self.path.relative_to(repo_root).as_posix()
-        except ValueError:
-            display_path = self.path.as_posix()
-        return f"{display_path}:{self.lineno}: {message}"
+    def format(self, rule_id: str, detail: str, *, repo_root: Path) -> str:
+        location = f"{display_path(self.path, repo_root)}:{self.lineno}"
+        return diagnostic(rule_id, location, detail)
 
 
 def read_json(path: Path) -> Any:
@@ -119,23 +136,34 @@ def collect_mobile_edges(repo_root: Path = REPO_ROOT) -> list[MobileEdge]:
 
 def validate_mobile_tsconfig(repo_root: Path = REPO_ROOT) -> list[str]:
     path = repo_root / "apps" / "mobile" / "tsconfig.json"
+    location = display_path(path, repo_root)
     config = read_json(path)
     if not isinstance(config, dict):
-        return [f"{path}: expected a JSON object"]
+        return [diagnostic("FE-EXPORT-1", location, "expected a JSON object")]
     compiler_options = config.get("compilerOptions", {})
     if not isinstance(compiler_options, dict):
-        return [f"{path}: compilerOptions must be an object"]
+        return [
+            diagnostic("FE-EXPORT-1", location, "compilerOptions must be an object")
+        ]
 
     errors: list[str] = []
     if "baseUrl" in compiler_options:
         errors.append(
-            f"{path}: compilerOptions.baseUrl must be absent so Expo cannot "
-            "intercept package exports"
+            diagnostic(
+                "FE-EXPORT-1",
+                location,
+                "compilerOptions.baseUrl must be absent so Expo cannot "
+                "intercept package exports",
+            )
         )
     if "paths" in compiler_options:
         errors.append(
-            f"{path}: compilerOptions.paths must be absent so Expo cannot "
-            "resolve ProductClient source aliases"
+            diagnostic(
+                "FE-EXPORT-1",
+                location,
+                "compilerOptions.paths must be absent so Expo cannot "
+                "resolve ProductClient source aliases",
+            )
         )
     return errors
 
@@ -165,21 +193,41 @@ def load_effective_metro_facts(repo_root: Path = REPO_ROOT) -> dict[str, Any]:
 
 
 def validate_metro_facts(facts: dict[str, Any]) -> list[str]:
+    location = "apps/mobile/metro.config.js"
     errors: list[str] = []
     if facts.get("resolveRequest") is not None:
         errors.append(
-            "apps/mobile/metro.config.js must not install a custom resolver.resolveRequest"
+            diagnostic(
+                "FE-EXPORT-2",
+                location,
+                "must not install a custom resolver.resolveRequest",
+            )
         )
     if facts.get("unstable_enablePackageExports") is not True:
         errors.append(
-            "Metro resolver.unstable_enablePackageExports must be exactly true"
+            diagnostic(
+                "FE-EXPORT-3",
+                location,
+                "Metro resolver.unstable_enablePackageExports must be exactly true",
+            )
         )
     if facts.get("unstable_conditionNames") != []:
-        errors.append("Metro resolver.unstable_conditionNames must be exactly []")
+        errors.append(
+            diagnostic(
+                "FE-EXPORT-3",
+                location,
+                "Metro resolver.unstable_conditionNames must be exactly []",
+            )
+        )
     if facts.get("unstable_conditionsByPlatform") != EXPECTED_METRO_CONDITIONS:
         errors.append(
-            "Metro resolver.unstable_conditionsByPlatform drifted from Expo's expected "
-            f"iOS/Android/Web defaults: {facts.get('unstable_conditionsByPlatform')!r}"
+            diagnostic(
+                "FE-EXPORT-3",
+                location,
+                "Metro resolver.unstable_conditionsByPlatform drifted from Expo's "
+                "expected iOS/Android/Web defaults: "
+                f"{facts.get('unstable_conditionsByPlatform')!r}",
+            )
         )
     return errors
 
@@ -188,31 +236,48 @@ def validate_internal_export(
     repo_root: Path = REPO_ROOT,
 ) -> tuple[str | None, list[str]]:
     path = repo_root / "apps" / "packages" / "product-client" / "package.json"
+    location = display_path(path, repo_root)
     manifest = read_json(path)
     if not isinstance(manifest, dict):
-        return None, [f"{path}: expected a JSON object"]
+        return None, [diagnostic("FE-EXPORT-4", location, "expected a JSON object")]
     exports = manifest.get("exports")
     if not isinstance(exports, dict):
-        return None, [f"{path}: exports must be an object"]
+        return None, [diagnostic("FE-EXPORT-4", location, "exports must be an object")]
     internal = exports.get("./internal/*")
     if not isinstance(internal, dict):
-        return None, [f"{path}: exports['./internal/*'] must be an object"]
+        return None, [
+            diagnostic(
+                "FE-EXPORT-4", location, "exports['./internal/*'] must be an object"
+            )
+        ]
 
     errors: list[str] = []
     unexpected = set(internal) - {"types", "default"}
     if unexpected:
         errors.append(
-            f"{path}: exports['./internal/*'] has forbidden condition overrides: "
-            f"{', '.join(sorted(unexpected))}"
+            diagnostic(
+                "FE-EXPORT-4",
+                location,
+                "exports['./internal/*'] has forbidden condition overrides: "
+                f"{', '.join(sorted(unexpected))}",
+            )
         )
     if internal.get("types") != "./src/*":
         errors.append(
-            f"{path}: exports['./internal/*'].types must be exactly './src/*'"
+            diagnostic(
+                "FE-EXPORT-4",
+                location,
+                "exports['./internal/*'].types must be exactly './src/*'",
+            )
         )
     runtime_target = internal.get("default")
     if runtime_target != "./dist/*.js":
         errors.append(
-            f"{path}: exports['./internal/*'].default must be exactly './dist/*.js'"
+            diagnostic(
+                "FE-EXPORT-4",
+                location,
+                "exports['./internal/*'].default must be exactly './dist/*.js'",
+            )
         )
         return None, errors
     return runtime_target, errors
@@ -244,16 +309,21 @@ def resolve_export_target(pattern: str, subpath: str) -> str | None:
     return target
 
 
+def no_mobile_edges_error() -> str:
+    return diagnostic(
+        "FE-EXPORT-8",
+        "apps/mobile/src",
+        "contains no ProductClient import; proof cannot establish a domain edge",
+    )
+
+
 def validate_mobile_edges(
     runtime_pattern: str,
     edges: list[MobileEdge],
     repo_root: Path = REPO_ROOT,
 ) -> list[str]:
     if not edges:
-        return [
-            "apps/mobile/src contains no ProductClient import; proof cannot "
-            "establish a domain edge"
-        ]
+        return [no_mobile_edges_error()]
 
     product_client_root = repo_root / "apps" / "packages" / "product-client"
     errors: list[str] = []
@@ -263,6 +333,7 @@ def validate_mobile_edges(
         if not edge.source.startswith(PRODUCT_CLIENT_DOMAIN_PREFIX):
             errors.append(
                 edge.format(
+                    "FE-EXPORT-5",
                     "Mobile may import ProductClient only through "
                     f"{PRODUCT_CLIENT_DOMAIN_PREFIX}<concrete-file>; found {edge.source!r}",
                     repo_root=repo_root,
@@ -274,6 +345,7 @@ def validate_mobile_edges(
         if runtime_target is None:
             errors.append(
                 edge.format(
+                    "FE-EXPORT-5",
                     f"ProductClient export does not map {edge.source!r} to a "
                     "concrete dist/domain JS file",
                     repo_root=repo_root,
@@ -286,6 +358,7 @@ def validate_mobile_edges(
             if not runtime_path.is_file():
                 errors.append(
                     edge.format(
+                        "FE-EXPORT-6",
                         f"missing built ProductClient runtime target {runtime_path}",
                         repo_root=repo_root,
                     )
@@ -297,7 +370,9 @@ def validate_mobile_edges(
         ):
             errors.append(
                 edge.format(
-                    f"missing adjacent ProductClient declaration target {declaration_path}",
+                    "FE-EXPORT-7",
+                    "missing adjacent ProductClient declaration target "
+                    f"{declaration_path}",
                     repo_root=repo_root,
                 )
             )
@@ -314,13 +389,17 @@ def check_preflight(
     try:
         errors.extend(validate_mobile_tsconfig(repo_root))
     except ValueError as error:
-        errors.append(str(error))
+        errors.append(
+            diagnostic("FE-EXPORT-1", "apps/mobile/tsconfig.json", str(error))
+        )
 
     if metro_facts is None:
         try:
             metro_facts = load_effective_metro_facts(repo_root)
         except ValueError as error:
-            errors.append(str(error))
+            errors.append(
+                diagnostic("FE-EXPORT-3", "apps/mobile/metro.config.js", str(error))
+            )
     if metro_facts is not None:
         errors.extend(validate_metro_facts(metro_facts))
 
@@ -329,16 +408,19 @@ def check_preflight(
         runtime_pattern, export_errors = validate_internal_export(repo_root)
         errors.extend(export_errors)
     except ValueError as error:
-        errors.append(str(error))
+        errors.append(
+            diagnostic(
+                "FE-EXPORT-4",
+                "apps/packages/product-client/package.json",
+                str(error),
+            )
+        )
 
     edges = collect_mobile_edges(repo_root)
     if runtime_pattern is not None:
         errors.extend(validate_mobile_edges(runtime_pattern, edges, repo_root))
     elif not edges:
-        errors.append(
-            "apps/mobile/src contains no ProductClient import; proof cannot "
-            "establish a domain edge"
-        )
+        errors.append(no_mobile_edges_error())
     return errors
 
 
@@ -348,18 +430,25 @@ def source_with_root(source_root: str, source: str) -> str:
     return f"{source_root.rstrip('/')}/{source.lstrip('/')}"
 
 
-def source_map_sources(
-    value: Any, *, label: str
-) -> tuple[list[str], list[str]]:
+def source_map_sources(value: Any) -> tuple[list[str], list[str]]:
+    """Flatten a source map's `sources`, collecting shape complaints as details.
+
+    Errors are details relative to the map, not absolute: the caller owns the
+    file location it renders them against. A nested context (`sections[0].map`)
+    is kept as a prefix because the offending map is not the outer one.
+    """
     sources: list[str] = []
     errors: list[str] = []
 
+    def note(context: str, detail: str) -> None:
+        errors.append(f"{context}: {detail}" if context else detail)
+
     def visit(mapping: Any, context: str) -> None:
         if not isinstance(mapping, dict):
-            errors.append(f"{context}: source map must be an object")
+            note(context, "source map must be an object")
             return
         if mapping.get("version") != 3:
-            errors.append(f"{context}: source map version must be 3")
+            note(context, "source map version must be 3")
 
         raw_sources = mapping.get("sources")
         sections = mapping.get("sections")
@@ -367,29 +456,30 @@ def source_map_sources(
             if not isinstance(raw_sources, list) or not all(
                 isinstance(source, str) for source in raw_sources
             ):
-                errors.append(f"{context}: sources must be a list of strings")
+                note(context, "sources must be a list of strings")
             else:
                 source_root = mapping.get("sourceRoot", "")
                 if not isinstance(source_root, str):
-                    errors.append(f"{context}: sourceRoot must be a string")
+                    note(context, "sourceRoot must be a string")
                     source_root = ""
                 sources.extend(
                     source_with_root(source_root, source) for source in raw_sources
                 )
         elif sections is None:
-            errors.append(f"{context}: source map has neither sources nor sections")
+            note(context, "source map has neither sources nor sections")
 
         if sections is not None:
             if not isinstance(sections, list):
-                errors.append(f"{context}: sections must be a list")
+                note(context, "sections must be a list")
                 return
             for index, section in enumerate(sections):
+                nested = f"{context}.sections[{index}]" if context else f"sections[{index}]"
                 if not isinstance(section, dict) or "map" not in section:
-                    errors.append(f"{context}.sections[{index}]: missing nested map")
+                    note(nested, "missing nested map")
                     continue
-                visit(section["map"], f"{context}.sections[{index}].map")
+                visit(section["map"], f"{nested}.map")
 
-    visit(value, label)
+    visit(value, "")
     return sources, errors
 
 
@@ -429,10 +519,20 @@ def classify_product_client_source(source: str) -> str | None:
 def check_export_maps(export_dir: Path) -> list[str]:
     export_dir = export_dir.resolve()
     if not export_dir.is_dir():
-        return [f"export directory does not exist or is not a directory: {export_dir}"]
+        return [
+            diagnostic(
+                "FE-EXPORT-9",
+                export_dir.as_posix(),
+                "export directory does not exist or is not a directory",
+            )
+        ]
     map_paths = sorted(export_dir.rglob("*.map"))
     if not map_paths:
-        return [f"{export_dir}: no emitted source maps found"]
+        return [
+            diagnostic(
+                "FE-EXPORT-9", export_dir.as_posix(), "no emitted source maps found"
+            )
+        ]
 
     errors: list[str] = []
     product_client_sources = 0
@@ -440,10 +540,12 @@ def check_export_maps(export_dir: Path) -> list[str]:
         try:
             mapping = read_json(path)
         except ValueError as error:
-            errors.append(str(error))
+            errors.append(diagnostic("FE-EXPORT-9", path.as_posix(), str(error)))
             continue
-        sources, map_errors = source_map_sources(mapping, label=path.as_posix())
-        errors.extend(map_errors)
+        sources, map_errors = source_map_sources(mapping)
+        errors.extend(
+            diagnostic("FE-EXPORT-9", path.as_posix(), error) for error in map_errors
+        )
         for source in sources:
             package_path = classify_product_client_source(source)
             if package_path is None:
@@ -451,12 +553,21 @@ def check_export_maps(export_dir: Path) -> list[str]:
             product_client_sources += 1
             if not package_path.startswith(("src/domain/", "dist/domain/")):
                 errors.append(
-                    f"{path}: forbidden ProductClient source in Mobile export: {source!r}"
+                    diagnostic(
+                        "FE-EXPORT-9",
+                        path.as_posix(),
+                        "forbidden ProductClient source in Mobile export: "
+                        f"{source!r}",
+                    )
                 )
 
     if product_client_sources == 0:
         errors.append(
-            f"{export_dir}: emitted source maps contain no ProductClient module"
+            diagnostic(
+                "FE-EXPORT-9",
+                export_dir.as_posix(),
+                "emitted source maps contain no ProductClient module",
+            )
         )
     return errors
 
@@ -485,7 +596,8 @@ def main(argv: list[str]) -> int:
     if errors:
         print("Mobile ProductClient export proof failed:", file=sys.stderr)
         for error in errors:
-            print(f"  {error}", file=sys.stderr)
+            print(error, file=sys.stderr)
+            print(file=sys.stderr)
         return 1
     if args.preflight:
         print("Mobile ProductClient export preflight passed.")

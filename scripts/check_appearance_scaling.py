@@ -35,6 +35,12 @@ in exactly one situation — a regex widens and newly SEES pre-existing sites �
 then the sanction explains which law widened it, which files it newly saw, and
 who burns them down. It is never legitimate for a dead class from a removed
 token: that gets deleted at the call site.
+
+The rules themselves are records under `lints/product/appearance-scaling.toml`
+(PROD-SCALE-1 .. PROD-SCALE-34); this file is only the engine. Every diagnostic
+is rendered from the record — rule sentence, legal alternative, record path — via
+`scripts/lint_records.py`, so a failure teaches the rule instead of reciting a
+hardcoded remedy string.
 """
 
 from __future__ import annotations
@@ -45,10 +51,24 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import re
+import sys
 from typing import Iterable, Mapping, Sequence
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    # Run as `python3 scripts/check_appearance_scaling.py` from the repo root,
+    # sys.path[0] is scripts/ — the shared loader lives one level up.
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts import lint_records  # noqa: E402  (path shim must precede the import)
+
+CHECKER = "scripts/check_appearance_scaling.py"
+RULES = lint_records.load("product")
+OWNED_RULE_IDS = frozenset(
+    rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER
+)
+
 # Every shipped frontend source root, which is exactly the set Tailwind scans
 # from `product.css` (`@source`). A root that ships utilities but is not listed here
 # is a hole in the ban, not an omission of taste: the vocabulary would be closed
@@ -93,28 +113,62 @@ JSX_TAG_RE = re.compile(
     re.MULTILINE,
 )
 
+# Rule ids, one per record in lints/product/appearance-scaling.toml. The old
+# bespoke kebab names are gone: the record id is the only name a violation has,
+# in diagnostics, in the census keys, and in the sanction trail.
+STOCK_TEXT_RULE = "PROD-SCALE-1"
+ARBITRARY_TEXT_RULE = "PROD-SCALE-2"
+FONT_SIZE_PROPERTY_RULE = "PROD-SCALE-3"
+FONT_SIZE_CSS_RULE = "PROD-SCALE-4"
+GLYPH_ATTRIBUTE_RULE = "PROD-SCALE-5"
+GLYPH_STYLE_RULE = "PROD-SCALE-6"
+GLYPH_UTILITY_RULE = "PROD-SCALE-7"
+GLYPH_PROP_RULE = "PROD-SCALE-8"
+GLYPH_ALIAS_RULE = "PROD-SCALE-9"
+GLYPH_COMPONENT_DEFAULT_RULE = "PROD-SCALE-10"
+SVG_DESCENDANT_RULE = "PROD-SCALE-11"
+STATUS_GLYPH_RULE = "PROD-SCALE-12"
+GLYPH_CSS_VARIABLE_RULE = "PROD-SCALE-13"
+ARBITRARY_RADIUS_RULE = "PROD-SCALE-14"
+ARBITRARY_Z_RULE = "PROD-SCALE-15"
+ARBITRARY_GAP_RULE = "PROD-SCALE-16"
+ARBITRARY_SIZE_RULE = "PROD-SCALE-17"
+RETIRED_SHADOW_RULE = "PROD-SCALE-18"
+RETIRED_ACCENT_RULE = "PROD-SCALE-19"
+FOREGROUND_ALPHA_RULE = "PROD-SCALE-20"
+NUMERIC_DURATION_RULE = "PROD-SCALE-21"
+INLINE_EASING_RULE = "PROD-SCALE-22"
+INLINE_MOTION_RULE = "PROD-SCALE-23"
+JS_MOTION_RULE = "PROD-SCALE-24"
+DESIGN_MOTION_RULE = "PROD-SCALE-25"
+DESIGN_EASING_RULE = "PROD-SCALE-26"
+AUTHORED_BACKDROP_RULE = "PROD-SCALE-27"
+UNOWNED_BACKDROP_RULE = "PROD-SCALE-28"
+RAW_HEX_RULE = "PROD-SCALE-29"
+AUTHORED_THEME_RULE = "PROD-SCALE-30"
+AUTHORED_ROOT_TOKEN_RULE = "PROD-SCALE-31"
+STANDARD_Z_RULE = "PROD-SCALE-32"
+LONG_LIST_RULE = "PROD-SCALE-33"
+ARBITRARY_BRACKET_GEOMETRY_RULE = "PROD-SCALE-35"
+
 FIXED_TEXT_PATTERNS = (
     (
-        "fixed-stock-text-utility",
+        STOCK_TEXT_RULE,
         re.compile(r"\btext-(?:xs|sm|base|lg|xl|2xl|3xl|4xl|5xl|6xl|7xl|8xl|9xl)\b"),
-        "use a semantic appearance-owned text role",
     ),
     (
-        "fixed-text-utility",
+        ARBITRARY_TEXT_RULE,
         re.compile(r"\btext-\[[^\]]+\]|\bleading-\[[^\]]+\]"),
-        "use a semantic text/readable-code token instead of an arbitrary utility",
     ),
     (
-        "fixed-font-size-property",
+        FONT_SIZE_PROPERTY_RULE,
         re.compile(
             r"\bfontSize\s*:\s*(?:[0-9]+(?:\.[0-9]+)?|[\"'][0-9.]+(?:px|rem|em)[\"'])"
         ),
-        "derive third-party fontSize values from the active appearance preference",
     ),
     (
-        "fixed-font-size-css",
+        FONT_SIZE_CSS_RULE,
         re.compile(r"\bfont-size\s*:\s*[0-9.]+(?:px|rem|em)"),
-        "use a semantic CSS variable instead of a fixed font-size",
     ),
 )
 
@@ -251,38 +305,38 @@ RAW_HEX_FILE_ALLOWLIST = {
 # shrink. A rule stays here after reaching zero entries: an empty census is an
 # absolute ban, so no edit to this set is needed when a category is finished.
 STAGED_RULE_IDS = frozenset({
-    "fixed-stock-text-utility",
-    "fixed-text-utility",
-    "fixed-font-size-property",
-    "fixed-font-size-css",
-    "fixed-glyph-attribute",
-    "fixed-glyph-style",
-    "fixed-glyph-utility",
-    "fixed-glyph-prop-utility",
-    "fixed-glyph-alias-utility",
-    "fixed-glyph-component-default",
-    "fixed-svg-descendant-utility",
-    "fixed-status-glyph-utility",
-    "arbitrary-radius",
-    "arbitrary-z",
-    "arbitrary-gap",
-    "arbitrary-size",
-    "arbitrary-bracket-geometry",
-    "retired-shadow",
-    "retired-accent-state",
-    "foreground-alpha-foundation",
-    "numeric-duration",
-    "inline-easing",
-    "inline-motion-literal",
-    "inline-js-motion-literal",
-    "authored-backdrop-filter",
-    "raw-hex",
+    STOCK_TEXT_RULE,
+    ARBITRARY_TEXT_RULE,
+    FONT_SIZE_PROPERTY_RULE,
+    FONT_SIZE_CSS_RULE,
+    GLYPH_ATTRIBUTE_RULE,
+    GLYPH_STYLE_RULE,
+    GLYPH_UTILITY_RULE,
+    GLYPH_PROP_RULE,
+    GLYPH_ALIAS_RULE,
+    GLYPH_COMPONENT_DEFAULT_RULE,
+    SVG_DESCENDANT_RULE,
+    STATUS_GLYPH_RULE,
+    ARBITRARY_RADIUS_RULE,
+    ARBITRARY_Z_RULE,
+    ARBITRARY_GAP_RULE,
+    ARBITRARY_SIZE_RULE,
+    ARBITRARY_BRACKET_GEOMETRY_RULE,
+    RETIRED_SHADOW_RULE,
+    RETIRED_ACCENT_RULE,
+    FOREGROUND_ALPHA_RULE,
+    NUMERIC_DURATION_RULE,
+    INLINE_EASING_RULE,
+    INLINE_MOTION_RULE,
+    JS_MOTION_RULE,
+    AUTHORED_BACKDROP_RULE,
+    RAW_HEX_RULE,
 })
 STAGED_CENSUS_KEY = "stagedViolations"
 # Reported when a censused (file, rule) allocates more than the file now uses.
 # Deliberately NOT a staged rule: it is the guard on the census, so it can never
 # be absorbed by the census it guards.
-CENSUS_SLACK_RULE_ID = "stale-census-allowance"
+CENSUS_SLACK_RULE_ID = "PROD-SCALE-34"
 # v2 §4.6: no exception without a sanction trail. Keyed by rule id, each value is
 # ``{"files": {<path>: <count>}, "justification": "..."}``: the written reason the
 # census is allowed to move in the one direction it is not free to move, plus the
@@ -302,18 +356,29 @@ SANCTION_JUSTIFICATION_KEY = "justification"
 SEALED_KEY = "sealedDirectories"
 SEALED_PATH_KEY = "path"
 SEALED_JUSTIFICATION_KEY = "justification"
-SEALED_RULE_ID = "sealed-directory-regression"
+SEALED_RULE_ID = "PROD-SCALE-36"
 
 
 @dataclass(frozen=True)
 class Violation:
+    """One violation, reported through its record.
+
+    ``detail`` is evidence, never advice: the matched text, or the census
+    arithmetic that made this hit reportable. The rule sentence and the legal
+    alternative come from the record, so no remedy string is written twice.
+    """
+
     rule_id: str
     path: Path
     lineno: int
-    message: str
+    detail: str = ""
 
     def format(self, repo_root: Path = REPO_ROOT) -> str:
-        return f"{relative_path(self.path, repo_root)}:{self.lineno}: [{self.rule_id}] {self.message}"
+        return lint_records.render_diagnostic(
+            RULES.rule(self.rule_id),
+            f"{relative_path(self.path, repo_root)}:{self.lineno}",
+            self.detail,
+        )
 
 
 def relative_path(path: Path, repo_root: Path = REPO_ROOT) -> str:
@@ -424,34 +489,32 @@ def foreground_alpha_percent(raw_alpha: str) -> float:
     return float(value)
 
 
+def matched_text(match: re.Match[str]) -> str:
+    """The evidence a diagnostic quotes: the hit, collapsed to one line."""
+    return " ".join(match.group(0).split())
+
+
 def check_foundation_source(path: Path, source: str) -> list[Violation]:
     violations: list[Violation] = []
     source_without_comments = mask_comments(source)
 
     checks = (
-        (
-            "arbitrary-radius",
-            ARBITRARY_RADIUS_RE,
-            "use the ruled semantic radius scale, including directional radius utilities",
-        ),
-        ("arbitrary-z", ARBITRARY_Z_RE, "use a semantic z-* layer utility"),
-        ("arbitrary-gap", ARBITRARY_GAP_RE, "use the ruled standard gap utility"),
-        ("arbitrary-size", ARBITRARY_SIZE_RE, "use standard container geometry and semantic icon tiers"),
-        (
-            "arbitrary-bracket-geometry",
-            ARBITRARY_BRACKET_GEOMETRY_RE,
-            "use the ruled spacing/width scale; a measured or virtualization value "
-            "needs a recorded cause at the site",
-        ),
-        ("retired-shadow", OLD_SHADOW_RE, "use shadow-popover/shadow-modal or remove non-floating elevation"),
-        ("numeric-duration", NUMERIC_DURATION_UTILITY_RE, "use the semantic duration-* utility"),
-        ("inline-js-motion-literal", JS_MOTION_LITERAL_RE, "import the shared design motion authority"),
-        ("authored-backdrop-filter", BACKDROP_FILTER_RE, "backdrop-filter is owned by the composer design CSS"),
+        (ARBITRARY_RADIUS_RULE, ARBITRARY_RADIUS_RE),
+        (ARBITRARY_Z_RULE, ARBITRARY_Z_RE),
+        (ARBITRARY_GAP_RULE, ARBITRARY_GAP_RE),
+        (ARBITRARY_SIZE_RULE, ARBITRARY_SIZE_RE),
+        (ARBITRARY_BRACKET_GEOMETRY_RULE, ARBITRARY_BRACKET_GEOMETRY_RE),
+        (RETIRED_SHADOW_RULE, OLD_SHADOW_RE),
+        (NUMERIC_DURATION_RULE, NUMERIC_DURATION_UTILITY_RE),
+        (JS_MOTION_RULE, JS_MOTION_LITERAL_RE),
+        (AUTHORED_BACKDROP_RULE, BACKDROP_FILTER_RE),
     )
-    for rule_id, pattern, message in checks:
+    for rule_id, pattern in checks:
         for match in pattern.finditer(source_without_comments):
             violations.append(
-                Violation(rule_id, path, line_number(source, match.start()), message)
+                Violation(
+                    rule_id, path, line_number(source, match.start()), matched_text(match)
+                )
             )
 
     def is_negative_assertion(offset: int) -> bool:
@@ -466,10 +529,10 @@ def check_foundation_source(path: Path, source: str) -> list[Violation]:
             continue
         violations.append(
             Violation(
-                "retired-accent-state",
+                RETIRED_ACCENT_RULE,
                 path,
                 line_number(source, match.start()),
-                "use bg-hover/bg-active/bg-selected or the ruled static surface",
+                matched_text(match),
             )
         )
 
@@ -478,27 +541,30 @@ def check_foundation_source(path: Path, source: str) -> list[Violation]:
         declaration_end = source.rfind(";", 0, offset)
         return marker > declaration_end
 
-    for rule_id, pattern, message in (
-        ("inline-easing", INLINE_CUBIC_BEZIER_RE, "use a generated semantic easing token"),
-        ("inline-motion-literal", CSS_MOTION_LITERAL_RE, "use generated semantic motion variables"),
+    for rule_id, pattern in (
+        (INLINE_EASING_RULE, INLINE_CUBIC_BEZIER_RE),
+        (INLINE_MOTION_RULE, CSS_MOTION_LITERAL_RE),
     ):
         for match in pattern.finditer(source_without_comments):
             if is_marked_activity_declaration(match.start()):
                 continue
             violations.append(
-                Violation(rule_id, path, line_number(source, match.start()), message)
+                Violation(
+                    rule_id, path, line_number(source, match.start()), matched_text(match)
+                )
             )
 
     for match in FOREGROUND_ALPHA_RE.finditer(source_without_comments):
         if is_negative_assertion(match.start()):
             continue
-        if foreground_alpha_percent(match.group("alpha")) <= 10:
+        alpha = foreground_alpha_percent(match.group("alpha"))
+        if alpha <= 10:
             violations.append(
                 Violation(
-                    "foreground-alpha-foundation",
+                    FOREGROUND_ALPHA_RULE,
                     path,
                     line_number(source, match.start()),
-                    "use a ruled semantic state or static surface instead of a <=10% foreground overlay",
+                    f"{matched_text(match)} (resolves to {alpha:g}% foreground)",
                 )
             )
 
@@ -507,10 +573,10 @@ def check_foundation_source(path: Path, source: str) -> list[Violation]:
             if not raw_hex_is_allowed(path, source_without_comments, match):
                 violations.append(
                     Violation(
-                        "raw-hex",
+                        RAW_HEX_RULE,
                         path,
                         line_number(source, match.start()),
-                        "move rendered palette colors into the design token authority",
+                        matched_text(match),
                     )
                 )
 
@@ -530,41 +596,37 @@ def check_source(path: Path, source: str) -> list[Violation]:
         return ".not.toContain(" in source_without_comments[line_start:line_end]
 
     if relative not in FIXED_TEXT_SOURCE_EXCEPTIONS:
-        for rule_id, pattern, message in FIXED_TEXT_PATTERNS:
+        for rule_id, pattern in FIXED_TEXT_PATTERNS:
             for match in pattern.finditer(source_without_comments):
                 if is_negative_assertion(match.start()):
                     continue
-                violations.append(Violation(rule_id, path, line_number(source, match.start()), message))
+                violations.append(
+                    Violation(
+                        rule_id, path, line_number(source, match.start()), matched_text(match)
+                    )
+                )
 
     for match in FIXED_SVG_DESCENDANT_UTILITY_RE.finditer(source_without_comments):
         violations.append(
             Violation(
-                "fixed-svg-descendant-utility",
+                SVG_DESCENDANT_RULE,
                 path,
                 line_number(source, match.start()),
-                "SVG descendant sizing must use a semantic icon-* tier",
+                matched_text(match),
             )
         )
 
-    for rule_id, pattern, message in (
-        (
-            "fixed-glyph-prop-utility",
-            FIXED_GLYPH_PROP_UTILITY_RE,
-            "iconClassName/glyphClassName must use a semantic icon-* tier",
-        ),
-        (
-            "fixed-glyph-alias-utility",
-            FIXED_GLYPH_ALIAS_UTILITY_RE,
-            "icon/glyph class aliases must use a semantic icon-* tier",
-        ),
-        (
-            "fixed-glyph-component-default",
-            FIXED_GLYPH_COMPONENT_DEFAULT_RE,
-            "local glyph component defaults must use a semantic icon-* tier",
-        ),
+    for rule_id, pattern in (
+        (GLYPH_PROP_RULE, FIXED_GLYPH_PROP_UTILITY_RE),
+        (GLYPH_ALIAS_RULE, FIXED_GLYPH_ALIAS_UTILITY_RE),
+        (GLYPH_COMPONENT_DEFAULT_RULE, FIXED_GLYPH_COMPONENT_DEFAULT_RE),
     ):
         for match in pattern.finditer(source_without_comments):
-            violations.append(Violation(rule_id, path, line_number(source, match.start()), message))
+            violations.append(
+                Violation(
+                    rule_id, path, line_number(source, match.start()), matched_text(match)
+                )
+            )
 
     icons = imported_icon_names(source)
     for tag in JSX_TAG_RE.finditer(source):
@@ -584,18 +646,18 @@ def check_source(path: Path, source: str) -> list[Violation]:
         ):
             violations.append(
                 Violation(
-                    "fixed-status-glyph-utility",
+                    STATUS_GLYPH_RULE,
                     path,
                     line_number(source, tag.start()),
-                    "status dot must use the icon-status semantic utility",
+                    matched_text(FIXED_STATUS_DOT_UTILITY_RE.search(attrs)),
                 )
             )
         if relative in GLYPH_SOURCE_EXCEPTIONS or not is_owned_glyph_tag(name, icons):
             continue
         for rule_id, pattern in (
-            ("fixed-glyph-attribute", FIXED_GLYPH_ATTRIBUTE_RE),
-            ("fixed-glyph-style", FIXED_GLYPH_STYLE_RE),
-            ("fixed-glyph-utility", FIXED_GLYPH_UTILITY_RE),
+            (GLYPH_ATTRIBUTE_RULE, FIXED_GLYPH_ATTRIBUTE_RE),
+            (GLYPH_STYLE_RULE, FIXED_GLYPH_STYLE_RE),
+            (GLYPH_UTILITY_RULE, FIXED_GLYPH_UTILITY_RE),
         ):
             for match in pattern.finditer(attrs):
                 violations.append(
@@ -603,7 +665,7 @@ def check_source(path: Path, source: str) -> list[Violation]:
                         rule_id,
                         path,
                         line_number(source, tag.start("attrs") + match.start()),
-                        f"<{name}> must use a semantic --icon-* tier; hit-target geometry belongs on its wrapper",
+                        f"<{name}> carries {matched_text(match)}",
                     )
                 )
 
@@ -614,10 +676,10 @@ def check_design_css_source(path: Path, source: str) -> list[Violation]:
     source_without_comments = mask_comments(source)
     violations = [
         Violation(
-            "fixed-glyph-css-variable",
+            GLYPH_CSS_VARIABLE_RULE,
             path,
             line_number(source, match.start()),
-            "global glyph sizes must resolve through the canonical --icon-* ladder",
+            matched_text(match),
         )
         for match in FIXED_ICON_CSS_VARIABLE_RE.finditer(source_without_comments)
     ]
@@ -625,10 +687,10 @@ def check_design_css_source(path: Path, source: str) -> list[Violation]:
     for match in re.finditer(r"@theme\b", source_without_comments):
         violations.append(
             Violation(
-                "authored-theme-block",
+                AUTHORED_THEME_RULE,
                 path,
                 line_number(source, match.start()),
-                "@theme is generated from tokens.ts and cannot be authored in component CSS",
+                matched_text(match),
             )
         )
 
@@ -643,10 +705,10 @@ def check_design_css_source(path: Path, source: str) -> list[Violation]:
         if custom_property:
             violations.append(
                 Violation(
-                    "authored-root-token",
+                    AUTHORED_ROOT_TOKEN_RULE,
                     path,
                     line_number(source, root_match.start("body") + custom_property.start()),
-                    "global tokens are generated from tokens.ts, not declared in product.css",
+                    matched_text(custom_property),
                 )
             )
 
@@ -668,10 +730,10 @@ def check_design_css_source(path: Path, source: str) -> list[Violation]:
         if not is_marked_activity:
             violations.append(
                 Violation(
-                    "design-finite-motion-literal",
+                    DESIGN_MOTION_RULE,
                     path,
                     line_number(source, match.start()),
-                    "finite design CSS motion must use generated duration/easing variables",
+                    matched_text(match),
                 )
             )
 
@@ -679,16 +741,16 @@ def check_design_css_source(path: Path, source: str) -> list[Violation]:
         if is_marked_infinite_activity(match.start()):
             continue
         if not any(
-            violation.rule_id == "design-finite-motion-literal"
+            violation.rule_id == DESIGN_MOTION_RULE
             and violation.lineno == line_number(source, match.start())
             for violation in violations
         ):
             violations.append(
                 Violation(
-                    "design-easing-literal",
+                    DESIGN_EASING_RULE,
                     path,
                     line_number(source, match.start()),
-                    "design CSS easing must resolve through a generated easing variable",
+                    matched_text(match),
                 )
             )
 
@@ -699,10 +761,10 @@ def check_design_css_source(path: Path, source: str) -> list[Violation]:
         if ".chat-composer-surface" not in selector:
             violations.append(
                 Violation(
-                    "unowned-backdrop-filter",
+                    UNOWNED_BACKDROP_RULE,
                     path,
                     line_number(source, match.start()),
-                    "only the composer surface owns an authored backdrop-filter",
+                    f"{matched_text(match)} declared by `{' '.join(selector.split()).lstrip('} ')}`",
                 )
             )
 
@@ -752,26 +814,26 @@ def check_census_additions(
     standard_z, long_lists, locations = source_counters(sources, repo_root)
     violations: list[Violation] = []
 
-    for rule_id, current, baseline_name, message in (
-        (
-            "standard-z-addition",
-            standard_z,
-            "standardNumericZ",
-            "new standard numeric z-index sites are closed; use a semantic z-* layer",
-        ),
-        (
-            "unvirtualized-long-list-addition",
-            long_lists,
-            "unvirtualizedLongLists",
-            "new long-list surfaces must use the repository virtualization path",
-        ),
+    for rule_id, current, baseline_name in (
+        (STANDARD_Z_RULE, standard_z, "standardNumericZ"),
+        (LONG_LIST_RULE, long_lists, "unvirtualizedLongLists"),
     ):
         baseline = baselines.get(baseline_name, {})
         for key, count in sorted(current.items()):
-            if count <= baseline.get(key, 0):
+            frozen = baseline.get(key, 0)
+            if count <= frozen:
                 continue
             path, lineno = locations[key]
-            violations.append(Violation(rule_id, path, lineno, message))
+            _relative, _, site = key.rpartition("|")
+            violations.append(
+                Violation(
+                    rule_id,
+                    path,
+                    lineno,
+                    f"`{site}` appears {count}× here; the {baseline_name} census "
+                    f"freezes it at {frozen}",
+                )
+            )
 
     return violations
 
@@ -822,10 +884,7 @@ def census_slack(
                 CENSUS_SLACK_RULE_ID,
                 repo_root / relative,
                 1,
-                f"stale census: [{rule_id}] is frozen at {frozen} here but the file "
-                f"now has {hits}. Run `python3 scripts/check_appearance_scaling.py "
-                f"--write-baseline` to ratchet the census down; leaving the freed "
-                f"allowance in place would let it absorb a new violation.",
+                f"{rule_id} is frozen at {frozen} here but the file now has {hits}",
             )
         )
     return reported
@@ -879,7 +938,7 @@ def sealed_directory_violations(
                         SEALED_RULE_ID,
                         violation.path,
                         violation.lineno,
-                        f"[{violation.rule_id}] {violation.message} — {prefix} is "
+                        f"[{violation.rule_id}] {violation.detail} — {prefix} is "
                         f"sealed at zero ({justification}); a finished directory "
                         f"re-baselines to nothing, so fix the site",
                     )
@@ -923,7 +982,7 @@ def apply_staged_baseline(
                 violation.rule_id,
                 violation.path,
                 violation.lineno,
-                f"{violation.message} (staged rule: this file's frozen census is "
+                f"{violation.detail} (staged rule: this file's frozen census is "
                 f"{baseline.get(key, 0)}; new sites are rejected)",
             )
         )
@@ -1093,10 +1152,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     print("Appearance scaling source violations:")
     for violation in violations:
-        print(f"  {violation.format()}")
+        print(violation.format())
+        print()
     print(
-        "\nUse the semantic design vocabulary and update behavior, not the guard. "
-        "Baseline manifests may only shrink unless the frozen specification changes."
+        "Use the semantic design vocabulary and update behavior, not the guard. The"
+        "\nstaged census may only shrink: `--write-baseline` refuses growth that no"
+        "\ncensusGrowthSanctions entry authorizes for that exact file and count."
     )
     return 1
 

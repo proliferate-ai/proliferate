@@ -401,6 +401,13 @@ class Settings(BaseSettings):
     cloud_mcp_google_workspace_oauth_client_id: str = ""
     cloud_mcp_google_workspace_oauth_client_secret: str = ""
     # Agent LLM gateway (LiteLLM proxy)
+    # Publisher lane (Update Flow ADR, FR-1): when set, the server advertises
+    # these on GET /meta so a desktop shell or cloud worker launches its
+    # runtime sidecar with ANYHARNESS_CATALOG_ARTIFACT_BASE_URL/_CHANNEL
+    # populated. Absent (default) => `agentCatalog` is null and every runtime
+    # this deployment launches stays on the compiled-in floor, by design.
+    agent_catalog_artifact_base_url: str = ""
+    agent_catalog_channel: str = "stable"
     agent_gateway_enabled: bool = False
     agent_gateway_litellm_base_url: str = "http://127.0.0.1:14000"
     agent_gateway_litellm_public_base_url: str = ""
@@ -419,6 +426,12 @@ class Settings(BaseSettings):
     agent_gateway_llm_margin_pct: str = "15"
     agent_gateway_usage_import_interval_seconds: float = 60.0
     agent_gateway_usage_import_overlap_seconds: float = 300.0
+    # Control-plane gateway-enablement verification (agent-auth.md FR-3). The loop
+    # asks LiteLLM which models each active enrollment key can see and records a
+    # per-key verdict. Behind a flag (default off) so a deployment opts in, and it
+    # only runs when the gateway is enabled and background workers are on.
+    agent_gateway_verification_enabled: bool = False
+    agent_gateway_verification_interval_seconds: float = 900.0
     agent_gateway_topup_interval_seconds: float = 300.0
     # Auto top-up fires when the shared LLM pool drops below this balance; each
     # trigger buys exactly one pack (face value ``agent_gateway_topup_amount_usd``)

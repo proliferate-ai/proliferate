@@ -334,9 +334,12 @@ impl WorkflowActor {
         // through the sessions columns, and the extension matches turn reports
         // through them.
         let prompt_id = format!("wf2-{}", node.id);
-        self.deps
-            .session_store
-            .link_workflow_columns(&session.id, &self.run_id, &node.id)?;
+        self.deps.session_store.link_workflow_columns(
+            &session.id,
+            &self.run_id,
+            &node.id,
+            &node.session_title(),
+        )?;
         self.deps
             .store
             .stamp_session(&node.id, &session.id, Some(&prompt_id), Some(agent_kind))?;

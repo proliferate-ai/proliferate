@@ -37,7 +37,7 @@ import {
 export function RepoConfigurePane({
   repository,
   context,
-  cloudEnabled,
+  controlPlaneReachable,
   cloudActive,
   cloudSignInChecking,
   cloudSignInAvailable,
@@ -62,7 +62,7 @@ export function RepoConfigurePane({
       {context === "cloud" ? (
         <ConfigureCloud
           repository={repository}
-          cloudEnabled={cloudEnabled}
+          controlPlaneReachable={controlPlaneReachable}
           cloudActive={cloudActive}
           cloudSignInChecking={cloudSignInChecking}
           cloudSignInAvailable={cloudSignInAvailable}
@@ -89,13 +89,13 @@ export function RepoConfigurePane({
 
 function ConfigureCloud({
   repository,
-  cloudEnabled,
+  controlPlaneReachable,
   cloudActive,
   cloudSignInChecking,
   cloudSignInAvailable,
 }: {
   repository: SettingsRepositoryEntry;
-  cloudEnabled: boolean;
+  controlPlaneReachable: boolean;
   cloudActive: boolean;
   cloudSignInChecking: boolean;
   cloudSignInAvailable: boolean;
@@ -130,7 +130,7 @@ function ConfigureCloud({
   return (
     <RepoCloudGate
       editor={editor}
-      cloudEnabled={cloudEnabled}
+      controlPlaneReachable={controlPlaneReachable}
       cloudActive={cloudActive}
       cloudSignInChecking={cloudSignInChecking}
       cloudSignInAvailable={cloudSignInAvailable}

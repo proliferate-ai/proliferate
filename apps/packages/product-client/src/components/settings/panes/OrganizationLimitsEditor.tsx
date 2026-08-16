@@ -8,7 +8,7 @@ import { Select } from "#product/primitives/Select";
 import { Switch } from "#product/primitives/Switch";
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
-import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
+import { LoadingBoundary } from "#product/primitives/LoadingBoundary";
 import type { OrganizationMemberRecord } from "#product/lib/domain/organizations/organization-records";
 import {
   capInputValue,
@@ -83,16 +83,19 @@ export function LimitsEditor({
           </Button>
         }
       >
-        {limitsQuery.isLoading ? (
-          <div className="space-y-2 px-3.5 py-3">
-            {[0, 1].map((row) => (
-              <SkeletonBlock key={row} className="h-10 w-full" style={shimmerDelay(row)} />
-            ))}
-          </div>
-        ) : rows.length === 0 ? (
-          <div className="px-3.5 py-4 text-ui-sm text-muted-foreground">No limits configured yet.</div>
-        ) : (
-          rows.map((row) => (
+        {/* Class C + Q19 empty split (UX Latency + Transitions ADR §4 Rung 4,
+            FR-1): retired the placeholder-row skeleton. "No limits configured
+            yet." may only render once the limits query resolves empty, never
+            while it is still loading. */}
+        <LoadingBoundary
+          state={limitsQuery.isLoading ? "pending" : rows.length === 0 ? "empty" : "ready"}
+          diagnostics={{ flow: "org_limits_editor" }}
+          treatment={null}
+          emptyContent={
+            <div className="px-3.5 py-4 text-ui-sm text-muted-foreground">No limits configured yet.</div>
+          }
+        >
+          {rows.map((row) => (
             <LimitRow
               key={row.id}
               row={row}
@@ -101,8 +104,8 @@ export function LimitsEditor({
               onChange={(patch) => updateRow(row.id, patch)}
               onRemove={() => removeRow(row.id)}
             />
-          ))
-        )}
+          ))}
+        </LoadingBoundary>
       </SettingsSection>
       {!limitsQuery.isLoading ? (
         <div className="flex flex-wrap items-center gap-2">

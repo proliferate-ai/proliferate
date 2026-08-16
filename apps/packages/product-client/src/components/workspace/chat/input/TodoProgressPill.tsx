@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef, type CSSProperties } from "react";
 import type { PlanEntry } from "@anyharness/sdk";
+import { motion } from "@proliferate/design/motion";
 import { DotCellLoader } from "#product/primitives/DotCellLoader";
 import { Spinner } from "#product/primitives/Spinner";
 import { CheckCircleFilled, Circle } from "#product/primitives/icons/status";
@@ -13,12 +14,16 @@ import {
 } from "#product/domain/chats/composer/todo-progress-summary";
 import {
   INITIAL_TODO_PILL_STATE,
-  TODO_PILL_HOVER_FADE_START_MS,
-  TODO_PILL_HOVER_HIDE_MS,
-  TODO_PILL_STEP_FADE_START_MS,
-  TODO_PILL_STEP_HIDE_MS,
   todoPillReducer,
 } from "#product/domain/chats/composer/todo-progress-pill-state";
+
+// Pill choreography timings, sourced from the shared design `motion.delay`
+// tokens (the raw millisecond values live only there). The pure reducer stays
+// design-free; this connected component owns the timers that consume them.
+const TODO_PILL_STEP_FADE_START_MS = motion.delay.todoPillStepLingerMs;
+const TODO_PILL_STEP_HIDE_MS = motion.delay.todoPillStepHideMs;
+const TODO_PILL_HOVER_FADE_START_MS = motion.delay.todoPillHoverLingerMs;
+const TODO_PILL_HOVER_HIDE_MS = motion.delay.todoPillHoverHideMs;
 
 const DOT_CELL_STYLE = {
   "--dot-cell-size": "0.125rem",

@@ -66,11 +66,72 @@ export const motion = {
      */
     tabNameRevealMs: 420,
   },
+  /**
+   * Loading-treatment timing. Its own scale, deliberately not aliased to the
+   * interaction or activity numbers: these two waits gate whether a loading
+   * treatment (spinner, living mark, dot cell) is allowed to appear at all and
+   * how long it must stay once it does. They are JS-scheduled, so consumers read
+   * these numbers directly and never hand-author the milliseconds.
+   */
+  loading: {
+    /**
+     * Show delay. No loading treatment mounts until a wait has lasted this long,
+     * so any resolution faster than this never flashes a treatment at all. The
+     * ADR's Class C default window (UX Latency + Transitions ADR §4.2). Set to
+     * 200ms by founder ruling and the ADR; an earlier requirements draft said
+     * 150ms and is superseded.
+     */
+    showDelayMs: 200,
+    /**
+     * Minimum display. Once a treatment has mounted it stays at least this long
+     * before yielding to resolved content or an empty state, so a treatment that
+     * only just appeared cannot immediately vanish and read as a flicker. Applies
+     * to both ready and empty resolutions.
+     */
+    minDisplayMs: 300,
+    /**
+     * Hero-tier minimum display (R16, UX Latency + Transitions ADR). The chat
+     * loading hero's DotCellLoader mark holds for this long once shown, even
+     * if the surface resolves sooner, so a resolve mid-mount cannot cut the
+     * mark off and read as a flicker. Longer than the generic `minDisplayMs`
+     * because the hero is a larger, more prominent mark. Pairs with
+     * `duration.exitMs` for the hand-off fade into resolved content.
+     */
+    heroMinDisplayMs: 420,
+  },
   /** UI choreography delays; these are not animation durations. */
   delay: {
     autoHideScrollbarMs: 700,
     hoverCardHideMs: 120,
     levelBarStaggerMs: 110,
+    /** Todo progress pill: wait after a step advance before its linger fade
+     * starts (`todo-progress-pill-state.ts`). */
+    todoPillStepLingerMs: 3400,
+    /** Todo progress pill: fully hidden by this point after a step advance. */
+    todoPillStepHideMs: 4000,
+    /** Todo progress pill: wait after the pointer leaves before its
+     * shorter leave-fade starts. */
+    todoPillHoverLingerMs: 1200,
+    /** Todo progress pill: fully hidden by this point after the pointer
+     * leaves. */
+    todoPillHoverHideMs: 1800,
+    /** A deleted tab row outlives the live data as a collapsing ghost so the
+     * disclosure transition finishes even when the archive round-trip beats
+     * it; covers `disclosureMs` plus timer-scheduling slack
+     * (`ClosedChatTabsMenu.tsx`). */
+    ghostRowFinalizeMs: 280,
+    /** A settled optimistic archive/unarchive POST is a definite outcome
+     * (success or a typed/generic failure). Past this bound the outcome is
+     * genuinely unknown, so the row stays hidden and the pending reconciler
+     * becomes the decider instead of a false failure toast. */
+    optimisticSettleTimeoutMs: 12_000,
+  },
+  /** Feedback affordances that are neither animation nor choreography waits:
+   * a control flipping to a confirmation label, then reverting. */
+  feedback: {
+    /** How long a control reads "Copied" before reverting to its resting
+     * label. */
+    copiedResetMs: 2_000,
   },
   cssMs,
 } as const;

@@ -82,6 +82,12 @@ pub struct ProbeEngineConfig {
     /// engine records nothing and credentials stay at their heuristic
     /// (bare-presence / acknowledged-route) strength.
     pub tier1_trial_enabled: bool,
+    /// The runtime data-plane gateway-health check gate (ADR FR-3). OFF by
+    /// default: it rides the tier-1 trial's `GET /v1/models` fetch (one hit per
+    /// poke, never a second), but recording a health verdict is a distinct
+    /// deployment opt-in from the trial, so it carries its own sibling flag. When
+    /// off, no health verdict is recorded and the gateway fact stays empty.
+    pub gateway_health_enabled: bool,
 }
 
 impl Default for ProbeEngineConfig {
@@ -93,6 +99,7 @@ impl Default for ProbeEngineConfig {
             max_concurrent_probes: 1,
             sweep_age_multiplier: 3,
             tier1_trial_enabled: false,
+            gateway_health_enabled: false,
         }
     }
 }

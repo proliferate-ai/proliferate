@@ -4,6 +4,7 @@ use anyharness_contract::v1::{ForkChildStartStatus, ForkSessionRequest, ForkSess
 use axum::{
     body::Bytes,
     extract::{Path, State},
+    http::HeaderMap,
     Extension, Json,
 };
 
@@ -36,12 +37,19 @@ pub async fn fork_session(
     State(state): State<AppState>,
     Extension(auth): Extension<AuthContext>,
     Path(session_id): Path<String>,
+    headers: HeaderMap,
     body: Bytes,
 ) -> Result<Json<ForkSessionResponse>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
     let _admission_permit =
         admit_session_mutation(&state, &session_id, SessionMutationKind::Fork).await?;
     let req = parse_optional_fork_request(body)?;
+    // Forks ADR rung 2: the operation idempotency key is the caller-reserved
+    // child id, falling back to an `Idempotency-Key` header.
+    let idempotency_key_header = headers
+        .get("Idempotency-Key")
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string);
     let _lease = acquire_session_exclusive_operation_lease(
         &state,
         &session_id,
@@ -50,7 +58,12 @@ pub async fn fork_session(
     .await?;
     let outcome = match state
         .session_runtime
-        .fork_session(&session_id, req.target)
+        .fork_session(
+            &session_id,
+            req.target,
+            req.child_session_id,
+            idempotency_key_header,
+        )
         .await
     {
         Ok(outcome) => outcome,

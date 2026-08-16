@@ -3,6 +3,8 @@ import { Navigate, Route } from "react-router-dom"
 import { BootstrappedRoute, PublicOnlyRoute } from "#product/components/auth/AuthGate"
 import { UserPreferencesGate } from "#product/components/app/UserPreferencesGate"
 import { ToastHost } from "#product/primitives/patterns/toast/ToastHost"
+import { ProliferateLivingMark } from "#product/components/brand/ProliferateLivingMark"
+import { LoadingBoundary } from "#product/primitives/LoadingBoundary"
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider"
 import { MacWindowControlsSafeArea } from "#product/components/app/chrome/MacWindowControlsSafeArea"
 import { SupportModalHost } from "#product/components/support/SupportModalHost"
@@ -21,6 +23,15 @@ const AuthenticatedProductClient = lazy(
 // Desktop-only: the app-update flow (restart dialog, phase toasts, automatic
 // download). Lazy so the public shell — and /login, which has a fail-closed
 // first-load JS budget — never pulls the updater state machine.
+// Lazy like DesktopUpdateSurface: the gate only ever renders for an
+// authenticated desktop, so its query hooks must not ride the /login chunk
+// (login first-load budget).
+const MinDesktopVersionGate = lazy(() =>
+  import("#product/components/auth/MinDesktopVersionGate").then((m) => ({
+    default: m.MinDesktopVersionGate,
+  })),
+)
+
 const DesktopUpdateSurface = lazy(() =>
   import("#product/components/feedback/DesktopUpdateSurface").then((m) => ({
     default: m.DesktopUpdateSurface,
@@ -125,6 +136,7 @@ export function App({ RoutesComponent }: AppProps) {
   return (
       <ShortcutRevealProvider>
         <MacWindowControlsSafeArea />
+        <AppMinDesktopVersionGate />
         <RoutesComponent>
           <Route path="/index.html" element={<Navigate to="/" replace />} />
           <Route path="/settings/cloud" element={<SettingsCloudRedirect />} />
@@ -141,7 +153,28 @@ export function App({ RoutesComponent }: AppProps) {
               <Route
                 path="*"
                 element={
-                  <Suspense fallback={null}>
+                  // App-root cold-chunk boundary (UX Latency + Transitions ADR
+                  // §4.3, Rung 3): the fallback is the Class A living mark,
+                  // routed through `LoadingBoundary` in `state="pending"` so
+                  // the show-delay window is honored. Known limitation: a
+                  // `Suspense` fallback is unmounted the instant the chunk
+                  // resolves, so `LoadingBoundary` never gets a `ready`
+                  // transition here and its min-display hold cannot engage;
+                  // a resolve inside the 200-500ms window can still flash the
+                  // mark briefly. See PR #1926 for the residual-flicker note.
+                  <Suspense
+                    fallback={
+                      <LoadingBoundary
+                        state="pending"
+                        diagnostics={{ flow: "app_root" }}
+                        treatment={
+                          <div className="flex min-h-screen items-center justify-center bg-background">
+                            <ProliferateLivingMark />
+                          </div>
+                        }
+                      />
+                    }
+                  >
                     <AuthenticatedProductClient />
                   </Suspense>
                 }
@@ -277,6 +310,31 @@ function AppUpdateSurface() {
   return (
     <Suspense fallback={null}>
       <DesktopUpdateSurface />
+    </Suspense>
+  )
+}
+
+/**
+ * Same desktop-only gate as `AppUpdateSurface`: the min-desktop-version block
+ * screen only makes sense where there's an updater to jump into and a
+ * connectable server to be behind on, so Web never pays for the query hooks.
+ */
+function AppMinDesktopVersionGate() {
+  const host = useProductHost()
+  const hasUpdater = Boolean(host.desktop?.updater)
+  // Never cover the sign-in/connect surface: a signed-out user must always be
+  // able to reach it and point the app at a different server, so a
+  // misconfigured floor can only ever strand a session, not the app itself.
+  const authenticated =
+    host.auth.state.status === "authenticated" || !host.auth.authRequired
+
+  if (!hasUpdater || !authenticated) {
+    return null
+  }
+
+  return (
+    <Suspense fallback={null}>
+      <MinDesktopVersionGate />
     </Suspense>
   )
 }

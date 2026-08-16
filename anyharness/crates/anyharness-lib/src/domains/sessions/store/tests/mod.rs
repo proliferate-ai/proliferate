@@ -68,6 +68,7 @@ fn fork_link_record(
     }
 }
 
+mod adapter_markers;
 mod background_work;
 mod delete;
 mod events;

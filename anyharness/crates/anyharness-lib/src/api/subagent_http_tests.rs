@@ -470,6 +470,59 @@ fn subagent_http_routes_require_read_or_parent_control_with_matching_scope() {
     );
 }
 
+/// Forks ADR rung 2 (scope f): the fork and steer routes are reachable by a
+/// direct-attached user claim at Write authority on the scoped session, and a
+/// claim scoped to a different session is refused rather than falling through
+/// to `UnsupportedRoute`.
+#[test]
+fn fork_and_steer_routes_require_write_with_matching_session_scope() {
+    let mut write = claim(ClaimPermissions {
+        write: true,
+        ..ClaimPermissions::default()
+    });
+    write.anyharness_session_id = Some("s1".into());
+
+    assert_eq!(
+        user_route_allowed(&Method::POST, "/v1/sessions/s1/fork", &write),
+        Ok(())
+    );
+    assert_eq!(
+        user_route_allowed(
+            &Method::POST,
+            "/v1/sessions/s1/pending-prompts/7/steer",
+            &write,
+        ),
+        Ok(())
+    );
+
+    let read = claim(ClaimPermissions {
+        read: true,
+        ..ClaimPermissions::default()
+    });
+    assert_eq!(
+        user_route_allowed(&Method::POST, "/v1/sessions/s1/fork", &read),
+        Err(AuthError::InsufficientPermission)
+    );
+
+    let mut wrong_session = claim(ClaimPermissions {
+        write: true,
+        ..ClaimPermissions::default()
+    });
+    wrong_session.anyharness_session_id = Some("s2".into());
+    assert_eq!(
+        user_route_allowed(&Method::POST, "/v1/sessions/s1/fork", &wrong_session),
+        Err(AuthError::ScopeMismatch)
+    );
+    assert_eq!(
+        user_route_allowed(
+            &Method::POST,
+            "/v1/sessions/s1/pending-prompts/7/steer",
+            &wrong_session,
+        ),
+        Err(AuthError::ScopeMismatch)
+    );
+}
+
 fn link(
     id: &str,
     relation: SessionLinkRelation,

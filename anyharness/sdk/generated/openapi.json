@@ -8001,6 +8001,8 @@
         "enum": [
           "reachable",
           "unreachable",
+          "unauthorized",
+          "models_drifted",
           "budget_exhausted"
         ]
       },
@@ -8139,7 +8141,7 @@
       },
       "AgentCatalogVersionResponse": {
         "type": "object",
-        "description": "The runtime's active agent catalog version and its provenance. Read-only:\nthe runtime binary is the only catalog transport, so there is no apply\nresponse shape to report.",
+        "description": "The runtime's active agent catalog version and its provenance. Read-only:\nthere is no apply/push endpoint. Since rung 5 (FR-1) the runtime binary\nis the FLOOR transport, not the only one — a signed, versioned artifact\nmay also be fetched once at boot, so `source` can now report either\nprovenance.",
         "required": [
           "catalogVersion",
           "source"
@@ -8151,7 +8153,7 @@
           },
           "source": {
             "type": "string",
-            "description": "Where the active catalog came from. Always `\"bundled\"`."
+            "description": "Where the active catalog came from: `\"bundled\"` (the compiled-in\nfloor) or `\"staged\"` (a signed artifact fetched at boot and activated\nbecause it validated and was strictly newer than the floor)."
           }
         }
       },
@@ -11348,6 +11350,13 @@
       "ForkSessionRequest": {
         "type": "object",
         "properties": {
+          "childSessionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Forks ADR rung 2: optional caller-reserved child session id. When set it\nis both the child's durable id and the fork operation's idempotency key,\nso repeating the request with the same payload resumes/returns the same\nchild. An `Idempotency-Key` header serves the same role when this is\nabsent."
+          },
           "target": {
             "oneOf": [
               {

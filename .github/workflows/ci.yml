@@ -26,6 +26,11 @@ jobs:
 
       - uses: astral-sh/setup-uv@v7
 
+      - name: Validate lint records
+        run: |
+          python3 -m unittest scripts/test_lint_records.py
+          python3 scripts/lint_records.py
+
       - name: Check max source file length
         run: python3 scripts/check_max_lines.py
 
@@ -64,8 +69,16 @@ jobs:
           python3 -m unittest scripts/test_check_toast_copy.py
           python3 scripts/check_toast_copy.py
 
+      - name: Check agent-auth secret logs
+        run: |
+          python3 -m unittest scripts/test_check_agent_auth_secret_logs.py
+          python3 scripts/check_agent_auth_secret_logs.py
+
       - name: Check frontend structure drift
         run: python3 scripts/report_frontend_structure.py --strict --summary-only
+
+      - name: Check transcript single scroll writer
+        run: python3 scripts/check_transcript_scroll_writer.py
 
       - name: Check component library conformance
         run: |
@@ -92,6 +105,9 @@ jobs:
 
       - name: Check managed Workflow legacy-plane boundary
         run: python3 scripts/check_workflow_managed_boundaries.py
+
+      - name: Check Update Flow lints
+        run: python3 scripts/check_update_flow_lints.py
 
       - name: Check documentation integrity
         run: |

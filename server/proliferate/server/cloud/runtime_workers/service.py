@@ -303,12 +303,14 @@ async def record_heartbeat(
     worker_id: UUID,
     worker_version: str | None = None,
     anyharness_version: str | None = None,
+    catalog_version: str | None = None,
 ) -> WorkerHeartbeatResponse:
     await store.touch_worker_heartbeat(
         db,
         worker_id=worker_id,
         worker_version=worker_version,
         anyharness_version=anyharness_version,
+        catalog_version=catalog_version,
     )
     # Target-scoped desired state (decision 1): a cloud-sandbox worker's
     # target may override either global pin; a desktop worker (no

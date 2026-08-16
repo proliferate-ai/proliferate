@@ -296,33 +296,63 @@ Fork invariants:
 - adapters whose fork ids are process-local until first prompt, such as Claude,
   start the child actor with `fork_from_native`; that child actor calls ACP
   `session/fork` from the parent native id and owns the resulting live fork
-- a process-local fork id only becomes durable (reloadable via `load_session`)
-  once the child has run its own first turn. Until then — i.e. while the child's
-  `last_prompt_at` is unset — startup re-forks from the parent
-  (`fork_from_native`) rather than loading the child's recorded native id, even
-  if one was eagerly persisted at fork creation. Loading it after a cold
-  restart-before-first-prompt returns `Resource not found` and, with no
-  fallback, bricks the session. Once `last_prompt_at` is set the child loads its
-  own native id with no fallback (re-forking would drop the child's own turns).
-  If a zero-turn child cannot resolve a parent native id, it falls back to its
-  own (possibly stale) native id rather than failing the launch. This applies
-  to process-local-fork adapters (Claude); durable-fork adapters keep loading
-  their recorded native id per the durable-fork bullet above (a zero-turn
-  durable-fork child still uses `load_session`). The decision keys on
-  `last_prompt_at`, not on
-  `turn_started`: the transcript snapshot below copies the parent's
-  `turn_started` events into the child, so that signal is always set for forks.
-  Because re-fork is tip-only, a zero-turn child re-forked after the parent
-  advanced is seeded from the parent's current tip while its stored
-  `session_events` snapshot still reflects the fork-point prefix; the agent then
-  reasons over state the child transcript does not show. This is accepted as
-  better than the prior permanent failure, but it is a real divergence, not just
-  a fidelity gap.
 - for adapters that cannot replay the forked transcript through child
   `load_session`, AnyHarness snapshots the parent's durable `session_events`
   into the child before startup and appends child events after that prefix
 - raw ACP notifications are not copied into fork children
-- generic ACP fork support means tip fork only
+- generic ACP fork support (`action_capabilities.fork`) means tip fork only;
+  targeted fork requires the separate `action_capabilities.targeted_fork`
+  capability, absent on every adapter until the per-harness bridges land
+
+### Fork boundary and the durable operation record
+
+Every fork — tip or targeted — is one durable operation recorded in
+`fork_operations` before the native call and advanced through explicit phases.
+The record is the single source of truth for idempotency, provenance, and
+recovery; nothing load-bearing lives in opaque adapter `_meta`.
+
+- Boundary. A tip fork carries no product anchor (`target = null`). A targeted
+  fork's boundary is `(turn_id, item_id)` of a committed user message in the
+  parent's `session_events`, meaning "the conversation as it stood immediately
+  before that message." `item_id` is required at the product boundary; an
+  item-less target is rejected `INVALID_FORK_TARGET`. An anchor that does not
+  resolve to a committed user-message event is `TARGET_NOT_FOUND`; an anchor
+  inside the parent's active/uncommitted turn is `BOUNDARY_NOT_COMMITTED`. A
+  resolved target never silently degrades to a tip fork — it dispatches at the
+  recorded anchor or it fails.
+- Provenance. The record stores the product anchor, the provider anchor
+  (kind/value and inclusivity rule), the exact copied-prefix terminal `seq` and
+  its digest, and the adapter/native versions. It is written atomically with the
+  child session row, the `fork` link, and (for snapshot adapters) the copied
+  event prefix.
+- Identity/idempotency. The operation key is the caller's `child_session_id` or
+  an `Idempotency-Key`, bound to a canonical request digest. Same key + same
+  payload resumes the in-flight operation or returns the same child; same key +
+  a different payload is `IDEMPOTENCY_CONFLICT`. The phase is marked
+  `native_call_in_flight` before dispatch; a timeout, disconnect, or crash
+  leaves the record `native_outcome_unknown`, which blocks blind redispatch and
+  preserves an orphan candidate for audited reconciliation rather than
+  speculatively re-forking (surfaced as `FORK_NATIVE_OUTCOME_UNKNOWN`).
+
+### Restart and recovery
+
+A process-local fork id (Claude) only becomes durable (reloadable via
+`load_session`) once the child has run its own first turn. The
+has-the-child-run signal is the child's own `last_prompt_at`, never
+`turn_started`: the transcript snapshot copies the parent's `turn_started`
+events into the child, so that signal is always set for forks.
+
+On a child cold start:
+
+- if the child recorded its own durable native id (durable-fork adapter, or a
+  process-local child with `last_prompt_at` set), it loads that id with no
+  fallback — re-forking would drop the child's own turns.
+- otherwise it runs the exact-prefix recovery recipe: re-fork from the parent
+  native id, reproduce the copied prefix, and verify the reproduced prefix
+  digest against the `fork_operations` provenance before going live. A mismatch
+  fails visibly (`FORK_RECOVERY_PREFIX_MISMATCH`); the child never re-forks the
+  parent's later tip. If no parent native id resolves, it falls back to the
+  child's own (possibly stale) native id rather than failing the launch.
 
 AnyHarness exposes fork through typed contract fields. ACP `_meta.anyharness`
 is reserved for private runtime-to-adapter extensions and must not leak into

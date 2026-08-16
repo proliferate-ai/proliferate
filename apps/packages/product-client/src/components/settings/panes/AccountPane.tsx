@@ -238,7 +238,7 @@ export function AccountPane() {
           ? undefined
           : signInUnavailable
             ? CAPABILITY_COPY.accountAuthUnavailableDescription
-          : "Sign in to use cloud workspaces and credential sync. Local workspaces remain available without an account."
+          : "Sign in to sync credentials across your devices. Local workspaces remain available without an account."
         }
       />
 

@@ -3,7 +3,7 @@ import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { ExternalLink } from "#product/primitives/icons/core";
 import { Badge } from "#product/primitives/Badge";
 import { Button } from "#product/primitives/Button";
-import { SkeletonBlock } from "#product/primitives/Skeleton";
+import { LoadingBoundary } from "#product/primitives/LoadingBoundary";
 import { Switch } from "#product/primitives/Switch";
 import type {
   BillingPlanPresentation,
@@ -63,7 +63,15 @@ export function BillingPlanCard({
           description={description}
         >
           {loading && !plan ? (
-            <SkeletonBlock className="h-8 w-20" />
+            // Class C big-surface treatment (UX Latency + Transitions ADR §4
+            // Rung 4, FR-1): retired the control-shaped skeleton. The row's
+            // label + description are the stable shell; the action slot shows
+            // nothing until the plan query resolves.
+            <LoadingBoundary
+              state="pending"
+              diagnostics={{ flow: "billing_plan" }}
+              treatment={null}
+            />
           ) : errorMessage ? (
             <Button type="button" variant="secondary" onClick={onRetry}>
               Retry

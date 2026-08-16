@@ -14,6 +14,11 @@ import {
   deriveProvidersStatus,
   HarnessAuthStatusAction,
 } from "#product/components/settings/panes/agents/harness/HarnessAuthStatusBadge";
+import {
+  HarnessAuthEvidenceBadge,
+  HarnessAuthEvidenceSummary,
+} from "#product/components/settings/panes/agents/harness/HarnessAuthEvidenceBadge";
+import { isFeatureEnabled } from "#product/config/feature-flags";
 
 // Lazy: the modal pulls in the vendored provider-logo asset map (170+ marks),
 // which must never reach the login-path chunk (login JS budget gate,
@@ -37,6 +42,14 @@ export function HarnessProvidersSection({
   editor: HarnessAuthEditorApi;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
+  // The Configure trigger, not the modal, is the Class B loading treatment
+  // (UX Latency + Transitions ADR §4.3, Rung 3): the modal chunk carries the
+  // 170+-mark provider-logo asset map, so opening it cold can outlive the
+  // show-delay. Rather than let `Suspense fallback={null}` pop the modal in
+  // blank once the chunk lands, the trigger button shows a Spinner while the
+  // import resolves and only flips `modalOpen` once the modal can paint
+  // immediately.
+  const [modalLoading, setModalLoading] = useState(false);
   // The summary tiles show the real models.dev marks. The generated URL map is
   // dynamic-imported (same budget rule as the modal: it must never land in the
   // login-path chunk); until it resolves the tiles fall back to mono letters.
@@ -78,6 +91,14 @@ export function HarnessProvidersSection({
 
   const status = deriveProvidersStatus();
   const refreshing = editor.apiKeysQuery.isFetching || editor.selectionsQuery.isFetching;
+  // Flag-ON (ADR agent-auth rung 6): opencode's badge reads the runtime's
+  // derived authState, killing deriveProvidersStatus's unconditional green.
+  const evidenceOn = isFeatureEnabled("agentAuthEvidencePanes");
+  const authState = evidenceOn ? editor.localAgent?.authState ?? null : null;
+  function handleRefresh() {
+    void editor.apiKeysQuery.refetch();
+    void editor.selectionsQuery.refetch();
+  }
 
   // §5's two writes: a vault api_key entry, then one selection row whose
   // env_var_name is the provider's key-shaped registry env var and whose
@@ -141,14 +162,18 @@ export function HarnessProvidersSection({
       description={HARNESS_PANE_COPY.providersDescription}
       titleWeight="emphasized"
       surface="plain"
-      action={(
+      action={authState ? (
+        <HarnessAuthEvidenceBadge
+          authState={authState}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          data-harness-status="api_key"
+        />
+      ) : (
         <HarnessAuthStatusAction
           status={status}
           refreshing={refreshing}
-          onRefresh={() => {
-            void editor.apiKeysQuery.refetch();
-            void editor.selectionsQuery.refetch();
-          }}
+          onRefresh={handleRefresh}
           data-harness-status="api_key"
         />
       )}
@@ -156,6 +181,7 @@ export function HarnessProvidersSection({
       data-harness-auth-delivery={editor.deliveryPending ? "pending" : "applied"}
       data-harness-selected-route={selectedRoute}
     >
+      {authState ? <HarnessAuthEvidenceSummary authState={authState} /> : null}
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           {configured.length > 0 ? (
@@ -211,8 +237,26 @@ export function HarnessProvidersSection({
             type="button"
             variant="secondary"
             size="sm"
-            disabled={editor.busy}
-            onClick={() => setModalOpen(true)}
+            disabled={editor.busy || modalLoading}
+            loading={modalLoading}
+            onClick={() => {
+              setModalLoading(true);
+              void import(
+                "#product/components/settings/panes/agents/harness/ProviderPickerModal"
+              )
+                .then(() => {
+                  setModalLoading(false);
+                  setModalOpen(true);
+                })
+                .catch(() => {
+                  // A rejected chunk import (offline, bad deploy skew, etc.)
+                  // must not leave the trigger disabled+loading forever: clear
+                  // the pending state and surface the existing inline error
+                  // affordance so the user can retry.
+                  setModalLoading(false);
+                  setProviderError(HARNESS_PANE_COPY.providerPickerLoadError);
+                });
+            }}
           >
             {HARNESS_PANE_COPY.providersConfigure}
           </Button>
@@ -220,6 +264,11 @@ export function HarnessProvidersSection({
             {HARNESS_PANE_COPY.providersCliNote}
           </p>
         </div>
+        {!modalOpen && providerError && (
+          <p role="alert" className="text-ui-sm text-destructive">
+            {providerError}
+          </p>
+        )}
       </div>
 
       {modalOpen ? (

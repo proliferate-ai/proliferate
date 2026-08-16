@@ -12,35 +12,62 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from scripts import check_toast_copy
 from scripts.check_toast_copy import scan_file
 
 
-def findings_for(source: str, suffix: str = ".ts") -> list[str]:
+def scanned(source: str, suffix: str = ".ts") -> list[check_toast_copy.Finding]:
     with tempfile.NamedTemporaryFile("w", suffix=suffix, delete=False) as handle:
         handle.write(source)
         path = Path(handle.name)
     try:
-        return [rule for _lineno, rule, _snippet, _hint in scan_file(path)]
+        return scan_file(path)
     finally:
         path.unlink()
+
+
+def findings_for(source: str, suffix: str = ".ts") -> list[str]:
+    return [finding.rule_id for finding in scanned(source, suffix)]
+
+
+class RecordCoverageTest(unittest.TestCase):
+    """Every rule this checker claims must have a record, and vice versa."""
+
+    def test_checker_owns_exactly_the_prod_copy_records(self) -> None:
+        self.assertEqual(
+            check_toast_copy.OWNED_RULE_IDS,
+            frozenset({"PROD-COPY-1", "PROD-COPY-2"}),
+        )
+
+    def test_every_pattern_names_an_owned_record(self) -> None:
+        self.assertEqual(
+            {rule_id for rule_id, _pattern in check_toast_copy.PATTERNS},
+            set(check_toast_copy.OWNED_RULE_IDS),
+        )
+
+    def test_diagnostic_cites_the_rule_and_the_record(self) -> None:
+        diagnostic = scanned("headline: `Failed to open ${name}`,")[0].format()
+        self.assertIn("PROD-COPY-1", diagnostic)
+        self.assertIn("lints/product/toast-copy.toml", diagnostic)
+        self.assertIn("instead: A headline is a written line, not a built", diagnostic)
 
 
 class HeadlineRejected(unittest.TestCase):
     def test_interpolated_template(self) -> None:
         self.assertIn(
-            "interpolated-headline",
+            "PROD-COPY-1",
             findings_for("headline: `Failed to open ${name}`,"),
         )
 
     def test_concatenated_literal(self) -> None:
         self.assertIn(
-            "interpolated-headline",
+            "PROD-COPY-1",
             findings_for('headline: "Failed to open " + name,'),
         )
 
     def test_concatenated_binding_first(self) -> None:
         self.assertIn(
-            "interpolated-headline",
+            "PROD-COPY-1",
             findings_for("headline: prefix + reason,"),
         )
 
@@ -53,7 +80,7 @@ class WrappedCallsAreNotAnEscapeHatch(unittest.TestCase):
 
     def test_wrapped_toast_call(self) -> None:
         self.assertIn(
-            "error-in-toast-message",
+            "PROD-COPY-2",
             findings_for(
                 "showToast(\n"
                 "  `Couldn't save the workspace: ${errorMessage(error)}`,\n"
@@ -63,7 +90,7 @@ class WrappedCallsAreNotAnEscapeHatch(unittest.TestCase):
 
     def test_wrapped_headline_value(self) -> None:
         self.assertIn(
-            "interpolated-headline",
+            "PROD-COPY-1",
             findings_for(
                 "toastError({\n"
                 "  headline:\n"
@@ -94,7 +121,7 @@ class ErrorInMessageRejected(unittest.TestCase):
     def test_the_original_failure(self) -> None:
         """The exact line the sweep was written to delete."""
         self.assertIn(
-            "error-in-toast-message",
+            "PROD-COPY-2",
             findings_for(
                 "showToast(`Failed to send queued message next: ${errorMessage(error)}`);",
             ),
@@ -102,13 +129,13 @@ class ErrorInMessageRejected(unittest.TestCase):
 
     def test_bare_error_binding(self) -> None:
         self.assertIn(
-            "error-in-toast-message",
+            "PROD-COPY-2",
             findings_for("showToast(`Failed to start work: ${error}`);"),
         )
 
     def test_concatenated_form(self) -> None:
         self.assertIn(
-            "error-in-toast-message",
+            "PROD-COPY-2",
             findings_for('showToast("Failed to start work: " + err);'),
         )
 
@@ -122,7 +149,7 @@ class ErrorInMessageRejected(unittest.TestCase):
         ):
             with self.subTest(call=call):
                 self.assertIn(
-                    "error-in-toast-message",
+                    "PROD-COPY-2",
                     findings_for(f"{call}(`Could not save: ${{message}}`);"),
                 )
 

@@ -103,13 +103,21 @@ function normalizeDesktopTargetAvailability(
   selection: HomeNextTargetSelectionState,
   desktopTargetsAvailable: boolean,
 ): HomeNextTargetSelectionState {
+  if (desktopTargetsAvailable) {
+    // Cloud compute is culled from Desktop (PRO-10). A selection persisted
+    // before the cull (or hydrated from a shared store) may still carry
+    // `repoLaunchKind: "cloud"`; coerce it to "worktree" here at the
+    // selection source so every downstream reader (derived state, pickers)
+    // sees a desktop-valid launch kind instead of relying on display-only
+    // coercion further downstream.
+    return selection.repoLaunchKind === "cloud"
+      ? { ...selection, repoLaunchKind: "worktree" }
+      : selection;
+  }
   if (
-    desktopTargetsAvailable
-    || (
-      selection.destination === "repository"
-      && selection.repoLaunchKind === "cloud"
-      && selection.selectedSshTargetId === null
-    )
+    selection.destination === "repository"
+    && selection.repoLaunchKind === "cloud"
+    && selection.selectedSshTargetId === null
   ) {
     return selection;
   }
@@ -174,6 +182,22 @@ export function resetHomeNextTargetSelectionForTests(): void {
   storageContext = null;
   hasUserWritten = false;
   cachedHomeNextTargetSelection = DEFAULT_HOME_NEXT_TARGET_SELECTION;
+}
+
+/**
+ * Test-only seam: seeds the in-memory selection cache as if it had just been
+ * hydrated from persisted storage, without going through the async
+ * `hydrateHomeNextTargetSelection` path. Lets tests exercise
+ * `normalizeDesktopTargetAvailability` (e.g. a stale persisted
+ * `repoLaunchKind: "cloud"`) at the hook layer.
+ */
+export function cachedHomeNextTargetSelectionForTests(
+  selection: HomeNextTargetSelectionState,
+): void {
+  cachedHomeNextTargetSelection = selection;
+  for (const listener of homeNextTargetSelectionListeners) {
+    listener();
+  }
 }
 
 export function subscribeHomeNextTargetSelectionState(listener: () => void): () => void {

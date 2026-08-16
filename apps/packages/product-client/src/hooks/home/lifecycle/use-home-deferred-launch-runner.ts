@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import type { CloudWorkspaceSummary } from "#product/lib/domain/workspaces/cloud/cloud-workspace-model";
+import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
+import { promptAttachmentSendFields } from "#product/domain/chats/composer/prompt-attachment-content-parts";
 import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use-session-creation-actions";
 import {
   notifyQueuedPromptSendFailure,
@@ -211,6 +213,7 @@ export function useHomeDeferredLaunchRunner() {
         promptId: launch.promptId,
         launchIntentId: launch.launchIntentId,
         launchControlValues: launch.launchControlValues,
+        ...promptAttachmentSendFields(launch.promptText, launch.attachmentSnapshots),
         activateOnCreate: attended,
         targetWorkspaceUiKey: attended ? null : launch.workspaceId,
         ...(launch.modeId ? { modeId: launch.modeId } : {}),

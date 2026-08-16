@@ -284,6 +284,13 @@ pub fn user_route_allowed(
             require_permission(claim, Permission::Write)?;
             require_session_claim_scope(claim, session_id)
         }
+        // Forks ADR rung 2 (scope f): fork is a user-driven lifecycle control,
+        // so a direct-attached user claim may drive it. Write on the scoped
+        // session — the same authority level as sending a prompt.
+        ["sessions", session_id, "fork"] if method == Method::POST => {
+            require_permission(claim, Permission::Write)?;
+            require_session_claim_scope(claim, session_id)
+        }
         ["sessions", session_id, "interactions", _, "resolve"] if method == Method::POST => {
             require_permission(claim, Permission::Write)?;
             require_session_claim_scope(claim, session_id)
@@ -311,6 +318,11 @@ pub fn user_route_allowed(
         ["sessions", session_id, "pending-prompts", _]
             if method == Method::PATCH || method == Method::DELETE =>
         {
+            require_session_permission(claim, session_id, Permission::Write)
+        }
+        // Forks ADR rung 2 (scope f): steering (promote-and-interrupt) is a
+        // user-driven turn control at the same authority as editing the queue.
+        ["sessions", session_id, "pending-prompts", _, "steer"] if method == Method::POST => {
             require_session_permission(claim, session_id, Permission::Write)
         }
         ["sessions", session_id, "prompt-attachments", _] if method == Method::GET => {

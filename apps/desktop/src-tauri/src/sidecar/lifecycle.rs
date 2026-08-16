@@ -33,7 +33,13 @@ pub(super) async fn boot_inner(
         }
         let _ = wait_healthy(sidecar, false).await;
         #[cfg(all(debug_assertions, unix))]
-        diagnostics::publish_dev_diagnostics_env(supervisor);
+        {
+            let published_boot_id = diagnostics::publish_dev_diagnostics_env(supervisor);
+            diagnostics::spawn_dev_diagnostics_env_republisher(
+                Arc::clone(supervisor),
+                published_boot_id,
+            );
+        }
         return BootOutcome::External;
     }
 
@@ -188,6 +194,32 @@ pub(super) async fn wait_healthy(sidecar: &SharedSidecar, require_child: bool) -
             Ok(resp) if resp.status().is_success() => {
                 let health = resp.json::<RuntimeHealthRecord>().await.ok();
                 tracing::info!(health_url = %url, "AnyHarness runtime is healthy");
+
+                // Boot-time version assert against the bundled runtime-version.json
+                // (see `crate::runtime_version_assert`). `block` mode surfaces this
+                // exactly like any other unhealthy-boot failure; `warn` (the
+                // default) and `off` fall through to the normal healthy path.
+                if crate::runtime_version_assert::check(health.as_ref().map(|h| h.version.as_str()))
+                    == crate::runtime_version_assert::VersionCheckOutcome::Blocked
+                {
+                    let mut guard = sidecar.lock().await;
+                    guard.info.status = RuntimeStatus::Failed;
+                    // Unlike the other Failed paths, this child is alive and
+                    // healthy — kill it so a "Failed" boot never leaves a
+                    // running runtime process behind the status.
+                    if let Some(child) = guard.child.as_mut() {
+                        let _ = child.start_kill();
+                    }
+                    guard.child = None;
+                    #[cfg(all(
+                        target_os = "macos",
+                        any(target_arch = "aarch64", target_arch = "x86_64")
+                    ))]
+                    sidecar.set_child_shutdown_signal(None);
+                    persist_runtime_info(&guard.info, health.as_ref());
+                    return BootOutcome::Failed("runtime_version_mismatch");
+                }
+
                 let mut guard = sidecar.lock().await;
                 guard.info.status = RuntimeStatus::Healthy;
                 persist_runtime_info(&guard.info, health.as_ref());

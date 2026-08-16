@@ -1,0 +1,29 @@
+{
+  "note": "Hand-curated documentation and console URLs for the featured provider tier (PRO-206). The vendored provider registry (provider-registry.generated.json) carries no upstream doc URLs, so these are maintained by hand and merged in as data alongside it. Keyed by the models.dev provider id. Rendered by a later rung; carried as data only today.",
+  "providers": {
+    "anthropic": {
+      "docsUrl": "https://docs.anthropic.com/",
+      "consoleUrl": "https://console.anthropic.com/"
+    },
+    "openai": {
+      "docsUrl": "https://platform.openai.com/docs",
+      "consoleUrl": "https://platform.openai.com/api-keys"
+    },
+    "xai": {
+      "docsUrl": "https://docs.x.ai/",
+      "consoleUrl": "https://console.x.ai/"
+    },
+    "amazon-bedrock": {
+      "docsUrl": "https://docs.aws.amazon.com/bedrock/",
+      "consoleUrl": "https://console.aws.amazon.com/bedrock/"
+    },
+    "azure": {
+      "docsUrl": "https://learn.microsoft.com/azure/ai-services/openai/",
+      "consoleUrl": "https://portal.azure.com/"
+    },
+    "google": {
+      "docsUrl": "https://ai.google.dev/gemini-api/docs",
+      "consoleUrl": "https://aistudio.google.com/apikey"
+    }
+  }
+}

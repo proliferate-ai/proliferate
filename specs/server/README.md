@@ -33,12 +33,12 @@ Plus the meta-rule: **lowest layer that can own it cleanly**, and dependencies
 point one way.
 
 The ownership model is current operating truth, enforced by
-[check_server_boundaries.py](../../scripts/check_server_boundaries.py) with its
-exact named exceptions in
-[server_boundaries_allowlist.txt](../../scripts/server_boundaries_allowlist.txt).
+[check_server_boundaries.py](../../scripts/check_server_boundaries.py) from the
+rule records in [lints/server/](../../lints/server/), with its exact named
+exception sites in [exceptions.toml](../../lints/server/exceptions.toml).
 The rules listed under [Current gaps](#current-gaps) are the ones that remain
-unenforced; reviewed allowlists remain the operating exceptions until those gaps
-close.
+unenforced; the reviewed exception ledger remains the operating tolerance until
+those gaps close.
 
 ## The Core Idea
 
@@ -238,14 +238,14 @@ or persistence detail.
 
 | Failure mode | Grid rule | Prevention |
 | --- | --- | --- |
-| Foreign writes corrupt shared state | `SRV-STORE-3` | Only the owner's service writes |
-| Store changes surprise foreign readers | `SRV-STORE-2` | Exact consumer ledger makes reads queryable |
+| Foreign writes corrupt shared state | `SRV-STORE-5` | Only the owner's service writes |
+| Store changes surprise foreign readers | `SRV-STORE-6` | Exact consumer ledger makes reads queryable |
 | Errors vary by call site | `SRV-ERR-1` | Product errors plus one transport handler |
-| Shared code becomes a junk drawer | `SRV-LIB-2/4/5/6` | Three audiences, two-consumer entry ticket, and reverse ratchet |
+| Shared code becomes a junk drawer | `SRV-LIB-1` | Three audiences and a two-consumer entry ticket |
 | Auth decisions hide in orchestration | `SRV-SEAM-1` | Four endpoint-composed boundaries |
-| Background work has divergent failure models | `SRV-BG-3` | One Celery execution model |
-| Service cycles block refactors | `SRV-TOPO-3` | `GAP`: generated graph and acyclic-component gate are documented rules, not gates (gap 9) |
-| Third-party packages leak into product code | `SRV-PKG-2` | `GAP`: explicit package-audience map is a documented rule, not a gate (gap 9) |
+| Background work has divergent failure models | `SRV-BG-1` | One Celery execution model |
+| Service cycles block refactors | `SRV-TOPO-1` | `GAP`: generated graph and acyclic-component gate are documented rules, not gates (#1714) |
+| Third-party packages leak into product code | `SRV-PKG-1` | `GAP`: explicit package-audience map is a documented rule, not a gate (#1714) |
 
 ## Foreign-Read Doctrine
 
@@ -311,13 +311,13 @@ not a softer version of the rule.
   [billing_subjects.py](../../server/proliferate/db/store/billing_subjects.py)
   return ORM types. Accounts SSO also mutates a `User` and calls `db.flush()` in
   [user_resolution.py](../../server/proliferate/server/accounts/sso/user_resolution.py).
-- [ ] **Request transaction ownership is incomplete.** The migration allowlist
+- [ ] **Request transaction ownership is incomplete.** The exception ledger
   records 30 route-owned session calls across the Accounts
   [Desktop](../../server/proliferate/server/accounts/desktop/api.py),
   [Identity](../../server/proliferate/server/accounts/identity/api.py),
   and [SSO](../../server/proliferate/server/accounts/sso/api.py) APIs.
-  Their exact count locks live in
-  [server_boundaries_allowlist.txt](../../scripts/server_boundaries_allowlist.txt).
+  Each site is a `SRV-API-5` entry in
+  [exceptions.toml](../../lints/server/exceptions.toml).
 - [ ] **Authorization dependency adoption is partial.** The current
   [Auth guide](auth.md) treats inline service checks as migration debt. Current
   examples include Organization role gates in
@@ -343,10 +343,8 @@ not a softer version of the rule.
 - [ ] **Raw-transport placement retains one exact exception.**
   [cloud/gateway/proxy.py](../../server/proliferate/server/cloud/gateway/proxy.py)
   owns raw HTTP and WebSocket proxy transport inside a product domain. Its
-  `httpx` import is count-locked as
-  `PRODUCT_RAW_HTTP_IMPORT server/proliferate/server/cloud/gateway/proxy.py 1`
-  in
-  [server_boundaries_allowlist.txt](../../scripts/server_boundaries_allowlist.txt).
+  `httpx` import is the one `SRV-INTEG-4` site in
+  [exceptions.toml](../../lints/server/exceptions.toml).
   Sentry release identity is injected and no longer crosses into a product
   domain.
 - [ ] **Service topology and package audiences are not gated.** Cloud Sandbox

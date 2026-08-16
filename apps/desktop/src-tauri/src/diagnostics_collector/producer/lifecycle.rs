@@ -45,6 +45,15 @@ impl LifecycleOperation {
     fn operation_id(&self) -> &str {
         &self.operation_id
     }
+
+    /// Attaches arguments learned after the operation began (e.g. an exit
+    /// status observed at terminal time). They ride the terminal record only.
+    pub(crate) fn append_arguments(
+        &mut self,
+        arguments: impl IntoIterator<Item = TypedArgumentV1>,
+    ) {
+        self.arguments.extend(arguments);
+    }
 }
 
 impl LifecycleOperation {
@@ -107,6 +116,30 @@ impl LifecycleOperation {
 impl TauriDiagnosticsProducer {
     pub(crate) fn begin_lifecycle(&self, name: &'static str) -> LifecycleOperation {
         self.begin_lifecycle_with_correlation(name, LifecycleCorrelation::default())
+    }
+
+    pub(crate) fn begin_lifecycle_with_arguments(
+        &self,
+        name: &'static str,
+        arguments: Vec<TypedArgumentV1>,
+    ) -> LifecycleOperation {
+        if !PR3_LIFECYCLE_NAMES.contains(&name) {
+            return LifecycleOperation::new(
+                self.clone(),
+                name,
+                uuid::Uuid::new_v4().to_string(),
+                LifecycleCorrelation::default(),
+                arguments,
+                &PR3_CLASSIFICATIONS,
+                true,
+            );
+        }
+        self.begin_admitted_lifecycle(
+            name,
+            LifecycleCorrelation::default(),
+            arguments,
+            &PR3_CLASSIFICATIONS,
+        )
     }
 
     pub(crate) fn begin_lifecycle_with_correlation(

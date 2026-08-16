@@ -297,6 +297,25 @@ pub(super) fn map_fork_session_error(error: ForkSessionError) -> ApiError {
             ApiError::conflict("session must be idle before forking", "SESSION_BUSY")
         }
         ForkSessionError::Invalid(detail) => ApiError::bad_request(detail, "FORK_INVALID_SESSION"),
+        ForkSessionError::InvalidForkTarget(detail) => {
+            ApiError::bad_request(detail, "INVALID_FORK_TARGET")
+        }
+        ForkSessionError::TargetNotFound => ApiError::not_found(
+            "fork target message not found in this session",
+            "TARGET_NOT_FOUND",
+        ),
+        ForkSessionError::BoundaryNotCommitted => ApiError::conflict(
+            "fork target boundary is not committed yet",
+            "BOUNDARY_NOT_COMMITTED",
+        ),
+        ForkSessionError::IdempotencyConflict => ApiError::conflict(
+            "fork idempotency key already used with a different request payload",
+            "IDEMPOTENCY_CONFLICT",
+        ),
+        ForkSessionError::NativeOutcomeUnknown => ApiError::conflict(
+            "a prior fork on this key has an unresolved native outcome and cannot be redispatched",
+            "FORK_NATIVE_OUTCOME_UNKNOWN",
+        ),
         ForkSessionError::WorkspaceDirectoryMissing { path } => ApiError::conflict(
             format!("workspace directory is missing: {path}"),
             "WORKSPACE_DIRECTORY_MISSING",

@@ -110,6 +110,7 @@ describe("session stream flush controller", () => {
     const patchSpy = spyOnTranscriptPatch();
     const closeCurrentHandle = vi.fn();
     const scheduleReconnect = vi.fn();
+    const scheduleImmediateReconnect = vi.fn();
     let resolveRehydrate: (applied: boolean) => void = () => {};
     const rehydrateSessionSlotFromHistory = vi.fn().mockReturnValue(
       new Promise<boolean>((resolve) => {
@@ -120,6 +121,7 @@ describe("session stream flush controller", () => {
       scheduler: scheduled.scheduler,
       closeCurrentHandle,
       scheduleReconnect,
+      scheduleImmediateReconnect,
       rehydrateSessionSlotFromHistory,
     });
 
@@ -137,10 +139,16 @@ describe("session stream flush controller", () => {
       timeoutMs: 5_000,
     }));
     expect(closeCurrentHandle).toHaveBeenCalledTimes(1);
+    // Before the reconcile settles, nothing is scheduled either way.
     expect(scheduleReconnect).not.toHaveBeenCalled();
+    expect(scheduleImmediateReconnect).not.toHaveBeenCalled();
     resolveRehydrate(false);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(scheduleReconnect).toHaveBeenCalledWith(0);
+    // A gap-reconcile forced reconnect uses the bypass-backoff immediate path,
+    // NOT the shared error-retry curve (Q9). Negative control: the ordinary
+    // curve-advancing scheduleReconnect must never fire for this path.
+    expect(scheduleImmediateReconnect).toHaveBeenCalledTimes(1);
+    expect(scheduleReconnect).not.toHaveBeenCalled();
   });
 
   it("keeps the active summary refresh scheduled when a new turn starts after a turn end in one flush", () => {
@@ -251,7 +259,8 @@ describe("session stream flush controller", () => {
 function createTestController(options?: {
   scheduler?: SessionStreamFlushScheduler;
   closeCurrentHandle?: () => void;
-  scheduleReconnect?: (delayMs?: number) => void;
+  scheduleReconnect?: () => void;
+  scheduleImmediateReconnect?: () => void;
   clearActiveSummaryRefreshTimer?: () => void;
   scheduleActiveSummaryRefresh?: () => void;
   refreshSessionSlotMeta?: () => Promise<void>;
@@ -271,6 +280,7 @@ function createTestController(options?: {
     isCurrentStream: () => true,
     closeCurrentHandle: options?.closeCurrentHandle ?? vi.fn(),
     scheduleReconnect: options?.scheduleReconnect ?? vi.fn(),
+    scheduleImmediateReconnect: options?.scheduleImmediateReconnect ?? vi.fn(),
     clearActiveSummaryRefreshTimer: options?.clearActiveSummaryRefreshTimer ?? vi.fn(),
     scheduleActiveSummaryRefresh: options?.scheduleActiveSummaryRefresh ?? vi.fn(),
     scheduleStartupReadyRefresh: vi.fn(),

@@ -217,7 +217,8 @@ impl AppState {
             runtime_home.clone(),
         ));
         let agent_reconcile_service = Arc::new(AgentReconcileService::new());
-        let catalog_sync_service = Arc::new(CatalogSyncService::from_bundled());
+        let catalog_sync_service =
+            Arc::new(CatalogSyncService::from_bundled_and_staged_via_env(&runtime_home));
         let agent_runtime_without_probes = AgentRuntime::new(
             runtime_home.clone(),
             agent_reconcile_service.clone(),

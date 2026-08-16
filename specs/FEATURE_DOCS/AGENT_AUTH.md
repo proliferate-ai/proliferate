@@ -92,6 +92,35 @@ Selection laws:
   a vault entry; it names an `env_var_name` when that entry is a bare
   key and must not when the entry is typed (the typed kind carries its
   own env mapping) — enforced in the store, since it spans tables.
+
+### Registry is the allow-list authority (FR-4)
+
+[registry.json](../../catalogs/agents/registry.json) is the single
+declared authority for three allow-lists: the harness-kind set, the
+gateway-capable set (a harness is gateway-capable exactly when its
+`auth.slots[]` contains a slot with id `gateway`; cursor has none), and the
+single-vs-multi cardinality (an explicit per-agent `authCardinality` field,
+`single` or `multi`, because deriving multiplicity from slot count is fragile).
+Every other plane mirrors those sets rather than re-deriving them:
+
+- The Python constants (`AGENT_AUTH_HARNESS_KINDS`,
+  `AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS`,
+  `SINGLE_SOURCE_HARNESSES`, `MULTI_SOURCE_HARNESSES`) stay literals so
+  `constants/` keeps no runtime registry read and the store to server import
+  boundary is untouched, but a drift test
+  ([test_agent_registry_mirror_drift.py](../../server/tests/unit/test_agent_registry_mirror_drift.py))
+  fails CI the moment a literal and its registry derivation disagree. The
+  LiteLLM access-group contract test is anchored to the same registry
+  derivation, not just the Python constant.
+- The Rust `AgentKind` enum stays a type, but
+  [schema_tests.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/schema_tests.rs)
+  asserts `AgentKind::all()` equals the registry kind set and that the
+  registry gateway-slot derivation matches `render.rs`'s
+  gateway/`UnsupportedRoute` split (cursor is the only non-gateway kind).
+- The TypeScript client derives the same three sets from the bundled registry
+  copy (`bundled-agent-registry.ts`) instead of re-literalling them, and the
+  harness settings pane reads its per-harness toggles from the bundled catalog
+  copy rather than a hand-copied table.
 - **Org policy gates writes, not launches.**
   `PUT …/selections/{harness}` runs every org the user belongs to
   through `_enforce_org_selection_policy`
@@ -339,8 +368,31 @@ pushes into its embedded runtime
   gateway for harnesses without native logins, then this sync loop — is
   what delivers the first `state.json`, and a home-screen onboarding card
   ("Setting up your agents…") awaits the runtime's ack with a short grace
-  window (~20s) before auto-advancing — degrading to a visible pending
+  window (~20s) before auto-advancing, degrading to a visible pending
   badge and letting the user proceed. It never blocks.
+- **Under `agentAuthEvidencePanes` the card is state-bound, not timed.**
+  With the same flag that drives the evidence panes ON, the timer card is
+  replaced by per-agent badges bound to the REAL states each adopted agent
+  moves through: install progress (the agents projection's `installState`),
+  the `state.json` selection ack, and the derived `authState` (display,
+  next action, probe lifecycle). The card completes when every adopted agent
+  reaches a launchable or actionable terminal state (usable, authenticated,
+  or installed with a next action), never on a timer. Every terminal badge
+  the card shows carries a next-action affordance routing to the right pane
+  (from `authState.nextAction`, with an "open agent settings" fallback so no
+  state is a dead end), and a stuck probe shows its backoff and next-attempt
+  countdown rather than an eternal spinner. With the flag OFF the timer card
+  above is untouched.
+  ([auth-setup-badges.ts](../../apps/packages/product-client/src/lib/domain/agents/auth-setup-badges.ts),
+  [use-auth-setup-onboarding-evidence.ts](../../apps/packages/product-client/src/hooks/agents/lifecycle/use-auth-setup-onboarding-evidence.ts))
+- **Acceptance (FR-1).** The flag-ON onboarding coherence (sign-in,
+  auto-install or adopt, default auth source resolution, state ack, probe,
+  picker populated, first session) is covered by the badge-derivation domain
+  tests and the card component tests that assert each real state renders its
+  badge and affordance and that completion requires terminal states rather
+  than a timer. The end-to-end live pass on a fresh profile was not run in
+  the rung-7 change; see that PR's description for the exact blocker and the
+  static evidence delivered in its place.
 - **The loop.** `GET /v1/cloud/agent-auth/state?surface=local` (the same
   renderer as the cloud materializer, scoped to the `local`-surface
   selections) → fingerprint-compare against the last pushed document →
@@ -845,6 +897,38 @@ treats fail-closed. The ruling for the probe in that window:
 Rationale: never lie about what was observed, and do not invent a special
 no-probe state for a window that lasts seconds. A pending badge next to
 real data beats an empty pane next to no explanation.
+
+### Evidence panes (rung 6, flag-gated)
+
+The panes above render the runtime's DERIVED `authState` rather than
+re-deriving status in the client, behind the build-time flag
+`agentAuthEvidencePanes` (env `VITE_AGENT_AUTH_EVIDENCE_PANES`, default off).
+With the flag off the legacy locally-derived badge is untouched. With it on:
+
+- **The status badge is the derivation, verbatim.** The badge reads
+  `authState.display` for its label and tone and shows green ONLY for
+  `usable`/`authenticated`, each carrying its evidence age ("verified 2m
+  ago"). There is no local fallback and no readiness-based green, so the
+  false greens the legacy badge produced (opencode's unconditional success,
+  the `readiness === "ready"` fallback, enrollment `synced`) cannot occur.
+- **The pane leads with the next action.** `authState.nextAction` names the
+  one thing to do next (install, log in or paste a key, choose a source, top
+  up or retry, fix config, wait). The probe lifecycle renders inline: a
+  spinner while running or queued, and a backoff line with the
+  `next_attempt_at` countdown and last-failure detail. The login handoff
+  states (`initiated`, `awaiting-browser`, `completed`, `cancelled`,
+  `timed-out`) render from `facts.handoff` when present, with an in-flight
+  indicator and a retry affordance on the terminal failures. Handoff is
+  wired to render from the typed field ahead of the runtime adapters that
+  emit it, so nothing shows until those land.
+
+**Model visibility is a per-user preference.** With the flag on, enabling or
+disabling a model in the pane's model list is a per-user per-harness
+visibility preference keyed `(harnessKind, modelId)`, applied at render over
+the observed list on every surface (the launch picker reads the same
+preference). The flag-on UI no longer writes the server
+`agent_catalog_override` table; that table and its endpoints stay in place
+for the dormant cloud arm and their removal is a follow-up.
 
 ### Open verification items
 

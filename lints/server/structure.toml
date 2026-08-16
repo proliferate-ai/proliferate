@@ -1,0 +1,148 @@
+# Server file/folder shape rules (SRV-STRUCT), completed-migration path blocks
+# (SRV-PATHS), and the managed Workflows plane boundary (SRV-WFLOW). A path
+# should tell a reader what kind of code is allowed there.
+
+[[rule]]
+id = "SRV-STRUCT-1"
+title = "Server module names are not underscore-prefixed"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/{background,server,auth,db/models,db/store,integrations}/**"
+
+rule = """server module names must not begin with a single underscore (dunder
+modules excepted)."""
+alternative = """Name the owned concern; keep genuinely private helpers inside
+the module that uses them."""
+why = """A file path should tell a developer what kind of code is allowed
+there."""
+
+[rule.example]
+bad = "server/proliferate/server/<domain>/_helpers.py"
+good = "server/proliferate/server/<domain>/entitlement.py"
+
+[[rule]]
+id = "SRV-STRUCT-2"
+title = "Services are named service.py"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/{background,server,auth,db/models,db/store,integrations}/**"
+
+rule = """server modules must use service.py, not *_service.py."""
+alternative = """Use the canonical service.py, or promote the concern into a
+subdomain folder with its own service.py."""
+why = """Canonical files are named api.py, service.py, and models.py, and are
+neither prefixed nor suffixed."""
+
+[rule.example]
+bad = "server/proliferate/server/cloud/gateway_service.py"
+good = "server/proliferate/server/cloud/gateway/service.py"
+
+[[rule]]
+id = "SRV-STRUCT-3"
+title = "No junk-drawer modules"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/{background,server,auth,db/models,db/store,integrations}/**"
+
+rule = """server modules must use owned concern names, not
+helper/helpers/misc/common/utils names (including the _helper/_helpers/_utils
+suffixes)."""
+alternative = """Put reusable cross-domain machinery in lib/infra/<concern>/;
+single-domain helpers go in domain/, a promoted subdomain, an integration, or
+the owning service. There is no utils/ bucket."""
+why = """A shared junk drawer accumulates unowned code and hides ownership."""
+
+[rule.example]
+bad = "server/proliferate/server/billing/utils.py"
+good = "server/proliferate/lib/infra/time/clock.py"
+
+[[rule]]
+id = "SRV-STRUCT-4"
+title = "No single-file folders"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/{background,server,auth,db/models,db/store,integrations}/**"
+
+rule = """single-file folders are forbidden under the structure roots; the only
+module must be inlined or the folder promoted. The sanctioned carve-outs are a
+canonical worker/ holding only service.py, a product domain/ holding one pure
+module, and background/tasks/."""
+alternative = """Inline the module into its parent, or grow the folder into a
+real subdomain."""
+why = """Single-file folders imply a structure that does not exist yet."""
+
+[rule.example]
+bad = "server/proliferate/server/<domain>/reports/ containing only snapshot.py"
+good = "server/proliferate/server/<domain>/reports.py"
+
+[[rule]]
+id = "SRV-PATHS-1"
+title = "Completed path migrations do not come back"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_old_paths.py"
+mode = "lint"
+scope = "server/proliferate/utils"
+
+rule = """A completed server path migration must not regain a compatibility
+shim: no source may exist under server/proliferate/utils."""
+alternative = """Put reusable cross-domain machinery in lib/infra/<concern>/
+and single-domain helpers with their owner."""
+why = """A shim re-opens the path the migration closed, and a second home for
+the same concern means neither is authoritative. There is no utils/ bucket."""
+
+[rule.example]
+bad = "server/proliferate/utils/time.py"
+good = "server/proliferate/lib/infra/time/clock.py"
+
+[[rule]]
+id = "SRV-WFLOW-1"
+title = "Managed Workflows do not import the legacy Cloud plane"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_workflow_managed_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/server/workflows/**"
+
+rule = """The managed Workflows domain must not import the legacy Cloud
+command/session/event planes: proliferate.db.models.cloud.sync,
+proliferate.db.store.cloud_sync,
+proliferate.db.store.support_session_diagnostics,
+proliferate.server.cloud.commands, or
+proliferate.server.cloud.gateway.proxy."""
+alternative = """Use the managed Workflow plane's own stores and models."""
+why = """Keeping managed Workflows off the legacy Cloud command/session/event
+planes lets the new plane evolve independently instead of inheriting the old
+plane's run-control semantics."""
+
+[rule.example]
+bad = "from proliferate.server.cloud.commands import enqueue  # under server/workflows/"
+good = "from proliferate.db.store.workflow_runs import load_run"
+
+[[rule]]
+id = "SRV-WFLOW-2"
+title = "Managed Workflows do not name legacy Cloud plane symbols"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_workflow_managed_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/server/workflows/**"
+
+rule = """Managed Workflows code must not reference the legacy Cloud plane
+symbols CloudCommandKind, CloudCommandSnapshot, CloudSessionEvent,
+CloudSessionProjection, or CloudTranscriptItem by name."""
+alternative = """Use the managed Workflow run/session vocabulary."""
+why = """Closes the same boundary as SRV-WFLOW-1 at the identifier level, so an
+indirect re-export cannot reopen it."""
+
+[rule.example]
+bad = "CloudSessionEvent used anywhere under server/proliferate/server/workflows/"
+good = "WorkflowRunEvent from the managed run vocabulary"

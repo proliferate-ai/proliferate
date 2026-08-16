@@ -13,6 +13,8 @@ import type {
   HomeOnboardingIcon,
 } from "#product/lib/domain/home/home-screen";
 import type { AuthSetupStepState } from "#product/lib/domain/agents/auth-onboarding";
+import type { AuthSetupEvidence } from "#product/lib/domain/agents/auth-setup-badges";
+import { AuthSetupEvidenceCard } from "#product/components/home/screen/HomeOnboardingEvidenceCard";
 
 function resolveOnboardingIcon(icon: HomeOnboardingIcon) {
   switch (icon) {
@@ -209,6 +211,7 @@ export function HomeOnboardingCards({
   isAddingRepo,
   onSelect,
   authSetup,
+  authSetupEvidence,
   modelProbe,
   onOpenAgents,
   onDismissModelProbe,
@@ -217,23 +220,35 @@ export function HomeOnboardingCards({
   isAddingRepo: boolean;
   onSelect: (card: HomeOnboardingCardModel) => void;
   authSetup?: AuthSetupStepState;
+  authSetupEvidence?: AuthSetupEvidence | null;
   modelProbe?: HomeModelProbeCardState;
   onOpenAgents?: () => void;
   onDismissModelProbe?: () => void;
 }) {
+  // The timer card (flag off) and the evidence card (flag on) are mutually
+  // exclusive: the dormant hook yields nothing, so only one is ever truthy.
   const hasAuthSetupCard = authSetup === "settingUp";
+  const hasEvidenceCard =
+    authSetupEvidence != null && authSetupEvidence.badges.length > 0;
   const hasProbeCard = modelProbe !== undefined && modelProbe.kind !== "hidden";
-  if (cards.length === 0 && !hasProbeCard && !hasAuthSetupCard) {
+  if (cards.length === 0 && !hasProbeCard && !hasAuthSetupCard && !hasEvidenceCard) {
     return null;
   }
 
   // Max 3 cards (spec §10): the transient auth-setup step leads, setup cards
   // take priority over the probe card, which fills last.
-  const reservedSlots = (hasAuthSetupCard ? 1 : 0) + (hasProbeCard ? 1 : 0);
+  const reservedSlots =
+    (hasAuthSetupCard || hasEvidenceCard ? 1 : 0) + (hasProbeCard ? 1 : 0);
   const visibleCards = cards.slice(0, 3 - reservedSlots);
 
   return (
     <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3 empty:hidden">
+      {hasEvidenceCard && authSetupEvidence ? (
+        <AuthSetupEvidenceCard
+          evidence={authSetupEvidence}
+          onOpenAgents={onOpenAgents ?? (() => {})}
+        />
+      ) : null}
       {hasAuthSetupCard && authSetup ? <AuthSetupCard state={authSetup} /> : null}
       {visibleCards.map((card) => (
         <OnboardingCard

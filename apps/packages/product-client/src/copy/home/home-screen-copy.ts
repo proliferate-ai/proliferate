@@ -4,12 +4,21 @@ export const HOME_SCREEN_LABELS = {
   configureDefaultHarnessesTitle: "Configure default harnesses",
   configureDefaultHarnessesDescription: "Pick the coding agents and models you want to use.",
   configureRepositoryTitle: "Configure your repo",
-  configureRepositoryDescription: "Finish setting up this repo for cloud workspaces.",
+  configureRepositoryDescription: "Finish setting up this repo to start working.",
   // Ack-gated onboarding step (agent-auth.md): shown from first-run adoption's
   // gateway writes until the runtime acks the delivered auth state (or the
   // ~20s grace window passes and the step auto-advances).
   authSetupTitle: "Setting up your agents…",
   authSetupDescription: "Connecting your agents to managed model access.",
+  // Evidence-bound onboarding card (agent-auth.md rung 7, flag
+  // agentAuthEvidencePanes): per-agent badges bound to the real install, ack,
+  // and probe states instead of a timer. Phase labels the badge shows before
+  // the runtime's derived `authState` names a display.
+  authSetupInstalling: "Installing",
+  authSetupPreparing: "Preparing",
+  authSetupNeedsInstall: "Not installed",
+  authSetupWaitingStatus: "Waiting for status",
+  authSetupOpenAgents: "Open agent settings",
   modelProbeProbingTitle: "Processing your models…",
   modelProbeDoneDescription: "Check out which models you already have access to.",
   modelProbeNoneTitle: "Connect a provider to get started",

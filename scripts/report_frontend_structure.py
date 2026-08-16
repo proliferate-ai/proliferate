@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 
+"""Frontend structure inventory.
+
+The rules themselves are records under `lints/frontend/structure.toml`; this file
+is only the engine that finds their violations. Diagnostics are rendered from
+those records, so wording lives with the rule, not here. FE-SIZE-1's measured
+size debt is a shrink-only ratchet in `lints/frontend/ratchets.toml`.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -12,12 +20,22 @@ from pathlib import Path
 
 try:
     from scripts.frontend_imports import ImportStatement, collect_module_specifiers
+    from scripts import lint_records
 except ModuleNotFoundError:  # Direct `python3 scripts/...` execution.
     from frontend_imports import ImportStatement, collect_module_specifiers
+    import lint_records
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-MAX_LINES_ALLOWLIST_PATH = REPO_ROOT / "scripts" / "max_lines_allowlist.txt"
-FRONTEND_STRUCTURE_ALLOWLIST_PATH = REPO_ROOT / "scripts" / "frontend_structure_allowlist.txt"
+
+RULES = lint_records.load("frontend")
+
+# FE-SIZE-1's measured debt is a ratchet, not an exception ledger. `[[max_lines]]`
+# in the same file belongs to scripts/check_max_lines.py, so this reader owns a
+# distinct table.
+SIZE_RATCHET_RULE_ID = "FE-SIZE-1"
+SIZE_RATCHET_TABLE = "frontend_structure"
+SIZE_RATCHET_SOURCE = "lints/frontend/ratchets.toml"
+
 PRODUCT_CLIENT_SRC = REPO_ROOT / "apps" / "packages" / "product-client" / "src"
 PRODUCT_CLIENT_DOMAIN_SRC = PRODUCT_CLIENT_SRC / "domain"
 PRODUCT_CLIENT_PRIMITIVES_SRC = PRODUCT_CLIENT_SRC / "primitives"
@@ -187,26 +205,18 @@ JUNK_DRAWER_BASENAMES = {
 }
 
 RULE_ORDER = [
-    "RAW_DOM_CONTROL",
-    "PRIMITIVE_DEFINITION_OUTSIDE_UI",
-    "COMPONENT_TS_FILE",
-    "PRODUCT_HOOK_DIRECT_FILE",
-    "NONSTANDARD_HOOK_FOLDER",
-    "FRONTEND_JUNK_DRAWER_FILENAME",
-    "FORBIDDEN_SHARED_PACKAGE_IMPORT",
-    "LARGE_FRONTEND_FILE",
+    "FE-STRUCT-1",
+    "FE-STRUCT-2",
+    "FE-STRUCT-3",
+    "FE-STRUCT-4",
+    "FE-STRUCT-5",
+    "FE-STRUCT-6",
+    "FE-STRUCT-7",
+    "FE-SIZE-1",
 ]
 
-RULE_TITLES = {
-    "RAW_DOM_CONTROL": "Raw DOM controls outside ProductClient primitives",
-    "PRIMITIVE_DEFINITION_OUTSIDE_UI": "Primitive definitions outside ProductClient primitives",
-    "COMPONENT_TS_FILE": ".ts files under components/**",
-    "PRODUCT_HOOK_DIRECT_FILE": "Product hooks directly under hooks/<domain>/",
-    "NONSTANDARD_HOOK_FOLDER": "Nonstandard product hook responsibility folders",
-    "FRONTEND_JUNK_DRAWER_FILENAME": "Generic frontend junk-drawer filenames",
-    "FORBIDDEN_SHARED_PACKAGE_IMPORT": "Forbidden shared-package imports",
-    "LARGE_FRONTEND_FILE": "Large frontend files over documented thresholds",
-}
+def rule_title(rule_id: str) -> str:
+    return RULES.rule(rule_id).title
 
 
 @dataclass(frozen=True)
@@ -221,7 +231,11 @@ class Violation:
         return self.path.relative_to(REPO_ROOT).as_posix()
 
     def format(self) -> str:
-        return f"{self.relative_path}:{self.lineno}: {self.message}"
+        return lint_records.render_diagnostic(
+            RULES.rule(self.rule_id),
+            f"{self.relative_path}:{self.lineno}",
+            self.message,
+        )
 
 
 def relative(path: Path) -> str:
@@ -268,53 +282,62 @@ def count_lines(path: Path) -> int:
     return data.count(b"\n") + (0 if data.endswith(b"\n") else 1)
 
 
-def load_max_lines_allowlist_paths() -> set[str]:
+def load_max_lines_ratchet_paths() -> set[str]:
+    """Paths whose size debt is already ratcheted under lints/*/ratchets.toml.
+
+    scripts/check_max_lines.py owns those files; this reporter defers to it so a
+    file is not reported twice.
+    """
     paths: set[str] = set()
-    if not MAX_LINES_ALLOWLIST_PATH.exists():
-        return paths
-    for raw_line in MAX_LINES_ALLOWLIST_PATH.read_text().splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        parts = line.split(maxsplit=2)
-        if len(parts) == 3:
-            paths.add(parts[0])
+    for owner in lint_records.OWNERS:
+        for entry in lint_records.load_ratchets(owner).get("max_lines", []):
+            if "path" in entry:
+                paths.add(entry["path"])
     return paths
 
 
 @dataclass(frozen=True)
-class LargeFileAllowlistEntry:
+class SizeRatchetEntry:
     path: str
     max_lines: int
     reason: str
 
 
-def load_large_file_allowlist() -> dict[str, LargeFileAllowlistEntry]:
-    entries: dict[str, LargeFileAllowlistEntry] = {}
-    if not FRONTEND_STRUCTURE_ALLOWLIST_PATH.exists():
-        return entries
-    relative_allowlist = FRONTEND_STRUCTURE_ALLOWLIST_PATH.relative_to(REPO_ROOT)
-    for line_number, raw_line in enumerate(
-        FRONTEND_STRUCTURE_ALLOWLIST_PATH.read_text().splitlines(), start=1
-    ):
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        parts = line.split(maxsplit=2)
-        if len(parts) != 3:
-            raise ValueError(f"{relative_allowlist}:{line_number}: expected path max_lines reason")
-        entry_path, raw_max_lines, reason = parts
-        try:
-            max_lines = int(raw_max_lines)
-        except ValueError as exc:
-            raise ValueError(
-                f"{relative_allowlist}:{line_number}: max_lines must be an integer"
-            ) from exc
+def load_size_ratchet() -> dict[str, SizeRatchetEntry]:
+    """FE-SIZE-1's measured size debt, from lints/frontend/ratchets.toml.
+
+    Fails closed: a missing or empty `[[frontend_structure]]` table means the
+    ledger was lost, not that the debt was paid, so every oversized file would
+    suddenly report. Refuse to run instead of printing a bogus inventory.
+    """
+    ratchets = lint_records.load_ratchets("frontend")
+    raw_entries = ratchets.get(SIZE_RATCHET_TABLE)
+    if not raw_entries:
+        raise ValueError(
+            f"{SIZE_RATCHET_SOURCE}: missing or empty [[{SIZE_RATCHET_TABLE}]] table — "
+            f"{SIZE_RATCHET_RULE_ID}'s ratchet ledger is the only record of measured "
+            "frontend size debt; restore it instead of running without it"
+        )
+    entries: dict[str, SizeRatchetEntry] = {}
+    for index, entry in enumerate(raw_entries, start=1):
+        location = f"{SIZE_RATCHET_SOURCE}: [[{SIZE_RATCHET_TABLE}]] #{index}"
+        missing = [key for key in ("path", "max_lines", "reason") if key not in entry]
+        if missing:
+            raise ValueError(f"{location}: missing {', '.join(missing)}")
+        entry_path = entry["path"]
+        max_lines = entry["max_lines"]
+        reason = entry["reason"]
+        if not isinstance(entry_path, str) or not entry_path:
+            raise ValueError(f"{location}: path must be a non-empty string")
+        if not isinstance(max_lines, int) or isinstance(max_lines, bool):
+            raise ValueError(f"{location}: max_lines must be an integer")
         if max_lines < 1:
-            raise ValueError(f"{relative_allowlist}:{line_number}: max_lines must be positive")
+            raise ValueError(f"{location}: max_lines must be positive")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValueError(f"{location}: reason must be a non-empty string")
         if entry_path in entries:
-            raise ValueError(f"{relative_allowlist}:{line_number}: duplicate allowlist entry")
-        entries[entry_path] = LargeFileAllowlistEntry(entry_path, max_lines, reason)
+            raise ValueError(f"{location}: duplicate ratchet entry for {entry_path}")
+        entries[entry_path] = SizeRatchetEntry(entry_path, max_lines, reason)
     return entries
 
 
@@ -380,7 +403,7 @@ def find_raw_dom_controls(files: Iterable[Path]) -> list[Violation]:
                 tag = match.group(1)
                 violations.append(
                     Violation(
-                        "RAW_DOM_CONTROL",
+                        "FE-STRUCT-1",
                         path,
                         lineno,
                         f"raw <{tag}> should use a ProductClient primitive",
@@ -414,14 +437,14 @@ def find_primitive_definitions(files: Iterable[Path]) -> list[Violation]:
                     break
                 context = component_definition_context(lines, index)
                 # Keep this category narrow: product components that merely render controls
-                # are reported by RAW_DOM_CONTROL instead of being labeled primitives.
+                # are reported by FE-STRUCT-1 instead of being labeled primitives.
                 if is_primitive_like_name(name) and has_native_dom_contract_for(
                     name, context, native_type_names
                 ):
                     reported_names.add(name)
                     violations.append(
                         Violation(
-                            "PRIMITIVE_DEFINITION_OUTSIDE_UI",
+                            "FE-STRUCT-2",
                             path,
                             index + 1,
                             (
@@ -443,7 +466,7 @@ def find_component_ts_files(files: Iterable[Path]) -> list[Violation]:
             continue
         violations.append(
             Violation(
-                "COMPONENT_TS_FILE",
+                "FE-STRUCT-3",
                 path,
                 1,
                 "components/** is .tsx-only; move non-UI logic to config, copy, or lib/domain",
@@ -466,7 +489,7 @@ def find_hook_shape_violations() -> list[Violation]:
                 if child.is_file() and child.suffix in EXTENSIONS and not should_skip(child):
                     violations.append(
                         Violation(
-                            "PRODUCT_HOOK_DIRECT_FILE",
+                            "FE-STRUCT-4",
                             child,
                             1,
                             (
@@ -478,7 +501,7 @@ def find_hook_shape_violations() -> list[Violation]:
                 elif child.is_dir() and child.name not in CANONICAL_PRODUCT_HOOK_FOLDERS:
                     violations.append(
                         Violation(
-                            "NONSTANDARD_HOOK_FOLDER",
+                            "FE-STRUCT-5",
                             child,
                             1,
                             (
@@ -493,7 +516,7 @@ def find_hook_shape_violations() -> list[Violation]:
 def find_junk_drawer_filename_violations(files: Iterable[Path]) -> list[Violation]:
     return [
         Violation(
-            "FRONTEND_JUNK_DRAWER_FILENAME",
+            "FE-STRUCT-6",
             path,
             1,
             "name the owned concept instead of using a generic junk-drawer filename",
@@ -650,7 +673,7 @@ def find_forbidden_shared_package_imports(files: Iterable[Path]) -> list[Violati
                 continue
             violations.append(
                 Violation(
-                    "FORBIDDEN_SHARED_PACKAGE_IMPORT",
+                    "FE-STRUCT-7",
                     path,
                     statement.lineno,
                     (
@@ -664,8 +687,8 @@ def find_forbidden_shared_package_imports(files: Iterable[Path]) -> list[Violati
 
 def find_large_frontend_files(files: Iterable[Path]) -> list[Violation]:
     violations: list[Violation] = []
-    documented_large_files = load_max_lines_allowlist_paths()
-    allowlist = load_large_file_allowlist()
+    documented_large_files = load_max_lines_ratchet_paths()
+    ratchet = load_size_ratchet()
     observed: dict[str, int] = {}
     for path in files:
         relative_path = relative(path)
@@ -675,7 +698,7 @@ def find_large_frontend_files(files: Iterable[Path]) -> list[Violation]:
         observed[relative_path] = line_count
         if line_count <= LINE_SOFT_THRESHOLD:
             continue
-        entry = allowlist.get(relative_path)
+        entry = ratchet.get(relative_path)
         if entry is not None and line_count <= entry.max_lines:
             continue
         if line_count >= LINE_STRONG_REASON_THRESHOLD:
@@ -689,20 +712,20 @@ def find_large_frontend_files(files: Iterable[Path]) -> list[Violation]:
                 f"{LINE_SOFT_THRESHOLD} lines"
             )
         if entry is not None:
-            threshold_note += f" (exceeds allowlisted {entry.max_lines})"
+            threshold_note += f" (exceeds ratcheted {entry.max_lines})"
         violations.append(
             Violation(
-                "LARGE_FRONTEND_FILE",
+                "FE-SIZE-1",
                 path,
                 1,
                 threshold_note,
             )
         )
 
-    # Ratchet: an allowlisted file that dropped back under the threshold (or was
+    # Shrink-only: a ratcheted file that dropped back under the threshold (or was
     # deleted) makes its entry stale and must be removed, mirroring the
-    # max_lines_allowlist contract.
-    for entry_path, entry in allowlist.items():
+    # [[max_lines]] contract.
+    for entry_path, entry in ratchet.items():
         line_count = observed.get(entry_path)
         if line_count is None:
             if entry_path in documented_large_files:
@@ -710,12 +733,12 @@ def find_large_frontend_files(files: Iterable[Path]) -> list[Violation]:
             if not (REPO_ROOT / entry_path).exists():
                 violations.append(
                     Violation(
-                        "LARGE_FRONTEND_FILE",
+                        "FE-SIZE-1",
                         REPO_ROOT / entry_path,
                         1,
                         (
-                            "stale frontend-structure allowlist entry; file no longer "
-                            f"scanned/present (allowlisted {entry.max_lines}); remove it"
+                            f"stale [[{SIZE_RATCHET_TABLE}]] ratchet entry; file no longer "
+                            f"scanned/present (ratcheted {entry.max_lines}); remove it"
                         ),
                     )
                 )
@@ -723,13 +746,13 @@ def find_large_frontend_files(files: Iterable[Path]) -> list[Violation]:
         if line_count <= LINE_SOFT_THRESHOLD:
             violations.append(
                 Violation(
-                    "LARGE_FRONTEND_FILE",
+                    "FE-SIZE-1",
                     REPO_ROOT / entry_path,
                     1,
                     (
-                        f"stale frontend-structure allowlist entry; file is now {line_count} "
-                        f"lines (<= {LINE_SOFT_THRESHOLD}) and allowlisted {entry.max_lines}; "
-                        "remove it"
+                        f"stale [[{SIZE_RATCHET_TABLE}]] ratchet entry; file is now "
+                        f"{line_count} lines (<= {LINE_SOFT_THRESHOLD}) and ratcheted "
+                        f"{entry.max_lines}; remove it"
                     ),
                 )
             )
@@ -785,9 +808,10 @@ def print_report(violations: list[Violation], *, strict: bool, summary_only: boo
         if not rule_violations:
             continue
         print()
-        print(f"{rule_id} - {RULE_TITLES[rule_id]} ({len(rule_violations)})")
+        print(f"{rule_id} - {rule_title(rule_id)} ({len(rule_violations)})")
         for violation in rule_violations:
-            print(f"  {violation.format()}")
+            print(violation.format())
+            print()
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -813,7 +837,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
-    violations = collect_violations()
+    try:
+        violations = collect_violations()
+    except ValueError as exc:
+        # A malformed or missing ratchet ledger is fail-closed: report it as an
+        # error rather than an empty inventory, in strict mode and out of it.
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
     print_report(violations, strict=args.strict, summary_only=args.summary_only)
     if args.strict and violations:
         return 1

@@ -19,6 +19,7 @@ import type { SidebarIndicatorAction } from "#product/lib/domain/workspaces/side
 import type { WorkspaceAvailabilityCommandKind } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
 import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import { SkeletonBlock } from "#product/primitives/Skeleton";
+import { LoadingBoundary } from "#product/primitives/LoadingBoundary";
 import { RepoGroup, type RepoGroupEnvironmentKind } from "#product/components/workspace/shell/sidebar/RepoGroup";
 import { ProductSidebarShowToggleRow } from "#product/components/workspace/shell/sidebar/ProductSidebarShowToggleRow";
 import { SidebarWorkspaceItems } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceItems";
@@ -74,18 +75,27 @@ interface SidebarWorkspaceContentProps {
   onOpenCloudRepoSettingsForGroup: (target: CloudWorkspaceRepoTarget) => void;
   /** Begins the connected Cloud action intent (readiness → set up in Cloud). */
   onSetUpCloudForGroup: (target: CloudWorkspaceRepoTarget) => void;
-  /** Desktop-only: register an existing local folder for a Cloud repo. */
-  onAddToThisMac: (target: CloudWorkspaceRepoTarget) => void;
 }
 
+// FR-1 carve-out (UX Latency + Transitions ADR §4 Rung 4): the sidebar
+// workspace list keeps its fixed-geometry row skeleton because the final row
+// geometry is genuinely known. Routing it through `LoadingBoundary` as the
+// treatment slot buys the Class C show-delay for free, so a sub-200ms load no
+// longer flashes the skeleton, without rebuilding the sidebar.
 function SidebarLoadingState() {
   return (
-    <div className="flex flex-col gap-1 px-3 py-3" aria-label="Loading workspaces" role="status">
-      <SkeletonBlock className="h-7 w-full bg-surface-control" />
-      <SkeletonBlock className="h-7 w-[88%] bg-surface-control/80" />
-      <SkeletonBlock className="h-7 w-[72%] bg-surface-control/70" />
-      <p className="sr-only">Loading workspaces</p>
-    </div>
+    <LoadingBoundary
+      state="pending"
+      diagnostics={{ flow: "sidebar_workspaces" }}
+      treatment={
+        <div className="flex flex-col gap-1 px-3 py-3" aria-label="Loading workspaces" role="status">
+          <SkeletonBlock className="h-7 w-full bg-surface-control" />
+          <SkeletonBlock className="h-7 w-[88%] bg-surface-control/80" />
+          <SkeletonBlock className="h-7 w-[72%] bg-surface-control/70" />
+          <p className="sr-only">Loading workspaces</p>
+        </div>
+      }
+    />
   );
 }
 
@@ -125,7 +135,6 @@ export function SidebarWorkspaceContent({
   managedCloudAvailable,
   onOpenCloudRepoSettingsForGroup,
   onSetUpCloudForGroup,
-  onAddToThisMac,
 }: SidebarWorkspaceContentProps) {
   if (isLoading && emptyState === "noWorkspaces") {
     return <SidebarLoadingState />;
@@ -219,7 +228,11 @@ export function SidebarWorkspaceContent({
           action: cloudRepoAction,
           localWorkspacesAvailable,
         })}
-        onCloudWorkspaceAction={cloudRepoTarget
+        // Cloud is culled from Desktop (PRO-10, FR-3): the Desktop sidebar
+        // offers no cloud-workspace creation, no "Set up Cloud"/GitHub App
+        // authorize, no "Add to this Mac", and no cloud settings. Web keeps its
+        // cloud affordances, gated by the host capability (`!isDesktopHost`).
+        onCloudWorkspaceAction={!isDesktopHost && cloudRepoTarget
           ? () => {
             if (cloudRepoAction.kind === "create") {
               onCreateCloudWorkspace(cloudRepoTarget, group.sourceRoot);
@@ -233,14 +246,11 @@ export function SidebarWorkspaceContent({
         onRemoveRepo={() => onRemoveRepo(group.sourceRoot)}
         onOpenSettings={() => onOpenRepoSettings(group.sourceRoot)}
         isGitHubRepo={Boolean(cloudRepoTarget)}
-        canSetUpCloud={isDesktopHost && managedCloudAvailable}
-        onSetUpCloud={cloudRepoTarget
+        canSetUpCloud={!isDesktopHost && managedCloudAvailable}
+        onSetUpCloud={!isDesktopHost && cloudRepoTarget
           ? () => onSetUpCloudForGroup(cloudRepoTarget)
           : undefined}
-        onAddToThisMac={isDesktopHost && cloudRepoTarget
-          ? () => onAddToThisMac(cloudRepoTarget)
-          : undefined}
-        onOpenCloudSettings={cloudRepoTarget
+        onOpenCloudSettings={!isDesktopHost && cloudRepoTarget
           ? () => onOpenCloudRepoSettingsForGroup(cloudRepoTarget)
           : undefined}
       >
