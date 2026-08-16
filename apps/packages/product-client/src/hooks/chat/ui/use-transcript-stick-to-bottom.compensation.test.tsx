@@ -349,6 +349,68 @@ describe("useTranscriptStickToBottom above-change compensation (PRO-187, r4)", (
       nowSpy.mockRestore();
     }
   });
+
+  // Deterministic negative control for the r5 prepend-anchoring CI defect
+  // (PRO-187): "scrollTop Expected > 150 / Received 0". A transient
+  // measured-swap dip can drive the browser's own scrollTop clamp DOWN in the
+  // very same pass the growth deadline lapses. Silently releasing the anchor
+  // there strands the reader near the freshly-prepended top forever (nothing
+  // else will ever re-raise an unpinned reader for ordinary growth). The fix
+  // performs one last forward-only corrective write against the established
+  // floor before releasing whenever the reader is still displaced below its
+  // seat, so the release itself can never leave the reader worse off than the
+  // best delta already observed.
+  it("re-raises the reader with a final corrective write when a downward clamp lands the same pass the deadline lapses", () => {
+    let clock = 0;
+    const nowSpy = vi.spyOn(performance, "now").mockImplementation(() => clock);
+    try {
+      const handle = renderHarness();
+      const { viewport, api } = handle.current;
+      setContentHeight(viewport, 2000);
+      viewport.scrollTop = 200;
+
+      act(() => {
+        api.setPinned(false);
+        api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 200 }, false);
+      });
+
+      // The older rows measure taller: total grows to 2600. The first glue tick
+      // absorbs it (seat = 200 + (2600 - 2000) = 800).
+      setContentHeight(viewport, 2600);
+      act(() => {
+        flushRafRound();
+      });
+      expect(viewport.scrollTop).toBe(800);
+
+      // The glue window ends on its quiet frame; the reader is correctly
+      // seated at 800. The growth to 2600 extended the deadline to 0 + 1000ms
+      // (ABOVE_CHANGE_COMPENSATION_QUIET_EXTENSION_MS).
+      act(() => {
+        flushRafRound();
+      });
+      expect(viewport.scrollTop).toBe(800);
+
+      // Past the extended 1000ms deadline, a transient measured-swap dip lands:
+      // the browser's own clamp (simulated here) forces scrollTop down to 0 as
+      // the reported total dips (well below the 2600 already absorbed, so it
+      // is NOT itself a fresh above-anchor growth that would extend the window
+      // again).
+      // NEGATIVE CONTROL: drop the `displacedAboveTarget` final write ahead of
+      // the deadline release in use-transcript-frame-pipeline-lifecycle.ts and
+      // scrollTop stays 0 here.
+      clock = 1100;
+      viewport.scrollTop = 0;
+      setContentHeight(viewport, 2100);
+      act(() => {
+        api.notifyContentResize();
+      });
+
+      expect(viewport.scrollTop).toBe(800);
+      expect(handle.current.api.isPinnedToBottom).toBe(false);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
 });
 
 describe("above-change compensation cancels on upward user intent (PRO-187, r4)", () => {
