@@ -131,9 +131,12 @@ test("creates, reloads, reopens, edits, and deletes a durable gen-2 definition",
   await page.locator("#workflow-builder-input-1-required").click();
   await expect(page.locator("#workflow-builder-input-1-required")).not.toBeChecked();
 
-  // Node 1 (step-1, agent) is selected in the inspector by default — both
-  // @input: refs already resolved by the inputs above, so this alone
-  // introduces no issue.
+  // Node 1 (step-1, agent) is only selected by default while nothing else
+  // has been selected — `selectInputCard` above moved selection onto the
+  // input card, so it needs reselecting here before its fields exist in the
+  // DOM. Both @input: refs are already resolved by the inputs above, so this
+  // alone introduces no issue.
+  await selectNodeCard(page, "Untitled step");
   await page.locator("#workflow-builder-node-step-1-title").fill(NODE1_TITLE);
   await page.locator("#workflow-builder-node-step-1-prompt").fill(STAGE1_PROMPT);
 
