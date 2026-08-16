@@ -120,7 +120,7 @@ test("complete probe builds use the exact resolved candidate pins", () => {
     );
     assert.equal(
       draft.agents.find((agent) => agent.kind === "codex").session.unattendedModeId,
-      "full-access",
+      "agent-full-access",
     );
     assert.equal(
       draft.agents.find((agent) => agent.kind === "cursor").session.unattendedModeId,

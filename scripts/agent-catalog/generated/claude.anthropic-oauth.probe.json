@@ -1,22 +1,21 @@
 {
-  "probedAt": "2026-07-17T20:46:57.133593+00:00",
+  "probedAt": "2026-08-16T11:54:38.685887+00:00",
   "agentKind": "claude",
   "authContext": "anthropic-oauth",
   "attestation": {
     "name": "@proliferate/claude-agent-acp",
-    "version": "0.59.0-proliferate.1",
+    "version": "0.66.0-proliferate.1",
     "title": "Claude Agent"
   },
   "modelSource": "modelConfigOption",
   "nativeCli": {
     "path": "/Users/pablohansen/.proliferate-local/anyharness/agents/claude/native/claude",
-    "version": "2.1.212 (Claude Code)"
+    "version": "2.1.233 (Claude Code)"
   },
   "trials": [
     {
       "modelId": "claude-fable-5",
       "accepted": true,
-      "name": "Fable",
       "configOptions": [
         {
           "category": "mode",
@@ -60,7 +59,7 @@
         },
         {
           "category": "model",
-          "currentValue": "claude-fable-5",
+          "currentValue": "claude-opus-4-8",
           "description": "AI model to use",
           "id": "model",
           "name": "Model",
@@ -76,12 +75,7 @@
               "value": "sonnet"
             },
             {
-              "description": "Fable 5 · Most capable for your hardest and longest-running tasks",
-              "name": "Fable",
-              "value": "claude-fable-5"
-            },
-            {
-              "description": "Opus 4.8 · Best for everyday, complex tasks",
+              "description": "Opus 5 · Best for everyday, complex tasks",
               "name": "Opus",
               "value": "opus"
             },
@@ -89,6 +83,11 @@
               "description": "Haiku 4.5 · Fastest for quick answers",
               "name": "Haiku",
               "value": "haiku"
+            },
+            {
+              "description": "Newer version available · select Opus for Opus 5",
+              "name": "Opus 4.8",
+              "value": "claude-opus-4-8"
             }
           ],
           "type": "select"
@@ -126,12 +125,31 @@
             }
           ],
           "type": "select"
+        },
+        {
+          "category": "model_config",
+          "currentValue": "off",
+          "description": "Faster responses on supported models",
+          "id": "fast",
+          "name": "Fast mode",
+          "options": [
+            {
+              "name": "On",
+              "value": "on"
+            },
+            {
+              "name": "Off",
+              "value": "off"
+            }
+          ],
+          "type": "select"
         }
       ]
     },
     {
       "modelId": "claude-opus-4-8",
       "accepted": true,
+      "name": "Opus 4.8",
       "configOptions": [
         {
           "category": "mode",
@@ -175,7 +193,7 @@
         },
         {
           "category": "model",
-          "currentValue": "opus",
+          "currentValue": "claude-opus-4-8",
           "description": "AI model to use",
           "id": "model",
           "name": "Model",
@@ -191,7 +209,7 @@
               "value": "sonnet"
             },
             {
-              "description": "Opus 4.8 · Best for everyday, complex tasks",
+              "description": "Opus 5 · Best for everyday, complex tasks",
               "name": "Opus",
               "value": "opus"
             },
@@ -199,6 +217,11 @@
               "description": "Haiku 4.5 · Fastest for quick answers",
               "name": "Haiku",
               "value": "haiku"
+            },
+            {
+              "description": "Newer version available · select Opus for Opus 5",
+              "name": "Opus 4.8",
+              "value": "claude-opus-4-8"
             }
           ],
           "type": "select"
@@ -338,7 +361,7 @@
     },
     {
       "category": "model",
-      "currentValue": "default",
+      "currentValue": "claude-opus-4-8",
       "description": "AI model to use",
       "id": "model",
       "name": "Model",
@@ -354,7 +377,7 @@
           "value": "sonnet"
         },
         {
-          "description": "Opus 4.8 · Best for everyday, complex tasks",
+          "description": "Opus 5 · Best for everyday, complex tasks",
           "name": "Opus",
           "value": "opus"
         },
@@ -362,6 +385,11 @@
           "description": "Haiku 4.5 · Fastest for quick answers",
           "name": "Haiku",
           "value": "haiku"
+        },
+        {
+          "description": "Newer version available · select Opus for Opus 5",
+          "name": "Opus 4.8",
+          "value": "claude-opus-4-8"
         }
       ],
       "type": "select"
@@ -396,6 +424,24 @@
         {
           "name": "Max",
           "value": "max"
+        }
+      ],
+      "type": "select"
+    },
+    {
+      "category": "model_config",
+      "currentValue": "off",
+      "description": "Faster responses on supported models",
+      "id": "fast",
+      "name": "Fast mode",
+      "options": [
+        {
+          "name": "On",
+          "value": "on"
+        },
+        {
+          "name": "Off",
+          "value": "off"
         }
       ],
       "type": "select"
@@ -587,7 +633,7 @@
     {
       "modelId": "opus",
       "name": "Opus",
-      "description": "Opus 4.8 · Best for everyday, complex tasks",
+      "description": "Opus 5 · Best for everyday, complex tasks",
       "configOptions": [
         {
           "category": "mode",
@@ -742,6 +788,115 @@
           "options": [],
           "type": "select",
           "valuesElided": true
+        }
+      ]
+    },
+    {
+      "modelId": "claude-opus-4-8",
+      "name": "Opus 4.8",
+      "description": "Newer version available · select Opus for Opus 5",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "default",
+          "description": "Session permission mode",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Use a model classifier to approve/deny permission prompts",
+              "name": "Auto",
+              "value": "auto"
+            },
+            {
+              "description": "Standard behavior, prompts for dangerous operations",
+              "name": "Manual",
+              "value": "default"
+            },
+            {
+              "description": "Auto-accept file edit operations",
+              "name": "Accept Edits",
+              "value": "acceptEdits"
+            },
+            {
+              "description": "Planning mode, no actual tool execution",
+              "name": "Plan Mode",
+              "value": "plan"
+            },
+            {
+              "description": "Don't prompt for permissions, deny if not pre-approved",
+              "name": "Don't Ask",
+              "value": "dontAsk"
+            },
+            {
+              "description": "Bypass all permission checks",
+              "name": "Bypass Permissions",
+              "value": "bypassPermissions"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "claude-opus-4-8",
+          "description": "AI model to use",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model_config",
+          "currentValue": "off",
+          "description": "Faster responses on supported models",
+          "id": "fast",
+          "name": "Fast mode",
+          "options": [
+            {
+              "name": "On",
+              "value": "on"
+            },
+            {
+              "name": "Off",
+              "value": "off"
+            }
+          ],
+          "type": "select"
         }
       ]
     }
