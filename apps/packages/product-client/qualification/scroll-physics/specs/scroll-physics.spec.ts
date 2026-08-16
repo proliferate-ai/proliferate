@@ -1079,9 +1079,25 @@ test.describe("transcript scroll physics", () => {
     // actually matches its physics, instead of one bound loose enough to
     // hide a lifecycle-height regression in the phases that have no
     // legitimate reason to bounce at all.
-    function assertNoBackwardBounce(trace: number[], maxBouncePx: number): void {
+    // `leadingBouncePx`, when given, applies only to the FIRST inter-frame
+    // step of this trace (index 0 -> 1); every subsequent step still uses
+    // the tight `maxBouncePx`. CI (round 3) showed the tool row's
+    // estimate-to-measured correction is deferred past the tool-call
+    // bracket's own settle: it lands on the first remeasure pass that a
+    // subsequent content mutation triggers, i.e. the opening frame of the
+    // NEXT (prose) phase, not synchronously after `streamToolCall`. That's
+    // still the same already-quantified, already-legitimate convergence —
+    // just late — so it gets the wide budget on that one leading step only;
+    // a lifecycle-height regression anywhere else in the phase still fails
+    // at the tight bound.
+    function assertNoBackwardBounce(
+      trace: number[],
+      maxBouncePx: number,
+      leadingBouncePx = maxBouncePx,
+    ): void {
       for (let i = 1; i < trace.length; i += 1) {
-        expect(trace[i]).toBeGreaterThanOrEqual(trace[i - 1] - maxBouncePx);
+        const bound = i === 1 ? leadingBouncePx : maxBouncePx;
+        expect(trace[i]).toBeGreaterThanOrEqual(trace[i - 1] - bound);
       }
     }
 
@@ -1099,28 +1115,31 @@ test.describe("transcript scroll physics", () => {
     );
 
     // Thought yields to a tool call mid-turn (thinking -> tool -> thinking is
-    // the exact class the ADR's Cell 6 names). This is the one phase where a
-    // real new row mounts, so it alone gets the wider, quantified
-    // convergence bound instead of the lifecycle-only one.
+    // the exact class the ADR's Cell 6 names). A real new row mounts here,
+    // but CI (round 3) showed its estimate-to-measured correction does NOT
+    // land synchronously in this bracket even with a full 350ms settle — the
+    // virtualizer defers the remeasure pass to the next content mutation
+    // (see the prose bracket below), so THIS bracket's own trace is still
+    // governed by the tight lifecycle bound.
     await drive(page, "startScrollTrace");
     await drive(page, "streamThoughtStop");
     await drive(page, "streamToolCall");
-    // Longer settle than the other phases (default 350ms, not the 80ms used
-    // for pure lifecycle transitions): the tool row's estimate-to-measured
-    // convergence must finish resolving INSIDE this phase's own trace
-    // window, not bleed into the next phase's tight-tolerance window. CI
-    // round 2 caught exactly that: an 80ms settle here let the correction
-    // land one frame late, inside the following (tight-bound) prose trace.
     await settle(page);
     const afterTool = await metricsAfterFrame(page);
     expect(afterTool.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
     assertNoBackwardBounce(
       (await drive<number[]>(page, "stopScrollTrace")).filter((v) => Number.isFinite(v)),
-      TOOL_ROW_ESTIMATE_CONVERGENCE_MAX_PX,
+      INTERLEAVE_MAX_BACKWARD_BOUNCE_PX,
     );
 
     // Prose resumes and grows the turn for real; THIS is content growth (not
-    // lifecycle) on an already-mounted row, so it's back to the tight bound.
+    // lifecycle) on an already-mounted row. CI (rounds 2-3) showed the tool
+    // row's deferred estimate-to-measured correction (~61px, deterministic
+    // on both browsers) lands on the FIRST remeasure pass that streaming
+    // prose triggers — i.e. the opening frame of THIS bracket — so only
+    // that leading step gets the wider, quantified convergence bound; every
+    // later step in this bracket is pure content growth and stays on the
+    // tight bound.
     await drive(page, "startScrollTrace");
     await drive(page, "streamChunks", 5);
     await settle(page, 200);
@@ -1130,6 +1149,7 @@ test.describe("transcript scroll physics", () => {
     assertNoBackwardBounce(
       (await drive<number[]>(page, "stopScrollTrace")).filter((v) => Number.isFinite(v)),
       INTERLEAVE_MAX_BACKWARD_BOUNCE_PX,
+      TOOL_ROW_ESTIMATE_CONVERGENCE_MAX_PX,
     );
 
     await drive(page, "finalizeStreamingTurn");
