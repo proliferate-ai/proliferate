@@ -16,6 +16,7 @@ import {
 } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
 import { goalMetMarkerLabel } from "#product/domain/activity/goal";
 import { useSessionGoal } from "#product/hooks/activity/derived/use-session-goal";
+import { useTranscriptPaneLifecycle } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import { TurnItemSequence } from "#product/components/workspace/chat/transcript/TurnItemSequence";
 import { hostsSynthesizedReceiptDisclosure } from "#product/components/workspace/chat/transcript/TurnWorkspaceReceiptSlot";
 import {
@@ -108,6 +109,7 @@ export function TranscriptTurnRow({
     ? transcript.itemsById[tailAssistantProseRootId]
     : null;
   const tailAssistantTextLength = tailAssistantCopyContent?.length ?? 0;
+  const paneLifecycle = useTranscriptPaneLifecycle();
   const {
     animateAssistantRevealItemId,
     assistantRevealComplete,
@@ -118,6 +120,7 @@ export function TranscriptTurnRow({
     targetLength: tailAssistantTextLength,
     turnCompletedAt: turn.completedAt,
     turnId: turn.turnId,
+    paneEstablishedAtMount: paneLifecycle.initialPaintComplete,
   });
   const visualTurnCompleted = !!turn.completedAt && assistantRevealComplete;
   const assistantEndResource = useMemo(

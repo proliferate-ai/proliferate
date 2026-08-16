@@ -19,12 +19,22 @@ export function useAssistantRevealFrontier({
   targetLength,
   turnCompletedAt,
   turnId,
+  paneEstablishedAtMount = false,
 }: {
   itemId: string | null;
   isLatestTurn: boolean;
   targetLength: number;
   turnCompletedAt: string | null | undefined;
   turnId: string;
+  /**
+   * True when the transcript pane had already completed its initial paint by
+   * the time this row first rendered (see TranscriptPaneLifecycle). A row
+   * mounting inside an established pane carries content that arrived while
+   * the viewer was watching — e.g. a new turn whose first store flush
+   * coalesced the turn with its opening prose — so it must pace, not be
+   * finalized by the mount floor.
+   */
+  paneEstablishedAtMount?: boolean;
 }) {
   const revealOriginRef = useRef({
     turnId,
@@ -37,16 +47,28 @@ export function useAssistantRevealFrontier({
   }
 
   // Streaming continuity (Chat Scroll ADR Q15): text that already exists when
-  // this row first renders is finalized history for this viewer — only deltas
-  // that arrive while the row is mounted may animate. Raising the shared
-  // reveal floor before child rows mount keeps a stream that kept ingesting
-  // while its workspace was backgrounded from re-playing on return. Items that
-  // appear on later renders start at floor zero, so a fresh live chunk still
-  // paces in through the frontier.
+  // this row first renders AS PART OF THE PANE'S INITIAL PAINT is finalized
+  // history for this viewer — only deltas that arrive while the viewer is
+  // watching may animate. Raising the shared reveal floor keeps a stream that
+  // kept ingesting while its workspace was backgrounded from re-playing on
+  // return. Two carve-outs preserve arrival-vs-viewer semantics: items that
+  // appear on later renders of a mounted row, and rows that first mount inside
+  // an established pane (paneEstablishedAtMount), both start at floor zero so
+  // a fresh live chunk still paces in through the frontier.
+  //
+  // The floor is written during render, deliberately: it must exist before
+  // this render's children (TranscriptItemBlock → AssistantMessage) mount and
+  // read the cache to seed their visible content — an effect would run after
+  // that first paint, too late to stop a one-frame replay. The write is safe
+  // where render purity normally forbids side effects because it is
+  // idempotent and monotonic: StrictMode's double-invoke finds the floor
+  // already at targetLength and skips, and an abandoned concurrent render can
+  // only have raised the floor toward "more content finalized", which a retry
+  // re-derives from the current targetLength.
   const appliedMountRevealFloorRef = useRef(false);
   if (!appliedMountRevealFloorRef.current) {
     appliedMountRevealFloorRef.current = true;
-    if (itemId !== null && targetLength > 0) {
+    if (itemId !== null && targetLength > 0 && !paneEstablishedAtMount) {
       const cachedAtMount = getAssistantRevealProgress(itemId);
       if (
         !cachedAtMount

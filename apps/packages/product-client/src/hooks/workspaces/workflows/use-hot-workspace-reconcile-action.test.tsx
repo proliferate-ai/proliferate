@@ -122,6 +122,25 @@ describe("useHotWorkspaceReconcileAction transcript hydration", () => {
     expect(rehydrate.mock.calls[1]?.[1]).toMatchObject({ replace: true });
   });
 
+  it("never trusts a slot that was not transcript-hydrated, even with a live stream", async () => {
+    patchSessionRecord(SESSION_ID, {
+      streamConnectionState: "open",
+      transcriptHydrated: false,
+    });
+    useSessionIngestStore.getState().applyStreamProgress(SESSION_ID, {
+      lastAppliedSeq: 42,
+      lastObservedSeq: 42,
+      gapAfterSeq: null,
+    });
+    const rehydrate = vi.fn(async () => true);
+
+    const reconcile = renderReconcile(rehydrate);
+    const outcome = await reconcile(reconcileInput());
+
+    expect(outcome).toBe("completed");
+    expect(rehydrate).toHaveBeenCalledTimes(1);
+  });
+
   it("does not trust an open stream whose ingest state reports a gap", async () => {
     patchSessionRecord(SESSION_ID, {
       streamConnectionState: "open",

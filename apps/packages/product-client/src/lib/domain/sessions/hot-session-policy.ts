@@ -156,6 +156,9 @@ export function resolveHotSessionTargets(
     }
   }
 
+  // Cap contract: reasons win strictly by priority; within a priority tier the
+  // lexicographic session-id tiebreak is arbitrary but stable, so repeated
+  // resolutions over the same inputs never churn which sessions hold streams.
   return Array.from(candidates.values())
     .sort((a, b) => a.priority - b.priority || a.clientSessionId.localeCompare(b.clientSessionId))
     .slice(0, maxHotSessionStreams);
