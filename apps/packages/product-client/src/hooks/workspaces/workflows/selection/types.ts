@@ -71,6 +71,16 @@ export interface WorkspaceSelectionDeps {
       anyharnessWorkspaceId?: string | null;
     }>;
   };
+  /**
+   * Warm the global agent catalog in the background (UX Latency ADR §4.6, Rung
+   * 10 / Q12). The catalog is a global cloud document with no dependency on this
+   * workspace's connection, so it must not sit serially behind the blocking
+   * connection resolution and session-directory fetch. Selection fires this
+   * fire-and-forget at entry so the catalog races the whole connection/directory
+   * chain; the composer-submit gate then reads an already-warm result. Being
+   * global, it cannot paint wrong-workspace content, so it needs no abort guard.
+   */
+  prefetchAgentCatalog?: () => void;
   setSelectedLogicalWorkspaceId: (logicalWorkspaceId: string | null) => void;
   setSelectedWorkspace: (
     id: string,

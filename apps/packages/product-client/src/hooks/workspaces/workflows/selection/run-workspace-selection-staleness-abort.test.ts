@@ -69,6 +69,11 @@ describe("runWorkspaceSelection staleness abort", () => {
       },
     });
 
+    // Rung 10 (Q12) runs the catalog prefetch in parallel with this bootstrap;
+    // the parallel shape must not weaken the Rung 9 abort invariant. Spy the
+    // prefetch so we can assert every selection still fires it while the
+    // supersession aborts continue to hold.
+    const prefetchAgentCatalog = vi.fn();
     const capturedSignals: Record<string, AbortSignal> = {};
     const releaseById: Record<string, () => void> = {};
     const bootstrapWorkspace = vi.fn(async (input: { workspaceId: string; signal: AbortSignal }) => {
@@ -86,6 +91,7 @@ describe("runWorkspaceSelection staleness abort", () => {
         cache: selectionCache(),
         logicalWorkspaces: logicals,
         rawWorkspaces: [],
+        prefetchAgentCatalog,
         setSelectedLogicalWorkspaceId: vi.fn(),
         setSelectedWorkspace,
         removeWorkspaceSlots: vi.fn(),
@@ -149,6 +155,10 @@ describe("runWorkspaceSelection staleness abort", () => {
     const activeFlowIds = listActiveLatencyFlows().map((flow) => flow.flowId);
     expect(activeFlowIds).not.toContain(flowA);
     expect(activeFlowIds).not.toContain(flowB);
+
+    // Parallel shape: each of the three selections fired its background catalog
+    // prefetch, and doing so did not interfere with the supersession aborts.
+    expect(prefetchAgentCatalog).toHaveBeenCalledTimes(3);
   });
 });
 
