@@ -10,7 +10,6 @@ import {
   OUTDENT_CONTENT_COMMAND,
   type LexicalEditor,
 } from "lexical";
-import { $isListItemNode } from "@lexical/list";
 import {
   $convertFromMarkdownString,
   $convertToMarkdownString,
@@ -33,6 +32,11 @@ import {
   type ComposerEditorContext,
 } from "#product/components/workspace/chat/input/ComposerEditorDocument";
 import { ComposerLinkPastePlugin } from "#product/components/workspace/chat/input/ComposerLinkPastePlugin";
+import {
+  $exitListForShiftEnter,
+  $nearestListItem,
+  $outdentTopLevelListItems,
+} from "#product/components/workspace/chat/input/ComposerListExit";
 import { ComposerMarkdownShortcutPlugin } from "#product/components/workspace/chat/input/ComposerMarkdownShortcutPlugin";
 import { CHAT_TRANSCRIPT_LINK_CLASS } from "#product/config/transcript-link-styles";
 import type { ComposerKeyboardEventLike } from "#product/lib/domain/chat/composer/composer-keyboard";
@@ -322,6 +326,11 @@ function ComposerBehaviorPlugin({
       if (onCommandKey?.(event)) return true;
       const plainEnter = !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
       const primaryEnter = !event.shiftKey && !event.altKey && (event.metaKey || event.ctrlKey);
+      const shiftEnter = event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
+      if (shiftEnter && $exitListForShiftEnter(editor)) {
+        event.preventDefault();
+        return true;
+      }
       if (!plainEnter && !primaryEnter) return false;
       event.preventDefault();
       if (!event.repeat && canSubmit) onSubmit();
@@ -335,6 +344,7 @@ function ComposerBehaviorPlugin({
         return event.defaultPrevented;
       }
       event.preventDefault();
+      if (event.shiftKey && $outdentTopLevelListItems()) return true;
       return editor.dispatchCommand(
         event.shiftKey ? OUTDENT_CONTENT_COMMAND : INDENT_CONTENT_COMMAND,
         undefined,
@@ -349,11 +359,5 @@ function ComposerBehaviorPlugin({
 function selectionIsInList(): boolean {
   const selection = $getSelection();
   if (!$isRangeSelection(selection)) return false;
-  let node = selection.anchor.getNode();
-  while (node && !$isListItemNode(node)) {
-    const parent = node.getParent();
-    if (!parent) return false;
-    node = parent;
-  }
-  return $isListItemNode(node);
+  return $nearestListItem(selection.anchor.getNode()) !== null;
 }

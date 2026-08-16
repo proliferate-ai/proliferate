@@ -7,7 +7,7 @@ import { ToolCallSummary } from "#product/components/workspace/chat/tool-calls/T
 afterEach(cleanup);
 
 describe("ToolCallSummary", () => {
-  it("shows the completed-work divider only while collapsed and restores turn spacing when expanded", () => {
+  it("keeps the completed-work divider mounted and collapses it in step with the disclosure", () => {
     const { container } = render(
       <ToolCallSummary
         label="Worked for 13m 25s"
@@ -39,14 +39,26 @@ describe("ToolCallSummary", () => {
     expect(ledgerShell?.className).not.toMatch(/(?:^|\s)rounded(?:\s|$)/);
     expect(ledger.parentElement?.className).toContain("mt-4");
     expect(ledger.parentElement?.className).toContain("gap-transcript-turn");
-    expect(container.querySelector("[data-completed-work-divider]")).toBeNull();
+    // The divider stays mounted while expanded — it exits through the same
+    // disclosure motion as the ledger instead of popping out (PRO-181).
+    const expandedDivider = container.querySelector("[data-completed-work-divider]");
+    expect(expandedDivider).not.toBeNull();
+    const expandedDividerShell = expandedDivider?.closest("[data-animated-collapsible-content]");
+    expect(expandedDividerShell?.getAttribute("data-expanded")).toBe("false");
+    expect((expandedDividerShell as HTMLElement | null)?.style.gridTemplateRows).toBe("0fr");
 
     fireEvent.click(disclosure);
-    const motionShell = container.querySelector("[data-animated-collapsible-content]");
+    const collapsedDivider = container.querySelector("[data-completed-work-divider]");
+    expect(collapsedDivider).not.toBeNull();
+    const collapsedDividerShell = collapsedDivider?.closest("[data-animated-collapsible-content]");
+    expect(collapsedDividerShell?.getAttribute("data-expanded")).toBe("true");
+    expect((collapsedDividerShell as HTMLElement | null)?.style.gridTemplateRows).toBe("1fr");
+    const ledgerShellMotion = container
+      .querySelector("[data-completed-work-ledger]")
+      ?.closest("[data-animated-collapsible-content]");
     expect(screen.queryByText("Work ledger")).not.toBeNull();
-    expect(motionShell?.getAttribute("data-expanded")).toBe("false");
-    expect((motionShell as HTMLElement | null)?.style.gridTemplateRows).toBe("0fr");
-    expect(motionShell?.hasAttribute("inert")).toBe(true);
-    expect(container.querySelectorAll("[data-completed-work-divider]")).toHaveLength(1);
+    expect(ledgerShellMotion?.getAttribute("data-expanded")).toBe("false");
+    expect((ledgerShellMotion as HTMLElement | null)?.style.gridTemplateRows).toBe("0fr");
+    expect(ledgerShellMotion?.hasAttribute("inert")).toBe(true);
   });
 });
