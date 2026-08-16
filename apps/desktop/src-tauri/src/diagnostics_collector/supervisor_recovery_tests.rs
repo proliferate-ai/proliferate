@@ -1,10 +1,19 @@
 use super::*;
 use crate::diagnostics_collector::test_binary::built_collector_binary;
 use proliferate_diagnostics_protocol::v1::types::{
-    ComponentV1, LifecyclePhaseV1, ProducerRecordV1, RecordClassV1, RecordsFilterV1,
+    ArgumentValueV1, ComponentV1, LifecyclePhaseV1, ProducerRecordV1, RecordClassV1,
+    RecordsFilterV1,
 };
 use std::io::Read;
 use std::path::PathBuf;
+
+fn argument(record: &ProducerRecordV1, name: &str) -> Option<ArgumentValueV1> {
+    record
+        .arguments
+        .iter()
+        .find(|argument| argument.name == name)
+        .map(|argument| argument.value.clone())
+}
 
 fn lifecycle_query(name: &str) -> RecordsQueryV1 {
     RecordsQueryV1 {
@@ -150,6 +159,23 @@ async fn killed_collector_restarts_with_new_generation_capability_and_query() {
         page.records[0].record.operation_id,
         page.records[1].record.operation_id
     );
+    // The death certificate rides both phases: a killed child restarts with
+    // the signal that took it, the trigger, and the attempt count on record.
+    for stored in &page.records {
+        assert_eq!(
+            argument(&stored.record, "trigger"),
+            Some(ArgumentValueV1::String("child_exited".to_owned()))
+        );
+        assert_eq!(
+            argument(&stored.record, "restart_count"),
+            Some(ArgumentValueV1::Integer(1))
+        );
+        assert_eq!(
+            argument(&stored.record, "signal"),
+            Some(ArgumentValueV1::Integer(i64::from(libc::SIGKILL)))
+        );
+        assert_eq!(argument(&stored.record, "exit_code"), None);
+    }
 
     stop_fixture(root, fallback, producer, supervisor).await;
 }
@@ -323,6 +349,112 @@ async fn killed_collector_sends_new_generation_ready_over_the_child_bridge() {
     drop(bridge);
     drop(child);
     stop_fixture(root, fallback, producer, supervisor).await;
+}
+
+#[tokio::test]
+async fn stop_of_an_already_exited_child_records_the_death_certificate() {
+    let (root, fallback, producer, supervisor) = running_supervisor("collector-stop-exited").await;
+    supervisor.arm_shutdown();
+    supervisor
+        .kill_current_process_for_test()
+        .expect("kill owned collector");
+    // SIGKILL delivery is asynchronous; the child must be observably exited
+    // before the stop path inspects it.
+    tokio::time::sleep(Duration::from_millis(250)).await;
+    supervisor
+        .stop_collector()
+        .await
+        .expect("stop over exited child");
+
+    let terminal: Vec<ProducerRecordV1> = producer
+        .lifecycle_snapshot("desktop.collector.stop")
+        .into_iter()
+        .filter(|record| {
+            record
+                .lifecycle
+                .as_ref()
+                .is_some_and(|lifecycle| lifecycle.phase == LifecyclePhaseV1::Terminal)
+        })
+        .collect();
+    assert_eq!(terminal.len(), 1);
+    let record = &terminal[0];
+    assert_eq!(record.error_classification.as_deref(), Some("child_exited"));
+    assert_eq!(
+        argument(record, "trigger"),
+        Some(ArgumentValueV1::String("child_exited".to_owned()))
+    );
+    assert_eq!(
+        argument(record, "signal"),
+        Some(ArgumentValueV1::Integer(i64::from(libc::SIGKILL)))
+    );
+    assert_eq!(argument(record, "exit_code"), None);
+    assert_eq!(
+        argument(record, "restart_count"),
+        Some(ArgumentValueV1::Integer(0))
+    );
+
+    producer.close();
+    fallback.close().expect("fallback close");
+    std::fs::remove_dir_all(root).expect("fixture cleanup");
+}
+
+#[cfg(unix)]
+#[test]
+fn death_certificate_distinguishes_clean_exit_from_signal() {
+    use std::os::unix::process::ExitStatusExt;
+
+    let clean = super::death_certificate::CollectorDeathCertificate::new(
+        "child_exited",
+        Some(std::process::ExitStatus::from_raw(0)),
+    );
+    let clean_record = certificate_record(clean);
+    assert_eq!(
+        argument(&clean_record, "exit_code"),
+        Some(ArgumentValueV1::Integer(0))
+    );
+    assert_eq!(argument(&clean_record, "signal"), None);
+
+    let signalled = super::death_certificate::CollectorDeathCertificate::new(
+        "child_exited",
+        Some(std::process::ExitStatus::from_raw(libc::SIGKILL)),
+    );
+    let signalled_record = certificate_record(signalled);
+    assert_eq!(argument(&signalled_record, "exit_code"), None);
+    assert_eq!(
+        argument(&signalled_record, "signal"),
+        Some(ArgumentValueV1::Integer(i64::from(libc::SIGKILL)))
+    );
+
+    let uninspected = super::death_certificate::CollectorDeathCertificate::new("health_unavailable", None);
+    let uninspected_record = certificate_record(uninspected);
+    assert_eq!(
+        argument(&uninspected_record, "trigger"),
+        Some(ArgumentValueV1::String("health_unavailable".to_owned()))
+    );
+    assert_eq!(argument(&uninspected_record, "exit_code"), None);
+    assert_eq!(argument(&uninspected_record, "signal"), None);
+}
+
+/// Runs a certificate through the real producer admission path so the
+/// arguments asserted on are the ones a stored record would carry.
+fn certificate_record(
+    certificate: super::death_certificate::CollectorDeathCertificate,
+) -> ProducerRecordV1 {
+    let root = std::env::temp_dir().join(format!("certificate-args-{}", uuid::Uuid::new_v4()));
+    let fallback = FallbackDiagnosticsWriter::open_for_test(root.join("desktop-native.log"))
+        .expect("fallback");
+    let producer = TauriDiagnosticsProducer::new(fallback.clone(), "test".into(), "test".into());
+    let operation = producer
+        .begin_lifecycle_with_arguments("desktop.collector.restart", certificate.arguments(1));
+    drop(operation);
+    let record = producer
+        .lifecycle_snapshot("desktop.collector.restart")
+        .into_iter()
+        .next()
+        .expect("admitted certificate record");
+    fallback.close().expect("fallback close");
+    std::fs::remove_dir_all(root).expect("fixture cleanup");
+    record
 }
 
 #[tokio::test]

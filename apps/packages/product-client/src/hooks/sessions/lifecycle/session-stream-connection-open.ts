@@ -128,14 +128,23 @@ export async function openSessionStreamConnection({
         && isCurrentStreamHandle(materializedSessionId, handle);
     },
   });
-  const scheduleReconnect = (delayMs = 350) => {
+  const scheduleReconnect = () => {
     scheduleSessionStreamReconnect({
       sessionId,
-      delayMs,
       options,
       refreshSessionSlotMeta,
       ensureSessionStreamConnected,
       isStillCurrent,
+    });
+  };
+  const scheduleImmediateReconnect = () => {
+    scheduleSessionStreamReconnect({
+      sessionId,
+      options,
+      refreshSessionSlotMeta,
+      ensureSessionStreamConnected,
+      isStillCurrent,
+      immediate: true,
     });
   };
   const streamFlushController = createSessionStreamFlushController({
@@ -154,6 +163,7 @@ export async function openSessionStreamConnection({
       handle?.close();
     },
     scheduleReconnect,
+    scheduleImmediateReconnect,
     clearActiveSummaryRefreshTimer: refreshController.clearActiveSummaryRefreshTimer,
     scheduleActiveSummaryRefresh: refreshController.scheduleActiveSummaryRefresh,
     scheduleStartupReadyRefresh: refreshController.scheduleStartupReadyRefresh,

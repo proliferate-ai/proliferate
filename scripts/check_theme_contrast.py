@@ -35,9 +35,15 @@ Floors (both modes, no per-mode exemptions):
     transient one.
 
 Five measured dark-mode pairs do not meet those floors and are NOT silently
-exempted: they are pinned in `DECLARED_DEVIATIONS` with their exact measured
-ratio, so each one is visible in review and can only ever improve. See that
-table for the per-entry reasoning.
+exempted: each is a grandfathered site in `lints/product/exceptions.toml`,
+carrying its reasoning, and the exact ratio measured when it was accepted is
+pinned in `DECLARED_DEVIATION_RATIOS` under the same `(path, site)` key — because
+an `[[exception]]` entry carries prose, not numbers. A pinned pair may improve
+freely and can never regress.
+
+The rules themselves are records under `lints/product/theme.toml`; this file is
+only the engine. Diagnostics are rendered from the record (rule sentence, legal
+alternative, record path) via `scripts/lint_records.py`.
 
 Exit codes: 0 = all floors met (or met as pinned), 1 = at least one violation.
 
@@ -55,7 +61,30 @@ from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    # Run as `python3 scripts/check_theme_contrast.py` from the repo root,
+    # sys.path[0] is scripts/ — the shared loader lives one level up.
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts import lint_records  # noqa: E402  (path shim must precede the import)
+
+CHECKER = "scripts/check_theme_contrast.py"
+RULES = lint_records.load("product")
+OWNED_RULE_IDS = frozenset(
+    rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER
+)
+
 THEME_CSS = REPO_ROOT / "apps" / "packages" / "design" / "dist" / "theme.css"
+# The `path` every PROD-THEME exception entry is filed under: this checker
+# measures one artifact, so the ledger's fine-grained axis is the `site`.
+THEME_CSS_RECORD_PATH = "apps/packages/design/dist/theme.css"
+
+TEXT_RULE = "PROD-THEME-1"
+SIDEBAR_RULE = "PROD-THEME-2"
+BORDER_RULE = "PROD-THEME-3"
+STATE_RULE = "PROD-THEME-4"
+ORPHAN_PIN_RULE = "PROD-THEME-5"
+STALE_PIN_RULE = "PROD-THEME-6"
 
 DARK_SELECTOR = ":root"
 LIGHT_SELECTOR = ':root[data-mode="light"]'
@@ -150,43 +179,69 @@ STACKED_TEXT_PAIRS: tuple[tuple[str, str, str, float], ...] = (
 STATE_ROLES = ("--color-hover", "--color-selected", "--color-active")
 STATE_PLANE = "--color-surface"
 
-# Pinned deviations, keyed by (mode, label) -> (measured ratio, why).
+# The measured ratio each grandfathered pair carried when it was accepted, keyed
+# by the same (path, site) pair the exception ledger uses.
 #
-# This is a ratchet, not an exemption list. The pinned number is the ratio
-# measured when the deviation was accepted: the pair may improve freely, but any
-# regression below the pin fails, and an entry that starts CLEARING its floor
-# fails too so it gets deleted instead of quietly outliving its reason. Adding a
-# row is a design decision, which is why each one carries prose.
-DECLARED_DEVIATIONS: dict[tuple[str, str], tuple[float, str]] = {
-    ("dark", "--color-border-light against --color-surface"): (
-        1.14,
-        "pre-existing dark value, untouched by the light retune; raising it "
-        "changes every hairline divider in dark mode and needs its own review",
-    ),
-    ("dark", "--color-border-light against --color-sidebar"): (
-        1.156,
-        "newly measured dark rail pair, outside the light retune; pinned here "
-        "so it cannot regress before the dark hairline system is reviewed",
-    ),
-    ("dark", "--color-border-light against --color-surface-under"): (
-        1.127,
-        "newly measured dark recessed-plane pair, outside the light retune; "
-        "pinned here so it cannot regress before the dark hairline system is reviewed",
-    ),
-    ("dark", "--color-border-light against --color-surface-control"): (
-        1.164,
-        "newly measured dark control-fill pair, outside the light retune; "
-        "pinned here so it cannot regress before the dark hairline system is reviewed",
-    ),
-    ("dark", "--color-selected carries at least as much ink as --color-hover"): (
-        1.08,
-        "pre-existing dark inversion (selected #1f1f1f reads 1.08:1 off the "
-        "surface where hover #2a2a2a reads 1.24:1); the light half is fixed "
-        "here, dark needs its own retune. Pinned at the measured 1.08 rather "
-        "than 0.0 so the inversion cannot deepen — a 0.0 pin would have "
-        "accepted any regression at all",
-    ),
+# The prose lives in `lints/product/exceptions.toml`, which is where a reviewer
+# reads why a deviation exists. The NUMBER stays here because an `[[exception]]`
+# entry has no field for it, and the number is what makes the entry a ratchet
+# rather than a waiver: the pair may improve freely, but any regression below the
+# pin fails, and an entry that starts CLEARING its floor fails too (PROD-THEME-6)
+# so it gets deleted instead of quietly outliving its reason. A ledger entry with
+# no ratio here, or a ratio with no ledger entry, is itself an error
+# (PROD-THEME-5) — the two halves may not drift apart.
+DECLARED_DEVIATION_RATIOS: dict[tuple[str, str], float] = {
+    (THEME_CSS_RECORD_PATH, "[dark] --color-border-light against --color-surface"): 1.14,
+    (THEME_CSS_RECORD_PATH, "[dark] --color-border-light against --color-sidebar"): 1.156,
+    (
+        THEME_CSS_RECORD_PATH,
+        "[dark] --color-border-light against --color-surface-under",
+    ): 1.127,
+    (
+        THEME_CSS_RECORD_PATH,
+        "[dark] --color-border-light against --color-surface-control",
+    ): 1.164,
+    (
+        THEME_CSS_RECORD_PATH,
+        "[dark] --color-selected carries at least as much ink as --color-hover",
+    ): 1.08,
 }
+
+DEVIATION_RULE_IDS = (BORDER_RULE, STATE_RULE)
+
+
+def load_declared_deviations() -> tuple[
+    dict[tuple[str, str], tuple[float, str]], list[tuple[str, str]], list[tuple[str, str]]
+]:
+    """Join the exception ledger to the pinned ratios.
+
+    Returns the pinned deviations keyed by `(path, site)`, the ledgered sites
+    with no pinned ratio, and the pinned ratios with no ledger entry. Both
+    mismatches are PROD-THEME-5 failures rather than silent no-ops: half a
+    deviation is a waiver.
+    """
+    reasons = {
+        (entry.path, entry.site): entry.reason
+        for entry in RULES.exceptions
+        if entry.rule in DEVIATION_RULE_IDS
+    }
+    ledgered: set[tuple[str, str]] = set()
+    for rule_id in DEVIATION_RULE_IDS:
+        ledgered |= RULES.exception_sites(rule_id)
+
+    deviations: dict[tuple[str, str], tuple[float, str]] = {}
+    unpinned: list[tuple[str, str]] = []
+    for key in sorted(ledgered):
+        ratio = DECLARED_DEVIATION_RATIOS.get(key)
+        if ratio is None:
+            unpinned.append(key)
+            continue
+        deviations[key] = (ratio, reasons.get(key, ""))
+    unledgered = sorted(set(DECLARED_DEVIATION_RATIOS) - ledgered)
+    return deviations, unpinned, unledgered
+
+
+DECLARED_DEVIATIONS, UNPINNED_DEVIATIONS, UNLEDGERED_RATIOS = load_declared_deviations()
 
 
 # ---------------------------------------------------------------- color model
@@ -468,6 +523,11 @@ class Resolver:
 # ------------------------------------------------------------------ the check
 
 
+def deviation_site(mode: str, label: str) -> str:
+    """The exception-ledger `site` for one measured pair in one mode."""
+    return f"[{mode}] {label}"
+
+
 @dataclass
 class Measurement:
     mode: str
@@ -475,10 +535,28 @@ class Measurement:
     ratio: float
     floor: float
     detail: str
+    rule_id: str = TEXT_RULE
+
+    @property
+    def site(self) -> str:
+        return deviation_site(self.mode, self.label)
+
+    @property
+    def key(self) -> tuple[str, str]:
+        return (THEME_CSS_RECORD_PATH, self.site)
 
     @property
     def pin(self) -> tuple[float, str] | None:
-        return DECLARED_DEVIATIONS.get((self.mode, self.label))
+        return DECLARED_DEVIATIONS.get(self.key)
+
+    def diagnostic(self) -> str:
+        """The record-generated diagnostic: rule, alternative, record path."""
+        return lint_records.render_diagnostic(
+            RULES.rule(self.rule_id),
+            f"{THEME_CSS_RECORD_PATH} [{self.mode}]",
+            f"{self.label} measures {self.ratio:.2f}:1 against a "
+            f"{self.floor:.2f}:1 floor ({self.detail})",
+        )
 
     @property
     def ok(self) -> bool:
@@ -546,6 +624,7 @@ def measure_mode(mode: str, declarations: dict[str, str]) -> tuple[list[Measurem
                     contrast(ink, backdrop),
                     floor,
                     f"{ink.hex()} on {backdrop.hex()}",
+                    TEXT_RULE,
                 )
             )
 
@@ -563,6 +642,7 @@ def measure_mode(mode: str, declarations: dict[str, str]) -> tuple[list[Measurem
                 contrast(ink, backdrop),
                 floor,
                 f"{ink.hex()} on {backdrop.hex()}",
+                SIDEBAR_RULE,
             )
         )
 
@@ -583,6 +663,7 @@ def measure_mode(mode: str, declarations: dict[str, str]) -> tuple[list[Measurem
                 contrast(ink, nested_plane),
                 floor,
                 f"{ink.hex()} on {nested_plane.hex()}",
+                SIDEBAR_RULE,
             )
         )
 
@@ -602,6 +683,7 @@ def measure_mode(mode: str, declarations: dict[str, str]) -> tuple[list[Measurem
                 contrast(stroke, backdrop),
                 BORDER_FLOOR,
                 f"{stroke.hex()} on {backdrop.hex()}",
+                BORDER_RULE,
             )
         )
 
@@ -627,6 +709,7 @@ def measure_mode(mode: str, declarations: dict[str, str]) -> tuple[list[Measurem
                     contrast(fills[first], fills[second]),
                     STATE_STEP_FLOOR,
                     f"{fills[first].hex()} vs {fills[second].hex()}",
+                    STATE_RULE,
                 )
             )
         for role in STATE_ROLES:
@@ -639,6 +722,7 @@ def measure_mode(mode: str, declarations: dict[str, str]) -> tuple[list[Measurem
                     contrast(fills[role], state_plane),
                     STATE_STEP_FLOOR,
                     f"{fills[role].hex()} on {state_plane.hex()}",
+                    STATE_RULE,
                 )
             )
 
@@ -656,6 +740,7 @@ def measure_mode(mode: str, declarations: dict[str, str]) -> tuple[list[Measurem
                     hover_step,
                     f"selected {fills['--color-selected'].hex()} vs "
                     f"hover {fills['--color-hover'].hex()} off {state_plane.hex()}",
+                    STATE_RULE,
                 )
             )
 
@@ -688,13 +773,14 @@ def main(argv: list[str] | None = None) -> int:
     failures: list[Measurement] = []
     pinned: list[Measurement] = []
     stale: list[Measurement] = []
-    errors: list[str] = []
-    seen_labels: set[tuple[str, str]] = set()
+    unresolved: list[str] = []
+    diagnostics: list[str] = []
+    seen_sites: set[tuple[str, str]] = set()
     for mode, declarations in modes:
         measurements, mode_errors = measure_mode(mode, declarations)
-        errors.extend(mode_errors)
+        unresolved.extend(mode_errors)
         for measurement in measurements:
-            seen_labels.add((measurement.mode, measurement.label))
+            seen_sites.add(measurement.key)
             if not measurement.ok:
                 failures.append(measurement)
             elif measurement.stale_pin:
@@ -706,16 +792,43 @@ def main(argv: list[str] | None = None) -> int:
             for measurement in measurements:
                 print(measurement.row())
 
-    # A pin for a pair that is no longer measured is dead weight in a design
-    # contract, so it is an error rather than a silent no-op.
-    orphans = sorted(key for key in DECLARED_DEVIATIONS if key not in seen_labels)
-    for mode, label in orphans:
-        errors.append(f"{mode}: DECLARED_DEVIATIONS pins {label!r}, which is no longer measured")
+    # A ledger entry for a pair that is no longer measured is dead weight in a
+    # design contract, so it fails rather than silently enforcing nothing — and so
+    # does half a deviation, whichever half is missing.
+    for path, site in sorted(key for key in DECLARED_DEVIATIONS if key not in seen_sites):
+        diagnostics.append(
+            lint_records.render_diagnostic(
+                RULES.rule(ORPHAN_PIN_RULE),
+                "lints/product/exceptions.toml",
+                f"{site} is grandfathered for {path} but is no longer measured",
+            )
+        )
+    for path, site in UNPINNED_DEVIATIONS:
+        diagnostics.append(
+            lint_records.render_diagnostic(
+                RULES.rule(ORPHAN_PIN_RULE),
+                "lints/product/exceptions.toml",
+                f"{site} is grandfathered for {path} with no pinned ratio in "
+                f"DECLARED_DEVIATION_RATIOS",
+            )
+        )
+    for path, site in UNLEDGERED_RATIOS:
+        diagnostics.append(
+            lint_records.render_diagnostic(
+                RULES.rule(ORPHAN_PIN_RULE),
+                CHECKER,
+                f"DECLARED_DEVIATION_RATIOS pins {site} for {path} with no "
+                f"[[exception]] entry in lints/product/exceptions.toml",
+            )
+        )
     for measurement in stale:
-        errors.append(
-            f"{measurement.mode}: {measurement.label} now measures "
-            f"{measurement.ratio:.2f}:1 and clears its {measurement.floor:.2f}:1 floor — "
-            "remove its DECLARED_DEVIATIONS entry"
+        diagnostics.append(
+            lint_records.render_diagnostic(
+                RULES.rule(STALE_PIN_RULE),
+                "lints/product/exceptions.toml",
+                f"{measurement.site} now measures {measurement.ratio:.2f}:1 and "
+                f"clears its {measurement.floor:.2f}:1 floor",
+            )
         )
 
     if pinned:
@@ -727,7 +840,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"vs a {measurement.floor:.2f}:1 floor — {reason}"
             )
 
-    if not failures and not errors:
+    if not failures and not diagnostics and not unresolved:
         print(
             f"\nTheme contrast check passed (dark + light)"
             f"{f', {len(pinned)} declared deviation(s)' if pinned else ''}."
@@ -736,10 +849,16 @@ def main(argv: list[str] | None = None) -> int:
 
     print("\nTheme contrast floors are not met:")
     for measurement in failures:
-        print(f"  [{measurement.mode}] {measurement.label}: {measurement.ratio:.2f}:1 "
-              f"is below the {measurement.floor:.2f}:1 floor ({measurement.detail})")
-    for error in errors:
-        print(f"  [error] {error}")
+        print(measurement.diagnostic())
+        print()
+    for diagnostic in diagnostics:
+        print(diagnostic)
+        print()
+    # Not a rule violation: a token the resolver cannot reduce to an opaque sRGB
+    # color cannot be graded at all, so this is the checker reporting that it
+    # could not run rather than that a floor was missed.
+    for error in unresolved:
+        print(f"  [unmeasurable] {error}")
     print(
         "\nEach role is authored per mode in apps/packages/design/src/tokens.ts. "
         "Raise the token's contrast — the floors are the contract, not the knob."

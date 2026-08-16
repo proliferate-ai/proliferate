@@ -134,7 +134,7 @@ export function getAccountActionDescription({
   if (localMode || signInUnavailable) {
     return "Cloud sign-in is unavailable in this environment.";
   }
-  return "Connect GitHub to use cloud workspaces and credential sync.";
+  return "Connect GitHub to use credential sync.";
 }
 
 export function getAccountInitials(displayName: string): string {

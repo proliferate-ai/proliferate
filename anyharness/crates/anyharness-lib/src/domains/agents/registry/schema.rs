@@ -17,6 +17,13 @@ pub struct AgentRegistryDocument {
 #[serde(rename_all = "camelCase")]
 pub struct AgentRegistryAgent {
     pub kind: String,
+    /// How many auth sources this harness may keep enabled at once
+    /// (`single` = radio, `multi` = additive gateway + api_key rows). The
+    /// declared authority for the server/TS single-vs-multi mirrors; the Rust
+    /// render plane does not branch on it (cardinality is a product-layer
+    /// selection rule), so it is carried through untyped and only round-tripped.
+    #[serde(default)]
+    pub auth_cardinality: Option<String>,
     pub display_name: String,
     #[serde(default)]
     pub description: Option<String>,

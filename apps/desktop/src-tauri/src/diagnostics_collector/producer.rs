@@ -284,6 +284,22 @@ impl TauriDiagnosticsProducer {
     }
 
     #[cfg(test)]
+    pub(crate) fn lifecycle_snapshot(&self, name: &str) -> Vec<ProducerRecordV1> {
+        self.inner
+            .state
+            .lock()
+            .map(|state| {
+                state
+                    .queued
+                    .iter()
+                    .filter(|queued| queued.record.name == name)
+                    .map(|queued| queued.record.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    #[cfg(test)]
     pub(crate) fn support_lifecycle_snapshot(&self) -> Vec<ProducerRecordV1> {
         self.inner
             .state

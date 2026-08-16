@@ -12,6 +12,7 @@ use crate::domains::agents::catalog::universe::ObservedUniverse;
 use crate::domains::agents::model::{AgentDescriptor, ResolvedAgentStatus};
 use crate::domains::agents::readiness::service::resolve_launch_agent;
 use crate::domains::agents::registry;
+use crate::domains::sessions::adapter_migration::SessionAdapterMarker;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::store::idempotent_create::InsertSessionByIdOutcome;
 use crate::domains::workspaces::env::read_materialized_launch_env;
@@ -286,6 +287,32 @@ impl SessionService {
                 record
             }
         };
+
+        // Forks ADR R9 (rung 1c): stamp the adapter-migration marker with the
+        // exact (adapter, native) versions this session was created under, so a
+        // canonical-migrated session is distinguishable from a pinned
+        // pre-migration one at reattach (the dual-read seam in
+        // domains/sessions/adapter_migration.rs). Restamping an existing
+        // (reused) session is skipped — it keeps its original provenance. A
+        // stamp failure degrades to the legacy floor (absent marker) rather
+        // than failing the create; it is logged for observability.
+        if let CreateSessionOutcome::Created(_) = &outcome {
+            let marker = SessionAdapterMarker::new(
+                resolved.agent_process.version.clone(),
+                resolved.native.as_ref().and_then(|native| native.version.clone()),
+            );
+            if let Err(error) =
+                self.session_store
+                    .upsert_adapter_marker(&record.id, &marker, &record.created_at)
+            {
+                tracing::warn!(
+                    session_id = %record.id,
+                    error = %error,
+                    "failed to stamp session adapter-migration marker (R9)"
+                );
+            }
+        }
+
         tracing::info!(
             workspace_id = %workspace_id,
             session_id = %record.id,

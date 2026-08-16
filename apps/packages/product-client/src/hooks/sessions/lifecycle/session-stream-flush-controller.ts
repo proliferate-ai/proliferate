@@ -182,7 +182,9 @@ function reconcileGapAndReconnect(
       message: error instanceof Error ? error.message : String(error),
     });
   }).finally(() => {
-    input.scheduleReconnect(0);
+    // A gap-reconcile forced reconnect is not an error retry: fire immediately
+    // and do not advance the shared error-retry backoff counter (Q9).
+    input.scheduleImmediateReconnect();
   });
   input.clearActiveSummaryRefreshTimer();
   input.closeCurrentHandle();

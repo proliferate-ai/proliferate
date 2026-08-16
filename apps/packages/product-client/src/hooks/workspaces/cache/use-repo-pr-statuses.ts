@@ -4,15 +4,18 @@ import {
   useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
 import { useQueries } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import {
   listRepoRootPullRequestStatuses,
   type RepoPullRequestStatusesResult,
 } from "#product/lib/access/anyharness/pull-requests";
 import type { WorkspacePrStatusAvailability } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import { cadence } from "@proliferate/design/cadence";
 
-const PR_STATUS_STALE_MS = 60_000;
+// Was a raw 60_000ms literal, already exactly `cadence.slowMs` (UX Latency +
+// Transitions ADR §4.7, Rung 6, Q8).
+const PR_STATUS_STALE_MS = cadence.slowMs;
 
 export interface RepoPrStatusesState {
   entriesByRepoRootId: Record<string, BranchPullRequestStatus[]>;
@@ -33,30 +36,40 @@ export function useRepoPrStatuses(repoRootIds: string[]): RepoPrStatusesState {
     [repoRootIds],
   );
 
-  return useQueries({
-    queries: ids.map((repoRootId) => ({
-      queryKey: anyHarnessRepoRootPullRequestsKey(
-        trimmedRuntimeUrl,
-        repoRootId,
-        cacheScopeKey,
-      ),
-      enabled: trimmedRuntimeUrl.length > 0,
-      staleTime: PR_STATUS_STALE_MS,
-      // No interval/focus polling (owner decision 2026-07-02): PR status
-      // updates on session turn end (stream side effects), message send, and
-      // publish — plus this initial mount fetch. The daemon throttle makes
-      // extra polling pointless anyway.
-      refetchOnWindowFocus: false,
-      retry: false as const,
-      queryFn: async ({ signal }: { signal: AbortSignal }) =>
-        listRepoRootPullRequestStatuses(
-          { runtimeUrl: trimmedRuntimeUrl },
+  // Memoize the query descriptors so a shell re-render (e.g. a workspace
+  // switch) does not rebuild every per-repo option object and force
+  // observer.setOptions churn when the inputs are unchanged.
+  const queries = useMemo(
+    () =>
+      ids.map((repoRootId) => ({
+        queryKey: anyHarnessRepoRootPullRequestsKey(
+          trimmedRuntimeUrl,
           repoRootId,
-          { refresh: false },
-          { signal },
+          cacheScopeKey,
         ),
-    })),
-    combine: (results) => {
+        enabled: trimmedRuntimeUrl.length > 0,
+        staleTime: PR_STATUS_STALE_MS,
+        // No interval/focus polling (owner decision 2026-07-02): PR status
+        // updates on session turn end (stream side effects), message send, and
+        // publish, plus this initial mount fetch. The daemon throttle makes
+        // extra polling pointless anyway.
+        refetchOnWindowFocus: false,
+        retry: false as const,
+        queryFn: async ({ signal }: { signal: AbortSignal }) =>
+          listRepoRootPullRequestStatuses(
+            { runtimeUrl: trimmedRuntimeUrl },
+            repoRootId,
+            { refresh: false },
+            { signal },
+          ),
+      })),
+    [ids, trimmedRuntimeUrl, cacheScopeKey],
+  );
+
+  // Stable combine reference so react-query only recomputes the merged view
+  // when the results or the id ordering actually change, not on every render.
+  const combine = useCallback(
+    (results: { data: unknown }[]): RepoPrStatusesState => {
       const entriesByRepoRootId: Record<string, BranchPullRequestStatus[]> = {};
       const availabilityByRepoRootId: Record<string, WorkspacePrStatusAvailability> = {};
       const fetchedAtByRepoRootId: Record<string, string | null> = {};
@@ -72,5 +85,8 @@ export function useRepoPrStatuses(repoRootIds: string[]): RepoPrStatusesState {
       });
       return { entriesByRepoRootId, availabilityByRepoRootId, fetchedAtByRepoRootId };
     },
-  });
+    [ids],
+  );
+
+  return useQueries({ queries, combine });
 }

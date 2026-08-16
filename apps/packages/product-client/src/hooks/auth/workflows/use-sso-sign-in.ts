@@ -21,16 +21,16 @@ export interface UseSsoSignInResult {
 // access hook so the login surface can render only when deployment SSO is enabled.
 export function useSsoSignIn(): UseSsoSignInResult {
   const { startLogin, cancelLogin } = useAuditedAuth();
-  const { cloudEnabled } = useAppCapabilities();
+  const { controlPlaneReachable } = useAppCapabilities();
   const {
     data: ssoDiscovery,
     isPending: ssoDiscoveryPending,
-  } = useSsoDiscovery({ enabled: cloudEnabled });
+  } = useSsoDiscovery({ enabled: controlPlaneReachable });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const signInChecking = cloudEnabled && ssoDiscoveryPending;
-  const signInAvailable = cloudEnabled && ssoDiscovery?.enabled === true;
+  const signInChecking = controlPlaneReachable && ssoDiscoveryPending;
+  const signInAvailable = controlPlaneReachable && ssoDiscovery?.enabled === true;
   const signInUnavailableDescription = ssoDiscovery?.reason === "not_configured"
     ? "SSO is not configured for this environment."
     : "SSO is not available for this environment.";

@@ -8,6 +8,7 @@ harness gets its own access-group-scoped virtual key here, keyed by
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -40,6 +41,54 @@ async def list_active_enrollment_keys(
         .all()
     )
     return [enrollment_key_record(row) for row in rows]
+
+
+async def list_all_active_enrollment_keys(
+    db: AsyncSession,
+    *,
+    limit: int = 1000,
+) -> list[AgentGatewayEnrollmentKeyRecord]:
+    """Every active (non-revoked) per-harness key, for the verification loop.
+
+    Ordered by ``updated_at`` so a bounded tick walks the least-recently-touched
+    keys first; the loop re-runs on its interval to cover the rest.
+    """
+    rows = (
+        (
+            await db.execute(
+                select(AgentGatewayEnrollmentKey)
+                .where(AgentGatewayEnrollmentKey.revoked_at.is_(None))
+                .order_by(AgentGatewayEnrollmentKey.updated_at)
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [enrollment_key_record(row) for row in rows]
+
+
+async def record_enrollment_key_verification(
+    db: AsyncSession,
+    *,
+    enrollment_key_id: UUID,
+    status: str,
+    delta: str | None,
+    verified_at: datetime,
+) -> None:
+    """Persist a gateway-enablement verification verdict (agent-auth.md FR-3).
+
+    Called only for a CONCLUSIVE verdict (``ok`` or ``misconfigured``); an error
+    inside the loop never reaches here, so a last-known-good verdict is never
+    overwritten by a transient LiteLLM blip.
+    """
+    row = await db.get(AgentGatewayEnrollmentKey, enrollment_key_id)
+    if row is None:
+        return
+    row.verification_status = status
+    row.verification_delta = delta
+    row.verified_at = verified_at
+    await db.flush()
 
 
 async def get_active_enrollment_key(

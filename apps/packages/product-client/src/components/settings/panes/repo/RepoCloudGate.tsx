@@ -13,7 +13,7 @@ import { RepoCloudAuthorizationRequired } from "#product/components/settings/pan
 
 interface RepoCloudGateProps {
   editor: CloudRepoEnvironmentEditor;
-  cloudEnabled: boolean;
+  controlPlaneReachable: boolean;
   cloudActive: boolean;
   cloudSignInChecking: boolean;
   cloudSignInAvailable: boolean;
@@ -43,7 +43,7 @@ function CloudGateState({
  */
 export function RepoCloudGate({
   editor,
-  cloudEnabled,
+  controlPlaneReachable,
   cloudSignInChecking,
   cloudSignInAvailable,
   children,
@@ -79,7 +79,7 @@ export function RepoCloudGate({
     );
   }
 
-  if (!cloudEnabled) {
+  if (!controlPlaneReachable) {
     return (
       <CloudGateState
         title="Cloud unavailable"

@@ -23,6 +23,11 @@ A NEW mutating handler that is not classified fails this check — that is the
 ratchet: adding a session mutation owner without deciding its admission story
 is an error. Additionally, session core (domains/sessions/**) must never
 import the Workflows domain.
+
+The rules enforced here are records: lints/anyharness/admission.toml holds
+AH-ADMIT-1..11, and every failure below is rendered from the matching record.
+Note that the two ledgers this checker reads are INPUT (classifications), not
+exception ledgers — a classified handler is enforced, not excused.
 """
 
 from __future__ import annotations
@@ -32,6 +37,18 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts import lint_records  # noqa: E402
+
+RULES = lint_records.load("anyharness")
+
+
+def diagnostic(rule_id: str, location: str, detail: str) -> str:
+    return lint_records.render_diagnostic(RULES.rule(rule_id), location, detail)
+
+
 API_DIR = REPO_ROOT / "anyharness/crates/anyharness-lib/src/api"
 HTTP_DIR = API_DIR / "http"
 LIB_SRC_DIR = REPO_ROOT / "anyharness/crates/anyharness-lib/src"
@@ -112,7 +129,13 @@ def collect_mutating_handlers() -> set[str]:
                 # handler's module is the scanned file's own module name.
                 module = router.stem
             if module is None:
-                unresolved.append(f"{router.name}: bare handler '{fn}' not resolvable via imports")
+                unresolved.append(
+                    diagnostic(
+                        "AH-ADMIT-6",
+                        router.relative_to(REPO_ROOT).as_posix(),
+                        f"bare handler '{fn}' not resolvable via the router's imports",
+                    )
+                )
             else:
                 handlers.add(f"{module}::{fn}")
         # Catch-all teeth (PR1227-RATCHET-01): the two shapes above only match
@@ -127,11 +150,15 @@ def collect_mutating_handlers() -> set[str]:
                 # Bare or singly-qualified: already handled above.
                 continue
             unresolved.append(
-                f"{router.name}: route handler ref '{path}' has an unsupported "
-                f"segment count and escaped enumeration; classify it explicitly"
+                diagnostic(
+                    "AH-ADMIT-7",
+                    router.relative_to(REPO_ROOT).as_posix(),
+                    f"route handler ref '{path}' has {len(segments)} segments, more "
+                    f"than the resolver supports, and escaped enumeration",
+                )
             )
     if unresolved:
-        raise SystemExit("Unresolvable bare route handlers:\n  " + "\n  ".join(unresolved))
+        raise SystemExit("\n\n".join(unresolved))
     return handlers
 
 
@@ -298,8 +325,11 @@ def check_non_http_owners() -> list[str]:
         body = owner_body(rel_path, fn)
         if body is None:
             failures.append(
-                f"STALE non-HTTP owner entry {rel_path}::{fn}: function not found "
-                f"(remove it or fix the entry)"
+                diagnostic(
+                    "AH-ADMIT-11",
+                    NON_HTTP_OWNERS_PATH.relative_to(REPO_ROOT).as_posix(),
+                    f"stale entry '{rel_path}::{fn}' — function not found",
+                )
             )
             continue
         # Strip comments/string literals, then collapse whitespace so rustfmt
@@ -312,9 +342,11 @@ def check_non_http_owners() -> list[str]:
         admit_idx = admit_match.start() if admit_match else -1
         if admit_idx < 0:
             failures.append(
-                f"{rel_path}::{fn}: non-HTTP destructive owner is missing its "
-                f"admission call '{admit_call}' — permit-first admission must not "
-                f"be removed"
+                diagnostic(
+                    "AH-ADMIT-9",
+                    f"{rel_path}::{fn}",
+                    f"declared admission call '{admit_call}' is not in the function body",
+                )
             )
             continue
         flat_effects = [re.sub(r"\s+", "", e) for e in effects]
@@ -322,8 +354,12 @@ def check_non_http_owners() -> list[str]:
             effect_idx = flat.find(effect)
             if 0 <= effect_idx < admit_idx:
                 failures.append(
-                    f"{rel_path}::{fn}: effect surface '{effect}' appears BEFORE "
-                    f"the admission call '{admit_call}' — admission must come first"
+                    diagnostic(
+                        "AH-ADMIT-10",
+                        f"{rel_path}::{fn}",
+                        f"effect surface '{effect}' appears before the declared "
+                        f"admission call '{admit_call}'",
+                    )
                 )
                 break
     return failures
@@ -338,15 +374,25 @@ def main() -> int:
         entry = classification.get(key)
         if entry is None:
             failures.append(
-                f"UNCLASSIFIED mutation handler {key}: add it to "
-                f"scripts/session_mutation_admission.txt with an admission decision"
+                diagnostic(
+                    "AH-ADMIT-1",
+                    key,
+                    "mutating route handler with no line in "
+                    "scripts/session_mutation_admission.txt",
+                )
             )
             continue
         cls, _reason = entry
         module, fn = key.split("::")
         body = handler_source(module, fn)
         if body is None:
-            failures.append(f"{key}: classified but handler source not found")
+            failures.append(
+                diagnostic(
+                    "AH-ADMIT-2",
+                    CLASSIFICATION_PATH.relative_to(REPO_ROOT).as_posix(),
+                    f"classification for '{key}' resolves to no handler function",
+                )
+            )
             continue
         if cls == "fenced":
             # rustfmt splits field chains across lines, so ordering is checked
@@ -355,31 +401,49 @@ def main() -> int:
             admit = ADMIT_RE.search(flat)
             if not admit:
                 failures.append(
-                    f"{key}: classified 'fenced' but no admit_* call in the handler"
+                    diagnostic(
+                        "AH-ADMIT-3",
+                        key,
+                        "classified 'fenced' but the handler body calls no admit_* gate",
+                    )
                 )
             else:
                 for token in EFFECT_TOKENS:
                     effect_idx = flat.find(token)
                     if 0 <= effect_idx < admit.start():
                         failures.append(
-                            f"{key}: effect surface '{token}' appears BEFORE the "
-                            f"admission call — admission must come first"
+                            diagnostic(
+                                "AH-ADMIT-4",
+                                key,
+                                f"effect surface '{token}' appears before the "
+                                f"admission call '{admit.group(0)}'",
+                            )
                         )
                         break
 
     for key in sorted(classification):
         if key not in handlers:
             failures.append(
-                f"STALE classification entry {key}: no mutating route references it"
+                diagnostic(
+                    "AH-ADMIT-5",
+                    CLASSIFICATION_PATH.relative_to(REPO_ROOT).as_posix(),
+                    f"stale entry '{key}' — no mutating route references it",
+                )
             )
 
     # Session-core purity: sessions must not import the Workflows domain.
-    for path in SESSIONS_DIR.rglob("*.rs"):
+    for path in sorted(SESSIONS_DIR.rglob("*.rs")):
         text = path.read_text()
-        if "domains::workflows" in text or "domains/workflows" in text:
-            failures.append(
-                f"{path.relative_to(REPO_ROOT)}: session core must not import the Workflows domain"
-            )
+        for token in ("domains::workflows", "domains/workflows"):
+            if token in text:
+                failures.append(
+                    diagnostic(
+                        "AH-ADMIT-8",
+                        path.relative_to(REPO_ROOT).as_posix(),
+                        token,
+                    )
+                )
+                break
 
     # PR1227-RETENTION-RATCHET-01: non-HTTP destructive owners (startup /
     # post-create automatic passes) are fenced statically here too.
@@ -387,9 +451,9 @@ def main() -> int:
     failures.extend(check_non_http_owners())
 
     if failures:
-        print("Session mutation admission ratchet failures:")
         for failure in failures:
-            print(f"  {failure}")
+            print(failure)
+            print()
         return 1
     print(
         f"Session mutation admission ratchet passed "

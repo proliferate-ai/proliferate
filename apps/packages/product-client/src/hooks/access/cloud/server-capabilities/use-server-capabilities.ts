@@ -3,6 +3,7 @@ import { useProductHost } from "@proliferate/product-client/host/ProductHostProv
 import { fetchServerCapabilities } from "#product/lib/access/cloud/server-capabilities";
 import type { ServerCapabilityContract } from "#product/lib/domain/capabilities/server-capability-contract";
 import { serverCapabilitiesKey } from "#product/hooks/access/cloud/server-capabilities/query-keys";
+import { cadence } from "@proliferate/design/cadence";
 
 /**
  * The connected control plane's self-host capability contract (`GET /meta`).
@@ -14,8 +15,10 @@ export function useServerCapabilitiesFor(apiBaseUrl: string) {
   return useQuery<ServerCapabilityContract | null>({
     queryKey: serverCapabilitiesKey(apiBaseUrl),
     queryFn: () => fetchServerCapabilities(apiBaseUrl),
-    staleTime: 60_000,
-    refetchInterval: 60_000,
+    // Was raw 60_000ms literals, already exactly `cadence.slowMs` (UX Latency
+    // + Transitions ADR §4.7, Rung 6, Q8).
+    staleTime: cadence.slowMs,
+    refetchInterval: cadence.slowMs,
     retry: 1,
   });
 }

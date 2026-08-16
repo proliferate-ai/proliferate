@@ -135,15 +135,15 @@ def test_foreign_direct_import_rejects_every_protected_symbol(
 
     assert len(violations) == 1
     violation = violations[0]
-    assert violation.rule_id == "NAMED_CROSS_DOMAIN_WRITE"
+    assert violation.rule_id == "SRV-STORE-5"
     assert violation.lineno == 1
-    assert f"{store_module}.{symbol}" in violation.message
+    assert f"{store_module}.{symbol}" in violation.detail
     expected_hint = (
         "proliferate.server.cloud.cloud_sandboxes.service"
         if store_module.endswith("cloud_sandboxes")
         else "proliferate.server.organizations.service"
     )
-    assert expected_hint in violation.message
+    assert expected_hint in violation.detail
     assert violation.relative_path(tmp_path) == ("server/proliferate/server/billing/foreign.py")
 
 
@@ -170,8 +170,8 @@ def test_module_alias_access_is_rejected(tmp_path: Path, source: str) -> None:
     )
 
     assert len(violations) == 1
-    assert violations[0].rule_id == "NAMED_CROSS_DOMAIN_WRITE"
-    assert "proliferate.db.store.organizations.bind_team_checkout_session" in violations[0].message
+    assert violations[0].rule_id == "SRV-STORE-5"
+    assert "proliferate.db.store.organizations.bind_team_checkout_session" in violations[0].detail
 
 
 @pytest.mark.parametrize("literal_getattr", [False, True])
@@ -189,7 +189,7 @@ def test_qualified_reference_is_rejected(tmp_path: Path, literal_getattr: bool) 
 
     assert len(violations) == 1
     assert violations[0].lineno == 2
-    assert f"{store_module}.{symbol}" in violations[0].message
+    assert f"{store_module}.{symbol}" in violations[0].detail
 
 
 def test_star_import_rejects_each_protected_store_symbol(tmp_path: Path) -> None:
@@ -201,9 +201,9 @@ def test_star_import_rejects_each_protected_store_symbol(tmp_path: Path) -> None
     )
 
     assert len(violations) == 4
-    assert {item.rule_id for item in violations} == {"NAMED_CROSS_DOMAIN_WRITE"}
+    assert {item.rule_id for item in violations} == {"SRV-STORE-5"}
     for symbol in PROTECTED_STORE_SYMBOLS[store_module]:
-        assert any(f"{store_module}.{symbol}" in item.message for item in violations)
+        assert any(f"{store_module}.{symbol}" in item.detail for item in violations)
 
 
 @pytest.mark.parametrize(
@@ -289,7 +289,7 @@ def test_owner_lookalikes_may_not_access_protected_store(
     )
 
     assert len(violations) == 1
-    assert violations[0].rule_id == "NAMED_CROSS_DOMAIN_WRITE"
+    assert violations[0].rule_id == "SRV-STORE-5"
 
 
 def test_same_named_owner_service_calls_are_legal(tmp_path: Path) -> None:

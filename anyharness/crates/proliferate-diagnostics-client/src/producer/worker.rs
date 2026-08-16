@@ -333,6 +333,7 @@ async fn finish_ingest(
     result: Result<proliferate_diagnostics_protocol::v1::types::IngestReceiptV1, TransportFailure>,
 ) {
     let mut fallback = None;
+    let mut delivery_ended_generation = None;
     {
         let mut state = inner
             .state
@@ -388,6 +389,9 @@ async fn finish_ingest(
                         state.collector = CollectorAvailability::Unavailable {
                             generation: generation_identity.generation,
                         };
+                        if state.note_delivery_ended(generation_identity.generation) {
+                            delivery_ended_generation = Some(generation_identity.generation);
+                        }
                         for record in &mut records {
                             record.fallback_reason = Some(FallbackReason::DeliveryUnknown);
                         }
@@ -468,6 +472,9 @@ async fn finish_ingest(
                 }
             }
         }
+    }
+    if let Some(generation) = delivery_ended_generation {
+        super::delivery_log::warn_delivery_ended(generation);
     }
     if let Some((records, deadline)) = fallback {
         route_fallback(inner, records, deadline).await;

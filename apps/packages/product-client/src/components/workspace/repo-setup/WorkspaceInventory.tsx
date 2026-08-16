@@ -1,7 +1,10 @@
 import { twMerge } from "#product/primitives/utils/tw-merge";
 
 import { EmptyState } from "#product/primitives/patterns/EmptyState";
-import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
+import {
+  LoadingBoundary,
+  type LoadingBoundaryState,
+} from "#product/primitives/LoadingBoundary";
 
 import type { WorkspaceInventoryGroupView } from "#product/domain/workspaces/inventory";
 
@@ -43,10 +46,8 @@ export function WorkspaceInventory({
 }: WorkspaceInventoryProps) {
   const itemCount = groups.reduce((sum, g) => sum + g.items.length, 0);
 
-  if (loading) {
-    return <WorkspaceInventoryLoadingState className={className} />;
-  }
-
+  // Error is a resolved outcome distinct from `empty`; it renders directly
+  // rather than through the loading gate.
   if (error) {
     return (
       <EmptyState
@@ -58,53 +59,46 @@ export function WorkspaceInventory({
     );
   }
 
-  if (itemCount === 0) {
-    return (
-      <EmptyState
-        className={className}
-        title={emptyTitle}
-        description={emptyDescription}
-      />
-    );
-  }
+  // Class C big-surface treatment (UX Latency + Transitions ADR §4 Rung 4,
+  // FR-1): this inventory retired its placeholder-row skeleton. While pending
+  // the boundary shows nothing until the Class C show-delay window, and the
+  // "No workspaces" empty state may only render after the fetch resolves
+  // (`state="empty"`), never as a default while still loading (Q19 empty
+  // split).
+  const state: LoadingBoundaryState = loading
+    ? "pending"
+    : itemCount === 0
+      ? "empty"
+      : "ready";
 
   return (
-    <div
-      className={twMerge("w-full min-w-0 overflow-hidden pb-10 animate-content-fade-in", className)}
-      role="region"
-      aria-label={ariaLabel}
-    >
-      {groups.map((group) => (
-        <InventoryGroup
-          key={group.id}
-          group={group}
-          externalOpenWorkspaceIds={externalOpenWorkspaceIds}
-          onGroupToggle={onGroupToggle}
-          onWorkspaceSelect={onWorkspaceSelect}
+    <LoadingBoundary
+      state={state}
+      diagnostics={{ flow: "workspace_inventory" }}
+      treatment={null}
+      emptyContent={
+        <EmptyState
+          className={className}
+          title={emptyTitle}
+          description={emptyDescription}
         />
-      ))}
-    </div>
-  );
-}
-
-function WorkspaceInventoryLoadingState({ className }: { className?: string }) {
-  return (
-    <div
-      className={twMerge("w-full min-w-0 overflow-hidden pb-10 pt-2", className)}
-      role="status"
-      aria-live="polite"
-      aria-label="Loading workspaces"
+      }
     >
-      <div className="flex flex-col gap-1">
-        <SkeletonBlock className="h-9 w-full bg-foreground/5" style={shimmerDelay(0)} />
-        <SkeletonBlock className="h-9 w-[92%] bg-foreground/5" style={shimmerDelay(1)} />
-        <SkeletonBlock className="h-9 w-[76%] bg-foreground/5" style={shimmerDelay(2)} />
+      <div
+        className={twMerge("w-full min-w-0 overflow-hidden pb-10", className)}
+        role="region"
+        aria-label={ariaLabel}
+      >
+        {groups.map((group) => (
+          <InventoryGroup
+            key={group.id}
+            group={group}
+            externalOpenWorkspaceIds={externalOpenWorkspaceIds}
+            onGroupToggle={onGroupToggle}
+            onWorkspaceSelect={onWorkspaceSelect}
+          />
+        ))}
       </div>
-      <div className="mt-5 flex flex-col gap-1">
-        <SkeletonBlock className="h-9 w-full bg-foreground/5" style={shimmerDelay(3)} />
-        <SkeletonBlock className="h-9 w-[84%] bg-foreground/5" style={shimmerDelay(4)} />
-      </div>
-      <span className="sr-only">Loading workspaces</span>
-    </div>
+    </LoadingBoundary>
   );
 }

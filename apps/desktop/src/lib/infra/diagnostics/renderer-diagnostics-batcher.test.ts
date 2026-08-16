@@ -315,7 +315,7 @@ describe("renderer diagnostics batcher", () => {
     expect(snapshots).toHaveLength(2);
     expect(snapshots[1]).toMatchObject({
       total: 3,
-      byReason: { invalid_input: 1, invoke_failure: 2 },
+      byReason: { invalid_input: 1, collector_stopped: 2 },
     });
   });
 

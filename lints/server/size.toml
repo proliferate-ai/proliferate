@@ -1,0 +1,27 @@
+# Server file-size ceilings (SRV-SIZE). The measured debt is a ratchet, not an
+# exception ledger: baselines live in lints/server/ratchets.toml and may only
+# shrink.
+
+[[rule]]
+id = "SRV-SIZE-1"
+title = "Server files stay under their layer's line max"
+owner = "server"
+status = "holds"
+enforced_by = "scripts/check_max_lines.py"
+mode = "lint"
+scope = "server/proliferate/**, server/tests/**"
+
+rule = """Server files must stay under their layer's hard line max — api.py 400,
+service.py 800, models.py 500, any module under a `domain` path part 500,
+db/store/** 700, db/models/** 500 — falling back to the repo-wide 600
+(PROD-SIZE-1) for server files with no layer-specific threshold."""
+alternative = """Split the file along its layer seam, or add a `[[max_lines]]`
+entry to lints/server/ratchets.toml with a written reason (typically a tracking
+issue). The recorded count may only shrink."""
+why = """Hard thresholds require a justification in the PR description; the soft
+column is a review prompt. Large control-plane flows become reviewable by
+moving logic to the owner layer."""
+
+[rule.example]
+bad = "server/proliferate/server/<domain>/api.py at 512 lines with no ratchet entry"
+good = "the route file splits along its subdomain seam, or its ratchet entry shrinks"

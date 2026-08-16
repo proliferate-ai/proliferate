@@ -1,0 +1,25 @@
+# Chat transcript scroll-writer rules — FE-CHATSCROLL-* family, reserved by the
+# Chat Scroll ladder (ADR rung 3, single-writer scroll discipline).
+#
+# Enforced by scripts/check_transcript_scroll_writer.py over
+# apps/packages/product-client/src/**. The sanctioned writer files are held as a
+# shrink-only allowlist in ratchets.toml `[[transcript_scroll_writer]]`; the
+# checker reads that table and fails any net-new scroll-position writer.
+# See lints/README.md for the record and ratchet contract.
+
+[[rule]]
+id = "FE-CHATSCROLL-1"
+title = "the transcript has a single scroll writer"
+owner = "frontend"
+status = "holds"
+enforced_by = "scripts/check_transcript_scroll_writer.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**"
+
+rule = """A non-test product-client source file must not mutate scroll position — assign `.scrollTop`, call `.scrollTo(` or `.scrollIntoView(`, or set `overflow-anchor` / `overflowAnchor` — unless it is recorded in the `[[transcript_scroll_writer]]` allowlist in lints/frontend/ratchets.toml. The stick-to-bottom engine (and its transcript-owned siblings) is the sole sanctioned writer of the transcript viewport; the remaining allowlisted files are pre-existing non-transcript scrollers, held shrink-only so no net-new writer slips in. `overflow-anchor` stays disabled and is owned by the AutoHideScrollArea primitive, never set ad-hoc."""
+alternative = """Route transcript scrolling through the stick-to-bottom engine, and let AutoHideScrollArea own `overflow-anchor`. If a genuinely new scroller is unavoidable, add its file to the `[[transcript_scroll_writer]]` allowlist with a reason in the same change — a lints/ edit is founder-reviewed by CODEOWNERS."""
+why = """Multiple modules writing the transcript viewport scrollTop is exactly what produced the jump-to-bottom and lost-anchor regressions the Chat Scroll ADR (rung 3) root-caused; a single writer plus a shrink-only allowlist keeps the invariant falsifiable instead of aspirational."""
+
+[rule.example]
+bad = """a feature component grabbing the transcript viewport ref and assigning `viewport.scrollTop = 0` outside the engine"""
+good = """the component asks the stick-to-bottom engine to follow bottom; only the engine writes `viewport.scrollTop`"""

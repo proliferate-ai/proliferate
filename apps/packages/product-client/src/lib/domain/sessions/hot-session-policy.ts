@@ -12,7 +12,8 @@ export type HotSessionReason =
   | "queued_prompt"
   | "needs_input"
   | "running"
-  | "open_tab";
+  | "open_tab"
+  | "background_running";
 
 export interface HotSessionTarget {
   clientSessionId: string;
@@ -40,6 +41,12 @@ export interface ResolveHotSessionTargetsInput {
   activeSessionId: string | null;
   visibleChatSessionIds: readonly string[];
   workspaceSessionIds: readonly string[];
+  /**
+   * Sessions outside the selected workspace that may have in-flight work.
+   * Running ones stay hot so their store slots keep ingesting stream deltas
+   * while the workspace is backgrounded (streaming continuity, ADR Q15).
+   */
+  backgroundSessionIds?: readonly string[];
   directoryEntriesById: Record<string, HotSessionDirectoryEntry | undefined>;
   promptActivityBySessionId: Record<string, number | undefined>;
   maxHotSessionStreams?: number;
@@ -51,15 +58,12 @@ const PRIORITY_BY_REASON: Record<HotSessionReason, number> = {
   needs_input: 2,
   running: 3,
   open_tab: 4,
+  background_running: 5,
 };
 
 export function resolveHotSessionTargets(
   input: ResolveHotSessionTargetsInput,
 ): HotSessionTarget[] {
-  if (!input.selectedWorkspaceId) {
-    return [];
-  }
-
   const candidates = new Map<string, HotSessionTarget>();
   const maxHotSessionStreams = input.maxHotSessionStreams ?? MAX_HOT_SESSION_STREAMS;
 
@@ -69,7 +73,11 @@ export function resolveHotSessionTargets(
     }
     const entry = input.directoryEntriesById[sessionId];
     const workspaceId = entry?.workspaceId ?? null;
-    if (!entry || !workspaceId || workspaceId !== input.selectedWorkspaceId) {
+    if (!entry || !workspaceId) {
+      return;
+    }
+    const inSelectedWorkspace = workspaceId === input.selectedWorkspaceId;
+    if (reason === "background_running" ? inSelectedWorkspace : !inSelectedWorkspace) {
       return;
     }
 
@@ -89,23 +97,51 @@ export function resolveHotSessionTargets(
     });
   };
 
-  maybeAdd(input.activeSessionId, "selected");
+  if (input.selectedWorkspaceId) {
+    maybeAdd(input.activeSessionId, "selected");
 
-  const visibleSet = new Set(input.visibleChatSessionIds);
-  for (const sessionId of input.visibleChatSessionIds) {
-    maybeAdd(sessionId, "open_tab");
+    const visibleSet = new Set(input.visibleChatSessionIds);
+    for (const sessionId of input.visibleChatSessionIds) {
+      maybeAdd(sessionId, "open_tab");
+    }
+
+    for (const sessionId of input.workspaceSessionIds) {
+      const entry = input.directoryEntriesById[sessionId];
+      if (!entry || entry.workspaceId !== input.selectedWorkspaceId) {
+        continue;
+      }
+
+      if ((input.promptActivityBySessionId[sessionId] ?? 0) > 0) {
+        maybeAdd(sessionId, "queued_prompt");
+      }
+
+      const viewState = resolveSessionViewState({
+        status: entry.status,
+        executionSummary: entry.executionSummary,
+        streamConnectionState: entry.streamConnectionState,
+        transcript: {
+          isStreaming: entry.activity.isStreaming,
+          pendingInteractions: entry.activity.pendingInteractions,
+        },
+      });
+      if (viewState === "needs_input") {
+        maybeAdd(sessionId, "needs_input");
+      } else if (viewState === "working") {
+        maybeAdd(sessionId, "running");
+      } else if (visibleSet.has(sessionId)) {
+        maybeAdd(sessionId, "open_tab");
+      }
+    }
   }
 
-  for (const sessionId of input.workspaceSessionIds) {
+  // Backgrounded sessions stay hot only while they have in-flight work, so
+  // idle slots never hold a stream open just because their workspace was once
+  // visited. Selected-workspace reasons sort ahead of these under the cap.
+  for (const sessionId of input.backgroundSessionIds ?? []) {
     const entry = input.directoryEntriesById[sessionId];
-    if (!entry || entry.workspaceId !== input.selectedWorkspaceId) {
+    if (!entry) {
       continue;
     }
-
-    if ((input.promptActivityBySessionId[sessionId] ?? 0) > 0) {
-      maybeAdd(sessionId, "queued_prompt");
-    }
-
     const viewState = resolveSessionViewState({
       status: entry.status,
       executionSummary: entry.executionSummary,
@@ -115,15 +151,14 @@ export function resolveHotSessionTargets(
         pendingInteractions: entry.activity.pendingInteractions,
       },
     });
-    if (viewState === "needs_input") {
-      maybeAdd(sessionId, "needs_input");
-    } else if (viewState === "working") {
-      maybeAdd(sessionId, "running");
-    } else if (visibleSet.has(sessionId)) {
-      maybeAdd(sessionId, "open_tab");
+    if (viewState === "working" || (input.promptActivityBySessionId[sessionId] ?? 0) > 0) {
+      maybeAdd(sessionId, "background_running");
     }
   }
 
+  // Cap contract: reasons win strictly by priority; within a priority tier the
+  // lexicographic session-id tiebreak is arbitrary but stable, so repeated
+  // resolutions over the same inputs never churn which sessions hold streams.
   return Array.from(candidates.values())
     .sort((a, b) => a.priority - b.priority || a.clientSessionId.localeCompare(b.clientSessionId))
     .slice(0, maxHotSessionStreams);

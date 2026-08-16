@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useRef, useSyncExternalStore } from "react";
+import { motion } from "@proliferate/design/motion";
 import { Button } from "#product/primitives/Button";
 import { twMerge } from "#product/primitives/utils/tw-merge";
 import {
@@ -179,7 +180,7 @@ export function useToastCopy() {
     void write.then(() => {
       setCopied(control);
       clearTimeout(copyResetRef.current);
-      copyResetRef.current = setTimeout(() => setCopied(null), 1_500);
+      copyResetRef.current = setTimeout(() => setCopied(null), motion.feedback.copiedResetMs);
     }, () => {});
   };
 

@@ -10,6 +10,7 @@ import {
   recordMeasurementMetric,
   recordMeasurementWorkflowStep,
 } from "#product/lib/infra/measurement/measurement-port";
+import { fetchSessionHistory } from "#product/lib/access/anyharness/session-runtime";
 import { recordSessionHistoryRehydrateFailure } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
 import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 import type {
@@ -37,6 +38,45 @@ export const SESSION_APPLY_MEASUREMENT_SURFACES: readonly MeasurementSurface[] =
   "chat-composer-dock",
 ];
 export const SESSION_HISTORY_APPLY_MAX_DURATION_MS = 30_000;
+
+type FetchSessionHistoryArgs = Parameters<typeof fetchSessionHistory>[1];
+
+/**
+ * Assembles the `fetchSessionHistory` request options. Only the fields the
+ * caller actually supplied are included so a bare open still sends just the
+ * connection handles.
+ */
+export function buildSessionHistoryFetchArgs(params: {
+  afterSeq?: number;
+  beforeSeq?: number;
+  limit?: number;
+  turnLimit?: number;
+  requestHeaders?: HeadersInit;
+  measurementOperationId?: MeasurementOperationId | null;
+  timeoutMs?: number;
+  ssh: NonNullable<FetchSessionHistoryArgs>["ssh"];
+  cloudClient: NonNullable<FetchSessionHistoryArgs>["cloudClient"];
+}): FetchSessionHistoryArgs {
+  const { afterSeq, beforeSeq, limit, turnLimit, requestHeaders } = params;
+  const { measurementOperationId, timeoutMs, ssh, cloudClient } = params;
+  if (
+    afterSeq == null && beforeSeq == null && limit == null && turnLimit == null
+    && !requestHeaders && !measurementOperationId && timeoutMs == null
+  ) {
+    return { ssh, cloudClient };
+  }
+  return {
+    ...(afterSeq != null ? { afterSeq } : {}),
+    ...(beforeSeq != null ? { beforeSeq } : {}),
+    ...(limit != null ? { limit } : {}),
+    ...(turnLimit != null ? { turnLimit } : {}),
+    ...(requestHeaders ? { requestHeaders } : {}),
+    ...(measurementOperationId ? { measurementOperationId } : {}),
+    ...(timeoutMs != null ? { timeoutMs } : {}),
+    ssh,
+    cloudClient,
+  };
+}
 
 export function isSessionHistoryTimeoutAbort(error: unknown): boolean {
   return error instanceof Error

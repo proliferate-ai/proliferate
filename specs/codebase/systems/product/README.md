@@ -23,6 +23,7 @@ restating folder rules or low-level reusable contracts.
 | Agents | The agent-systems overview map (distribution, auth, gateway, model catalog), plus delegated-work UX and cowork artifact lifecycle. | [agents/README.md](agents/README.md) |
 | Settings and appearance | Settings/admin information architecture, Appearance scaling, billing/account/team/config surfaces, filtering, origins, and admin-facing state. | [settings/README.md](settings/README.md) |
 | Support reporting | Currently shipped private support capture. | [support/README.md](support/README.md) |
+| UX Latency + Transitions | Loading-treatment state machine and tokens, the chat pane's hero loading mark, sidebar row activation transition, and held-key workspace switching. | [ux-latency-transitions.md](ux-latency-transitions.md) |
 | Web/Desktop client unification | Shared client ownership, thin Desktop/Web hosts, capability policy, and migration governance. | [clients/web-desktop-unification/README.md](clients/web-desktop-unification/README.md) |
 
 ## Outline Coverage

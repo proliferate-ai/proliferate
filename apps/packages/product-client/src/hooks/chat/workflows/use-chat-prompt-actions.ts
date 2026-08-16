@@ -41,6 +41,10 @@ import {
   failLatencyFlow,
   startLatencyFlow,
 } from "#product/lib/infra/measurement/measurement-port";
+import {
+  abandonRendererFlow,
+  beginRendererFlow,
+} from "#product/lib/infra/diagnostics/renderer-flow-timing";
 import { useGitPromptSnapshotEffects } from "#product/hooks/workspaces/workflows/use-git-prompt-snapshot-effects";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
@@ -151,6 +155,20 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     const launchSelection = newSessionLaunchSelection;
     const targetSessionId = !forceNewSession && hasSlot ? activeSessionId : null;
     const promptId = createPromptId();
+    if (targetSessionId) {
+      // UX-latency R12: composer_submit is keyed by sessionId, not promptId.
+      // promptId is not threaded into the stream-apply layer where the first
+      // assistant content is observed (session-stream-flush-apply.ts), and the
+      // composer is blocked from a second concurrent send on the same session,
+      // so sessionId is a truthful correlation key for this flow's common
+      // (existing-session) path. New-session sends are out of scope for this
+      // mark: no sessionId exists yet at submit time.
+      beginRendererFlow({
+        kind: "composer_submit",
+        correlationKey: targetSessionId,
+        correlation: { sessionId: targetSessionId, promptId },
+      });
+    }
     const latencyFlowId = targetSessionId
       ? startLatencyFlow({
         flowKind: "prompt_submit",
@@ -275,6 +293,13 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
       input?.onSubmitted?.();
       return true;
     } catch (error) {
+      if (targetSessionId) {
+        abandonRendererFlow({
+          kind: "composer_submit",
+          correlationKey: targetSessionId,
+          reason: "prompt_submit_failed",
+        });
+      }
       if (latencyFlowId) {
         failLatencyFlow(latencyFlowId, "prompt_submit_failed");
       }

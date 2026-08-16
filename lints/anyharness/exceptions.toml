@@ -1,0 +1,1070 @@
+# AnyHarness exception ledger — grandfathered violation sites, one entry per site.
+#
+# Converted from the retired scripts/anyharness_boundaries_allowlist.txt, whose
+# rows were per-file COUNTS. A count tolerates any N hits in a file; these entries
+# name the exact sites, so a cleanup that removes one and a regression that adds
+# another can no longer cancel out. `site` is a content fingerprint —
+# `<enclosing symbol>::<matched token or import path>`, never a line number — so
+# reformatting and moves inside a file do not churn the ledger. A `#2` suffix is
+# an occurrence ordinal for a repeated token inside one symbol, not a line.
+#
+# Reasons are carried verbatim from the allowlist row that covered the file.
+# This is migration debt, not permission for new code: a net-new entry is an
+# amendment (lints/README.md) and needs founder approval. Removing debt means
+# deleting the entry in the same PR — a site that no longer violates fails the
+# check as stale.
+#
+# Known scope limits inherited from the checker (deliberate, not bugs to file):
+#
+# - Store-by-role files. A `*_store.rs` outside a `store/` directory (e.g.
+#   domains/workspaces/access_store.rs) is a store by role but not by path, so
+#   AH-STORE-3 polices its SQL while AH-STORE-1 / AH-STORE-2 do not treat it as
+#   store code. Moving the file under `store/` retires the SQL entry and enrols it
+#   in the store rules at once; until then the asymmetry stands.
+#
+# - The engine cannot see `#[cfg(test)]` boundaries inside otherwise-production
+#   files, so several entries below cover setup code in inline test mods. Those
+#   say so in their reason and are not cleanup targets.
+#
+# - AppState field access is only partly mechanical. AH-API-2 catches the store
+#   case (`state.<x>_store`) because a `*_store` field name is a reliable signal,
+#   and only for the identifier `state` (how every api/** handler param is spelled
+#   today). Reaching another domain innard through an AppState field, or through
+#   `app_state.foo_store` / a rebound clone, has no such name to key off and stays
+#   a judgment call for review.
+#
+# - SQL detection is lexical, so an uppercase SQL verb heading an ordinary string
+#   matches: `bail!("UPDATE failed for {id}")` is indistinguishable from
+#   `"UPDATE sessions SET .."` without parsing Rust. Such a hit is a seedable
+#   false positive, not a defect. The exact literal `"SELECT"` is excluded (keyword
+#   constant / serde rename) while `"SELECT " + cols` still counts, and SQL inside
+#   a `/* .. */` block comment counts because comment stripping only understands
+#   `//`. All of these are pinned by unit tests so they stay visible.
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/health.rs"
+site = "fn get_health::state.agent_seed_store"
+reason = "in-memory health snapshot named like a store (Arc<RwLock<AgentSeedHealth>>, not SQL); matches the state.*_store pattern; benign - seeded rather than special-cased to keep the pattern simple"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs"
+site = "mod tests::crate::domains::workspaces::store::WorkspaceStore"
+reason = "cfg(test)-mod store wiring the engine cannot see past; target = none, engine-invisible cfg boundary"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs"
+site = "fn purge_workspace_deletes_an_active_worktree_row_and_its_checkout::WorkspaceStore::new"
+reason = "cfg(test)-mod store wiring the engine cannot see past; target = none, engine-invisible cfg boundary"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workspaces_purge.rs"
+site = "fn purge_workspace_deletes_an_archived_row_whose_checkout_is_already_gone::WorkspaceStore::new"
+reason = "cfg(test)-mod store wiring the engine cannot see past; target = none, engine-invisible cfg boundary"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/activity/feeds.rs"
+site = "fn feed_service_with_binding::anyharness_contract::v1::FeedKind::TerminalBytes"
+reason = "1 inline wire path (:311 FeedKind in a struct literal) inside the inline cfg(test) mod the engine cannot see; target = none, engine-invisible cfg boundary"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/activity/model.rs"
+site = "anyharness_contract::v1::ActivityProcess"
+reason = "1 wire type import below the mapper boundary; target = activity domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/activity/service.rs"
+site = "anyharness_contract::v1::ActivityProcess"
+reason = "1 wire type import below the mapper boundary; target = activity domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/activity/session_ports.rs"
+site = "anyharness_contract::v1::ActivityProcess"
+reason = "1 wire type import below the mapper boundary; target = activity domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/activity/store.rs"
+site = "anyharness_contract::v1::FeedKind"
+reason = "1 wire type import below the mapper boundary; target = activity domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/agents/installer/seed/health.rs"
+site = "anyharness_contract::v1::AgentSeedFailureKind"
+reason = "1 wire type import below the mapper boundary; target = agents domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/agents/installer/seed/mod.rs"
+site = "mod types::anyharness_contract::v1::AgentSeedFailureKind"
+reason = "1 wire type import inside the inline cfg(test) mod the engine cannot see; target = none, engine-invisible cfg boundary"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/agents/installer/seed/types.rs"
+site = "anyharness_contract::v1::AgentSeedFailureKind"
+reason = "1 wire type import below the mapper boundary; target = agents domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/cowork/mcp/calls_helpers.rs"
+site = "fn mode_options_to_json::anyharness_contract::v1::NormalizedSessionControl"
+reason = "1 inline wire path (:31 NormalizedSessionControl fn param) below the mapper boundary; target = cowork domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/cowork/mcp/definition.rs"
+site = "anyharness_contract::v1::SessionMcpBindingNotAppliedReason"
+reason = "1 wire type import below the mapper boundary; target = cowork domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs"
+site = "anyharness_contract::v1::ContentPart"
+reason = "1 wire type import + 2 inline wire paths (:120 struct field, :765 return type) below the mapper boundary; target = cowork domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs"
+site = "type CoworkCodingStatusResult::anyharness_contract::v1::SessionExecutionSummary"
+reason = "1 wire type import + 2 inline wire paths (:120 struct field, :765 return type) below the mapper boundary; target = cowork domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs"
+site = "fn live_config_snapshot::anyharness_contract::v1::SessionLiveConfigSnapshot"
+reason = "1 wire type import + 2 inline wire paths (:120 struct field, :765 return type) below the mapper boundary; target = cowork domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/goals/model.rs"
+site = "anyharness_contract::v1::Goal"
+reason = "1 wire type import below the mapper boundary; target = goals domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/goals/runtime.rs"
+site = "anyharness_contract::v1::Goal"
+reason = "2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); target = goals domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/goals/runtime.rs"
+site = "mod tests::anyharness_contract::v1::Goal"
+reason = "2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); target = goals domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/goals/service.rs"
+site = "anyharness_contract::v1::Goal"
+reason = "1 wire type import below the mapper boundary; target = goals domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/goals/session_ports.rs"
+site = "anyharness_contract::v1::Goal"
+reason = "1 wire type import below the mapper boundary; target = goals domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/goals/store.rs"
+site = "anyharness_contract::v1::GoalStatus"
+reason = "1 wire type import below the mapper boundary; target = goals domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/goals/wire.rs"
+site = "anyharness_contract::v1::GoalStatus"
+reason = "1 wire type import below the mapper boundary; target = goals domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/loops/model.rs"
+site = "anyharness_contract::v1::Loop"
+reason = "1 wire type import below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs"
+site = "anyharness_contract::v1::Loop"
+reason = "3 wire type imports (one inside the inline cfg(test) mod) + 4 inline wire paths (:490/:491 match arms, :536 comparison, :754 fn param) below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs"
+site = "fn schedule_kind_wire::anyharness_contract::v1::LoopScheduleKind::Interval"
+reason = "3 wire type imports (one inside the inline cfg(test) mod) + 4 inline wire paths (:490/:491 match arms, :536 comparison, :754 fn param) below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs"
+site = "fn schedule_kind_wire::anyharness_contract::v1::LoopScheduleKind::Cron"
+reason = "3 wire type imports (one inside the inline cfg(test) mod) + 4 inline wire paths (:490/:491 match arms, :536 comparison, :754 fn param) below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs"
+site = "fn loop_event_loop_id::anyharness_contract::v1::SessionEvent"
+reason = "3 wire type imports (one inside the inline cfg(test) mod) + 4 inline wire paths (:490/:491 match arms, :536 comparison, :754 fn param) below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs"
+site = "fn loop_event_loop_id::anyharness_contract::v1::SessionEvent#2"
+reason = "3 wire type imports (one inside the inline cfg(test) mod) + 4 inline wire paths (:490/:491 match arms, :536 comparison, :754 fn param) below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs"
+site = "mod tests::anyharness_contract::v1::Loop"
+reason = "3 wire type imports (one inside the inline cfg(test) mod) + 4 inline wire paths (:490/:491 match arms, :536 comparison, :754 fn param) below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/loops/schedule.rs"
+site = "anyharness_contract::v1::LoopSchedule"
+reason = "1 wire type import below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/loops/service.rs"
+site = "anyharness_contract::v1::LoopFiredPayload"
+reason = "1 wire type import + 1 inline wire path (:245 struct field) below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/loops/service.rs"
+site = "type EmulatedLoopSpec::anyharness_contract::v1::LoopSchedule"
+reason = "1 wire type import + 1 inline wire path (:245 struct field) below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/loops/session_ports.rs"
+site = "anyharness_contract::v1::Loop"
+reason = "1 wire type import below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/loops/store.rs"
+site = "anyharness_contract::v1::LoopScheduleKind"
+reason = "1 wire type import below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/loops/wire.rs"
+site = "anyharness_contract::v1::LoopScheduleKind"
+reason = "1 wire type import below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/plans/decision_op.rs"
+site = "anyharness_contract::v1::PendingInteractionPayloadSummary"
+reason = "1 wire type import below the mapper boundary; target = plans domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/plans/document.rs"
+site = "mod tests::anyharness_contract::v1::ProposedPlanDecisionState"
+reason = "1 wire type import inside the inline cfg(test) mod the engine cannot see; target = none, engine-invisible cfg boundary"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/plans/model.rs"
+site = "anyharness_contract::v1::ProposedPlanDecisionState"
+reason = "1 wire type import below the mapper boundary; target = plans domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/plans/permission_advisor.rs"
+site = "anyharness_contract::v1::ProposedPlanDecisionState"
+reason = "1 wire type import below the mapper boundary; target = plans domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/plans/runtime.rs"
+site = "anyharness_contract::v1::PromptInputBlock"
+reason = "1 wire type import + 3 inline wire paths building an OriginContext (:374-:376) inside the inline cfg(test) mod the engine cannot see; target = plans domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/plans/runtime.rs"
+site = "fn handoff_origin_preserves_request_origin_for_created_sessions::anyharness_contract::v1::OriginContext"
+reason = "1 wire type import + 3 inline wire paths building an OriginContext (:374-:376) inside the inline cfg(test) mod the engine cannot see; target = plans domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/plans/runtime.rs"
+site = "fn handoff_origin_preserves_request_origin_for_created_sessions::anyharness_contract::v1::OriginKind::Human"
+reason = "1 wire type import + 3 inline wire paths building an OriginContext (:374-:376) inside the inline cfg(test) mod the engine cannot see; target = plans domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/plans/runtime.rs"
+site = "fn handoff_origin_preserves_request_origin_for_created_sessions::anyharness_contract::v1::OriginEntrypoint::Desktop"
+reason = "1 wire type import + 3 inline wire paths building an OriginContext (:374-:376) inside the inline cfg(test) mod the engine cannot see; target = plans domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/plans/service.rs"
+site = "anyharness_contract::v1::ContentPart"
+reason = "1 wire type import below the mapper boundary; target = plans domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/plans/store.rs"
+site = "anyharness_contract::v1::ProposedPlanDecisionState"
+reason = "1 wire type import below the mapper boundary; target = plans domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/reviews/mcp/calls.rs"
+site = "fn review_status_json::anyharness_contract::v1::ReviewRunDetail"
+reason = "1 inline wire path (:98 ReviewRunDetail fn param) below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/reviews/mcp/definition.rs"
+site = "anyharness_contract::v1::SessionMcpBindingNotAppliedReason"
+reason = "1 wire type import below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/reviews/model.rs"
+site = "anyharness_contract::v1"
+reason = "1 wire type import below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/reviews/runtime/events.rs"
+site = "anyharness_contract::v1::ReviewRunUpdatedPayload"
+reason = "1 wire type import + 1 inline wire path (:110 match pattern) below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/reviews/runtime/events.rs"
+site = "fn handle_reviewer_turn_finished::anyharness_contract::v1::ErrorEventDetails::ProviderRateLimit"
+reason = "1 wire type import + 1 inline wire path (:110 match pattern) below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/reviews/runtime/feedback.rs"
+site = "anyharness_contract::v1::ReviewRunDetail"
+reason = "1 wire type import below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/reviews/runtime/launching.rs"
+site = "anyharness_contract::v1::PromptInputBlock"
+reason = "1 wire type import below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/reviews/runtime/workflow.rs"
+site = "anyharness_contract::v1::ReviewRunDetail"
+reason = "1 wire type import below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/reviews/service/detail.rs"
+site = "anyharness_contract::v1"
+reason = "1 wire type import below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/reviews/service/queries.rs"
+site = "anyharness_contract::v1"
+reason = "1 wire type import below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/reviews/session_observer.rs"
+site = "anyharness_contract::v1::ContentPart"
+reason = "1 wire type import below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/reviews/store/feedback.rs"
+site = "anyharness_contract::v1::PendingPromptRemovalReason"
+reason = "1 wire type import below the mapper boundary; target = reviews domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/active_activity_roster.rs"
+site = "anyharness_contract::v1::ActivityProcess"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/active_goals.rs"
+site = "anyharness_contract::v1::Goal"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/active_loops.rs"
+site = "anyharness_contract::v1::Loop"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/delegation.rs"
+site = "anyharness_contract::v1::SessionEvent"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/execution_summary.rs"
+site = "anyharness_contract::v1::SessionExecutionPhase"
+reason = "2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/execution_summary.rs"
+site = "mod tests::anyharness_contract::v1::InteractionKind"
+reason = "2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/extensions.rs"
+site = "anyharness_contract::v1::ErrorEventDetails"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/live_config/controls.rs"
+site = "anyharness_contract::v1::NormalizedSessionControl"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/live_config/raw.rs"
+site = "anyharness_contract::v1::RawSessionConfigOption"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/live_ports.rs"
+site = "anyharness_contract::v1::SessionEvent"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/assembly.rs"
+site = "anyharness_contract::v1::SessionMcpBindingSummary"
+reason = "2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/assembly.rs"
+site = "mod tests::anyharness_contract::v1::SessionMcpBindingOutcome"
+reason = "2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/contract.rs"
+site = "anyharness_contract::v1::SessionMcpServer"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/summaries.rs"
+site = "anyharness_contract::v1::SessionMcpBindingSummary"
+reason = "2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/summaries.rs"
+site = "mod tests::anyharness_contract::v1::SessionMcpBindingOutcome"
+reason = "2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/model.rs"
+site = "anyharness_contract::v1"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/prompt/capabilities.rs"
+site = "anyharness_contract::v1::PromptCapabilities"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/prompt/mod.rs"
+site = "anyharness_contract::v1::ContentPart"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/prompt/prepare.rs"
+site = "anyharness_contract::v1::PromptAttachmentSource"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/prompt/provenance.rs"
+site = "anyharness_contract::v1::PromptProvenance"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/replay.rs"
+site = "anyharness_contract::v1::ReplayRecordingSummary"
+reason = "2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/replay.rs"
+site = "mod tests::anyharness_contract::v1::SessionStartedEvent"
+reason = "2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/config.rs"
+site = "anyharness_contract::v1::ConfigApplyState"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/creation.rs"
+site = "anyharness_contract::v1::SessionMcpBindingSummary"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/fork.rs"
+site = "anyharness_contract::v1::ForkSessionTarget"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/fork_boundary.rs"
+site = "anyharness_contract::v1::ForkSessionTarget"
+reason = "2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); the resolver reads wire SessionEvent/TranscriptItemKind to classify user-message boundaries; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/fork_boundary.rs"
+site = "mod tests::anyharness_contract::v1::ForkSessionTargetType"
+reason = "2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); the resolver reads wire SessionEvent/TranscriptItemKind to classify user-message boundaries; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/interactions.rs"
+site = "anyharness_contract::v1::InteractionKind"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/mod.rs"
+site = "anyharness_contract::v1::McpElicitationSubmittedField"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/pending_prompts.rs"
+site = "anyharness_contract::v1::PromptInputBlock"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/prompt.rs"
+site = "anyharness_contract::v1::PromptInputBlock"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/replay.rs"
+site = "anyharness_contract::v1::ReplayRecordingSummary"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/view.rs"
+site = "anyharness_contract::v1::ActivityProcess"
+reason = "2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/view.rs"
+site = "mod tests::anyharness_contract::v1::NormalizedSessionControls"
+reason = "2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime_event.rs"
+site = "anyharness_contract::v1::ReviewRunUpdatedPayload"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/service/config.rs"
+site = "fn get_live_config_snapshot::anyharness_contract::v1::SessionLiveConfigSnapshot"
+reason = "3 inline wire paths (SessionLiveConfigSnapshot in return types at :8/:35 and a HashMap value at :22) below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/service/config.rs"
+site = "fn get_live_config_snapshots::anyharness_contract::v1::SessionLiveConfigSnapshot"
+reason = "3 inline wire paths (SessionLiveConfigSnapshot in return types at :8/:35 and a HashMap value at :22) below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/service/config.rs"
+site = "fn get_live_config_snapshot_checked::anyharness_contract::v1::SessionLiveConfigSnapshot"
+reason = "3 inline wire paths (SessionLiveConfigSnapshot in return types at :8/:35 and a HashMap value at :22) below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/store/events.rs"
+site = "fn append_event_with_next_seq::anyharness_contract::v1::SessionEvent"
+reason = "4 inline wire paths (SessionEvent/SessionEventEnvelope at :53/:55/:73 and a turbofish deserialize at :527) below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/store/events.rs"
+site = "fn append_event_with_next_seq::anyharness_contract::v1::SessionEventEnvelope"
+reason = "4 inline wire paths (SessionEvent/SessionEventEnvelope at :53/:55/:73 and a turbofish deserialize at :527) below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/store/events.rs"
+site = "fn append_event_with_next_seq::anyharness_contract::v1::SessionEventEnvelope#2"
+reason = "4 inline wire paths (SessionEvent/SessionEventEnvelope at :53/:55/:73 and a turbofish deserialize at :527) below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/store/events.rs"
+site = "fn sanitize_session_event_payload_json::anyharness_contract::v1::SessionEvent"
+reason = "4 inline wire paths (SessionEvent/SessionEventEnvelope at :53/:55/:73 and a turbofish deserialize at :527) below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/store/persisted_payloads.rs"
+site = "anyharness_contract::v1::ContentPart"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/subagents/transcript.rs"
+site = "anyharness_contract::v1::ContentPart"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/access_model.rs"
+site = "anyharness_contract::v1::WorkspaceMobilityRuntimeMode"
+reason = "1 wire type import below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/creator_context.rs"
+site = "anyharness_contract::v1"
+reason = "1 wire type import below the mapper boundary; target = workspaces domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/live_config/mod.rs"
+site = "anyharness_contract::v1::ConfigApplyState"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/product_launch.rs"
+site = "anyharness_contract::v1::SessionMcpBindingOutcome"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-2"
+path = "anyharness/crates/anyharness-lib/src/domains/goals/runtime.rs"
+site = "anyharness_contract::v1::SetSessionGoalRequest"
+reason = "strict-mirror goal runtime uses SetSessionGoalRequest to drive the sidecar ext method; contract mapping pending move above the API boundary"
+
+[[exception]]
+rule = "AH-CONTRACT-2"
+path = "anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs"
+site = "anyharness_contract::v1::SetSessionLoopRequest"
+reason = "strict-mirror loop runtime uses SetSessionLoopRequest to drive the sidecar ext method; contract mapping pending move above the API boundary"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs"
+site = "crate::live::terminals::AgentLoginTerminalRecord"
+reason = "agent login holds the live login-terminal service directly (4 leaves in one group import); target = agents runtime valve (grid plan PR 6c)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs"
+site = "crate::live::terminals::AgentLoginTerminalService"
+reason = "agent login holds the live login-terminal service directly (4 leaves in one group import); target = agents runtime valve (grid plan PR 6c)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs"
+site = "crate::live::terminals::AgentLoginTerminalStatus"
+reason = "agent login holds the live login-terminal service directly (4 leaves in one group import); target = agents runtime valve (grid plan PR 6c)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/agents/auth/login_terminal.rs"
+site = "crate::live::terminals::StartAgentLoginTerminalOptions"
+reason = "agent login holds the live login-terminal service directly (4 leaves in one group import); target = agents runtime valve (grid plan PR 6c)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/entry.rs"
+site = "fn document_from_snapshot::crate::live::sessions::probe"
+reason = "inline fully-qualified live probe type in a fn signature; target = agents runtime valve (grid plan PR 6c)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/probe.rs"
+site = "crate::live::sessions::probe::probe_agent"
+reason = "model snapshot calls live session probe directly (3 leaves in one group import); target = agents runtime valve (grid plan PR 6c)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/probe.rs"
+site = "crate::live::sessions::probe::ProbeOptions"
+reason = "model snapshot calls live session probe directly (3 leaves in one group import); target = agents runtime valve (grid plan PR 6c)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/probe.rs"
+site = "crate::live::sessions::probe::ProbeSnapshot"
+reason = "model snapshot calls live session probe directly (3 leaves in one group import); target = agents runtime valve (grid plan PR 6c)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/test_support.rs"
+site = "crate::live::sessions::probe::ProbeModelEntry"
+reason = "test-fixture support file (not excluded by should_skip) builds live probe snapshots; target = agents runtime valve or move under tests/ (grid plan PR 6c)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/test_support.rs"
+site = "crate::live::sessions::probe::ProbeSnapshot"
+reason = "test-fixture support file (not excluded by should_skip) builds live probe snapshots; target = agents runtime valve or move under tests/ (grid plan PR 6c)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/test_support.rs"
+site = "fn snapshot::crate::live::sessions::probe"
+reason = "test-fixture support file (not excluded by should_skip) builds live probe snapshots; target = agents runtime valve or move under tests/ (grid plan PR 6c)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/plans/decision_op.rs"
+site = "crate::live::sessions::Resolution"
+reason = "plan decision op imports actor command types (Resolution, ResolveInteractionCommandError) via the live::sessions root re-export, not ::model; target = model re-export or plans runtime valve (grid plan PR 6e)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/plans/decision_op.rs"
+site = "crate::live::sessions::ResolveInteractionCommandError"
+reason = "plan decision op imports actor command types (Resolution, ResolveInteractionCommandError) via the live::sessions root re-export, not ::model; target = model re-export or plans runtime valve (grid plan PR 6e)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/execution_summary.rs"
+site = "crate::live::sessions::handle::LiveSessionExecutionSnapshot"
+reason = "summary reads LiveSessionExecutionSnapshot from live::sessions::handle, not ::model; target = re-export the snapshot as a model shape (grid plan PR 6d)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs"
+site = "crate::live::terminals::TerminalService"
+reason = "access gate holds live terminals directly (1 use-line + 1 re-import inside the inline cfg(test) mod the engine cannot see); target = workspaces runtime valve (grid plan PR 6b)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs"
+site = "mod tests::crate::live::terminals::TerminalService"
+reason = "access gate holds live terminals directly (1 use-line + 1 re-import inside the inline cfg(test) mod the engine cannot see); target = workspaces runtime valve (grid plan PR 6b)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/setup_runtime.rs"
+site = "crate::live::terminals::TerminalService"
+reason = "workspace setup holds live terminals directly; target = workspaces runtime valve (grid plan PR 6b)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/archive/quiesce.rs"
+site = "crate::live::terminals::TerminalService"
+reason = "archive quiesce holds live terminals directly, exactly as access_gate.rs and deletion/purge.rs do — the three plane stops are the same live surface; target = workspaces runtime valve (grid plan PR 6b)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/purge.rs"
+site = "crate::live::terminals::TerminalService"
+reason = "purge holds live terminals directly (row-dies-last quiesce is deliberately duplicated from archive/quiesce.rs rather than shared, R5); target = workspaces runtime valve (grid plan PR 6b)"
+
+[[exception]]
+rule = "AH-STORE-3"
+path = "anyharness/crates/anyharness-lib/src/domains/workspaces/access_gate.rs"
+site = "fn runtime_state_reports_access_store_failure_as_unexpected::DROP TABLE"
+reason = "inside the inline cfg(test) mod the engine cannot see (DROP TABLE workspace_access_modes); the repo_roots INSERT that used to sit alongside it moved to the shared repo_roots test_support helper (grid plan PR 8c); target = none, engine-invisible cfg boundary"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/sessions/background_work/mod.rs"
+site = "mod tests::crate::domains::sessions::store::SessionStore"
+reason = "both inside the inline cfg(test) mod the engine cannot see (1 import + 1 SessionStore::new in a fixture); target = none, engine-invisible cfg boundary"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/sessions/background_work/mod.rs"
+site = "fn seeded_store::SessionStore::new"
+reason = "both inside the inline cfg(test) mod the engine cannot see (1 import + 1 SessionStore::new in a fixture); target = none, engine-invisible cfg boundary"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/command_runs/pty.rs"
+site = "crate::domains::terminals::service::append_bounded"
+reason = "live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/command_runs/pty.rs"
+site = "crate::domains::terminals::service::complete_command_run"
+reason = "live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/command_runs/pty.rs"
+site = "crate::domains::terminals::service::new_command_run_record"
+reason = "live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/command_runs/pty.rs"
+site = "crate::domains::terminals::service::validate_env_vars"
+reason = "live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/command_runs/pty.rs"
+site = "crate::domains::terminals::service::TerminalCommandService"
+reason = "live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/command_runs/setup_process.rs"
+site = "crate::domains::terminals::service::append_bounded"
+reason = "live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/command_runs/setup_process.rs"
+site = "crate::domains::terminals::service::complete_command_run"
+reason = "live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/command_runs/setup_process.rs"
+site = "crate::domains::terminals::service::TerminalCommandService"
+reason = "live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/driver/pty.rs"
+site = "crate::domains::terminals::service::complete_command_run"
+reason = "live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/driver/pty.rs"
+site = "crate::domains::terminals::service::new_command_run_record"
+reason = "live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/driver/pty.rs"
+site = "crate::domains::terminals::service::TerminalCommandService"
+reason = "live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/handle.rs"
+site = "crate::domains::terminals::service::TerminalCommandService"
+reason = "live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/manager.rs"
+site = "crate::domains::terminals::service::new_command_run_record"
+reason = "live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/manager.rs"
+site = "crate::domains::terminals::service::validate_env_vars"
+reason = "live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/manager.rs"
+site = "crate::domains::terminals::service::TerminalCommandService"
+reason = "live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/manager.rs"
+site = "crate::domains::terminals::store::TerminalStore"
+reason = "live/terminals uses the older lock-based doctrine, deliberately retained; ratchet only, do not fix"
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/command_runs/workspace_stop.rs"
+site = "crate::domains::terminals::service::TerminalCommandService"
+reason = "R3: split from manager.rs to stay under the line cap (spec Scope section F); carries forward manager.rs's own already-allowlisted occurrence of this same live/terminals-uses-the-older-lock-based-doctrine exception for the TerminalCommandService/new_command_run_record calls the three workspace-wide stop primitives need; ratchet only, do not fix"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/terminals/command_runs/workspace_stop.rs"
+site = "crate::domains::terminals::service::new_command_run_record"
+reason = "R3: split from manager.rs to stay under the line cap (spec Scope section F); carries forward manager.rs's own already-allowlisted occurrence of this same live/terminals-uses-the-older-lock-based-doctrine exception for the TerminalCommandService/new_command_run_record calls the three workspace-wide stop primitives need; ratchet only, do not fix"
+
+
+# --- workflows gen-2 (merged from main) ---
+
+[[exception]]
+rule = "AH-API-1"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs"
+site = "crate::live::workflows::WorkflowCommandError"
+reason = "the command handlers match live::workflows::WorkflowCommandError to pick status codes (the oneshot reply IS the response per the gen-2 ADR); target = re-export the error through the domain or map it at the manager seam (post-merge, journaled)"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_run_commands.rs"
+site = "crate::domains::workflows::store::NodeMembership"
+reason = "the command routes answer their 404 discriminator and post-command projection from WorkflowStore reads; the gen-2 ADR rules reads-from-rows-never-actors (no domain facade exists by design); target = a thin reads facade if one ever grows (post-merge, journaled)"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_run_commands.rs"
+site = "fn dispatch_command::state.workflow_store"
+reason = "the command routes answer their 404 discriminator and post-command projection from WorkflowStore reads; the gen-2 ADR rules reads-from-rows-never-actors (no domain facade exists by design); target = a thin reads facade if one ever grows (post-merge, journaled)"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs"
+site = "crate::domains::workflows::store::NewRunParams"
+reason = "courier PUT upsert and the list/detail projections read WorkflowStore directly per the gen-2 ADR reads-from-rows ruling; same no-facade-by-design note as workflow_run_commands.rs"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs"
+site = "crate::domains::workflows::store::WorkspaceOccupied"
+reason = "courier PUT upsert and the list/detail projections read WorkflowStore directly per the gen-2 ADR reads-from-rows ruling; same no-facade-by-design note as workflow_run_commands.rs"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs"
+site = "fn list_workflow_runs::state.workflow_store"
+reason = "courier PUT upsert and the list/detail projections read WorkflowStore directly per the gen-2 ADR reads-from-rows ruling; same no-facade-by-design note as workflow_run_commands.rs"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs"
+site = "fn load_projection::state.workflow_store"
+reason = "courier PUT upsert and the list/detail projections read WorkflowStore directly per the gen-2 ADR reads-from-rows ruling; same no-facade-by-design note as workflow_run_commands.rs"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs"
+site = "fn put_workflow_run::state.workflow_store"
+reason = "courier PUT upsert and the list/detail projections read WorkflowStore directly per the gen-2 ADR reads-from-rows ruling; same no-facade-by-design note as workflow_run_commands.rs"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs"
+site = "fn put_workflow_run::state.workflow_store#2"
+reason = "courier PUT upsert and the list/detail projections read WorkflowStore directly per the gen-2 ADR reads-from-rows ruling; same no-facade-by-design note as workflow_run_commands.rs"
+
+[[exception]]
+rule = "AH-API-2"
+path = "anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs"
+site = "fn put_workflow_run::state.workflow_store#3"
+reason = "courier PUT upsert and the list/detail projections read WorkflowStore directly per the gen-2 ADR reads-from-rows ruling; same no-facade-by-design note as workflow_run_commands.rs"
+
+[[exception]]
+rule = "AH-STORE-3"
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/policy.rs"
+site = "fn controlling_run_id::\"SELECT"
+reason = "the gen-2 destruction-controller policy's controlling-run lookup runs its SELECT inline over a raw Db handle instead of through WorkflowStore; target = move the query into store.rs and pass facts in (journaled ADR wart, cleanup PR TBD)"
+
+[[exception]]
+rule = "AH-STORE-3"
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/policy.rs"
+site = "fn controlling_run_id::rusqlite::params"
+reason = "the gen-2 destruction-controller policy's controlling-run lookup runs its SELECT inline over a raw Db handle instead of through WorkflowStore; target = move the query into store.rs and pass facts in (journaled ADR wart, cleanup PR TBD)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/session_extension.rs"
+site = "anyharness_contract::v1::InteractionKind"
+reason = "1 wire type import (InteractionKind/InteractionOutcome, the types the extension contexts in sessions/extensions.rs already carry) mapped to tracing discriminants below the mapper boundary; resolves with the sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-LIVE-5"
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/session_extension.rs"
+site = "crate::live::workflows::WorkflowManager"
+reason = "the turn-finished extension hands its notification straight to live::workflows::WorkflowManager instead of a runtime valve; deliberate in the gen-2 ADR (the manager IS the engine's front door) but the import shape is valve-less; target = a workflows runtime valve or capability trait (post-merge cleanup, journaled)"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/workflows/actor.rs"
+site = "crate::domains::sessions::store::SessionStore"
+reason = "the WorkflowActor's persist-before-act loop commits every transition through WorkflowStore (plus Session/Workspace stores for side effects) before acting — the gen-2 ADR makes the actor the write authority, colliding with live-never-fetches; target = capability traits wired in app/ (post-merge cleanup, journaled)"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/workflows/actor.rs"
+site = "crate::domains::workflows::store::ResolvedSideEffect"
+reason = "the WorkflowActor's persist-before-act loop commits every transition through WorkflowStore (plus Session/Workspace stores for side effects) before acting — the gen-2 ADR makes the actor the write authority, colliding with live-never-fetches; target = capability traits wired in app/ (post-merge cleanup, journaled)"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/workflows/actor.rs"
+site = "crate::domains::workflows::store::WorkflowStore"
+reason = "the WorkflowActor's persist-before-act loop commits every transition through WorkflowStore (plus Session/Workspace stores for side effects) before acting — the gen-2 ADR makes the actor the write authority, colliding with live-never-fetches; target = capability traits wired in app/ (post-merge cleanup, journaled)"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/workflows/actor.rs"
+site = "crate::domains::workflows::store::emit_decision_events"
+reason = "the WorkflowActor's persist-before-act loop commits every transition through WorkflowStore (plus Session/Workspace stores for side effects) before acting — the gen-2 ADR makes the actor the write authority, colliding with live-never-fetches; target = capability traits wired in app/ (post-merge cleanup, journaled)"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/workflows/actor.rs"
+site = "crate::domains::workspaces::store::WorkspaceStore"
+reason = "the WorkflowActor's persist-before-act loop commits every transition through WorkflowStore (plus Session/Workspace stores for side effects) before acting — the gen-2 ADR makes the actor the write authority, colliding with live-never-fetches; target = capability traits wired in app/ (post-merge cleanup, journaled)"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/workflows/mod.rs"
+site = "mod lifecycle_tests::crate::domains::sessions::store::SessionStore"
+reason = "the WorkflowManager constructs actors and heals the boot fence from the same three stores the actor uses; same gen-2 ADR ruling and same capability-trait target as actor.rs"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/workflows/mod.rs"
+site = "mod lifecycle_tests::crate::domains::workflows::store::WorkflowStore"
+reason = "the WorkflowManager constructs actors and heals the boot fence from the same three stores the actor uses; same gen-2 ADR ruling and same capability-trait target as actor.rs"
+
+[[exception]]
+rule = "AH-STORE-4"
+path = "anyharness/crates/anyharness-lib/src/live/workflows/mod.rs"
+site = "mod lifecycle_tests::crate::domains::workspaces::store::WorkspaceStore"
+reason = "the WorkflowManager constructs actors and heals the boot fence from the same three stores the actor uses; same gen-2 ADR ruling and same capability-trait target as actor.rs"

@@ -19,6 +19,17 @@ import {
  * injects its concrete `captureException` (Desktop routes it to the telemetry
  * transport) so there is exactly one QueryClient instance and one capture path.
  */
+// Named exception (does not sit on the `cadence` scale): 30s falls strictly
+// between `cadence.relaxedMs` (15s) and `cadence.slowMs` (60s) — the same
+// band `WORKSPACE_COLLECTIONS_STALE_MS` occupies. This is the global
+// react-query fallback applied to every query in the app that does not
+// declare its own `staleTime`, not a single site's polling cadence; snapping
+// it to either token would shift every un-opted-in query's default freshness
+// window app-wide, which is out of scope for a per-site migration. Kept as
+// its own named constant rather than force-fit (UX Latency + Transitions ADR
+// §4.7, Rung 6, Q8).
+const DEFAULT_QUERY_STALE_MS = 30_000;
+
 export interface AppQueryClientDeps {
   captureException: (
     error: unknown,
@@ -163,7 +174,7 @@ export function createAppQueryClient({
     defaultOptions: {
       queries: {
         queryKeyHashFn: hashAppQueryKey,
-        staleTime: 30_000,
+        staleTime: DEFAULT_QUERY_STALE_MS,
         refetchOnWindowFocus: false,
         retry: 1,
       },

@@ -1,0 +1,323 @@
+# Frontend exception ledger - grandfathered violation sites, one entry per site.
+#
+# Converted from the retired scripts/frontend_boundaries_allowlist.txt, whose rows
+# were per-file COUNTS. A count tolerates any N hits in a file, so a cleanup that
+# removed one site and a regression that added another cancelled out silently.
+# These entries name the exact sites instead: every repair is a deletion, and a
+# new hit in an already-listed file is a failure rather than a wash.
+#
+# `site` is a content fingerprint - `<enclosing symbol>::<matched specifier or
+# token>`, never a line number - so reformatting and moves inside a file do not
+# churn the ledger. An import that sits above the first declaration has no
+# enclosing symbol, so its fingerprint is the bare specifier. A `#2` suffix is an
+# occurrence ordinal for a repeated token inside one symbol, not a line number.
+#
+# Reasons are carried verbatim from the allowlist row that covered the file.
+# This is migration debt, not permission for new code: a net-new entry is an
+# amendment (lints/README.md) and needs founder approval. Removing debt means
+# deleting the entry in the same PR - a site that no longer violates its rule
+# fails the check as stale.
+#
+# Known scope limits inherited from the checker (deliberate, not bugs to file):
+#
+# - The enclosing-symbol scan is lexical, not a TypeScript parse. Inside a
+#   multi-line brace import list the nearest preceding declaration-shaped line is
+#   the last named type in the list, which is why the four session-runtime.ts
+#   entries are fingerprinted under `type ListSessionsOptions`. The specifier half
+#   still makes each site unique, which is what the ledger needs.
+#
+# - Import rules fingerprint the specifier, so two symbols imported from the same
+#   module on separate lines share a fingerprint and take an ordinal. Repairing
+#   either leaves the other, and the survivor keeps the lower ordinal.
+#
+# - Nothing here tolerates a whole file. Every entry is (rule, path, site), so a
+#   second violation of the same rule elsewhere in a listed file still fails.
+
+[[exception]]
+rule = "FE-ACCESS-2"
+path = "apps/packages/product-client/src/hooks/workspaces/workflows/files/use-file-reference-actions.ts"
+site = "getAnyHarnessClient"
+reason = "workflow imports raw AnyHarness client"
+
+[[exception]]
+rule = "FE-ACCESS-2"
+path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-materialization-health-pass.ts"
+site = "getAnyHarnessClient"
+reason = "workflow imports raw AnyHarness client"
+
+[[exception]]
+rule = "FE-ACCESS-2"
+path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-availability-actions.ts"
+site = "getAnyHarnessClient"
+reason = "workflow imports raw AnyHarness client"
+
+[[exception]]
+rule = "FE-ACCESS-2"
+path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-git-reconciliation-actions.ts"
+site = "getAnyHarnessClient"
+reason = "workflow imports raw AnyHarness client"
+
+[[exception]]
+rule = "FE-CACHE-1"
+path = "apps/packages/product-client/src/components/playground/PlaygroundAttachmentFixtures.tsx"
+site = "useQueryClient"
+reason = "playground component owns query cache shape"
+
+[[exception]]
+rule = "FE-CACHE-1"
+path = "apps/packages/product-client/src/components/playground/PlaygroundAttachmentFixtures.tsx"
+site = "const queryClient::useQueryClient"
+reason = "playground component owns query cache shape"
+
+[[exception]]
+rule = "FE-CACHE-1"
+path = "apps/packages/product-client/src/components/playground/PlaygroundAttachmentFixtures.tsx"
+site = "const queryClient::queryClient.setQueryData("
+reason = "playground component owns query cache shape"
+
+[[exception]]
+rule = "FE-CACHE-1"
+path = "apps/packages/product-client/src/components/playground/PlaygroundAttachmentFixtures.tsx"
+site = "const queryClient::queryClient.setQueryData(#2"
+reason = "playground component owns query cache shape"
+
+[[exception]]
+rule = "FE-CACHE-1"
+path = "apps/packages/product-client/src/components/playground/PlaygroundAttachmentFixtures.tsx"
+site = "const queryClient::queryClient.removeQueries("
+reason = "playground component owns query cache shape"
+
+[[exception]]
+rule = "FE-CACHE-1"
+path = "apps/packages/product-client/src/hooks/agents/lifecycle/use-local-auth-state-sync.ts"
+site = "useQueryClient"
+reason = "lifecycle hook owns query invalidation"
+
+[[exception]]
+rule = "FE-CACHE-1"
+path = "apps/packages/product-client/src/hooks/agents/lifecycle/use-local-auth-state-sync.ts"
+site = "const queryClient::useQueryClient"
+reason = "lifecycle hook owns query invalidation"
+
+[[exception]]
+rule = "FE-CACHE-1"
+path = "apps/packages/product-client/src/hooks/agents/lifecycle/use-local-auth-state-sync.ts"
+site = "const previous::queryClient.invalidateQueries("
+reason = "lifecycle hook owns query invalidation"
+
+[[exception]]
+rule = "FE-CACHE-1"
+path = "apps/packages/product-client/src/hooks/agents/lifecycle/use-local-auth-state-sync.ts"
+site = "const previous::queryClient.invalidateQueries(#2"
+reason = "lifecycle hook owns query invalidation"
+
+[[exception]]
+rule = "FE-CACHE-1"
+path = "apps/packages/product-client/src/hooks/agents/lifecycle/use-local-auth-state-sync.ts"
+site = "const reportDeliveryAck::queryClient.invalidateQueries("
+reason = "lifecycle hook owns query invalidation"
+
+[[exception]]
+rule = "FE-CACHE-2"
+path = "apps/packages/product-client/src/hooks/cloud/workflows/use-cloud-workspace-actions.ts"
+site = "@tanstack/react-query:useMutation"
+reason = "workflow owns useMutation wrapper"
+
+[[exception]]
+rule = "FE-CACHE-2"
+path = "apps/packages/product-client/src/hooks/cloud/workflows/use-create-cloud-workspace.ts"
+site = "@tanstack/react-query:useMutation"
+reason = "workflow owns useMutation wrapper"
+
+[[exception]]
+rule = "FE-CACHE-2"
+path = "apps/packages/product-client/src/hooks/workspaces/facade/use-worktree-settings-targets.ts"
+site = "@tanstack/react-query:useQueries"
+reason = "facade owns useQueries wrapper"
+
+[[exception]]
+rule = "FE-CACHE-2"
+path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-actions.ts"
+site = "@tanstack/react-query:useMutation"
+reason = "workflow owns useMutation wrapper"
+
+[[exception]]
+rule = "FE-CACHE-2"
+path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-display-name-actions.ts"
+site = "@tanstack/react-query:useMutation"
+reason = "workflow owns useMutation wrapper"
+
+[[exception]]
+rule = "FE-COMPONENT-1"
+path = "apps/packages/product-client/src/components/settings/panes/AccountPane.tsx"
+site = "type AccountPasswordCredentialSubmit::#product/lib/access/cloud/auth-probes"
+reason = "component imports raw auth probe"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/hooks/chat/ui/use-composer-dock-slots.tsx"
+site = "#product/components/workspace/chat/input/ApprovalCard"
+reason = "JSX-returning hook imports connected components"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/hooks/chat/ui/use-composer-dock-slots.tsx"
+site = "#product/components/workspace/chat/input/McpElicitationCard"
+reason = "JSX-returning hook imports connected components"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/hooks/chat/ui/use-composer-dock-slots.tsx"
+site = "#product/components/workspace/chat/input/PendingPromptList"
+reason = "JSX-returning hook imports connected components"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/hooks/chat/ui/use-composer-dock-slots.tsx"
+site = "#product/components/workspace/chat/input/DelegatedWorkComposerPanel"
+reason = "JSX-returning hook imports connected components"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/hooks/chat/ui/use-composer-dock-slots.tsx"
+site = "#product/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl"
+reason = "JSX-returning hook imports connected components"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/hooks/chat/ui/use-composer-dock-slots.tsx"
+site = "#product/components/workspace/chat/input/UserInputCard"
+reason = "JSX-returning hook imports connected components"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/hooks/chat/ui/use-composer-dock-slots.tsx"
+site = "#product/components/workspace/chat/input/PromptRecoveryPanel"
+reason = "JSX-returning hook imports connected components"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/hooks/chat/ui/use-composer-dock-slots.tsx"
+site = "#product/components/workspace/activity/SessionActivityBar"
+reason = "JSX-returning hook imports connected components"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/hooks/ui/diff/use-gap-expansion.ts"
+site = "#product/components/content/ui/diff/DiffContextExpander"
+reason = "hook imports component-owned expansion type"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/hooks/workspaces/ui/tabs/use-header-tabs-group-editor.ts"
+site = "#product/components/workspace/shell/tabs/ManualChatGroupEditorPopover"
+reason = "hook imports component-owned anchor type"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/hooks/workspaces/ui/use-repo-group-native-context-menu.ts"
+site = "#product/components/workspace/shell/sidebar/RepoGroup"
+reason = "hook imports component-owned environment type"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap.ts"
+site = "#product/stores/sessions/harness-connection-store"
+reason = "access module imports connection store"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/lib/access/anyharness/session-runtime.ts"
+site = "type ListSessionsOptions::#product/stores/sessions/harness-connection-store"
+reason = "access module imports session stores"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/lib/access/anyharness/session-runtime.ts"
+site = "type ListSessionsOptions::#product/stores/sessions/session-directory-store"
+reason = "access module imports session stores"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/lib/access/anyharness/session-runtime.ts"
+site = "type ListSessionsOptions::#product/stores/sessions/session-records"
+reason = "access module imports session stores"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/lib/access/anyharness/session-runtime.ts"
+site = "type ListSessionsOptions::#product/stores/sessions/session-selection-store"
+reason = "access module imports session stores"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/lib/access/cloud/owner-context-headers.ts"
+site = "#product/stores/organizations/organization-store"
+reason = "access module imports organization store"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/lib/domain/chat/__fixtures__/playground/environment-fixtures.ts"
+site = "#product/hooks/workspaces/facade/use-runtime-pressure-control-state"
+reason = "domain fixture imports hook-owned pressure type"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/lib/domain/chat/__fixtures__/playground/workspace-status-fixtures.ts"
+site = "#product/components/workspace/chat/input/workspace-status/WorkspaceStatusComposerControl"
+reason = "domain fixture imports component-owned status type"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/lib/domain/workspaces/cloud/workspace-availability-intent-mapping.ts"
+site = "#product/stores/cloud/workspace-availability-intent-store"
+reason = "domain module imports store-owned intent type"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/lib/domain/workspaces/status/workspace-status-model.ts"
+site = "#product/components/workspace/chat/input/workspace-status/WorkspaceStatusComposerControl"
+reason = "domain module imports component-owned status type"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/lib/workflows/sessions/hot-session-ingest-manager.ts"
+site = "#product/stores/sessions/session-ingest-store"
+reason = "workflow imports ingest store"
+
+[[exception]]
+rule = "FE-PC-6"
+path = "apps/packages/product-client/src/stores/toast/toast-store.ts"
+site = "#product/components/feedback/product-toast"
+reason = "store imports component toast implementation"
+
+[[exception]]
+rule = "FE-STORE-1"
+path = "apps/packages/product-client/src/stores/workspaces/cloud-workspace-billing-block-store.ts"
+site = "#product/lib/access/cloud/workspace-connection-retry"
+reason = "store imports access-owned billing type"
+
+[[exception]]
+rule = "FE-STORE-3"
+path = "apps/packages/product-client/src/hooks/workspaces/lifecycle/use-workspace-header-tabs-preference-effects.ts"
+site = "const patch::useWorkspaceUiStore.setState"
+reason = "lifecycle hook mutates imported workspace UI store"
+
+[[exception]]
+rule = "FE-STORE-3"
+path = "apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap.ts"
+site = "const runtimeSnapshot::useHarnessConnectionStore.setState"
+reason = "runtime bootstrap mutates imported connection store"
+
+[[exception]]
+rule = "FE-STORE-3"
+path = "apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap.ts"
+site = "const previous::useHarnessConnectionStore.setState"
+reason = "runtime bootstrap mutates imported connection store"
+
+[[exception]]
+rule = "FE-STORE-3"
+path = "apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap.ts"
+site = "const state::useHarnessConnectionStore.setState"
+reason = "runtime bootstrap mutates imported connection store"
+

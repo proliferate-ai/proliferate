@@ -103,6 +103,7 @@ pub(super) fn producer(
             pending_loss_total: 0,
             pending_loss_range: PendingLossRange::Empty,
             open_loss_snapshot: None,
+            delivery_end_warned_generation: None,
         }),
         fallback: Arc::new(super::fallback_runtime::FallbackController::new(fallback)),
         notify: tokio::sync::Notify::new(),

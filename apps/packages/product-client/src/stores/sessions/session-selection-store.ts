@@ -15,6 +15,26 @@ import type {
   WorkspaceSessionRecovery,
 } from "#product/lib/domain/workspaces/selection/session-recovery";
 
+/**
+ * Reason attached to the superseded selection's abort so a rejected in-flight
+ * request reads as an intentional supersession rather than a transport failure.
+ */
+export const WORKSPACE_SELECTION_SUPERSEDED_REASON = "workspace_selection_superseded";
+
+/**
+ * Abort the outgoing selection's controller and mint the incoming selection's.
+ * Called by every nonce-bumping mutation so the abort lifecycle and the nonce
+ * advance together as one mechanism.
+ */
+function supersedeWorkspaceSelectionAbort(
+  previous: AbortController | undefined,
+): AbortController {
+  if (previous && !previous.signal.aborted) {
+    previous.abort(WORKSPACE_SELECTION_SUPERSEDED_REASON);
+  }
+  return new AbortController();
+}
+
 interface ActivateWorkspaceOptions {
   logicalWorkspaceId: string | null;
   workspaceId: string;
@@ -47,6 +67,16 @@ interface SessionSelectionState {
   activeSessionId: string | null;
   activeSessionVersion: number;
   sessionActivationIntentEpochByWorkspace: Record<string, number>;
+  /**
+   * Single source of truth for workspace-selection staleness (UX Latency ADR
+   * §4.6, Rung 9 / Q11). Every mutation that bumps `workspaceSelectionNonce`
+   * aborts this controller and installs a fresh one, so a newer selection
+   * cancels the prior selection's in-flight requests on the wire rather than
+   * merely discarding their resolved results. `isWorkspaceSelectionCurrent`
+   * stays as defense-in-depth: the abort is the mechanism, the nonce compare is
+   * the truthfulness check.
+   */
+  workspaceSelectionAbort: AbortController;
   hotPaintGate: HotPaintGate | null;
   setSelectedLogicalWorkspaceId: (logicalWorkspaceId: string | null) => void;
   enterPendingWorkspaceShell: (
@@ -79,6 +109,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
   activeSessionId: null,
   activeSessionVersion: 0,
   sessionActivationIntentEpochByWorkspace: {},
+  workspaceSelectionAbort: new AbortController(),
   hotPaintGate: null,
 
   setSelectedLogicalWorkspaceId: (selectedLogicalWorkspaceId) => {
@@ -92,6 +123,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
       selectedLogicalWorkspaceId: buildPendingWorkspaceUiKey(entry),
       selectedWorkspaceId: null,
       workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
+      workspaceSelectionAbort: supersedeWorkspaceSelectionAbort(state.workspaceSelectionAbort),
       workspaceArrivalEvent: null,
       workspaceSessionRecovery: null,
       activeSessionId,
@@ -131,6 +163,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
       selectedLogicalWorkspaceId: options.logicalWorkspaceId,
       selectedWorkspaceId: options.workspaceId,
       workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
+      workspaceSelectionAbort: supersedeWorkspaceSelectionAbort(state.workspaceSelectionAbort),
       workspaceArrivalEvent: state.workspaceArrivalEvent?.workspaceId === options.workspaceId
         ? state.workspaceArrivalEvent
         : null,
@@ -150,6 +183,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
       selectedLogicalWorkspaceId: options.logicalWorkspaceId,
       selectedWorkspaceId: options.workspaceId,
       workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
+      workspaceSelectionAbort: supersedeWorkspaceSelectionAbort(state.workspaceSelectionAbort),
       workspaceArrivalEvent: state.workspaceArrivalEvent?.workspaceId === options.workspaceId
         ? state.workspaceArrivalEvent
         : null,
@@ -177,6 +211,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
       selectedLogicalWorkspaceId: null,
       selectedWorkspaceId: null,
       workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
+      workspaceSelectionAbort: supersedeWorkspaceSelectionAbort(state.workspaceSelectionAbort),
       workspaceArrivalEvent: null,
       workspaceSessionRecovery: null,
       activeSessionId: null,
@@ -201,6 +236,7 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
       selectedLogicalWorkspaceId: null,
       selectedWorkspaceId: null,
       workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
+      workspaceSelectionAbort: supersedeWorkspaceSelectionAbort(state.workspaceSelectionAbort),
       workspaceArrivalEvent: null,
       workspaceSessionRecovery: null,
       activeSessionId: null,

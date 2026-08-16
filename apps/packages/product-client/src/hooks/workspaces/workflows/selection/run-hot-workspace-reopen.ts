@@ -214,6 +214,7 @@ async function reconcileAfterHotPaint(input: {
     selectionNonce: nonce,
     selectionStartedAt: performance.now(),
     cloudWorkspaceId: null,
+    abortSignal: useSessionSelectionStore.getState().workspaceSelectionAbort.signal,
   };
   const isCurrent = () =>
     isWorkspaceSelectionCurrent(resolvedWorkspaceId, nonce)

@@ -267,10 +267,11 @@ rather than adding opaque intermediate planes.
 
 The composer is opaque in both modes and uses no backdrop filter. That keeps
 transcript paint out of the input surface and avoids re-blurring the transcript
-while typing. Its chrome is borderless, so the fill alone has to separate it
-from the page — in light that means it cannot be the white content plane. It
-takes the existing `#f6f6f6` rail plane rather than a fourth opaque light
-plane: the count above stays at three.
+while typing. It takes the existing `#f6f6f6` rail plane rather than a fourth
+opaque light plane, so the count above stays at three. Light adds one 0.5
+CSS-pixel `--color-border` shadow stroke around that fill so the full rounded
+edge remains legible against white; dark keeps its stronger fill step and no
+perimeter paint. The hairline is an edge, not elevation.
 
 ### Borders
 
@@ -402,10 +403,10 @@ Depth is carried by borders and surface steps first, shadow second. Light shadow
 color derives from the same `#1a1c1f` ink as the neutral ladder, so elevation
 does not reintroduce a blue slate cast.
 
-Two component roles refine the shared scale: the light user-message bubble uses
-a 5% ink 2px shadow, and the light composer combines a 0.5px ink edge with 3px
-and 12px shadow layers. Dark keeps the user-message shadow absent and aliases
-the composer to `--shadow-subtle`.
+One component role refines the shared scale: the light user-message bubble uses
+a 5% ink 2px shadow, while dark keeps that shadow absent. The composer has no
+elevation role or elevation stack in either mode. Light paints only its 0.5px
+border-role hairline; dark remains fill-only.
 
 From the class side, the appearance gate bans every other elevation spelling —
 `shadow-sm/md/lg/xl/2xl/inner` (stock Tailwind emits a non-token shadow),
@@ -518,7 +519,8 @@ spelling fails `ARBITRARY_RADIUS_RE`.
 ## Motion
 
 Motion has two scales that are deliberately *not* aliased to each other, plus a
-set of choreography delays. All three live in
+set of choreography delays and a small feedback scale for confirmation
+affordances. All four live in
 [motion.ts](../apps/packages/design/src/motion.ts) and are projected
 into CSS custom properties by the generator, so no component authors a
 millisecond or a bezier.
@@ -581,6 +583,72 @@ scrollbar lingers before hiding, how long a hover card tolerates the pointer
 leaving, how far apart stepped level bars fire. They live with motion because
 they are perceived as part of the same choreography, and JS consumers that must
 stay in lockstep with CSS import them and format through `motion.cssMs()`.
+
+The same delay scale also owns the todo progress pill's choreography
+(`delay.todoPillStepLingerMs: 3400`, `delay.todoPillStepHideMs: 4000`,
+`delay.todoPillHoverLingerMs: 1200`, `delay.todoPillHoverHideMs: 1800`: how
+long the pill lingers after a step advance or after the pointer leaves before
+its fade starts and finishes), a ghost tab row's collapse window
+(`delay.ghostRowFinalizeMs: 280`: covers `duration.disclosureMs` plus
+timer-scheduling slack so a deleted row's disclosure transition finishes
+before it is torn down), and the bound on an optimistic archive/unarchive
+POST's outcome (`delay.optimisticSettleTimeoutMs: 12_000`: past this the
+outcome is treated as genuinely unknown rather than a false failure).
+
+### Feedback affordances
+
+`motion.feedback` is a third, smaller scale for a control flipping to a
+confirmation label and then reverting — not an animation and not a
+choreography wait. `feedback.copiedResetMs: 2_000` is how long a control reads
+"Copied" before reverting to its resting label; every copy-to-clipboard
+control shares this one token rather than each owning its own reset literal.
+
+### Loading treatments
+
+| Value | ms | Role |
+| --- | --- | --- |
+| `loading.showDelayMs` | 200 | No loading treatment mounts until a wait has lasted this long. |
+| `loading.minDisplayMs` | 300 | A mounted treatment stays at least this long before it yields. |
+
+> **Loading is its own scale, and a treatment is gated, not free.** These two
+> waits are JS-scheduled and deliberately unaliased to the interaction or
+> activity numbers: `showDelayMs` is the Class C default window from the UX
+> Latency + Transitions ADR §4.2, and `minDisplayMs` is the anti-flicker floor.
+> Any wait that resolves faster than 200ms never mounts a treatment at all, so
+> fast paths stay treatment-free; once a treatment is up it holds for 300ms so a
+> just-appeared spinner cannot flash back out.
+
+The [`LoadingBoundary`](../apps/packages/product-client/src/primitives/LoadingBoundary.tsx)
+primitive is the single owner of that state machine. Surfaces never hand-roll a
+`content-fade-in` + `animation-delay` show-delay again; they pass a discriminated
+`pending | empty | ready` state and a treatment slot. Doctrine, all load-bearing:
+
+- The state is discriminated, never a boolean. `empty` is a resolved outcome and
+  may only render after data lands; while `pending` the boundary shows the class
+  treatment or nothing, never the empty slot.
+- The treatment is a call-site slot: Class A is `ProliferateLivingMark`, Class B
+  is `Spinner`. The boundary never renders two treatments inside one pending
+  window, and the treatment identity is stable for the whole window.
+- The one sanctioned reveal is `content-fade-in` at `--duration-enter`; reduced
+  motion disables the fade so content appears instantly. No treatment carries a
+  raw millisecond.
+- The boundary emits `renderer.loading.*` marks (`treatment_shown`,
+  `treatment_suppressed`, `settled`) through the same renderer diagnostics port
+  as the Rung 1 `renderer.flow.*` family, so the show-delay suppression and the
+  min-display hold are observable in telemetry.
+
+> **Skeletons are a carve-out, not a default (ADR §4 Rung 4, FR-1).** A
+> placeholder-shape skeleton (`SkeletonBlock`, `.skeleton-shimmer`) is sanctioned
+> only for a small fixed-shape row list whose final geometry is genuinely known,
+> and only at two named surfaces: the sidebar workspace list
+> (`SidebarWorkspaceContent`) and the repo picker rows (`CloudRepoPicker`). Both
+> route their skeleton through `LoadingBoundary` as the treatment slot so the
+> Class C show-delay still governs it. Every other loading surface is Class C:
+> the stable shell stays put and the body shows nothing until content resolves,
+> with a Class B `Spinner` reserved for a single named slow region inside that
+> shell. Settings pane bodies, the git review body, and any other big-surface
+> placeholder are Class C and carry no skeleton. New skeleton sites are a review
+> failure unless they are one of the two carve-out surfaces.
 
 > **Raw time literals are illegal in the design CSS.** `check-theme.mjs`'s
 > `checkRawMotionAuthority` walks `product.css` and the generated
@@ -772,9 +840,9 @@ components and `design` tokens. It does not invent new visual vocabulary:
   resolve to a root file directly under `product-client/src/primitives/` or any
   file under `product-client/src/primitives/patterns/**`. Radix stays illegal in
   `icons/**`, `utils/**`, `overlays/**`, `__tests__/**`, and higher layers.
-  Enforced by `RADIX_IMPORT_OUTSIDE_UI_COMPONENT_LIBRARY` in
-  [check_frontend_boundaries.py](../scripts/check_frontend_boundaries.py),
-  scanned across every frontend package and app.
+  Enforced by `FE-UI-1` in
+  [check_frontend_boundaries.py](../scripts/check_frontend_boundaries.py), scanned
+  across every frontend package and app.
 - **No hardcoded style values.** Colors, spacing, radii, shadows, and motion
   come from `design` tokens through library components, never as arbitrary
   Tailwind brackets or raw hex/duration values at a feature callsite. Enforced by
@@ -847,6 +915,7 @@ index is the closed set, not a sample of it. Closure is mechanical in both direc
 | `IconTile` | [IconTile.tsx](../apps/packages/product-client/src/primitives/IconTile.tsx) | Glyph in a rounded tinted square, `tone` × `size`; non-interactive by construction, so it owns no state stack and never becomes a button. Promoted from 14 hand-rolled tiles across harness, repo-setup, billing and transcript surfaces. Eight files consume it now — four in the harness area, two in the transcript, plan handoff and the workflow definition list. Most of the unmigrated remainder is off-step or off-tone — `HarnessPane`'s 28px tile, the repo-setup and restart-dialog tiles at a radius the step does not carry, and `BillingOwnerCard`'s elevated-and-bordered pair, which no single `tone` recipe spells. `HarnessAuthSection`'s tile is not: it paints `size-8 rounded-md bg-surface-control text-muted-foreground`, which is exactly `tone="control" size="md"`, and is an unmigrated exact instance rather than a gap in the axes. |
 | `Input` | [Input.tsx](../apps/packages/product-client/src/primitives/Input.tsx) | Text input field. |
 | `Label` | [Label.tsx](../apps/packages/product-client/src/primitives/Label.tsx) | Form field label. |
+| `LoadingBoundary` | [LoadingBoundary.tsx](../apps/packages/product-client/src/primitives/LoadingBoundary.tsx) | The shared loading primitive: takes `pending`/`empty`/`ready`, arms a treatment only after `loading.showDelayMs`, holds it at least `loading.minDisplayMs`, renders the empty slot only post-resolve, and exits through the one sanctioned content fade-in. |
 | `PaneIconButton` | [PaneIconButton.tsx](../apps/packages/product-client/src/primitives/PaneIconButton.tsx) | Pane-scoped icon button (24px box), composes `Button`. |
 | `Popover` | [Popover.tsx](../apps/packages/product-client/src/primitives/Popover.tsx) | Raw `@radix-ui/react-popover` wrapper; `PopoverButton` composes it. |
 | `PopoverButton` | [PopoverButton.tsx](../apps/packages/product-client/src/primitives/PopoverButton.tsx) | Popover-backed trigger/content wrapper with `triggerMode` (`click`/`doubleClick`/`contextMenu`); the sanctioned trigger for click-only popovers and menus (keyboard-navigable menus stay on `DropdownMenu` until parity — see DropdownMenu status below). |
@@ -858,7 +927,7 @@ index is the closed set, not a sample of it. Closure is mechanical in both direc
 | `SegmentedControl` | [SegmentedControl.tsx](../apps/packages/product-client/src/primitives/SegmentedControl.tsx) | Segmented tab-like control. |
 | `Select` | [Select.tsx](../apps/packages/product-client/src/primitives/Select.tsx) | Native select styled to tokens. |
 | `ShortcutBadge` | [ShortcutBadge.tsx](../apps/packages/product-client/src/primitives/ShortcutBadge.tsx) | Keyboard-shortcut badge. |
-| `Skeleton` | [Skeleton.tsx](../apps/packages/product-client/src/primitives/Skeleton.tsx) | Shimmer loading placeholder block. |
+| `Skeleton` | [Skeleton.tsx](../apps/packages/product-client/src/primitives/Skeleton.tsx) | Shimmer loading placeholder block. Carve-out only (ADR §4 Rung 4, FR-1): the sidebar workspace list and repo picker rows, both routed through `LoadingBoundary`. Every other surface is Class C (no skeleton). |
 | `Sonner` | [Sonner.tsx](../apps/packages/product-client/src/primitives/Sonner.tsx) | Sole toast treatment, split in two: `Sonner` is the transparent positioner (stacking, swipe, 3-visible cap), and the toast body pattern ([ToastBody.tsx](../apps/packages/product-client/src/primitives/patterns/toast/ToastBody.tsx)) paints the whole card — popover frame, always-visible corner close, 28px action cluster with only the primary filled, and the in-place Details expansion (356→480px). |
 | `Spinner` | [Spinner.tsx](../apps/packages/product-client/src/primitives/Spinner.tsx) | Inline loading spinner. |
 | `StatusDot` | [StatusDot.tsx](../apps/packages/product-client/src/primitives/StatusDot.tsx) | Round semantic-status glyph sized by the `icon-status` tier, `tone` × `fill` (solid disc / hollow ring). The union of two hand-rolled dots (`PrStatusDot`, `RecentWorkStatusDot`) and a dozen inline `icon-status rounded-full bg-*` spans; every tone is an opaque ink, so `warning` maps to `warning-foreground`. `PrStatusDot` composes it, as do the workspace tab strip, the settings sidebar and the workflow run/detail lists. `RecentWorkStatusDot` and the inline spans have not migrated: the ones that remain each want a pulsing `live` state, a halo ring, or the `sidebar-status-unseen` tone, and each of those would be the third axis this row rules out. |
@@ -1134,8 +1203,8 @@ cleaned it, so the pin records work done rather than an opinion about a director
 | A banned class lands (arbitrary radius/z/gap/size, non-token shadow, `bg-foreground/<alpha>` ≤ 10%, `text-[…]`/`leading-[…]`, numeric duration, fixed glyph size) | `check_appearance_scaling.py` fails in pre-commit and CI, naming file and match | Replace with the semantic token utility, or obtain a written sanction — baseline growth is not a fix. |
 | A hard-coded value lands in `product.css` instead of `tokens.ts` | The token-declaration case is gated: `check_design_css_source` emits `authored-root-token` for any `--x:` in a global `:root` block and `authored-theme-block` for any `@theme`. Only a non-token literal inside a component rule (e.g. `background: #212121` in `.foo`) escapes, since `RAW_HEX_RE` is not run over design CSS — that one silently becomes a second source of truth and diverges mode-to-mode | Move the value into `tokens.ts` and regenerate. |
 | A raw `ms`/`s` literal or inline bezier lands in design CSS | `checkRawMotionAuthority` in `check-theme.mjs` fails, naming the owning rule and declaration | Use a `--duration-*`/`--ease-*`/`--activity-*` variable, or add the `/* activity-motion */` marker if it is genuinely an infinite loop. |
-| A `@radix-ui/*` import lands outside a root primitive file or `product-client/src/primitives/patterns/**` | `RADIX_IMPORT_OUTSIDE_UI_COMPONENT_LIBRARY` fails in `check_frontend_boundaries.py`, naming file and line | Move the wrapper into the legal tier, or compose the existing library primitive. |
-| A non-source file or unsupported directory is added at the primitives root | `PRODUCT_CLIENT_PRIMITIVES_TOP_LEVEL_ENTRY` fails, naming the offending entry | Move it to a root primitive file or the `patterns`, `icons`, `utils`, `overlays`, or `__tests__` owner. |
+| A `@radix-ui/*` import lands outside a root primitive file or `product-client/src/primitives/patterns/**` | `FE-UI-1` fails in `check_frontend_boundaries.py`, naming file and line | Move the wrapper into the legal tier, or compose the existing library primitive. |
+| A non-source file or unsupported directory is added at the primitives root | `FE-PC-7` fails, naming the offending entry | Move it to a root primitive file or the `patterns`, `icons`, `utils`, `overlays`, or `__tests__` owner. |
 | A styled component ships outside the library with no library equivalent and gets reused across surfaces | No mechanical check catches this — review only | Promote it into the matching tier per "How to add a component". |
 | A `lucide-react` import or dependency entry reappears | `LUCIDE_ICON_SOURCE` / `LUCIDE_PACKAGE_DEPENDENCY` fail in `check_frontend_boundaries.py`, naming file and line | Add the glyph to `primitives/icons/**` and import it from there. |
 | A new `role="dialog\|menu\|listbox\|tooltip\|button"` lands on a raw element | `hand-rolled-overlay-role` fails in `check_component_library.py` | Compose `ModalShell`/`PopoverButton`/`DropdownMenu`/`Tooltip`/`Button`, or record the site in the allowlist with the reason no sanctioned path fits. |
@@ -1166,9 +1235,10 @@ this document states is not mechanically enforced.
   checkout has no emitted file to read; every statement here about the generated
   stylesheet is verified against `src/tokens.ts` plus the generator and checker
   scripts.
-- No automated rendered-visual check exists. Nothing compares a served build
-  against an expected appearance, so a change that is token-correct and visually
-  wrong is caught only by human inspection, with no artifact retained.
+- Rendered visual coverage is narrow: the Tier-2 composer perimeter spec serves
+  the real Desktop renderer and preserves the production dock/surface depth
+  path, but other design surfaces still rely on human inspection with no fixed
+  appearance baseline.
 - `DropdownMenu` usage has no mechanical routing: it is the sanctioned path for
   keyboard-navigable menus (so new keyboard-menu consumers are legitimate), but
   nothing fails CI when a *click-only* menu imports it instead of

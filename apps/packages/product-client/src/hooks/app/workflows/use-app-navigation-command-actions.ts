@@ -3,6 +3,10 @@ import { useProductHost } from "@proliferate/product-client/host/ProductHostProv
 import { APP_ROUTES } from "#product/config/app-routes";
 import { isWorkflowsV2Enabled } from "#product/lib/domain/capabilities/workflows-v2";
 import { navigateApp } from "#product/lib/workflows/app/app-navigate-handoff";
+import {
+  SETTINGS_NAV_FLOW_KEY,
+  beginRendererFlow,
+} from "#product/lib/infra/diagnostics/renderer-flow-timing";
 import { useWebAppTarget } from "#product/hooks/capabilities/derived/use-web-app-target";
 import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 import { useOpenSupportReportWindow } from "#product/hooks/support/workflows/use-open-support-report-window";
@@ -32,6 +36,14 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
   // useNavigate would subscribe every command surface (and the lifecycle root
   // composing them) to each location change (PRO-170, PRO-182).
   const openSettings = useCallback(() => {
+    // UX-latency R1: intent mark for the settings_nav flow. The shell/data/
+    // stable marks are emitted by SettingsScreen once it mounts and settles.
+    // COVERAGE LIMIT (honest): only THIS command path emits the intent mark.
+    // Opening settings via a direct URL, a page reload, or a deep link does not
+    // run this callback, so those routes emit no settings_nav flow at all (the
+    // settle marks in SettingsScreen then no-op against a missing flow). This
+    // rung measures the in-app command/palette/shortcut path only.
+    beginRendererFlow({ kind: "settings_nav", correlationKey: SETTINGS_NAV_FLOW_KEY });
     navigateApp("/settings?section=account");
   }, []);
   const openShortcutsDialog = useKeyboardShortcutsDialogStore((state) => state.setOpen);

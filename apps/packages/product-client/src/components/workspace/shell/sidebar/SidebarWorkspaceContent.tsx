@@ -19,6 +19,7 @@ import type { SidebarIndicatorAction } from "#product/lib/domain/workspaces/side
 import type { WorkspaceAvailabilityCommandKind } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
 import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import { SkeletonBlock } from "#product/primitives/Skeleton";
+import { LoadingBoundary } from "#product/primitives/LoadingBoundary";
 import { RepoGroup, type RepoGroupEnvironmentKind } from "#product/components/workspace/shell/sidebar/RepoGroup";
 import { ProductSidebarShowToggleRow } from "#product/components/workspace/shell/sidebar/ProductSidebarShowToggleRow";
 import { SidebarWorkspaceItems } from "#product/components/workspace/shell/sidebar/SidebarWorkspaceItems";
@@ -76,14 +77,25 @@ interface SidebarWorkspaceContentProps {
   onSetUpCloudForGroup: (target: CloudWorkspaceRepoTarget) => void;
 }
 
+// FR-1 carve-out (UX Latency + Transitions ADR §4 Rung 4): the sidebar
+// workspace list keeps its fixed-geometry row skeleton because the final row
+// geometry is genuinely known. Routing it through `LoadingBoundary` as the
+// treatment slot buys the Class C show-delay for free, so a sub-200ms load no
+// longer flashes the skeleton, without rebuilding the sidebar.
 function SidebarLoadingState() {
   return (
-    <div className="flex flex-col gap-1 px-3 py-3" aria-label="Loading workspaces" role="status">
-      <SkeletonBlock className="h-7 w-full bg-surface-control" />
-      <SkeletonBlock className="h-7 w-[88%] bg-surface-control/80" />
-      <SkeletonBlock className="h-7 w-[72%] bg-surface-control/70" />
-      <p className="sr-only">Loading workspaces</p>
-    </div>
+    <LoadingBoundary
+      state="pending"
+      diagnostics={{ flow: "sidebar_workspaces" }}
+      treatment={
+        <div className="flex flex-col gap-1 px-3 py-3" aria-label="Loading workspaces" role="status">
+          <SkeletonBlock className="h-7 w-full bg-surface-control" />
+          <SkeletonBlock className="h-7 w-[88%] bg-surface-control/80" />
+          <SkeletonBlock className="h-7 w-[72%] bg-surface-control/70" />
+          <p className="sr-only">Loading workspaces</p>
+        </div>
+      }
+    />
   );
 }
 

@@ -1,3 +1,4 @@
+pub mod artifact;
 pub mod bundled;
 pub mod gateway_plan;
 pub mod gateway_probe;

@@ -3,6 +3,7 @@ import { Laptop } from "#product/primitives/icons/platform";
 import { parseGitRepoId } from "#product/domain/repos/repo-id";
 import { SettingsEmptyState } from "#product/primitives/patterns/settings/SettingsEmptyState";
 import { Button } from "#product/primitives/Button";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { type RepoSettingsContext } from "#product/lib/domain/settings/repo-scope-selection";
 import { type SettingsRepositoryEntry } from "#product/lib/domain/settings/repositories";
 import {
@@ -19,7 +20,7 @@ export interface RepoScopeSelectionCallbacks {
 export interface RepoScopePaneProps extends RepoScopeSelectionCallbacks {
   repository: SettingsRepositoryEntry | null;
   context: RepoSettingsContext;
-  cloudEnabled: boolean;
+  controlPlaneReachable: boolean;
   cloudActive: boolean;
   cloudSignInChecking: boolean;
   cloudSignInAvailable: boolean;
@@ -45,11 +46,20 @@ function buildAddRepoCompletionHandler({
 /** Repo scope with zero repositories — every repo-scope pane renders this. */
 export function RepoScopeEmptyState(callbacks: RepoScopeSelectionCallbacks) {
   const openFlow = useAddRepoFlowStore((state) => state.openFlow);
+  // Cloud workspaces are culled from desktop (PRO-10, FR-2/FR-3): the desktop
+  // add-repo flow only registers a local checkout, so the empty-state copy must
+  // not advertise a "runs in Proliferate Cloud" repo. Web keeps its cloud copy.
+  const host = useProductHost();
+  const cloudReachable = host.surface === "web";
   return (
     <SettingsEmptyState
       icon={<Folder aria-hidden="true" />}
       title="No repositories yet"
-      description="Add a local checkout or a GitHub repo that runs in Proliferate Cloud."
+      description={
+        cloudReachable
+          ? "Add a local checkout or a GitHub repo that runs in Proliferate Cloud."
+          : "Add a local checkout to get started."
+      }
       action={
         <Button
           type="button"

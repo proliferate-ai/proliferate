@@ -19,6 +19,16 @@ export {
   isRetryableCloudWorkspaceConnectionError,
 };
 
+// Named exception (does not sit on the `cadence` scale): 30s falls strictly
+// between `cadence.relaxedMs` (15s) and `cadence.slowMs` (60s) — the same
+// band `WORKSPACE_COLLECTIONS_STALE_MS` occupies. This resolves the cloud
+// sandbox gateway connection info a session runtime dials into; snapping
+// down tightens (forbidden), and snapping up doubles how long a stale
+// connection can be reused before `refetchOnWindowFocus`/`refetchOnMount`
+// (both already `true` here) catch a rotated URL. Kept as its own named
+// constant (UX Latency + Transitions ADR §4.7, Rung 6, Q8).
+const CLOUD_WORKSPACE_CONNECTION_STALE_MS = 30_000;
+
 export function cloudWorkspaceConnectionQueryOptions(
   workspaceId: string,
   cloudClient: CloudSandboxGatewayUrlSource | null,
@@ -26,7 +36,7 @@ export function cloudWorkspaceConnectionQueryOptions(
   return queryOptions<CloudConnectionInfo>({
     queryKey: cloudWorkspaceConnectionKey(workspaceId),
     queryFn: () => getResolvedCloudWorkspaceConnection(workspaceId, cloudClient),
-    staleTime: 30_000,
+    staleTime: CLOUD_WORKSPACE_CONNECTION_STALE_MS,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
