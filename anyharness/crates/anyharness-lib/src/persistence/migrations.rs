@@ -236,6 +236,10 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0070_fork_operations",
         include_str!("sql/0070_fork_operations.sql"),
     ),
+    (
+        "0071_session_adapter_markers",
+        include_str!("sql/0071_session_adapter_markers.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

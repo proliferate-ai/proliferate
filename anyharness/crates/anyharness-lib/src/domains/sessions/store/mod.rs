@@ -1,5 +1,6 @@
 use crate::persistence::Db;
 
+mod adapter_markers;
 mod attachments;
 mod background_work;
 pub(crate) mod completion_deliveries;

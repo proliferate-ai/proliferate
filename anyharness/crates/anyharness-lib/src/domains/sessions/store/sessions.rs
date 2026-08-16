@@ -481,6 +481,10 @@ pub(crate) fn delete_session_rows_in_tx(
         [id],
     )?;
     conn.execute("DELETE FROM session_events WHERE session_id = ?1", [id])?;
+    conn.execute(
+        "DELETE FROM session_adapter_markers WHERE session_id = ?1",
+        [id],
+    )?;
     conn.execute("DELETE FROM sessions WHERE id = ?1", [id])?;
     Ok(())
 }
