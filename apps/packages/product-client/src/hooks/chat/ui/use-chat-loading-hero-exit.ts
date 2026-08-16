@@ -35,7 +35,13 @@ export function useChatLoadingHeroExit(isHeroMode: boolean): {
     prevHeroModeRef.current = isHeroMode;
 
     if (isHeroMode) {
-      // Back in (or still in) hero mode: any prior exit overlay is stale.
+      // Back in (or still in) hero mode: any prior exit overlay is stale, and
+      // so is any stale shown-timestamp from a previous hero cycle. Without
+      // this reset, a workspace that never calls `handleTreatmentShown` (e.g.
+      // it's already bootstrapped, so `ChatLoadingHero` returns null) would
+      // still inherit an earlier cycle's `shownAt`, and resolving would mount
+      // a spurious exit overlay over content that never showed a mark.
+      shownAtRef.current = null;
       setPhase("idle");
       return;
     }

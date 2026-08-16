@@ -76,6 +76,9 @@ describe("useChatLoadingHeroExit / ChatLoadingHeroExitOverlay (R16 hero exit hol
     let overlay = container.querySelector<HTMLElement>("[data-chat-loading-hero-exit]");
     expect(overlay).not.toBeNull();
     expect(overlay!.style.opacity).toBe("1");
+    // Decorative echo of the hero's own role="status" announcement, not a
+    // second live region: screen readers should hear one announcement.
+    expect(overlay!.getAttribute("aria-hidden")).toBe("true");
     expect(container.querySelector("[data-real-content]")!.textContent).toBe("resolved");
 
     // Advance to just before the 420ms floor: still holding, still opaque.
@@ -144,6 +147,36 @@ describe("useChatLoadingHeroExit / ChatLoadingHeroExitOverlay (R16 hero exit hol
     // true, no matter how long the mark has been shown.
     expect(container.querySelector("[data-chat-loading-hero-exit]")).toBeNull();
     expect(container.querySelector("[data-real-content]")!.textContent).toBe("loading");
+  });
+
+  it("does not leak a stale shown-timestamp into a bootstrapped-workspace hero cycle that never shows a mark", () => {
+    const { rerender, container } = render(<Harness isHeroMode />);
+    act(() => {
+      container.querySelector<HTMLButtonElement>("[data-treatment-shown-trigger]")!.click();
+    });
+
+    // Session A's hero shows its mark, then resolves at 250ms — still inside
+    // the 420ms hold, so the exit overlay is holding (not yet faded/cleared)
+    // when the user switches away.
+    advance(250);
+    rerender(<Harness isHeroMode={false} />);
+    expect(container.querySelector("[data-chat-loading-hero-exit]")).not.toBeNull();
+
+    // Switch to a second, already-bootstrapped workspace before A's hold/fade
+    // ever completes: hero mode goes true again, but `ChatLoadingHero`
+    // returns null for a bootstrapped workspace, so `handleTreatmentShown`
+    // never fires for this cycle.
+    rerender(<Harness isHeroMode />);
+    expect(container.querySelector("[data-chat-loading-hero-exit]")).toBeNull();
+
+    // B resolves without ever showing a mark. Without the stale-ref fix, the
+    // hook would still carry session A's old `shownAt`, compute a large
+    // elapsed/zero remaining, and mount a spurious exit overlay over B's
+    // already-resolved content.
+    rerender(<Harness isHeroMode={false} />);
+    advance(1000);
+
+    expect(container.querySelector("[data-chat-loading-hero-exit]")).toBeNull();
   });
 
   it("negative control: without the hold, an early mode flip would show resolved content with nothing covering it", () => {

@@ -63,6 +63,8 @@ export function ChatLoadingHero({ onTreatmentShown }: ChatLoadingHeroProps = {})
       <DebugProfiler id="chat-loading-hero">
         <div
           className="flex flex-col items-center text-center"
+          role="status"
+          aria-label="Loading conversation"
           data-chat-loading-hero
         >
           <ThinkingText />
@@ -77,14 +79,20 @@ export function ChatLoadingHero({ onTreatmentShown }: ChatLoadingHeroProps = {})
 
   return (
     <DebugProfiler id="chat-loading-hero">
-      <LoadingBoundary
-        state="pending"
-        diagnostics={{ flow: "chat_loading_hero" }}
-        onTreatmentShown={onTreatmentShown}
+      <div
         className="flex flex-col items-center text-center"
+        role="status"
+        aria-label="Loading conversation"
         data-chat-loading-hero
-        treatment={<DotCellLoader size="hero" />}
-      />
+      >
+        <LoadingBoundary
+          state="pending"
+          diagnostics={{ flow: "chat_loading_hero" }}
+          onTreatmentShown={onTreatmentShown}
+          aria-hidden="true"
+          treatment={<DotCellLoader size="hero" />}
+        />
+      </div>
     </DebugProfiler>
   );
 }

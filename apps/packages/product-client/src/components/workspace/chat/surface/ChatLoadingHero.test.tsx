@@ -63,6 +63,17 @@ describe("ChatLoadingHero", () => {
     expect(screen.queryByText("acme/widgets")).toBeNull();
   });
 
+  it("exposes an accessible status region with no visible text (mark-only, aria-label-only)", () => {
+    const { container } = render(<ChatLoadingHero />);
+    advance(motion.loading.showDelayMs);
+
+    const status = screen.getByRole("status", { name: "Loading conversation" });
+    expect(status).not.toBeNull();
+    // The mark itself renders no visible copy; only the aria-label carries text.
+    expect(status.textContent).toBe("");
+    expect(container.querySelector("[data-dot-cell-loader]")).not.toBeNull();
+  });
+
   it("renders ThinkingText immediately for the awaiting-first-turn substep, bypassing the show-delay", () => {
     substepState.substep = "awaiting-first-turn";
     substepState.caption = null;

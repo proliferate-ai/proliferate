@@ -11,6 +11,10 @@ import type { ChatLoadingHeroExitPhase } from "#product/hooks/chat/ui/use-chat-l
  * A standalone `<DotCellLoader size="hero" />` rather than a live
  * `ChatLoadingHero`, so it doesn't re-derive from the session/workspace state
  * that already changed when `mode.kind` flipped away.
+ *
+ * `aria-hidden`: a decorative echo of the loading state the live hero already
+ * announced via its own `role="status"`, not a second status region, so
+ * screen readers hear one loading announcement, not two.
  */
 export function ChatLoadingHeroExitOverlay({
   dockSafeAreaPx,
@@ -23,6 +27,7 @@ export function ChatLoadingHeroExitOverlay({
     <div
       className="absolute inset-0"
       data-chat-loading-hero-exit
+      aria-hidden="true"
       style={{
         opacity: phase === "fading" ? 0 : 1,
         transitionProperty: "opacity",
