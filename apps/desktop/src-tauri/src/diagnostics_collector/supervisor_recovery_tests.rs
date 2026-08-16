@@ -180,6 +180,177 @@ async fn killed_collector_restarts_with_new_generation_capability_and_query() {
     stop_fixture(root, fallback, producer, supervisor).await;
 }
 
+/// The end-to-end companion to the handoff proof above: a real
+/// `ChildDiagnosticsBridge` is attached over a socketpair to the running
+/// supervisor, the owned collector is killed, and the child endpoint is
+/// asserted to receive a well-formed `GenerationReady` for the restarted
+/// collector — a new generation and boot id with a readable capability
+/// descriptor — rather than silence. `child_bridge` is macOS-only, so this
+/// gates exactly like the module it exercises.
+#[cfg(all(
+    target_os = "macos",
+    any(target_arch = "aarch64", target_arch = "x86_64")
+))]
+// Multi-threaded on purpose: the child-endpoint frame reads below block the
+// calling thread, and the supervisor monitor plus the bridge's generation
+// task must keep running while they do.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn killed_collector_sends_new_generation_ready_over_the_child_bridge() {
+    use std::io::Read;
+    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+    use std::os::unix::net::UnixStream;
+
+    use proliferate_diagnostics_client::bridge::{
+        framing::{receive_frame_until, FrameError},
+        wire::{
+            BootstrapCollectorState, FallbackUnavailableClassification, ParentFrame, WireComponent,
+        },
+    };
+
+    use crate::diagnostics_collector::child_bridge::{
+        fallback_root::FallbackRootOutcome, runtime::ChildDiagnosticsBridge,
+    };
+
+    // Reads the one-shot capability channel the parent handed across the
+    // bridge to EOF. The supervisor drops its writer end after emitting the
+    // token, so a plain read to end yields the whole capability.
+    fn read_capability(fd: OwnedFd) -> String {
+        let mut channel = UnixStream::from(fd);
+        let mut capability = String::new();
+        channel
+            .read_to_string(&mut capability)
+            .expect("capability bytes");
+        capability.trim().to_owned()
+    }
+
+    let (root, fallback, producer, supervisor) =
+        running_supervisor("collector-kill-bridge-frame").await;
+
+    let mut shutdown_fds = [0_i32; 2];
+    assert_eq!(unsafe { libc::pipe(shutdown_fds.as_mut_ptr()) }, 0);
+    let (_shutdown_read, shutdown_write) = unsafe {
+        (
+            OwnedFd::from_raw_fd(shutdown_fds[0]),
+            OwnedFd::from_raw_fd(shutdown_fds[1]),
+        )
+    };
+    let (parent, child) = UnixStream::pair().expect("bridge socketpair");
+
+    let bridge = ChildDiagnosticsBridge::start(
+        WireComponent::Anyharness,
+        parent,
+        shutdown_write,
+        Arc::clone(&supervisor),
+        FallbackRootOutcome::Unavailable(FallbackUnavailableClassification::DirectoryUnavailable),
+    );
+
+    // The initial bootstrap frame carries the current generation and its
+    // capability descriptor.
+    let bootstrap = receive_frame_until::<ParentFrame>(
+        &child,
+        Instant::now() + Duration::from_secs(2),
+    )
+    .expect("bootstrap frame");
+    assert_eq!(bootstrap.descriptors.len(), 1, "bootstrap carries the capability");
+    let (old_generation, old_boot) = match bootstrap.frame {
+        ParentFrame::Bootstrap {
+            initial_state:
+                BootstrapCollectorState::Ready {
+                    generation,
+                    descriptor,
+                    ..
+                },
+            ..
+        } => (generation, descriptor.collector_boot_id),
+        other => panic!("expected a ready bootstrap, got {other:?}"),
+    };
+    let old_capability = read_capability(bootstrap.descriptors.into_iter().next().unwrap());
+    assert!(!old_capability.is_empty(), "bootstrap capability is readable");
+
+    supervisor
+        .kill_current_process_for_test()
+        .expect("kill owned collector");
+
+    // Wait for the supervisor to observe the death and restart the collector,
+    // yielding so the monitor and the bridge's generation task can run.
+    let restarted = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            if let DesktopDiagnosticsSupervisorStateV1::Ready {
+                collector_boot_id,
+                restart_count,
+                ..
+            } = supervisor.state()
+            {
+                if restart_count >= 1 && collector_boot_id != old_boot {
+                    return;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await;
+    restarted.expect("supervisor restarts the killed collector");
+
+    // The bridge's generation task converges by sending GenerationReady for
+    // the new collector. Intermediate GenerationUnavailable frames (the
+    // Starting window) are skipped.
+    let overall_deadline = Instant::now() + Duration::from_secs(5);
+    let (descriptors, new_generation, new_descriptor) = loop {
+        assert!(
+            Instant::now() < overall_deadline,
+            "no GenerationReady arrived after the restart; supervisor state = {:?}",
+            supervisor.state()
+        );
+        let per_call = (Instant::now() + Duration::from_secs(1)).min(overall_deadline);
+        match receive_frame_until::<ParentFrame>(&child, per_call) {
+            Ok(received) => match received.frame {
+                ParentFrame::GenerationReady {
+                    generation,
+                    descriptor,
+                    ..
+                } => break (received.descriptors, generation, descriptor),
+                ParentFrame::GenerationUnavailable { .. } => continue,
+                other => panic!("unexpected parent frame after restart: {other:?}"),
+            },
+            Err(FrameError::Deadline) => continue,
+            Err(error) => panic!("child bridge frame error: {error:?}"),
+        }
+    };
+
+    assert!(
+        new_generation > old_generation,
+        "the restart advances the generation"
+    );
+    assert_ne!(
+        new_descriptor.collector_boot_id, old_boot,
+        "the restarted collector has a fresh boot id"
+    );
+    assert_eq!(
+        descriptors.len(),
+        1,
+        "GenerationReady carries exactly the new capability"
+    );
+    let capability_fd = descriptors.into_iter().next().unwrap();
+    // `FIONREAD` is sampled before the read so a failure can distinguish
+    // "bytes never arrived on the transferred channel" from "bytes read but
+    // wrong". Observed once locally (empty read, unreproduced in 50 further
+    // runs); keep the forensics in the message.
+    let mut queued: libc::c_int = -1;
+    unsafe { libc::ioctl(capability_fd.as_raw_fd(), libc::FIONREAD, &mut queued) };
+    let new_capability = read_capability(capability_fd);
+    assert!(
+        !new_capability.is_empty() && new_capability != old_capability,
+        "the new capability is readable and distinct; \
+         new={new_capability:?} old={old_capability:?} queued_bytes_at_receive={queued} \
+         generation={new_generation} supervisor_state={:?}",
+        supervisor.state()
+    );
+
+    drop(bridge);
+    drop(child);
+    stop_fixture(root, fallback, producer, supervisor).await;
+}
+
 #[tokio::test]
 async fn stop_of_an_already_exited_child_records_the_death_certificate() {
     let (root, fallback, producer, supervisor) = running_supervisor("collector-stop-exited").await;
