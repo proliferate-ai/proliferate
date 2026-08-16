@@ -23,6 +23,9 @@ const ALL_FLOWS: readonly RendererFlowKind[] = [
   "session_open",
 ];
 
+// R12: two-point flows (begin/finish only, no shell/data-ready midpoints).
+const TWO_POINT_FLOWS: readonly RendererFlowKind[] = ["composer_submit", "mode_switch"];
+
 describe("renderer flow timing", () => {
   let emitted: RendererDiagnosticInput[];
   let nowValue: number;
@@ -78,10 +81,43 @@ describe("renderer flow timing", () => {
   );
 
   it("keeps every flow budget an unenforced draft", () => {
-    for (const kind of ALL_FLOWS) {
+    for (const kind of [...ALL_FLOWS, ...TWO_POINT_FLOWS]) {
       expect(RENDERER_FLOW_BUDGETS[kind].thresholdMs).toBeNull();
       expect(RENDERER_FLOW_BUDGETS[kind].metric).toContain(kind);
     }
+  });
+
+  it.each(TWO_POINT_FLOWS)(
+    "emits an intent-to-stable timing for the two-point flow %s with no shell/data fields",
+    (kind) => {
+      const correlationKey = `${kind}-1`;
+      beginRendererFlow({ kind, correlationKey, correlation: { sessionId: "s1" } });
+      nowValue = 42;
+      finishRendererFlow({ kind, correlationKey });
+
+      const stable = fieldsOf("renderer.flow.content_stable");
+      expect(stable.intent_to_stable_ms).toBe(42);
+      expect(stable.data_to_stable_ms).toBe(42);
+      expect(stable.stages_completed).toBe(0);
+      expect("intent_to_shell_ms" in stable).toBe(false);
+      expect("shell_to_data_ms" in stable).toBe(false);
+      expect(stable.budget_metric).toBe(RENDERER_FLOW_BUDGETS[kind].metric);
+      expect(stable.budget_threshold_ms).toBeNull();
+    },
+  );
+
+  it("restarts a mode_switch flow's clock on re-begin (PRO-261 coalescing semantics)", () => {
+    beginRendererFlow({ kind: "mode_switch", correlationKey: "intent-1" });
+    nowValue = 30;
+    // A rapid second mode pick reuses the same intentId (tail coalescing), so
+    // the caller re-begins rather than opening a second flow.
+    beginRendererFlow({ kind: "mode_switch", correlationKey: "intent-1" });
+    nowValue = 55;
+    finishRendererFlow({ kind: "mode_switch", correlationKey: "intent-1" });
+
+    const stableRecords = emitted.filter((e) => e.name === "renderer.flow.content_stable");
+    expect(stableRecords).toHaveLength(1);
+    expect(fieldsOf("renderer.flow.content_stable").intent_to_stable_ms).toBe(25);
   });
 
   it("marks the correlation through on every emitted event", () => {
