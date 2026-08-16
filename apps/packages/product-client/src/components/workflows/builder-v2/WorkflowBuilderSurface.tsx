@@ -176,6 +176,17 @@ export function WorkflowBuilderSurface({
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background" data-telemetry-block>
+      {/* `MainSidebarPageShell` draws an absolute, always-on-top 46px window-
+          drag strip over its content area (see that file), so any real
+          control in a directly-nested page's own top 46px is unreachable —
+          the same reason `ProductPageShell` reserves `pt-14` for the list
+          page next to this one. This surface has its own header instead of
+          going through that shell, so it reserves the identical clearance
+          itself. The pixel height comes from that same shared native-chrome
+          constant, not a one-off measurement, so it is set inline rather
+          than through the (sealed-zero, arbitrary-bracket-banned) class
+          scale this directory enforces. */}
+      <div className="shrink-0" style={{ height: 46 }} data-tauri-drag-region="true" />
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border/70 px-3">
         <IconButton
           size="md"
