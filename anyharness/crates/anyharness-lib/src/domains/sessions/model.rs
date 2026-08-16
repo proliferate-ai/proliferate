@@ -543,6 +543,11 @@ pub(crate) fn bounded_assistant_text(messages: &[String]) -> Option<String> {
     Some(bounded)
 }
 
+// Forks ADR rung 2: `ForkOperationPhase` / `ForkOperationRecord` live in the
+// sibling `fork_operation` module (split out to stay within the line budget)
+// and are re-exported here so existing `model::` import paths keep working.
+pub use super::fork_operation::{ForkOperationPhase, ForkOperationRecord};
+
 #[derive(Debug, Clone)]
 pub struct SessionRawNotificationRecord {
     pub id: i64,

@@ -29,6 +29,7 @@ mod agent_creation;
 mod config;
 mod creation;
 mod fork;
+pub(crate) mod fork_boundary;
 #[cfg(test)]
 mod idempotent_creation_tests;
 mod interactions;
@@ -220,6 +221,21 @@ pub enum ForkSessionError {
     Unsupported(String),
     Busy,
     Invalid(String),
+    /// Forks ADR rung 2 (4.8): the fork target is malformed at the product
+    /// boundary — e.g. `item_id` missing on a `before_user_message` target
+    /// (ruling Q1). 400 `INVALID_FORK_TARGET`.
+    InvalidForkTarget(String),
+    /// The `(turn_id, item_id)` anchor resolves to no committed user message.
+    /// 404 `TARGET_NOT_FOUND`. Never silently degrades to a tip fork.
+    TargetNotFound,
+    /// The anchor's turn has not committed. 409 `BOUNDARY_NOT_COMMITTED`.
+    BoundaryNotCommitted,
+    /// Same idempotency key, different canonical payload. 409
+    /// `IDEMPOTENCY_CONFLICT`.
+    IdempotencyConflict,
+    /// A prior operation on this key lost its native outcome and blocks blind
+    /// redispatch (orphan preserved). 409 `FORK_NATIVE_OUTCOME_UNKNOWN`.
+    NativeOutcomeUnknown,
     /// The parent workspace's local checkout directory has been deleted from
     /// disk. Caught before inserting the fork child so a deleted checkout never
     /// leaves behind an empty errored fork session row.
