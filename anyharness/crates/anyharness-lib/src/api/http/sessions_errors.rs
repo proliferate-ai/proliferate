@@ -297,6 +297,25 @@ pub(super) fn map_fork_session_error(error: ForkSessionError) -> ApiError {
             ApiError::conflict("session must be idle before forking", "SESSION_BUSY")
         }
         ForkSessionError::Invalid(detail) => ApiError::bad_request(detail, "FORK_INVALID_SESSION"),
+        ForkSessionError::InvalidForkTarget(detail) => {
+            ApiError::bad_request(detail, "INVALID_FORK_TARGET")
+        }
+        ForkSessionError::TargetNotFound => ApiError::not_found(
+            "fork target message not found in this session",
+            "TARGET_NOT_FOUND",
+        ),
+        ForkSessionError::BoundaryNotCommitted => ApiError::conflict(
+            "fork target boundary is not committed yet",
+            "BOUNDARY_NOT_COMMITTED",
+        ),
+        ForkSessionError::IdempotencyConflict => ApiError::conflict(
+            "fork idempotency key already used with a different request payload",
+            "IDEMPOTENCY_CONFLICT",
+        ),
+        ForkSessionError::NativeOutcomeUnknown => ApiError::conflict(
+            "a prior fork on this key has an unresolved native outcome and cannot be redispatched",
+            "FORK_NATIVE_OUTCOME_UNKNOWN",
+        ),
         ForkSessionError::WorkspaceDirectoryMissing { path } => ApiError::conflict(
             format!("workspace directory is missing: {path}"),
             "WORKSPACE_DIRECTORY_MISSING",
@@ -554,6 +573,45 @@ mod tests {
         });
         assert_eq!(error.code(), Some("WORKSPACE_DIRECTORY_MISSING"));
         assert_eq!(error.into_response().status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn targeted_fork_taxonomy_maps_to_stable_reasons() {
+        use crate::domains::sessions::runtime::ForkSessionError;
+
+        let cases = [
+            (
+                super::map_fork_session_error(ForkSessionError::InvalidForkTarget(
+                    "item_id required".to_string(),
+                )),
+                StatusCode::BAD_REQUEST,
+                "INVALID_FORK_TARGET",
+            ),
+            (
+                super::map_fork_session_error(ForkSessionError::TargetNotFound),
+                StatusCode::NOT_FOUND,
+                "TARGET_NOT_FOUND",
+            ),
+            (
+                super::map_fork_session_error(ForkSessionError::BoundaryNotCommitted),
+                StatusCode::CONFLICT,
+                "BOUNDARY_NOT_COMMITTED",
+            ),
+            (
+                super::map_fork_session_error(ForkSessionError::IdempotencyConflict),
+                StatusCode::CONFLICT,
+                "IDEMPOTENCY_CONFLICT",
+            ),
+            (
+                super::map_fork_session_error(ForkSessionError::NativeOutcomeUnknown),
+                StatusCode::CONFLICT,
+                "FORK_NATIVE_OUTCOME_UNKNOWN",
+            ),
+        ];
+        for (error, status, code) in cases {
+            assert_eq!(error.code(), Some(code));
+            assert_eq!(error.into_response().status(), status);
+        }
     }
 
     #[test]

@@ -4,6 +4,7 @@ mod attachments;
 mod background_work;
 pub(crate) mod completion_deliveries;
 mod events;
+pub(crate) mod fork_operations;
 pub(crate) mod idempotent_create;
 pub(crate) mod link_completions;
 mod links;

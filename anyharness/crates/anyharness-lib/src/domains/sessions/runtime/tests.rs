@@ -1003,7 +1003,7 @@ exit 0
 
     let error = state
         .session_runtime
-        .fork_session(&record.id, None)
+        .fork_session(&record.id, None, None, None)
         .await
         .expect_err("a real opencode credential gap on the parent must refuse the fork");
 
@@ -1016,4 +1016,198 @@ exit 0
 
     let _ = std::fs::remove_dir_all(&runtime_home);
     let _ = std::fs::remove_dir_all(&empty_home);
+}
+
+// ---------------------------------------------------------------------------
+// Forks ADR rung 2: targeted-fork plumbing (idempotency, provenance, gating).
+//
+// These exercise the branches that short-circuit BEFORE the live-start seam
+// (`ensure_live_session_handle`), so they need no spawned agent: target
+// validation, the capability gate, and the idempotency lookup all resolve
+// against the durable store.
+// ---------------------------------------------------------------------------
+
+/// Build an `AppState` with a seeded, on-disk local workspace and a single
+/// forkable parent session. Returns `(state, parent_id, runtime_home)`.
+fn build_forkable_fork_state(
+    caps_json: &str,
+) -> (crate::app::AppState, String, std::path::PathBuf) {
+    use crate::domains::agents::installer::seed::AgentSeedStore;
+
+    let runtime_home = std::env::temp_dir().join(format!(
+        "anyharness-fork-rung2-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let workspace_path = runtime_home.join("workspace");
+    std::fs::create_dir_all(&workspace_path).expect("create workspace directory");
+
+    let state = crate::app::AppState::new(
+        runtime_home.clone(),
+        "http://127.0.0.1:8457".to_string(),
+        Db::open_in_memory().expect("in-memory db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("app state");
+
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-fork-rung2",
+        "local",
+        &workspace_path.to_string_lossy(),
+    );
+
+    let mut record = session_record("claude");
+    record.workspace_id = "workspace-fork-rung2".to_string();
+    record.last_prompt_at = Some("2026-03-25T00:05:00Z".to_string());
+    record.action_capabilities_json = Some(caps_json.to_string());
+    state
+        .session_service
+        .store()
+        .insert(&record)
+        .expect("insert parent session");
+
+    (state, record.id, runtime_home)
+}
+
+fn before_user_message_target(item_id: Option<&str>) -> anyharness_contract::v1::ForkSessionTarget {
+    anyharness_contract::v1::ForkSessionTarget {
+        target_type: anyharness_contract::v1::ForkSessionTargetType::BeforeUserMessage,
+        turn_id: "turn-1".to_string(),
+        item_id: item_id.map(str::to_string),
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn fork_rejects_item_less_target_with_invalid_fork_target() {
+    use crate::domains::sessions::runtime::ForkSessionError;
+    let (state, parent_id, runtime_home) = build_forkable_fork_state(r#"{"fork":true}"#);
+
+    let error = state
+        .session_runtime
+        .fork_session(&parent_id, Some(before_user_message_target(None)), None, None)
+        .await
+        .expect_err("item-less target must be rejected at the product boundary");
+
+    assert!(matches!(error, ForkSessionError::InvalidForkTarget(_)));
+    let _ = std::fs::remove_dir_all(&runtime_home);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn targeted_fork_fails_closed_without_the_capability_and_creates_no_child() {
+    // The silent target-to-tip downgrade is the cardinal sin: a targeted
+    // request on an agent that does not advertise `targeted_fork` must fail
+    // closed with FORK_UNSUPPORTED and leave NO fork child behind — never a tip
+    // child standing in for the requested boundary.
+    use crate::domains::sessions::runtime::ForkSessionError;
+    let (state, parent_id, runtime_home) = build_forkable_fork_state(r#"{"fork":true}"#);
+
+    let error = state
+        .session_runtime
+        .fork_session(
+            &parent_id,
+            Some(before_user_message_target(Some("item-1"))),
+            None,
+            None,
+        )
+        .await
+        .expect_err("targeted fork without the capability must fail closed");
+
+    assert!(matches!(error, ForkSessionError::Unsupported(_)));
+    let link_service = SessionLinkService::new(
+        SessionLinkStore::new(state.db.clone()),
+        state.session_service.store().clone(),
+    );
+    let children = link_service.list_by_parent(&parent_id).expect("list links");
+    assert!(
+        children.is_empty(),
+        "no fork child (tip or otherwise) may be created for a rejected targeted fork"
+    );
+    let _ = std::fs::remove_dir_all(&runtime_home);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn same_key_different_payload_is_idempotency_conflict() {
+    use crate::domains::sessions::model::{ForkOperationPhase, ForkOperationRecord};
+    use crate::domains::sessions::runtime::ForkSessionError;
+    let (state, parent_id, runtime_home) = build_forkable_fork_state(r#"{"fork":true}"#);
+
+    let operation = ForkOperationRecord {
+        id: uuid::Uuid::new_v4().to_string(),
+        idempotency_key: "reserved-child".to_string(),
+        request_digest: "a-different-payload-digest".to_string(),
+        parent_session_id: parent_id.clone(),
+        child_session_id: "reserved-child".to_string(),
+        phase: ForkOperationPhase::Completed,
+        anchor_turn_id: None,
+        anchor_item_id: None,
+        provider_anchor_kind: Some("tip".to_string()),
+        provider_anchor_value: None,
+        provider_anchor_inclusive: None,
+        prefix_terminal_seq: Some(0),
+        prefix_digest: Some("digest".to_string()),
+        adapter_version: None,
+        native_version: None,
+        native_child_session_id: None,
+        created_at: "2026-03-25T00:00:00Z".to_string(),
+        updated_at: "2026-03-25T00:00:00Z".to_string(),
+    };
+    state
+        .session_service
+        .store()
+        .insert_fork_operation(&operation)
+        .expect("insert operation");
+
+    let error = state
+        .session_runtime
+        .fork_session(&parent_id, None, Some("reserved-child".to_string()), None)
+        .await
+        .expect_err("same key + different payload conflicts");
+    assert!(matches!(error, ForkSessionError::IdempotencyConflict));
+    let _ = std::fs::remove_dir_all(&runtime_home);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn unknown_native_outcome_blocks_redispatch_on_the_same_key() {
+    // Double-fork guard (ADR 4.4): a prior operation whose native outcome is
+    // unknown parks at `native_outcome_unknown`; the same key + same payload
+    // refuses to re-dispatch rather than risk a second native child.
+    use super::fork::canonical_fork_request_digest;
+    use crate::domains::sessions::model::{ForkOperationPhase, ForkOperationRecord};
+    use crate::domains::sessions::runtime::ForkSessionError;
+    let (state, parent_id, runtime_home) = build_forkable_fork_state(r#"{"fork":true}"#);
+
+    let operation = ForkOperationRecord {
+        id: uuid::Uuid::new_v4().to_string(),
+        idempotency_key: "reserved-child".to_string(),
+        request_digest: canonical_fork_request_digest(&parent_id, None),
+        parent_session_id: parent_id.clone(),
+        child_session_id: "reserved-child".to_string(),
+        phase: ForkOperationPhase::NativeOutcomeUnknown,
+        anchor_turn_id: None,
+        anchor_item_id: None,
+        provider_anchor_kind: Some("tip".to_string()),
+        provider_anchor_value: None,
+        provider_anchor_inclusive: None,
+        prefix_terminal_seq: Some(0),
+        prefix_digest: Some("digest".to_string()),
+        adapter_version: None,
+        native_version: None,
+        native_child_session_id: None,
+        created_at: "2026-03-25T00:00:00Z".to_string(),
+        updated_at: "2026-03-25T00:00:00Z".to_string(),
+    };
+    state
+        .session_service
+        .store()
+        .insert_fork_operation(&operation)
+        .expect("insert operation");
+
+    let error = state
+        .session_runtime
+        .fork_session(&parent_id, None, Some("reserved-child".to_string()), None)
+        .await
+        .expect_err("unknown native outcome blocks redispatch");
+    assert!(matches!(error, ForkSessionError::NativeOutcomeUnknown));
+    let _ = std::fs::remove_dir_all(&runtime_home);
 }
