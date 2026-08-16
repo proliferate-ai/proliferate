@@ -5,12 +5,17 @@ import {
 } from "#product/lib/infra/measurement/measurement-port";
 import { recordTranscriptVirtualizerBlank } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
 
-// Bounded window (ms) after an older-history prepend during which the
-// blank-viewport fallback is suppressed while the freshly mounted rows correct
-// estimate -> measured height. A generous upper bound on that reconciliation
-// even on a slow/loaded runner; the anchored scrollTop legitimately sits ahead
-// of the still estimate-coordinate mounted range for that span and must not be
-// misread as a broken virtualizer (a remount resets scrollTop to 0).
+// Founder Ruling 3(c), rung 10 (PRO-187): this used to be an INDEPENDENT fixed
+// 3s timer, started the instant a prepend fired regardless of whether the
+// engine's own above-change compensation was actually still live. Now that
+// rung 10's reserved-slot invariant makes the compensation anchor's own
+// deadline (compensationDeadlineRef, wired below) the real signal for "still
+// reconciling," the row list subordinates suppression to THAT deadline
+// directly — suppression lasts exactly as long as the engine is actually
+// absorbing a correction, not a blind clock. This constant survives only as
+// the bounded fallback ceiling for the (should-not-happen) case where a
+// prepend settle window is armed without a live compensation deadline, so a
+// missing signal can never suppress detection unboundedly.
 export const PREPEND_BLANK_FALLBACK_GRACE_MS = 3_000;
 const BLANK_VIEWPORT_MIN_SCROLLABLE_PX = 32;
 const BLANK_VIEWPORT_LOGICAL_CONFIRMATION_FRAMES = 2;
