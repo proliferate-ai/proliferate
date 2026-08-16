@@ -75,6 +75,12 @@ class CloudRuntimeWorker(Base):
     # workers never report them.
     worker_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     anyharness_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Telemetry only (Update Flow ADR, FR-1): last-observed `catalogVersion`
+    # from this worker's runtime's `GET /v1/catalogs/agents/version`. Never a
+    # desired-state field and never acted on server-side — the catalog
+    # sync/push channel stays deleted (796ff1f08); this column exists purely
+    # for the fleet-convergence dashboard.
+    catalog_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     hostname: Mapped[str | None] = mapped_column(String(255), nullable=True)
     machine_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
     enrolled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

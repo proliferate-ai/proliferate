@@ -31,5 +31,6 @@ pub async fn get_agent_catalog_version(
 fn catalog_source_label(source: CatalogSource) -> &'static str {
     match source {
         CatalogSource::Bundled => "bundled",
+        CatalogSource::Staged => "staged",
     }
 }

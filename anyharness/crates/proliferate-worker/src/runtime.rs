@@ -94,8 +94,8 @@ async fn heartbeat_and_converge(
     dry_run: bool,
 ) -> TickControl {
     let anyharness_version = anyharness_update::running_anyharness_version(store);
-    let response = match lifecycle::heartbeat::send_once(cloud, identity, anyharness_version).await
-    {
+    let response =
+        match lifecycle::heartbeat::send_once(cloud, identity, config, anyharness_version).await {
         Ok(response) => response,
         Err(error) => {
             warn!(?error, "worker heartbeat failed");

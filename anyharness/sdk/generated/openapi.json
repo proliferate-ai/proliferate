@@ -8139,7 +8139,7 @@
       },
       "AgentCatalogVersionResponse": {
         "type": "object",
-        "description": "The runtime's active agent catalog version and its provenance. Read-only:\nthe runtime binary is the only catalog transport, so there is no apply\nresponse shape to report.",
+        "description": "The runtime's active agent catalog version and its provenance. Read-only:\nthere is no apply/push endpoint. Since rung 5 (FR-1) the runtime binary\nis the FLOOR transport, not the only one — a signed, versioned artifact\nmay also be fetched once at boot, so `source` can now report either\nprovenance.",
         "required": [
           "catalogVersion",
           "source"
@@ -8151,7 +8151,7 @@
           },
           "source": {
             "type": "string",
-            "description": "Where the active catalog came from. Always `\"bundled\"`."
+            "description": "Where the active catalog came from: `\"bundled\"` (the compiled-in\nfloor) or `\"staged\"` (a signed artifact fetched at boot and activated\nbecause it validated and was strictly newer than the floor)."
           }
         }
       },

@@ -79,6 +79,7 @@ def test_meta_shape_and_types_without_env(monkeypatch) -> None:  # type: ignore[
         "capabilities",
         "minDesktopVersionEnforced",
         "desktopUpdater",
+        "agentCatalog",
     }
     for field in _VERSION_FIELDS:
         assert isinstance(body[field], str) and body[field]
@@ -130,6 +131,7 @@ _META_GOLDEN_FIELDS = [
     # Additive (FR-2): optional desktop updater cadence override, null unless
     # the deployment configured it.
     "desktopUpdater",
+    "agentCatalog",
 ]
 
 
