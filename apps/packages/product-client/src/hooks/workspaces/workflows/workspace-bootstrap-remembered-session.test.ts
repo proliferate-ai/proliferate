@@ -102,4 +102,46 @@ describe("handleRememberedWorkspaceSessionBootstrap", () => {
     expect(setActiveSessionId).not.toHaveBeenCalledWith(null);
     expect(removeSessionRecord).toHaveBeenCalledWith(setupSessionId);
   });
+
+  it("finishes without awaiting transcript hydration and hands the content_stable session to the pane", async () => {
+    // R14: session selection stays on the critical path; the history fetch does
+    // not. This resolves even though rehydration never settles.
+    vi.mocked(selectSessionWithShellIntentRollback).mockResolvedValueOnce(undefined);
+    let hydrationSettled = false;
+    const rehydrateSessionSlotFromHistory = vi.fn(
+      () => new Promise<boolean>(() => {
+        // Deliberately never resolves within the test.
+        hydrationSettled = true;
+      }),
+    );
+    const patchSessionRecord = vi.fn();
+
+    const result = await handleRememberedWorkspaceSessionBootstrap({
+      lastViewedSessionByWorkspace: { "logical-workspace-1": "session-1" },
+      latencyFlowId: null,
+      logicalWorkspaceId: "logical-workspace-1",
+      measurementOperationId: null,
+      sessions: [session("session-1")],
+      startedAt: performance.now(),
+      workspaceId: "workspace-1",
+      isCurrent: () => true,
+    }, {
+      clearLastViewedSession: vi.fn(),
+      getActiveSessionId: () => null,
+      getSessionRecord: vi.fn(),
+      patchSessionRecord,
+      rehydrateSessionSlotFromHistory: rehydrateSessionSlotFromHistory as never,
+      removeSessionRecord: vi.fn(),
+      selectSession: vi.fn() as never,
+      setActiveSessionId: vi.fn(),
+    });
+
+    expect(result.shouldReturn).toBe(false);
+    expect(result.contentStableSessionId).toBe("session-1");
+    // Hydration was kicked off (fire-and-forget) but never awaited: the record
+    // is not patched hydrated synchronously, since the fetch has not resolved.
+    expect(rehydrateSessionSlotFromHistory).toHaveBeenCalledTimes(1);
+    expect(hydrationSettled).toBe(true);
+    expect(patchSessionRecord).not.toHaveBeenCalled();
+  });
 });

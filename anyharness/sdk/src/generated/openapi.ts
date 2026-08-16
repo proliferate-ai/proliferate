@@ -2202,7 +2202,7 @@ export interface components {
             unsupportedRoute: boolean;
         };
         /** @enum {string} */
-        AgentAuthGatewayHealth: "reachable" | "unreachable" | "budget_exhausted";
+        AgentAuthGatewayHealth: "reachable" | "unreachable" | "unauthorized" | "models_drifted" | "budget_exhausted";
         /** @enum {string} */
         AgentAuthLoginHandoff: "initiated" | "awaiting_browser" | "completed" | "cancelled" | "timed_out";
         /** @enum {string} */
@@ -2238,13 +2238,19 @@ export interface components {
         };
         /**
          * @description The runtime's active agent catalog version and its provenance. Read-only:
-         *     the runtime binary is the only catalog transport, so there is no apply
-         *     response shape to report.
+         *     there is no apply/push endpoint. Since rung 5 (FR-1) the runtime binary
+         *     is the FLOOR transport, not the only one — a signed, versioned artifact
+         *     may also be fetched once at boot, so `source` can now report either
+         *     provenance.
          */
         AgentCatalogVersionResponse: {
             /** @description The `catalogVersion` string from the active document. */
             catalogVersion: string;
-            /** @description Where the active catalog came from. Always `"bundled"`. */
+            /**
+             * @description Where the active catalog came from: `"bundled"` (the compiled-in
+             *     floor) or `"staged"` (a signed artifact fetched at boot and activated
+             *     because it validated and was strictly newer than the floor).
+             */
             source: string;
         };
         /** @enum {string} */
@@ -3027,6 +3033,14 @@ export interface components {
             status: components["schemas"]["ForkChildStartStatus"];
         };
         ForkSessionRequest: {
+            /**
+             * @description Forks ADR rung 2: optional caller-reserved child session id. When set it
+             *     is both the child's durable id and the fork operation's idempotency key,
+             *     so repeating the request with the same payload resumes/returns the same
+             *     child. An `Idempotency-Key` header serves the same role when this is
+             *     absent.
+             */
+            childSessionId?: string | null;
             target?: null | components["schemas"]["ForkSessionTarget"];
         };
         ForkSessionResponse: {

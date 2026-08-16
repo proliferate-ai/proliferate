@@ -72,7 +72,14 @@ export function ToolCallSummary({
           {completionContent}
         </div>
       )}
-      {showWorkDivider && !expanded && <ToolCallWorkDivider className="mt-1" />}
+      {showWorkDivider && (
+        // The divider's exit/entry must ride the same disclosure motion as the
+        // ledger above it: unmounting it on toggle pops the content below by
+        // the divider's 5px box against the animation direction (PRO-181).
+        <AnimatedCollapsibleContent expanded={!expanded}>
+          <ToolCallWorkDivider className="mt-1" />
+        </AnimatedCollapsibleContent>
+      )}
     </div>
   );
 }

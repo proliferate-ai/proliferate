@@ -772,12 +772,6 @@
     },
     {
       "path": "proliferate/server/cloud/agent_gateway/models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 20
-    },
-    {
-      "path": "proliferate/server/cloud/agent_gateway/models.py",
       "code": "unused-ignore",
       "message": "Unused \"type: ignore\" comment",
       "count": 6

@@ -6,6 +6,7 @@ import {
 } from "#product/lib/access/cloud/auth-probes";
 import { useControlPlaneHealthFor } from "#product/hooks/access/cloud/use-control-plane-health";
 import { ssoDiscoveryKey } from "#product/hooks/access/cloud/auth/query-keys";
+import { cadence } from "@proliferate/design/cadence";
 
 // `useSsoDiscoveryFor` takes the deployment base URL explicitly so the host
 // provider (which builds the host and cannot read it back) can reuse it; the
@@ -21,8 +22,10 @@ export function useSsoDiscoveryFor(
     queryKey: ssoDiscoveryKey(apiBaseUrl, email),
     queryFn: () => discoverDesktopSso({ email, apiBaseUrl }),
     enabled: controlPlaneReachable && (options?.enabled ?? true),
-    staleTime: 15_000,
-    refetchInterval: 15_000,
+    // Was raw 15_000ms literals, already exactly `cadence.relaxedMs` (UX
+    // Latency + Transitions ADR §4.7, Rung 6, Q8).
+    staleTime: cadence.relaxedMs,
+    refetchInterval: cadence.relaxedMs,
     retry: 1,
   });
 }

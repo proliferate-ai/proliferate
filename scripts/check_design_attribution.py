@@ -17,15 +17,32 @@ Accepted: `harnessKind === "codex"`, `"codex-mini"`, `codex.openai-oauth`.
 Describe the treatment instead of its source: "90%-alpha popover fill, 8px
 blur" says more than "codex dropdown recipe" and stays true when the
 reference changes.
+
+The rules themselves are records under `lints/product/attribution.toml`; this
+file is only the engine. Diagnostics are rendered from the record (rule sentence,
+legal alternative, record path) via `scripts/lint_records.py`.
 """
 
 from __future__ import annotations
 
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    # Run as `python3 scripts/check_design_attribution.py` from the repo root,
+    # sys.path[0] is scripts/ — the shared loader lives one level up.
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts import lint_records  # noqa: E402  (path shim must precede the import)
+
+CHECKER = "scripts/check_design_attribution.py"
+RULES = lint_records.load("product")
+OWNED_RULE_IDS = frozenset(
+    rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER
+)
 
 SCANNED_ROOTS = [
     "apps/packages",
@@ -43,16 +60,15 @@ PRODUCTS = ["codex", "conductor", "cursor", "capy"]
 
 _PRODUCT = "(?:" + "|".join(PRODUCTS) + ")"
 
-PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
+PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
-        "attributed-style",
+        "PROD-ATTR-1",
         # "codex-style", "Codex style dot", "conductor-like". The separator is
         # required: `cursorStyle` is an xterm option, not an attribution.
         re.compile(rf"\b{_PRODUCT}(?:'s)?[-\s](?:style|styled|like|esque)\b", re.IGNORECASE),
-        "describe the treatment, not the product it came from",
     ),
     (
-        "attributed-recipe",
+        "PROD-ATTR-2",
         # "codex recipe", "codex's tooltip recipe", "codex popover recipe",
         # "codex anatomy", "codex convention", "codex parity", "codex hierarchy"
         re.compile(
@@ -60,16 +76,14 @@ PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
             r"(?:recipe|anatomy|convention|parity|hierarchy|format|ordered|dump)",
             re.IGNORECASE,
         ),
-        "name the anatomy on its own terms instead of citing another product's",
     ),
     (
-        "reference-dump-path",
+        "PROD-ATTR-3",
         # reference/codex/status/card.html
         re.compile(rf"reference/{_PRODUCT}\b", re.IGNORECASE),
-        "a path into a scratch reference dump is not a durable citation",
     ),
     (
-        "attributed-treatment",
+        "PROD-ATTR-4",
         # A bare product name modifying one of our design nouns: "codex avatar
         # -group clusters", "conductor divider". Kept to design vocabulary so
         # real product phrases ("the codex harness", "codex session") pass.
@@ -83,10 +97,9 @@ PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
             r"placeholder|shell|spacing|leading|tint|hue|palette|ink)s?\b",
             re.IGNORECASE,
         ),
-        "describe our element, not the product it was modelled on",
     ),
     (
-        "attributed-identifier",
+        "PROD-ATTR-5",
         # a shipped class/identifier named after another product, e.g.
         # codex-thread-find-match. Allows real product vocabulary by requiring
         # the suffix to be design language rather than a harness/model token.
@@ -95,23 +108,47 @@ PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
             r"review|diff|glyph|sprite)\b",
             re.IGNORECASE,
         ),
-        "name shipped classes after what they are in our product",
     ),
 ]
 
 
-def scan_file(path: Path) -> list[tuple[int, str, str, str]]:
+@dataclass(frozen=True)
+class Finding:
+    """One attribution violation, reported through its record."""
+
+    rule_id: str
+    path: Path
+    lineno: int
+    snippet: str
+
+    @property
+    def relative_path(self) -> str:
+        try:
+            return str(self.path.relative_to(REPO_ROOT))
+        except ValueError:
+            return str(self.path)
+
+    def format(self) -> str:
+        """The record-generated diagnostic: rule, alternative, record path."""
+        return lint_records.render_diagnostic(
+            RULES.rule(self.rule_id),
+            f"{self.relative_path}:{self.lineno}",
+            repr(self.snippet),
+        )
+
+
+def scan_file(path: Path) -> list[Finding]:
     try:
         text = path.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
         return []
 
-    findings: list[tuple[int, str, str, str]] = []
+    findings: list[Finding] = []
     for lineno, line in enumerate(text.splitlines(), start=1):
-        for rule, pattern, hint in PATTERNS:
+        for rule_id, pattern in PATTERNS:
             match = pattern.search(line)
             if match:
-                findings.append((lineno, rule, match.group(0).strip(), hint))
+                findings.append(Finding(rule_id, path, lineno, match.group(0).strip()))
     return findings
 
 
@@ -131,11 +168,9 @@ def iter_source_files() -> list[Path]:
 
 
 def main() -> int:
-    violations: list[str] = []
+    violations: list[Finding] = []
     for path in sorted(iter_source_files()):
-        for lineno, rule, snippet, hint in scan_file(path):
-            rel = path.relative_to(REPO_ROOT)
-            violations.append(f"  {rel}:{lineno} [{rule}] {snippet!r} — {hint}")
+        violations.extend(scan_file(path))
 
     if not violations:
         print("Design attribution check passed.")
@@ -143,7 +178,8 @@ def main() -> int:
 
     print("Our design must be described in our own vocabulary:")
     for violation in violations:
-        print(violation)
+        print(violation.format())
+        print()
     print(
         "\nThese names are fine as product vocabulary (a harness kind, a model id,"
         "\na CSS cursor). What is rejected is crediting another product for how our"

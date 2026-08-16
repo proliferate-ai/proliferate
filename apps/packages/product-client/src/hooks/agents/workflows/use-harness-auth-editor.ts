@@ -26,7 +26,7 @@ import {
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 
-// Poll cadence while a delivery ack is outstanding (pending → applied).
+// Poll cadence while a delivery ack is outstanding (pending → applied). Named exception (does not sit on the `cadence` scale): 3s falls strictly between `cadence.fastMs` (1s) and `cadence.standardMs` (5s), the harness auth pane's own delivery-ack watch kept in lockstep with the onboarding step's `AUTH_SETUP_POLL_MS`; snapping down to fast would tighten (forbidden), snapping up to standard would visibly stretch how long a pending → applied row sits in the editor the user has open (UX Latency + Transitions ADR §4.7, Rung 6, Q8).
 const DELIVERY_PENDING_POLL_MS = 3000;
 
 /**
@@ -119,11 +119,11 @@ export function useHarnessAuthEditor(
   displayName: string,
   surface: AgentAuthSurface,
 ): HarnessAuthEditorApi {
-  const { authStatus, cloudEnabled } = useCloudAvailabilityState();
+  const { authStatus, controlPlaneReachable } = useCloudAvailabilityState();
   // Auth-plane readiness: signed in + control plane reachable. Cloud compute is
   // deliberately NOT part of this — model-auth surfaces must work for a
   // local-only / self-hosted user who never provisioned E2B.
-  const authReady = authStatus === "authenticated" && cloudEnabled;
+  const authReady = authStatus === "authenticated" && controlPlaneReachable;
   const showToast = useToastStore((state) => state.show);
 
   // Org policy is the server's hard gate; here it also drives client-side

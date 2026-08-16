@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { cadence } from "@proliferate/design/cadence";
 import type { RepoEnvironmentResponse } from "@proliferate/cloud-sdk";
 import {
   buildCoreCloudEnvironmentSaveRequest,
@@ -20,7 +21,10 @@ import { useRepoPreferencesStore } from "#product/stores/preferences/repo-prefer
 import { useAppCapabilities } from "#product/hooks/capabilities/derived/use-app-capabilities";
 import { useProductAuthStatus } from "#product/hooks/auth/facade/use-product-auth";
 
-const MATERIALIZATION_POLL_INTERVAL_MS = 5000;
+// Was a raw 5000ms literal; already exactly on-scale, so this is a rename
+// onto `cadence.standardMs` rather than a value change (UX Latency +
+// Transitions ADR §4.7, Rung 6, Q8).
+const MATERIALIZATION_POLL_INTERVAL_MS = cadence.standardMs;
 
 export interface CloudRepoEnvironmentEditor {
   /** Non-null when the repository is GitHub-backed (cloud-capable). */

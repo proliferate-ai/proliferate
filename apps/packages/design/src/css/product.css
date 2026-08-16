@@ -252,6 +252,11 @@ body {
   --dot-cell-gap: 0.09375rem;
 }
 
+.dot-cell-loader[data-size="hero"] {
+  --dot-cell-size: 0.375rem;
+  --dot-cell-gap: 0.25rem;
+}
+
 /* Each dot carries its grid coordinates (--om-r/--om-c) and its clockwise
    ring position (--om-o); every variant derives its per-dot delay from those
    in one calc() instead of a per-variant nth-child ladder. */
@@ -376,30 +381,28 @@ body {
   box-shadow: var(--shadow-user-message);
 }
 
-/* Composer chrome: fill only. No stroke and no elevation — the composer is
-   read by its own fill against the pane and by its 28px radius, so the 0.5px
-   shadow-stroke and the elevation stack that used to sit here are both gone.
-   This is a replacement of the chrome, not a variant: every
-   .chat-composer-surface instance is borderless and shadowless, so the
-   composer's own elevation token went with the elevation it described. */
+/* Composer chrome: one opaque surface with no elevation. Dark is separated by
+   its fill alone; light adds the border-role hairline below so the same 28px
+   silhouette remains legible against the white content plane without changing
+   layout or restoring an elevation stack. */
 .chat-composer-surface {
   background-color: var(--color-composer-background);
   -webkit-backdrop-filter: var(--color-composer-backdrop-filter);
   backdrop-filter: var(--color-composer-backdrop-filter);
 }
 
+:root[data-mode="light"] .chat-composer-surface {
+  box-shadow: 0 0 0 0.5px var(--color-border);
+}
+
 /* The cap variant of that same surface: composer chrome attached
    ABOVE the input box (the workspace-activity cap). It is the composer surface,
-   so it takes the identical translucent fill and backdrop treatment — a cap
-   that skipped the blur would be translucent over an unblurred transcript one
-   pixel above a surface translucent over a blurred one, reading as two
-   different greys at the seam. It carries no elevation shadow and no stroke of
-   its own; the 1px stroke that outlines the cap is painted outside the
-   border-box by the consumer (ring-*), and the bottom of it is clipped here
-   because the surface below is no longer opaque enough to cover the bleed at
-   96% alpha. The surface's own 0.5px shadow-stroke that this used to line up
-   with is gone (see .chat-composer-surface above); the cap's ring is the
-   activity card's chrome and is out of the composer-input scope. */
+   so it takes the identical opaque fill and backdrop treatment. It carries no
+   elevation shadow or stroke of its own; the 1px stroke that outlines the cap
+   is painted outside the border-box by the consumer (ring-*), and its bottom is
+   clipped here to keep that ring from double-painting the attached seam. The
+   underlying composer keeps its shared light hairline while dark remains
+   fill-only; the cap ring is activity-card chrome outside composer-input scope. */
 .chat-composer-surface--cap {
   background-color: var(--color-composer-background);
   -webkit-backdrop-filter: var(--color-composer-backdrop-filter);

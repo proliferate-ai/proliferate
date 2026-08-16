@@ -31,6 +31,8 @@ from proliferate.db.store.agent_gateway.enrollment_keys import (
     get_enrollment_key_by_virtual_key_id,
     get_enrollment_key_virtual_key_decrypted,
     list_active_enrollment_keys,
+    list_all_active_enrollment_keys,
+    record_enrollment_key_verification,
     revoke_enrollment_keys,
     upsert_enrollment_key,
 )
@@ -147,6 +149,8 @@ __all__ = [
     "get_usage_import_cursor",
     "insert_usage_event_once",
     "list_active_enrollment_keys",
+    "list_all_active_enrollment_keys",
+    "record_enrollment_key_verification",
     "list_active_enrollments_for_subject",
     "list_active_personal_enrollments",
     "list_agent_api_keys",

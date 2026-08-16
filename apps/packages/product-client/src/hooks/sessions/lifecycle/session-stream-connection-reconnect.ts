@@ -15,7 +15,6 @@ import type {
 
 interface ScheduleSessionStreamReconnectInput {
   sessionId: string;
-  delayMs?: number;
   options: SessionStreamConnectOptions | undefined;
   refreshSessionSlotMeta: RefreshSessionSlotMeta;
   ensureSessionStreamConnected: (
@@ -23,15 +22,22 @@ interface ScheduleSessionStreamReconnectInput {
     options?: SessionStreamConnectOptions,
   ) => Promise<void>;
   isStillCurrent: () => boolean;
+  /**
+   * Bypass-backoff fast path for a gap-reconcile forced close (Q9): fire on the
+   * next tick without waiting on the shared error-retry curve and without
+   * advancing the per-session attempt counter. Defaults to false (ordinary
+   * error retry).
+   */
+  immediate?: boolean;
 }
 
 export function scheduleSessionStreamReconnect({
   sessionId,
-  delayMs = 350,
   options,
   refreshSessionSlotMeta,
   ensureSessionStreamConnected,
   isStillCurrent,
+  immediate = false,
 }: ScheduleSessionStreamReconnectInput): void {
   clearSessionReconnectTimer(sessionId);
   if (!isStillCurrent()) {
@@ -75,7 +81,20 @@ export function scheduleSessionStreamReconnect({
     return;
   }
 
-  const backoffDelay = nextSessionReconnectDelayMs(sessionId, delayMs);
+  if (immediate) {
+    // Gap-reconcile forced reconnect: do NOT advance the shared attempt counter
+    // and do NOT wait on the curve — schedule on the next tick. The attempt
+    // number reported is the unchanged current one.
+    recordSessionStreamReconnectScheduled({
+      sessionId,
+      attempt: currentSessionReconnectAttempt(sessionId),
+      delayMs: 0,
+    });
+    scheduleSessionReconnectTimer(sessionId, runner, 0);
+    return;
+  }
+
+  const backoffDelay = nextSessionReconnectDelayMs(sessionId);
   recordSessionStreamReconnectScheduled({
     sessionId,
     // nextSessionReconnectDelayMs has already counted this attempt, so the

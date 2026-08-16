@@ -231,3 +231,60 @@ fn draft_catalog_version() -> String {
         .expect("catalogVersion")
         .to_string()
 }
+
+// --------------------------------------------------------------------------
+// registry-authority drift guards (agent-auth.md FR-4)
+// --------------------------------------------------------------------------
+//
+// AgentKind is a type (it stays code), but registry.json is the declared
+// allow-list authority. These tests fail the moment the enum and the registry
+// disagree on which kinds exist or which are gateway-capable, so the Rust
+// render plane's per-kind branching (render.rs) can never silently diverge
+// from the document every other plane reads.
+
+use crate::domains::agents::model::AgentKind;
+use crate::domains::agents::registry::bundled::bundled_agent_registry_document;
+
+#[test]
+fn agent_kind_enum_matches_registry_kinds() {
+    let enum_kinds: std::collections::BTreeSet<&str> =
+        AgentKind::all().iter().map(|kind| kind.as_str()).collect();
+    let registry_kinds: std::collections::BTreeSet<&str> = bundled_agent_registry_document()
+        .agents
+        .iter()
+        .map(|agent| agent.kind.as_str())
+        .collect();
+    assert_eq!(
+        enum_kinds, registry_kinds,
+        "AgentKind::all() must equal registry.json agents[].kind exactly"
+    );
+}
+
+#[test]
+fn registry_gateway_capability_matches_render_assumption() {
+    // Gateway capability = the registry auth block declares a `gateway` slot.
+    let gateway_capable: std::collections::BTreeSet<&str> = bundled_agent_registry_document()
+        .agents
+        .iter()
+        .filter(|agent| agent.auth.slots.iter().any(|slot| slot.id == "gateway"))
+        .map(|agent| agent.kind.as_str())
+        .collect();
+
+    // render.rs::render_gateway serves claude/codex/opencode/grok and returns
+    // UnsupportedRoute for cursor. That runtime assumption is exactly: every
+    // kind EXCEPT cursor is gateway-capable.
+    let expected: std::collections::BTreeSet<&str> = AgentKind::all()
+        .iter()
+        .map(|kind| kind.as_str())
+        .filter(|kind| *kind != "cursor")
+        .collect();
+
+    assert_eq!(
+        gateway_capable, expected,
+        "registry gateway-slot derivation must match render.rs's gateway/UnsupportedRoute split"
+    );
+    assert!(
+        !gateway_capable.contains("cursor"),
+        "cursor must never be gateway-capable (render.rs returns UnsupportedRoute)"
+    );
+}

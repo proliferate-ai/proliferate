@@ -31,7 +31,7 @@ import { cancelLatencyFlow } from "#product/lib/infra/measurement/measurement-po
 import { isCloudWorkspaceNotReadyError } from "#product/hooks/access/cloud/use-cloud-workspace-connection";
 import { resolveCloudWorkspaceReadiness } from "#product/hooks/workspaces/workflows/selection/cloud-readiness";
 import { resolveSelectionConnection } from "#product/hooks/workspaces/workflows/selection/connection";
-import { isWorkspaceSelectionCurrent } from "#product/hooks/workspaces/workflows/selection/guards";
+import { currentWorkspaceSelectionSignal, isWorkspaceSelectionCurrent } from "#product/hooks/workspaces/workflows/selection/guards";
 import {
   prepareOptimisticWorkspaceSessionShell,
   resolveInitialActiveSessionId,
@@ -66,6 +66,13 @@ export async function runWorkspaceSelection(
   })) {
     return;
   }
+
+  // UX Latency ADR §4.6, Rung 10 (Q12): warm the global agent catalog now, in parallel with the connection resolution
+  // and the blocking session-directory fetch that follow. It has no data dependency on this workspace's connection,
+  // so racing it off the critical path removes it as a serial contributor to switch latency. Fire-and-forget:
+  // selection never awaits it (the composer submit gate awaits catalog readiness at send time), and it is global so a
+  // superseded selection cannot paint wrong-workspace content from it.
+  deps.prefetchAgentCatalog?.();
 
   const logicalWorkspace = findLogicalWorkspace(deps.logicalWorkspaces, request.workspaceId);
   if (!logicalWorkspace) {
@@ -117,6 +124,7 @@ export async function runWorkspaceSelection(
         selectionNonce: useSessionSelectionStore.getState().workspaceSelectionNonce,
         selectionStartedAt,
         cloudWorkspaceId: null,
+        abortSignal: currentWorkspaceSelectionSignal(),
       };
       if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
         cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
@@ -137,6 +145,7 @@ export async function runWorkspaceSelection(
         latencyFlowId: request.options?.latencyFlowId,
         forceSessionDirectoryRefresh: request.options?.forceSessionDirectoryRefresh,
         isCurrent: () => isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce),
+        signal: context.abortSignal,
       });
       if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
         cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
@@ -153,14 +162,11 @@ export async function runWorkspaceSelection(
       return;
     }
 
-    // A just-created workspace can be selected before the workspace-collections
-    // cache has projected it into `logicalWorkspaces`/`rawWorkspaces` — the
-    // pending-composer flow selects it the instant AnyHarness returns it, and on
-    // a fresh actor the collections query may not be populated yet. The creator
-    // threads the resolved workspace through `options.knownWorkspace` so we can
-    // select it directly instead of hard-failing. The same hint restores the
-    // last workspace on reopen. Both local and cowork workspaces resolve through
-    // the local runtime.
+    // A just-created workspace can be selected before the workspace-collections cache has projected it into
+    // `logicalWorkspaces`/`rawWorkspaces` — the pending-composer flow selects it the instant AnyHarness returns it,
+    // and on a fresh actor the collections query may not be populated yet. The creator threads the resolved workspace
+    // through `options.knownWorkspace` so we can select it directly instead of hard-failing. The same hint restores
+    // the last workspace on reopen. Both local and cowork workspaces resolve through the local runtime.
     const directWorkspace = deps.rawWorkspaces.find(
       (workspace) => workspace.id === request.workspaceId,
     ) ?? (
@@ -169,12 +175,10 @@ export async function runWorkspaceSelection(
         : null
     );
     if (directWorkspace) {
-      // A cowork workspace has no logical-workspace slot, so its logical
-      // selection is null (unchanged). A local workspace does have one; persist
-      // its id as the selected logical workspace so a reload restores it (the
-      // collections cache resolves `findLogicalWorkspace(..., workspace.id)` via
-      // `localWorkspace.id`). Persisting null here would leave the shell empty
-      // after reopen.
+      // A cowork workspace has no logical-workspace slot, so its logical selection is null (unchanged). A local
+      // workspace does have one; persist its id as the selected logical workspace so a reload restores it (the
+      // collections cache resolves `findLogicalWorkspace(..., workspace.id)` via `localWorkspace.id`). Persisting
+      // null here would leave the shell empty after reopen.
       const directLogicalWorkspaceId = directWorkspace.surface === "cowork"
         ? null
         : directWorkspace.id;
@@ -223,6 +227,7 @@ export async function runWorkspaceSelection(
         selectionNonce: useSessionSelectionStore.getState().workspaceSelectionNonce,
         selectionStartedAt,
         cloudWorkspaceId: null,
+        abortSignal: currentWorkspaceSelectionSignal(),
       };
       if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
         cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
@@ -243,6 +248,7 @@ export async function runWorkspaceSelection(
         latencyFlowId: request.options?.latencyFlowId,
         forceSessionDirectoryRefresh: request.options?.forceSessionDirectoryRefresh,
         isCurrent: () => isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce),
+        signal: context.abortSignal,
       });
       if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
         cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
@@ -316,6 +322,7 @@ export async function runWorkspaceSelection(
     selectionNonce: useSessionSelectionStore.getState().workspaceSelectionNonce,
     selectionStartedAt,
     cloudWorkspaceId: null,
+    abortSignal: currentWorkspaceSelectionSignal(),
   };
 
   const cloudReadiness = await resolveCloudWorkspaceReadiness(baseContext);
@@ -373,6 +380,7 @@ export async function runWorkspaceSelection(
     latencyFlowId: request.options?.latencyFlowId,
     forceSessionDirectoryRefresh: request.options?.forceSessionDirectoryRefresh,
     isCurrent: () => isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce),
+    signal: context.abortSignal,
   });
   if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
     cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");

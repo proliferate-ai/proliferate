@@ -22,6 +22,7 @@ import { fetchSessionHistory } from "#product/lib/access/anyharness/session-runt
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import {
   applyHistoryStateToStores,
+  buildSessionHistoryFetchArgs,
   finishStandaloneApplyOperation,
   recordHistoryApplyStepMetrics,
   recordHistoryStateCounts,
@@ -31,6 +32,20 @@ import {
   SESSION_HISTORY_APPLY_MAX_DURATION_MS,
 } from "#product/hooks/sessions/lifecycle/session-history-hydration-helpers";
 import { useSessionHistorySubagentAuthority } from "#product/hooks/sessions/lifecycle/use-session-history-subagent-authority";
+import { dedupeSessionOpenHydration } from "#product/hooks/sessions/lifecycle/session-history-hydration-dedupe";
+import {
+  beginRendererFlow,
+  finishRendererFlow,
+  markRendererFlowDataReady,
+  markRendererFlowShellCommitted,
+} from "#product/lib/infra/diagnostics/renderer-flow-timing";
+import {
+  buildSessionOpenBeginParams,
+  buildSessionOpenDataReadyParams,
+  buildSessionOpenFinishParams,
+  buildSessionOpenShellCommittedParams,
+  markSessionOpenFlowAbandoned,
+} from "#product/hooks/sessions/lifecycle/session-open-flow-marks";
 
 export interface SessionHistoryHydrationOptions {
   afterSeq?: number;
@@ -54,7 +69,7 @@ export function useSessionHistoryHydration() {
   const cloudClient = host.cloud.client;
   const reconcileHydratedSubagents = useSessionHistorySubagentAuthority();
 
-  const rehydrateSessionSlotFromHistory = useCallback(async (
+  const runHydration = useCallback(async (
     sessionId: string,
     options?: SessionHistoryHydrationOptions,
   ): Promise<boolean> => {
@@ -71,11 +86,22 @@ export function useSessionHistoryHydration() {
 
       const afterSeq = options?.replace ? undefined : options?.afterSeq;
       const beforeSeq = options?.replace || afterSeq != null ? undefined : options?.beforeSeq;
-      standaloneMeasurementOperationId = startMeasurementOperation({
-        kind: resolveHistoryApplyOperationKind({ afterSeq, beforeSeq }),
-        surfaces: SESSION_APPLY_MEASUREMENT_SURFACES,
-        maxDurationMs: SESSION_HISTORY_APPLY_MAX_DURATION_MS,
-      });
+      // UX-latency R1 (Q17): a full (non-incremental) hydration is the
+      // session_open flow, which emits ONLY through the renderer flow-timing
+      // family; see session-open-flow-marks.ts for param construction and the
+      // rationale for skipping the legacy measurement-operation/logLatency
+      // emits here. Incremental append/prepend fetches are not a fresh open.
+      const isSessionOpenFlow = afterSeq == null && beforeSeq == null;
+      if (isSessionOpenFlow) {
+        beginRendererFlow(buildSessionOpenBeginParams(sessionId));
+        markRendererFlowShellCommitted(buildSessionOpenShellCommittedParams(sessionId));
+      } else {
+        standaloneMeasurementOperationId = startMeasurementOperation({
+          kind: resolveHistoryApplyOperationKind({ afterSeq, beforeSeq }),
+          surfaces: SESSION_APPLY_MEASUREMENT_SURFACES,
+          maxDurationMs: SESSION_HISTORY_APPLY_MAX_DURATION_MS,
+        });
+      }
       const requestMeasurementOperationId =
         options?.measurementOperationId ?? standaloneMeasurementOperationId;
       const historyApplyOperationIds = uniqueMeasurementOperationIds([
@@ -93,29 +119,17 @@ export function useSessionHistoryHydration() {
       const fetchStartedAt = performance.now();
       const events = await fetchSessionHistory(
         sessionId,
-        afterSeq != null
-          || beforeSeq != null
-          || options?.limit != null
-          || options?.turnLimit != null
-          || options?.requestHeaders
-          || requestMeasurementOperationId
-          || options?.timeoutMs != null
-          ? {
-            ...(afterSeq != null ? { afterSeq } : {}),
-            ...(beforeSeq != null ? { beforeSeq } : {}),
-            ...(options?.limit != null ? { limit: options.limit } : {}),
-            ...(options?.turnLimit != null ? { turnLimit: options.turnLimit } : {}),
-            ...(options?.requestHeaders
-              ? { requestHeaders: options.requestHeaders }
-              : {}),
-            ...(requestMeasurementOperationId
-              ? { measurementOperationId: requestMeasurementOperationId }
-              : {}),
-            ...(options?.timeoutMs != null ? { timeoutMs: options.timeoutMs } : {}),
-            ssh,
-            cloudClient,
-          }
-          : { ssh, cloudClient },
+        buildSessionHistoryFetchArgs({
+          afterSeq,
+          beforeSeq,
+          limit: options?.limit,
+          turnLimit: options?.turnLimit,
+          requestHeaders: options?.requestHeaders,
+          measurementOperationId: requestMeasurementOperationId,
+          timeoutMs: options?.timeoutMs,
+          ssh,
+          cloudClient,
+        }),
       );
       for (const operationId of historyApplyOperationIds) {
         recordMeasurementWorkflowStep({
@@ -131,9 +145,15 @@ export function useSessionHistoryHydration() {
           count: events.length,
         });
       }
+      if (isSessionOpenFlow) {
+        markRendererFlowDataReady(buildSessionOpenDataReadyParams(sessionId, events.length));
+      }
       const currentSlot = getSessionRecord(sessionId);
       if (!currentSlot || (options?.isCurrent && !options.isCurrent())) {
         finishStandaloneApplyOperation(standaloneMeasurementOperationId, "aborted");
+        if (isSessionOpenFlow) {
+          markSessionOpenFlowAbandoned(sessionId, "session_slot_changed");
+        }
         return false;
       }
 
@@ -323,6 +343,9 @@ export function useSessionHistoryHydration() {
         isCurrent: options?.isCurrent,
       })) {
         finishStandaloneApplyOperation(standaloneMeasurementOperationId, "aborted");
+        if (isSessionOpenFlow) {
+          markSessionOpenFlowAbandoned(sessionId, "session_slot_changed");
+        }
         return false;
       }
       recordHistoryApplyStepMetrics(historyApplyOperationIds, {
@@ -330,14 +353,20 @@ export function useSessionHistoryHydration() {
         startedAt: mountStartedAt,
       });
       finishStandaloneApplyOperation(standaloneMeasurementOperationId, "completed", true);
-      logLatency("session.history.rehydrate.success", {
-        sessionId,
-        eventCount: replacementEvents.length,
-        appended: false,
-        elapsedMs: Math.round(performance.now() - startedAt),
-      });
+      if (isSessionOpenFlow) {
+        // Phase timings rerouted from the removed measurement operation onto the
+        // canonical content_stable mark (see session-open-flow-marks.ts).
+        finishRendererFlow(buildSessionOpenFinishParams(sessionId, {
+          eventCount: replacementEvents.length,
+          replayStartedAt,
+          storeStartedAt,
+          mountStartedAt,
+          finishedAt: performance.now(),
+        }));
+      }
       return true;
     } catch (error) {
+      markSessionOpenFlowAbandoned(sessionId, "session_history_rehydrate_failed");
       reportSessionHistoryRehydrateFailure({
         error,
         sessionId,
@@ -353,6 +382,17 @@ export function useSessionHistoryHydration() {
       return false;
     }
   }, [cloudClient, reconcileHydratedSubagents, ssh]);
+
+  // UX-latency R14: full session-open hydrations dedupe by session id so the
+  // bootstrap kickoff and the transcript pane share one fetch + apply.
+  const rehydrateSessionSlotFromHistory = useCallback((
+    sessionId: string,
+    options?: SessionHistoryHydrationOptions,
+  ): Promise<boolean> => dedupeSessionOpenHydration(
+    sessionId,
+    options,
+    () => runHydration(sessionId, options),
+  ), [runHydration]);
 
   return {
     rehydrateSessionSlotFromHistory,

@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
-"""Fail when the alembic migration history has more than one head.
+"""Enforce the Alembic history rules recorded as SRV-MIGRATE-2/3/4.
 
-Parallel PR stacks each adding a migration off the same parent fork the
-history; `alembic upgrade head` then fails everywhere (dev `make run`,
-staging deploys, self-host bootstraps) with "Multiple head revisions".
-This check catches the fork on the PR that would create it: the pull
-request checkout is the merge commit, so a PR based on a stale main sees
-both its own migration and the one that landed in the meantime.
+The rule statements and rationales are canonical in lints/server/migrations.toml
+(see lints/README.md); this module is only the detection engine, and every
+diagnostic is rendered from the record through ``lint_records.render_diagnostic``.
 
-Parses revision graphs with ast (no alembic import, no server deps), so it
-runs in the repo-shape job. Fix a failure with either a merge revision
-(`alembic merge heads`, when some environments may already have applied a
-subset) or by re-parenting the unshipped migration onto the other head.
+Parses revision graphs with ast (no alembic import, no server deps), so it runs
+in the repo-shape job.
 """
 
 from __future__ import annotations
@@ -20,7 +15,39 @@ import ast
 import sys
 from pathlib import Path
 
-VERSIONS_DIR = Path(__file__).resolve().parents[1] / "server" / "alembic" / "versions"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts import lint_records  # noqa: E402 - repo-root bootstrap above
+
+VERSIONS_DIR = REPO_ROOT / "server" / "alembic" / "versions"
+
+REVISION_ID_RULE_ID = "SRV-MIGRATE-2"
+DOWN_REVISION_RULE_ID = "SRV-MIGRATE-3"
+SINGLE_HEAD_RULE_ID = "SRV-MIGRATE-4"
+
+
+def _relative(path: Path) -> str:
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
+_RULESET: lint_records.RuleSet | None = None
+
+
+def _ruleset() -> lint_records.RuleSet:
+    global _RULESET
+    if _RULESET is None:
+        _RULESET = lint_records.load("server")
+    return _RULESET
+
+
+def _report(rule_id: str, location: str, detail: str) -> None:
+    diagnostic = lint_records.render_diagnostic(_ruleset().rule(rule_id), location, detail)
+    print(diagnostic, file=sys.stderr)
 
 
 def _module_constant(tree: ast.Module, name: str) -> object:
@@ -59,12 +86,18 @@ def main() -> int:
         tree = ast.parse(path.read_text(encoding="utf-8"))
         revision = _module_constant(tree, "revision")
         if not isinstance(revision, str):
-            print(f"Could not parse a revision id from {path}", file=sys.stderr)
+            _report(
+                REVISION_ID_RULE_ID,
+                _relative(path),
+                "no parseable module-level revision id",
+            )
             return 1
         if revision in revisions:
-            print(
-                f"Duplicate revision id {revision} in {path} and {revisions[revision]}",
-                file=sys.stderr,
+            _report(
+                REVISION_ID_RULE_ID,
+                _relative(path),
+                f"revision id {revision} is already declared by "
+                f"{_relative(revisions[revision])}",
             )
             return 1
         revisions[revision] = path
@@ -72,26 +105,20 @@ def main() -> int:
 
     unknown = referenced_parents - set(revisions)
     if unknown:
-        print(
-            "down_revision points at unknown revision id(s): " + ", ".join(sorted(unknown)),
-            file=sys.stderr,
+        _report(
+            DOWN_REVISION_RULE_ID,
+            "server/alembic/versions",
+            "down_revision points at unknown revision id(s): "
+            + ", ".join(sorted(unknown)),
         )
         return 1
 
     heads = sorted(set(revisions) - referenced_parents)
     if len(heads) != 1:
-        print(
-            f"Expected exactly one alembic head, found {len(heads)}:",
-            file=sys.stderr,
+        detail = f"{len(heads)} head revisions: " + ", ".join(
+            f"{head} ({revisions[head].name})" for head in heads
         )
-        for head in heads:
-            print(f"  {head} ({revisions[head].name})", file=sys.stderr)
-        print(
-            "\nParallel migrations forked the history. Rejoin it with a merge "
-            "revision (cd server && alembic merge heads -m '...') or re-parent "
-            "your unshipped migration onto the other head.",
-            file=sys.stderr,
-        )
+        _report(SINGLE_HEAD_RULE_ID, "server/alembic/versions", detail)
         return 1
 
     print(f"Migration head check passed ({len(revisions)} revisions, head {heads[0]}).")

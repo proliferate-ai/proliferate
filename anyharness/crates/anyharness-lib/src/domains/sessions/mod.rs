@@ -1,4 +1,5 @@
 pub mod active_activity_roster;
+pub mod adapter_migration;
 pub mod admission;
 pub mod active_goals;
 pub mod active_loops;
@@ -7,6 +8,7 @@ pub mod delegation;
 pub mod deletion;
 pub mod execution_summary;
 pub mod extensions;
+pub mod fork_operation;
 pub mod links;
 pub mod live_config;
 pub mod live_ports;

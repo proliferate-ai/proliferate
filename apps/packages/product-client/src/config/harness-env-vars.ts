@@ -4,18 +4,39 @@
 // agent_gateway/selection_rules.py is the actual source of truth there).
 import { isValidEnvVarName } from "../lib/domain/settings/harness-auth-sources";
 import providerRegistry from "./provider-registry.generated.json";
+import providerDocOverlay from "./provider-doc-overlay.json";
 
 export interface ProviderRegistryEntry {
   id: string;
   displayName: string;
   envVarNames: readonly string[];
   npm?: string;
+  // Featured-tier documentation/console links (PRO-206). The vendored registry
+  // carries no upstream doc URLs, so these come from the hand-curated
+  // provider-doc-overlay.json, merged in as data below. Carried as data only
+  // today; a later rung renders them.
+  docsUrl?: string;
+  consoleUrl?: string;
 }
 
+interface ProviderDocOverlayEntry {
+  docsUrl?: string;
+  consoleUrl?: string;
+}
+
+const PROVIDER_DOC_OVERLAY: Readonly<Record<string, ProviderDocOverlayEntry>> =
+  (providerDocOverlay as { providers?: Record<string, ProviderDocOverlayEntry> }).providers ?? {};
+
 // Re-exported so callers (e.g. the OpenCode "Add provider" modal) don't need
-// to import the generated JSON path directly. Refresh via
-// scripts/vendor-provider-registry.mjs.
-export const PROVIDER_REGISTRY: readonly ProviderRegistryEntry[] = providerRegistry;
+// to import the generated JSON path directly. Refresh the vendored half via
+// scripts/vendor-provider-registry.mjs; the doc-URL overlay is hand-maintained
+// in provider-doc-overlay.json and merged here by provider id.
+export const PROVIDER_REGISTRY: readonly ProviderRegistryEntry[] = (
+  providerRegistry as ProviderRegistryEntry[]
+).map((entry) => {
+  const overlay = PROVIDER_DOC_OVERLAY[entry.id];
+  return overlay ? { ...entry, ...overlay } : entry;
+});
 
 // Which of a provider's env vars actually holds the secret. Registry order is
 // arbitrary and multi-field providers lead with a NON-secret (azure ->

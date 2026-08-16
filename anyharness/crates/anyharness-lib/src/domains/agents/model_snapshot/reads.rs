@@ -10,7 +10,9 @@ use chrono::{DateTime, Utc};
 use super::document::{self, read_document, ModelSnapshotDocument};
 use super::trial::Tier1TrialResult;
 use super::{status, ModelSnapshotService};
-use crate::domains::agents::auth_state::{AuthRuntimeInputs, ProbeLifecycle, ProbePhase};
+use crate::domains::agents::auth_state::{
+    AuthRuntimeInputs, GatewayHealth, ProbeLifecycle, ProbePhase,
+};
 
 impl ModelSnapshotService {
     // -----------------------------------------------------------------------
@@ -68,15 +70,23 @@ impl ModelSnapshotService {
         self.trial.result(harness_kind)
     }
 
-    /// Both live runtime inputs the agents projection folds onto the static facts
-    /// (ADR FR-2): the real probe lifecycle and the tier-1 trial verdict as a
-    /// dependency-free fact. One call per harness at render time.
+    /// The last recorded gateway-health verdict for a harness, if any (ADR FR-3).
+    pub fn gateway_health(&self, harness_kind: &str) -> Option<GatewayHealth> {
+        self.trial
+            .gateway_health(harness_kind)
+            .map(|result| result.health)
+    }
+
+    /// The live runtime inputs the agents projection folds onto the static facts:
+    /// the real probe lifecycle and the tier-1 trial verdict (ADR FR-2), plus the
+    /// gateway-health verdict (ADR FR-3). One call per harness at render time.
     pub fn auth_runtime_inputs(&self, harness_kind: &str, now: DateTime<Utc>) -> AuthRuntimeInputs {
         AuthRuntimeInputs {
             probe: self.auth_probe_lifecycle(harness_kind, now),
             trial: self
                 .tier1_trial(harness_kind)
                 .map(|result| result.to_fact(now)),
+            gateway: self.gateway_health(harness_kind),
         }
     }
 

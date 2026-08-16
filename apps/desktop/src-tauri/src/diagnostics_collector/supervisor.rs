@@ -221,6 +221,8 @@ impl fmt::Debug for DiagnosticsCollectorSupervisor {
     }
 }
 
+#[path = "supervisor/death_certificate.rs"]
+mod death_certificate;
 #[path = "supervisor/initialization.rs"]
 mod initialization;
 #[path = "supervisor/lifecycle.rs"]

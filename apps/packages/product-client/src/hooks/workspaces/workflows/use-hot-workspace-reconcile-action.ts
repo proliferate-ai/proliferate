@@ -28,6 +28,7 @@ import {
   getSessionRecord,
   patchSessionRecord,
 } from "#product/stores/sessions/session-records";
+import { useSessionIngestStore } from "#product/stores/sessions/session-ingest-store";
 import { recordHotWorkspaceReconcileFailure } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
 import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 
@@ -236,34 +237,49 @@ export function useHotWorkspaceReconcileAction({
         isCurrent,
       });
 
+      // Streaming continuity (ADR Q15): a slot whose hot stream stayed open
+      // and contiguous while the workspace was backgrounded already holds the
+      // full transcript, so the store is trusted as-is. History is fetched
+      // only to repair a real gap (closed stream, missed sequence), and the
+      // full replace stays a last resort for a non-contiguous tail.
       const slotBeforeHydrate = getSessionRecord(sessionId);
+      const ingestFreshness = useSessionIngestStore
+        .getState()
+        .freshnessByClientSessionId[sessionId];
+      const slotStreamLive = slotBeforeHydrate?.transcriptHydrated === true
+        && slotBeforeHydrate.streamConnectionState === "open"
+        && ingestFreshness?.freshness === "current"
+        && ingestFreshness.gapAfterSeq === null;
       const lastSeq = slotBeforeHydrate?.transcript.lastSeq ?? 0;
       const hydrateStartedAt = startLatencyTimer();
-      const tailHydrated = await rehydrateSessionSlotFromHistory(sessionId, {
-        afterSeq: lastSeq,
-        requestHeaders,
-        measurementOperationId,
-        isCurrent,
-      });
-      if (!isCurrent()) {
-        return "stale";
-      }
-      if (!tailHydrated) {
-        await rehydrateSessionSlotFromHistory(sessionId, {
-          replace: true,
+      if (!slotStreamLive) {
+        const tailHydrated = await rehydrateSessionSlotFromHistory(sessionId, {
+          afterSeq: lastSeq,
           requestHeaders,
           measurementOperationId,
           isCurrent,
         });
-      }
-      if (!isCurrent()) {
-        return "stale";
+        if (!isCurrent()) {
+          return "stale";
+        }
+        if (!tailHydrated) {
+          await rehydrateSessionSlotFromHistory(sessionId, {
+            replace: true,
+            requestHeaders,
+            measurementOperationId,
+            isCurrent,
+          });
+        }
+        if (!isCurrent()) {
+          return "stale";
+        }
       }
       patchSessionRecord(sessionId, { transcriptHydrated: true });
       recordMeasurementWorkflowStep({
         operationId: measurementOperationId,
         step: "session.select.history_hydrate",
         startedAt: hydrateStartedAt,
+        outcome: slotStreamLive ? "skipped" : undefined,
       });
 
       markWorkspaceBootstrappedInSession(workspaceId);

@@ -32,6 +32,13 @@ import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-d
  * Poll the enrollment while it has not reached `synced` so the pending→synced
  * transition is actually observed (there is no server push channel). Stops the
  * moment the enrollment is synced.
+ *
+ * Named exception (does not sit on the `cadence` scale): 10s falls strictly
+ * between `cadence.standardMs` (5s) and `cadence.relaxedMs` (15s). Snapping
+ * down to standard would tighten (forbidden); snapping up to relaxed would
+ * delay the pending→synced transition that gates whether local agent auth is
+ * usable by 50% longer. Kept as its own named constant (UX Latency +
+ * Transitions ADR §4.7, Rung 6, Q8).
  */
 const ENROLLMENT_SYNC_POLL_MS = 10_000;
 
@@ -67,12 +74,12 @@ export function useLocalAuthStateSync() {
   // routes for LOCAL sessions, which a gateway-enabled, compute-less server
   // still needs. Gate on authenticated + reachable instead (see
   // `shouldSyncLocalAuthState`).
-  const { cloudEnabled, authStatus } = useCloudAvailabilityState();
+  const { controlPlaneReachable, authStatus } = useCloudAvailabilityState();
   const apiBaseUrl = useProductHost().deployment.apiBaseUrl;
   const authenticated = authStatus === "authenticated";
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
-  const stateQuery = useAgentAuthState("local", authenticated && cloudEnabled);
+  const stateQuery = useAgentAuthState("local", authenticated && controlPlaneReachable);
   const cloudClient = useCloudClient();
   const queryClient = useQueryClient();
   const lastPushedRef = useRef<string | null>(null);
@@ -96,7 +103,7 @@ export function useLocalAuthStateSync() {
   const [enrollmentPollMs, setEnrollmentPollMs] = useState<number | false>(
     ENROLLMENT_SYNC_POLL_MS,
   );
-  const enrollmentQuery = useAgentGatewayEnrollment(authenticated && cloudEnabled, {
+  const enrollmentQuery = useAgentGatewayEnrollment(authenticated && controlPlaneReachable, {
     refetchInterval: enrollmentPollMs,
   });
   // "none" (a 404 — enrollment row not created yet) counts as an observed
@@ -126,7 +133,7 @@ export function useLocalAuthStateSync() {
   }, [enrollmentSyncStatus, queryClient]);
 
   useEffect(() => {
-    if (!shouldSyncLocalAuthState({ authenticated, serverReachable: cloudEnabled, runtimeHealthy })) {
+    if (!shouldSyncLocalAuthState({ authenticated, serverReachable: controlPlaneReachable, runtimeHealthy })) {
       return;
     }
     // Wait until the server state has settled before deciding anything.
@@ -223,7 +230,7 @@ export function useLocalAuthStateSync() {
     apiBaseUrl,
     authenticated,
     cloudClient,
-    cloudEnabled,
+    controlPlaneReachable,
     invalidateAgentLaunchReadinessResources,
     queryClient,
     runtimeHealthy,

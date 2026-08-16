@@ -6,6 +6,9 @@ import type { SessionEventEnvelope } from "@anyharness/sdk";
 import { replaySessionHistory } from "#product/lib/domain/sessions/stream/stream-state";
 import { useSessionHistoryHydration } from "#product/hooks/sessions/lifecycle/use-session-history-hydration";
 import {
+  resetSessionHistoryHydrationInFlightForTest,
+} from "#product/hooks/sessions/lifecycle/session-history-hydration-dedupe";
+import {
   createEmptySessionRecord,
   getSessionRecord,
   putSessionRecord,
@@ -36,6 +39,7 @@ vi.mock("#product/hooks/sessions/lifecycle/use-session-history-subagent-authorit
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetSessionHistoryHydrationInFlightForTest();
   useSessionDirectoryStore.getState().clearEntries();
   useSessionIntentStore.getState().clear();
   useSessionTranscriptStore.getState().clearEntries();
@@ -92,6 +96,60 @@ describe("useSessionHistoryHydration subagent authority", () => {
     expect(retryResult).toBe(true);
     expect(mocks.reconcileHydratedSubagents).toHaveBeenCalledTimes(2);
     expect(mocks.reconcileHydratedSubagents.mock.calls[1]?.[0].transcript.lastSeq).toBe(2);
+  });
+});
+
+describe("useSessionHistoryHydration session-open dedupe", () => {
+  it("collapses two concurrent full hydrations of a session into one fetch", async () => {
+    putSessionRecord(createEmptySessionRecord("session-1", "codex", {
+      workspaceId: "workspace-1",
+    }));
+    let resolveFetch!: (events: SessionEventEnvelope[]) => void;
+    mocks.fetchSessionHistory.mockReturnValueOnce(
+      new Promise<SessionEventEnvelope[]>((resolve) => {
+        resolveFetch = resolve;
+      }),
+    );
+    mocks.reconcileHydratedSubagents.mockResolvedValue(true);
+    const rendered = renderHook(() => useSessionHistoryHydration());
+
+    let results: [boolean, boolean] = [false, false];
+    await act(async () => {
+      // Bootstrap kickoff and the transcript pane both hydrate the same session
+      // while the first fetch is still in flight.
+      const first = rendered.result.current.rehydrateSessionSlotFromHistory(
+        "session-1",
+        { replace: true },
+      );
+      const second = rendered.result.current.rehydrateSessionSlotFromHistory(
+        "session-1",
+        { replace: true },
+      );
+      resolveFetch([turnStarted(1), turnEnded(2)]);
+      results = await Promise.all([first, second]);
+    });
+
+    expect(mocks.fetchSessionHistory).toHaveBeenCalledTimes(1);
+    expect(results).toEqual([true, true]);
+  });
+
+  it("does not dedupe incremental (afterSeq/beforeSeq) fetches", async () => {
+    const initial = replaySessionHistory("session-1", [turnStarted(1)]);
+    putSessionRecord({
+      ...createEmptySessionRecord("session-1", "codex", { workspaceId: "workspace-1" }),
+      events: initial.events,
+      transcript: initial.transcript,
+    });
+    mocks.fetchSessionHistory.mockResolvedValue([turnEnded(2)]);
+    mocks.reconcileHydratedSubagents.mockResolvedValue(true);
+    const rendered = renderHook(() => useSessionHistoryHydration());
+
+    await act(async () => {
+      await rendered.result.current.rehydrateSessionSlotFromHistory("session-1", { afterSeq: 1 });
+      await rendered.result.current.rehydrateSessionSlotFromHistory("session-1", { afterSeq: 1 });
+    });
+
+    expect(mocks.fetchSessionHistory).toHaveBeenCalledTimes(2);
   });
 });
 

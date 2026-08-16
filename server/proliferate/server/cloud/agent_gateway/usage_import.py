@@ -244,6 +244,10 @@ async def run_usage_import(
                 "LiteLLM spend row has an unresolved virtual key",
                 extra={
                     "litellm_request_id": entry.request_id,
+                    # A 12-char prefix of LiteLLM's stored key identifier (the
+                    # value used as virtual_key_id below), truncated for manual
+                    # review — a redacted hint, not the raw secret.
+                    # agent-auth:allow-secret-log
                     "api_key_hint": entry.api_key[:12] if entry.api_key else None,
                 },
             )

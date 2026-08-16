@@ -25,6 +25,25 @@ def expected_metro_facts() -> dict[str, object]:
 
 
 class MobileProductClientExportCheckerTest(unittest.TestCase):
+    def matching(self, errors: list[str], rule_id: str, detail: str) -> list[str]:
+        """Diagnostics naming `rule_id` whose `found:` line carries `detail`.
+
+        Keying on both halves is the point: the rule id proves the engine
+        reached for the right record, and the detail proves it found the right
+        thing. A record renamed out from under the engine fails here.
+        """
+        return [
+            error
+            for error in errors
+            if rule_id in error and detail in error and "found:" in error
+        ]
+
+    def has(self, errors: list[str], rule_id: str, detail: str) -> None:
+        self.assertTrue(
+            self.matching(errors, rule_id, detail),
+            f"no {rule_id} diagnostic mentioning {detail!r} in {errors!r}",
+        )
+
     def write_text(self, root: Path, relative_path: str, content: str) -> Path:
         path = root / relative_path
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -105,9 +124,7 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
 
             errors = self.check_preflight(root)
 
-        self.assertTrue(
-            any("no ProductClient import" in error for error in errors)
-        )
+        self.has(errors, "FE-EXPORT-8", "no ProductClient import")
 
     def test_static_dynamic_require_and_mock_broad_imports_fail(self) -> None:
         mobile_source = "\n".join(
@@ -144,9 +161,9 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
 
             errors = self.check_preflight(root)
 
-        boundary_errors = [
-            error for error in errors if "Mobile may import ProductClient only" in error
-        ]
+        boundary_errors = self.matching(
+            errors, "FE-EXPORT-5", "Mobile may import ProductClient only"
+        )
         self.assertEqual(len(boundary_errors), 14)
 
     def test_relative_product_client_source_paths_fail(self) -> None:
@@ -174,9 +191,9 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
 
             errors = self.check_preflight(root)
 
-        boundary_errors = [
-            error for error in errors if "Mobile may import ProductClient only" in error
-        ]
+        boundary_errors = self.matching(
+            errors, "FE-EXPORT-5", "Mobile may import ProductClient only"
+        )
         self.assertEqual(len(boundary_errors), 2)
 
     def test_all_supported_loader_forms_reach_valid_domain_target(self) -> None:
@@ -220,8 +237,8 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
 
             errors = self.check_preflight(root)
 
-        self.assertTrue(any("baseUrl must be absent" in error for error in errors))
-        self.assertTrue(any("paths must be absent" in error for error in errors))
+        self.has(errors, "FE-EXPORT-1", "baseUrl must be absent")
+        self.has(errors, "FE-EXPORT-1", "paths must be absent")
 
     def test_custom_metro_resolver_and_condition_drift_fail(self) -> None:
         facts = expected_metro_facts()
@@ -239,16 +256,10 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
 
             errors = self.check_preflight(root, metro_facts=facts)
 
-        self.assertTrue(
-            any("custom resolver.resolveRequest" in error for error in errors)
-        )
-        self.assertTrue(
-            any("unstable_enablePackageExports" in error for error in errors)
-        )
-        self.assertTrue(any("unstable_conditionNames" in error for error in errors))
-        self.assertTrue(
-            any("unstable_conditionsByPlatform" in error for error in errors)
-        )
+        self.has(errors, "FE-EXPORT-2", "custom resolver.resolveRequest")
+        self.has(errors, "FE-EXPORT-3", "unstable_enablePackageExports")
+        self.has(errors, "FE-EXPORT-3", "unstable_conditionNames")
+        self.has(errors, "FE-EXPORT-3", "unstable_conditionsByPlatform")
 
     def test_package_export_override_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -270,9 +281,7 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
 
             errors = self.check_preflight(root)
 
-        self.assertTrue(
-            any("forbidden condition overrides" in error for error in errors)
-        )
+        self.has(errors, "FE-EXPORT-4", "forbidden condition overrides")
 
     def test_non_dist_runtime_export_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -293,7 +302,7 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
 
             errors = self.check_preflight(root)
 
-        self.assertTrue(any("must be exactly './dist/*.js'" in error for error in errors))
+        self.has(errors, "FE-EXPORT-4", "must be exactly './dist/*.js'")
 
     def test_missing_runtime_target_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -302,12 +311,7 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
 
             errors = self.check_preflight(root)
 
-        self.assertTrue(
-            any(
-                "missing built ProductClient runtime target" in error
-                for error in errors
-            )
-        )
+        self.has(errors, "FE-EXPORT-6", "missing built ProductClient runtime target")
 
     def test_type_only_edge_needs_declaration_but_not_runtime_js(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -337,12 +341,7 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
 
             errors = self.check_preflight(root)
 
-        self.assertTrue(
-            any(
-                "missing built ProductClient runtime target" in error
-                for error in errors
-            )
-        )
+        self.has(errors, "FE-EXPORT-6", "missing built ProductClient runtime target")
 
     def test_missing_declaration_target_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -351,12 +350,7 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
 
             errors = self.check_preflight(root)
 
-        self.assertTrue(
-            any(
-                "missing adjacent ProductClient declaration target" in error
-                for error in errors
-            )
-        )
+        self.has(errors, "FE-EXPORT-7", "missing adjacent ProductClient declaration target")
 
     def test_composed_map_with_product_client_domain_source_passes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -409,7 +403,11 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
             errors = check_module.check_export_maps(export_dir)
 
         self.assertEqual(
-            len([error for error in errors if "forbidden ProductClient source" in error]),
+            len(
+                self.matching(
+                    errors, "FE-EXPORT-9", "forbidden ProductClient source"
+                )
+            ),
             2,
         )
 
@@ -429,7 +427,7 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
 
             errors = check_module.check_export_maps(export_dir)
 
-        self.assertTrue(any("contain no ProductClient module" in error for error in errors))
+        self.has(errors, "FE-EXPORT-9", "contain no ProductClient module")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+"""Enforce the server grid coordinate boundaries recorded under lints/server/.
+
+The rule statements, rationales, and grandfathered sites are canonical in the
+TOML records (see lints/README.md); this module is only the detection engine.
+Every diagnostic is rendered from the record through
+``lint_records.render_diagnostic``.
+"""
 
 from __future__ import annotations
 
@@ -6,12 +13,50 @@ import ast
 import os
 import shutil
 import sys
-from collections import Counter, defaultdict
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-ALLOWLIST_PATH = REPO_ROOT / "scripts" / "server_boundaries_allowlist.txt"
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts import lint_records  # noqa: E402 - repo-root bootstrap above
+
+# Every rule id this checker emits. Each must have a record under lints/server/.
+OWNED_RULE_IDS = (
+    "SRV-API-1",
+    "SRV-API-2",
+    "SRV-API-3",
+    "SRV-API-4",
+    "SRV-API-5",
+    "SRV-SVC-1",
+    "SRV-SVC-2",
+    "SRV-SVC-3",
+    "SRV-SVC-4",
+    "SRV-STORE-1",
+    "SRV-STORE-2",
+    "SRV-STORE-3",
+    "SRV-STORE-4",
+    "SRV-STORE-5",
+    "SRV-DOMAIN-1",
+    "SRV-DOMAIN-2",
+    "SRV-DOMAIN-3",
+    "SRV-ERR-1",
+    "SRV-MODELS-1",
+    "SRV-MODELS-2",
+    "SRV-MODELS-3",
+    "SRV-INTEG-1",
+    "SRV-INTEG-2",
+    "SRV-INTEG-3",
+    "SRV-INTEG-4",
+    "SRV-STRUCT-1",
+    "SRV-STRUCT-2",
+    "SRV-STRUCT-3",
+    "SRV-STRUCT-4",
+    "SRV-MIGRATE-1",
+)
+
 CHECK_ROOTS = [
     REPO_ROOT / "server" / "proliferate" / "background",
     REPO_ROOT / "server" / "proliferate" / "server",
@@ -181,10 +226,13 @@ NAMED_STORE_BOUNDARIES: dict[str, NamedStoreBoundary] = {
 
 @dataclass(frozen=True)
 class Violation:
+    """One detected violation, keyed on a line-number-free site fingerprint."""
+
     rule_id: str
     path: Path
     lineno: int
-    message: str
+    site: str
+    detail: str = ""
 
     def relative_path(self, repo_root: Path = REPO_ROOT) -> str:
         try:
@@ -192,16 +240,76 @@ class Violation:
         except ValueError:
             return self.path.as_posix()
 
+    def key(self, repo_root: Path = REPO_ROOT) -> tuple[str, str, str]:
+        return (self.rule_id, self.relative_path(repo_root), self.site)
+
     def format(self, repo_root: Path = REPO_ROOT) -> str:
-        return f"{self.relative_path(repo_root)}:{self.lineno}: [{self.rule_id}] {self.message}"
+        rule = ruleset().rule(self.rule_id)
+        location = f"{self.relative_path(repo_root)}:{self.lineno}"
+        detail = self.detail or self.site
+        return lint_records.render_diagnostic(rule, location, detail)
 
 
-@dataclass(frozen=True)
-class AllowlistEntry:
-    rule_id: str
-    path: str
-    count: int
-    reason: str
+_RULESET: lint_records.RuleSet | None = None
+
+
+def ruleset() -> lint_records.RuleSet:
+    """The loaded lints/ records; loaded once per process."""
+    global _RULESET
+    if _RULESET is None:
+        _RULESET = lint_records.load()
+        for rule_id in OWNED_RULE_IDS:
+            _RULESET.rule(rule_id)
+    return _RULESET
+
+
+# ── Site fingerprints ────────────────────────────────────────────────────────
+# A site names WHERE inside a file a violation sits, without a line number, so
+# an exception entry survives edits above it. The anchor is the enclosing
+# symbol chain plus the control-flow branch path; the suffix names the matched
+# import, call, or module.
+
+MODULE_ANCHOR = "<module>"
+
+
+def _handler_label(handler: ast.ExceptHandler) -> str:
+    if handler.type is None:
+        return "except"
+    return f"except:{ast.unparse(handler.type)}"
+
+
+_BRANCH_NODES = (ast.Try, ast.If, ast.With, ast.AsyncWith, ast.For, ast.AsyncFor, ast.While)
+
+
+def anchor_map(tree: ast.AST) -> dict[int, str]:
+    """Map each node to its enclosing symbol + control-flow branch anchor."""
+    anchors: dict[int, str] = {}
+
+    def walk(node: ast.AST, symbols: tuple[str, ...], branch: tuple[str, ...]) -> None:
+        for field_name, value in ast.iter_fields(node):
+            children = value if isinstance(value, list) else [value]
+            for child in children:
+                if not isinstance(child, ast.AST):
+                    continue
+                next_symbols, next_branch = symbols, branch
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    next_symbols, next_branch = (*symbols, child.name), ()
+                elif isinstance(child, ast.ExceptHandler):
+                    next_branch = (*branch, _handler_label(child))
+                elif isinstance(node, _BRANCH_NODES):
+                    label = type(node).__name__.lower().removeprefix("async")
+                    if field_name == "orelse":
+                        label = f"{label}-else"
+                    elif field_name == "finalbody":
+                        label = "finally"
+                    next_branch = (*branch, label)
+                parts = (*next_symbols, *next_branch)
+                anchors[id(child)] = "/".join(parts) if parts else MODULE_ANCHOR
+                walk(child, next_symbols, next_branch)
+
+    anchors[id(tree)] = MODULE_ANCHOR
+    walk(tree, (), ())
+    return anchors
 
 
 @dataclass(frozen=True)
@@ -419,19 +527,39 @@ def is_background_tasks_folder(folder: Path) -> bool:
     return _starts_with(parts, ("server", "proliferate", "background", "tasks"))
 
 
+def import_site_suffix(module: str, names: set[str]) -> str:
+    if names == {"*"}:
+        return f"import:{module}"
+    return f"import:{module}:{','.join(sorted(names))}"
+
+
 class BoundaryChecker(ast.NodeVisitor):
     def __init__(self, path: Path) -> None:
         self.path = path
         self.kind = classify_path(path)
         self.violations: list[Violation] = []
+        self.anchors: dict[int, str] = {}
 
-    def add(self, node: ast.AST, rule_id: str, message: str) -> None:
+    def check(self, tree: ast.Module) -> list[Violation]:
+        self.anchors = anchor_map(tree)
+        self.visit(tree)
+        return self.violations
+
+    def visit(self, node: ast.AST) -> None:
+        if not self.anchors:
+            # Direct visit() without check(): still fingerprint deterministically.
+            self.anchors = anchor_map(node)
+        super().visit(node)
+
+    def add(self, node: ast.AST, rule_id: str, suffix: str, detail: str = "") -> None:
+        anchor = self.anchors.get(id(node), MODULE_ANCHOR)
         self.violations.append(
             Violation(
                 rule_id=rule_id,
                 path=self.path,
                 lineno=getattr(node, "lineno", 1),
-                message=message,
+                site=f"{anchor}::{suffix}",
+                detail=detail or suffix,
             )
         )
 
@@ -469,45 +597,31 @@ class BoundaryChecker(ast.NodeVisitor):
         if self.kind.is_product:
             self._check_product_raw_access_import(node, module)
         if self.kind.is_migration and is_module(module, "proliferate"):
-            self.add(
-                node,
-                "MIGRATION_APP_IMPORT",
-                "Alembic revisions must be self-contained and must not import application code",
-            )
+            self.add(node, "SRV-MIGRATE-1", import_site_suffix(module, names))
 
     def _check_api_import(self, node: ast.AST, module: str, names: set[str]) -> None:
+        suffix = import_site_suffix(module, names)
         if is_module(module, "proliferate.db.store"):
-            self.add(node, "API_STORE_IMPORT", "api.py must not import db/store modules")
+            self.add(node, "SRV-API-1", suffix)
         if is_module(module, "sqlalchemy"):
             allowed = module == ALLOWED_SQLALCHEMY_TYPE_IMPORT[0] and names <= {
                 ALLOWED_SQLALCHEMY_TYPE_IMPORT[1]
             }
             if not allowed:
-                self.add(node, "API_SQLALCHEMY_IMPORT", "api.py must not import SQLAlchemy")
+                self.add(node, "SRV-API-2", suffix)
         if module == "proliferate.db.engine":
             forbidden = names - ALLOWED_API_ENGINE_IMPORTS
             if forbidden:
-                self.add(
-                    node,
-                    "API_DB_ENGINE_IMPORT",
-                    "api.py may import get_async_session only for Depends(...) injection",
-                )
+                self.add(node, "SRV-API-3", suffix)
         if module == "proliferate.db" and ("engine" in names or "*" in names):
-            self.add(
-                node,
-                "API_DB_ENGINE_IMPORT",
-                "api.py may import get_async_session only for Depends(...) injection",
-            )
+            self.add(node, "SRV-API-3", suffix)
         if is_module(module, "proliferate.db.models"):
             allowed_module, allowed_name = ALLOWED_API_ORM_IMPORT
             if not (module == allowed_module and names <= {allowed_name}):
-                self.add(
-                    node,
-                    "API_ORM_IMPORT",
-                    "api.py may only import User from proliferate.db.models.auth",
-                )
+                self.add(node, "SRV-API-4", suffix)
 
     def _check_service_import(self, node: ast.AST, module: str, names: set[str]) -> None:
+        suffix = import_site_suffix(module, names)
         if is_module(module, "sqlalchemy"):
             allowed_names = (
                 ALLOWED_WORKER_SERVICE_SQLALCHEMY_TYPE_IMPORTS
@@ -516,39 +630,20 @@ class BoundaryChecker(ast.NodeVisitor):
             )
             allowed = module == ALLOWED_SQLALCHEMY_TYPE_IMPORT[0] and names <= allowed_names
             if not allowed:
-                self.add(
-                    node,
-                    "SERVICE_SQLALCHEMY_IMPORT",
-                    "service.py must not import SQLAlchemy query/building APIs",
-                )
+                self.add(node, "SRV-SVC-1", suffix)
         if module == "proliferate.db.engine":
-            self.add(
-                node,
-                "SERVICE_DB_ENGINE_IMPORT",
-                "service.py must not import DB session entrypoint helpers",
-            )
+            self.add(node, "SRV-SVC-2", suffix)
         if module == "proliferate.db.session_ops":
-            self.add(
-                node,
-                "SERVICE_DB_ENGINE_IMPORT",
-                "service.py must not import DB session entrypoint helpers",
-            )
+            self.add(node, "SRV-SVC-2", suffix)
         if module == "proliferate.db" and (
             "engine" in names or "session_ops" in names or "*" in names
         ):
-            self.add(
-                node,
-                "SERVICE_DB_ENGINE_IMPORT",
-                "service.py must not import DB session entrypoint helpers",
-            )
+            self.add(node, "SRV-SVC-2", suffix)
         if is_module(module, "proliferate.db.models"):
-            self.add(
-                node,
-                "SERVICE_ORM_IMPORT",
-                "service.py must not import ORM models directly",
-            )
+            self.add(node, "SRV-SVC-3", suffix)
 
     def _check_domain_import(self, node: ast.AST, module: str, names: set[str]) -> None:
+        suffix = import_site_suffix(module, names)
         forbidden_modules = (
             "fastapi",
             "sqlalchemy",
@@ -558,24 +653,11 @@ class BoundaryChecker(ast.NodeVisitor):
             "proliferate.integrations",
         )
         if any(is_module(module, prefix) for prefix in forbidden_modules):
-            self.add(
-                node,
-                "DOMAIN_FORBIDDEN_IMPORT",
-                "domain modules must be pure and must not import framework, "
-                "DB, config, or integration modules",
-            )
+            self.add(node, "SRV-DOMAIN-1", suffix)
         if is_module(module, "proliferate.server") and module.endswith(".service"):
-            self.add(
-                node,
-                "DOMAIN_SERVICE_IMPORT",
-                "domain modules must not import service.py",
-            )
+            self.add(node, "SRV-DOMAIN-2", suffix)
         if module == "fastapi" and "HTTPException" in names:
-            self.add(
-                node,
-                "HTTP_EXCEPTION_FORBIDDEN",
-                "HTTPException is banned outside HTTP boundary code",
-            )
+            self.add(node, "SRV-ERR-1", suffix)
 
     def _check_product_models_import(
         self,
@@ -584,39 +666,20 @@ class BoundaryChecker(ast.NodeVisitor):
         names: set[str],
     ) -> None:
         if is_module(module, "proliferate.db.models"):
-            self.add(
-                node,
-                "MODELS_ORM_IMPORT",
-                "server/<domain>/models.py must not import ORM models",
-            )
+            self.add(node, "SRV-MODELS-1", import_site_suffix(module, names))
 
     def _check_store_import(self, node: ast.AST, module: str, names: set[str]) -> None:
+        suffix = import_site_suffix(module, names)
         if module == "proliferate.db" and ("engine" in names or "*" in names):
-            self.add(
-                node,
-                "STORE_SESSION_FACTORY_IMPORT",
-                "store modules must not import DB session factories",
-            )
+            self.add(node, "SRV-STORE-1", suffix)
         if module == "proliferate.db.engine":
-            self.add(
-                node,
-                "STORE_SESSION_FACTORY_IMPORT",
-                "store modules must not import DB session factories",
-            )
+            self.add(node, "SRV-STORE-1", suffix)
         if is_module(module, "fastapi"):
-            self.add(node, "STORE_FORBIDDEN_IMPORT", "store modules must not import FastAPI")
+            self.add(node, "SRV-STORE-2", suffix)
         if is_module(module, "proliferate.integrations"):
-            self.add(
-                node,
-                "STORE_FORBIDDEN_IMPORT",
-                "store modules must not import integrations",
-            )
+            self.add(node, "SRV-STORE-2", suffix)
         if is_module(module, "proliferate.server"):
-            self.add(
-                node,
-                "STORE_FORBIDDEN_IMPORT",
-                "store modules must not import product server modules",
-            )
+            self.add(node, "SRV-STORE-2", suffix)
 
     def _check_orm_model_import(self, node: ast.AST, module: str) -> None:
         forbidden_modules = (
@@ -625,54 +688,27 @@ class BoundaryChecker(ast.NodeVisitor):
             "proliferate.integrations",
         )
         if any(is_module(module, prefix) for prefix in forbidden_modules):
-            self.add(
-                node,
-                "ORM_MODEL_FORBIDDEN_IMPORT",
-                "db/models modules must not import stores, services, or integrations",
-            )
+            self.add(node, "SRV-MODELS-3", f"import:{module}")
 
     def _check_integration_import(self, node: ast.AST, module: str, names: set[str]) -> None:
+        suffix = import_site_suffix(module, names)
         if is_module(module, "proliferate.db"):
-            self.add(
-                node,
-                "INTEGRATION_DB_IMPORT",
-                "integrations must not import database modules",
-            )
+            self.add(node, "SRV-INTEG-1", suffix)
         if is_module(module, "proliferate.server"):
-            self.add(
-                node,
-                "INTEGRATION_PRODUCT_IMPORT",
-                "integrations must not import product server domains",
-            )
+            self.add(node, "SRV-INTEG-2", suffix)
         if is_module(module, "proliferate.db.store"):
-            self.add(
-                node,
-                "INTEGRATION_STORE_IMPORT",
-                "integrations must not import db/store modules",
-            )
+            self.add(node, "SRV-INTEG-3", suffix)
         if module == "fastapi" and "HTTPException" in names:
-            self.add(
-                node,
-                "HTTP_EXCEPTION_FORBIDDEN",
-                "HTTPException is banned outside HTTP boundary code",
-            )
+            self.add(node, "SRV-ERR-1", suffix)
 
     def _check_product_raw_access_import(self, node: ast.AST, module: str) -> None:
         top_level = module.split(".", 1)[0]
         if top_level in RAW_HTTP_MODULES:
-            self.add(
-                node,
-                "PRODUCT_RAW_HTTP_IMPORT",
-                "product domains must not own raw external HTTP clients",
-            )
+            self.add(node, "SRV-INTEG-4", f"import:{module}")
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         if self.kind.is_domain and is_public_async_export(node):
-            self.add(
-                node,
-                "DOMAIN_ASYNC_EXPORT",
-                "domain modules must not export async functions",
-            )
+            self.add(node, "SRV-DOMAIN-3", f"async-def:{node.name}")
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:
@@ -682,16 +718,14 @@ class BoundaryChecker(ast.NodeVisitor):
     def _check_call(self, node: ast.Call) -> None:
         func = node.func
         if isinstance(func, ast.Attribute):
+            receiver = func.value.id if isinstance(func.value, ast.Name) else "<expr>"
+            call_suffix = f"{receiver}.{func.attr}"
             if (
                 self.kind.is_api
                 and func.attr in API_DB_METHODS
                 and looks_like_db_handle(func.value)
             ):
-                self.add(
-                    node,
-                    "API_DB_METHOD_CALL",
-                    f"api.py must not call session method .{func.attr}()",
-                )
+                self.add(node, "SRV-API-5", call_suffix, detail=f"await {call_suffix}()")
             service_db_methods = (
                 WORKER_SERVICE_DB_METHODS if self.kind.is_worker_service else SERVICE_DB_METHODS
             )
@@ -700,11 +734,7 @@ class BoundaryChecker(ast.NodeVisitor):
                 and func.attr in service_db_methods
                 and looks_like_db_handle(func.value)
             ):
-                self.add(
-                    node,
-                    "SERVICE_DB_METHOD_CALL",
-                    f"service.py must not call session method .{func.attr}()",
-                )
+                self.add(node, "SRV-SVC-4", call_suffix, detail=f"await {call_suffix}()")
             if (
                 (self.kind.is_service or self.kind.is_service_boundary_debt)
                 and func.attr in SERVICE_DB_SESSION_OPS_METHODS
@@ -713,55 +743,45 @@ class BoundaryChecker(ast.NodeVisitor):
             ):
                 self.add(
                     node,
-                    "SERVICE_DB_METHOD_CALL",
-                    f"service.py must not call session boundary helper .{func.attr}()",
+                    "SRV-SVC-4",
+                    call_suffix,
+                    detail=f"session boundary helper {call_suffix}()",
                 )
             if (
                 self.kind.is_store
                 and func.attr in STORE_FORBIDDEN_SESSION_METHODS
                 and looks_like_db_handle(func.value)
             ):
-                self.add(
-                    node,
-                    "STORE_COMMIT_ROLLBACK",
-                    f"store modules must not call session method .{func.attr}()",
-                )
+                self.add(node, "SRV-STORE-3", call_suffix, detail=f"await {call_suffix}()")
             if (
                 self.kind.is_store
                 and func.attr == "async_session_factory"
                 and isinstance(func.value, ast.Name)
             ):
-                self.add(
-                    node,
-                    "STORE_SESSION_FACTORY_CALL",
-                    "store modules must not open DB sessions",
-                )
+                self.add(node, "SRV-STORE-4", call_suffix, detail=f"{call_suffix}()")
         if isinstance(func, ast.Name):
             if self.kind.is_store and func.id == "async_session_factory":
                 self.add(
                     node,
-                    "STORE_SESSION_FACTORY_CALL",
-                    "store modules must not open DB sessions",
+                    "SRV-STORE-4",
+                    "async_session_factory",
+                    detail="async_session_factory()",
                 )
             if func.id == "ConfigDict" and self.kind.is_product_models:
                 for keyword in node.keywords:
                     if keyword.arg == "from_attributes":
                         self.add(
                             node,
-                            "MODELS_FROM_ATTRIBUTES",
-                            "Pydantic response models must not map ORM objects "
-                            "with from_attributes",
+                            "SRV-MODELS-2",
+                            "ConfigDict.from_attributes",
+                            detail="ConfigDict(from_attributes=...)",
                         )
         if (
             isinstance(func, ast.Name)
             and func.id == "HTTPException"
             and (self.kind.is_domain or self.kind.is_store or self.kind.is_integration)
         ):
-            self.add(
-                node,
-                "HTTP_EXCEPTION_FORBIDDEN",
-                "HTTPException is banned outside HTTP boundary code",
-            )
+            self.add(node, "SRV-ERR-1", "raise:HTTPException", detail="HTTPException(...)")
 
 
 def _dotted_name(node: ast.AST) -> tuple[str, ...] | None:
@@ -781,8 +801,10 @@ class NamedCrossDomainWriteChecker(ast.NodeVisitor):
         self.module_aliases: dict[str, set[str]] = defaultdict(set)
         self.imported_modules: set[str] = set()
         self.violations: list[Violation] = []
+        self.anchors: dict[int, str] = {}
 
     def check(self, tree: ast.Module) -> list[Violation]:
+        self.anchors = anchor_map(tree)
         self._collect_import_bindings(tree)
         self.visit(tree)
         return self.violations
@@ -838,12 +860,14 @@ class NamedCrossDomainWriteChecker(ast.NodeVisitor):
         if self._is_owner(boundary):
             return
         qualified_symbol = f"{boundary.store_module}.{symbol}"
+        anchor = self.anchors.get(id(node), MODULE_ANCHOR)
         self.violations.append(
             Violation(
-                rule_id="NAMED_CROSS_DOMAIN_WRITE",
+                rule_id="SRV-STORE-5",
                 path=self.path,
                 lineno=getattr(node, "lineno", 1),
-                message=(
+                site=f"{anchor}::write:{qualified_symbol}",
+                detail=(
                     f"{qualified_symbol} is a protected {boundary.owner_label} "
                     "store mutation; cross-domain callers must use "
                     f"{boundary.owner_service_hint}"
@@ -903,9 +927,7 @@ def check_paths(paths: list[Path]) -> list[Violation]:
     violations: list[Violation] = []
     for path in paths:
         checker = BoundaryChecker(path)
-        tree = parse_source(path)
-        checker.visit(tree)
-        violations.extend(checker.violations)
+        violations.extend(checker.check(parse_source(path)))
     return violations
 
 
@@ -928,31 +950,31 @@ def check_structure(repo_root: Path = REPO_ROOT) -> list[Violation]:
         if has_single_underscore_prefix(path):
             violations.append(
                 Violation(
-                    rule_id="UNDERSCORE_PREFIXED_MODULE",
+                    rule_id="SRV-STRUCT-1",
                     path=path,
                     lineno=1,
-                    message="server module names must not start with a single underscore",
+                    site=f"module:{path.name}",
+                    detail=f"module name {path.name}",
                 )
             )
         if path.name.endswith("_service.py"):
             violations.append(
                 Violation(
-                    rule_id="SERVICE_SUFFIX_MODULE",
+                    rule_id="SRV-STRUCT-2",
                     path=path,
                     lineno=1,
-                    message="server modules must use service.py, not *_service.py",
+                    site=f"module:{path.name}",
+                    detail=f"module name {path.name}",
                 )
             )
         if is_banned_junk_drawer_module(path):
             violations.append(
                 Violation(
-                    rule_id="JUNK_DRAWER_MODULE",
+                    rule_id="SRV-STRUCT-3",
                     path=path,
                     lineno=1,
-                    message=(
-                        "server modules must use owned concern names, "
-                        "not helper/misc/common/utils names"
-                    ),
+                    site=f"module:{path.name}",
+                    detail=f"module name {path.name}",
                 )
             )
 
@@ -980,100 +1002,84 @@ def check_structure(repo_root: Path = REPO_ROOT) -> list[Violation]:
             only_file = source_files[0].name
             violations.append(
                 Violation(
-                    rule_id="SINGLE_FILE_FOLDER",
+                    rule_id="SRV-STRUCT-4",
                     path=folder,
                     lineno=1,
-                    message=f"single-file folders are forbidden; inline or promote {only_file}",
+                    site=f"folder:{only_file}",
+                    detail=f"folder holds only {only_file}",
                 )
             )
 
     return violations
 
 
-def load_allowlist(path: Path = ALLOWLIST_PATH) -> dict[tuple[str, str], AllowlistEntry]:
-    if not path.exists():
-        return {}
-    entries: dict[tuple[str, str], AllowlistEntry] = {}
-    for line_number, raw_line in enumerate(path.read_text().splitlines(), start=1):
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        parts = line.split(maxsplit=3)
-        if len(parts) != 4:
-            raise ValueError(
-                f"{path.relative_to(REPO_ROOT)}:{line_number}: expected RULE_ID path count reason"
-            )
-        rule_id, entry_path, raw_count, reason = parts
-        try:
-            count = int(raw_count)
-        except ValueError as exc:
-            raise ValueError(
-                f"{path.relative_to(REPO_ROOT)}:{line_number}: count must be an integer"
-            ) from exc
-        if count < 1:
-            raise ValueError(
-                f"{path.relative_to(REPO_ROOT)}:{line_number}: count must be positive"
-            )
-        key = (rule_id, entry_path)
-        if key in entries:
-            raise ValueError(
-                f"{path.relative_to(REPO_ROOT)}:{line_number}: duplicate allowlist entry"
-            )
-        entries[key] = AllowlistEntry(
-            rule_id=rule_id,
-            path=entry_path,
-            count=count,
-            reason=reason,
-        )
-    return entries
+def disambiguate(
+    violations: list[Violation], repo_root: Path = REPO_ROOT
+) -> list[Violation]:
+    """Give repeated fingerprints an occurrence ordinal, in file order.
 
-
-def apply_allowlist(
-    violations: list[Violation],
-    allowlist: dict[tuple[str, str], AllowlistEntry],
-) -> tuple[list[Violation], list[str]]:
-    grouped: dict[tuple[str, str], list[Violation]] = defaultdict(list)
+    Two hits of the same rule can share a fingerprint — the same matched token
+    twice inside one function. The ledger keys on `(path, site)`, so without an
+    ordinal the second occurrence would be excused by the first one's entry.
+    The ordinal is an occurrence index, not a line number: reformatting does not
+    move it, and adding a hit only ever appends a new `#n` site.
+    """
+    grouped: dict[tuple[str, str, str], list[Violation]] = {}
     for violation in violations:
-        grouped[(violation.rule_id, violation.relative_path())].append(violation)
-
-    failing: list[Violation] = []
-    stale: list[str] = []
-
-    for key, group in grouped.items():
-        entry = allowlist.get(key)
-        if entry is None:
-            failing.extend(group)
+        grouped.setdefault(violation.key(repo_root), []).append(violation)
+    out: list[Violation] = []
+    for group in grouped.values():
+        if len(group) == 1:
+            out.extend(group)
             continue
-        if len(group) > entry.count:
-            failing.extend(group[entry.count :])
-
-    for key, entry in allowlist.items():
-        observed = len(grouped.get(key, []))
-        if observed < entry.count:
-            stale.append(
-                f"{entry.rule_id} {entry.path} allowlisted={entry.count} observed={observed}"
+        for ordinal, violation in enumerate(
+            sorted(group, key=lambda item: item.lineno), start=1
+        ):
+            out.append(
+                violation
+                if ordinal == 1
+                else Violation(
+                    rule_id=violation.rule_id,
+                    path=violation.path,
+                    lineno=violation.lineno,
+                    site=f"{violation.site}#{ordinal}",
+                    detail=violation.detail,
+                )
             )
-        elif not (REPO_ROOT / entry.path).exists():
-            stale.append(
-                f"{entry.rule_id} {entry.path} allowlisted={entry.count} observed=missing-file"
-            )
+    return sorted(
+        out,
+        key=lambda item: (
+            item.relative_path(repo_root),
+            item.lineno,
+            item.rule_id,
+            item.site,
+        ),
+    )
 
-    return failing, stale
 
-
-def print_summary(
+def apply_exceptions(
     violations: list[Violation],
-    allowlist: dict[tuple[str, str], AllowlistEntry],
-) -> None:
-    observed = Counter((violation.rule_id, violation.relative_path()) for violation in violations)
-    if not observed:
-        return
-    print("Observed server boundary debt:")
-    for (rule_id, path), count in sorted(observed.items()):
-        entry = allowlist.get((rule_id, path))
-        suffix = f" allowlisted={entry.count}" if entry else " unallowlisted"
-        print(f"  {rule_id} {path}: {count}{suffix}")
-    print()
+    ledger: lint_records.RuleSet | None = None,
+) -> tuple[list[Violation], list[str]]:
+    """Split violations into failures and report stale exception entries.
+
+    A ledgered (rule, path, site) triple is tolerated. A ledger entry whose
+    site no longer violates is stale and must be deleted in the same change.
+    """
+    records = ledger if ledger is not None else ruleset()
+    observed = {violation.key() for violation in violations}
+    failing = [
+        violation
+        for violation in violations
+        if violation.key()[1:] not in records.exception_sites(violation.rule_id)
+    ]
+    stale = [
+        f"{rule_id} {path} {site}"
+        for rule_id in OWNED_RULE_IDS
+        for path, site in sorted(records.exception_sites(rule_id))
+        if (rule_id, path, site) not in observed
+    ]
+    return failing, sorted(stale)
 
 
 def reexec_with_python_312() -> None:
@@ -1095,30 +1101,31 @@ def main() -> int:
 
     paths = [*iter_target_files(REPO_ROOT), *iter_migration_files(REPO_ROOT)]
     named_write_paths = iter_named_write_target_files(REPO_ROOT)
-    allowlist = load_allowlist()
-    violations = [
-        *check_paths(paths),
-        *check_named_cross_domain_writes(named_write_paths),
-        *check_structure(REPO_ROOT),
-    ]
-    failing, stale = apply_allowlist(violations, allowlist)
+    violations = disambiguate(
+        [
+            *check_paths(paths),
+            *check_named_cross_domain_writes(named_write_paths),
+            *check_structure(REPO_ROOT),
+        ]
+    )
+    failing, stale = apply_exceptions(violations)
 
     if not failing and not stale:
         print("Server boundary check passed.")
         return 0
 
-    print_summary(violations, allowlist)
-
     if failing:
-        print("Server boundary violations not covered by allowlist:")
-        for violation in sorted(failing, key=lambda item: item.format()):
+        print("Server boundary violations with no exception-ledger entry:")
+        for violation in sorted(failing, key=lambda item: item.key()):
             print(violation.format())
+            print()
 
     if stale:
-        if failing:
-            print()
-        print("Stale server boundary allowlist entries:")
-        for entry in sorted(stale):
+        print(
+            "Stale exception entries in lints/server/exceptions.toml — these sites "
+            "no longer violate; delete the entries in this change:"
+        )
+        for entry in stale:
             print(f"  {entry}")
 
     return 1

@@ -35,6 +35,7 @@
       "type": "object",
       "required": [
         "kind",
+        "authCardinality",
         "displayName",
         "agentProcess",
         "launch",
@@ -50,6 +51,13 @@
             "cursor",
             "opencode",
             "grok"
+          ]
+        },
+        "authCardinality": {
+          "description": "How many auth sources this harness may keep enabled at once. `single` (radio: gateway XOR one api_key row) covers claude/codex/grok/cursor; `multi` (gateway plus any number of api_key rows, composed additively) is opencode-only today. This is the declared authority for the SINGLE_SOURCE/MULTI_SOURCE mirrors; deriving multiplicity from auth.slots length is fragile, so it is stated explicitly.",
+          "enum": [
+            "single",
+            "multi"
           ]
         },
         "displayName": {

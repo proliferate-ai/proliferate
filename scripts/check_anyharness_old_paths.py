@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts import lint_records  # noqa: E402
+
+RULES = lint_records.load("anyharness")
+RULE_ID = "AH-PATHS-1"
 
 BLOCKED_PATHS = [
     "anyharness/crates/anyharness-lib/src/sessions",
@@ -42,9 +50,14 @@ def main() -> int:
         print("AnyHarness old-path check passed.")
         return 0
 
-    print("Completed AnyHarness splits must not resurrect old paths:")
+    rule = RULES.rule(RULE_ID)
     for path in existing_paths:
-        print(f"  {path}")
+        print(
+            lint_records.render_diagnostic(
+                rule, path, "retired path exists again"
+            )
+        )
+        print()
     return 1
 
 

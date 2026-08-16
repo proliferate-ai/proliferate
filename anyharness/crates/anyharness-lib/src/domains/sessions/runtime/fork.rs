@@ -1,10 +1,17 @@
-use anyharness_contract::v1::SessionExecutionPhase;
+use anyharness_contract::v1::{ForkSessionTarget, SessionExecutionPhase};
+use sha2::{Digest, Sha256};
 
 use crate::domains::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
 };
 use crate::domains::sessions::links::service::SessionLinkService;
-use crate::domains::sessions::model::{parse_action_capabilities, SessionRecord};
+use crate::domains::sessions::model::{
+    parse_action_capabilities, ForkOperationPhase, ForkOperationRecord, SessionRecord,
+};
+use crate::domains::sessions::runtime::fork_boundary::{
+    self, ForkTargetError,
+};
+use crate::domains::sessions::store::fork_operations::ForkOperationChildResult;
 use crate::live::sessions::SessionStartupStrategy;
 use crate::live::sessions::{ForkSessionCommandError, LiveSessionCommandError};
 
@@ -17,42 +24,99 @@ impl SessionRuntime {
     pub async fn fork_session(
         &self,
         session_id: &str,
-        target: Option<anyharness_contract::v1::ForkSessionTarget>,
+        target: Option<ForkSessionTarget>,
+        requested_child_id: Option<String>,
+        idempotency_key_header: Option<String>,
     ) -> Result<ForkSessionOutcome, ForkSessionError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
             .map_err(|error| ForkSessionError::Internal(anyhow::anyhow!(error.to_string())))?;
-        if target.is_some() {
+
+        // Forks ADR rung 2 (ruling Q1): `item_id` is required at the product
+        // boundary. Checked before anything else — it is a request-shape error
+        // independent of the agent's capabilities.
+        if let Some(target) = target.as_ref() {
+            let has_item_id = target
+                .item_id
+                .as_deref()
+                .map(str::trim)
+                .is_some_and(|value| !value.is_empty());
+            if !has_item_id {
+                return Err(ForkSessionError::InvalidForkTarget(
+                    "fork target requires item_id".to_string(),
+                ));
+            }
+        }
+
+        let parent = self.get_fork_parent(session_id)?;
+        validate_fork_parent(&parent, &self.session_link_service)?;
+        self.assert_fork_workspace_checkout_present(&parent.workspace_id)?;
+
+        let capabilities = parse_action_capabilities(parent.action_capabilities_json.as_deref());
+        if !capabilities.fork {
             return Err(ForkSessionError::Unsupported(
-                "targeted fork is not enabled for this adapter".to_string(),
+                "session agent does not advertise fork support".to_string(),
+            ));
+        }
+        // Capability-gated per-adapter dispatch (flag default OFF). No adapter
+        // advertises `targeted_fork` until the rung-3 bridges land, so a
+        // targeted request fails closed and tip-fork behavior is unchanged.
+        if target.is_some() && !capabilities.targeted_fork {
+            return Err(ForkSessionError::Unsupported(
+                "targeted fork is not supported by this agent".to_string(),
             ));
         }
 
-        let parent = self
-            .get_session_or_not_found(session_id)
-            .map_err(|error| match error {
-                SessionLifecycleError::SessionNotFound(session_id) => {
-                    ForkSessionError::SessionNotFound(session_id)
+        // --- Idempotency identity + canonical request digest (ADR 4.4) ---
+        let reserved_child_id = requested_child_id
+            .clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let idempotency_key = requested_child_id
+            .or(idempotency_key_header)
+            .unwrap_or_else(|| reserved_child_id.clone());
+        let request_digest = canonical_fork_request_digest(session_id, target.as_ref());
+
+        if let Some(existing) = self
+            .session_service
+            .store()
+            .find_fork_operation_by_key(&idempotency_key)
+            .map_err(ForkSessionError::Internal)?
+        {
+            return self.reconcile_existing_fork_operation(&existing, &request_digest);
+        }
+
+        // Resolve and record the boundary. A resolved target never silently
+        // degrades to a tip fork: it dispatches at the recorded anchor or errors.
+        let parent_events = self
+            .session_service
+            .store()
+            .list_events(session_id)
+            .map_err(ForkSessionError::Internal)?;
+        let (anchor_turn_id, anchor_item_id, provider_anchor_kind, prefix_terminal_seq, prefix_digest) =
+            match target.as_ref() {
+                Some(target) => {
+                    let resolved =
+                        fork_boundary::resolve_targeted_boundary(&parent_events, target)
+                            .map_err(map_fork_target_error)?;
+                    (
+                        Some(resolved.anchor_turn_id),
+                        Some(resolved.anchor_item_id),
+                        "targeted",
+                        resolved.prefix_terminal_seq,
+                        resolved.prefix_digest,
+                    )
                 }
-                SessionLifecycleError::Internal(error) => ForkSessionError::Internal(error),
-            })?;
-
-        validate_fork_parent(&parent, &self.session_link_service)?;
-
-        self.assert_fork_workspace_checkout_present(&parent.workspace_id)?;
+                None => {
+                    let tip = fork_boundary::tip_boundary(&parent_events);
+                    (None, None, "tip", tip.prefix_terminal_seq, tip.prefix_digest)
+                }
+            };
 
         let handle = self
             .ensure_live_session_handle(&parent, None)
             .await
             .map_err(map_start_error_to_fork)?;
-        let parent = self
-            .get_session_or_not_found(session_id)
-            .map_err(|error| match error {
-                SessionLifecycleError::SessionNotFound(session_id) => {
-                    ForkSessionError::SessionNotFound(session_id)
-                }
-                SessionLifecycleError::Internal(error) => ForkSessionError::Internal(error),
-            })?;
+        let parent = self.get_fork_parent(session_id)?;
         validate_fork_parent(&parent, &self.session_link_service)?;
         let parent_native_session_id = handle
             .native_session_id()
@@ -62,12 +126,6 @@ impl SessionRuntime {
             .filter(|value| !value.is_empty())
             .map(str::to_string)
             .ok_or(ForkSessionError::MissingNativeSessionId)?;
-        let capabilities = parse_action_capabilities(parent.action_capabilities_json.as_deref());
-        if !capabilities.fork {
-            return Err(ForkSessionError::Unsupported(
-                "session agent does not advertise fork support".to_string(),
-            ));
-        }
         if !self
             .session_service
             .store()
@@ -86,24 +144,89 @@ impl SessionRuntime {
             return Err(ForkSessionError::Busy);
         }
 
+        // Rung 3 target: this is the seam a targeted native dispatch plugs into.
+        // Until a bridge advertises `targeted_fork` the gate above rejects it, so
+        // reaching here with a targeted anchor means a capability was advertised
+        // without a dispatch implementation.
+        if target.is_some() {
+            return Err(ForkSessionError::Unsupported(
+                "targeted fork native dispatch is not wired yet (rung 3)".to_string(),
+            ));
+        }
+
+        // --- Persist the durable operation in `prepared` before any native call ---
+        let now = chrono::Utc::now().to_rfc3339();
+        let operation = ForkOperationRecord {
+            id: uuid::Uuid::new_v4().to_string(),
+            idempotency_key: idempotency_key.clone(),
+            request_digest,
+            parent_session_id: parent.id.clone(),
+            child_session_id: reserved_child_id.clone(),
+            phase: ForkOperationPhase::Prepared,
+            anchor_turn_id,
+            anchor_item_id,
+            provider_anchor_kind: None,
+            provider_anchor_value: None,
+            provider_anchor_inclusive: None,
+            prefix_terminal_seq: Some(prefix_terminal_seq),
+            prefix_digest: Some(prefix_digest.clone()),
+            adapter_version: None,
+            native_version: None,
+            native_child_session_id: None,
+            created_at: now.clone(),
+            updated_at: now.clone(),
+        };
+        // find-then-insert has a TOCTOU window (near-unreachable behind the
+        // per-session fork lease): a concurrent request with the same key may
+        // have inserted the row after our lookup. The UNIQUE constraint on
+        // `idempotency_key`/`child_session_id` is the real guard — on a
+        // constraint failure, re-read the winner and reconcile it (same-payload
+        // resume, different-payload IDEMPOTENCY_CONFLICT) rather than 500.
+        if let Err(error) = self.session_service.store().insert_fork_operation(&operation) {
+            if let Some(existing) = self
+                .session_service
+                .store()
+                .find_fork_operation_by_key(&idempotency_key)
+                .map_err(ForkSessionError::Internal)?
+            {
+                return self.reconcile_existing_fork_operation(&existing, &operation.request_digest);
+            }
+            return Err(ForkSessionError::Internal(error));
+        }
+
         // Must stay in lockstep with the resume-side strategy: a child forked on
         // the child actor (process-local fork id) is the one that can later land
         // in the zero-turn "stale native id" state handled by `launch_policy`.
         let child_actor_forks = super::launch_policy::fork_id_is_process_local(&parent.agent_kind);
+        // Phase marked before dispatch (ADR 4.4): a lost native outcome parks the
+        // record at `native_outcome_unknown` and blocks blind redispatch.
+        self.mark_fork_phase(&operation.id, ForkOperationPhase::NativeCallInFlight, &now);
         let forked = if child_actor_forks {
-            handle.verify_fork_ready().await.map_err(|error| {
-                map_live_fork_command_error(error, "session actor dropped fork readiness response")
-            })?;
-            None
+            match handle.verify_fork_ready().await {
+                Ok(()) => None,
+                Err(error) => {
+                    self.mark_fork_native_failure(&operation.id, &error, &now);
+                    return Err(map_live_fork_command_error(
+                        error,
+                        "session actor dropped fork readiness response",
+                    ));
+                }
+            }
         } else {
-            Some(handle.fork().await.map_err(|error| {
-                map_live_fork_command_error(error, "session actor dropped fork response")
-            })?)
+            match handle.fork().await {
+                Ok(forked) => Some(forked),
+                Err(error) => {
+                    self.mark_fork_native_failure(&operation.id, &error, &now);
+                    return Err(map_live_fork_command_error(
+                        error,
+                        "session actor dropped fork response",
+                    ));
+                }
+            }
         };
 
-        let now = chrono::Utc::now().to_rfc3339();
         let child = SessionRecord {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: reserved_child_id.clone(),
             workspace_id: parent.workspace_id.clone(),
             agent_kind: parent.agent_kind.clone(),
             native_session_id: forked
@@ -145,28 +268,48 @@ impl SessionRuntime {
             label: None,
             created_by_turn_id: None,
             created_by_tool_call_id: None,
-            created_at: now,
+            created_at: now.clone(),
             subagent_closed_at: None,
             closed_at: None,
         };
-        let insert_result = if child_actor_forks {
-            self.session_service
-                .store()
-                .insert_fork_session_with_link_and_event_snapshot(&child, &link)
-                .map(|copied_events| {
-                    tracing::info!(
-                        parent_session_id = %parent.id,
-                        child_session_id = %child.id,
-                        copied_events,
-                        "snapshotted parent transcript into fork child"
-                    );
-                })
-        } else {
-            self.session_service
-                .store()
-                .insert_session_with_link(&child, &link)
+        // Provenance resolved once the native call returns; applied atomically
+        // with the child + link, advancing the operation to `child_persisted`.
+        let child_result = ForkOperationChildResult {
+            provider_anchor_kind: Some(provider_anchor_kind.to_string()),
+            provider_anchor_value: Some(parent_native_session_id.clone()),
+            provider_anchor_inclusive: None,
+            prefix_terminal_seq: Some(prefix_terminal_seq),
+            prefix_digest: Some(prefix_digest.clone()),
+            adapter_version: None,
+            native_version: None,
+            native_child_session_id: forked
+                .as_ref()
+                .map(|forked| forked.native_session_id.clone()),
         };
+        let insert_result = self
+            .session_service
+            .store()
+            .insert_fork_child_with_link_and_operation(
+                &child,
+                &link,
+                &operation.id,
+                &child_result,
+                child_actor_forks,
+                &now,
+            );
+        match &insert_result {
+            Ok(copied_events) if child_actor_forks => {
+                tracing::info!(
+                    parent_session_id = %parent.id,
+                    child_session_id = %child.id,
+                    copied_events,
+                    "snapshotted parent transcript into fork child"
+                );
+            }
+            _ => {}
+        }
         if let Err(error) = insert_result {
+            self.mark_fork_phase(&operation.id, ForkOperationPhase::Failed, &now);
             if let Some(forked) = forked.as_ref().filter(|forked| forked.supports_close) {
                 let _ = handle
                     .close_native_session(forked.native_session_id.clone())
@@ -190,6 +333,7 @@ impl SessionRuntime {
         {
             Ok((_handle, native_session_id)) => {
                 self.persist_live_session_state(&child.id, &native_session_id);
+                self.mark_fork_phase(&operation.id, ForkOperationPhase::Completed, &now);
                 let updated = self
                     .session_service
                     .get_session(&child.id)
@@ -206,12 +350,16 @@ impl SessionRuntime {
                 // resumes should retry fork startup from the parent boundary instead
                 // of looping forever on an ACP-side child id that did not load.
                 if child_loaded_from_forked_native_id {
-                    let now = chrono::Utc::now().to_rfc3339();
+                    let cleared_at = chrono::Utc::now().to_rfc3339();
                     let _ = self
                         .session_service
                         .store()
-                        .clear_native_session_id(&child.id, &now);
+                        .clear_native_session_id(&child.id, &cleared_at);
                 }
+                // The child row exists and is a first-class resumable state
+                // (`FORK_CHILD_START_FAILED`); the operation stays at
+                // `child_persisted`, not `failed` — the child, not the fork
+                // dispatch, is what failed.
                 self.mark_session_errored(&child.id);
                 let errored = self
                     .session_service
@@ -225,6 +373,150 @@ impl SessionRuntime {
                 })
             }
         }
+    }
+
+    fn get_fork_parent(&self, session_id: &str) -> Result<SessionRecord, ForkSessionError> {
+        self.get_session_or_not_found(session_id)
+            .map_err(|error| match error {
+                SessionLifecycleError::SessionNotFound(session_id) => {
+                    ForkSessionError::SessionNotFound(session_id)
+                }
+                SessionLifecycleError::Internal(error) => ForkSessionError::Internal(error),
+            })
+    }
+
+    /// Best-effort phase advance; a failure to record the phase is logged, never
+    /// fatal to the fork (the record is provenance/recovery metadata, not the
+    /// child's source of truth).
+    fn mark_fork_phase(&self, operation_id: &str, phase: ForkOperationPhase, now: &str) {
+        if let Err(error) = self
+            .session_service
+            .store()
+            .mark_fork_operation_phase(operation_id, phase, now)
+        {
+            tracing::warn!(
+                operation_id = %operation_id,
+                phase = phase.as_str(),
+                error = %error,
+                "failed to advance fork operation phase"
+            );
+        }
+    }
+
+    /// Classify a native fork dispatch error. A dropped response / unavailable
+    /// actor is an unknown outcome that BLOCKS blind redispatch (ADR 4.4); a
+    /// definite rejection is a terminal failure.
+    fn mark_fork_native_failure(
+        &self,
+        operation_id: &str,
+        error: &LiveSessionCommandError<ForkSessionCommandError>,
+        now: &str,
+    ) {
+        let phase = match error {
+            LiveSessionCommandError::ResponseDropped
+            | LiveSessionCommandError::ActorUnavailable => {
+                ForkOperationPhase::NativeOutcomeUnknown
+            }
+            LiveSessionCommandError::Rejected(_) => ForkOperationPhase::Failed,
+        };
+        self.mark_fork_phase(operation_id, phase, now);
+    }
+
+    /// Reconcile a fork operation that already exists under this idempotency
+    /// key: a different canonical payload is an `IDEMPOTENCY_CONFLICT`; the same
+    /// payload resumes. Shared by the initial lookup and the insert-time
+    /// UNIQUE-constraint TOCTOU fallback so both honor identical semantics.
+    fn reconcile_existing_fork_operation(
+        &self,
+        existing: &ForkOperationRecord,
+        request_digest: &str,
+    ) -> Result<ForkSessionOutcome, ForkSessionError> {
+        if existing.request_digest != request_digest {
+            return Err(ForkSessionError::IdempotencyConflict);
+        }
+        self.resume_fork_operation(existing)
+    }
+
+    /// Resume an existing fork operation found by idempotency key (same payload).
+    /// A parked/in-flight record whose native outcome is unknown blocks
+    /// redispatch; a persisted child is returned as-is.
+    fn resume_fork_operation(
+        &self,
+        operation: &ForkOperationRecord,
+    ) -> Result<ForkSessionOutcome, ForkSessionError> {
+        use ForkOperationPhase::*;
+        match operation.phase {
+            NativeOutcomeUnknown | Prepared | NativeCallInFlight | NativeResultKnown => {
+                // No proven child: refuse to re-dispatch on the same key.
+                Err(ForkSessionError::NativeOutcomeUnknown)
+            }
+            ChildPersisted | Completed | Failed => {
+                let child = self
+                    .session_service
+                    .get_session(&operation.child_session_id)
+                    .map_err(ForkSessionError::Internal)?
+                    .ok_or_else(|| {
+                        ForkSessionError::Internal(anyhow::anyhow!(
+                            "fork operation child session missing: {}",
+                            operation.child_session_id
+                        ))
+                    })?;
+                let link = self
+                    .session_link_service
+                    .list_by_child(&operation.child_session_id)
+                    .map_err(ForkSessionError::Internal)?
+                    .into_iter()
+                    .find(|link| {
+                        link.relation == SessionLinkRelation::Fork
+                            && link.parent_session_id == operation.parent_session_id
+                    })
+                    .ok_or_else(|| {
+                        ForkSessionError::Internal(anyhow::anyhow!(
+                            "fork operation child link missing: {}",
+                            operation.child_session_id
+                        ))
+                    })?;
+                let child_started = child.status != "error" && child.status != "starting";
+                Ok(ForkSessionOutcome {
+                    session: child,
+                    link,
+                    child_started,
+                })
+            }
+        }
+    }
+}
+
+/// Canonical fork request digest: binds an idempotency key to the exact request
+/// so a repeat with the same key + payload resumes and a different payload
+/// conflicts (ADR 4.4).
+pub(crate) fn canonical_fork_request_digest(
+    session_id: &str,
+    target: Option<&ForkSessionTarget>,
+) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(session_id.as_bytes());
+    hasher.update([0u8]);
+    match target {
+        None => hasher.update(b"tip"),
+        Some(target) => {
+            hasher.update(b"before_user_message");
+            hasher.update([0u8]);
+            hasher.update(target.turn_id.as_bytes());
+            hasher.update([0u8]);
+            hasher.update(target.item_id.as_deref().unwrap_or("").as_bytes());
+        }
+    }
+    format!("{:x}", hasher.finalize())
+}
+
+fn map_fork_target_error(error: ForkTargetError) -> ForkSessionError {
+    match error {
+        ForkTargetError::ItemIdRequired => {
+            ForkSessionError::InvalidForkTarget("fork target requires item_id".to_string())
+        }
+        ForkTargetError::TargetNotFound => ForkSessionError::TargetNotFound,
+        ForkTargetError::BoundaryNotCommitted => ForkSessionError::BoundaryNotCommitted,
     }
 }
 

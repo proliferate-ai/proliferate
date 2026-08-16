@@ -19,6 +19,7 @@ import { resolveWorkspaceItemTrailingCells } from "#product/components/workspace
 import { useWorkspacePeek } from "#product/components/workspace/shell/sidebar/WorkspacePeekCard";
 import { WorkspaceRenamePopover } from "#product/components/workspace/shell/sidebar/WorkspaceRenamePopover";
 import { ProductSidebarWorkspaceRow } from "#product/components/workspace/shell/sidebar/ProductSidebarRepositories";
+import { useSidebarSwitchCursorStore } from "#product/stores/workspaces/sidebar-switch-cursor-store";
 
 interface WorkspaceItemProps {
   workspaceId?: string;
@@ -117,6 +118,14 @@ export function WorkspaceItem({
   onCopyBranchName,
   onRename,
 }: WorkspaceItemProps) {
+  // While a held-key traversal cursor is set the cursor position, not the
+  // committed selection, drives the highlight so exactly one row reads active
+  // during movement. The selector folds this row's id and its committed
+  // `active` prop into a single boolean, so a cursor step re-renders only the
+  // two rows whose displayed state flips rather than every subscribed row.
+  const displayedActive = useSidebarSwitchCursorStore((state) =>
+    state.cursorId === null ? active : state.cursorId === workspaceId,
+  );
   const [renameOpen, setRenameOpen] = useState(false);
   const [doneConfirmOpen, setDoneConfirmOpen] = useState(false);
   const handleRenameCommand = () => setRenameOpen(true);
@@ -223,7 +232,7 @@ export function WorkspaceItem({
 
   const row = (
     <ProductSidebarWorkspaceRow
-      active={active}
+      active={displayedActive}
       archived={archived}
       trailingStatus={trailingStatus}
       trailingIdentity={trailingIdentity}

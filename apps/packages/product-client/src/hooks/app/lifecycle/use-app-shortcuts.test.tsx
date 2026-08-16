@@ -14,6 +14,8 @@ import {
 import { USER_PREFERENCE_DEFAULTS } from "#product/lib/domain/preferences/user/model";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { requestRightPanelTabByIndex } from "#product/lib/workflows/workspaces/right-panel-shortcut-requests";
+import { useSidebarSwitchCursorStore } from "#product/stores/workspaces/sidebar-switch-cursor-store";
+import { WORKSPACE_CURSOR_SETTLE_MS } from "#product/lib/domain/workspaces/sidebar/workspace-switch-cursor-controller";
 
 const navigationMocks = vi.hoisted(() => ({
   selectWorkspaceFromSurface: vi.fn(),
@@ -35,18 +37,24 @@ vi.mock("#product/hooks/workspaces/workflows/use-workspace-navigation-workflow",
   }),
 }));
 
-vi.mock("#product/stores/sessions/session-selection-store", () => ({
-  useSessionSelectionStore: (
+vi.mock("#product/stores/sessions/session-selection-store", () => {
+  const readSelection = () => ({
+    selectedWorkspaceId: harnessState.selectedWorkspaceId,
+    selectedLogicalWorkspaceId: harnessState.selectedLogicalWorkspaceId,
+  });
+  const useSessionSelectionStore = (
     selector: (state: {
       selectedWorkspaceId: string | null;
       selectedLogicalWorkspaceId: string | null;
     }) => unknown,
-  ) =>
-    selector({
-      selectedWorkspaceId: harnessState.selectedWorkspaceId,
-      selectedLogicalWorkspaceId: harnessState.selectedLogicalWorkspaceId,
-    }),
-}));
+  ) => selector(readSelection());
+  // The traversal-cursor effect reads the committed selection imperatively and
+  // subscribes for commit reflection, so the mock exposes the same static
+  // surface the real zustand store does.
+  useSessionSelectionStore.getState = readSelection;
+  useSessionSelectionStore.subscribe = () => () => {};
+  return { useSessionSelectionStore };
+});
 
 vi.mock("#product/lib/workflows/workspaces/right-panel-shortcut-requests", () => ({
   requestRightPanelTabByIndex: vi.fn(() => true),
@@ -69,9 +77,58 @@ describe("useAppShortcuts", () => {
     cleanup();
     clearShortcutHandlerRegistryForTests();
     document.body.innerHTML = "";
+    useSidebarSwitchCursorStore.getState().setCursor(null);
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+  });
+
+  describe("held-key workspace traversal", () => {
+    it("previews the cursor on a step and commits the selection once after the settle", () => {
+      harnessState.selectedWorkspaceId = "workspace-1";
+      harnessState.selectedLogicalWorkspaceId = "workspace-1";
+      harnessState.sidebarShortcutTargets = ["workspace-1", "workspace-2", "workspace-3"];
+      vi.useFakeTimers();
+
+      renderHook(() => useAppShortcuts(commandActions()));
+
+      expect(runShortcutHandler("workspace.next-workspace", { source: "keyboard" })).toBe(true);
+      // The step previews immediately via the cursor, without committing.
+      expect(useSidebarSwitchCursorStore.getState().cursorId).toBe("workspace-2");
+      expect(navigationMocks.selectWorkspaceFromSurface).not.toHaveBeenCalled();
+
+      // The one expensive selection commit fires only after movement settles.
+      act(() => {
+        vi.advanceTimersByTime(WORKSPACE_CURSOR_SETTLE_MS);
+      });
+      expect(navigationMocks.selectWorkspaceFromSurface).toHaveBeenCalledTimes(1);
+      expect(navigationMocks.selectWorkspaceFromSurface).toHaveBeenCalledWith(
+        "workspace-2",
+        "shortcut",
+      );
+    });
+
+    it("cancels an uncommitted preview on Escape without committing", () => {
+      harnessState.selectedWorkspaceId = "workspace-1";
+      harnessState.selectedLogicalWorkspaceId = "workspace-1";
+      harnessState.sidebarShortcutTargets = ["workspace-1", "workspace-2", "workspace-3"];
+      vi.useFakeTimers();
+
+      renderHook(() => useAppShortcuts(commandActions()));
+
+      runShortcutHandler("workspace.next-workspace", { source: "keyboard" });
+      expect(useSidebarSwitchCursorStore.getState().cursorId).toBe("workspace-2");
+
+      act(() => {
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      });
+      expect(useSidebarSwitchCursorStore.getState().cursorId).toBeNull();
+
+      act(() => {
+        vi.advanceTimersByTime(WORKSPACE_CURSOR_SETTLE_MS);
+      });
+      expect(navigationMocks.selectWorkspaceFromSurface).not.toHaveBeenCalled();
+    });
   });
 
   it("steps window zoom through the registered app shortcuts without changing font sizes", () => {

@@ -1,0 +1,68 @@
+# Agent-auth AnyHarness rules (AH-AGENTAUTH-*). Reserved family segment:
+# AGENTAUTH (see lints/README.md "Rule ID allocation"). The Rust render plane's
+# share of the Agent Auth ADR: FR-4 registry authority on the Rust mirror, and
+# the FR-1 evidence-only-green auth-state invariant.
+
+# FR-4 (2, Rust): the Rust catalog/auth-context projection is derived from the
+# bundled registry, not hand-authored — the registry schema/version and the
+# gateway auth context are asserted against the registry. A real, CI-wired Rust
+# test (`cargo test --workspace`, ci.yml), so the record points at it directly.
+[[rule]]
+id = "AH-AGENTAUTH-001"
+title = "The Rust auth-context projection is derived from the bundled registry"
+owner = "anyharness"
+status = "law"
+enforced_by = "anyharness/crates/anyharness-lib/src/domains/agents/catalog/schema_tests.rs"
+mode = "test"
+scope = "anyharness/crates/anyharness-lib/src/domains/agents/catalog/**, anyharness/crates/anyharness-lib/src/domains/agents/registry/**"
+
+rule = """The Rust auth contexts and their route/gateway signals must be
+projected from the bundled agent registry (registry version and the
+gateway-engaged context are asserted against the registry), never mirrored by
+hand into Rust literals that can drift from `catalogs/agents/registry.json`."""
+alternative = """Change the registry and let the projection follow it; assert
+new auth-context shape against the registry in the catalog schema tests rather
+than pinning a hand-written Rust constant."""
+why = """FR-4 makes the registry the one authority for gateway capability. The
+Rust plane is a consumer, so its auth-context projection is a mirror that must
+stay pinned to the registry or the runtime authorizes routes the authority never
+granted. (Agent Auth ADR FR-4.)"""
+
+[rule.example]
+bad = "a hardcoded Rust list of gateway-capable kinds independent of the registry"
+good = "auth contexts projected from the bundled registry and asserted against it"
+
+# FR-1: an auth source is reported green only with probe evidence. Enforcement
+# is the Rust auth_state invariant unit tests on the FR-1 code ladder. Recorded
+# as intentionally deferred: the record convention's automated enforcers are
+# scripts/ checkers or CI-wired test files present on this branch, and the FR-1
+# auth_state invariant tests are not materialized on this foundation branch. A
+# thin lint-lane wrapper would need the cargo build (too heavy for the lint
+# lane) and would duplicate the invariant divergently, so this is tracked debt.
+[[rule]]
+id = "AH-AGENTAUTH-002"
+title = "An auth source is reported green only with probe evidence"
+owner = "anyharness"
+status = "leaks"
+gap = "#1916"
+enforced_by = "review"
+mode = "review"
+scope = "anyharness/crates/anyharness-lib/src/domains/agents/route_auth/**"
+
+rule = """A rendered auth state must not present a source as verified/green
+optimistically: a green status requires positive probe evidence for that source;
+absent evidence the state is unknown/unverified, never green."""
+alternative = """Gate the green status on a successful probe result; render
+unknown/unverified until evidence lands, and let the status regress to unknown —
+never silently stay green — when evidence is absent."""
+why = """FR-1's evidence-only-green rule keeps the auth surface from claiming a
+credential works before anything proved it does. The invariant is enforced by
+the Rust auth_state unit tests on the FR-1 code ladder; that enforcement is not
+present on this lint-records foundation branch, and a cargo-driven lint-lane
+wrapper is too heavy and would duplicate the invariant, so the gap is tracked
+rather than pretended closed. (Reconcile the gap ref to the FR-1 rung PR at
+integration.)"""
+
+[rule.example]
+bad = "rendering a source green before any probe has confirmed the credential"
+good = "green only after a successful probe; unknown/unverified until then"

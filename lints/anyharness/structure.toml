@@ -1,0 +1,20 @@
+# AnyHarness repository shape (AH-PATHS) — completed-migration path blocks for
+# the anyharness-lib crate: the pre-restructure tree may not grow back, one
+# file at a time or otherwise. Enforced by scripts/check_anyharness_old_paths.py.
+
+[[rule]]
+id = "AH-PATHS-1"
+title = "retired AnyHarness paths stay retired"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_anyharness_old_paths.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/**"
+
+rule = """None of the 17 retired AnyHarness paths in BLOCKED_PATHS may exist again, including the `src/acp` directory and its `src/acp.rs` module-file twin."""
+alternative = """Place the code at its post-restructure coordinate (adapters/**, domains/**, live/**) rather than recreating the pre-restructure tree."""
+why = """A completed structural migration is only permanent if the old shape is illegal; otherwise it grows back one file at a time."""
+
+[rule.example]
+bad = """a new anyharness/src/acp.rs appearing after the adapters move"""
+good = """the code lives at its post-restructure coordinate (adapters/, domains/, live/)"""

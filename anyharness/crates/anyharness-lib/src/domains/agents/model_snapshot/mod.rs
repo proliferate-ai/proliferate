@@ -198,10 +198,10 @@ impl ModelSnapshotService {
         config: ProbeEngineConfig,
     ) -> Self {
         let engine_lock = lock::ProbeEngineLock::try_acquire(&runtime_home);
-        let trial = Arc::new(Tier1TrialEngine::new(
-            config.tier1_trial_enabled,
-            runtime_home.clone(),
-        ));
+        let trial = Arc::new(
+            Tier1TrialEngine::new(config.tier1_trial_enabled, runtime_home.clone())
+                .with_health(config.gateway_health_enabled),
+        );
         let service = Self {
             runtime_home,
             engine_lock,

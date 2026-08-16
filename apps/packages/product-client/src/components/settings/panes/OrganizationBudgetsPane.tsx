@@ -10,14 +10,12 @@ import {
 import { Button } from "#product/primitives/Button";
 import { ProgressBar } from "#product/primitives/ProgressBar";
 import { Select } from "#product/primitives/Select";
-import {
-  SegmentedControl,
-} from "#product/primitives/SegmentedControl";
+import { SegmentedControl } from "#product/primitives/SegmentedControl";
 import { PageHeader } from "#product/primitives/patterns/PageHeader";
 import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { Card } from "#product/primitives/patterns/Card";
-import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
+import { LoadingBoundary, type LoadingBoundaryState } from "#product/primitives/LoadingBoundary";
 import { useOrganizationMembers } from "#product/hooks/access/cloud/organizations/use-organization-members";
 import { useActiveOrganization } from "#product/hooks/organizations/facade/use-active-organization";
 import type { OrganizationMemberRecord } from "#product/lib/domain/organizations/organization-records";
@@ -78,10 +76,7 @@ export function OrganizationBudgetsPane() {
     () => toChartPoints(userTimeseriesQuery.data?.buckets, granularity),
     [userTimeseriesQuery.data, granularity],
   );
-  const usageRows = useMemo(
-    () => buildOrgUsageRows(byUserQuery.data?.users),
-    [byUserQuery.data],
-  );
+  const usageRows = useMemo(() => buildOrgUsageRows(byUserQuery.data?.users), [byUserQuery.data]);
   const selectedRow = usageRows.find((row) => row.userId === selectedUserId) ?? null;
 
   return (
@@ -180,13 +175,15 @@ function BudgetBalanceCard({
   percentAvailable,
   loading,
 }: BudgetBalanceView & { loading?: boolean }) {
+  // Class C big-surface treatment (UX Latency ADR §4 Rung 4, FR-1): skeleton
+  // retired; nothing shows until the Class C show-delay elapses, then fades in.
   if (loading) {
     return (
-      <Card surface="tint" className="space-y-3 p-4">
-        <SkeletonBlock className="h-4 w-24" style={shimmerDelay(0)} />
-        <SkeletonBlock className="h-6 w-32" style={shimmerDelay(1)} />
-        <SkeletonBlock className="h-4 w-full" style={shimmerDelay(2)} />
-      </Card>
+      <LoadingBoundary
+        state="pending"
+        diagnostics={{ flow: "org_budget_balance" }}
+        treatment={null}
+      />
     );
   }
 
@@ -220,27 +217,13 @@ function UsageBarChart({
   kind: UsageChartKind;
   loading: boolean;
 }) {
-  if (loading) {
-    return (
-      <Card surface="tint" className="flex h-48 items-end gap-2 p-4">
-        {Array.from({ length: 8 }, (_, index) => (
-          <SkeletonBlock
-            key={index}
-            className="flex-1"
-            style={{ height: `${30 + (index % 3) * 20}%`, ...shimmerDelay(index) }}
-          />
-        ))}
-      </Card>
-    );
-  }
-
-  if (points.length === 0) {
-    return (
-      <Card surface="tint" className="flex h-48 items-center justify-center text-ui-sm text-muted-foreground">
-        No usage in this range.
-      </Card>
-    );
-  }
+  // Class C + Q19 empty split: pending renders nothing; "No usage in this
+  // range." may only appear once the usage query settles with zero points.
+  const chartState: LoadingBoundaryState = loading
+    ? "pending"
+    : points.length === 0
+      ? "empty"
+      : "ready";
 
   const showCompute = kind !== "llm";
   const showLlm = kind !== "compute";
@@ -248,6 +231,16 @@ function UsageBarChart({
   const maxLlm = chartMax(points.map((point) => point.llmCostUsd));
 
   return (
+    <LoadingBoundary
+      state={chartState}
+      diagnostics={{ flow: "org_budget_usage_chart" }}
+      treatment={null}
+      emptyContent={
+        <Card surface="tint" className="flex h-48 items-center justify-center text-ui-sm text-muted-foreground">
+          No usage in this range.
+        </Card>
+      }
+    >
     <Card surface="tint" className="p-4">
       <div className="flex flex-wrap items-center gap-4 pb-3 text-ui-sm text-muted-foreground">
         {showCompute ? (
@@ -292,6 +285,7 @@ function UsageBarChart({
         })}
       </div>
     </Card>
+    </LoadingBoundary>
   );
 }
 
@@ -304,18 +298,9 @@ function OrgUsageTable({
   loading: boolean;
   onSelectUser: (userId: string) => void;
 }) {
-  return (
-    <SettingsSection title="Usage by member" description="Select a member to see their usage over time.">
-      {loading ? (
-        <div className="space-y-2 px-3.5 py-3">
-          {[0, 1, 2].map((row) => (
-            <SkeletonBlock key={row} className="h-10 w-full" style={shimmerDelay(row)} />
-          ))}
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="px-6 py-[30px] text-center text-ui text-muted-foreground">No usage recorded in this range.</div>
-      ) : (
-        rows.map((row) => (
+  // This member list predates this rung (unvirtualized on main); the skeleton
+  // retirement only rewrapped it. Virtualizing it stays a settings follow-up.
+  const memberRows = rows.map((row) => (
           <Button
             key={row.userId}
             type="button"
@@ -334,8 +319,21 @@ function OrgUsageTable({
               <UsageMiniStat label="LLM" value={row.llmCost} percent={row.llmPercent} />
             </div>
           </Button>
-        ))
-      )}
+  ));
+  return (
+    <SettingsSection title="Usage by member" description="Select a member to see their usage over time.">
+      {/* Class C + Q19 empty split: skeleton retired; the empty copy may only
+          render once the query resolves with zero rows, never mid-fetch. */}
+      <LoadingBoundary
+        state={loading ? "pending" : rows.length === 0 ? "empty" : "ready"}
+        diagnostics={{ flow: "org_usage_table" }}
+        treatment={null}
+        emptyContent={
+          <div className="px-6 py-[30px] text-center text-ui text-muted-foreground">No usage recorded in this range.</div>
+        }
+      >
+        {memberRows}
+      </LoadingBoundary>
     </SettingsSection>
   );
 }

@@ -36,6 +36,7 @@ fn test_config() -> ProbeEngineConfig {
         max_concurrent_probes: 1,
         sweep_age_multiplier: 3,
         tier1_trial_enabled: false,
+        gateway_health_enabled: false,
     }
 }
 
