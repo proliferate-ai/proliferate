@@ -11,6 +11,10 @@
  *   - hovering pins the pill (cancels any fade) and reveals the checklist
  *   - mouse-leave restarts a short fade: starts at 1.2s, hidden by 1.8s
  *
+ * The raw millisecond values live only in the design `motion.delay` tokens;
+ * this pure module never imports the design layer. The connected component
+ * (`TodoProgressPill.tsx`) reads those tokens and drives the timers.
+ *
  * A step advance while the pointer is actually on the pill/checklist never
  * reaches this reducer: the connected component holds its fire so the pinned
  * checklist stays mounted and updates in place (`step_advanced` would unpin
@@ -24,11 +28,6 @@
  * scheduling its own, so a `fade_start`/`hide` arriving while pinned can
  * only be the most recent `hover_off`'s own timer — never a stale one.
  */
-
-export const TODO_PILL_STEP_FADE_START_MS = 3400;
-export const TODO_PILL_STEP_HIDE_MS = 4000;
-export const TODO_PILL_HOVER_FADE_START_MS = 1200;
-export const TODO_PILL_HOVER_HIDE_MS = 1800;
 
 export interface TodoPillState {
   /** Whether the pill is mounted at all. */

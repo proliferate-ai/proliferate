@@ -267,10 +267,11 @@ rather than adding opaque intermediate planes.
 
 The composer is opaque in both modes and uses no backdrop filter. That keeps
 transcript paint out of the input surface and avoids re-blurring the transcript
-while typing. Its chrome is borderless, so the fill alone has to separate it
-from the page — in light that means it cannot be the white content plane. It
-takes the existing `#f6f6f6` rail plane rather than a fourth opaque light
-plane: the count above stays at three.
+while typing. It takes the existing `#f6f6f6` rail plane rather than a fourth
+opaque light plane, so the count above stays at three. Light adds one 0.5
+CSS-pixel `--color-border` shadow stroke around that fill so the full rounded
+edge remains legible against white; dark keeps its stronger fill step and no
+perimeter paint. The hairline is an edge, not elevation.
 
 ### Borders
 
@@ -402,10 +403,10 @@ Depth is carried by borders and surface steps first, shadow second. Light shadow
 color derives from the same `#1a1c1f` ink as the neutral ladder, so elevation
 does not reintroduce a blue slate cast.
 
-Two component roles refine the shared scale: the light user-message bubble uses
-a 5% ink 2px shadow, and the light composer combines a 0.5px ink edge with 3px
-and 12px shadow layers. Dark keeps the user-message shadow absent and aliases
-the composer to `--shadow-subtle`.
+One component role refines the shared scale: the light user-message bubble uses
+a 5% ink 2px shadow, while dark keeps that shadow absent. The composer has no
+elevation role or elevation stack in either mode. Light paints only its 0.5px
+border-role hairline; dark remains fill-only.
 
 From the class side, the appearance gate bans every other elevation spelling —
 `shadow-sm/md/lg/xl/2xl/inner` (stock Tailwind emits a non-token shadow),
@@ -518,7 +519,8 @@ spelling fails `ARBITRARY_RADIUS_RE`.
 ## Motion
 
 Motion has two scales that are deliberately *not* aliased to each other, plus a
-set of choreography delays. All three live in
+set of choreography delays and a small feedback scale for confirmation
+affordances. All four live in
 [motion.ts](../apps/packages/design/src/motion.ts) and are projected
 into CSS custom properties by the generator, so no component authors a
 millisecond or a bezier.
@@ -581,6 +583,25 @@ scrollbar lingers before hiding, how long a hover card tolerates the pointer
 leaving, how far apart stepped level bars fire. They live with motion because
 they are perceived as part of the same choreography, and JS consumers that must
 stay in lockstep with CSS import them and format through `motion.cssMs()`.
+
+The same delay scale also owns the todo progress pill's choreography
+(`delay.todoPillStepLingerMs: 3400`, `delay.todoPillStepHideMs: 4000`,
+`delay.todoPillHoverLingerMs: 1200`, `delay.todoPillHoverHideMs: 1800`: how
+long the pill lingers after a step advance or after the pointer leaves before
+its fade starts and finishes), a ghost tab row's collapse window
+(`delay.ghostRowFinalizeMs: 280`: covers `duration.disclosureMs` plus
+timer-scheduling slack so a deleted row's disclosure transition finishes
+before it is torn down), and the bound on an optimistic archive/unarchive
+POST's outcome (`delay.optimisticSettleTimeoutMs: 12_000`: past this the
+outcome is treated as genuinely unknown rather than a false failure).
+
+### Feedback affordances
+
+`motion.feedback` is a third, smaller scale for a control flipping to a
+confirmation label and then reverting — not an animation and not a
+choreography wait. `feedback.copiedResetMs: 2_000` is how long a control reads
+"Copied" before reverting to its resting label; every copy-to-clipboard
+control shares this one token rather than each owning its own reset literal.
 
 > **Raw time literals are illegal in the design CSS.** `check-theme.mjs`'s
 > `checkRawMotionAuthority` walks `product.css` and the generated
@@ -907,7 +928,7 @@ above are not migration debt); click-only popovers use
 | Component | Path | Purpose |
 | --- | --- | --- |
 | `ActionRow` | [ActionRow.tsx](../apps/packages/product-client/src/primitives/patterns/ActionRow.tsx) | The row you answer rather than select: primary/secondary lines plus an always-visible trailing control cluster, never pressable itself, carrying the hover wash that says which row those controls belong to. One `secondaryTone` axis (`muted` / `destructive`, for a second line that *is* the error); alignment derives from whether there is a secondary line, as on `RosterRow`. Promoted from `PromptRecoveryPanel`'s unsent-message row and the workflows resume popover's interrupted-run row, which had both recorded the same two-part refusal of `RosterRow` (hover tied to `onSelect`, secondary line fixed at `text-muted-foreground`) — this pattern is those two gaps, and `RosterRow` stays the row you select. |
-| `AutoHideScrollArea` | [AutoHideScrollArea.tsx](../apps/packages/product-client/src/primitives/patterns/AutoHideScrollArea.tsx) | Scroll area whose scrollbar affordance auto-hides. |
+| `AutoHideScrollArea` | [AutoHideScrollArea.tsx](../apps/packages/product-client/src/primitives/patterns/AutoHideScrollArea.tsx) | Scroll area whose scrollbar affordance auto-hides. Chains the vertical wheel to the nearest scrollable ancestor at its scroll edges by default (`chainVerticalWheel={false}` opts out); a raw scroller that cannot adopt the pattern wires the same behavior via `useChainedVerticalWheel` from `primitives/utils`. |
 | `Card` | [Card.tsx](../apps/packages/product-client/src/primitives/patterns/Card.tsx) | The card surface — fill, radius, clipping and header layering, and nothing else (padding and width stay at the call site). `surface` (`tint` wash / `opaque` bordered panel) × `plane` (which ground a sticky header paints on); `stickyHeader` is a header-slot property, not a third axis. Promoted from 16 hand-rolled shells in the workflows area and 21 in chat; the settings area adopted it too (`AppearancePane`, `OrganizationBudgetsPane`, `HarnessAuthApiKeyDetails`), which was not part of the promotion evidence. Of the chat 21, 2 have migrated onto `Card`, 3 went to `NoticeBanner` (they are notices, not cards) and 3 folded onto the shared tool-call detail panel; the remaining 13 carry a recorded exclusion at the site — most need a fill the two-value `surface` axis does not carry (alpha-modified cards, `bg-muted`/`bg-background` washes, `--color-diff-panel-surface`), some need to overflow their frame, one needs no fill at all, and one needs interaction states `Card` does not own. |
 | `ChromeTab` | [tabs/ChromeTab.tsx](../apps/packages/product-client/src/primitives/patterns/tabs/ChromeTab.tsx) | Tabs kit — the workspace-shell chrome tab: fixed-width truncating label, optional badge and shortcut reveal, hover-revealed close. Composes `Button`/`ShortcutBadge`/`TypewriterRevealText`. |
 | `CommandPalette` | [CommandPalette.tsx](../apps/packages/product-client/src/primitives/patterns/CommandPalette.tsx) | Command-palette shell/context, built directly on `cmdk` (not on the `Command` primitive — see `Command` row above). |
@@ -1166,9 +1187,10 @@ this document states is not mechanically enforced.
   checkout has no emitted file to read; every statement here about the generated
   stylesheet is verified against `src/tokens.ts` plus the generator and checker
   scripts.
-- No automated rendered-visual check exists. Nothing compares a served build
-  against an expected appearance, so a change that is token-correct and visually
-  wrong is caught only by human inspection, with no artifact retained.
+- Rendered visual coverage is narrow: the Tier-2 composer perimeter spec serves
+  the real Desktop renderer and preserves the production dock/surface depth
+  path, but other design surfaces still rely on human inspection with no fixed
+  appearance baseline.
 - `DropdownMenu` usage has no mechanical routing: it is the sanctioned path for
   keyboard-navigable menus (so new keyboard-menu consumers are legitimate), but
   nothing fails CI when a *click-only* menu imports it instead of

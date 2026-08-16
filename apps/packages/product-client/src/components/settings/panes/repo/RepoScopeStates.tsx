@@ -20,7 +20,7 @@ export interface RepoScopeSelectionCallbacks {
 export interface RepoScopePaneProps extends RepoScopeSelectionCallbacks {
   repository: SettingsRepositoryEntry | null;
   context: RepoSettingsContext;
-  cloudEnabled: boolean;
+  controlPlaneReachable: boolean;
   cloudActive: boolean;
   cloudSignInChecking: boolean;
   cloudSignInAvailable: boolean;

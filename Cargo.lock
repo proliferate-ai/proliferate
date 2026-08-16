@@ -394,9 +394,11 @@ dependencies = [
  "hmac",
  "jsonwebtoken",
  "libc",
+ "minisign-verify",
  "nucleo-matcher",
  "portable-pty",
  "reqwest 0.12.28",
+ "ring",
  "rusqlite",
  "serde",
  "serde_jcs",
@@ -4238,14 +4240,16 @@ dependencies = [
 
 [[package]]
 name = "proliferate"
-version = "0.4.11"
+version = "0.4.12"
 dependencies = [
  "base64 0.22.1",
  "chrono",
  "fs2",
+ "futures",
  "getrandom 0.4.3",
  "keyring",
  "libc",
+ "minisign-verify",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
@@ -4272,6 +4276,7 @@ dependencies = [
  "tauri-plugin-store",
  "tauri-plugin-updater",
  "tokio",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
  "url",

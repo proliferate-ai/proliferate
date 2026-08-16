@@ -57,7 +57,17 @@ export interface SessionStreamFlushControllerOptions {
   isStillCurrent: () => boolean;
   isCurrentStream: () => boolean;
   closeCurrentHandle: () => void;
-  scheduleReconnect: (delayMs?: number) => void;
+  /**
+   * Schedule a normal error-retry reconnect on the shared backoff curve (Q9).
+   * Advances the per-session attempt counter.
+   */
+  scheduleReconnect: () => void;
+  /**
+   * Schedule a bypass-backoff reconnect for a gap-reconcile forced close. This
+   * is NOT an error retry: it fires immediately and must NOT advance the shared
+   * backoff attempt counter (which would inflate later genuine retries).
+   */
+  scheduleImmediateReconnect: () => void;
   clearActiveSummaryRefreshTimer: () => void;
   scheduleActiveSummaryRefresh: () => void;
   scheduleStartupReadyRefresh: (

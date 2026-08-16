@@ -239,7 +239,7 @@ vi.mock("#product/components/settings/panes/agent-auth/ApiKeyCreatorModal", () =
 vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({
     authStatus: state.authStatus,
-    cloudEnabled: true,
+    controlPlaneReachable: true,
     cloudActive: state.cloudActive,
     cloudSignInChecking: false,
     // When cloud is inactive the CloudGuard should fall through to the

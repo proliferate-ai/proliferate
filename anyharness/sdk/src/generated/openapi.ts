@@ -2172,15 +2172,85 @@ export interface components {
         AdvanceReplaySessionResponse: {
             advanced: boolean;
         };
+        AgentAuthCredentialEvidence: {
+            /** Format: int64 */
+            evidenceAgeSeconds?: number | null;
+            source: components["schemas"]["AgentAuthCredentialSource"];
+            strength: components["schemas"]["AgentAuthEvidenceStrength"];
+        };
+        /** @enum {string} */
+        AgentAuthCredentialSource: "gateway" | "api_key_byok" | "native_login";
+        /** @enum {string} */
+        AgentAuthDisplay: "not_installed" | "unsupported" | "misconfigured" | "expired" | "unavailable" | "probing" | "usable" | "authenticated" | "selected" | "installed";
+        /** @enum {string} */
+        AgentAuthEvidenceRef: "probe_observation" | "gateway_key_check" | "acknowledged_route";
+        /** @enum {string} */
+        AgentAuthEvidenceStrength: "bare_presence" | "acknowledged_route" | "tier1_trial" | "probe_observation";
+        /**
+         * @description The orthogonal facts that fed the derivation, serialized alongside it so a
+         *     client can see WHY a display was chosen without re-deriving.
+         */
+        AgentAuthFactsSummary: {
+            credential?: null | components["schemas"]["AgentAuthCredentialEvidence"];
+            expired: boolean;
+            gateway?: null | components["schemas"]["AgentAuthGatewayHealth"];
+            handoff?: null | components["schemas"]["AgentAuthLoginHandoff"];
+            installed: boolean;
+            misconfigured: boolean;
+            probe: components["schemas"]["AgentAuthProbeLifecycle"];
+            selection?: null | components["schemas"]["AgentAuthSelectionFact"];
+            unsupportedRoute: boolean;
+        };
+        /** @enum {string} */
+        AgentAuthGatewayHealth: "reachable" | "unreachable" | "budget_exhausted";
+        /** @enum {string} */
+        AgentAuthLoginHandoff: "initiated" | "awaiting_browser" | "completed" | "cancelled" | "timed_out";
+        /** @enum {string} */
+        AgentAuthNextAction: "install" | "none" | "fix_config" | "log_in_or_paste_key" | "top_up_or_retry" | "wait" | "wait_for_probe" | "choose_source";
+        AgentAuthProbeLifecycle: {
+            lastFailureDetail?: string | null;
+            /** Format: int64 */
+            lastSuccessAgeSeconds?: number | null;
+            nextAttemptAt?: string | null;
+            observationNonempty: boolean;
+            phase: components["schemas"]["AgentAuthProbePhase"];
+        };
+        /** @enum {string} */
+        AgentAuthProbePhase: "idle" | "queued" | "running" | "backoff";
+        AgentAuthSelectionFact: {
+            acknowledged: boolean;
+            /** Format: int64 */
+            acknowledgedAgeSeconds?: number | null;
+            /** Format: int64 */
+            revision?: number | null;
+            satisfiable: boolean;
+        };
+        AgentAuthStateSummary: {
+            display: components["schemas"]["AgentAuthDisplay"];
+            /**
+             * Format: int64
+             * @description Age of that evidence in seconds. Present whenever the display is green.
+             */
+            evidenceAgeSeconds?: number | null;
+            evidenceRef?: null | components["schemas"]["AgentAuthEvidenceRef"];
+            facts: components["schemas"]["AgentAuthFactsSummary"];
+            nextAction: components["schemas"]["AgentAuthNextAction"];
+        };
         /**
          * @description The runtime's active agent catalog version and its provenance. Read-only:
-         *     the runtime binary is the only catalog transport, so there is no apply
-         *     response shape to report.
+         *     there is no apply/push endpoint. Since rung 5 (FR-1) the runtime binary
+         *     is the FLOOR transport, not the only one — a signed, versioned artifact
+         *     may also be fetched once at boot, so `source` can now report either
+         *     provenance.
          */
         AgentCatalogVersionResponse: {
             /** @description The `catalogVersion` string from the active document. */
             catalogVersion: string;
-            /** @description Where the active catalog came from. Always `"bundled"`. */
+            /**
+             * @description Where the active catalog came from: `"bundled"` (the compiled-in
+             *     floor) or `"staged"` (a signed artifact fetched at boot and activated
+             *     because it validated and was strictly newer than the floor).
+             */
             source: string;
         };
         /** @enum {string} */
@@ -2352,6 +2422,7 @@ export interface components {
         AgentSeedStatus: "not_configured_dev" | "missing_bundled_seed" | "hydrating" | "ready" | "partial" | "failed";
         AgentSummary: {
             agentProcess: components["schemas"]["ArtifactStatus"];
+            authState?: null | components["schemas"]["AgentAuthStateSummary"];
             cliAuthState?: null | components["schemas"]["AgentCliAuthState"];
             credentialState: components["schemas"]["AgentCredentialState"];
             /**
@@ -2376,6 +2447,15 @@ export interface components {
             nativeRequired: boolean;
             readiness: components["schemas"]["AgentReadinessState"];
             supportsLogin: boolean;
+            /**
+             * @description True when the user has their own copy of this agent on PATH,
+             *     regardless of whether a managed copy also exists and wins resolution
+             *     (R2.0, always-managed: a managed copy never displaces a PATH one).
+             *     Drives the settings-pane one-time notice explaining the managed copy
+             *     when both exist. Additive and tolerant: absent on runtimes that
+             *     predate R2.0, so old readers simply see no notice.
+             */
+            userPathCopyDetected?: boolean;
         };
         /** @enum {string} */
         AnyHarnessBoundedWindowCompletenessV1: "complete" | "limit_uncertain";
@@ -4195,6 +4275,13 @@ export interface components {
         /** @enum {string} */
         ReasoningVisibility: "private";
         ReconcileAgentResult: {
+            /**
+             * @description Typed classification of a terminal failure: one of `network`,
+             *     `checksum`, `in_use`, `disk`, `other`. Additive and tolerant: absent on
+             *     success/skip and on runtimes that predate typed failures, so old readers
+             *     simply ignore it.
+             */
+            failureKind?: string | null;
             installedArtifacts: components["schemas"]["ArtifactStatus"][];
             kind: string;
             message?: string | null;

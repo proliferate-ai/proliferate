@@ -123,6 +123,30 @@ specifier. Fail-closed rules, enforced in code
 - Installed adapters get a generated launcher script that `exec`s the
   resolved binary with the pin's baked ACP args; per-session flags are
   applied by the runtime at spawn, never baked into the launcher.
+- Every LIVE launcher write is staged-then-atomically-renamed, never written
+  in place. `generate_launcher_script_atomic`
+  ([`integrations/agent_cli/launcher.rs`](../../../../anyharness/crates/anyharness-lib/src/integrations/agent_cli/launcher.rs))
+  writes a `.{name}.next` sibling, makes it executable, then renames it over
+  the live launcher, keeping a transient `.{name}.previous` so a failed
+  promotion leaves the prior launcher in place. A managed session already
+  running keeps its old inode open (POSIX rename semantics) — no kills, no
+  waiting. The archive-adapter path stages the same way through
+  `ArchiveTreeActivation::activate_launcher`
+  ([`installer/downloads/activation.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/downloads/activation.rs)).
+- The launcher's env is data-driven from the registry's per-harness
+  `selfUpdateNeutralization` record (`managed_launcher_env` in
+  [`installer/agent_process.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/agent_process.rs)):
+  an `env` mechanism injects each declared var (claude disables its own
+  auto-updater with `DISABLE_AUTOUPDATER=1`); `none_found`/`not_applicable`
+  inject nothing and exist to record the static-analysis finding honestly, so
+  the managed lane stays the single version authority.
+- A terminal install failure carries a typed classification, not just a
+  string. `InstallError::kind()`
+  ([`installer/service.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/service.rs))
+  maps to `InstallErrorKind` `{ network, checksum, in_use, disk, other }`,
+  threaded additively through `AgentReconcileResult.failure_kind` → the
+  contract's `ReconcileAgentResult.failureKind` → the terminal-failure toast,
+  so the UI names WHY a reinstall failed.
 
 Installation is automatic. Every harness supported on a surface converges
 with no user action: absent means install, drifted means reinstall, and
@@ -134,18 +158,20 @@ triggered by the startup pass on every runtime boot
 walks the supported set and installs whatever the drift planner
 ([`installer/install_policy.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/install_policy.rs))
 says is absent or stale. A user
-authenticates harnesses; they never install them. The two carve-outs below
-are one named predicate
+authenticates harnesses; they never install them. Proliferate always
+maintains its own managed copy (R2.0, RULED): a user's own copy on PATH is
+detection-only now and no longer blocks the managed install — resolution
+already prefers the managed copy when both exist
+([`readiness/artifacts.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/artifacts.rs),
+`resolve_native_artifact`/`resolve_agent_process_artifact`), so nothing
+displaces the user's binary, but nothing defers to it either. The one
+remaining carve-out is one named predicate
 ([`installer/auto_install.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/auto_install.rs)),
-deliberately not a side effect of the pass's scope: PATH protection must
-outrank every other rule, so it cannot be something a scope change can
-silently remove. Completed installs
+deliberately not a side effect of the pass's scope. Completed installs
 poke the model-snapshot reconciler ([MODELS.md](../../../FEATURE_DOCS/MODELS.md))
 so a newly converged harness re-probes its models without extra wiring.
-Two carve-outs:
+The one carve-out:
 
-- An agent the user already provides on PATH is left alone: it is usable
-  through readiness as-is, and a managed install would shadow their copy.
 - Cursor never installs in cloud. Its readiness resolves through a headless
   credential path — an enabled `api_key` selection (agent-auth.md's
   `CURSOR_API_KEY` slot) upgrades `CredentialsRequired` to `Ready` the same
@@ -160,6 +186,19 @@ Two carve-outs:
   surface can interactively seed. For the same keychain reason it is
   excluded from unattended model probing and refreshed only on request
   (model-catalog.md's probe engine).
+
+When a managed copy lands alongside a harness the user already had on
+PATH, the settings pane (`HarnessPane.tsx`) shows a one-time, dismissible
+notice explaining that Proliferate now maintains its own copy and the
+user's own install is untouched; dismissal persists per harness under
+`proliferate.harnessManagedNotice.v1`. The signal is an additive,
+tolerant `AgentSummary.userPathCopyDetected` bit (anyharness-contract), read
+independently of which artifact resolution picked — a managed hit
+short-circuits before ever checking PATH, so the resolved artifact alone
+cannot express "both exist". An escape hatch,
+`ANYHARNESS_ALWAYS_MANAGED_INSTALL=off`, restores the pre-R2.0 PATH
+carve-out for operators who need to revert without a code change; it
+defaults on (the ruling).
 
 Install topology per surface is then only about who pays the first
 download:
@@ -192,8 +231,8 @@ unchanged is a no-op for X. Drift is also directionless (`!=`, not
 path as upgrading.
 
 The reconcile runs from two pokes, both covering the full supported set
-for the surface (PATH-provided agents excluded, cursor excluded in
-cloud):
+for the surface (cursor excluded in cloud; a PATH-provided agent is no
+longer excluded — R2.0 installs a managed copy alongside it):
 
 - the startup pass (`spawn_startup_pass` in
   [`runtime.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/runtime.rs))
@@ -210,31 +249,174 @@ download progress, and the desktop polls it continuously
 [`sdk-react/src/hooks/agents.ts`](../../../../anyharness/sdk-react/src/hooks/agents.ts)
 — 1.5s while a job runs, 750ms while downloading, 30s idle discovery).
 
-One transport delivers a new active catalog, on every surface: **the
-runtime binary carries it.** `catalog.json` is compiled into the runtime
-(`include_str!` in
+The runtime binary is always the FLOOR transport, on every surface:
+`catalog.json` is compiled into the runtime (`include_str!` in
 [`catalog/bundled.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/bundled.rs);
 a document that fails validation fails the build), so which harness pins
-a machine is on is answered by
-one number — the runtime version — and a runtime binary update delivers
-new pins by definition. The startup pass after the swap is the entire
-convergence story; there is no document push, no second version to
-reason about, and no faster lane on any surface. The nightly release
-train already delivers the catalog daily; a live document-sync layer
-would save at most that one day and give up the invariant that makes
-this design stable: **the active catalog is immutable for the lifetime
-of the runtime process.** Pins can never move under a machine mid-work;
-harness installs mutate only across a restart, when nothing is running.
+a machine is on is answered by one number — the runtime version — and a
+runtime binary update delivers new pins by definition. **A machine that
+never fetches anything is fully correct**, on this floor alone, exactly as
+it always was.
 
-This also makes the runtime version the single rollback unit. Repinning
-the fleet to a previous runtime version rolls back the code, the catalog
-pins, and the probe-observed behavior together, atomically — there is no
-document state that can race the binary or survive it.
+Since the publisher lane (FR-1), a SECOND transport exists alongside the
+floor: a signed, versioned catalog+registry artifact
+([`catalog/artifact.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/artifact.rs)),
+fetched at BOOT ONLY, behind an env gate an operator must set
+(`ANYHARNESS_CATALOG_ARTIFACT_BASE_URL`, `ANYHARNESS_CATALOG_CHANNEL`
+default `"stable"`). Absent, the lane is inert and nothing downstream of
+that check is ever consulted — no client is constructed, no request is
+ever made. This is a conscious supersession of commit 796ff1f08's
+conclusion that the binary is the ONLY transport a runtime process ever
+consults, made because a signed, boot-only artifact can close roughly a
+day of the nightly-train's catalog lag without reopening the hazard
+796ff1f08 closed: a mid-lifetime push that could move a pin under running
+work.
 
-Neither document has a live transport, on purpose. Catalog and registry
-both ship only inside a new binary: changing pins, install method, or
-auth vocabulary is a code-review-and-release event, never a runtime
-push.
+That hazard is closed by construction, not by convention. The staged-
+vs-bundled decision — which document actually becomes the active catalog
+— is made exactly ONCE, at `CatalogSyncService` construction, before
+`AppState::new` runs, and never revisited: **the active catalog is
+immutable for the lifetime of the runtime process**, the same invariant
+796ff1f08 established, now proven by
+`sync.rs`'s `active_catalog_is_immutable_for_the_process_lifetime`
+tripwire test regardless of which transport supplied the winner. Pins can
+never move under a machine mid-work; harness installs mutate only across a
+restart, when nothing is running, and a fetched artifact only ever competes
+for the NEXT boot's decision. Boot sequence:
+
+1. **The lane gate is env-AND-key, not env-alone.** The base-url env
+   (`ANYHARNESS_CATALOG_ARTIFACT_BASE_URL`, and it must resolve to an
+   `https://` URL — anything else, including bare `http://`, is refused and
+   treated as absent) must be set AND a signing pubkey must be baked in.
+   Either being missing makes the ENTIRE staged lane inert — not just the
+   network fetch: the warm-cache load of a previously staged directory is
+   gated the same way, so a directory left on disk by a differently-built
+   binary can never activate on a build that lacks the key.
+2. If the gate is open: one best-effort fetch, bounded to a hard 3s timeout
+   and a 4 MiB response-size ceiling per file, of the channel's rolling
+   manifest and the catalog+registry files it names. The manifest itself is
+   minisign-verified FIRST, before its `catalogVersion`/`registryVersion` are
+   trusted for anything (including building the versioned URLs the documents
+   are fetched from) — otherwise a forged-but-unsigned manifest pointing at
+   an old, still-validly-signed pair could walk a runtime backwards. The two
+   documents are then sha256-verified against the manifest and
+   minisign-verified against the baked publisher pubkey (a signing trust
+   domain distinct from desktop app signing; a second const slot exists for
+   a two-release rotation), gated through the SAME parse/validate/
+   registry-pairing checks the bundled floor runs, and checked for version
+   identity between the manifest and the documents it names. Any failure —
+   fetch, signature, gate, or version-identity — logs a typed
+   `CATALOG_ARTIFACT_REJECTED`.
+3. If this boot's fetch succeeded, the ALREADY-verified in-memory pair
+   activates directly — no disk round-trip. If it failed (or the gate was
+   closed), the runtime falls back to whatever a PRIOR boot staged to
+   `runtime_home/catalog/staged/`, re-running the full minisign verification
+   over the exact staged bytes (the `.minisig` files are persisted alongside
+   the staged documents for exactly this) plus every parse/validate gate —
+   a staged directory is untrusted input to a fresh process until it
+   re-verifies signatures itself, not just schema-shape.
+4. Decide once: the staged pair (freshly fetched or reloaded-and-reverified
+   from disk) wins over the bundled floor iff it passed every gate AND its
+   `generatedAt` is strictly newer than `max(bundled floor, this machine's
+   persisted activation high-water mark)`, comparing RFC3339 instants —
+   never the dotted `catalogVersion` string lexicographically (`.9` sorts
+   after `.10`). The high-water mark
+   (`runtime_home/catalog/activated.json`, tolerant read/write) records the
+   `generatedAt` of the last artifact this machine ever activated, across
+   restarts, so a still-validly-signed but OLDER artifact can never win once
+   a newer one has already been active here — downgrade resistance the
+   bundled-floor comparison alone cannot provide, since the floor never
+   moves. The mark is written only after a successful activation decision.
+   Catalog and registry always activate as the SAME staged pair; there is no
+   path that mixes a staged catalog with the bundled registry or vice versa.
+   Publisher caution: the mark is monotonic, so an artifact published with a
+   FUTURE `generatedAt` (CI clock skew, manual stamping) pins every machine
+   that activates it ahead of later correctly-stamped catalogs until their
+   timestamps catch up — the failure is denial-of-update to the bundled
+   floor, never activation of anything unsigned, and the remedy is
+   republishing with a corrected, newer timestamp.
+
+**Registry consumers outside `CatalogSyncService`**: auth's launch-facts
+collection (`auth/launch_facts.rs`, `registry_flag_vars` and
+`collect_launch_env_facts_with_ambient`) cannot reach the constructed
+`CatalogSyncService` without invasive plumbing through several launch call
+sites, so it reads through a documented process-global
+(`catalog::sync::active_agent_registry`), published exactly once at
+`CatalogSyncService` construction — the same one-decision, immutable-after-
+boot discipline as the active catalog itself. This closes the residual
+called out in earlier revisions of this document: a staged registry that
+advertises a new agent now yields consistent launch-facts instead of the
+collector silently reading the bundled floor underneath an activated staged
+registry.
+
+This also keeps the runtime version the rollback unit of record for the
+floor, and adds a second, faster rollback unit for the publisher lane:
+re-publishing an OLDER immutable version onto the channel's rolling
+pointer (`catalogs/agents/<channel>/manifest.json`) rolls every FUTURE boot
+back, without a new runtime release — see "The publisher pipeline" below
+for the exact procedure. Neither rollback path can race the other: a
+runtime that already booted keeps whatever it activated, by the same
+immutability invariant.
+
+### The publisher pipeline
+
+`.github/workflows/publish-agent-catalog.yml` runs on every
+`catalogs/agents/**` change that lands on `main` (or manual dispatch): it
+re-runs `scripts/validate-agent-catalog.mjs`, builds a manifest
+(`scripts/generate-agent-catalog-manifest.mjs`: `catalogVersion`,
+`registryVersion`, `generatedAt`, and a per-file sha256), minisign-signs
+`catalog.json`, `registry.json`, AND the manifest itself
+(`manifest.json.minisig`, same key) with the `AGENT_CATALOG_SIGNING_*` CI
+secrets (a trust domain separate from desktop app signing; the job fails
+with a clear message rather than publishing unsigned if those secrets are
+not yet provisioned) — the manifest signature is what lets the runtime
+trust `catalogVersion`/`registryVersion` before it ever builds a versioned
+URL from them (see boot-sequence step 2 above) — and publishes following
+the desktop updater's S3 pattern exactly: a `head-object` refuse-existing
+guard plus `--if-none-match "*"` and `max-age=31536000, immutable` on the
+versioned, never-overwritten path (`catalogs/agents/<catalogVersion>/...`,
+now including `manifest.json.minisig`), then a short-cached
+(`max-age=300`) rolling pointer at `catalogs/agents/<channel>/manifest.json`
+plus its `.minisig` sibling, with a CloudFront invalidation scoped to both
+rolling-pointer paths only — never the immutable versioned paths.
+
+**Rollback**: every version this job publishes stays in S3 forever, so
+rolling back is a manual `aws s3 cp` of an OLDER version's `manifest.json`
+onto the rolling pointer, plus a CloudFront invalidation of that pointer —
+the publish job itself is not involved and does not re-run old commits.
+
+**Signing-key rotation**: two-release choreography, no automation. Ship
+the new pubkey alongside the old one (the second const slot in
+`artifact.rs`) in release N; every artifact published between N and N+1
+keeps signing with the OLD key so already-running fetch code (which only
+knows the old key) still verifies. Drop the old key in release N+1, once
+every runtime that could still be checking it has had a release cycle to
+pick up the new one.
+
+**Channel resolution**: the server's `GET /meta` gains an additive
+`agentCatalog: {channel, artifactBaseUrl} | null` field (`None` unless an
+operator configures `AGENT_CATALOG_ARTIFACT_BASE_URL`); a desktop shell or
+cloud worker that sees it non-null passes the two env vars through to its
+runtime sidecar launch. This is advertisement, not a push — the runtime
+still only ever fetches once, at its own boot.
+
+**Convergence telemetry, never desired state**: the worker heartbeat
+carries a read-only `catalogVersion`, polled each tick from the runtime's
+own `GET /v1/catalogs/agents/version` (mirrors
+[`model_snapshot_sync.rs`](../../../../anyharness/crates/proliferate-worker/src/model_snapshot_sync.rs)'s
+non-fatal pattern), and the server stores it alongside
+`anyharness_version` on the runtime-worker row purely for a fleet-
+convergence dashboard. There is no field in either direction that acts on
+this value — the catalog sync/push channel 796ff1f08 deleted stays
+deleted; this is observation only.
+
+**`agent_catalog_override` stays**, unchanged in behavior and now
+documented as the sanctioned per-tenant lever: a server-side model-overlay
+applied at snapshot read, never touching the signed artifact or the
+bundled floor. It is the one way to differ a tenant's effective catalog
+without a new publish or a new runtime release, and it is orthogonal to
+both transports above — it acts after either one already decided the
+active document.
 
 ### Runtime binary convergence (cloud)
 

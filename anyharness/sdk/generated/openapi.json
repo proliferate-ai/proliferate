@@ -7866,9 +7866,280 @@
           }
         }
       },
+      "AgentAuthCredentialEvidence": {
+        "type": "object",
+        "required": [
+          "source",
+          "strength"
+        ],
+        "properties": {
+          "evidenceAgeSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "source": {
+            "$ref": "#/components/schemas/AgentAuthCredentialSource"
+          },
+          "strength": {
+            "$ref": "#/components/schemas/AgentAuthEvidenceStrength"
+          }
+        }
+      },
+      "AgentAuthCredentialSource": {
+        "type": "string",
+        "enum": [
+          "gateway",
+          "api_key_byok",
+          "native_login"
+        ]
+      },
+      "AgentAuthDisplay": {
+        "type": "string",
+        "enum": [
+          "not_installed",
+          "unsupported",
+          "misconfigured",
+          "expired",
+          "unavailable",
+          "probing",
+          "usable",
+          "authenticated",
+          "selected",
+          "installed"
+        ]
+      },
+      "AgentAuthEvidenceRef": {
+        "type": "string",
+        "enum": [
+          "probe_observation",
+          "gateway_key_check",
+          "acknowledged_route"
+        ]
+      },
+      "AgentAuthEvidenceStrength": {
+        "type": "string",
+        "enum": [
+          "bare_presence",
+          "acknowledged_route",
+          "tier1_trial",
+          "probe_observation"
+        ]
+      },
+      "AgentAuthFactsSummary": {
+        "type": "object",
+        "description": "The orthogonal facts that fed the derivation, serialized alongside it so a\nclient can see WHY a display was chosen without re-deriving.",
+        "required": [
+          "installed",
+          "unsupportedRoute",
+          "misconfigured",
+          "expired",
+          "probe"
+        ],
+        "properties": {
+          "credential": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentAuthCredentialEvidence"
+              }
+            ]
+          },
+          "expired": {
+            "type": "boolean"
+          },
+          "gateway": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentAuthGatewayHealth"
+              }
+            ]
+          },
+          "handoff": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentAuthLoginHandoff"
+              }
+            ]
+          },
+          "installed": {
+            "type": "boolean"
+          },
+          "misconfigured": {
+            "type": "boolean"
+          },
+          "probe": {
+            "$ref": "#/components/schemas/AgentAuthProbeLifecycle"
+          },
+          "selection": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentAuthSelectionFact"
+              }
+            ]
+          },
+          "unsupportedRoute": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AgentAuthGatewayHealth": {
+        "type": "string",
+        "enum": [
+          "reachable",
+          "unreachable",
+          "budget_exhausted"
+        ]
+      },
+      "AgentAuthLoginHandoff": {
+        "type": "string",
+        "enum": [
+          "initiated",
+          "awaiting_browser",
+          "completed",
+          "cancelled",
+          "timed_out"
+        ]
+      },
+      "AgentAuthNextAction": {
+        "type": "string",
+        "enum": [
+          "install",
+          "none",
+          "fix_config",
+          "log_in_or_paste_key",
+          "top_up_or_retry",
+          "wait",
+          "wait_for_probe",
+          "choose_source"
+        ]
+      },
+      "AgentAuthProbeLifecycle": {
+        "type": "object",
+        "required": [
+          "phase",
+          "observationNonempty"
+        ],
+        "properties": {
+          "lastFailureDetail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastSuccessAgeSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "nextAttemptAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "observationNonempty": {
+            "type": "boolean"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/AgentAuthProbePhase"
+          }
+        }
+      },
+      "AgentAuthProbePhase": {
+        "type": "string",
+        "enum": [
+          "idle",
+          "queued",
+          "running",
+          "backoff"
+        ]
+      },
+      "AgentAuthSelectionFact": {
+        "type": "object",
+        "required": [
+          "acknowledged",
+          "satisfiable"
+        ],
+        "properties": {
+          "acknowledged": {
+            "type": "boolean"
+          },
+          "acknowledgedAgeSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "revision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "satisfiable": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AgentAuthStateSummary": {
+        "type": "object",
+        "required": [
+          "display",
+          "nextAction",
+          "facts"
+        ],
+        "properties": {
+          "display": {
+            "$ref": "#/components/schemas/AgentAuthDisplay"
+          },
+          "evidenceAgeSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Age of that evidence in seconds. Present whenever the display is green."
+          },
+          "evidenceRef": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentAuthEvidenceRef",
+                "description": "Present exactly when the display is green (`usable`/`authenticated`) or an\nacknowledged `selected`."
+              }
+            ]
+          },
+          "facts": {
+            "$ref": "#/components/schemas/AgentAuthFactsSummary"
+          },
+          "nextAction": {
+            "$ref": "#/components/schemas/AgentAuthNextAction"
+          }
+        }
+      },
       "AgentCatalogVersionResponse": {
         "type": "object",
-        "description": "The runtime's active agent catalog version and its provenance. Read-only:\nthe runtime binary is the only catalog transport, so there is no apply\nresponse shape to report.",
+        "description": "The runtime's active agent catalog version and its provenance. Read-only:\nthere is no apply/push endpoint. Since rung 5 (FR-1) the runtime binary\nis the FLOOR transport, not the only one — a signed, versioned artifact\nmay also be fetched once at boot, so `source` can now report either\nprovenance.",
         "required": [
           "catalogVersion",
           "source"
@@ -7880,7 +8151,7 @@
           },
           "source": {
             "type": "string",
-            "description": "Where the active catalog came from. Always `\"bundled\"`."
+            "description": "Where the active catalog came from: `\"bundled\"` (the compiled-in\nfloor) or `\"staged\"` (a signed artifact fetched at boot and activated\nbecause it validated and was strictly newer than the floor)."
           }
         }
       },
@@ -8557,6 +8828,17 @@
           "agentProcess": {
             "$ref": "#/components/schemas/ArtifactStatus"
           },
+          "authState": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentAuthStateSummary",
+                "description": "The canonical agent-auth evidence model (ADR FR-1), computed ALONGSIDE the\nlegacy `credentialState`/`readiness` ladders and never replacing them. A\nclient still renders the legacy ladder until the UI rung; this field is\nthe additive canonical projection. Absent on runtimes predating it."
+              }
+            ]
+          },
           "cliAuthState": {
             "oneOf": [
               {
@@ -8619,6 +8901,10 @@
           },
           "supportsLogin": {
             "type": "boolean"
+          },
+          "userPathCopyDetected": {
+            "type": "boolean",
+            "description": "True when the user has their own copy of this agent on PATH,\nregardless of whether a managed copy also exists and wins resolution\n(R2.0, always-managed: a managed copy never displaces a PATH one).\nDrives the settings-pane one-time notice explaining the managed copy\nwhen both exist. Additive and tolerant: absent on runtimes that\npredate R2.0, so old readers simply see no notice."
           }
         }
       },
@@ -15761,6 +16047,13 @@
           "installedArtifacts"
         ],
         "properties": {
+          "failureKind": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Typed classification of a terminal failure: one of `network`,\n`checksum`, `in_use`, `disk`, `other`. Additive and tolerant: absent on\nsuccess/skip and on runtimes that predate typed failures, so old readers\nsimply ignore it."
+          },
           "installedArtifacts": {
             "type": "array",
             "items": {

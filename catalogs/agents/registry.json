@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "registryVersion": "2026-07-17.5",
+  "registryVersion": "2026-08-15.1",
   "generatedAt": "2026-07-17T03:08:00Z",
   "agents": [
     {
@@ -138,7 +138,17 @@
           "pending": true,
           "pendingReason": "Foundry translation built but live-unverified: the renderer's endpoint->ANTHROPIC_FOUNDRY_RESOURCE derivation and API_KEY/AUTH_TOKEN alternative are unverified judgment calls awaiting a Gate 4 live claude x azure_openai run (R5/R11: the cell stays excluded from supported kinds until then)."
         }
-      ]
+      ],
+      "selfUpdateNeutralization": {
+        "mechanism": "env",
+        "detail": "claude-code's native auto-updater is disabled by the DISABLE_AUTOUPDATER=1 env var, injected into the managed launcher so the managed lane is the only version authority.",
+        "env": [
+          {
+            "name": "DISABLE_AUTOUPDATER",
+            "value": "1"
+          }
+        ]
+      }
     },
     {
       "kind": "codex",
@@ -266,7 +276,12 @@
           "pending": true,
           "pendingReason": "config.toml injection built, live-unverified: nobody has exercised codex against real Azure OpenAI yet (D3 brief \u00a75/\u00a76 Gate 4), and the registry only declares AZURE_OPENAI_API_KEY today \u2014 not yet the endpoint/deployment vars the render arm also needs."
         }
-      ]
+      ],
+      "selfUpdateNeutralization": {
+        "mechanism": "none_found",
+        "detail": "Static analysis of the @proliferate-ai/codex-acp adapter found no self-update path invoked by the ACP process; the wrapped codex binary is version-pinned by the managed install and performs no background self-update in ACP mode.",
+        "env": []
+      }
     },
     {
       "kind": "cursor",
@@ -334,7 +349,12 @@
           }
         ]
       },
-      "docsUrl": "https://cursor.com/docs/cli"
+      "docsUrl": "https://cursor.com/docs/cli",
+      "selfUpdateNeutralization": {
+        "mechanism": "none_found",
+        "detail": "Static analysis of the cursor-agent distribution found no self-updater invoked when run as the managed ACP adapter; the binary is materialized from a pinned archive.",
+        "env": []
+      }
     },
     {
       "kind": "opencode",
@@ -489,7 +509,12 @@
             "AZURE_API_KEY"
           ]
         }
-      ]
+      ],
+      "selfUpdateNeutralization": {
+        "mechanism": "none_found",
+        "detail": "opencode exposes its ACP surface via a native subcommand and static analysis found no self-update invocation on that path.",
+        "env": []
+      }
     },
     {
       "kind": "grok",
@@ -568,7 +593,12 @@
           }
         ]
       },
-      "docsUrl": "https://docs.x.ai/docs"
+      "docsUrl": "https://docs.x.ai/docs",
+      "selfUpdateNeutralization": {
+        "mechanism": "none_found",
+        "detail": "Static analysis of the grok ACP adapter found no self-updater invocation on the managed launch path.",
+        "env": []
+      }
     }
   ]
 }

@@ -8,7 +8,9 @@
 use chrono::{DateTime, Utc};
 
 use super::document::{self, read_document, ModelSnapshotDocument};
+use super::trial::Tier1TrialResult;
 use super::{status, ModelSnapshotService};
+use crate::domains::agents::auth_state::{AuthRuntimeInputs, ProbeLifecycle, ProbePhase};
 
 impl ModelSnapshotService {
     // -----------------------------------------------------------------------
@@ -34,6 +36,48 @@ impl ModelSnapshotService {
             live_state,
             next_attempt_at,
         })
+    }
+
+    /// Project the same live status into the canonical agent-auth
+    /// [`ProbeLifecycle`] fact (ADR FR-2, item 3), so `derive_agent_auth_state`
+    /// sees the engine's real phase, last-success age, last-failure detail, and
+    /// `next_attempt_at` instead of the rung-2 `Idle` placeholder. Pure over one
+    /// status read; available in read-only mode.
+    pub fn auth_probe_lifecycle(&self, harness_kind: &str, now: DateTime<Utc>) -> ProbeLifecycle {
+        let status = self.status(harness_kind, now);
+        let phase = match status.state {
+            status::LiveState::Idle => ProbePhase::Idle,
+            status::LiveState::Queued => ProbePhase::Queued,
+            status::LiveState::Running => ProbePhase::Running,
+            status::LiveState::Backoff => ProbePhase::Backoff,
+        };
+        ProbeLifecycle {
+            phase,
+            // `snapshot_age_seconds` is the age of `probedAt`, which is the last
+            // SUCCESSFUL observation by construction (a failed attempt updates
+            // `lastAttempt` only, never `probedAt`).
+            last_success_age_seconds: status.snapshot_age_seconds,
+            last_failure_detail: status.last_error.clone(),
+            next_attempt_at: status.next_attempt_at.clone(),
+            observation_nonempty: status.model_count > 0,
+        }
+    }
+
+    /// The last recorded tier-1 trial verdict for a harness, if any.
+    pub fn tier1_trial(&self, harness_kind: &str) -> Option<Tier1TrialResult> {
+        self.trial.result(harness_kind)
+    }
+
+    /// Both live runtime inputs the agents projection folds onto the static facts
+    /// (ADR FR-2): the real probe lifecycle and the tier-1 trial verdict as a
+    /// dependency-free fact. One call per harness at render time.
+    pub fn auth_runtime_inputs(&self, harness_kind: &str, now: DateTime<Utc>) -> AuthRuntimeInputs {
+        AuthRuntimeInputs {
+            probe: self.auth_probe_lifecycle(harness_kind, now),
+            trial: self
+                .tier1_trial(harness_kind)
+                .map(|result| result.to_fact(now)),
+        }
     }
 
     /// A slot the engine has never touched reports idle, which is honest: nothing

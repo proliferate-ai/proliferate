@@ -6,7 +6,7 @@ import { CloudUnavailablePane } from "#product/components/settings/panes/CloudUn
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 
 export interface CloudGateFlags {
-  cloudEnabled: boolean;
+  controlPlaneReachable: boolean;
   cloudActive: boolean;
   cloudSignInChecking: boolean;
   cloudSignInAvailable: boolean;
@@ -38,12 +38,12 @@ interface CloudGuardProps {
  */
 export function CloudGuard({ children, flags }: CloudGuardProps): ReactNode {
   const availability = useCloudAvailabilityState();
-  const cloudEnabled = flags?.cloudEnabled ?? availability.cloudEnabled;
+  const controlPlaneReachable = flags?.controlPlaneReachable ?? availability.controlPlaneReachable;
   const cloudActive = flags?.cloudActive ?? availability.cloudActive;
   const cloudSignInChecking = flags?.cloudSignInChecking ?? availability.cloudSignInChecking;
   const cloudSignInAvailable = flags?.cloudSignInAvailable ?? availability.cloudSignInAvailable;
 
-  if (!cloudEnabled) {
+  if (!controlPlaneReachable) {
     return <CloudUnavailablePane />;
   }
   if (cloudActive) {

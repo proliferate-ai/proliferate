@@ -11,7 +11,7 @@ import type {
 // A deleted row outlives the live data as a collapsing ghost so the 0fr
 // transition finishes even when the archive round-trip beats it; the slack
 // covers timer scheduling past the CSS duration.
-const GHOST_FINALIZE_MS = motion.duration.disclosureMs + 80;
+const GHOST_FINALIZE_MS = motion.delay.ghostRowFinalizeMs;
 
 interface DeletingRowEntry {
   row: HeaderChatMenuEntry;

@@ -27,7 +27,7 @@ interface AvailabilityShape extends CloudGateFlags {
 
 const availability = vi.hoisted(() => ({
   value: {
-    cloudEnabled: true,
+    controlPlaneReachable: true,
     cloudActive: true,
     cloudSignInChecking: false,
     cloudSignInAvailable: false,
@@ -43,7 +43,7 @@ vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
 afterEach(() => {
   cleanup();
   availability.value = {
-    cloudEnabled: true,
+    controlPlaneReachable: true,
     cloudActive: true,
     cloudSignInChecking: false,
     cloudSignInAvailable: false,
@@ -58,7 +58,7 @@ function setAvailability(overrides: Partial<AvailabilityShape>) {
 
 function flags(overrides: Partial<CloudGateFlags>): CloudGateFlags {
   return {
-    cloudEnabled: true,
+    controlPlaneReachable: true,
     cloudActive: false,
     cloudSignInChecking: false,
     cloudSignInAvailable: false,
@@ -68,7 +68,7 @@ function flags(overrides: Partial<CloudGateFlags>): CloudGateFlags {
 
 describe("CloudGuard", () => {
   it("renders CloudUnavailablePane when cloud is disabled", () => {
-    render(<CloudGuard flags={flags({ cloudEnabled: false })}>child</CloudGuard>);
+    render(<CloudGuard flags={flags({ controlPlaneReachable: false })}>child</CloudGuard>);
     expect(screen.queryByText("unavailable")).not.toBeNull();
   });
 
@@ -111,7 +111,7 @@ describe("CloudGuard", () => {
   });
 
   it("falls back to the availability hook when no flags are passed", () => {
-    setAvailability({ cloudEnabled: false, cloudActive: false });
+    setAvailability({ controlPlaneReachable: false, cloudActive: false });
     render(<CloudGuard>child</CloudGuard>);
     expect(screen.queryByText("unavailable")).not.toBeNull();
   });

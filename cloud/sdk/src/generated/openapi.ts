@@ -3452,6 +3452,21 @@ export interface components {
             /** Anyof */
             anyOf: string[];
         };
+        /**
+         * AgentCatalogChannel
+         * @description Publisher-lane channel this deployment advertises (Update Flow ADR,
+         *     FR-1). A desktop shell or cloud worker launches its runtime sidecar with
+         *     these as ``ANYHARNESS_CATALOG_ARTIFACT_BASE_URL``/``ANYHARNESS_CATALOG_CHANNEL``.
+         *     Telemetry-shaped, never a push: the runtime still only fetches this ONCE
+         *     at its own boot (`catalog/artifact.rs`); nothing here can move a pin under
+         *     an already-running process.
+         */
+        AgentCatalogChannel: {
+            /** Channel */
+            channel: string;
+            /** Artifactbaseurl */
+            artifactBaseUrl: string;
+        };
         /** AgentCatalogControlMapping */
         AgentCatalogControlMapping: {
             /** Createfield */
@@ -4693,6 +4708,20 @@ export interface components {
             /** Logourl */
             logoUrl: string | null;
         };
+        /**
+         * DesktopUpdaterCadence
+         * @description Optional desktop updater cadence overrides.
+         *
+         *     Both fields default to ``None``; the desktop keeps its baked defaults unless
+         *     a deployment sets them. Additive and tolerant — the desktop ignores absent
+         *     or malformed values.
+         */
+        DesktopUpdaterCadence: {
+            /** Checkintervalms */
+            checkIntervalMs?: number | null;
+            /** Stallthresholdms */
+            stallThresholdMs?: number | null;
+        };
         /** DesktopWorkerEnrollmentRequest */
         DesktopWorkerEnrollmentRequest: {
             /** Desktopinstallid */
@@ -5346,7 +5375,11 @@ export interface components {
             workerVersion: string;
             /** Mindesktopversion */
             minDesktopVersion: string;
+            /** Mindesktopversionenforced */
+            minDesktopVersionEnforced: boolean;
             capabilities: components["schemas"]["ServerCapabilities"];
+            desktopUpdater?: components["schemas"]["DesktopUpdaterCadence"] | null;
+            agentCatalog?: components["schemas"]["AgentCatalogChannel"] | null;
         };
         /** OAuthAvailabilityResponse */
         OAuthAvailabilityResponse: {
@@ -7003,6 +7036,8 @@ export interface components {
             workerVersion?: string | null;
             /** Anyharnessversion */
             anyharnessVersion?: string | null;
+            /** Catalogversion */
+            catalogVersion?: string | null;
         };
         /** WorkerHeartbeatResponse */
         WorkerHeartbeatResponse: {

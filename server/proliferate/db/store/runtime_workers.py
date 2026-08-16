@@ -496,11 +496,13 @@ async def touch_worker_heartbeat(
     worker_id: UUID,
     worker_version: str | None = None,
     anyharness_version: str | None = None,
+    catalog_version: str | None = None,
 ) -> None:
     """Stamp liveness and, when self-reported, the running component versions.
 
     Versions only move forward on report (post-swap); an omitted field never
-    clears what enrollment or a prior heartbeat recorded.
+    clears what enrollment or a prior heartbeat recorded. `catalog_version` is
+    telemetry only (Update Flow ADR, FR-1) — last-observed, never acted on.
     """
     row = await db.get(CloudRuntimeWorker, worker_id)
     if row is None or row.status == "revoked":
@@ -512,6 +514,8 @@ async def touch_worker_heartbeat(
         row.worker_version = worker_version
     if anyharness_version is not None and anyharness_version != row.anyharness_version:
         row.anyharness_version = anyharness_version
+    if catalog_version is not None and catalog_version != row.catalog_version:
+        row.catalog_version = catalog_version
     row.updated_at = now
     await db.flush()
 

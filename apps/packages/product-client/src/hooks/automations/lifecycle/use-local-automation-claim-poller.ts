@@ -29,6 +29,17 @@ import {
 import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
 
 const AUTOMATION_LOCAL_EXECUTOR_ID_KEY = "automationLocalExecutorId";
+
+// Named exceptions (neither sits on the `cadence` scale). The claim poll:
+// 10s falls strictly between `cadence.standardMs` (5s) and `cadence.relaxedMs`
+// (15s); snapping down to standard would tighten (forbidden), and snapping
+// up to relaxed would delay how quickly a queued local automation gets
+// claimed and starts running by 50%. The heartbeat: 30s falls strictly
+// between `cadence.relaxedMs` (15s) and `cadence.slowMs` (60s) — the same
+// band as `WORKSPACE_COLLECTIONS_STALE_MS` — for the same reason: snapping
+// down tightens, snapping up doubles the interval before a dead executor's
+// claim is recognized as stale and released. Kept as their own named
+// constants (UX Latency + Transitions ADR §4.7, Rung 6, Q8).
 const LOCAL_EXECUTOR_POLL_MS = 10_000;
 const LOCAL_EXECUTOR_HEARTBEAT_MS = 30_000;
 
