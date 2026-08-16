@@ -64,6 +64,7 @@ export function VirtualizedTranscriptRowList({
   } = resolveTranscriptBottomInsets(bottomInsetPx, nonDisplacingBottomInsetPx);
   const {
     isPinnedToBottom,
+    hasNewContentWhileUnpinned,
     pinnedRef,
     onViewportScroll,
     notifyUserScrollIntent,
@@ -391,6 +392,7 @@ export function VirtualizedTranscriptRowList({
       <TranscriptFloatingControls
         bottomInsetPx={bottomInsetPx}
         isPinnedToBottom={isPinnedToBottom}
+        hasNewContentWhileUnpinned={hasNewContentWhileUnpinned}
         onScrollToBottomClick={handleScrollToBottomClick}
       />
     </div>
