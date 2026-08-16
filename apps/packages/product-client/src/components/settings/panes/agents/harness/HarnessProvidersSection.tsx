@@ -14,6 +14,11 @@ import {
   deriveProvidersStatus,
   HarnessAuthStatusAction,
 } from "#product/components/settings/panes/agents/harness/HarnessAuthStatusBadge";
+import {
+  HarnessAuthEvidenceBadge,
+  HarnessAuthEvidenceSummary,
+} from "#product/components/settings/panes/agents/harness/HarnessAuthEvidenceBadge";
+import { isFeatureEnabled } from "#product/config/feature-flags";
 
 // Lazy: the modal pulls in the vendored provider-logo asset map (170+ marks),
 // which must never reach the login-path chunk (login JS budget gate,
@@ -86,6 +91,14 @@ export function HarnessProvidersSection({
 
   const status = deriveProvidersStatus();
   const refreshing = editor.apiKeysQuery.isFetching || editor.selectionsQuery.isFetching;
+  // Flag-ON (ADR agent-auth rung 6): opencode's badge reads the runtime's
+  // derived authState, killing deriveProvidersStatus's unconditional green.
+  const evidenceOn = isFeatureEnabled("agentAuthEvidencePanes");
+  const authState = evidenceOn ? editor.localAgent?.authState ?? null : null;
+  function handleRefresh() {
+    void editor.apiKeysQuery.refetch();
+    void editor.selectionsQuery.refetch();
+  }
 
   // §5's two writes: a vault api_key entry, then one selection row whose
   // env_var_name is the provider's key-shaped registry env var and whose
@@ -149,14 +162,18 @@ export function HarnessProvidersSection({
       description={HARNESS_PANE_COPY.providersDescription}
       titleWeight="emphasized"
       surface="plain"
-      action={(
+      action={authState ? (
+        <HarnessAuthEvidenceBadge
+          authState={authState}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          data-harness-status="api_key"
+        />
+      ) : (
         <HarnessAuthStatusAction
           status={status}
           refreshing={refreshing}
-          onRefresh={() => {
-            void editor.apiKeysQuery.refetch();
-            void editor.selectionsQuery.refetch();
-          }}
+          onRefresh={handleRefresh}
           data-harness-status="api_key"
         />
       )}
@@ -164,6 +181,7 @@ export function HarnessProvidersSection({
       data-harness-auth-delivery={editor.deliveryPending ? "pending" : "applied"}
       data-harness-selected-route={selectedRoute}
     >
+      {authState ? <HarnessAuthEvidenceSummary authState={authState} /> : null}
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           {configured.length > 0 ? (

@@ -9,12 +9,11 @@ import {
   useModelSnapshotStatusQuery,
   useRefreshModelSnapshotMutation,
 } from "@anyharness/sdk-react";
-import { ChevronRight, Search, X } from "#product/primitives/icons/core";
+import { ChevronRight } from "#product/primitives/icons/core";
 import { RefreshCw } from "#product/primitives/icons/platform";
 import { AnimatedCollapsibleContent } from "#product/primitives/AnimatedCollapsibleContent";
-import { Button } from "#product/primitives/Button";
 import { IconButton } from "#product/primitives/IconButton";
-import { Input } from "#product/primitives/Input";
+import { HarnessAllModelsFilterRow } from "#product/components/settings/panes/agents/harness/HarnessAllModelsFilterRow";
 import { ModelTable, type ModelTableRow } from "#product/components/settings/panes/agents/harness/ModelTable";
 import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
@@ -29,6 +28,14 @@ import {
   formatSnapshotAge,
   resolveComposedObservation,
 } from "#product/lib/domain/settings/model-snapshot-observation";
+import { useShallow } from "zustand/react/shallow";
+import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import {
+  isModelVisibleByPreference,
+  resolveCatalogDefaultOptIn,
+  withUpdatedModelVisibilityOverride,
+} from "#product/lib/domain/chat/models/model-visibility";
+import { isFeatureEnabled } from "#product/config/feature-flags";
 
 interface HarnessAllModelsSectionProps {
   harnessKind: string;
@@ -64,6 +71,18 @@ export function HarnessAllModelsSection({
   const { cloudActive } = useCloudAvailabilityState();
   const showToast = useToastStore((state) => state.show);
   const isLocal = surface === "local";
+
+  // Flag-ON (ADR agent-auth rung 6): model enable/disable is a per-user
+  // per-harness VISIBILITY preference applied at render over the observed list,
+  // on every surface. The picker already reads the same preference
+  // (model-visibility.ts), so hiding here hides everywhere. The flag-ON UI no
+  // longer writes the server agent_catalog_override table (dormant cloud arm;
+  // deletion deferred to a follow-up).
+  const evidenceOn = isFeatureEnabled("agentAuthEvidencePanes");
+  const visibilityOverrides = useUserPreferencesStore(
+    useShallow((state) => state.chatModelVisibilityOverridesByAgentKind),
+  );
+  const setPreference = useUserPreferencesStore((state) => state.set);
 
   // Cloud (machineless) branch: the layered read off the context-free route —
   // one composed observation per (owner, harness), the cloud sandbox's
@@ -128,8 +147,15 @@ export function HarnessAllModelsSection({
     effort: model.effort,
     modes: model.modes,
     fastMode: model.fastMode,
-    enabled: model.enabled,
-    toggleDisabled: isLocal || upsertOverride.isPending,
+    enabled: evidenceOn
+      ? isModelVisibleByPreference(
+          harnessKind,
+          model.id,
+          resolveCatalogDefaultOptIn(),
+          visibilityOverrides,
+        )
+      : model.enabled,
+    toggleDisabled: evidenceOn ? false : isLocal || upsertOverride.isPending,
   }));
 
   if (!isLocal && !cloudActive) {
@@ -160,6 +186,19 @@ export function HarnessAllModelsSection({
   }
 
   function handleToggle(modelId: string, enabled: boolean) {
+    if (evidenceOn) {
+      setPreference(
+        "chatModelVisibilityOverridesByAgentKind",
+        withUpdatedModelVisibilityOverride(
+          visibilityOverrides,
+          harnessKind,
+          modelId,
+          enabled,
+          resolveCatalogDefaultOptIn(),
+        ),
+      );
+      return;
+    }
     if (isLocal) {
       return;
     }
@@ -309,37 +348,13 @@ export function HarnessAllModelsSection({
         ) : null}
 
         {rows.length > 0 ? (
-          // Canonical picker-search treatment (PopoverSearchField recipe): muted
-          // magnifier + borderless transparent input — no boxed field — with a
-          // hairline divider between the row and the table below. py-[7px]
-          // matches PopoverSearchField's own filter-row height exactly, so the
-          // two recipes stay pixel-identical rather than drifting to the
-          // nearest space-scale step.
-          <div className="flex items-center gap-2 border-b border-border px-2.5 py-[7px]">
-            <Search className="icon-paired shrink-0 text-muted-foreground/75" />
-            <Input
-              aria-label="Filter models"
-              placeholder="Filter models..."
-              value={filterText}
-              className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-ui shadow-none focus:ring-0"
-              onChange={(event) => setFilterText(event.target.value)}
-            />
-            {filterText ? (
-              <span className="flex shrink-0 items-center gap-1.5 text-ui-sm text-muted-foreground">
-                {filteredRows.length} of {rows.length}
-                <Button
-                  variant="unstyled"
-                  size="unstyled"
-                  type="button"
-                  aria-label="Clear filter"
-                  className="rounded p-0.5 hover:bg-hover active:bg-active"
-                  onClick={() => setFilterText("")}
-                >
-                  <X className="icon-compact" />
-                </Button>
-              </span>
-            ) : null}
-          </div>
+          <HarnessAllModelsFilterRow
+            filterText={filterText}
+            filteredCount={filteredRows.length}
+            totalCount={rows.length}
+            onChange={setFilterText}
+            onClear={() => setFilterText("")}
+          />
         ) : null}
 
         {isLoading ? (

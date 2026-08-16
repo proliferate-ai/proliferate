@@ -875,6 +875,38 @@ Rationale: never lie about what was observed, and do not invent a special
 no-probe state for a window that lasts seconds. A pending badge next to
 real data beats an empty pane next to no explanation.
 
+### Evidence panes (rung 6, flag-gated)
+
+The panes above render the runtime's DERIVED `authState` rather than
+re-deriving status in the client, behind the build-time flag
+`agentAuthEvidencePanes` (env `VITE_AGENT_AUTH_EVIDENCE_PANES`, default off).
+With the flag off the legacy locally-derived badge is untouched. With it on:
+
+- **The status badge is the derivation, verbatim.** The badge reads
+  `authState.display` for its label and tone and shows green ONLY for
+  `usable`/`authenticated`, each carrying its evidence age ("verified 2m
+  ago"). There is no local fallback and no readiness-based green, so the
+  false greens the legacy badge produced (opencode's unconditional success,
+  the `readiness === "ready"` fallback, enrollment `synced`) cannot occur.
+- **The pane leads with the next action.** `authState.nextAction` names the
+  one thing to do next (install, log in or paste a key, choose a source, top
+  up or retry, fix config, wait). The probe lifecycle renders inline: a
+  spinner while running or queued, and a backoff line with the
+  `next_attempt_at` countdown and last-failure detail. The login handoff
+  states (`initiated`, `awaiting-browser`, `completed`, `cancelled`,
+  `timed-out`) render from `facts.handoff` when present, with an in-flight
+  indicator and a retry affordance on the terminal failures. Handoff is
+  wired to render from the typed field ahead of the runtime adapters that
+  emit it, so nothing shows until those land.
+
+**Model visibility is a per-user preference.** With the flag on, enabling or
+disabling a model in the pane's model list is a per-user per-harness
+visibility preference keyed `(harnessKind, modelId)`, applied at render over
+the observed list on every surface (the launch picker reads the same
+preference). The flag-on UI no longer writes the server
+`agent_catalog_override` table; that table and its endpoints stay in place
+for the dormant cloud arm and their removal is a follow-up.
+
 ### Open verification items
 
 Cells this document specifies but does not yet claim as verified. Each is a
