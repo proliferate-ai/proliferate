@@ -163,7 +163,7 @@ describe("transcript-reading-position-store", () => {
         (write) => write(),
       );
       expect(placed).toBe(true);
-      expect(setPinned).toHaveBeenCalledWith(false);
+      expect(setPinned).toHaveBeenCalledWith(false, "session_reset");
       expect(refs.viewport.scrollTop).toBe(450);
       expect(refs.restoreResolverRef.current).toBe(plan.kind === "restore" ? plan.resolveTargetTop : null);
       expect(refs.restoreDeadlineRef.current).toBe(1234);
