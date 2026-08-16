@@ -118,10 +118,22 @@ export function useTranscriptFramePipelineLifecycle({
           restoreResolverRef.current = null;
         } else {
           const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
-          const reachable = Math.min(target, maxTop);
-          notifyProgrammaticScroll(() => {
-            viewport.scrollTop = reachable;
-          });
+          // Only place when the saved anchor's scrollTop is actually reachable.
+          // Once the anchor row is mounted the resolver returns an estimate-immune
+          // target derived from its real rendered position, which is always within
+          // the current content, so this holds. When the row is NOT yet mounted
+          // the resolver falls back to the coarse index-sum estimate, which can
+          // exceed the freshly-switched content's not-yet-measured max height;
+          // writing it then would paint a clamped intermediate (a visible extra
+          // frame). Waiting a frame instead lets the content measure taller (and
+          // the carried-over scroll position keeps the anchor row in the render
+          // window so the estimate-immune path takes over), so the restore lands
+          // in a single instant cut with zero intermediate motion.
+          if (target <= maxTop + 1) {
+            notifyProgrammaticScroll(() => {
+              viewport.scrollTop = target;
+            });
+          }
         }
         return;
       }

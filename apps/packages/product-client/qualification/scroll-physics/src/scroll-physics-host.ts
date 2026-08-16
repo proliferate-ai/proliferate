@@ -703,7 +703,17 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
       return null;
     }
     const row = probe.closest("[data-index]") ?? probe;
-    return (row.textContent ?? "").trim().slice(0, 60);
+    // Strip the volatile relative timestamp ("Dec 31 · 4:00 pm") so this probe is
+    // a STABLE reading-position identity across the fixture's re-seeds: the
+    // seq-derived timestamps advance on a global counter, so the same turn
+    // renders a later time on a second seed, but its row key and prompt/reply
+    // text do not change. FR-2 restores by row key, so the row is identical; only
+    // this rendered timestamp would differ, which is not a reading-position move.
+    const text = (row.textContent ?? "").replace(
+      /[A-Z][a-z]{2} \d{1,2} · \d{1,2}:\d{2} ?[ap]m/gi,
+      "",
+    );
+    return text.trim().slice(0, 48);
   },
 
   // Engine-portable pin-to-bottom baseline: sets scrollTop directly, which

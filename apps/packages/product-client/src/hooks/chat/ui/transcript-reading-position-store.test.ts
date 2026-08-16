@@ -132,7 +132,10 @@ describe("transcript-reading-position-store", () => {
 
   describe("beginSessionRestorePlacement", () => {
     function makeRefs(scrollTop = 0) {
-      const viewport = { scrollTop } as HTMLDivElement;
+      // scrollHeight/clientHeight give a reachable max so the pre-paint placement
+      // guard (target must be within the current content) does not suppress the
+      // write in these unit assertions.
+      const viewport = { scrollTop, scrollHeight: 5000, clientHeight: 600 } as HTMLDivElement;
       return {
         viewport,
         scrollRef: { current: viewport },

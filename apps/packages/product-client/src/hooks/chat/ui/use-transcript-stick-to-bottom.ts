@@ -280,9 +280,16 @@ export function useTranscriptStickToBottom({
       repinThresholdPx,
     });
     if (decision.pin === false) {
-      // A genuine user displacement (incl. a scrollbar drag that skips the
-      // intent listener) ends any in-flight FR-2 restore (rung 6).
-      restoreResolverRef.current = null;
+      // NOTE (FR-2, rung 6): do NOT clear the restore resolver here. An
+      // unmatched scroll during an in-flight restore is our OWN placement write
+      // being clamped by the browser to the current (not-yet-measured) content
+      // max, not the reader — the freshly-mounted rows have not measured tall
+      // enough for the saved anchor's scrollTop to be reachable yet, so the
+      // write lands short and fires a downward event that misses the marker.
+      // Clearing on that clamp kills the frame writer's re-resolution before it
+      // can converge. A genuine reader takeover comes through the intent
+      // listener (notifyUserScrollIntent), which clears the resolver; the
+      // restore also self-terminates at RESTORE_MAX_MS.
       consumedAutoFollowBottomInsetRef.current = 0;
       setPinned(false);
     } else if (decision.pin === true) {
