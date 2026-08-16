@@ -1090,6 +1090,23 @@ test.describe("transcript scroll physics", () => {
     // just late — so it gets the wide budget on that one leading step only;
     // a lifecycle-height regression anywhere else in the phase still fails
     // at the tight bound.
+    //
+    // CI (round 4, PR #1980 bimodal followup) showed this convergence's
+    // deferred landing frame is not pinned to trace index 1 under runner
+    // load: on a slow attempt it can land one or more frames later, at a
+    // trace index that only carries the tight `maxBouncePx` budget, and the
+    // assertion trips on a step that is not a displacement at all. The trace
+    // is built on raw scrollTop, which cannot tell a real backward
+    // displacement of the pinned reader's view apart from the single writer
+    // correctly following a content area (scrollHeight) that just shrank by
+    // the same amount — exactly what an estimate-to-measured correction
+    // does. bottomDistance (scrollHeight - clientHeight - scrollTop) is the
+    // quantity the reader actually perceives: it stays flat when scrollTop
+    // and scrollHeight move together, and it still catches a phantom
+    // reserved-slot bounce (the rung-10 defect class), which moves scrollTop
+    // WITHOUT a matching scrollHeight change. Assert on bottomDistance, not
+    // scrollTop, so the bound stays meaningful regardless of which frame the
+    // legitimate convergence lands on.
     function assertNoBackwardBounce(
       trace: number[],
       maxBouncePx: number,
@@ -1110,7 +1127,7 @@ test.describe("transcript scroll physics", () => {
     const afterThoughtStart = await metricsAfterFrame(page);
     expect(afterThoughtStart.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
     assertNoBackwardBounce(
-      (await drive<number[]>(page, "stopScrollTrace")).filter((v) => Number.isFinite(v)),
+      (await drive<number[]>(page, "stopBottomDistanceTrace")).filter((v) => Number.isFinite(v)),
       INTERLEAVE_MAX_BACKWARD_BOUNCE_PX,
     );
 
@@ -1128,7 +1145,7 @@ test.describe("transcript scroll physics", () => {
     const afterTool = await metricsAfterFrame(page);
     expect(afterTool.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
     assertNoBackwardBounce(
-      (await drive<number[]>(page, "stopScrollTrace")).filter((v) => Number.isFinite(v)),
+      (await drive<number[]>(page, "stopBottomDistanceTrace")).filter((v) => Number.isFinite(v)),
       INTERLEAVE_MAX_BACKWARD_BOUNCE_PX,
     );
 
@@ -1147,7 +1164,7 @@ test.describe("transcript scroll physics", () => {
     expect(afterProse.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
     await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
     assertNoBackwardBounce(
-      (await drive<number[]>(page, "stopScrollTrace")).filter((v) => Number.isFinite(v)),
+      (await drive<number[]>(page, "stopBottomDistanceTrace")).filter((v) => Number.isFinite(v)),
       INTERLEAVE_MAX_BACKWARD_BOUNCE_PX,
       TOOL_ROW_ESTIMATE_CONVERGENCE_MAX_PX,
     );
