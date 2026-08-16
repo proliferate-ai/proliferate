@@ -39,16 +39,14 @@ export interface UseTranscriptStickToBottomOptions {
   /** px from the bottom within which a user scroll re-pins. */
   repinThresholdPx?: number;
   /**
-   * Structural (displacing) dock inset: composer height, status bar, footer.
-   * Reflected in scrollHeight as the virtualizer's paddingEnd. Fed to the
-   * consumed-inset machine so a structural shrink (composer collapse) marks its
-   * upward clamp while pinned instead of fighting the reader (rung 7 / Q6).
+   * Structural (displacing) dock inset (composer, status bar, footer), reflected
+   * in scrollHeight as the virtualizer paddingEnd. Fed to the consumed-inset
+   * machine so a structural shrink marks its clamp while pinned (rung 7 / Q6).
    */
   structuralBottomInsetPx?: number;
   /**
-   * Manual-only scroll range created by cards overlaying the transcript. Auto
-   * follow stops before this range until the user explicitly reaches the hard
-   * bottom or clicks the scroll-to-bottom button.
+   * Manual-only overlay range created by cards overlaying the transcript. Auto
+   * follow stops before it until the user reaches the hard bottom.
    */
   nonDisplacingBottomInsetPx?: number;
   /**
@@ -59,13 +57,10 @@ export interface UseTranscriptStickToBottomOptions {
    */
   lastPromptSubmittedAtMs?: number | null;
   /**
-   * Identity of the session/workspace currently mounted (e.g.
-   * `${workspaceId}:${sessionId}`). The row lists never remount across a
-   * session switch, so `lastPromptSubmittedAtMs` alone can't distinguish "a
-   * fresh submit in this session" from "the incoming session's own current
-   * stamp, carried over from a stale prior comparison." A change here
-   * re-baselines the submit-stamp tracking to the incoming session's current
-   * value instead of comparing across the switch.
+   * Identity of the session/workspace currently mounted. Row lists never remount
+   * across a session switch, so `lastPromptSubmittedAtMs` alone can't tell "fresh
+   * submit here" from "incoming session's own stamp carried over"; a change here
+   * re-baselines submit-stamp tracking instead of comparing across the switch.
    */
   sessionKey?: string;
 }
@@ -99,11 +94,9 @@ export interface TranscriptStickToBottom {
    */
   notifyContentResize: () => void;
   /**
-   * Hold anchored content in place while a freshly-inserted row above it
-   * measures in, routed through the single frame pipeline instead of an
-   * independent rAF delta loop. Applies the measured scrollHeight delta on every
-   * frame pass while unpinned until the compensation deadline lapses; a no-op
-   * while pinned.
+   * Hold anchored content in place while a freshly-inserted row above measures
+   * in, via the single frame pipeline: applies the measured scrollHeight delta
+   * each frame while unpinned until the compensation deadline lapses (no-op pinned).
    */
   startAboveChangeCompensation: (anchor: ContentHeightScrollAnchor, cancelableByUpwardIntent: boolean) => void;
   /**
@@ -116,9 +109,8 @@ export interface TranscriptStickToBottom {
 
 /**
  * Single stick-to-bottom engine shared by the full and virtualized transcript
- * lists. Distinguishes user scrolls from its own programmatic snaps so a
- * streaming snap cannot fight a user scrolling up, re-pins only within a tight
- * bottom band, and collapses a tab/window-resume measurement backlog into one
+ * lists. Distinguishes user scrolls from its own programmatic snaps, re-pins only
+ * within a tight bottom band, and collapses a resume measurement backlog into one
  * jump instead of a visible crawl.
  */
 export function useTranscriptStickToBottom({
@@ -137,21 +129,19 @@ export function useTranscriptStickToBottom({
   // displacement (same-size content) apart from our snap lagging a growing stream
   // (content just grew). Only the former unpins. See onViewportScroll.
   const lastContentHeightRef = useRef(0);
-  // Ownership markers: the PRIMARY classification signal telling our own
-  // writes apart from a user scroll. See transcript-scroll-ownership.ts.
-  // `useRef`'s initializer only takes effect on the first render.
+  // Ownership markers: the PRIMARY signal telling our own writes apart from a
+  // user scroll. See transcript-scroll-ownership.ts.
   const ownershipMarkersRef = useRef(new TranscriptScrollOwnershipMarkers());
   // One per-frame mutate-then-snap pipeline (rung 4 / PRO-187): replaces the
-  // session-entry / submit / tab-resume glue rAF loops and the above-change
-  // compensation rAF loop with a single owned scheduler and ONE snap writer.
+  // session-entry / submit / tab-resume / above-change rAF loops with one owned
+  // scheduler and ONE snap writer.
   const pipelineRef = useRef(new TranscriptFramePipeline());
   // Active above-change compensation anchor, applied by the single frame writer
   // while unpinned until its deadline lapses (the deadline, not the glue window,
   // bounds it so a post-glue correction is still absorbed).
   const compensationAnchorRef = useRef<ContentHeightScrollAnchor | null>(null);
-  // Whether the active compensation window cancels on upward user intent. True
-  // for a completed-turn split (autonomous insertion); false for a history
-  // prepend (reader-requested, must hold through the continuing upward gesture).
+  // Whether the active compensation cancels on upward user intent: true for a
+  // completed-turn split (autonomous); false for a history prepend (reader-asked).
   const compensationCancelableRef = useRef(false);
   // Deadline (interactionNow ms) past which the active above-change anchor is
   // stale: the frame pass compensates each correction before it, then stops so
@@ -159,9 +149,7 @@ export function useTranscriptStickToBottom({
   // instead of the glue window's quiet-frame termination (which ends a frame
   // early on a slow runner and loses the last correction).
   const compensationDeadlineRef = useRef(0);
-  // FR-2 restore (rung 6): the single frame writer re-resolves this to a
-  // scrollTop each glued frame so the saved reading row holds as heights settle.
-  // Null except during a restore; a user scroll clears it.
+  // FR-2 restore (rung 6): frame writer re-resolves this each glued frame so the saved reading row holds as heights settle.
   const restoreResolverRef = useRef<((viewport: HTMLElement) => number | null) | null>(null);
   const restoreDeadlineRef = useRef(0);
   const userScrollIntentUntilRef = useRef(0);
@@ -218,8 +206,8 @@ export function useTranscriptStickToBottom({
     onScrollSample({ programmatic: false, userInitiated: true });
   }, [onScrollSample, setPinned]);
 
-  // Owns the consumed-inset state machine, the follow-target math, and the
-  // scroll-to-bottom callbacks. See use-transcript-auto-follow-bottom.ts.
+  // Owns the consumed-inset machine, follow-target math, and scroll-to-bottom
+  // callbacks. See use-transcript-auto-follow-bottom.ts.
   const {
     dispatchInsetEvent,
     scrollToBottom,
@@ -235,9 +223,7 @@ export function useTranscriptStickToBottom({
     notifyProgrammaticScroll,
   });
 
-  // Q6 (rung 7): a submit re-pins but does NOT consume the overlay. Routed
-  // through the consumed-inset machine as an explicit (no-op) transition so the
-  // rule lives in one place.
+  // Q6 (rung 7): submit re-pins but does NOT consume the overlay (explicit no-op).
   const submitRepin = useCallback(() => {
     dispatchInsetEvent({ type: "submit_repin" });
   }, [dispatchInsetEvent]);
@@ -279,10 +265,9 @@ export function useTranscriptStickToBottom({
     });
     if (decision.pin === false) {
       // FR-2, rung 6: do NOT clear the restore resolver here. An unmatched scroll
-      // during an in-flight restore is our OWN placement write clamped by the
-      // browser to the not-yet-measured content max, not the reader; clearing it
-      // would kill the frame writer's re-resolution before it converges. A real
-      // reader takeover clears via notifyUserScrollIntent (restore also expires).
+      // mid-restore is our OWN placement write clamped to the not-yet-measured
+      // content max, not the reader; clearing it would kill the frame writer's
+      // re-resolution. A real takeover clears via notifyUserScrollIntent.
       dispatchInsetEvent({ type: "leave_band" });
       setPinned(false);
     } else if (decision.pin === true) {
@@ -345,10 +330,9 @@ export function useTranscriptStickToBottom({
     onSubmitRepin: submitRepin,
   });
 
-  // Session re-entry: snap instantly, then glue for a few frames so the
-  // measurement backlog of freshly mounted rows (virtualizer estimates
-  // correcting to real heights) lands as one silent jump instead of a visible
-  // scroll from an old position to the bottom.
+  // Session re-entry: snap instantly, then glue for a few frames so the mounted
+  // rows' measurement backlog (estimates correcting to real heights) lands as
+  // one silent jump instead of a visible scroll from the old position.
   const resetForSession = useCallback((plan?: TranscriptSessionRestorePlan) => {
     clearAllMarkers();
     compensationAnchorRef.current = null;
@@ -361,9 +345,9 @@ export function useTranscriptStickToBottom({
     dispatchInsetEvent({ type: "reset" });
     userScrollIntentUntilRef.current = 0;
     // FR-2 (rung 6): restore a finalized session's saved reading position before
-    // first paint; a streaming session, a missing plan, or a saved row now gone
-    // bottom-pins (the conservative default). The frame writer then re-resolves
-    // the anchor each glued frame so residual corrections land silently.
+    // first paint; a streaming session / missing plan / vanished row bottom-pins
+    // (conservative default). The frame writer re-resolves the anchor each glued
+    // frame so residual corrections land silently.
     const restored = beginSessionRestorePlacement(
       plan ?? { kind: "bottom" },
       interactionNow() + RESTORE_MAX_MS,
