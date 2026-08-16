@@ -1,21 +1,22 @@
 # Subagent wake suppression and coalescing
 
-Description: resolve redundant subagent completion deliveries without a parent wake turn — suppress when the child's own message already reached the parent, coalesce by rewriting the queued wake row in place to the newest completion.
+Description: resolve redundant subagent completion deliveries without a parent wake turn — suppress when the child's own message already reached the parent, coalesce by rewriting the queued wake row in place to the newest completion — and collapse the surviving wake turns out of the central conversation.
 Date: 2026-08-15
-Status: approved; shipped in PR #1965 (PRO-287).
+Status: approved; rung 1 (runtime suppression/coalescing) shipped in PR #1965
+(PRO-287); rung 2 (transcript presentation) pending.
 
 ## Orientation
 
-Every terminal subagent turn creates a durable completion delivery, and the
-delivery worker turns each one into a parent prompt with `SubagentWake`
-provenance. Separately, children report results with `send_message`, which
-creates an `AgentSession` parent prompt. The parent model pays a full LLM turn
-per prompt, so one logical child update ("here is my result" + "I finished")
-produced two parent turns, and every terminal follow-up turn on an
-already-completed child produced another. In the investigated parent session
-(`ce4ad24e`), 17 direct messages plus 17 completion wakes drained into roughly
-29 automated parent turns full of "Superseded…" / "No action needed"
-acknowledgements.
+Every terminal subagent turn creates a durable completion delivery. Before
+this decision, the delivery worker turned each one into a parent prompt with
+`SubagentWake` provenance. Separately, children report results with
+`send_message`, which creates an `AgentSession` parent prompt. The parent model
+pays a full LLM turn per prompt, so one logical child update ("here is my
+result" + "I finished") produced two parent turns, and every terminal
+follow-up turn on an already-completed child produced another. In the
+investigated parent session (`ce4ad24e`), 17 direct messages plus 17 completion
+wakes drained into roughly 29 automated parent turns full of "Superseded…" /
+"No action needed" acknowledgements.
 
 This decision keeps the durable exactly-once delivery machinery and adds a
 semantic layer on top of it: a completion delivery may resolve without its own
@@ -23,11 +24,15 @@ parent wake turn when the wake would be redundant.
 
 Goals: eliminate redundant parent turns; keep completion state durable and
 visible; keep wake semantics for completions that materially require parent
-action. Non-goals: cross-child batching of wakes into one prompt, changing the
-`send_message` path (child messages are real content and always surface),
-retry-cadence or dead-letter changes, and any wire-contract or schema change.
+action; keep the central transcript legible as the human↔parent conversation,
+with subagent orchestration traffic subordinate to it. Non-goals: cross-child
+batching of wakes into one prompt, changing the `send_message` path (child
+messages are real content and always surface), retry-cadence or dead-letter
+changes, any wire-contract or schema change, and hiding orchestration turns
+entirely (auditability: every model turn stays reachable in the transcript).
 
-Requirements (the PRO-287 acceptance criteria):
+Requirements (1–6 are the PRO-287 acceptance criteria; 7 is the presentation
+expectation this ADR adds for rung 2):
 
 1. A child that reports completion via `send_message` and then ends does not
    create redundant parent-facing turns.
@@ -40,6 +45,12 @@ Requirements (the PRO-287 acceptance criteria):
 5. Tests use the real durable prompt/completion path and prove that
    SSE/history replay remains idempotent.
 6. Coalesced and suppressed deliveries are observable.
+7. Wake turns that do survive render subordinate to the user's conversation:
+   the central pane shows one collapsed receipt row per wake turn (chip plus
+   the parent's acknowledgement, folded), expandable on demand, and expanded
+   by default only when the parent's response took a real action. Delegated
+   work state remains primarily discoverable in the agents UI, not the
+   transcript.
 
 ## Current context
 
@@ -67,18 +78,22 @@ The primitives involved:
   durable row's `prompt_id` (`staged_wake_matches_delivery`) before committing
   the turn, the queue-row delete, and the delivered transition atomically.
   Extended by this decision (one new outcome classification).
-- **Completion metadata injection**: on the single `pending → enqueued`
-  transition the worker injects one `subagent_turn_completed` event via
-  `emit_runtime_event`, which routes through the live actor (the only live
-  seq owner) or appends offline. The transcript indexes it for wake receipts
-  and roster invalidation; the SDK reducer keys
-  `linkCompletionsByCompletionId` off it. Reused as-is; for a suppressed
-  delivery it becomes the only parent-transcript record.
+- **Completion metadata injection**: on a fresh claimed delivery's first
+  resolution, the worker injects one `subagent_turn_completed` event via
+  `emit_runtime_event`: after `pending → enqueued` for a materialized wake,
+  or after `pending → delivered` for suppression. The event routes through
+  the live actor (the only live seq owner) or appends offline. The transcript
+  indexes it for wake receipts and roster invalidation; the SDK reducer keys
+  `linkCompletionsByCompletionId` off it. For a suppressed delivery it becomes
+  the only parent-transcript record.
 - **Prompt provenance**: internal `PromptProvenance` (`agent_session`,
   `subagent_wake`) persisted on queue rows; the public twin persisted inside
   item events. The boundary checker forbids importing wire contract types
   below the API mapper, so domain code probes persisted item payloads with
-  untyped JSON (the `persisted_stop_reason` precedent).
+  untyped JSON (the `persisted_stop_reason` precedent). This prompt/item
+  provenance is distinct from `fork_operations` boundary and recovery
+  provenance: `relation = fork` children do not create subagent completion
+  deliveries and are outside suppression/coalescing.
 
 ## Design
 
@@ -111,6 +126,25 @@ reconciliation is never affected — two rules apply, in order:
 Either way the worker still injects the completion metadata event and the
 completion ledger row persists, so delegated-work surfaces stay current
 (requirement 3), and it logs the decision (requirement 6).
+
+**Transcript presentation (rung 2, requirement 7).** Suppression and
+coalescing bound how many wake turns exist; presentation decides how the
+survivors read. The runtime already gives the client everything it needs: the
+wake turn's user item carries `subagentWake`/`linkWake` provenance in its
+persisted payload, and [`provenance.ts`](../apps/packages/product-client/src/domain/chats/subagents/provenance.ts)
+already collapses the prompt side into a `finished · <agent>` chip. Rung 2
+extends the transcript row renderer so the *entire* wake-consuming turn —
+chip plus the parent's assistant response — renders as one folded receipt row
+that expands on click. A turn stays expanded by default only when the
+parent's response performed a materially visible action (spawned or messaged
+an agent, edited files, started a run); pure acknowledgements fold. This is a
+product-client-only change keyed off provenance the events already carry: no
+runtime, schema, or contract work, and no information is deleted — folding is
+presentation, so history replay and copy/export still see the full turn.
+Hiding the turns entirely was rejected (see alternatives): the surviving
+wakes are by construction the material ones, and invisible model turns that
+spent tokens and made decisions would undermine the transcript as the
+auditable record.
 
 ```mermaid
 sequenceDiagram
@@ -171,12 +205,27 @@ Alternatives rejected:
 - **New `suppressed`/`coalesced` outbox states**: honest bookkeeping, but the
   `state` CHECK constraint makes it a table rebuild; terminal `delivered`
   with NULL prompt/turn plus tracing carries the same information.
+- **Hide wake turns from the central transcript entirely** (presentation):
+  cleanest-looking pane, but it removes the parent's reactions to exactly the
+  completions selected as material (failures, cancellations, unreported
+  results), leaves model turns with no visible trace, and takes away the
+  user's chance to interrupt a bad orchestration decision. Collapsed-by-
+  default preserves the clean pane without the audit gap.
+- **Suppress harder at the runtime instead of folding in the UI** (e.g. stop
+  waking on cancellations): rejected for rung 2 — the outcome gate is a
+  correctness decision (requirement 4), and bursts like mass-cancellation of
+  obsolete subagents are better solved by presentation than by silencing
+  outcomes the parent may need to react to.
 
-No open decisions.
+Open decisions:
+
+- The "materially visible action" criterion that keeps a wake turn expanded
+  by default (which tool calls and effects qualify). Owner: taira. Must close
+  by the rung 2 delivery spec, since the renderer test fixtures encode it.
 
 ## New and modified primitives
 
-AnyHarness sessions domain only:
+AnyHarness sessions domain (rung 1, shipped):
 
 - `enqueue/coalescing.rs` (new): `adopt_superseded_sibling_wake` (in-place
   rewrite + sibling retirement + projection null-out) and
@@ -191,7 +240,15 @@ AnyHarness sessions domain only:
   injection) and logs both resolutions.
 - `canonical.rs`: `pending_prompt_agent_session_source` helper.
 
-No schema, endpoint, contract, or frontend changes; no new cross-cell access.
+No schema, endpoint, or contract changes; no new cross-cell access.
+
+Product client (rung 2, pending): the chat transcript row renderer
+(`use-chat-transcript-row-renderer` and the wake helpers in
+`domain/chats/subagents/provenance.ts`) gains a folded wake-turn row —
+grouping a `subagentWake`/`linkWake`-provenance user item with the assistant
+items of the same turn — plus the expand interaction and the
+expanded-by-default action check. Client state only; reducers and the SDK
+transcript state are untouched.
 
 ## Flows
 
@@ -231,6 +288,10 @@ re-claimed; the stale-copy race resolves to `Stale` plus redelivery.
   once; tier-2 worker test
   `suppressed_completion_injects_metadata_without_a_wake_prompt` also proves
   recovery replay injects no duplicates and re-claims nothing.
+- Folded rows hiding a material parent reaction (rung 2) — the
+  expanded-by-default action check, pinned by renderer tests over fixture
+  turns with and without action tool calls; a fold is always expandable, so
+  the failure degrades to one extra click, never to lost information.
 
 Runtime observability: `anyharness.subagent.delivery_suppressed` with
 `result_class = "suppressed"` and `reason = "coalesced" |
@@ -239,12 +300,17 @@ local-runtime behavior with no hosted failure surface.
 
 ## High level sequencing
 
-Single-PR ladder: PR #1965 (`fix(anyharness): suppress redundant subagent
-completion wakes`), no flag — the enqueue-time rules are the new default, and
-reverting the PR restores one-wake-per-terminal-turn with no data migration
-(suppressed rows are ordinary terminal `delivered` rows). Canonical docs
-updated in the same PR: `specs/anyharness/sessions.md` (Workspace MCP And
-Completion Delivery, Parent Wake).
+1. **Rung 1 — runtime suppression and coalescing** (shipped, PR #1965,
+   PRO-287). No flag — the enqueue-time rules are the new default, and
+   reverting the PR restores one-wake-per-terminal-turn with no data
+   migration (suppressed rows are ordinary terminal `delivered` rows).
+   Canonical docs updated in the same PR: `specs/anyharness/sessions.md`
+   (Workspace MCP And Completion Delivery, Parent Wake).
+2. **Rung 2 — collapsed wake-turn presentation** (pending, needs its own
+   ticket and frozen delivery spec). Product-client only; no flag — folding
+   is presentation, and reverting the PR restores fully expanded wake turns
+   with no state to migrate. Closes the open decision above and updates the
+   frontend transcript docs in the same PR.
 
 ## Appendix
 

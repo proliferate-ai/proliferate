@@ -369,4 +369,3 @@ fn previously_enqueued_delivery_is_recreated_not_suppressed() {
         ClaimedDeliveryEnqueueOutcome::Enqueued { inserted: true, .. }
     ));
 }
-
