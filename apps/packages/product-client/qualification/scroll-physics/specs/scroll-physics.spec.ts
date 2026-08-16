@@ -820,4 +820,114 @@ test.describe("transcript scroll physics", () => {
     const estimateError = Math.abs(estimated.scrollHeight - real.scrollHeight);
     expect(estimateError).toBeLessThan(1400);
   });
+
+  // Rung 7 (PRO-187, Q6): a DISPLACING (structural) dock inset that
+  // appears/disappears (composer growth/collapse, status bar) must not fight a
+  // pinned reader. The pinned follow re-lands in one cut (never a crawl or an
+  // oscillation) and the clamp a shrink queues is never misread as a user
+  // upward scroll. Negative control: route the structural inset out of the
+  // consumed-inset machine (or drop the structural-shrink clamp mark in
+  // use-transcript-auto-follow-bottom.ts) and the collapse clamp is reclassified
+  // as a user scroll, so the follow drops and the subsequent stream runs away.
+  test("displacing-inset transition while pinned: composer collapse/grow follows in one cut, no fight", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 6);
+    await waitForViewport(page);
+    await settle(page);
+    await wheelToBottom(page);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+
+    // Composer collapses (structural 120 -> 40): scrollHeight shrinks and the
+    // client height grows, so the pinned viewport re-lands at the new bottom.
+    await drive(page, "startScrollTrace");
+    await drive(page, "setComposerInset", 40);
+    await settle(page, 500);
+    const collapseTrace = (await drive<number[]>(page, "stopScrollTrace")).filter((v) =>
+      Number.isFinite(v),
+    );
+
+    // Still pinned, glued to the new bottom.
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+    expect((await metricsAfterFrame(page)).bottomDistance).toBeLessThanOrEqual(
+      PIN_FOLLOW_MAX_DISTANCE_PX,
+    );
+    // One cut: only a couple of distinct positions, then landed-and-held (the
+    // final value, once reached, is never left again). A fight would oscillate.
+    expect(collapseTrace.length).toBeGreaterThan(0);
+    expect(new Set(collapseTrace).size).toBeLessThanOrEqual(3);
+    const collapseSettled = collapseTrace[collapseTrace.length - 1];
+    const collapseSettledIdx = collapseTrace.indexOf(collapseSettled);
+    expect(collapseTrace.slice(collapseSettledIdx).every((v) => v === collapseSettled)).toBe(true);
+
+    // Composer grows (structural 40 -> 220): the follow keeps up with the taller
+    // document without fighting.
+    await drive(page, "setComposerInset", 220);
+    await settle(page, 500);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+    expect((await metricsAfterFrame(page)).bottomDistance).toBeLessThanOrEqual(
+      PIN_FOLLOW_MAX_DISTANCE_PX,
+    );
+
+    // Negative control bite: the transitions did not silently unpin. Streaming
+    // now still follows to the bottom; a collapse-induced false unpin would
+    // leave the stream running away outside the follow ceiling.
+    await drive(page, "beginStreamingTurn");
+    for (let batch = 0; batch < 6; batch += 1) {
+      await drive(page, "streamChunk");
+      await settle(page, 60);
+      expect((await metricsAfterFrame(page)).bottomDistance).toBeLessThanOrEqual(
+        PIN_FOLLOW_MAX_DISTANCE_PX,
+      );
+    }
+    await drive(page, "finalizeStreamingTurn");
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+  });
+
+  // Rung 7 (PRO-187, Q6): an UNPINNED reader is not displaced when a displacing
+  // inset appears/disappears below the fold. The row under the top edge and the
+  // absolute scrollTop hold across a composer collapse and a composer growth.
+  // Negative control: if a structural inset change wrote scrollTop while
+  // unpinned (e.g. the pinned-only guard in the dock-inset layout effect were
+  // dropped), the reading row under the top edge would shift.
+  test("displacing-inset transition while unpinned reading: no displacement", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 12);
+    await waitForViewport(page);
+    await settle(page);
+
+    // Read up and unpin.
+    await keyboardScrollUp(page, 3);
+    await settle(page, 500);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+    const savedTopRow = await drive<string | null>(page, "getTopVisibleText");
+    expect(savedTopRow, "a transcript row must be under the top edge").toBeTruthy();
+    const savedTop = (await metrics(page)).scrollTop;
+
+    // Composer collapses then grows below the fold while the reader stays put.
+    await drive(page, "startScrollTrace");
+    await drive(page, "setComposerInset", 40);
+    await settle(page, 300);
+    await drive(page, "setComposerInset", 220);
+    await settle(page, 300);
+    const trace = (await drive<number[]>(page, "stopScrollTrace")).filter((v) =>
+      Number.isFinite(v),
+    );
+
+    // The reading row under the top edge is unchanged, still unpinned, and the
+    // absolute scrollTop held (the change was entirely below the viewport).
+    expect(await drive<string | null>(page, "getTopVisibleText")).toBe(savedTopRow);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+    expect(Math.abs((await metrics(page)).scrollTop - savedTop)).toBeLessThanOrEqual(2);
+    // No engine-driven scroll motion: the trace tail is flat at the saved top.
+    if (trace.length > 0) {
+      expect(new Set(trace.slice(-6)).size).toBe(1);
+    }
+  });
 });
