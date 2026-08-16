@@ -159,26 +159,12 @@ fn valid_fallback_directory_rejects_the_wrong_mode() {
 // descriptor_exists / set_cloexec / close_if_open
 // ---------------------------------------------------------------------
 
-/// Re-homes `fd` at or above `floor` so closed-state assertions (and
-/// `close_if_open` calls) probe a number the suite's lowest-free descriptor
-/// allocation cannot reallocate mid-test. This binary runs its tests
-/// concurrently in one process: a released low number is re-picked by any
-/// neighbouring test within microseconds, which turns an "is it closed"
-/// assertion into a probe of someone else's descriptor — and a stale-number
-/// `close_if_open` into closing it. Every caller uses a distinct floor so the
-/// re-homed numbers cannot collide with each other either.
-fn rehome_above(fd: OwnedFd, floor: libc::c_int) -> libc::c_int {
-    let high = unsafe { libc::fcntl(fd.as_raw_fd(), libc::F_DUPFD, floor) };
-    assert!(high >= floor, "F_DUPFD above {floor} failed");
-    high
-}
-
 #[test]
 fn descriptor_exists_reflects_open_and_closed_state() {
     let (read_end, _write_end) = pipe_pair();
-    let fd = rehome_above(read_end, 512);
+    let fd = read_end.as_raw_fd();
     assert!(descriptor_exists(fd));
-    unsafe { libc::close(fd) };
+    drop(read_end);
     assert!(!descriptor_exists(fd));
 }
 
@@ -198,16 +184,18 @@ fn set_cloexec_adds_the_flag_when_absent() {
 #[test]
 fn set_cloexec_reports_a_closed_descriptor() {
     let (read_end, _write_end) = pipe_pair();
-    let fd = rehome_above(read_end, 520);
-    unsafe { libc::close(fd) };
+    let fd = read_end.as_raw_fd();
+    drop(read_end);
     assert!(!set_cloexec(fd));
 }
 
 #[test]
 fn owned_bridge_with_failed_cloexec_degrades_and_closes_both_authorities() {
     let (bridge, shutdown) = pipe_pair();
-    let bridge_fd = rehome_above(bridge, 528);
-    let shutdown_fd = rehome_above(shutdown, 528);
+    let bridge_fd = bridge.as_raw_fd();
+    let shutdown_fd = shutdown.as_raw_fd();
+    std::mem::forget(bridge);
+    std::mem::forget(shutdown);
 
     assert_eq!(
         resolve_descriptor_authority(bridge_fd, shutdown_fd, true, false),
@@ -220,8 +208,10 @@ fn owned_bridge_with_failed_cloexec_degrades_and_closes_both_authorities() {
 #[test]
 fn unrelated_bridge_probe_remains_disabled_when_cloexec_fails() {
     let (bridge, shutdown) = pipe_pair();
-    let bridge_fd = rehome_above(bridge, 536);
-    let shutdown_fd = rehome_above(shutdown, 536);
+    let bridge_fd = bridge.as_raw_fd();
+    let shutdown_fd = shutdown.as_raw_fd();
+    std::mem::forget(bridge);
+    std::mem::forget(shutdown);
 
     assert_eq!(
         resolve_descriptor_authority(bridge_fd, shutdown_fd, false, false),
@@ -234,13 +224,12 @@ fn unrelated_bridge_probe_remains_disabled_when_cloexec_fails() {
 #[test]
 fn close_if_open_closes_an_open_descriptor_and_is_a_no_op_when_absent() {
     let (read_end, _write_end) = pipe_pair();
-    let fd = rehome_above(read_end, 544);
+    let fd = read_end.as_raw_fd();
+    std::mem::forget(read_end); // ownership now solely tracked by this test
     assert!(descriptor_exists(fd));
     close_if_open(fd);
     assert!(!descriptor_exists(fd));
     // Second call on an already-absent descriptor must not panic or error.
-    // The high floor above is what makes this call safe to repeat: on a
-    // reallocatable low number it would close an unrelated descriptor.
     close_if_open(fd);
     assert!(!descriptor_exists(fd));
 }

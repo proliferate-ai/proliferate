@@ -47,11 +47,7 @@ function statusDotToneFor(tone: WorkflowNodeTone): StatusDotTone {
 
 export interface WorkflowGraphNodeCardProps {
   vm: WorkflowGraphNodeVM;
-  /**
-   * Visually subordinate rendering for a side node anchored under another
-   * card: muted fill. Placement — the branch-rail indent — belongs to
-   * `WorkflowGraphView`, the container that owns the graph's geometry.
-   */
+  /** Visually subordinate rendering for a side node anchored under another card: muted fill, indented. Structure, not color. */
   secondary?: boolean;
   needsInput?: boolean;
   busy?: boolean;
@@ -159,12 +155,16 @@ export function WorkflowGraphNodeCard({
   return (
     <>
       {/*
-        The current node's emphasis is carried by its title weight (structure,
-        not color, and not a shadow smuggled through a layout prop): `Card`
-        owns elevation and exposes no shadow axis, so there is nothing
-        sanctioned to pass it through.
+        `className` on `Card` is layout only. The current node's emphasis is
+        carried by its title weight (structure, not color, and not a shadow
+        smuggled through a layout prop): `Card` owns elevation and exposes no
+        shadow axis, so there is nothing sanctioned to pass it through.
       */}
-      <Card surface={secondary ? "tint" : "opaque"} footer={controlsFooter}>
+      <Card
+        surface={secondary ? "tint" : "opaque"}
+        className={secondary ? "ml-6" : undefined}
+        footer={controlsFooter}
+      >
         <RosterRow
           density="comfortable"
           leading={<StatusDot tone={statusDotToneFor(tone)} />}

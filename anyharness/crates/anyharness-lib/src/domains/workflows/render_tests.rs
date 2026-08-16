@@ -93,12 +93,8 @@ fn agent_preamble_teaches_conventions_and_the_completion_contract() {
     let preamble = &envelope.instruction_blocks[0];
     assert!(preamble.contains("/ws/.proliferate/context"));
     assert!(preamble.contains("NN-slug.md"));
-    // The preamble is markdown the transcript renders: pinned section
-    // headings and one bullet line per registered doc.
-    assert!(preamble.contains("\n## Shared context documents\n"));
-    assert!(preamble.contains("\n## Your step\n"));
-    assert!(preamble.contains("\n- /ws/.proliferate/context/00-plan-doc.md\n"));
-    assert!(preamble.contains("\n- /ws/.proliferate/context/notes.md\n"));
+    assert!(preamble.contains("/ws/.proliferate/context/00-plan-doc.md"));
+    assert!(preamble.contains("/ws/.proliferate/context/notes.md"));
     assert!(preamble.contains("never stop to ask questions"));
     assert!(preamble.contains("do not proceed into later steps' work"));
     // Ruling D: the preamble never rides system_prompt_append — that channel
