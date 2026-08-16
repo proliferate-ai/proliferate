@@ -24,6 +24,7 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 import { ComposerCaretPlugin } from "#product/components/workspace/chat/input/ComposerCaretPlugin";
 import { ComposerFencedCodePlugin } from "#product/components/workspace/chat/input/ComposerFencedCodePlugin";
 import { ComposerFormatGuardPlugin } from "#product/components/workspace/chat/input/ComposerFormatGuardPlugin";
+import { ComposerSelectionRecoveryPlugin } from "#product/components/workspace/chat/input/ComposerSelectionRecoveryPlugin";
 import {
   COMPOSER_INPUT_TRANSFORMERS,
   COMPOSER_NODES,
@@ -178,6 +179,7 @@ export function ComposerRichTextEditor({
       <ComposerMarkdownShortcutPlugin transformers={INPUT_TRANSFORMERS} />
       <ComposerFencedCodePlugin />
       <ComposerFormatGuardPlugin />
+      <ComposerSelectionRecoveryPlugin />
       <ComposerBehaviorPlugin
         canSubmit={canSubmit}
         onSubmit={onSubmit}
