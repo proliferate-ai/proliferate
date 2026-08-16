@@ -19,6 +19,26 @@ function compensationNow(): number {
   return typeof performance === "undefined" ? Date.now() : performance.now();
 }
 
+// The freshly-prepended older rows' estimate-to-measured height correction can
+// make the virtualizer's reported scrollHeight move NON-MONOTONICALLY for a
+// beat (a transient dip below a height already observed this window, or even
+// below the anchor's own pre-prepend height) before settling at its real,
+// taller value. Sampling a delta against a dipped total would shrink the
+// compensation and jump the reader UP toward the freshly-prepended top, and —
+// worse — if the browser's own scrollTop clamp fires during that same dip
+// (scrollHeight transiently near the viewport height forces scrollTop toward
+// 0) and the deadline lapses before the recovery pass runs, releasing the
+// anchor without a final corrective write stranded the reader at the
+// freshly-prepended top for good (CI webkit "scrollTop Expected > 150 /
+// Received 0"). Track the running max scrollHeight observed so the delta is
+// monotonic non-decreasing, and always perform one last forward-only write
+// against that max before releasing the anchor at the deadline, so a late dip
+// can never leave the reader displaced.
+interface CompensationFloor {
+  anchor: ContentHeightScrollAnchor | null;
+  maxScrollHeight: number;
+}
+
 interface UseAboveChangeCompensationParams {
   scrollRef: RefObject<HTMLDivElement | null>;
   pinnedRef: RefObject<boolean>;
@@ -46,6 +66,7 @@ export function useAboveChangeCompensation({
   userScrollUpIntentAtRef,
 }: UseAboveChangeCompensationParams) {
   const compensateFrameRef = useRef<number | null>(null);
+  const floorRef = useRef<CompensationFloor>({ anchor: null, maxScrollHeight: 0 });
 
   // `cancelableByUpwardIntent` is true ONLY for the completed-turn split: an
   // autonomous insertion above an unpinned reader, where an active upward
@@ -66,6 +87,7 @@ export function useAboveChangeCompensation({
     }
     const startedAt = compensationNow();
     const deadline = startedAt + ABOVE_CHANGE_COMPENSATION_MAX_MS;
+    floorRef.current = { anchor, maxScrollHeight: anchor.scrollHeight };
     const tick = () => {
       const viewport = scrollRef.current;
       if (!viewport || pinnedRef.current) {
@@ -80,8 +102,20 @@ export function useAboveChangeCompensation({
         compensateFrameRef.current = null;
         return;
       }
+      const floor = floorRef.current;
+      if (viewport.scrollHeight > floor.maxScrollHeight) {
+        floor.maxScrollHeight = viewport.scrollHeight;
+      }
+      const target = anchor.scrollTop + (floor.maxScrollHeight - anchor.scrollHeight);
       notifyProgrammaticScroll(() => {
-        viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
+        // Forward-only: the anchored scrollTop only ever moves down (or holds)
+        // as the prepended rows measure taller. A transient dip in the reported
+        // total (or the browser's own scrollTop clamp firing during that dip)
+        // must never be allowed to jump the reader back toward the freshly
+        // prepended top.
+        if (target > viewport.scrollTop) {
+          viewport.scrollTop = target;
+        }
       });
       if (compensationNow() >= deadline) {
         compensateFrameRef.current = null;

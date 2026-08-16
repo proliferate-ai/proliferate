@@ -167,4 +167,41 @@ describe("useAboveChangeCompensation upward-intent cancel", () => {
     expect(h.viewport.scrollTop).toBe(170);
     expect(h.notifyProgrammaticScroll).toHaveBeenCalledTimes(2);
   });
+
+  // Deterministic negative control for the CI webkit prepend defect (PRO-187,
+  // r3): "scrollTop Expected > 150 / Received 0". The freshly-mounted older
+  // rows' estimate-to-measured correction can make the reported scrollHeight
+  // dip transiently (and, on a real engine, the browser's own scrollTop clamp
+  // can fire during that dip) before recovering to its real, taller value. A
+  // dip sampled on the LAST tick before the deadline must never jump the
+  // reader back toward the freshly-prepended top.
+  // NEGATIVE CONTROL: remove the `floorRef` monotonic tracking and the
+  // forward-only `if (target > viewport.scrollTop)` guard, computing the
+  // target directly from the dipped `viewport.scrollHeight` instead, and the
+  // last assertion here fails (scrollTop drops back toward 0).
+  it("survives a late transient scrollHeight dip (and browser scrollTop clamp) on the final tick before the deadline", () => {
+    const h = makeHarness();
+    h.start(h.anchor, false);
+
+    // The rows measure in taller: scrollTop absorbs the full added-above delta.
+    h.viewport.scrollHeight = 1_600;
+    flushRafRound();
+    expect(h.viewport.scrollTop).toBe(700);
+
+    // A transient measured-swap dip lands on the final tick before the
+    // deadline: the reported total drops back near its pre-prepend value and
+    // the browser's own clamp (simulated here) forces scrollTop down with it.
+    clockMs = 1_499;
+    h.viewport.scrollHeight = 1_010;
+    h.viewport.scrollTop = 5;
+    flushRafRound();
+    // The floor (1600) holds; scrollTop is re-raised forward, never released
+    // backward toward the dip.
+    expect(h.viewport.scrollTop).toBe(700);
+
+    // Deadline lapses on the next tick; no further ticks run.
+    clockMs = 1_501;
+    flushRafRound();
+    expect(h.viewport.scrollTop).toBe(700);
+  });
 });
