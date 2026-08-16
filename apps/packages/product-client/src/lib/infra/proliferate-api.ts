@@ -17,12 +17,27 @@ export function buildProliferateApiUrl(path: string, baseUrl: string): string {
   return `${baseUrl}${normalizedPath}`;
 }
 
+// The deployment base URL is effectively constant for a running client, but
+// `getProliferateApiOrigin` is called at render time from many query hooks
+// across the workspace shell. Parsing a fresh `new URL(...)` on every one of
+// those renders is pure waste, so memoize the last resolved origin. A single
+// slot is enough: the base URL only changes when the host swaps deployments.
+let cachedOriginBaseUrl: string | null = null;
+let cachedOrigin = "";
+
 export function getProliferateApiOrigin(baseUrl: string): string {
-  try {
-    return new URL(baseUrl).origin;
-  } catch {
-    return normalizeBaseUrl(baseUrl);
+  if (baseUrl === cachedOriginBaseUrl) {
+    return cachedOrigin;
   }
+  let origin: string;
+  try {
+    origin = new URL(baseUrl).origin;
+  } catch {
+    origin = normalizeBaseUrl(baseUrl);
+  }
+  cachedOriginBaseUrl = baseUrl;
+  cachedOrigin = origin;
+  return origin;
 }
 
 export function isOfficialHostedApiBaseUrl(baseUrl: string): boolean {
