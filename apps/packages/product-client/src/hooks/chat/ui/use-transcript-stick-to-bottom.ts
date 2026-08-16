@@ -20,8 +20,8 @@ function interactionNow(): number {
   return typeof performance === "undefined" ? Date.now() : performance.now();
 }
 
-// FR-2 (rung 6): how long the single frame pass keeps re-resolving the saved
-// reading anchor after a finalized-session revisit so residual corrections land.
+// FR-2 (rung 6): how long the single frame pass re-resolves the saved reading
+// anchor after a finalized-session revisit so residual corrections land.
 const RESTORE_MAX_MS = 500;
 
 // How long after an older-history prepend the single frame pass keeps absorbing
@@ -280,16 +280,11 @@ export function useTranscriptStickToBottom({
       repinThresholdPx,
     });
     if (decision.pin === false) {
-      // NOTE (FR-2, rung 6): do NOT clear the restore resolver here. An
-      // unmatched scroll during an in-flight restore is our OWN placement write
-      // being clamped by the browser to the current (not-yet-measured) content
-      // max, not the reader — the freshly-mounted rows have not measured tall
-      // enough for the saved anchor's scrollTop to be reachable yet, so the
-      // write lands short and fires a downward event that misses the marker.
-      // Clearing on that clamp kills the frame writer's re-resolution before it
-      // can converge. A genuine reader takeover comes through the intent
-      // listener (notifyUserScrollIntent), which clears the resolver; the
-      // restore also self-terminates at RESTORE_MAX_MS.
+      // FR-2, rung 6: do NOT clear the restore resolver here. An unmatched scroll
+      // during an in-flight restore is our OWN placement write clamped by the
+      // browser to the not-yet-measured content max, not the reader; clearing it
+      // would kill the frame writer's re-resolution before it converges. A real
+      // reader takeover clears via notifyUserScrollIntent (restore also expires).
       consumedAutoFollowBottomInsetRef.current = 0;
       setPinned(false);
     } else if (decision.pin === true) {
