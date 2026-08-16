@@ -15,9 +15,10 @@ use serde_json::Value;
 use self::auth::WorkspaceMcpAuth;
 use self::context::WorkspaceMcpContext;
 use crate::domains::agent_operations::runtime::AgentOperations;
+use crate::integrations::mcp::capability_token::McpCapabilityTokenValidation;
 use crate::integrations::mcp::product_server::{
     ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDefinition, ProductMcpRequestContext,
-    ProductMcpServer, ProductMcpTokenValidation,
+    ProductMcpServer,
 };
 use crate::integrations::mcp::tools::McpToolOutput;
 
@@ -44,7 +45,7 @@ impl ProductMcpServer for WorkspaceProductMcpServer {
         &self,
         header: ProductMcpAuthHeader<'_>,
         request: &ProductMcpRequestContext,
-    ) -> anyhow::Result<ProductMcpTokenValidation> {
+    ) -> anyhow::Result<McpCapabilityTokenValidation> {
         self.auth.validate_capability_header(header, request)
     }
 

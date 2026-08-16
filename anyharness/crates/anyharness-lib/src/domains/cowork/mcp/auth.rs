@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 
-use crate::integrations::mcp::capability_token::McpCapabilityTokenSignature;
+use crate::integrations::mcp::capability_token::{
+    McpCapabilityTokenSignature, McpCapabilityTokenValidation,
+};
 use crate::integrations::mcp::product_server::{
-    ProductMcpAuth, ProductMcpAuthHeader, ProductMcpRequestContext, ProductMcpTokenValidation,
+    ProductMcpAuth, ProductMcpAuthHeader, ProductMcpRequestContext,
 };
 
 pub(crate) const SECRET_FILE_NAME: &str = "cowork-mcp-token.key";
@@ -36,7 +38,7 @@ impl CoworkMcpAuth {
         &self,
         header: ProductMcpAuthHeader<'_>,
         request: &ProductMcpRequestContext,
-    ) -> anyhow::Result<ProductMcpTokenValidation> {
+    ) -> anyhow::Result<McpCapabilityTokenValidation> {
         self.inner.validate_capability_header(header, request)
     }
 }
@@ -71,7 +73,7 @@ mod tests {
                 &request,
             )
             .expect("validate product token"),
-            ProductMcpTokenValidation::Valid,
+            McpCapabilityTokenValidation::Valid,
         );
 
         let wrong_scope = ProductMcpRequestContext::new("workspace-1", "session-1", "subagents");
@@ -83,7 +85,7 @@ mod tests {
                 &wrong_scope,
             )
             .expect("reject wrong scope"),
-            ProductMcpTokenValidation::Invalid,
+            McpCapabilityTokenValidation::ScopeMismatch,
         );
 
         let _ = std::fs::remove_dir_all(home);

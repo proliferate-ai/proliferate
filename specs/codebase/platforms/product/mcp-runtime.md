@@ -215,6 +215,20 @@ POST -> validate capability header
         return JSON-RPC response or no-content response
 ```
 
+Capability validation returns a verdict, not a boolean. The token's embedded
+TTL is defense-in-depth, not the session-lifetime bound: the header is static
+for the life of the session, so an expired-but-authentic token defers to the
+sessions domain (`SessionService::session_open_for_capability`) and keeps
+serving while the session row exists, matches the workspace, and is not
+closed. Missing, malformed, mis-scoped, and expired-with-closed-session
+tokens are rejected with `403` and a cause-naming RFC 7807 body — never
+`401`, which MCP clients treat as an OAuth challenge and answer with
+authorization-server discovery that masks the real cause. Every rejection
+emits the named `anyharness.product_mcp.auth.rejected` tracing event with
+the session, workspace, endpoint slug, and reason
+(`missing | expired | invalid-signature | scope-mismatch`), and never the
+token value.
+
 Target shared owner for transport scaffolding:
 
 ```text

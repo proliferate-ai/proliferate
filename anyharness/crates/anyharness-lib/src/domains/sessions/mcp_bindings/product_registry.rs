@@ -5,10 +5,11 @@ use async_trait::async_trait;
 use serde_json::Value;
 
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
+use crate::integrations::mcp::capability_token::McpCapabilityTokenValidation;
 use crate::integrations::mcp::product_server::{
     dispatch_product_mcp_request, ProductMcpAuthHeader, ProductMcpDefinition,
     ProductMcpDispatchError, ProductMcpEndpointOperation, ProductMcpRequestContext,
-    ProductMcpServer, ProductMcpTokenValidation,
+    ProductMcpServer,
 };
 
 #[async_trait]
@@ -24,7 +25,7 @@ pub trait ProductMcpEndpointHandler: Send + Sync {
         &self,
         header: ProductMcpAuthHeader<'_>,
         request: &ProductMcpRequestContext,
-    ) -> anyhow::Result<ProductMcpTokenValidation>;
+    ) -> anyhow::Result<McpCapabilityTokenValidation>;
 
     async fn dispatch(
         &self,
@@ -94,7 +95,7 @@ where
         &self,
         header: ProductMcpAuthHeader<'_>,
         request: &ProductMcpRequestContext,
-    ) -> anyhow::Result<ProductMcpTokenValidation> {
+    ) -> anyhow::Result<McpCapabilityTokenValidation> {
         self.server.validate_capability_token(header, request)
     }
 
@@ -238,8 +239,8 @@ mod tests {
             &self,
             _header: ProductMcpAuthHeader<'_>,
             _request: &ProductMcpRequestContext,
-        ) -> anyhow::Result<ProductMcpTokenValidation> {
-            Ok(ProductMcpTokenValidation::Valid)
+        ) -> anyhow::Result<McpCapabilityTokenValidation> {
+            Ok(McpCapabilityTokenValidation::Valid)
         }
 
         fn resolve_context(
@@ -281,8 +282,8 @@ mod tests {
             &self,
             _header: ProductMcpAuthHeader<'_>,
             _request: &ProductMcpRequestContext,
-        ) -> anyhow::Result<ProductMcpTokenValidation> {
-            Ok(ProductMcpTokenValidation::Valid)
+        ) -> anyhow::Result<McpCapabilityTokenValidation> {
+            Ok(McpCapabilityTokenValidation::Valid)
         }
 
         async fn dispatch(

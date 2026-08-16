@@ -1,12 +1,15 @@
 use std::path::PathBuf;
 
 use crate::integrations::mcp::capability_token::{
-    McpCapabilityTokenIssuer, McpCapabilityTokenSignature, ProductMcpCapabilityScope,
+    McpCapabilityTokenIssuer, McpCapabilityTokenSignature, McpCapabilityTokenValidation,
+    ProductMcpCapabilityScope,
 };
-use crate::integrations::mcp::product_server::{
-    ProductMcpAuthHeader, ProductMcpRequestContext, ProductMcpTokenValidation,
-};
+use crate::integrations::mcp::product_server::{ProductMcpAuthHeader, ProductMcpRequestContext};
 
+/// Defense-in-depth only, not the session-lifetime bound. A token past this
+/// TTL still proves its scope; the HTTP dispatch layer then consults durable
+/// session state and keeps serving a session that is still open. The TTL
+/// exists so a token whose session row is gone entirely stops working.
 const TOKEN_TTL_SECONDS: i64 = 60 * 60 * 12;
 
 #[derive(Clone)]
@@ -50,8 +53,8 @@ impl ProductMcpAuth {
         &self,
         header: ProductMcpAuthHeader<'_>,
         request: &ProductMcpRequestContext,
-    ) -> anyhow::Result<ProductMcpTokenValidation> {
-        let valid = match header {
+    ) -> anyhow::Result<McpCapabilityTokenValidation> {
+        match header {
             ProductMcpAuthHeader::Product { value } => {
                 self.product_issuer.validate_product_mcp_token(
                     value,
@@ -60,14 +63,9 @@ impl ProductMcpAuth {
                         session_id: &request.session_id,
                         product_mcp_id: &request.product_mcp_id,
                     },
-                )?
+                )
             }
-        };
-        Ok(if valid {
-            ProductMcpTokenValidation::Valid
-        } else {
-            ProductMcpTokenValidation::Invalid
-        })
+        }
     }
 }
 
@@ -106,7 +104,7 @@ mod tests {
                 &request,
             )
             .expect("validate product header"),
-            ProductMcpTokenValidation::Valid,
+            McpCapabilityTokenValidation::Valid,
         );
 
         let wrong_scope_request =
@@ -119,7 +117,47 @@ mod tests {
                 &wrong_scope_request,
             )
             .expect("reject wrong scope"),
-            ProductMcpTokenValidation::Invalid,
+            McpCapabilityTokenValidation::ScopeMismatch,
+        );
+
+        let _ = std::fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn expired_tokens_report_expired_not_invalid() {
+        let home = runtime_home("expired");
+        let auth = ProductMcpAuth::new(
+            home.clone(),
+            "test-product.key",
+            McpCapabilityTokenSignature::HmacSha256,
+            "reviews",
+        );
+        // Same secret file and product id, negative TTL: an authentic token
+        // that is already past its expiry the moment it is minted.
+        let expired_issuer = McpCapabilityTokenIssuer::new(
+            home.clone(),
+            "test-product.key",
+            McpCapabilityTokenSignature::HmacSha256,
+            -60,
+        );
+        let expired_token = expired_issuer
+            .mint_product_mcp_token(ProductMcpCapabilityScope {
+                workspace_id: "workspace-1",
+                session_id: "session-1",
+                product_mcp_id: "reviews",
+            })
+            .expect("mint expired product token");
+        let request = ProductMcpRequestContext::new("workspace-1", "session-1", "reviews");
+
+        assert_eq!(
+            auth.validate_capability_header(
+                ProductMcpAuthHeader::Product {
+                    value: &expired_token,
+                },
+                &request,
+            )
+            .expect("validate expired header"),
+            McpCapabilityTokenValidation::Expired,
         );
 
         let _ = std::fs::remove_dir_all(home);

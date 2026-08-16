@@ -269,7 +269,11 @@ artifact_namespace
 
 Runtime bearer auth proves the HTTP caller can access protected AnyHarness
 routes. The product MCP capability token proves the MCP call was minted for a
-specific workspace/session/product capability.
+specific workspace/session/product capability. The token's expiry is
+defense-in-depth only: because the header is static for the life of the
+session, the shared endpoint accepts an expired-but-authentic token while the
+bound session is still open, and rejects with `403` plus a cause-naming body
+(never `401`, which triggers MCP client OAuth discovery) once it is not.
 
 ### `context.rs`
 

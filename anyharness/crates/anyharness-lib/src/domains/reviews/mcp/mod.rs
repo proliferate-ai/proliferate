@@ -12,9 +12,10 @@ use serde_json::Value;
 use self::auth::ReviewMcpAuth;
 use self::context::ReviewMcpContext;
 use crate::domains::reviews::runtime::ReviewRuntime;
+use crate::integrations::mcp::capability_token::McpCapabilityTokenValidation;
 use crate::integrations::mcp::product_server::{
     ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDefinition, ProductMcpRequestContext,
-    ProductMcpServer, ProductMcpTokenValidation,
+    ProductMcpServer,
 };
 
 #[derive(Clone)]
@@ -41,7 +42,7 @@ impl ProductMcpServer for ReviewProductMcpServer {
         &self,
         header: ProductMcpAuthHeader<'_>,
         request: &ProductMcpRequestContext,
-    ) -> anyhow::Result<ProductMcpTokenValidation> {
+    ) -> anyhow::Result<McpCapabilityTokenValidation> {
         self.auth.validate_capability_header(header, request)
     }
 
