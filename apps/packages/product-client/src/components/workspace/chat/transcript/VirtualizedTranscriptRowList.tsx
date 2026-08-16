@@ -336,18 +336,14 @@ export function VirtualizedTranscriptRowList({
   ]);
 
   // Q12 (rung 4): ONE content ResizeObserver drives the single per-frame snap
-  // pass. Row content grows between virtualizer measurements (tool-call output
-  // streaming, status flips, expanding panels, the assistant reveal's height
-  // growth — Q7); on any size change we request the one frame pass, which the
-  // pipeline coalesces with every other mutation source into exactly one snap
-  // (pinned) or compensation (unpinned) write per frame, so no independent loop
-  // can interleave. With useAnimationFrameWithResizeObserver:false the
-  // virtualizer already re-measures synchronously through its own element
-  // observation (no one-frame deferral), so measurement and this snap land in
-  // the same frame WITHOUT a second measure() call here — a manual measure()
-  // inside this callback would race the prepend anchor restore's scrollTop write
-  // and provoke ResizeObserver-loop churn. This replaces the previous bridge
-  // observer that wrote scrollTop directly.
+  // pass. Row content grows between virtualizer measurements (streaming, status
+  // flips, expanding panels, the reveal's growth — Q7); on any size change we
+  // request the one frame pass, which the pipeline coalesces into exactly one
+  // snap (pinned) or compensation (unpinned) write per frame. With
+  // useAnimationFrameWithResizeObserver:false the virtualizer re-measures
+  // synchronously, so measurement and this snap land in the same frame WITHOUT a
+  // second measure() here — a manual measure() would race the prepend anchor
+  // restore's scrollTop write and provoke ResizeObserver-loop churn.
   useEffect(() => {
     const content = contentRef.current;
     if (!content) {
