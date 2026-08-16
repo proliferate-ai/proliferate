@@ -20,6 +20,7 @@ import { VirtualTranscriptViewport } from "./VirtualTranscriptViewport";
 import { PREPEND_BLANK_FALLBACK_GRACE_MS, useTranscriptVirtualizerBlankFallback } from "#product/hooks/chat/ui/use-transcript-virtualizer-blank-fallback";
 import { useTranscriptVirtualAnchorCapture } from "#product/hooks/chat/ui/use-transcript-virtual-anchor-capture";
 import { useTranscriptVirtualMeasurementModel } from "#product/hooks/chat/ui/use-transcript-virtual-measurement-model";
+import { useTranscriptReadingPosition } from "#product/hooks/chat/ui/use-transcript-reading-position";
 
 const VIRTUALIZER_OVERSCAN = 8;
 
@@ -123,6 +124,12 @@ export function VirtualizedTranscriptRowList({
     // proven measurement cadence; the owned content ResizeObserver still routes
     // every growth through the one frame pipeline at zero RO-loop cost.
     useAnimationFrameWithResizeObserver: true,
+  });
+  const { captureReadingPosition, buildSessionRestorePlan } = useTranscriptReadingPosition({
+    sessionKey: `${selectedWorkspaceId ?? ""}:${activeSessionId}`,
+    isSessionBusy,
+    virtualizer,
+    renderableRows,
   });
   const pendingAnchorRef = useTranscriptVirtualAnchorCapture({
     getVirtualItems: () => virtualizer.getVirtualItems(),
@@ -230,8 +237,10 @@ export function VirtualizedTranscriptRowList({
 
   const handleViewportScroll = useCallback((viewport: HTMLDivElement) => {
     onViewportScroll(viewport);
+    captureReadingPosition(viewport); // FR-2: persist for a later finalized revisit.
     maybeLoadOlderHistory(viewport, "scroll");
   }, [
+    captureReadingPosition,
     maybeLoadOlderHistory,
     onViewportScroll,
   ]);
@@ -241,8 +250,8 @@ export function VirtualizedTranscriptRowList({
     pendingPrependAnchorRef.current = null;
     lastOlderHistoryCursorRequestRef.current = null;
     lastPrefetchDecisionLogRef.current = null;
-    resetForSession();
-  }, [activeSessionId, resetForSession, selectedWorkspaceId]);
+    resetForSession(buildSessionRestorePlan()); // FR-2: restore finalized / bottom-pin streaming.
+  }, [activeSessionId, buildSessionRestorePlan, resetForSession, selectedWorkspaceId]);
 
   useLayoutEffect(() => {
     const anchor = pendingPrependAnchorRef.current;
