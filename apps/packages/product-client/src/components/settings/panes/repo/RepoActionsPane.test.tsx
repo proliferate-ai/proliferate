@@ -85,7 +85,7 @@ function renderLocalActions() {
     <RepoActionsPane
       repository={repository}
       context="local"
-      cloudEnabled={false}
+      controlPlaneReachable={false}
       cloudActive={false}
       cloudSignInChecking={false}
       cloudSignInAvailable={false}

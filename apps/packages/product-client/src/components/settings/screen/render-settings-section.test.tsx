@@ -43,7 +43,7 @@ vi.mock("#product/components/settings/panes/CloudAuthUnavailablePane", () => ({
 }));
 
 interface AvailabilityShape {
-  cloudEnabled: boolean;
+  controlPlaneReachable: boolean;
   cloudActive: boolean;
   cloudSignInChecking: boolean;
   cloudSignInAvailable: boolean;
@@ -53,7 +53,7 @@ interface AvailabilityShape {
 
 const availability = vi.hoisted(() => ({
   value: {
-    cloudEnabled: true,
+    controlPlaneReachable: true,
     cloudActive: false,
     cloudSignInChecking: false,
     cloudSignInAvailable: true,
@@ -86,14 +86,14 @@ const noop = () => {};
 
 function renderSection(
   section: SettingsSection,
-  opts: { cloudEnabled: boolean; authenticated: boolean },
+  opts: { controlPlaneReachable: boolean; authenticated: boolean },
 ) {
   return render(
     <>
       {renderSettingsSection(
         section,
         repoSelection,
-        opts.cloudEnabled,
+        opts.controlPlaneReachable,
         // cloudActive threads the compute-inclusive signal; the fix makes the
         // control-plane sections ignore it. Force it false so any regression
         // that re-couples them to compute would gate.
@@ -114,7 +114,7 @@ function renderSection(
 afterEach(() => {
   cleanup();
   availability.value = {
-    cloudEnabled: true,
+    controlPlaneReachable: true,
     cloudActive: false,
     cloudSignInChecking: false,
     cloudSignInAvailable: true,
@@ -130,7 +130,7 @@ describe("renderSettingsSection control-plane gating (PRO-10)", () => {
     availability.value.cloudComputeEnabled = false;
     availability.value.authStatus = "authenticated";
     for (const { section, marker } of CONTROL_PLANE_SECTIONS) {
-      renderSection(section, { cloudEnabled: true, authenticated: true });
+      renderSection(section, { controlPlaneReachable: true, authenticated: true });
       expect(screen.queryByText(marker)).not.toBeNull();
       expect(screen.queryByText("gate:not-configured")).toBeNull();
       expect(screen.queryByText("gate:sign-in-required")).toBeNull();
@@ -140,10 +140,10 @@ describe("renderSettingsSection control-plane gating (PRO-10)", () => {
   });
 
   it("gates every control-plane section behind the unreachable pane when the control plane is unreachable", () => {
-    availability.value.cloudEnabled = false;
+    availability.value.controlPlaneReachable = false;
     availability.value.authStatus = "authenticated";
     for (const { section, marker } of CONTROL_PLANE_SECTIONS) {
-      renderSection(section, { cloudEnabled: false, authenticated: true });
+      renderSection(section, { controlPlaneReachable: false, authenticated: true });
       expect(screen.queryByText(marker)).toBeNull();
       expect(screen.queryByText("gate:unavailable")).not.toBeNull();
       cleanup();
@@ -154,7 +154,7 @@ describe("renderSettingsSection control-plane gating (PRO-10)", () => {
     availability.value.authStatus = "anonymous";
     availability.value.cloudSignInAvailable = true;
     for (const { section, marker } of CONTROL_PLANE_SECTIONS) {
-      renderSection(section, { cloudEnabled: true, authenticated: false });
+      renderSection(section, { controlPlaneReachable: true, authenticated: false });
       expect(screen.queryByText(marker)).toBeNull();
       expect(screen.queryByText("gate:sign-in-required")).not.toBeNull();
       cleanup();

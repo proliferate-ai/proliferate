@@ -70,14 +70,14 @@ export function DesktopProductHostProvider({
   const deployment = useMemo(() => createDesktopDeployment(), []);
   const apiBaseUrl = deployment.apiBaseUrl;
 
-  const { cloudEnabled } = useAppCapabilitiesFor(apiBaseUrl);
+  const { controlPlaneReachable } = useAppCapabilitiesFor(apiBaseUrl);
   const { data: authMethods } = useDesktopAuthMethodsFor(apiBaseUrl);
   const { data: githubAvailability } = useGitHubDesktopAuthAvailabilityFor(apiBaseUrl);
-  const { data: ssoDiscovery } = useSsoDiscoveryFor(apiBaseUrl, { enabled: cloudEnabled });
+  const { data: ssoDiscovery } = useSsoDiscoveryFor(apiBaseUrl, { enabled: controlPlaneReachable });
 
-  const passwordAvailable = cloudEnabled && authMethods?.passwordLogin === true;
-  const githubAvailable = cloudEnabled && githubAvailability?.enabled === true;
-  const ssoAvailable = cloudEnabled && ssoDiscovery?.enabled === true;
+  const passwordAvailable = controlPlaneReachable && authMethods?.passwordLogin === true;
+  const githubAvailable = controlPlaneReachable && githubAvailability?.enabled === true;
+  const ssoAvailable = controlPlaneReachable && ssoDiscovery?.enabled === true;
 
   const methods = useMemo(
     () =>

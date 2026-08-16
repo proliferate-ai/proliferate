@@ -15,7 +15,7 @@ vi.mock("#product/hooks/auth/facade/use-product-auth", () => ({
 
 vi.mock("#product/hooks/capabilities/derived/use-app-capabilities", () => ({
   useAppCapabilities: () => ({
-    cloudEnabled: true,
+    controlPlaneReachable: true,
     cloudComputeEnabled: true,
   }),
 }));

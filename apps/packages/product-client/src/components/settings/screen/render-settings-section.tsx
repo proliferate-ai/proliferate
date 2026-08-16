@@ -40,7 +40,7 @@ function renderCloudGatedPane(flags: CloudGateFlags, pane: () => ReactNode): Rea
 export function renderSettingsSection(
   activeSection: SettingsSection,
   repoSelection: RepoScopeSelection,
-  cloudEnabled: boolean,
+  controlPlaneReachable: boolean,
   cloudActive: boolean,
   cloudSignInChecking: boolean,
   cloudSignInAvailable: boolean,
@@ -57,10 +57,10 @@ export function renderSettingsSection(
   // integrations, SSO, and model policy — which must stay available whenever the
   // control plane is reachable and the user is authenticated, independent of
   // `cloudComputeEnabled`. CloudGuard renders children when its `cloudActive` is
-  // true (and still shows CloudUnavailablePane when `cloudEnabled` is false), so
+  // true (and still shows CloudUnavailablePane when `controlPlaneReachable` is false), so
   // feed it the authentication signal instead of the compute one.
   const authGate: CloudGateFlags = {
-    cloudEnabled,
+    controlPlaneReachable,
     cloudActive: authenticated,
     cloudSignInChecking,
     cloudSignInAvailable,
@@ -121,7 +121,7 @@ export function renderSettingsSection(
       <RepoActionsPane
         repository={repoSelection.repository}
         context={repoSelection.context}
-        cloudEnabled={cloudEnabled}
+        controlPlaneReachable={controlPlaneReachable}
         cloudActive={cloudActive}
         cloudSignInChecking={cloudSignInChecking}
         cloudSignInAvailable={cloudSignInAvailable}
@@ -135,7 +135,7 @@ export function renderSettingsSection(
       <RepoEnvironmentPane
         repository={repoSelection.repository}
         context={repoSelection.context}
-        cloudEnabled={cloudEnabled}
+        controlPlaneReachable={controlPlaneReachable}
         cloudActive={cloudActive}
         cloudSignInChecking={cloudSignInChecking}
         cloudSignInAvailable={cloudSignInAvailable}
@@ -149,7 +149,7 @@ export function renderSettingsSection(
     <RepoConfigurePane
       repository={repoSelection.repository}
       context={repoSelection.context}
-      cloudEnabled={cloudEnabled}
+      controlPlaneReachable={controlPlaneReachable}
       cloudActive={cloudActive}
       cloudSignInChecking={cloudSignInChecking}
       cloudSignInAvailable={cloudSignInAvailable}

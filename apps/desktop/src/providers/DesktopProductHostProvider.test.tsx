@@ -19,7 +19,7 @@ const h = vi.hoisted(() => ({
     linkGoogle: vi.fn(),
   },
   deps: {},
-  cloudEnabled: true,
+  controlPlaneReachable: true,
   authMethods: { passwordLogin: true, github: true } as unknown,
   github: { enabled: true, clientId: null } as unknown,
   sso: { enabled: true } as unknown,
@@ -41,7 +41,7 @@ vi.mock("@/hooks/auth/workflows/use-auth-orchestration-effects", () => ({
 vi.mock("@proliferate/product-client/internal/hooks/capabilities/derived/use-app-capabilities", () => ({
   // The provider consumes the `*For` variant (explicit deployment base URL)
   // because it builds the host and cannot read it back through useProductHost.
-  useAppCapabilitiesFor: () => ({ cloudEnabled: h.cloudEnabled }),
+  useAppCapabilitiesFor: () => ({ controlPlaneReachable: h.controlPlaneReachable }),
 }));
 vi.mock("@proliferate/product-client/internal/hooks/access/cloud/auth/use-auth-methods", () => ({
   useDesktopAuthMethodsFor: () => ({ data: h.authMethods }),
@@ -116,7 +116,7 @@ const AUTH_USER = {
 };
 
 beforeEach(() => {
-  h.cloudEnabled = true;
+  h.controlPlaneReachable = true;
   h.authMethods = { passwordLogin: true, github: true };
   h.github = { enabled: true, clientId: null };
   h.sso = { enabled: true };

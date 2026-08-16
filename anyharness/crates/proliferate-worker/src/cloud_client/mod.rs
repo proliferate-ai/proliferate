@@ -61,6 +61,12 @@ pub struct HeartbeatRequest {
     pub worker_version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub anyharness_version: Option<String>,
+    // Telemetry only (Update Flow ADR, FR-1): last-observed agent catalog
+    // version, polled from the runtime's own read-only
+    // `GET /v1/catalogs/agents/version` each tick. Never desired state —
+    // there is no ack field that ever tells the runtime to change this.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub catalog_version: Option<String>,
 }
 
 /// Component versions the server pins; self-managed workers converge onto
@@ -553,11 +559,25 @@ mod tests {
             status: Some("online".to_string()),
             worker_version: Some("0.1.0".to_string()),
             anyharness_version: None,
+            catalog_version: None,
         };
         let value = serde_json::to_value(&request).expect("serialize heartbeat request");
         assert_eq!(value["status"], "online");
         assert_eq!(value["workerVersion"], "0.1.0");
         // Absent versions are omitted entirely, not sent as null.
         assert!(value.get("anyharnessVersion").is_none());
+        assert!(value.get("catalogVersion").is_none());
+    }
+
+    #[test]
+    fn heartbeat_request_serializes_catalog_version_when_present() {
+        let request = super::HeartbeatRequest {
+            status: Some("online".to_string()),
+            worker_version: Some("0.1.0".to_string()),
+            anyharness_version: None,
+            catalog_version: Some("2026.08.15-1".to_string()),
+        };
+        let value = serde_json::to_value(&request).expect("serialize heartbeat request");
+        assert_eq!(value["catalogVersion"], "2026.08.15-1");
     }
 }
