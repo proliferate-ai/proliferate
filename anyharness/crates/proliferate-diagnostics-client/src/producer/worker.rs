@@ -474,7 +474,7 @@ async fn finish_ingest(
         }
     }
     if let Some(generation) = delivery_ended_generation {
-        super::warn_delivery_ended(generation);
+        super::delivery_log::warn_delivery_ended(generation);
     }
     if let Some((records, deadline)) = fallback {
         route_fallback(inner, records, deadline).await;

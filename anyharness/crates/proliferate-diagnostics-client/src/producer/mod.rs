@@ -17,6 +17,7 @@ use crate::{
 mod admission;
 #[cfg(unix)]
 mod bridge_runtime;
+mod delivery_log;
 mod emit;
 mod fallback_runtime;
 pub(crate) mod record;
@@ -139,32 +140,6 @@ pub(crate) struct AdmissionState {
     pending_loss_range: PendingLossRange,
     open_loss_snapshot: Option<LossSnapshot>,
     delivery_end_warned_generation: Option<u64>,
-}
-
-impl AdmissionState {
-    /// One-shot per generation: several sites can observe the same dead
-    /// generation (a bridge notice, a boot-mismatched receipt, retries), but
-    /// the loud delivery-end warning fires once.
-    pub(crate) fn note_delivery_ended(&mut self, generation: u64) -> bool {
-        if self.delivery_end_warned_generation == Some(generation) {
-            return false;
-        }
-        self.delivery_end_warned_generation = Some(generation);
-        true
-    }
-}
-
-/// The 2026-08-15 outage counted loss for 10.5h without one line in the
-/// runtime's own log; every latch into `Unavailable` now says so out loud.
-/// WARN is re-ingested by the tracing layer, which is acceptable: the caller
-/// guards with `note_delivery_ended` and the pipe being described is already
-/// dead.
-pub(crate) fn warn_delivery_ended(generation: u64) {
-    tracing::warn!(
-        target: "anyharness.diagnostics.delivery",
-        generation,
-        "diagnostics delivery ended: collector generation gone; records count as loss until re-attach"
-    );
 }
 
 pub(crate) enum CollectorAvailability {
@@ -416,71 +391,6 @@ impl ProducerInner {
             delivery_fence_eligible: state.delivery_fence_eligible,
             last_failure: state.last_failure,
         }
-    }
-
-    #[cfg(unix)]
-    pub(crate) fn replace_generation(
-        &self,
-        generation: crate::bridge::activation::CollectorGenerationHandle,
-    ) {
-        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-        let current = match &state.collector {
-            CollectorAvailability::Ready(current)
-            | CollectorAvailability::Cooldown {
-                generation: current,
-                ..
-            } => current.generation,
-            CollectorAvailability::Unavailable { generation } => *generation,
-        };
-        if generation.generation <= current {
-            return;
-        }
-        for record in &mut state.queue {
-            record.fallback_reason = Some(FallbackReason::GenerationChanged);
-        }
-        if !state.in_flight.is_empty() {
-            state.delivery_fence_eligible = false;
-        }
-        let generation_number = generation.generation;
-        state.collector = CollectorAvailability::Ready(Arc::new(generation));
-        drop(state);
-        // The canonical re-attach line, mirroring `warn_delivery_ended`; call
-        // sites must not log their own copy.
-        tracing::info!(
-            target: "anyharness.diagnostics.delivery",
-            generation = generation_number,
-            "diagnostics delivery re-attached: collector generation ready"
-        );
-        self.notify.notify_one();
-    }
-
-    #[cfg(unix)]
-    pub(crate) fn mark_generation_unavailable(&self, generation: u64) {
-        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-        let current = match &state.collector {
-            CollectorAvailability::Ready(current)
-            | CollectorAvailability::Cooldown {
-                generation: current,
-                ..
-            } => current.generation,
-            CollectorAvailability::Unavailable { generation } => *generation,
-        };
-        if generation <= current {
-            return;
-        }
-        for record in &mut state.queue {
-            record.fallback_reason = Some(FallbackReason::GenerationChanged);
-        }
-        state.collector = CollectorAvailability::Unavailable { generation };
-        if !state.in_flight.is_empty() {
-            state.delivery_fence_eligible = false;
-        }
-        let warn = state.note_delivery_ended(generation);
-        drop(state);
-        if warn {
-            warn_delivery_ended(generation);
-        }
-        self.notify.notify_one();
     }
 
     #[cfg(unix)]

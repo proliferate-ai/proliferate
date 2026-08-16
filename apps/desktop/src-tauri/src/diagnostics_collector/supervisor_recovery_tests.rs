@@ -232,7 +232,7 @@ async fn stop_of_an_already_exited_child_records_the_death_certificate() {
 fn death_certificate_distinguishes_clean_exit_from_signal() {
     use std::os::unix::process::ExitStatusExt;
 
-    let clean = super::lifecycle::CollectorDeathCertificate::new(
+    let clean = super::death_certificate::CollectorDeathCertificate::new(
         "child_exited",
         Some(std::process::ExitStatus::from_raw(0)),
     );
@@ -243,7 +243,7 @@ fn death_certificate_distinguishes_clean_exit_from_signal() {
     );
     assert_eq!(argument(&clean_record, "signal"), None);
 
-    let signalled = super::lifecycle::CollectorDeathCertificate::new(
+    let signalled = super::death_certificate::CollectorDeathCertificate::new(
         "child_exited",
         Some(std::process::ExitStatus::from_raw(libc::SIGKILL)),
     );
@@ -254,7 +254,7 @@ fn death_certificate_distinguishes_clean_exit_from_signal() {
         Some(ArgumentValueV1::Integer(i64::from(libc::SIGKILL)))
     );
 
-    let uninspected = super::lifecycle::CollectorDeathCertificate::new("health_unavailable", None);
+    let uninspected = super::death_certificate::CollectorDeathCertificate::new("health_unavailable", None);
     let uninspected_record = certificate_record(uninspected);
     assert_eq!(
         argument(&uninspected_record, "trigger"),
@@ -267,7 +267,7 @@ fn death_certificate_distinguishes_clean_exit_from_signal() {
 /// Runs a certificate through the real producer admission path so the
 /// arguments asserted on are the ones a stored record would carry.
 fn certificate_record(
-    certificate: super::lifecycle::CollectorDeathCertificate,
+    certificate: super::death_certificate::CollectorDeathCertificate,
 ) -> ProducerRecordV1 {
     let root = std::env::temp_dir().join(format!("certificate-args-{}", uuid::Uuid::new_v4()));
     let fallback = FallbackDiagnosticsWriter::open_for_test(root.join("desktop-native.log"))
