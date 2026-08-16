@@ -3033,6 +3033,14 @@ export interface components {
             status: components["schemas"]["ForkChildStartStatus"];
         };
         ForkSessionRequest: {
+            /**
+             * @description Forks ADR rung 2: optional caller-reserved child session id. When set it
+             *     is both the child's durable id and the fork operation's idempotency key,
+             *     so repeating the request with the same payload resumes/returns the same
+             *     child. An `Idempotency-Key` header serves the same role when this is
+             *     absent.
+             */
+            childSessionId?: string | null;
             target?: null | components["schemas"]["ForkSessionTarget"];
         };
         ForkSessionResponse: {

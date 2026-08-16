@@ -82,10 +82,7 @@ impl SessionRuntime {
             .find_fork_operation_by_key(&idempotency_key)
             .map_err(ForkSessionError::Internal)?
         {
-            if existing.request_digest != request_digest {
-                return Err(ForkSessionError::IdempotencyConflict);
-            }
-            return self.resume_fork_operation(&existing);
+            return self.reconcile_existing_fork_operation(&existing, &request_digest);
         }
 
         // Resolve and record the boundary. A resolved target never silently
@@ -179,10 +176,23 @@ impl SessionRuntime {
             created_at: now.clone(),
             updated_at: now.clone(),
         };
-        self.session_service
-            .store()
-            .insert_fork_operation(&operation)
-            .map_err(ForkSessionError::Internal)?;
+        // find-then-insert has a TOCTOU window (near-unreachable behind the
+        // per-session fork lease): a concurrent request with the same key may
+        // have inserted the row after our lookup. The UNIQUE constraint on
+        // `idempotency_key`/`child_session_id` is the real guard — on a
+        // constraint failure, re-read the winner and reconcile it (same-payload
+        // resume, different-payload IDEMPOTENCY_CONFLICT) rather than 500.
+        if let Err(error) = self.session_service.store().insert_fork_operation(&operation) {
+            if let Some(existing) = self
+                .session_service
+                .store()
+                .find_fork_operation_by_key(&idempotency_key)
+                .map_err(ForkSessionError::Internal)?
+            {
+                return self.reconcile_existing_fork_operation(&existing, &operation.request_digest);
+            }
+            return Err(ForkSessionError::Internal(error));
+        }
 
         // Must stay in lockstep with the resume-side strategy: a child forked on
         // the child actor (process-local fork id) is the one that can later land
@@ -410,6 +420,21 @@ impl SessionRuntime {
             LiveSessionCommandError::Rejected(_) => ForkOperationPhase::Failed,
         };
         self.mark_fork_phase(operation_id, phase, now);
+    }
+
+    /// Reconcile a fork operation that already exists under this idempotency
+    /// key: a different canonical payload is an `IDEMPOTENCY_CONFLICT`; the same
+    /// payload resumes. Shared by the initial lookup and the insert-time
+    /// UNIQUE-constraint TOCTOU fallback so both honor identical semantics.
+    fn reconcile_existing_fork_operation(
+        &self,
+        existing: &ForkOperationRecord,
+        request_digest: &str,
+    ) -> Result<ForkSessionOutcome, ForkSessionError> {
+        if existing.request_digest != request_digest {
+            return Err(ForkSessionError::IdempotencyConflict);
+        }
+        self.resume_fork_operation(existing)
     }
 
     /// Resume an existing fork operation found by idempotency key (same payload).
