@@ -32,6 +32,13 @@ import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-d
  * Poll the enrollment while it has not reached `synced` so the pending→synced
  * transition is actually observed (there is no server push channel). Stops the
  * moment the enrollment is synced.
+ *
+ * Named exception (does not sit on the `cadence` scale): 10s falls strictly
+ * between `cadence.standardMs` (5s) and `cadence.relaxedMs` (15s). Snapping
+ * down to standard would tighten (forbidden); snapping up to relaxed would
+ * delay the pending→synced transition that gates whether local agent auth is
+ * usable by 50% longer. Kept as its own named constant (UX Latency +
+ * Transitions ADR §4.7, Rung 6, Q8).
  */
 const ENROLLMENT_SYNC_POLL_MS = 10_000;
 

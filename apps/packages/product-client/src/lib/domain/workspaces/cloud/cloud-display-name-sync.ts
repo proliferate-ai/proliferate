@@ -1,3 +1,12 @@
+// Named exception (does not sit on the `cadence` scale): 2s falls strictly
+// between `cadence.fastMs` (1s) and `cadence.standardMs` (5s). This retries a
+// silent background backfill of a blank cloud workspace's display name;
+// snapping down to fast would tighten (forbidden), and snapping up to
+// standard would leave a freshly created workspace showing a blank name for
+// noticeably longer in the sidebar/header — the exact visible-staleness
+// surface the ADR calls out for this class of sync, even though the user
+// isn't actively watching this particular retry loop resolve (UX Latency +
+// Transitions ADR §4.7, Rung 6, Q8).
 export const CLOUD_DISPLAY_NAME_SYNC_RETRY_INTERVAL_MS = 2_000;
 
 export interface CloudDisplayNameSyncState {

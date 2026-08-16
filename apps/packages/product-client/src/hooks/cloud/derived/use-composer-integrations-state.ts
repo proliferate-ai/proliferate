@@ -9,7 +9,19 @@ import {
 
 export type { ComposerIntegrationsModel };
 
-/** Quiet background cadence: integration health is not urgent enough to poll aggressively. */
+/**
+ * Quiet background cadence: integration health is not urgent enough to poll
+ * aggressively.
+ *
+ * Named exception (does not sit on the `cadence` scale): 5 minutes is longer
+ * than even `cadence.slowMs` (60s), the scale's largest token — the same
+ * shape as `CLOUD_AGENT_CATALOG_STALE_MS`. Integration health (connected /
+ * degraded / disconnected) changes on the order of a provider outage or a
+ * user revoking access, not per-session, and `refetchOnWindowFocus` already
+ * covers the case where the user returns to a stale tab, so a stale time an
+ * order of magnitude beyond `slow` is intentional (UX Latency + Transitions
+ * ADR §4.7, Rung 6, Q8).
+ */
 const HEALTH_REFRESH_INTERVAL_MS = 5 * 60_000;
 
 /**
