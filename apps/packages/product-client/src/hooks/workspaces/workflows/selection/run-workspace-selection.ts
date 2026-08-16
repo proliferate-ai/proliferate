@@ -31,7 +31,10 @@ import { cancelLatencyFlow } from "#product/lib/infra/measurement/measurement-po
 import { isCloudWorkspaceNotReadyError } from "#product/hooks/access/cloud/use-cloud-workspace-connection";
 import { resolveCloudWorkspaceReadiness } from "#product/hooks/workspaces/workflows/selection/cloud-readiness";
 import { resolveSelectionConnection } from "#product/hooks/workspaces/workflows/selection/connection";
-import { isWorkspaceSelectionCurrent } from "#product/hooks/workspaces/workflows/selection/guards";
+import {
+  currentWorkspaceSelectionSignal,
+  isWorkspaceSelectionCurrent,
+} from "#product/hooks/workspaces/workflows/selection/guards";
 import {
   prepareOptimisticWorkspaceSessionShell,
   resolveInitialActiveSessionId,
@@ -117,6 +120,7 @@ export async function runWorkspaceSelection(
         selectionNonce: useSessionSelectionStore.getState().workspaceSelectionNonce,
         selectionStartedAt,
         cloudWorkspaceId: null,
+        abortSignal: currentWorkspaceSelectionSignal(),
       };
       if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
         cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
@@ -137,6 +141,7 @@ export async function runWorkspaceSelection(
         latencyFlowId: request.options?.latencyFlowId,
         forceSessionDirectoryRefresh: request.options?.forceSessionDirectoryRefresh,
         isCurrent: () => isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce),
+        signal: context.abortSignal,
       });
       if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
         cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
@@ -223,6 +228,7 @@ export async function runWorkspaceSelection(
         selectionNonce: useSessionSelectionStore.getState().workspaceSelectionNonce,
         selectionStartedAt,
         cloudWorkspaceId: null,
+        abortSignal: currentWorkspaceSelectionSignal(),
       };
       if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
         cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
@@ -243,6 +249,7 @@ export async function runWorkspaceSelection(
         latencyFlowId: request.options?.latencyFlowId,
         forceSessionDirectoryRefresh: request.options?.forceSessionDirectoryRefresh,
         isCurrent: () => isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce),
+        signal: context.abortSignal,
       });
       if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
         cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
@@ -316,6 +323,7 @@ export async function runWorkspaceSelection(
     selectionNonce: useSessionSelectionStore.getState().workspaceSelectionNonce,
     selectionStartedAt,
     cloudWorkspaceId: null,
+    abortSignal: currentWorkspaceSelectionSignal(),
   };
 
   const cloudReadiness = await resolveCloudWorkspaceReadiness(baseContext);
@@ -373,6 +381,7 @@ export async function runWorkspaceSelection(
     latencyFlowId: request.options?.latencyFlowId,
     forceSessionDirectoryRefresh: request.options?.forceSessionDirectoryRefresh,
     isCurrent: () => isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce),
+    signal: context.abortSignal,
   });
   if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
     cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");

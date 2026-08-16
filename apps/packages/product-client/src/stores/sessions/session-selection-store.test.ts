@@ -175,6 +175,31 @@ describe("session selection store invariants", () => {
     });
   });
 
+  it("aborts the prior selection controller and mints a fresh one on every nonce bump", () => {
+    // UX Latency ADR §4.6, Rung 9 (Q11): the selection abort controller is the
+    // single source of truth for selection staleness. Each nonce-bumping
+    // activation must abort the outgoing selection's signal (cancelling its
+    // in-flight requests) and install a live controller for the incoming one.
+    const initial = new AbortController();
+    useSessionSelectionStore.setState({ workspaceSelectionAbort: initial });
+
+    useSessionSelectionStore.getState().activateWorkspace({
+      logicalWorkspaceId: "logical-a",
+      workspaceId: "workspace-a",
+    });
+    const afterA = useSessionSelectionStore.getState().workspaceSelectionAbort;
+    expect(initial.signal.aborted).toBe(true);
+    expect(afterA).not.toBe(initial);
+    expect(afterA.signal.aborted).toBe(false);
+
+    useSessionSelectionStore.getState().activateHotWorkspace({
+      logicalWorkspaceId: "logical-b",
+      workspaceId: "workspace-b",
+    });
+    expect(afterA.signal.aborted).toBe(true);
+    expect(useSessionSelectionStore.getState().workspaceSelectionAbort.signal.aborted).toBe(false);
+  });
+
   it("clears hot paint gates only for the matching nonce", () => {
     useSessionSelectionStore.setState({
       hotPaintGate: hotGate({ nonce: 12 }),
