@@ -42,6 +42,12 @@ const desktopSrc = fileURLToPath(new URL("../../desktop/src", import.meta.url));
 // states, instead of making a build a precondition for running one file.
 const hostDir = fileURLToPath(new URL("./src/host", import.meta.url));
 
+// The retained Desktop measurement engine injected by `vitest.setup.ts`
+// reaches the diagnostics port back through the sibling
+// `@proliferate/product-client/internal/*` subpath, which is mapped to
+// source for the same reason (see the alias above).
+const internalDir = srcDir;
+
 export default defineConfig({
   resolve: {
     // Force a single React instance across the package boundary. Without this,
@@ -52,6 +58,7 @@ export default defineConfig({
     alias: [
       { find: /^#product\//, replacement: `${srcDir}/` },
       { find: /^@proliferate\/product-client\/host\//, replacement: `${hostDir}/` },
+      { find: /^@proliferate\/product-client\/internal\//, replacement: `${internalDir}/` },
       { find: /^@anyharness\/sdk-react$/, replacement: anyharnessSdkReact },
       { find: /^@anyharness\/sdk$/, replacement: anyharnessSdk },
       { find: /^@\//, replacement: `${desktopSrc}/` },
