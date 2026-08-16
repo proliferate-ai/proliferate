@@ -101,45 +101,37 @@ fn argument_text(value: &serde_json::Value) -> String {
 
 /// The fixed context-doc preamble, varied only by node type (advance
 /// semantics differ). Logged per node via the stored envelope; keep changes
-/// deliberate — this text is what every workflow agent is told. It is
-/// markdown on purpose: the transcript renders it, so structure the agent
-/// parses is the same structure the human reads (single newlines would
-/// collapse into one run-on paragraph).
+/// deliberate — this text is what every workflow agent is told.
 fn preamble(node_type: WorkflowNodeType, context_dir: &Path, docs: &[WorkflowRunDocRecord]) -> String {
-    let mut text = format!(
-        "You are one node in a multi-step workflow.\n\
-         \n\
-         ## Shared context documents\n\
-         \n\
-         Shared documents for this run live in one flat folder:\n\
-         \n\
-         {}\n\
-         \n\
-         - Files are named NN-slug.md, where NN is the position of the workflow step \
-         that produces the document.\n\
-         - Read them freely for context and write to the ones your step produces.\n\
-         - Keep documents legible plain markdown: someone who has never seen this \
-         workflow should understand what happened from the documents alone.\n\
-         - Prefer evidence over prose. Do not add frontmatter or machine metadata.\n",
-        context_dir.display()
+    let mut text = String::new();
+    text.push_str(
+        "You are one node in a multi-step workflow. Shared context documents for this \
+         run live in one flat folder:\n",
+    );
+    text.push_str(&format!("  {}\n", context_dir.display()));
+    text.push_str(
+        "Files are named NN-slug.md, where NN is the position of the workflow step that \
+         produces the document. Read them freely for context and write to the ones your \
+         step produces. Keep documents legible plain markdown: someone who has never seen \
+         this workflow should understand what happened from the documents alone. Prefer \
+         evidence over prose. Do not add frontmatter or machine metadata.\n",
     );
     if !docs.is_empty() {
-        text.push_str("\nThis run's documents:\n\n");
+        text.push_str("This run's documents:\n");
         for doc in docs {
-            text.push_str(&format!("- {}\n", context_dir.join(&doc.filename).display()));
+            text.push_str(&format!("  - {}\n", context_dir.join(&doc.filename).display()));
         }
     }
-    text.push_str("\n## Your step\n\n");
-    text.push_str(match node_type {
-        WorkflowNodeType::Agent => {
+    match node_type {
+        WorkflowNodeType::Agent => text.push_str(
             "Your step completes when this turn ends. Finish the job in this turn; never \
              stop to ask questions. Do only this step's work — do not proceed into later \
-             steps' work."
-        }
-        WorkflowNodeType::HumanInLoop => {
+             steps' work.",
+        ),
+        WorkflowNodeType::HumanInLoop => text.push_str(
             "A human reviews your work before the workflow advances. Ending with open \
-             questions or partial work is fine — surface what the reviewer should look at."
-        }
-    });
+             questions or partial work is fine — surface what the reviewer should look at.",
+        ),
+    }
     text
 }

@@ -28,9 +28,6 @@ mod definition_tests;
 #[path = "materialize_tests.rs"]
 mod materialize_tests;
 #[cfg(test)]
-#[path = "model_tests.rs"]
-mod model_tests;
-#[cfg(test)]
 #[path = "render_tests.rs"]
 mod render_tests;
 #[cfg(test)]
