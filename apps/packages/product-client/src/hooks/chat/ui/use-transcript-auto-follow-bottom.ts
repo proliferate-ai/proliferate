@@ -11,6 +11,7 @@ import {
   PROGRAMMATIC_MATCH_TOL_PX,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
 import { resolveTranscriptFollowTarget } from "#product/hooks/chat/ui/transcript-follow-target";
+import type { TranscriptPinTransitionCause } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
 import {
   initialTranscriptInsetState,
   reduceTranscriptInset,
@@ -38,7 +39,7 @@ export interface UseTranscriptAutoFollowBottomOptions {
   nonDisplacingBottomInsetPx: number;
   /** Live pin state. */
   pinnedRef: RefObject<boolean>;
-  setPinned: (pinned: boolean) => void;
+  setPinned: (pinned: boolean, cause?: TranscriptPinTransitionCause) => void;
   /** Owned by the caller: last observed scrollTop, used for direction detection. */
   lastScrollTopRef: MutableRefObject<number>;
   /** Record a write as our own, not the user's, before its scroll event arrives. */
@@ -184,7 +185,7 @@ export function useTranscriptAutoFollowBottom({
 
   const handleScrollToBottomClick = useCallback(() => {
     dispatchInsetEvent({ type: "consume_full" });
-    setPinned(true);
+    setPinned(true, "button_click");
     scrollToBottom();
   }, [dispatchInsetEvent, scrollToBottom, setPinned]);
 

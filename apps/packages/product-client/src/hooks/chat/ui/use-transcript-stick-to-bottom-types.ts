@@ -4,6 +4,7 @@ import type {
   TranscriptScrollSample,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
 import type { TranscriptSessionRestorePlan } from "#product/hooks/chat/ui/transcript-reading-position-store";
+import type { TranscriptPinTransitionCause } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
 
 /**
  * Split out of use-transcript-stick-to-bottom.ts (capped near 400 lines,
@@ -66,8 +67,13 @@ export interface TranscriptStickToBottom {
   handleScrollToBottomClick: () => void;
   /** Wrap ANY external scrollTop/scrollToOffset write so its scroll event is excluded from pin/direction. */
   notifyProgrammaticScroll: (write: () => void) => void;
-  /** Force the pin state (history prepend / anchor restore intentionally unpin to hold the user's position). */
-  setPinned: (pinned: boolean) => void;
+  /**
+   * Force the pin state (history prepend / anchor restore intentionally unpin
+   * to hold the user's position). `cause` is diagnostics-only (rung 11,
+   * PRO-187): it labels the resulting `renderer.transcript.pin_transition`
+   * record and never changes behavior.
+   */
+  setPinned: (pinned: boolean, cause?: TranscriptPinTransitionCause) => void;
   /**
    * Reset tracking for a session switch and place the viewport before first
    * paint: bottom-pin a streaming session, or restore a finalized session to its

@@ -23,6 +23,11 @@ import type {
   TranscriptStickToBottom,
   UseTranscriptStickToBottomOptions,
 } from "#product/hooks/chat/ui/use-transcript-stick-to-bottom-types";
+import {
+  recordTranscriptPinTransition,
+  recordTranscriptUserScrollIntent,
+  type TranscriptPinTransitionCause,
+} from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
 
 export type { TranscriptStickToBottom, UseTranscriptStickToBottomOptions };
 
@@ -95,7 +100,12 @@ export function useTranscriptStickToBottom({
   const restoreDeadlineRef = useRef(0);
   const userScrollIntentUntilRef = useRef(0);
 
-  const setPinned = useCallback((next: boolean) => {
+  // Rung 11 (PRO-187, R10 / Q8): `cause` is observation-only — it labels which
+  // of the engine's own transitions fired for the diagnostics record below and
+  // never changes what setPinned does. Defaults to "unspecified" so call sites
+  // this rung did not touch (there are none left un-instrumented, but future
+  // callers passing only one arg) still emit a record rather than a silent one.
+  const setPinned = useCallback((next: boolean, cause: TranscriptPinTransitionCause = "unspecified") => {
     if (next) {
       // Re-pinning (any path: repin band, submit, button click) means the
       // reader is at the bottom seeing the new content, so the announcement
@@ -107,7 +117,8 @@ export function useTranscriptStickToBottom({
     }
     pinnedRef.current = next;
     setIsPinnedToBottom(next);
-  }, [clearNewContentSignal]);
+    recordTranscriptPinTransition({ sessionId: sessionKey ?? "unknown", pinned: next, cause });
+  }, [clearNewContentSignal, sessionKey]);
 
   const clearAllMarkers = useCallback(() => {
     ownershipMarkersRef.current.clear();
@@ -139,6 +150,11 @@ export function useTranscriptStickToBottom({
     userScrollIntentUntilRef.current = interactionNow() + TRANSCRIPT_USER_SCROLL_SETTLE_MS;
     // The reader is driving: end any in-flight FR-2 restore (rung 6).
     restoreResolverRef.current = null;
+    // Rung 11: the input-intent record itself, so a production log can tell
+    // "no intent recorded before this pin flip" (false unpin) apart from
+    // "intent recorded but pin state never moved" (swallowed user scroll) —
+    // see the failure-mode detections in section 5 of the ADR.
+    recordTranscriptUserScrollIntent({ sessionId: sessionKey ?? "unknown", direction });
     if (direction < 0) {
       // Upward intent cancels only a CANCELABLE above-change compensation (a
       // completed-turn split): the gesture wins, no per-frame re-anchor. A history
@@ -147,11 +163,11 @@ export function useTranscriptStickToBottom({
       if (compensationCancelableRef.current) {
         compensationAnchorRef.current = null;
       }
-      setPinned(false);
+      setPinned(false, "user_intent_unpin");
     }
     // Claim the frame at input time so it can't race a stream/reveal animation frame.
     onScrollSample({ programmatic: false, userInitiated: true });
-  }, [onScrollSample, setPinned]);
+  }, [onScrollSample, sessionKey, setPinned]);
 
   // Owns the consumed-inset machine, follow-target math, and scroll-to-bottom
   // callbacks. See use-transcript-auto-follow-bottom.ts.
@@ -237,12 +253,12 @@ export function useTranscriptStickToBottom({
       // content max, not the reader; clearing it would kill the frame writer's
       // re-resolution. A real takeover clears via notifyUserScrollIntent.
       dispatchInsetEvent({ type: "leave_band" });
-      setPinned(false);
+      setPinned(false, "leave_band");
     } else if (decision.pin === true) {
       if (decision.consumeInset === "full") {
         dispatchInsetEvent({ type: "consume_full" });
       }
-      setPinned(true);
+      setPinned(true, "repin_band");
     }
     // decision.pin === "hold": our own resize lag — leave pin and inset as they
     // are so a lagging follow is never misread as the user leaving.
@@ -342,7 +358,7 @@ export function useTranscriptStickToBottom({
       notifyProgrammaticScroll,
     );
     if (!restored) {
-      setPinned(true);
+      setPinned(true, "session_reset");
       scrollToBottom();
     }
     beginGlue();
@@ -356,7 +372,7 @@ export function useTranscriptStickToBottom({
   // never mounted the saved row gives up on the coarse estimate and bottom-pins
   // instead — the conservative FR-2 default, same as a vanished saved row.
   const notifyRestoreStranded = useCallback(() => {
-    setPinned(true);
+    setPinned(true, "restore_stranded");
     scrollToBottom();
   }, [scrollToBottom, setPinned]);
 
