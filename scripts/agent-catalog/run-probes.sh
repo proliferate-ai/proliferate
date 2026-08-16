@@ -120,6 +120,18 @@ fi
 
 [ -f "$SECRETS" ] && source "$SECRETS"
 
+# MANDATORY probe precondition: never let a foreign claude binary masquerade as
+# the managed native. `detect_native_cli` (anyharness-lib .../live/sessions/probe.rs)
+# lets $CLAUDE_CODE_EXECUTABLE OVERRIDE the managed native for claude, so if the
+# invoking shell has that var set — the known agent-shell profile-leak class on
+# this box, e.g. a dev-profile's ~/.proliferate-local/runtimes/<profile>/.../claude
+# at an OLDER version — the claude probe attests that foreign binary's version
+# instead of the freshly-installed managed one, silently corrupting the native
+# attestation (observed: leaked 2.1.212 vs managed 2.1.233). Scrub it so the
+# probe always measures the managed artifact. Codex is unaffected (the override
+# is claude-only, probe.rs `kind == AgentKind::Claude`).
+unset CLAUDE_CODE_EXECUTABLE
+
 mkdir -p "$LOGS"
 rm -f "$LOGS"/*.log "$LOGS"/*.timeout "$STATE" "$CANDIDATE"
 started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

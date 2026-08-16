@@ -255,3 +255,70 @@ snapshot would attest 2.1.233, and the catalog claude native would be forced to
 therefore NOT attempted; it needs a ruling: accept the 2.1.212→2.1.233 native
 bump as sanctioned, or add a pin-specific-native mechanism. (codex had zero
 native drift — openai/codex latest IS rust-v0.147.0.)
+
+### AS-RUN #3 — both agents flipped and green (option #2 in, installer fix live)
+
+With the installer fix (PR #1991) the `install-agents` panic is gone, so the
+codex probe regenerated clean. Orchestrator rulings then landed: **option #2**
+for the gateway-carryover contradiction, and **option (a)** unfreezing claude
+(clean-full-pass-or-held).
+
+**Option #2 (gateway mode-vocab carryover).** codex-acp 1.1.14 renamed the
+unattended-mode vocabulary adapter-wide: `auto → agent`, `full-access →
+agent-full-access`. Fresh probe `modes` block, identical across all three codex
+contexts: `["read-only","agent","agent-full-access"]` (currentModeId `agent`).
+Session curation `AGENT_UNATTENDED_MODE_IDS.codex` was updated to
+`agent-full-access` (+ build-catalog test). The three carried-over **gateway-only**
+models (`gpt-5.2-2025-12-11`, `gpt-5-mini`, `gpt-5-mini-2025-08-07`) are not
+re-probed (no gateway auth context), so `applyBundledCuration` used to clone
+their stale per-model `mode` matrix and the Rust validator rejected the catalog.
+Fix: `applyBundledCuration` now drops the redundant per-model `mode` on
+carried-over gateway models so they inherit the freshly-probed agent-level vocab
+(`mode` is adapter-global — every probed model gets an identical copy from the
+`modes` block; a frozen clone goes stale on any rename). Negative control
+(literal): pre-fix the validator rejected — `agent catalog agent 'codex'
+unattendedModeId 'agent-full-access' is not supported by model
+'gpt-5.2-2025-12-11'`; post-fix it validates.
+
+**MANDATORY probe precondition — `CLAUDE_CODE_EXECUTABLE` scrub.** The first
+claude probe attested nativeCli `2.1.212` while installing `2.1.233`. Root cause
+= the known agent-shell profile-leak class on this box: the invoking shell had
+`CLAUDE_CODE_EXECUTABLE` set to a dev-profile's old native
+(`~/.proliferate-local/runtimes/wf2pablo/agents/claude/native/claude` = 2.1.212),
+and `detect_native_cli` (anyharness-lib `.../live/sessions/probe.rs`) lets that
+var OVERRIDE the managed native for claude. The catalog probe MUST run with
+`CLAUDE_CODE_EXECUTABLE` unset or the native attestation is corrupted by the
+foreign binary. Enforced in `run-probes.sh` (defensive `unset` after secrets
+sourcing, with comment). Codex is unaffected (the override is claude-only).
+
+**Sequencing note.** To run the claude probe while the codex flip was still
+being assembled, `catalog.json`/`catalog.draft.json` were reverted to the valid
+`origin/main` version as a probe prerequisite (the embedded catalog is validated
+at `install-agents` load, `bundled.rs`), while the codex snapshots + registry
+edits were preserved. The version pins were then declared in `catalog.json`
+(operator "flip the pin"; verified against the live attestations — not a snapshot
+hand-edit) and the candidate re-derived.
+
+**Combined authoritative probe (evidence-only-green).** `run.state
+complete=true`; all six contexts passed:
+
+- claude anthropic-api / anthropic-oauth / bedrock — attest `0.66.0-proliferate.1`,
+  nativeCli `2.1.233 (Claude Code)`.
+- codex openai-api / openai-oauth / bedrock — attest `1.1.14-proliferate.1`,
+  nativeCli `codex-cli 0.147.0`.
+
+**Gates.** `build-catalog --require-complete-probe` exit 0 (`catalog.json`
+byte-identical to `catalog.draft.json`); `node scripts/validate-agent-catalog.mjs`
+→ `agent catalog OK: 2026-08-16.4 (5 agents)`. The Rust cargo-test catalog gate
+is authoritative in CI (held locally: this box was pinned at memory-pressure 2 by
+the live fleet, and the START gate is pressure EXACTLY 1 — fail-closed, not
+forced).
+
+**Native moves are REAL at the catalog-pin level** (the env-leak was only the
+attestation mismatch): claude old pin `2.1.212` → attested/pinned `2.1.233`;
+codex `rust-v0.144.5` → `rust-v0.147.0`. Both ride the founder-visible line item
++ one-commit rollback recipe in the flip PR body.
+
+**Morning follow-ups (recorded, not tonight):** the `resolve-pins`
+pin-specific-native gap; and whether the three gateway-only codex models are
+still offered post-migration (no gateway probe context exists to prove launch).
