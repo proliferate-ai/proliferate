@@ -459,6 +459,14 @@ CREATE TABLE runtime_config_session_context (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- table: session_adapter_markers
+CREATE TABLE session_adapter_markers (
+    session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+    adapter_version TEXT,
+    native_version TEXT,
+    created_at TEXT NOT NULL
+);
+
 -- table: session_background_work
 CREATE TABLE session_background_work (
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
