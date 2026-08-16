@@ -36,6 +36,7 @@ import { useQueuedPromptEditStatus } from "#product/hooks/chat/ui/use-queued-pro
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useSessionErrorAcknowledgement } from "#product/hooks/sessions/lifecycle/use-session-error-acknowledgement";
 import { useSelectedCloudRuntimeRehydration } from "#product/hooks/workspaces/lifecycle/use-selected-cloud-runtime-rehydration";
+import { useTerminalConnectionPrewarm } from "#product/hooks/terminals/lifecycle/use-terminal-connection-prewarm";
 import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { canAttachPromptContent } from "#product/domain/chats/composer/prompt-attachment-rules";
 import {
@@ -230,6 +231,9 @@ export const ChatView = memo(function ChatView({
   } = useChatDockInset();
 
   useSelectedCloudRuntimeRehydration(selectedCloudRuntime);
+  // Q16: warm the gateway token + SSH tunnel at workspace selection so pane
+  // activation consumes a pre-warmed connection (silent, lazy-path fallback).
+  useTerminalConnectionPrewarm();
   useSessionErrorAcknowledgement();
 
   // The composer placeholder flips to the follow-up variant once the session
