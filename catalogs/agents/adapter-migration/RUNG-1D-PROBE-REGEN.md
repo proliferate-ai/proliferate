@@ -185,6 +185,73 @@ pins, blocker-2 hashes, gate proofs) is ready; only the build window is missing.
 ### Pin coordinates verified live for the flip (ls-remote)
 
 Claude `81a4d52e6bfe8f636d6818c6c48c29be28dca35d` (tag v0.66.0-proliferate.1,
-merged via 99a990c4 on canonical-0.66.0-base, #50); Codex `219738c9…` (tag
-v1.1.14-proliferate.1, merged via bb3c8866 on canonical-1.1.14-base, #19).
-Rollback anchor: claude `v0.59.0-proliferate.1 @ 26f9ee7a0049507bff5476ce390695515ce92840`.
+merged via 99a990c4 on canonical-0.66.0-base, #50; tag `^{}` peels to the
+commit); Codex `219738c9…` (tag v1.1.14-proliferate.1 peels to the commit,
+merged via bb3c8866 on canonical-1.1.14-base, #19). Rollback anchor: claude
+`v0.59.0-proliferate.1 @ 26f9ee7a0049507bff5476ce390695515ce92840`.
+
+---
+
+## AS-RUN #2 (2026-08-16, pressure-1 amendment) — build+probe attempted; BLOCKED by a runtime install bug
+
+Under the refined gate (pressure level EXACTLY 1 is the live signal; swap-free
+overridden), the gate was open (`cargo`/`rustc` empty, pressure 1) and the one
+authorized `cargo build -q -p anyharness` was run via the real harness
+(`run-probes.sh --agent codex`, unpatched).
+
+**What SUCCEEDED (the catalog flip is correct):**
+- `resolve-pins` cleanly resolved the codex flip from the edited registry:
+  `native rust-v0.147.0 (archive)`, `agentProcess 1.1.14-proliferate.1 (git)`,
+  and re-verified all three published 0.147.0 archive checksums — matching the
+  independently-computed BLOCKER-2 hashes above.
+- `cargo build -q -p anyharness` completed (warnings only).
+
+**What FAILED (a runtime bug, NOT a catalog/pin/adapter problem):** the next
+step, `anyharness install-agents --agent codex`, **panics immediately**:
+
+```
+thread 'main' panicked at tokio-1.50.0/src/runtime/blocking/shutdown.rs:51:21:
+Cannot drop a runtime in a context where blocking is not allowed. This happens
+when a runtime is dropped from within an asynchronous context.
+stack backtrace (abridged):
+   7: reqwest::blocking::wait::enter
+   9: reqwest::blocking::client::ClientHandle::new
+  10: reqwest::blocking::client::ClientBuilder::build
+  11: download_binary_inner   anyharness-lib/src/domains/agents/installer/downloads.rs:63
+  13: download_binary_verified                                     downloads.rs:172
+  14: download_and_extract_archive_verified                        downloads.rs:202
+  15: install_binary_or_archive_from_pin                              pinned.rs:69
+```
+
+Root cause: `install-agents` builds a **`reqwest::blocking`** client (which
+spins and then drops its own tokio runtime) from *inside* the CLI's async tokio
+context; dropping a runtime in async context is illegal → panic. It fires on the
+**native archive download** — the codex `rust-v0.144.5 → rust-v0.147.0` bump
+forces a native re-download, which is what exercises this blocking-reqwest path.
+(A no-native-drift run would not hit it; the Aug-9 run reportedly had no native
+bump.)
+
+**Consequence — fail-closed (condition #3):** no codex context can produce a
+live attestation, so the flip is NOT landed and NOT committed (no hand-edit /
+replay). The validator + cargo gates are irrelevant until a live attestation
+exists. This needs a **runtime fix** to the installer (use async reqwest, or
+`spawn_blocking`/off-runtime the blocking client) — a Rust change outside this
+catalog pin-flip's scope and beyond the one authorized build. The freshly-built
+`target/debug/anyharness` carries the bug, so a retry needs a fixed+rebuilt
+binary.
+
+Mid-run pressure note: pressure rose to 2 during the compile (would pause
+between contexts per condition iii) and returned to 1; it never reached 3, and
+the crash was the install bug, not memory.
+
+### Separate finding — claude native would DRIFT off the "2.1.212 unchanged" pin
+
+`resolve-pins` for claude native (`direct_binary`) always fetches
+`latestVersionUrl`, which currently returns **2.1.233** (catalog pins 2.1.212).
+There is no registry field to pin a specific non-latest native. So regenerating
+the claude probe via the standard flow would install native 2.1.233, the
+snapshot would attest 2.1.233, and the catalog claude native would be forced to
+2.1.233 — contradicting the "native 2.1.212 unchanged" instruction. Claude was
+therefore NOT attempted; it needs a ruling: accept the 2.1.212→2.1.233 native
+bump as sanctioned, or add a pin-specific-native mechanism. (codex had zero
+native drift — openai/codex latest IS rust-v0.147.0.)
