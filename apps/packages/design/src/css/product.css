@@ -252,6 +252,11 @@ body {
   --dot-cell-gap: 0.09375rem;
 }
 
+.dot-cell-loader[data-size="hero"] {
+  --dot-cell-size: 0.375rem;
+  --dot-cell-gap: 0.25rem;
+}
+
 /* Each dot carries its grid coordinates (--om-r/--om-c) and its clockwise
    ring position (--om-o); every variant derives its per-dot delay from those
    in one calc() instead of a per-variant nth-child ladder. */

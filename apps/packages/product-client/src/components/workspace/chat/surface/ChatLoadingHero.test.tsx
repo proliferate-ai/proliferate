@@ -14,6 +14,17 @@ vi.mock("#product/hooks/chat/derived/use-chat-loading-substep", () => ({
   useChatLoadingSubstep: () => substepState,
 }));
 
+let selectedWorkspaceId: string | null = "workspace-1";
+vi.mock("#product/stores/sessions/session-selection-store", () => ({
+  useSessionSelectionStore: (selector: (state: { selectedWorkspaceId: string | null }) => unknown) =>
+    selector({ selectedWorkspaceId }),
+}));
+
+let bootstrappedWorkspaceIds = new Set<string>();
+vi.mock("#product/hooks/workspaces/lifecycle/workspace-bootstrap-memory", () => ({
+  hasWorkspaceBootstrappedInSession: (workspaceId: string) => bootstrappedWorkspaceIds.has(workspaceId),
+}));
+
 import { ChatLoadingHero } from "./ChatLoadingHero";
 
 beforeEach(() => {
@@ -21,6 +32,8 @@ beforeEach(() => {
   substepState.substep = "loading-history";
   substepState.caption = "Loading conversation";
   substepState.workspaceName = "acme/widgets";
+  selectedWorkspaceId = "workspace-1";
+  bootstrappedWorkspaceIds = new Set();
 });
 
 afterEach(() => {
@@ -35,19 +48,19 @@ function advance(ms: number) {
 }
 
 describe("ChatLoadingHero", () => {
-  it("withholds the treatment inside the show delay, then renders the Class A living mark with captions", () => {
+  it("withholds the treatment inside the show delay, then renders the DotCellLoader hero mark, mark-only", () => {
     render(<ChatLoadingHero />);
 
-    expect(document.querySelector("[data-brand-mark]")).toBeNull();
     expect(document.querySelector("[data-dot-cell-loader]")).toBeNull();
 
     advance(motion.loading.showDelayMs);
 
-    expect(document.querySelector("[data-brand-mark]")).not.toBeNull();
-    // Negative control: the old DotCellLoader wave never mounts on this surface.
-    expect(document.querySelector("[data-dot-cell-loader]")).toBeNull();
-    expect(screen.getByText("Loading conversation")).not.toBeNull();
-    expect(screen.getByText("acme/widgets")).not.toBeNull();
+    const mark = document.querySelector("[data-dot-cell-loader]");
+    expect(mark).not.toBeNull();
+    expect(mark?.getAttribute("data-size")).toBe("hero");
+    // No caption/workspace-name copy: the hero renders the mark only.
+    expect(screen.queryByText("Loading conversation")).toBeNull();
+    expect(screen.queryByText("acme/widgets")).toBeNull();
   });
 
   it("renders ThinkingText immediately for the awaiting-first-turn substep, bypassing the show-delay", () => {
@@ -62,13 +75,32 @@ describe("ChatLoadingHero", () => {
     // treatment, and must not be withheld behind the show-delay.
     expect(document.querySelector("[data-thinking-text]")).not.toBeNull();
     expect(screen.getAllByText("Thinking").length).toBeGreaterThan(0);
-    expect(document.querySelector("[data-brand-mark]")).toBeNull();
     expect(document.querySelector("[data-dot-cell-loader]")).toBeNull();
 
     advance(motion.loading.showDelayMs);
 
     expect(document.querySelector("[data-thinking-text]")).not.toBeNull();
-    expect(document.querySelector("[data-brand-mark]")).toBeNull();
     expect(document.querySelector("[data-dot-cell-loader]")).toBeNull();
+  });
+
+  it("never mounts the hero mark for a workspace already bootstrapped in this session", () => {
+    bootstrappedWorkspaceIds.add("workspace-1");
+
+    const { container } = render(<ChatLoadingHero />);
+
+    advance(motion.loading.showDelayMs);
+
+    expect(document.querySelector("[data-dot-cell-loader]")).toBeNull();
+    expect(document.querySelector("[data-chat-loading-hero]")).toBeNull();
+    expect(container.innerHTML).toBe("");
+  });
+
+  it("negative control: a non-bootstrapped workspace does mount the hero mark after the show delay", () => {
+    bootstrappedWorkspaceIds.add("some-other-workspace");
+
+    render(<ChatLoadingHero />);
+    advance(motion.loading.showDelayMs);
+
+    expect(document.querySelector("[data-dot-cell-loader]")).not.toBeNull();
   });
 });
