@@ -102,10 +102,6 @@ export function useTranscriptFramePipelineLifecycle({
     // deadline instead of `isGluing` keeps this single writer absorbing the full
     // added-above height so the reading row stays fixed on every engine.
     const now = typeof performance === "undefined" ? Date.now() : performance.now();
-    if (now >= compensationDeadlineRef.current) {
-      compensationAnchorRef.current = null;
-      return;
-    }
     // Rung 5: composition-derived estimates plus the write-through
     // measured-height cache make the virtualizer's reported total scrollHeight
     // move NON-MONOTONICALLY while the freshly-prepended older rows correct from
@@ -124,6 +120,35 @@ export function useTranscriptFramePipelineLifecycle({
       floor.anchor = anchor;
       floor.maxScrollHeight = anchor.scrollHeight;
       floor.absoluteDeadline = now + ABOVE_CHANGE_COMPENSATION_ABSOLUTE_MAX_MS;
+    }
+    // Where the reading row already belongs, computed against the max observed
+    // SO FAR (before this pass folds in any new growth). The reader is DISPLACED
+    // above it when scrollTop sits below that seat — which is NOT the settled
+    // state: it means the browser clamped scrollTop DOWN during a transient
+    // measured-swap content dip (on webkit the real, taller heights can land a
+    // beat AFTER the estimate briefly shrinks the total), and the forward
+    // re-raise below has not run against the recovered height yet.
+    const seatedTarget = anchor.scrollTop + (floor.maxScrollHeight - anchor.scrollHeight);
+    const displacedAboveTarget = seatedTarget - viewport.scrollTop > 1;
+    if (now >= compensationDeadlineRef.current) {
+      // Release the anchor once the growth deadline lapses — UNLESS the reader
+      // is still displaced above the already-established seat. On a slow
+      // runner a late downward clamp can land in the same window the growth
+      // deadline lapses; releasing silently then strands the reader near the
+      // freshly-prepended top (CI webkit prepend "scrollTop Received 0"). Emit
+      // one last forward-only corrective write against the established floor
+      // BEFORE releasing, whether or not we are still within the absolute
+      // ceiling, so a late dip can never leave the reader displaced merely
+      // because the window closed on the same tick that observed it.
+      if (displacedAboveTarget) {
+        notifyProgrammaticScroll(() => {
+          if (seatedTarget > viewport.scrollTop) {
+            viewport.scrollTop = seatedTarget;
+          }
+        });
+      }
+      compensationAnchorRef.current = null;
+      return;
     }
     // A fresh above-anchor growth this pass is a late estimate-to-measured
     // correction still arriving; keep the compensation window open past the
