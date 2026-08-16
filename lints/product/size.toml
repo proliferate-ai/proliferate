@@ -1,0 +1,27 @@
+# Repo-wide file-size ceiling (PROD-SIZE). Cross-owner: one fallback cap for
+# every scanned source file that has no owner-specific layer threshold.
+
+[[rule]]
+id = "PROD-SIZE-1"
+title = "Source files stay under the repo-wide line cap"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_max_lines.py"
+mode = "lint"
+scope = "anyharness/**, apps/**, cloud/sdk/**, server/**"
+
+rule = """Every scanned .py/.rs/.ts/.tsx source file must stay under 600 lines
+(500 for a Desktop component .tsx under apps/desktop/src/components/), unless a
+narrower owner rule such as SRV-SIZE-1 already sets its threshold."""
+alternative = """Split the file along a real seam, or add a `[[max_lines]]`
+entry with a written reason to the owning directory's ratchets.toml —
+lints/anyharness/ratchets.toml, lints/frontend/ratchets.toml,
+lints/server/ratchets.toml, or lints/product/ratchets.toml. The recorded count
+may only shrink."""
+why = """A file nobody can read in one sitting hides its own seams. The cap is
+the prompt to name them; the ratchet keeps existing oversized files from
+growing while they wait for their split."""
+
+[rule.example]
+bad = "a 640-line module added with no ratchet entry"
+good = "the module splits, or its 640 is recorded in the owner's ratchets.toml with a reason"

@@ -1,0 +1,121 @@
+# Design attribution (PROD-ATTR). Enforced by scripts/check_design_attribution.py.
+#
+# These rules never ban a product's NAME. `codex` is a supported harness kind, a
+# model-id prefix, and a sidecar package; `cursor` is a CSS property and an
+# editor we open files in. What is banned is attributing OUR OWN visual design to
+# another product — the construction, not the word. A guard that flagged
+# `harnessKind === "codex"` would be switched off within a day, so every rule
+# below requires the attributing shape, and the checker's test suite pins the
+# accept cases as hard as the reject cases.
+#
+# In-code scope definitions kept in the checker (structural, not grandfathering):
+# SCANNED_ROOTS (the shipped frontend trees), EXTENSIONS, SKIPPED_DIR_NAMES
+# (build output and fixtures are not shipped source), and PRODUCTS (the list of
+# other products whose UI we have looked at).
+
+[[rule]]
+id = "PROD-ATTR-1"
+title = "our styles are not credited to another product"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_design_attribution.py"
+mode = "lint"
+scope = "apps/packages/**, apps/web/src/**, apps/desktop/src/** (.ts/.tsx/.css/.js/.jsx)"
+
+rule = """Shipped source must not describe one of our own styles as another
+product's style — no `<product>-style`, `<product> styled`, `<product>-like`, or
+`<product>-esque`, for any of the products the design work looked at."""
+alternative = """Describe the treatment by what it is in our design language:
+sizes, colors, roles, alphas."""
+why = """The design is ours and the code must say so. Naming the source instead
+of the treatment also stops being true the moment the reference changes, and it
+travels: a comment becomes a class name, and a class name becomes PR text."""
+
+[rule.example]
+bad = "// codex-style row hover"
+good = "// row hover: 4% foreground overlay, 120ms"
+
+[[rule]]
+id = "PROD-ATTR-2"
+title = "a styling recipe is not attributed to another product"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_design_attribution.py"
+mode = "lint"
+scope = "apps/packages/**, apps/web/src/**, apps/desktop/src/** (.ts/.tsx/.css/.js/.jsx)"
+
+rule = """Shipped source must not present a styling recipe, anatomy, convention,
+hierarchy, format, or parity target as belonging to another product."""
+alternative = """State the recipe in our own design-system terms."""
+why = """Same reason as PROD-ATTR-1, applied to the composition rather than the
+adjective. "90%-alpha popover fill, 8px blur" says strictly more than "codex
+dropdown recipe" and stays true when the reference changes."""
+
+[rule.example]
+bad = "/* cursor recipe: 1px border + 4% overlay */"
+good = "/* popover edge: 1px border-light + 4% foreground overlay */"
+
+[[rule]]
+id = "PROD-ATTR-3"
+title = "shipped source does not cite a reference-capture path"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_design_attribution.py"
+mode = "lint"
+scope = "apps/packages/**, apps/web/src/**, apps/desktop/src/** (.ts/.tsx/.css/.js/.jsx)"
+
+rule = """Shipped source must not reference a `reference/<product>/…` capture
+path."""
+alternative = """Remove the path. Captures are research artifacts, not durable
+citations; if the treatment matters, describe the treatment."""
+why = """A path into a scratch reference dump both attributes the design and
+points at material that is not ours to ship — and it is a dangling citation the
+moment the dump is cleaned up."""
+
+[rule.example]
+bad = "// see reference/codex/status/card.html"
+good = "// status card: 28px row, icon-paired glyph, secondary ink"
+
+[[rule]]
+id = "PROD-ATTR-4"
+title = "a visual treatment is not named after another product"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_design_attribution.py"
+mode = "lint"
+scope = "apps/packages/**, apps/web/src/**, apps/desktop/src/** (.ts/.tsx/.css/.js/.jsx)"
+
+rule = """A bare product name must not modify one of our design nouns — avatar,
+chip, pill, dot, glyph, icon, badge, tooltip, popover, dropdown, modal, card,
+panel, header, footer, divider, rail, gutter, shell, spacing, tint, palette,
+ink, and the rest of the design vocabulary the checker enumerates."""
+alternative = """Name the treatment for its role in our system."""
+why = """Same reason as PROD-ATTR-1. The noun list is deliberately design
+vocabulary only, so real product phrases such as "the codex harness" or "codex
+session" still pass — `row` is excluded on purpose because it is ordinary data
+vocabulary."""
+
+[rule.example]
+bad = "/* for codex avatar-group clusters */"
+good = "/* avatar cluster: three stacked 20px avatars, 6px overlap */"
+
+[[rule]]
+id = "PROD-ATTR-5"
+title = "shipped identifiers are not named after another product"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_design_attribution.py"
+mode = "lint"
+scope = "apps/packages/**, apps/web/src/**, apps/desktop/src/** (.ts/.tsx/.css/.js/.jsx)"
+
+rule = """A class name or identifier must not join a product name to one of our
+design nouns — `<product>-thread`, `-row`, `-card`, `-panel`, `-item`, `-dot`,
+`-chip`, `-surface`, `-frame`, `-review`, `-diff`, `-glyph`, `-sprite`."""
+alternative = """Rename the identifier after its function in our product."""
+why = """An identifier is the most durable form of attribution: it outlives the
+comment that explained it, ships to users in the DOM, and gets grepped for by
+everyone who touches the file afterwards."""
+
+[rule.example]
+bad = "className=\"codex-thread-find-match\""
+good = "className=\"thread-find-match\""

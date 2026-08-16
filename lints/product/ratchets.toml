@@ -1,0 +1,10 @@
+# Cross-owner measured size debt (PROD-SIZE-1) for scanned paths outside the
+# server, anyharness, and apps trees. A ratchet, not an exception ledger:
+# max_lines is the observed count allowed for this file and may only shrink.
+# Growth fails; so does a stale entry whose file is now under its allowance or
+# gone. scripts/check_max_lines.py is the only reader.
+
+[[max_lines]]
+path = "cloud/sdk/src/types/generated.ts"
+max_lines = 795
+reason = "existing generated cloud SDK type surface (+workspaceKind, git numstat fields, OpenAPI-derived materialization types, app-extra overlay, and PR 5 exact-ref create request fields; -actionBlock fields; + lostAt (C7))"

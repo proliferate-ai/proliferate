@@ -1,0 +1,84 @@
+# Alembic migration-history rules (SRV-MIGRATE). A revision must replay against
+# the application version it was written for, and the history must stay a single
+# linear graph.
+
+[[rule]]
+id = "SRV-MIGRATE-1"
+title = "Alembic revisions are self-contained"
+owner = "server"
+status = "holds"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/alembic/versions/**"
+
+rule = """Alembic revisions must be self-contained and must not import
+application code."""
+alternative = """Inline the constants or encryption the revision needs so it
+stays runnable against any past application version."""
+why = """A revision that imports mutable application settings changes meaning
+when the app changes, which breaks replay of the migration history. The two
+legacy identity revisions in lints/server/exceptions.toml predate this rule."""
+
+[rule.example]
+bad = "from proliferate.config import settings  # in server/alembic/versions/<rev>.py"
+good = "FERNET_KEY_ENV = \"PROLIFERATE_ENCRYPTION_KEY\"  # inlined in the revision"
+
+[[rule]]
+id = "SRV-MIGRATE-2"
+title = "Revision ids are parseable and unique"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_migration_heads.py"
+mode = "lint"
+scope = "server/alembic/versions/*.py"
+
+rule = """Every Alembic revision module must declare a parseable module-level
+`revision`, and no two modules may declare the same id."""
+alternative = """Regenerate the revision with a fresh id."""
+why = """A duplicate or unreadable id makes the migration history graph
+ambiguous, so no tool can order the upgrade path."""
+
+[rule.example]
+bad = "two files under server/alembic/versions/ both declaring revision = \"abc123\""
+good = "each revision module declares its own literal revision id"
+
+[[rule]]
+id = "SRV-MIGRATE-3"
+title = "Every down_revision exists"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_migration_heads.py"
+mode = "lint"
+scope = "server/alembic/versions/*.py"
+
+rule = """Every `down_revision` must point at a revision id that exists in the
+versions directory."""
+alternative = """Re-parent the migration onto a revision that exists."""
+why = """A dangling parent breaks `alembic upgrade head` in every
+environment."""
+
+[rule.example]
+bad = "down_revision = \"deleted_rev\"  # no module declares that revision"
+good = "down_revision = \"f7a8b9c0d1e2\"  # an existing revision id"
+
+[[rule]]
+id = "SRV-MIGRATE-4"
+title = "The migration history has exactly one head"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_migration_heads.py"
+mode = "lint"
+scope = "server/alembic/versions/*.py"
+
+rule = """The Alembic history must have exactly one head revision."""
+alternative = """Rejoin the history with `cd server && alembic merge heads -m
+'...'`, or re-parent the unshipped migration onto the other head."""
+why = """Parallel PR stacks that each add a migration off the same parent fork
+the history; `alembic upgrade head` then fails everywhere — dev boot, staging
+deploys, self-host bootstraps — with a multiple-head error. Because the PR
+checkout is the merge commit, the fork is caught on the PR that would create
+it."""
+
+[rule.example]
+bad = "two leaf revisions a1b2 (add_x.py) and c3d4 (add_y.py), neither referenced as a parent"
+good = "one leaf revision; a merge revision rejoins parallel branches"

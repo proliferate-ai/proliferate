@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Validate repository documentation without network access."""
+"""Validate repository documentation without network access.
+
+The rules themselves are records under `lints/product/docs.toml`; this file is
+only the engine. Diagnostics are rendered from the record (rule sentence, legal
+alternative, record path) via `scripts/lint_records.py`, so a failure always says
+what to do instead of naming a violated string.
+"""
 
 from __future__ import annotations
 
@@ -10,11 +16,42 @@ import subprocess
 import sys
 import unicodedata
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote
 
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    # Run as `python3 scripts/check_docs.py` from the repo root, sys.path[0] is
+    # scripts/ — the shared loader lives one level up.
+    sys.path.insert(0, str(ROOT))
+
+from scripts import lint_records  # noqa: E402  (path shim must precede the import)
+
+CHECKER = "scripts/check_docs.py"
+RULES = lint_records.load("product")
+OWNED_RULE_IDS = frozenset(
+    rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER
+)
+
+
+@dataclass(frozen=True)
+class Finding:
+    """One documentation violation, reported through its record."""
+
+    rule_id: str
+    location: str
+    detail: str
+
+    def format(self) -> str:
+        """The record-generated diagnostic: rule, alternative, record path."""
+        return lint_records.render_diagnostic(
+            RULES.rule(self.rule_id), self.location, self.detail
+        )
+
+
+
 HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 SETEXT_HEADING = re.compile(r"^\s{0,3}(?:=+|-+)\s*$")
 FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
@@ -260,8 +297,8 @@ def normalized_target(raw: str) -> str:
     return raw.split(maxsplit=1)[0]
 
 
-def check_markdown() -> list[str]:
-    errors: list[str] = []
+def check_markdown() -> list[Finding]:
+    findings: list[Finding] = []
     anchor_cache: dict[Path, set[str]] = {}
 
     for source in tracked_files("*.md", "**/*.md"):
@@ -271,11 +308,11 @@ def check_markdown() -> list[str]:
             if not target or target.startswith(EXTERNAL_PREFIXES):
                 continue
 
+            location = f"{source.relative_to(ROOT)}:{line_number}"
             path_text, separator, fragment = target.partition("#")
             if path_text.startswith("/"):
-                errors.append(
-                    f"{source.relative_to(ROOT)}:{line_number}: "
-                    f"repository Markdown link must be relative: {target}"
+                findings.append(
+                    Finding("PROD-DOCS-3", location, f"absolute repository link {target}")
                 )
                 continue
 
@@ -283,16 +320,14 @@ def check_markdown() -> list[str]:
             try:
                 destination.relative_to(ROOT)
             except ValueError:
-                errors.append(
-                    f"{source.relative_to(ROOT)}:{line_number}: "
-                    f"Markdown link leaves repository: {target}"
+                findings.append(
+                    Finding("PROD-DOCS-4", location, f"link leaves the repository: {target}")
                 )
                 continue
 
             if not destination.exists():
-                errors.append(
-                    f"{source.relative_to(ROOT)}:{line_number}: "
-                    f"missing Markdown target: {target}"
+                findings.append(
+                    Finding("PROD-DOCS-5", location, f"missing link target {target}")
                 )
                 continue
 
@@ -301,12 +336,11 @@ def check_markdown() -> list[str]:
             if destination not in anchor_cache:
                 anchor_cache[destination] = anchors_for(destination)
             if fragment not in anchor_cache[destination]:
-                errors.append(
-                    f"{source.relative_to(ROOT)}:{line_number}: "
-                    f"missing Markdown anchor: {target}"
+                findings.append(
+                    Finding("PROD-DOCS-6", location, f"missing heading anchor {target}")
                 )
 
-    return errors
+    return findings
 
 
 def validate_env_var_catalog(data: object) -> list[str]:
@@ -363,49 +397,70 @@ def validate_env_var_catalog(data: object) -> list[str]:
     return errors
 
 
-def check_structured_data() -> list[str]:
-    errors: list[str] = []
+def check_structured_data() -> list[Finding]:
+    findings: list[Finding] = []
 
     for path in tracked_files("specs/**/*.json"):
         try:
             json.loads(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as error:
-            errors.append(f"{path.relative_to(ROOT)}: invalid JSON: {error}")
+            findings.append(
+                Finding("PROD-DOCS-7", str(path.relative_to(ROOT)), f"invalid JSON: {error}")
+            )
 
     yaml_files = tracked_files("specs/**/*.yaml", "specs/**/*.yml")
     if yaml_files:
         ruby = shutil.which("ruby")
         if ruby is None:
-            errors.append("Ruby is required to parse checked-in YAML documentation")
+            findings.append(
+                Finding(
+                    "PROD-DOCS-8",
+                    "specs/**/*.yaml",
+                    "Ruby is required to parse checked-in YAML documentation",
+                )
+            )
         else:
             for path in yaml_files:
+                location = str(path.relative_to(ROOT))
                 command = [ruby, "-e", SAFE_YAML_TO_JSON, str(path)]
                 result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
                 if result.returncode:
                     detail = (result.stderr or result.stdout).strip()
-                    errors.append(f"{path.relative_to(ROOT)}: invalid YAML: {detail}")
+                    findings.append(
+                        Finding("PROD-DOCS-8", location, f"invalid YAML: {detail}")
+                    )
                     continue
 
                 try:
                     data = json.loads(result.stdout)
                 except json.JSONDecodeError as error:
-                    errors.append(f"{path.relative_to(ROOT)}: invalid YAML JSON output: {error}")
+                    findings.append(
+                        Finding(
+                            "PROD-DOCS-8",
+                            location,
+                            f"invalid YAML JSON output: {error}",
+                        )
+                    )
                     continue
 
                 if path.relative_to(ROOT) == ENV_VAR_CATALOG:
-                    errors.extend(
-                        f"{ENV_VAR_CATALOG}: {error}"
+                    findings.extend(
+                        Finding("PROD-DOCS-9", str(ENV_VAR_CATALOG), error)
                         for error in validate_env_var_catalog(data)
                     )
 
-    return errors
+    return findings
 
 
-def check_routing_roots() -> list[str]:
-    return [f"missing documentation routing root: {path}" for path in REQUIRED_READMES if not (ROOT / path).is_file()]
+def check_routing_roots() -> list[Finding]:
+    return [
+        Finding("PROD-DOCS-1", path, "missing documentation routing root")
+        for path in REQUIRED_READMES
+        if not (ROOT / path).is_file()
+    ]
 
 
-def check_developing_roots() -> list[str]:
+def check_developing_roots() -> list[Finding]:
     prefix = Path("specs/developing")
     unexpected: set[str] = set()
     for path in tracked_paths(str(prefix)):
@@ -418,23 +473,27 @@ def check_developing_roots() -> list[str]:
 
     allowed = ", ".join(sorted(DEVELOPING_ROOTS))
     return [
-        f"unexpected Developing documentation root: {prefix / root} "
-        f"(allowed roots: {allowed})"
+        Finding(
+            "PROD-DOCS-2",
+            str(prefix / root),
+            f"unexpected Developing documentation root (allowed roots: {allowed})",
+        )
         for root in sorted(unexpected)
     ]
 
 
 def main() -> int:
-    errors = (
+    findings = (
         check_routing_roots()
         + check_developing_roots()
         + check_markdown()
         + check_structured_data()
     )
-    if errors:
+    if findings:
         print("Documentation integrity check failed:", file=sys.stderr)
-        for error in errors:
-            print(f"- {error}", file=sys.stderr)
+        for finding in findings:
+            print(finding.format(), file=sys.stderr)
+            print(file=sys.stderr)
         return 1
 
     markdown_count = len(tracked_files("*.md", "**/*.md"))

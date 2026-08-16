@@ -10,57 +10,85 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from scripts import check_design_attribution
 from scripts.check_design_attribution import scan_file
 
 
-def findings_for(source: str, suffix: str = ".tsx") -> list[str]:
+def scanned(source: str, suffix: str = ".tsx") -> list[check_design_attribution.Finding]:
     with tempfile.NamedTemporaryFile("w", suffix=suffix, delete=False) as handle:
         handle.write(source)
         path = Path(handle.name)
     try:
-        return [rule for _lineno, rule, _snippet, _hint in scan_file(path)]
+        return scan_file(path)
     finally:
         path.unlink()
 
 
+def findings_for(source: str, suffix: str = ".tsx") -> list[str]:
+    return [finding.rule_id for finding in scanned(source, suffix)]
+
+
+class RecordCoverageTest(unittest.TestCase):
+    """Every rule this checker claims must have a record, and vice versa."""
+
+    def test_checker_owns_exactly_the_prod_attr_records(self) -> None:
+        self.assertEqual(
+            check_design_attribution.OWNED_RULE_IDS,
+            frozenset(f"PROD-ATTR-{index}" for index in range(1, 6)),
+        )
+
+    def test_every_pattern_names_an_owned_record(self) -> None:
+        self.assertEqual(
+            {rule_id for rule_id, _pattern in check_design_attribution.PATTERNS},
+            set(check_design_attribution.OWNED_RULE_IDS),
+        )
+
+    def test_diagnostic_cites_the_rule_and_the_record(self) -> None:
+        diagnostic = scanned("/* Codex-style dot */")[0].format()
+        self.assertIn("PROD-ATTR-1", diagnostic)
+        self.assertIn("Codex-style", diagnostic)
+        self.assertIn("lints/product/attribution.toml", diagnostic)
+        self.assertIn("  instead:", diagnostic)
+
+
 class AttributionRejected(unittest.TestCase):
     def test_style_suffix(self) -> None:
-        self.assertIn("attributed-style", findings_for("/* Codex-style dot */"))
+        self.assertIn("PROD-ATTR-1", findings_for("/* Codex-style dot */"))
 
     def test_possessive_style(self) -> None:
-        self.assertIn("attributed-style", findings_for("// codex's style here"))
+        self.assertIn("PROD-ATTR-1", findings_for("// codex's style here"))
 
     def test_recipe_language(self) -> None:
-        self.assertIn("attributed-recipe", findings_for("/* codex popover recipe */"))
+        self.assertIn("PROD-ATTR-2", findings_for("/* codex popover recipe */"))
 
     def test_anatomy_language(self) -> None:
-        self.assertIn("attributed-recipe", findings_for("// Codex anatomy has no footer"))
+        self.assertIn("PROD-ATTR-2", findings_for("// Codex anatomy has no footer"))
 
     def test_reference_dump_path(self) -> None:
         self.assertIn(
-            "reference-dump-path",
+            "PROD-ATTR-3",
             findings_for("/* see reference/codex/status/card.html */"),
         )
 
     def test_shipped_identifier(self) -> None:
         self.assertIn(
-            "attributed-identifier",
+            "PROD-ATTR-5",
             findings_for('className="codex-thread-find-match"'),
         )
 
     def test_bare_product_plus_design_noun(self) -> None:
         self.assertIn(
-            "attributed-treatment",
+            "PROD-ATTR-4",
             findings_for("/* for codex avatar-group clusters */"),
         )
 
     def test_other_products(self) -> None:
-        self.assertIn("attributed-style", findings_for("/* Conductor-style list */"))
-        self.assertIn("attributed-treatment", findings_for("/* cursor gutter */"))
+        self.assertIn("PROD-ATTR-1", findings_for("/* Conductor-style list */"))
+        self.assertIn("PROD-ATTR-4", findings_for("/* cursor gutter */"))
 
     def test_css_files_are_scanned(self) -> None:
         self.assertIn(
-            "attributed-identifier",
+            "PROD-ATTR-5",
             findings_for("mark.codex-thread-find-match { color: red; }", suffix=".css"),
         )
 

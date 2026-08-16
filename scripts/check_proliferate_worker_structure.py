@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts import lint_records  # noqa: E402
+
+RULES = lint_records.load("anyharness")
+
 WORKER_SRC = REPO_ROOT / "anyharness" / "crates" / "proliferate-worker" / "src"
 
 # The worker is deliberately slim post gateway-token rebuild: enroll once,
@@ -43,36 +51,59 @@ BLOCKED_IMPORT_RE = re.compile(r"\bcrate::(?:commands|sync|updates|control|tail|
 BLOCKED_ROOT_MOD_RE = re.compile(r"^\s*mod\s+(?:commands|sync|updates|control|tail|inventory)\s*;")
 
 
+def diagnostic(rule_id: str, location: str, detail: str) -> str:
+    return lint_records.render_diagnostic(RULES.rule(rule_id), location, detail)
+
+
 def main() -> int:
     violations: list[str] = []
     for path in BLOCKED_PATHS:
         if path.exists():
-            violations.append(path.relative_to(REPO_ROOT).as_posix())
+            violations.append(
+                diagnostic(
+                    "AH-WORKER-1",
+                    path.relative_to(REPO_ROOT).as_posix(),
+                    "retired worker path exists again",
+                )
+            )
     for path in REQUIRED_FILES:
         if not path.is_file():
-            relative = path.relative_to(REPO_ROOT).as_posix()
-            violations.append(f"{relative}: required worker structure file missing")
+            violations.append(
+                diagnostic(
+                    "AH-WORKER-2",
+                    path.relative_to(REPO_ROOT).as_posix(),
+                    "required worker structure file missing",
+                )
+            )
 
     for path in sorted(WORKER_SRC.rglob("*.rs")):
         text = path.read_text()
+        relative = path.relative_to(REPO_ROOT).as_posix()
         for lineno, line in enumerate(text.splitlines(), start=1):
-            if BLOCKED_IMPORT_RE.search(line):
-                relative = path.relative_to(REPO_ROOT).as_posix()
-                violations.append(f"{relative}:{lineno}: old worker top-level module import")
+            match = BLOCKED_IMPORT_RE.search(line)
+            if match:
+                violations.append(
+                    diagnostic("AH-WORKER-3", f"{relative}:{lineno}", match.group(0))
+                )
 
     main_rs = WORKER_SRC / "main.rs"
+    main_relative = main_rs.relative_to(REPO_ROOT).as_posix()
     for lineno, line in enumerate(main_rs.read_text().splitlines(), start=1):
-        if BLOCKED_ROOT_MOD_RE.search(line):
-            relative = main_rs.relative_to(REPO_ROOT).as_posix()
-            violations.append(f"{relative}:{lineno}: old worker top-level module declaration")
+        match = BLOCKED_ROOT_MOD_RE.search(line)
+        if match:
+            violations.append(
+                diagnostic(
+                    "AH-WORKER-4", f"{main_relative}:{lineno}", match.group(0).strip()
+                )
+            )
 
     if not violations:
         print("Proliferate Worker structure check passed.")
         return 0
 
-    print("Proliferate Worker code must use control/, tail/, and lifecycle/ paths:")
     for violation in violations:
-        print(f"  {violation}")
+        print(violation)
+        print()
     return 1
 
 

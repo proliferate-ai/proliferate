@@ -1,0 +1,49 @@
+# Grandfathered product sites. Every entry is a site that predates its rule and
+# is pinned so it cannot spread or worsen. Net-new entries are amendments and
+# require founder approval (see lints/README.md).
+#
+# THEME CONTRAST DEVIATIONS
+# -------------------------
+# `path` is the built stylesheet the checker measures; `site` is the mode block
+# and the measured pair, exactly as check_theme_contrast labels it. Each entry
+# also carries the ratio measured when the deviation was accepted, in the
+# checker's DECLARED_DEVIATION_RATIOS table under the same (path, site) key,
+# because an [[exception]] entry carries prose and not numbers. The pair may
+# improve freely; a regression below the pinned ratio fails, and a pair that
+# starts clearing its floor fails too (PROD-THEME-6) so the entry is deleted
+# rather than quietly outliving its reason.
+#
+# All five are dark-mode pairs. The light half of the retune that produced these
+# floors is done; dark's hairline and state systems each need their own review,
+# and until then the measured numbers here are the ceiling on how bad they may
+# get.
+
+[[exception]]
+rule = "PROD-THEME-3"
+path = "apps/packages/design/dist/theme.css"
+site = "[dark] --color-border-light against --color-surface"
+reason = "pre-existing dark value, untouched by the light retune; raising it changes every hairline divider in dark mode and needs its own review"
+
+[[exception]]
+rule = "PROD-THEME-3"
+path = "apps/packages/design/dist/theme.css"
+site = "[dark] --color-border-light against --color-sidebar"
+reason = "newly measured dark rail pair, outside the light retune; pinned here so it cannot regress before the dark hairline system is reviewed"
+
+[[exception]]
+rule = "PROD-THEME-3"
+path = "apps/packages/design/dist/theme.css"
+site = "[dark] --color-border-light against --color-surface-under"
+reason = "newly measured dark recessed-plane pair, outside the light retune; pinned here so it cannot regress before the dark hairline system is reviewed"
+
+[[exception]]
+rule = "PROD-THEME-3"
+path = "apps/packages/design/dist/theme.css"
+site = "[dark] --color-border-light against --color-surface-control"
+reason = "newly measured dark control-fill pair, outside the light retune; pinned here so it cannot regress before the dark hairline system is reviewed"
+
+[[exception]]
+rule = "PROD-THEME-4"
+path = "apps/packages/design/dist/theme.css"
+site = "[dark] --color-selected carries at least as much ink as --color-hover"
+reason = "pre-existing dark inversion (selected #1f1f1f reads 1.08:1 off the surface where hover #2a2a2a reads 1.24:1); the light half is fixed here, dark needs its own retune. Pinned at the measured 1.08 rather than 0.0 so the inversion cannot deepen — a 0.0 pin would have accepted any regression at all"

@@ -1,0 +1,231 @@
+# Server exception ledger — grandfathered violation sites, one entry per
+# site (never a count). Each entry names the rule record it excepts, the
+# file, a line-number-free site fingerprint the checker recomputes, and
+# the reason it was grandfathered. Deleting a site's violation means
+# deleting its entry in the same change; the checker fails on a stale one.
+#
+# Net-new entries are constitutional amendments (see lints/README.md).
+
+# ── SRV-API-5 ─────────────────────────────────────────────────────────
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/desktop/api.py"
+site = "desktop_password_login/except:AuthFlowError::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/desktop/api.py"
+site = "desktop_password_login::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "start_required_github_link::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "start_auth::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "oauth_callback/if/if/try::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "oauth_callback/if/if/except:AuthFlowError::db.rollback"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "oauth_callback/except:WebBetaAccessDenied::db.rollback"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "oauth_callback::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "oauth_shared_provider_callback/if/if/try::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "oauth_shared_provider_callback/if/if/except:AuthFlowError::db.rollback"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "oauth_shared_provider_callback/except:WebBetaAccessDenied::db.rollback"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "oauth_shared_provider_callback::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "apple_web_callback/except:WebBetaAccessDenied::db.rollback"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "apple_web_callback::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "apple_mobile_complete::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "web_password_login/except:WebBetaAccessDenied::db.rollback"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "web_password_login/except:AuthFlowError::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "web_password_login::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "mobile_password_login/except:AuthFlowError::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "mobile_password_login::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "set_password::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "web_token::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "mobile_token::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/identity/api.py"
+site = "web_session_logout::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/sso/api.py"
+site = "start_sso_endpoint::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/sso/api.py"
+site = "oidc_sso_callback/if/if/try::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/sso/api.py"
+site = "oidc_sso_callback/if/if/except:AuthFlowError::db.rollback"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/sso/api.py"
+site = "oidc_sso_callback/except:WebBetaAccessDenied::db.rollback"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/sso/api.py"
+site = "oidc_sso_callback/except:AuthFlowError::db.rollback"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+[[exception]]
+rule = "SRV-API-5"
+path = "server/proliferate/server/accounts/sso/api.py"
+site = "oidc_sso_callback::db.commit"
+reason = "inherited Auth transaction and error-persistence semantics retained during the route move"
+
+# ── SRV-DOMAIN-1 ──────────────────────────────────────────────────────
+
+[[exception]]
+rule = "SRV-DOMAIN-1"
+path = "server/proliferate/server/cloud/agent_run_config/domain/resolve.py"
+site = "<module>::import:proliferate.db.store.cloud_agent_run_config:CloudAgentRunConfigRecord"
+reason = "transitional agent run config resolver imports product constants"
+
+# ── SRV-INTEG-4 ───────────────────────────────────────────────────────
+
+[[exception]]
+rule = "SRV-INTEG-4"
+path = "server/proliferate/server/cloud/gateway/proxy.py"
+site = "<module>::import:httpx"
+reason = "managed sandbox gateway owns temporary HTTP/WS proxy transport until gateway access moves below product service layer"
+
+# ── SRV-MIGRATE-1 ─────────────────────────────────────────────────────
+
+[[exception]]
+rule = "SRV-MIGRATE-1"
+path = "server/alembic/versions/f7a8b9c0d1e2_auth_identity_model.py"
+site = "<module>::import:proliferate.config:settings"
+reason = "legacy identity migration imports mutable settings and encryption helpers; make the revision self-contained when identity encryption migrates"
+
+[[exception]]
+rule = "SRV-MIGRATE-1"
+path = "server/alembic/versions/f7a8b9c0d1e2_auth_identity_model.py"
+site = "<module>::import:proliferate.lib.infra.encryption.fernet:encrypt_text"
+reason = "legacy identity migration imports mutable settings and encryption helpers; make the revision self-contained when identity encryption migrates"
+
+[[exception]]
+rule = "SRV-MIGRATE-1"
+path = "server/alembic/versions/f8a9b0c1d2e3_auth_identity_multiple_provider_accounts.py"
+site = "<module>::import:proliferate.config:settings"
+reason = "legacy identity migration imports mutable settings and encryption helpers; make the revision self-contained when identity encryption migrates"
+
+[[exception]]
+rule = "SRV-MIGRATE-1"
+path = "server/alembic/versions/f8a9b0c1d2e3_auth_identity_multiple_provider_accounts.py"
+site = "<module>::import:proliferate.lib.infra.encryption.fernet:encrypt_text"
+reason = "legacy identity migration imports mutable settings and encryption helpers; make the revision self-contained when identity encryption migrates"
