@@ -35,11 +35,14 @@ const desktopSrc = fileURLToPath(new URL("../../desktop/src", import.meta.url));
 // A handful of modules import the package's own host surface by its PUBLIC
 // specifier (`@proliferate/product-client/host/*`) rather than through
 // `#product/*`. That subpath is an `exports` entry pointing at compiled `dist`,
-// so in the test lane it resolves only after a package build — and any test
+// so in the test lane it resolves only after a package build, and any test
 // whose graph touches one of those modules is unrunnable without one. Mapping
 // the public subpath at source, exactly as `#product/*` is mapped above, keeps
 // the same "tests run against source, never dist" rule the config already
-// states, instead of making a build a precondition for running one file.
+// states, instead of making a build a precondition for running one file. The
+// injected Desktop measurement engine reaches product-client's diagnostics port
+// through the sibling `@proliferate/product-client/internal/*` subpath, which is
+// mapped to source for the same reason (see the alias list below).
 const hostDir = fileURLToPath(new URL("./src/host", import.meta.url));
 
 export default defineConfig({
@@ -52,6 +55,13 @@ export default defineConfig({
     alias: [
       { find: /^#product\//, replacement: `${srcDir}/` },
       { find: /^@proliferate\/product-client\/host\//, replacement: `${hostDir}/` },
+      // Injected Desktop modules (the measurement engine and its diagnostics)
+      // import the package's own tree by the PUBLIC `internal/*` specifier,
+      // whose `exports` `default` points at compiled `dist`. Mirror the `host/`
+      // alias above and resolve it at source so the test lane stays runnable
+      // without a package build — the same "tests run against source, never
+      // dist" rule this config already states.
+      { find: /^@proliferate\/product-client\/internal\//, replacement: `${srcDir}/` },
       { find: /^@anyharness\/sdk-react$/, replacement: anyharnessSdkReact },
       { find: /^@anyharness\/sdk$/, replacement: anyharnessSdk },
       { find: /^@\//, replacement: `${desktopSrc}/` },

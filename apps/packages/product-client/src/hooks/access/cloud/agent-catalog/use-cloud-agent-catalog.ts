@@ -10,6 +10,13 @@ import {
 import { getBundledDesktopAgentLaunchCatalog } from "#product/lib/domain/agents/bundled-agent-catalog";
 import { cloudAgentCatalogKey } from "#product/hooks/access/cloud/agent-catalog/query-keys";
 
+// Named exception (does not sit on the `cadence` scale): 5 minutes is longer
+// than even `cadence.slowMs` (60s), the scale's largest token. The agent
+// catalog changes on a release cadence, not a per-session one, so a stale
+// time an order of magnitude beyond `slow` is intentional rather than an
+// oversight (UX Latency + Transitions ADR §4.7, Rung 6, Q8).
+const CLOUD_AGENT_CATALOG_STALE_MS = 5 * 60 * 1000;
+
 async function fetchCloudAgentCatalogProjection(): Promise<DesktopAgentLaunchCatalog> {
   // The cloud endpoint serves the raw schemaVersion-2 catalog document; the
   // generated cloud-sdk response type lags the cutover, hence the assertion.
@@ -25,7 +32,7 @@ export function useCloudAgentCatalog(enabled = true) {
     enabled,
     initialData: getBundledDesktopAgentLaunchCatalog,
     initialDataUpdatedAt: 0,
-    staleTime: 5 * 60 * 1000,
+    staleTime: CLOUD_AGENT_CATALOG_STALE_MS,
     retry: 1,
   });
 }
@@ -53,7 +60,7 @@ export function useCloudAgentCatalogCache() {
         queryFn: fetchCloudAgentCatalogProjection,
         initialData: getBundledDesktopAgentLaunchCatalog,
         initialDataUpdatedAt: 0,
-        staleTime: 5 * 60 * 1000,
+        staleTime: CLOUD_AGENT_CATALOG_STALE_MS,
       }),
   };
 }

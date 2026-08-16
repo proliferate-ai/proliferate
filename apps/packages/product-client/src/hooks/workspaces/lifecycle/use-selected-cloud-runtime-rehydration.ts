@@ -116,6 +116,7 @@ export function useSelectedCloudRuntimeRehydration(
           },
           startedAt: startLatencyTimer(),
           isCurrent: () => useSessionSelectionStore.getState().selectedWorkspaceId === workspaceId,
+          signal: useSessionSelectionStore.getState().workspaceSelectionAbort.signal,
         });
       }
 

@@ -34,6 +34,14 @@ import {
 import { getMeasurementRequestOptions } from "#product/lib/infra/measurement/measurement-port";
 import { hashMeasurementScope } from "#product/lib/infra/measurement/measurement-port";
 
+// Named exception (does not sit on the `cadence` scale): 30s falls strictly
+// between `cadence.relaxedMs` (15s) and `cadence.slowMs` (60s). Snapping down
+// to relaxed would tighten this active-refresh loop, which the ADR ruling
+// forbids; snapping up to slow would double it, which is more than an
+// inconsequential loosening for the collections backing the workspace
+// sidebar, header tabs, and file tree while a workspace is actively
+// refreshing. Kept as its own named constant instead of force-fitting a token
+// (UX Latency + Transitions ADR §4.7, Rung 6, Q8).
 const WORKSPACE_COLLECTIONS_STALE_MS = 30_000;
 
 interface UseWorkspacesOptions {

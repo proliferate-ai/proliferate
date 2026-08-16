@@ -23,6 +23,10 @@ import {
 } from "#product/stores/sessions/session-records";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
+import {
+  abandonRendererFlow,
+  finishRendererFlow,
+} from "#product/lib/infra/diagnostics/renderer-flow-timing";
 
 type SetSessionConfigOptionMutation = ReturnType<typeof useSetSessionConfigOptionMutation>;
 
@@ -174,6 +178,15 @@ export async function dispatchConfigIntent(
       configId: intent.configId,
       applyState: response.applyState,
     });
+    if (intent.configId === "mode") {
+      // UX-latency R12: commit mark, only reached once a superseding dispatch
+      // hasn't raced past this one (isCurrentConfigDispatch check above).
+      finishRendererFlow({
+        kind: "mode_switch",
+        correlationKey: intent.intentId,
+        detail: { apply_state: response.applyState },
+      });
+    }
   } catch (error) {
     if (!isCurrentConfigDispatch(intent.intentId, dispatchedAt)) {
       return;
@@ -183,6 +196,13 @@ export async function dispatchConfigIntent(
       status: "failed",
       errorMessage: message,
     });
+    if (intent.configId === "mode") {
+      abandonRendererFlow({
+        kind: "mode_switch",
+        correlationKey: intent.intentId,
+        reason: "dispatch_failed",
+      });
+    }
     deps.onFailure?.(message);
   }
 }

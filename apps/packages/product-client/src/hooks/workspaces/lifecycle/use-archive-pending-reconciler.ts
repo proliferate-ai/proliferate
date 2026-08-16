@@ -2,6 +2,16 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { listRuntimeWorkspaces } from "#product/lib/access/anyharness/workspaces";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
+// Named exception (does not sit on the `cadence` scale): 4s falls strictly
+// between `cadence.fastMs` (1s) and `cadence.standardMs` (5s). Snapping down
+// to fast would tighten (forbidden). Snapping up to standard is the closer
+// option, but this is the reconciler of last resort for the sidebar-state
+// contract (§9.5): it only ever polls while a workspace row is optimistically
+// hidden pending an archive confirmation the user can still Undo, so the last
+// second before a timed-out attempt gets reconciled is exactly the window
+// where an Undo raced a crash-before-response. Kept as its own named constant
+// rather than stretching that window (UX Latency + Transitions ADR §4.7,
+// Rung 6, Q8).
 const ARCHIVE_PENDING_POLL_INTERVAL_MS = 4_000;
 
 export interface UseArchivePendingReconcilerOptions {

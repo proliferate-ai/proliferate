@@ -43,6 +43,13 @@ export interface WorkspaceSelectionContext {
   selectionNonce: number;
   selectionStartedAt: number;
   cloudWorkspaceId: string | null;
+  /**
+   * Abort signal for this selection, owned by the selection store and captured
+   * the instant this selection took ownership (UX Latency ADR §4.6, Rung 9 /
+   * Q11). A newer selection aborts it; the bootstrap chain threads it onto its
+   * fetches so superseded requests are cancelled on the wire.
+   */
+  abortSignal: AbortSignal;
 }
 
 export interface WorkspaceSelectionDeps {
@@ -79,6 +86,8 @@ export interface WorkspaceSelectionDeps {
     latencyFlowId?: string | null;
     forceSessionDirectoryRefresh?: boolean;
     isCurrent: () => boolean;
+    /** Selection abort signal; a newer selection cancels this bootstrap's fetches on the wire. */
+    signal: AbortSignal;
   }) => Promise<{ sessions: WorkspaceSession[] }>;
   reconcileHotWorkspace: (input: {
     workspaceId: string;

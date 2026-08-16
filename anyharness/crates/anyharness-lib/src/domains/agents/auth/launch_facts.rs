@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 
 use anyharness_credential_discovery::{route_kinds, CredentialFact};
 
-use crate::domains::agents::registry::bundled::bundled_agent_registry_document;
+use crate::domains::agents::catalog::sync::active_agent_registry;
 use crate::domains::agents::registry::schema::{
     AgentRegistryAuthSlotEnvVar, AgentRegistryEnvVarKind,
 };
@@ -149,7 +149,7 @@ fn collect_enrolled_source_facts(
 /// mode switch as a secret and emit a valueless `Env` fact that the classifier's
 /// exact var+value `EnvFlag` match can never satisfy.
 fn registry_flag_vars(agent_kind: &str) -> BTreeSet<String> {
-    bundled_agent_registry_document()
+    active_agent_registry()
         .agents
         .iter()
         .find(|agent| agent.kind == agent_kind)
@@ -177,15 +177,15 @@ pub(crate) fn collect_launch_env_facts_with_ambient(
     ambient_env: &BTreeMap<String, String>,
 ) -> Vec<CredentialFact> {
     // Collect registry-declared env vars for this harness kind.
-    let mut registry_vars: Vec<&AgentRegistryAuthSlotEnvVar> = Vec::new();
-    if let Some(agent) = bundled_agent_registry_document()
+    let mut registry_vars: Vec<AgentRegistryAuthSlotEnvVar> = Vec::new();
+    if let Some(agent) = active_agent_registry()
         .agents
         .iter()
         .find(|agent| agent.kind == agent_kind)
     {
         for slot in &agent.auth.slots {
             for env_var in &slot.env_vars {
-                registry_vars.push(env_var);
+                registry_vars.push(env_var.clone());
             }
         }
     }

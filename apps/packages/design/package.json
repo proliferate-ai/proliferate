@@ -15,6 +15,10 @@
       "types": "./dist/motion.d.ts",
       "import": "./dist/motion.js"
     },
+    "./cadence": {
+      "types": "./dist/cadence.d.ts",
+      "import": "./dist/cadence.js"
+    },
     "./react-native": {
       "types": "./dist/react-native.d.ts",
       "import": "./dist/react-native.js"

@@ -12,18 +12,25 @@ import {
  * This module is the single producer of the `renderer.flow.*` event family. It
  * sits alongside the existing renderer connection/stream diagnostics
  * (renderer-diagnostics-connection.ts, renderer-diagnostic-migrations.ts) and is
- * the one place the four canonical UX flows (workspace_open, settings_nav,
- * terminal_attach, session_open) emit stage timings. The older
- * `logLatency(...)` latency-flow API and the `startMeasurementOperation(...)`
- * measurement-port operation are no longer wired to these four flows; only
- * genuinely out-of-scope probes (typing/jank/scroll, incremental history
- * append/prepend, etc.) still use those APIs.
+ * the one place the canonical UX flows (workspace_open, settings_nav,
+ * terminal_attach, session_open, composer_submit, mode_switch) emit stage
+ * timings. The older `logLatency(...)` latency-flow API and the
+ * `startMeasurementOperation(...)` measurement-port operation are no longer
+ * wired to these flows; only genuinely out-of-scope probes (typing/jank/scroll,
+ * incremental history append/prepend, etc.) still use those APIs.
  *
  * The three stage timings the ADR requires:
  *
  *   - intent_to_shell_ms  (intent      -> shell_committed)
  *   - shell_to_data_ms    (shell        -> data_ready)
  *   - data_to_stable_ms   (data_ready   -> content_stable)
+ *
+ * composer_submit and mode_switch (R12 rung) are simpler two-point flows: they
+ * only call beginRendererFlow and finishRendererFlow, so shell_committed and
+ * data_ready are never reached and those two fields are omitted from their
+ * content_stable record; `intent_to_stable_ms` alone carries their timing
+ * (composer_submit: submit intent to first visible assistant content;
+ * mode_switch: mode-switch input to committed).
  *
  * IMPORTANT: these marks are store/data-boundary proxies, not real paint
  * commits. `shell_committed` fires when the shell's store state is in place and
@@ -43,7 +50,9 @@ export type RendererFlowKind =
   | "workspace_open"
   | "settings_nav"
   | "terminal_attach"
-  | "session_open";
+  | "session_open"
+  | "composer_submit"
+  | "mode_switch";
 
 export type RendererFlowStage =
   | "intent"
@@ -83,6 +92,18 @@ export const RENDERER_FLOW_BUDGETS: Record<RendererFlowKind, RendererFlowBudget>
   },
   session_open: {
     metric: "renderer.flow.session_open.data_to_stable_ms",
+    thresholdMs: null,
+  },
+  // composer_submit and mode_switch are two-point flows (intent -> stable,
+  // no shell/data-ready midpoints, so no data_to_stable_ms field is ever
+  // emitted for them): the budget metric names intent_to_stable_ms, the
+  // field these flows actually produce.
+  composer_submit: {
+    metric: "renderer.flow.composer_submit.intent_to_stable_ms",
+    thresholdMs: null,
+  },
+  mode_switch: {
+    metric: "renderer.flow.mode_switch.intent_to_stable_ms",
     thresholdMs: null,
   },
 };
@@ -249,10 +270,6 @@ export function finishRendererFlow(input: {
   const fields: Record<string, RendererDiagnosticField> = {
     flow_kind: diagnosticField(input.kind, "operational"),
     stages_completed: diagnosticField(stagesCompleted, "operational"),
-    data_to_stable_ms: diagnosticField(
-      round(now - (flow.dataAt ?? flow.shellAt ?? flow.startedAt)),
-      "operational",
-    ),
     intent_to_stable_ms: diagnosticField(round(now - flow.startedAt), "operational"),
     budget_metric: diagnosticField(budget.metric, "operational"),
     budget_threshold_ms: diagnosticField(budget.thresholdMs, "operational"),
@@ -269,6 +286,11 @@ export function finishRendererFlow(input: {
       round(flow.dataAt - (flow.shellAt ?? flow.startedAt)),
       "operational",
     );
+    // data_to_stable_ms is the "last-mile paint stage" that Honeycomb queries
+    // aggregate on; it's only meaningful once data_ready was actually
+    // reached. composer_submit/mode_switch (two-point flows, no data_ready)
+    // omit it rather than aliasing it to the whole-intent duration.
+    fields.data_to_stable_ms = diagnosticField(round(now - flow.dataAt), "operational");
   }
   recordRendererDiagnostic({
     name: "renderer.flow.content_stable",

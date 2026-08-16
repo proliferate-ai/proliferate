@@ -65,6 +65,12 @@ export async function loadWorkspaceSessionDirectory(
     timeoutMs: number;
     workspaceConnection: AnyHarnessResolvedConnection;
     workspaceId: string;
+    /**
+     * Selection abort signal (UX Latency ADR §4.6, Rung 9 / Q11). Threaded onto
+     * the session-list fetch so a superseded selection cancels it on the wire;
+     * the fetch layer composes it with its own 8s timeout controller.
+     */
+    signal?: AbortSignal;
   },
   deps: {
     loadWorkspaceSessions: ReturnType<
@@ -72,6 +78,9 @@ export async function loadWorkspaceSessionDirectory(
     >["loadWorkspaceSessions"];
   },
 ): Promise<WorkspaceSessionDirectoryResult> {
+  const requestOptions: AnyHarnessRequestOptions | undefined = input.signal
+    ? { ...input.requestOptions, signal: input.signal }
+    : input.requestOptions;
   const result = await loadSessionsWithBoundedRecovery({
     isCurrent: input.isCurrent,
     forceInitialRefresh: input.forceInitialRefresh,
@@ -79,7 +88,7 @@ export async function loadWorkspaceSessionDirectory(
       workspaceConnection: input.workspaceConnection,
       workspaceId: input.workspaceId,
       isCurrent: input.isCurrent,
-      requestOptions: input.requestOptions ?? undefined,
+      requestOptions,
       forceRefresh,
       timeoutMs: input.timeoutMs,
     }),

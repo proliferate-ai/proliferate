@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { cadence } from "@proliferate/design/cadence";
 import { useSessionReviewsQuery } from "@anyharness/sdk-react";
 import type { ReviewAssignmentDetail } from "@anyharness/sdk";
 import { useComposerWorkspaceActivityModel } from "#product/hooks/workspaces/derived/use-composer-workspace-activity-model";
@@ -31,8 +32,10 @@ const NOW_TICK_MS = 30_000;
  * refresh. The daemon throttles refresh=1 to a 10s floor and the app's
  * standing design is event-driven refresh (prompt submit / turn end /
  * publish) — this interval only exists for the watching-CI window and stops
- * the moment checks settle. */
-const CHECKS_WATCH_INTERVAL_MS = 60_000;
+ * the moment checks settle. Was a raw 60_000ms literal; already exactly
+on-scale, so this is a rename onto `cadence.slowMs` rather than a value
+change (UX Latency + Transitions ADR §4.7, Rung 6, Q8). */
+const CHECKS_WATCH_INTERVAL_MS = cadence.slowMs;
 
 const WORKING_ASSIGNMENT_STATUSES = new Set<ReviewAssignmentDetail["status"]>([
   "queued",

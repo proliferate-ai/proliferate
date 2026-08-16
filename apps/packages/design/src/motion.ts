@@ -95,6 +95,34 @@ export const motion = {
     autoHideScrollbarMs: 700,
     hoverCardHideMs: 120,
     levelBarStaggerMs: 110,
+    /** Todo progress pill: wait after a step advance before its linger fade
+     * starts (`todo-progress-pill-state.ts`). */
+    todoPillStepLingerMs: 3400,
+    /** Todo progress pill: fully hidden by this point after a step advance. */
+    todoPillStepHideMs: 4000,
+    /** Todo progress pill: wait after the pointer leaves before its
+     * shorter leave-fade starts. */
+    todoPillHoverLingerMs: 1200,
+    /** Todo progress pill: fully hidden by this point after the pointer
+     * leaves. */
+    todoPillHoverHideMs: 1800,
+    /** A deleted tab row outlives the live data as a collapsing ghost so the
+     * disclosure transition finishes even when the archive round-trip beats
+     * it; covers `disclosureMs` plus timer-scheduling slack
+     * (`ClosedChatTabsMenu.tsx`). */
+    ghostRowFinalizeMs: 280,
+    /** A settled optimistic archive/unarchive POST is a definite outcome
+     * (success or a typed/generic failure). Past this bound the outcome is
+     * genuinely unknown, so the row stays hidden and the pending reconciler
+     * becomes the decider instead of a false failure toast. */
+    optimisticSettleTimeoutMs: 12_000,
+  },
+  /** Feedback affordances that are neither animation nor choreography waits:
+   * a control flipping to a confirmation label, then reverting. */
+  feedback: {
+    /** How long a control reads "Copied" before reverting to its resting
+     * label. */
+    copiedResetMs: 2_000,
   },
   cssMs,
 } as const;

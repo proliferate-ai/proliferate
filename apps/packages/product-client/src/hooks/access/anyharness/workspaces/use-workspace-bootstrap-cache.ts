@@ -43,11 +43,19 @@ interface FetchWorkspaceSessionsInput {
 
 function requestOptionsWithSignal(
   requestOptions: AnyHarnessRequestOptions | undefined,
-  signal: AbortSignal,
+  timeoutSignal: AbortSignal,
 ): AnyHarnessRequestOptions {
+  const callerSignal = requestOptions?.signal;
+  // Compose the caller's abort (e.g. a superseded workspace selection, UX
+  // Latency ADR §4.6 Rung 9) with the bootstrap timeout so either can cancel
+  // the request on the wire. Aborting on caller supersession must not disarm the
+  // 8s ceiling, and the timeout must not mask an intentional supersession.
+  const signal = callerSignal
+    ? AbortSignal.any([callerSignal, timeoutSignal])
+    : timeoutSignal;
   return {
     ...requestOptions,
-    signal: requestOptions?.signal ?? signal,
+    signal,
   };
 }
 

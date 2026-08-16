@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 
-import { cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { motion } from "@proliferate/design/motion";
 import { CopyMessageButton } from "#product/components/workspace/chat/transcript/CopyMessageButton";
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
 });
 
 describe("CopyMessageButton", () => {
@@ -65,5 +67,33 @@ describe("CopyMessageButton", () => {
     expect(root?.children[0]?.tagName).toBe("BUTTON");
     expect(root?.children[1]?.tagName).toBe("SPAN");
     expect(root?.children[1]?.textContent).toBe("9:41 AM");
+  });
+
+  it("reverts to the resting label motion.feedback.copiedResetMs after a copy", async () => {
+    vi.useFakeTimers();
+    Object.assign(navigator, {
+      clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
+
+    const { container } = render(
+      <CopyMessageButton content="Answer" visibilityClassName="opacity-100" />,
+    );
+    const button = container.querySelector("button") as HTMLButtonElement;
+
+    await act(async () => {
+      fireEvent.click(button);
+      await Promise.resolve();
+    });
+    expect(button.title).toBe("Copied");
+
+    await act(async () => {
+      vi.advanceTimersByTime(motion.feedback.copiedResetMs - 1);
+    });
+    expect(button.title).toBe("Copied");
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(button.title).toBe("Copy message");
   });
 });

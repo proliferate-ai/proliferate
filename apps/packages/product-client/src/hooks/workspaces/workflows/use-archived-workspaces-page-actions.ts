@@ -22,7 +22,10 @@ import type { UnarchiveScenarioAnswer } from "#product/lib/domain/workspaces/arc
 const ROW_EXIT_DELAY_MS = motion.duration.disclosureMs;
 // A row that neither succeeds nor raises the 409 scenario dialog within this
 // window reinstates rather than staying collapsed forever on a silent stall.
-const UNARCHIVE_SETTLE_TIMEOUT_MS = 10_000;
+// Shares `optimisticSettleTimeoutMs` with the archive settle above: both are
+// the same "definite outcome or genuinely unknown" bound, previously tuned
+// independently to 10s/12s for no principled reason.
+const UNARCHIVE_SETTLE_TIMEOUT_MS = motion.delay.optimisticSettleTimeoutMs;
 
 export type ArchivedDeleteTarget = string | "all" | null;
 

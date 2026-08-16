@@ -36,7 +36,7 @@ vi.mock("@proliferate/cloud-sdk", () => ({
 
 vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({
-    cloudEnabled: true,
+    controlPlaneReachable: true,
     authStatus: "authenticated",
   }),
 }));

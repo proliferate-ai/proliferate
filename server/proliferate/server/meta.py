@@ -292,6 +292,19 @@ class DesktopUpdaterCadence(BaseModel):
     stallThresholdMs: int | None = None
 
 
+class AgentCatalogChannel(BaseModel):
+    """Publisher-lane channel this deployment advertises (Update Flow ADR,
+    FR-1). A desktop shell or cloud worker launches its runtime sidecar with
+    these as ``ANYHARNESS_CATALOG_ARTIFACT_BASE_URL``/``ANYHARNESS_CATALOG_CHANNEL``.
+    Telemetry-shaped, never a push: the runtime still only fetches this ONCE
+    at its own boot (`catalog/artifact.rs`); nothing here can move a pin under
+    an already-running process.
+    """
+
+    channel: str
+    artifactBaseUrl: str
+
+
 class MetaResponse(BaseModel):
     serverVersion: str
     desktopVersion: str
@@ -306,6 +319,11 @@ class MetaResponse(BaseModel):
     capabilities: ServerCapabilities
     # Additive: absent (``None``) unless the deployment configured an override.
     desktopUpdater: DesktopUpdaterCadence | None = None
+    # `None` (the default: no `AGENT_CATALOG_ARTIFACT_BASE_URL` configured)
+    # means this deployment's runtimes never fetch — the compiled-in floor
+    # is the whole story. Clients must tolerate this field being entirely
+    # absent (older servers) exactly like an explicit `None`.
+    agentCatalog: AgentCatalogChannel | None = None
 
 
 def _cadence_env_ms(name: str) -> int | None:
@@ -333,6 +351,14 @@ def _desktop_updater_cadence() -> DesktopUpdaterCadence | None:
     )
 
 
+def _agent_catalog_channel(config: Settings) -> AgentCatalogChannel | None:
+    base_url = config.agent_catalog_artifact_base_url.strip()
+    if not base_url:
+        return None
+    channel = config.agent_catalog_channel.strip() or "stable"
+    return AgentCatalogChannel(channel=channel, artifactBaseUrl=base_url)
+
+
 @router.get("/meta", response_model=MetaResponse)
 async def meta() -> MetaResponse:
     return MetaResponse(
@@ -344,6 +370,7 @@ async def meta() -> MetaResponse:
         minDesktopVersionEnforced=min_desktop_version_enforced(),
         capabilities=build_server_capabilities(settings),
         desktopUpdater=_desktop_updater_cadence(),
+        agentCatalog=_agent_catalog_channel(settings),
     )
 
 

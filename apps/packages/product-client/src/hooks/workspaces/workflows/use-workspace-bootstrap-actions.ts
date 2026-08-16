@@ -109,7 +109,7 @@ export function useWorkspaceBootstrapActions() {
     startedAt,
     latencyFlowId,
     forceSessionDirectoryRefresh,
-    isCurrent,
+    isCurrent, signal,
   }: BootstrapWorkspaceInput): Promise<{ sessions: WorkspaceSession[] }> => {
     // UX-latency R1 (Q17): workspace_open emits ONLY through the renderer
     // flow-timing family. The old `startMeasurementOperation({kind:"workspace_open"})`
@@ -194,6 +194,7 @@ export function useWorkspaceBootstrapActions() {
         logicalWorkspaceId,
         measurementOperationId,
         requestOptions: sessionRequestOptions,
+        signal,
         forceInitialRefresh: forceSessionDirectoryRefresh,
         sessionsStartedAt,
         timeoutMs: WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS,
