@@ -271,6 +271,60 @@ async fn undo_advance_and_resume_map_the_illegal_and_missing_codes() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn cancel_answers_with_the_cancelled_projection_and_disposes_the_running_session() {
+    let fixture = fixture("wf-route-cancel");
+    let run_id = run_uuid(0x27);
+    let body = fixture.snapshot(single_node_definition("blocking turn"));
+    let (status, projection) = fixture
+        .request(Method::PUT, &format!("/v1/workflow-runs/{run_id}"), Some(body))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{projection}");
+    let wedged_row_id = projection["nodes"][0]["id"].as_str().expect("row id");
+    fixture.wait_for_control("turn-seen").await;
+
+    // The QA finding this closes: a wedged (never-ending) turn had no way to
+    // stop the run. Cancel answers with the run and its running node both
+    // cancelled in the same reply — the live session was disposed before the
+    // oneshot resolved, same persist-before-act shape as fail-redo.
+    let (status, projection) = fixture
+        .request(
+            Method::POST,
+            &format!("/v1/workflow-runs/{run_id}/cancel"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{projection}");
+    assert_eq!(projection["run"]["status"], "cancelled");
+    assert_eq!(node(&projection, wedged_row_id)["status"], "cancelled");
+
+    // A cancelled run is terminal: a second cancel is the transition table's
+    // refusal, same 409 shape as every other command.
+    let (status, problem) = fixture
+        .request(
+            Method::POST,
+            &format!("/v1/workflow-runs/{run_id}/cancel"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{problem}");
+    assert_eq!(problem["code"], "WORKFLOW_TRANSITION_ILLEGAL");
+    let detail = problem["detail"].as_str().expect("detail");
+    assert!(detail.contains("cancel"), "{detail}");
+
+    // A ghost run 404s with the run code, same as every other command route.
+    let ghost_run = run_uuid(0x28);
+    let (status, problem) = fixture
+        .request(
+            Method::POST,
+            &format!("/v1/workflow-runs/{ghost_run}/cancel"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(problem["code"], "WORKFLOW_RUN_NOT_FOUND");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn adhoc_nodes_launch_beside_the_chain_via_the_route() {
     let fixture = fixture("wf-route-adhoc");
     let run_id = run_uuid(0x26);

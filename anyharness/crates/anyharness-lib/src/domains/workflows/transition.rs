@@ -101,6 +101,7 @@ pub enum WorkflowCommand {
         prompt: String,
         model: Option<super::definition::NodeModel>,
     },
+    Cancel,
 }
 
 impl WorkflowCommand {
@@ -112,6 +113,7 @@ impl WorkflowCommand {
             Self::UndoAdvance => "undo_advance",
             Self::Resume => "resume",
             Self::AddAdhocNode { .. } => "add_adhoc_node",
+            Self::Cancel => "cancel",
         }
     }
 }
@@ -262,6 +264,18 @@ pub enum Transition {
         node_row_id: String,
         outcome: AdhocOutcome,
     },
+    /// User-initiated cancel: the run and its current node both go terminal.
+    /// `disposed_session_ids` collects EVERY running row's live session —
+    /// the chain node (Ruling L's condition: only when it was RUNNING, since
+    /// pause states hold no live turn to kill) plus any concurrently running
+    /// adhoc row. Unlike FailNode/CompleteRun, an adhoc row cannot be trusted
+    /// to self-resolve via its own turn report once the run is terminal and
+    /// the workspace policy releases: a wedged adhoc turn would otherwise
+    /// stay live forever. Mirrors `on_boot_fence`'s "every running row" scan.
+    Cancel {
+        node_row_id: String,
+        disposed_session_ids: Vec<String>,
+    },
 }
 
 impl Transition {
@@ -280,6 +294,7 @@ impl Transition {
             Self::ResumeNode { .. } => "resume",
             Self::AddAdhoc { .. } => "add_adhoc_node",
             Self::AdhocTurn { .. } => "adhoc_turn",
+            Self::Cancel { .. } => "cancel",
         }
     }
 }
@@ -678,6 +693,27 @@ fn on_command(state: &RunState, command: &WorkflowCommand) -> Decision {
                     rendered_envelope: None,
                     model: model.clone(),
                 },
+            })
+        }
+        WorkflowCommand::Cancel => {
+            // The terminal-run gate above already rejects Cancel once the run
+            // is terminal, so this arm only ever sees running / awaiting_human
+            // / interrupted — exactly the legal set the QA finding needs.
+            let Some(node) = state.current_node() else {
+                return illegal(state, command.as_str(), None, "no current node to cancel");
+            };
+            // Every running row's live session, chain or adhoc — same scan as
+            // `on_boot_fence` — so a running adhoc row is not left with a live
+            // agent burning tokens under a now-terminal, dispose-released run.
+            let disposed_session_ids: Vec<String> = state
+                .nodes
+                .iter()
+                .filter(|other| other.status == WorkflowNodeStatus::Running)
+                .filter_map(|other| other.session_id.clone())
+                .collect();
+            Decision::Transition(Transition::Cancel {
+                node_row_id: node.id.clone(),
+                disposed_session_ids,
             })
         }
     }

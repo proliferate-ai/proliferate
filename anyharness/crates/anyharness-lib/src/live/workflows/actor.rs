@@ -155,6 +155,15 @@ impl WorkflowActor {
                     self.dispose_session(&session_id).await;
                     break;
                 }
+                ResolvedSideEffect::DisposeSessions { session_ids } => {
+                    // Cancel's compound effect: every running row's session,
+                    // chain or adhoc. Nothing starts after — the run is
+                    // terminal.
+                    for session_id in &session_ids {
+                        self.dispose_session(session_id).await;
+                    }
+                    break;
+                }
                 ResolvedSideEffect::DisposeThenStart {
                     session_id,
                     node_row_id,

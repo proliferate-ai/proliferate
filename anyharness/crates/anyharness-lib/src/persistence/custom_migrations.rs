@@ -51,6 +51,14 @@ pub(super) const CUSTOM_FOREIGN_KEY_MIGRATIONS: &[(
     // transforms above (0061–0063) must still find the gen-1 shape they
     // rebuild, and only then does gen-2 claim the names.
     ("0069_workflow_runs_gen2", migrate_workflow_runs_gen2),
+    // The run-cancel command (QA finding: no way to kill a misbehaving run):
+    // widens the two gen-2 status CHECK vocabularies to admit 'cancelled'.
+    // Must run after 0069, which is the migration that first creates the
+    // gen-2 tables this one rebuilds.
+    (
+        "0070_workflow_run_cancel_status",
+        super::workflow_run_cancel_status_migration::migrate_workflow_run_cancel_status,
+    ),
 ];
 
 /// Turns the workspace lifecycle enum from `{active, retired}` into

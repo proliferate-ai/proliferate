@@ -120,8 +120,8 @@ reason = "R3 workspace-stop terminal suite: +615 lines of stop_all_for_workspace
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/persistence/custom_migrations.rs"
-max_lines = 1318
-reason = "custom migration with legacy schema coverage (+0063 partial unique controller index, ordered after the 0062 rebuild) ; +110: R1 archiving adds the 0067_workspace_archived_lifecycle FK-off full-table rebuild ; +72: R5 adds the 0068_workspace_drop_cleanup_columns FK-off full-table rebuild ; +10: workflows gen-2 PR1 registers the 0069_workflow_runs_gen2 FK-off rebuild"
+max_lines = 1326
+reason = "custom migration with legacy schema coverage (+0063 partial unique controller index, ordered after the 0062 rebuild) ; +110: R1 archiving adds the 0067_workspace_archived_lifecycle FK-off full-table rebuild ; +72: R5 adds the 0068_workspace_drop_cleanup_columns FK-off full-table rebuild ; +10: workflows gen-2 PR1 registers the 0069_workflow_runs_gen2 FK-off rebuild ; +8: fix/wf2-run-cancel registers the 0070_workflow_run_cancel_status FK-off rebuild"
 
 [[max_lines]]
 path = "anyharness/crates/proliferate-diagnostics-client/src/fallback/tests.rs"
@@ -170,23 +170,28 @@ reason = "scripted-ACP prompt/queue race suite over the real actor ; +2: workflo
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/workflows/store.rs"
-max_lines = 1327
-reason = "workflows gen-2 durable store: run/node/doc writes, apply_transition and projections share one SQLite seam; split into store/ on next growth per guides/domains.md ; +62: PR3 adds the docs-registry register/read seam and rendered-envelope persistence ; +32: PR4 adds the Ruling L DisposeThenStart side effect, the node model column, and queue-aware hold event emission ; +115: PR5a adds the courier PUT upsert (Ruling B one-live-run refusal, key-sorted definition JSON note) and the node_membership 404 discriminator read ; +11: pr11 adds the failure_code classification to the named transition event ; +20: pr11b splits the queued-interjection Hold out of the stale-notification target"
+max_lines = 1377
+reason = "workflows gen-2 durable store: run/node/doc writes, apply_transition and projections share one SQLite seam; split into store/ on next growth per guides/domains.md ; +62: PR3 adds the docs-registry register/read seam and rendered-envelope persistence ; +32: PR4 adds the Ruling L DisposeThenStart side effect, the node model column, and queue-aware hold event emission ; +115: PR5a adds the courier PUT upsert (Ruling B one-live-run refusal, key-sorted definition JSON note) and the node_membership 404 discriminator read ; +11: pr11 adds the failure_code classification to the named transition event ; +20: pr11b splits the queued-interjection Hold out of the stale-notification target ; +25: fix/wf2-run-cancel adds the run-cancel command ; +25: fix round 1 widens Cancel's disposal to every running row (chain + adhoc), NULLs the disposed node's session_id, and clears interruption_code on cancel"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/workflows/store_tests.rs"
-max_lines = 1462
-reason = "workflows gen-2 store suite over real migrations (idempotent create, transition application, projections, boot fence, docs registry) ; +139: PR3 adds docs-registry and rendered-envelope round-trip proofs ; +31: PR5a adds one-live-run refusal and membership-discriminator proofs ; +79: pr11 adds the subscriber-capture proof for the named transition event ; +89: pr11b adds the shared capture harness plus interjection-held and node_launched join-key proofs"
+max_lines = 1677
+reason = "workflows gen-2 store suite over real migrations (idempotent create, transition application, projections, boot fence, docs registry) ; +139: PR3 adds docs-registry and rendered-envelope round-trip proofs ; +31: PR5a adds one-live-run refusal and membership-discriminator proofs ; +79: pr11 adds the subscriber-capture proof for the named transition event ; +89: pr11b adds the shared capture harness plus interjection-held and node_launched join-key proofs ; +117: fix/wf2-run-cancel adds the cancel command store suite ; +98: fix round 1 adds the running-adhoc double-disposal proof and the interruption_code-cleared-on-cancel proof"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/workflows/transition.rs"
-max_lines = 738
-reason = "workflows gen-2 pure transition table: the ADR's ruling rows and their guards in one match ; +27: PR4 adds the ForcedUnload stop reason (parks as app_shutdown) and Ruling L redo-from-running"
+max_lines = 774
+reason = "workflows gen-2 pure transition table: the ADR's ruling rows and their guards in one match ; +27: PR4 adds the ForcedUnload stop reason (parks as app_shutdown) and Ruling L redo-from-running ; +18: fix/wf2-run-cancel adds the Cancel command and transition ; +18: fix round 1 widens Cancel's disposal to every running row (chain + adhoc), mirroring on_boot_fence's scan"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/workflows/transition_tests.rs"
-max_lines = 1103
-reason = "workflows gen-2 transition suite: one test per ADR table row plus staleness and illegal-command proofs ; +76: PR4 adds ForcedUnload-parking and Ruling L redo-from-running proofs"
+max_lines = 1190
+reason = "workflows gen-2 transition suite: one test per ADR table row plus staleness and illegal-command proofs ; +76: PR4 adds ForcedUnload-parking and Ruling L redo-from-running proofs ; +55: fix/wf2-run-cancel adds the cancel transition suite ; +32: fix round 1 adds the running-adhoc disposal proof and parameterizes the terminal-command wall over Completed/Failed/Cancelled"
+
+[[max_lines]]
+path = "anyharness/crates/anyharness-lib/src/live/workflows/actor.rs"
+max_lines = 606
+reason = "fix/wf2-run-cancel's Cancel command threads through the actor's transition-apply loop (+9 lines) alongside the gen-2 ADR's existing side-effect dispatch; grows the file past the repo-wide 600 cap for the first time"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/sessions/model.rs"

@@ -1,4 +1,4 @@
-//! The six workflow command POSTs. Every command goes through the manager's
+//! The seven workflow command POSTs. Every command goes through the manager's
 //! one door and its oneshot reply IS the response body (Illegal = the 409);
 //! the pre-dispatch 404s — unknown run and unknown node carry distinct codes,
 //! per the ADR — come from one cheap membership read, never a second full
@@ -218,4 +218,21 @@ pub async fn add_workflow_adhoc_node(
         },
     )
     .await
+}
+
+#[utoipa::path(
+    post,
+    path = "/v1/workflow-runs/{run_id}/cancel",
+    responses(
+        (status = 200, description = "Run cancelled; the fresh projection", body = RunProjection),
+        (status = 404, description = "WORKFLOW_RUN_NOT_FOUND"),
+        (status = 409, description = "WORKFLOW_TRANSITION_ILLEGAL"),
+    ),
+    tag = "workflow-runs"
+)]
+pub async fn cancel_workflow_run(
+    State(state): State<AppState>,
+    Path(run_id): Path<String>,
+) -> Result<Json<RunProjection>, ApiError> {
+    dispatch_command(&state, &run_id, None, WorkflowCommand::Cancel).await
 }
