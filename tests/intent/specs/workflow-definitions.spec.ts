@@ -171,10 +171,15 @@ test("creates, reloads, reopens, edits, and deletes a durable gen-2 definition",
   await expect(saveButton).toBeEnabled();
 
   // Reselect step-2 on the canvas to confirm its own reference actually
-  // resolved, rather than merely leaving the inspector that showed it.
+  // resolved, rather than merely leaving the inspector that showed it. The
+  // prompt also references @input:ticket (resolved from the start), so the
+  // doc chip needs picking out by its own text rather than the bare
+  // `data-resolved="true"` selector, which now matches both refs.
   await selectNodeCard(page, NODE2_TITLE);
   await expect(page.locator('span[data-resolved="false"]')).toHaveCount(0);
-  await expect(page.locator('span[data-resolved="true"]')).toHaveText("@doc:findings");
+  await expect(
+    page.locator('span[data-resolved="true"]').filter({ hasText: "@doc:findings" }),
+  ).toHaveText("@doc:findings");
 
   const createResponsePromise = page.waitForResponse((response) =>
     response.request().method() === "POST"
