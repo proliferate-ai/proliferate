@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { resolveVirtualBottomDistance } from "#product/domain/chats/transcript/transcript-virtual-rows";
+import { readTranscriptEasedFollowEnabled } from "#product/domain/chats/transcript/transcript-eased-follow-config";
 import {
   DIRECTION_EPSILON_PX,
   REPIN_BOTTOM_THRESHOLD_PX,
@@ -61,6 +62,9 @@ export function useTranscriptStickToBottom({
 }: UseTranscriptStickToBottomOptions): TranscriptStickToBottom {
   const pinnedRef = useRef(true);
   const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
+  // PRO-168 (rung 12, Q16): read once; flipping the flag mid-session is not a
+  // supported live-toggle, matching the virtualization-mode flag's contract.
+  const [easedFollowEnabled] = useState(readTranscriptEasedFollowEnabled);
   // Q18 (rung 9): see use-transcript-new-content-signal.ts.
   const {
     hasNewContentWhileUnpinned,
@@ -163,6 +167,7 @@ export function useTranscriptStickToBottom({
     dispatchInsetEvent,
     scrollToBottom,
     handleScrollToBottomClick,
+    resolveFollowTargetTop,
   } = useTranscriptAutoFollowBottom({
     scrollRef,
     structuralBottomInsetPx,
@@ -373,6 +378,8 @@ export function useTranscriptStickToBottom({
     restoreResolverRef,
     restoreDeadlineRef,
     scrollToBottom,
+    easedFollowEnabled,
+    resolveFollowTargetTop,
     notifyProgrammaticScroll,
     clearAllMarkers,
     beginGlue,
