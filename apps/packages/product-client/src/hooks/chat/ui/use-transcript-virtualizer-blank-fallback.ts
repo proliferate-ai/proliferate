@@ -217,16 +217,24 @@ export function useTranscriptVirtualizerBlankFallback({
       }
       lastBlankReportSignatureRef.current = signature;
 
+      // Rung 11 (PRO-187, Q8): a production occurrence is a bug per the
+      // founder ruling ("keep it as a safety net, but emit a diagnostic event
+      // on trigger, beyond dev-only console, and treat any production
+      // occurrence as a bug"), so the diagnostic record fires unconditionally
+      // — the DEV gate stays only in front of the verbose console dump below,
+      // which is a developer aid, not the telemetry signal itself. The record
+      // is observation-only: onFallback still fires the same full-render swap
+      // whether or not any sink is installed.
+      recordTranscriptVirtualizerBlank({
+        sessionId: activeSessionId,
+        workspaceId: selectedWorkspaceId,
+        rowCount,
+        renderableRowCount,
+        virtualItemCount,
+        firstVirtualItemIndex,
+        lastVirtualItemIndex,
+      });
       if (import.meta.env.DEV && isMainThreadMeasurementEnabled()) {
-        recordTranscriptVirtualizerBlank({
-          sessionId: activeSessionId,
-          workspaceId: selectedWorkspaceId,
-          rowCount,
-          renderableRowCount,
-          virtualItemCount,
-          firstVirtualItemIndex,
-          lastVirtualItemIndex,
-        });
         console.error("[transcript-virtualizer] blank viewport detected; falling back to full render", {
           activeSessionHash: hashMeasurementScope(activeSessionId),
           selectedWorkspaceHash: selectedWorkspaceId ? hashMeasurementScope(selectedWorkspaceId) : null,
