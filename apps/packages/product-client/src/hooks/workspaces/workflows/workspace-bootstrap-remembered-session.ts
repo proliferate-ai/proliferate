@@ -8,7 +8,6 @@ import {
 import {
   elapsedMs,
   logLatency,
-  startLatencyTimer,
 } from "#product/lib/infra/measurement/measurement-port";
 import {
   recordMeasurementWorkflowStep,
@@ -44,7 +43,7 @@ export async function handleRememberedWorkspaceSessionBootstrap(
     selectSession: ReturnType<typeof useSessionSelectionActions>["selectSession"];
     setActiveSessionId: (sessionId: string | null) => void;
   },
-): Promise<{ shouldReturn: boolean }> {
+): Promise<{ shouldReturn: boolean; contentStableSessionId?: string }> {
   const rememberedSession = resolveLastViewedSessionForWorkspace(
     input.lastViewedSessionByWorkspace,
     input.logicalWorkspaceId,
@@ -113,23 +112,31 @@ export async function handleRememberedWorkspaceSessionBootstrap(
     step: "workspace.bootstrap.session_select",
     startedAt: sessionSelectStartedAt,
   });
-  const hydrateStartedAt = startLatencyTimer();
-  await deps.rehydrateSessionSlotFromHistory(targetSession.id, {
+  // UX-latency R14: transcript hydration is OFF the workspace-switch critical
+  // path. Session selection above stays on it, but the history fetch does not:
+  // we kick rehydration fire-and-forget (never awaited) so bootstrap can finish
+  // the non-transcript work immediately. SessionTranscriptPane's own
+  // self-hydration effect owns the transcript for the selected session; the
+  // in-flight dedupe in use-session-history-hydration collapses this kickoff and
+  // the pane's fetch into a single request. This kickoff exists so hydration
+  // starts the instant the session is selected (even before the pane mounts) and
+  // so transcriptHydrated is set on the record even if this fetch wins the race
+  // and the pane's effect returns early.
+  void Promise.resolve(deps.rehydrateSessionSlotFromHistory(targetSession.id, {
     replace: true,
     requestHeaders: input.requestHeaders,
     measurementOperationId: input.measurementOperationId,
     isCurrent: () =>
       input.isCurrent()
       && deps.getActiveSessionId() === targetSession.id,
-  });
-  if (!input.isCurrent()) {
-    return { shouldReturn: true };
-  }
-  deps.patchSessionRecord(targetSession.id, { transcriptHydrated: true });
-  recordMeasurementWorkflowStep({
-    operationId: input.measurementOperationId,
-    step: "session.select.history_hydrate",
-    startedAt: hydrateStartedAt,
+  })).then((hydrated) => {
+    if (
+      hydrated
+      && input.isCurrent()
+      && deps.getActiveSessionId() === targetSession.id
+    ) {
+      deps.patchSessionRecord(targetSession.id, { transcriptHydrated: true });
+    }
   });
   logLatency("workspace.select.success", {
     workspaceId: input.workspaceId,
@@ -137,5 +144,8 @@ export async function handleRememberedWorkspaceSessionBootstrap(
     sessionCount: input.sessions.length,
     totalElapsedMs: elapsedMs(input.startedAt),
   });
-  return { shouldReturn: false };
+  // The bootstrap must NOT finish content_stable at its own completion now that
+  // the transcript is hydrated off the critical path. Hand the mark to the
+  // transcript pane, which fires it when this session's transcript commits.
+  return { shouldReturn: false, contentStableSessionId: targetSession.id };
 }

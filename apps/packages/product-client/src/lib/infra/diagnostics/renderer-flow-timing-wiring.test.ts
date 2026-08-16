@@ -26,8 +26,16 @@ const FLOW_ENTRY_FILES: Record<
       "beginRendererFlow",
       "markRendererFlowShellCommitted",
       "markRendererFlowDataReady",
-      "finishRendererFlow",
+      // UX-latency R14: the finish decision (finish now / defer content_stable to
+      // the transcript pane / abandon) is extracted to workspace-open-flow-finish.ts
+      // to keep this hook under the frontend-structure line threshold; the actual
+      // finishRendererFlow call is asserted on that module below.
+      "finishWorkspaceOpenRendererFlow",
     ],
+  },
+  workspace_open_finish: {
+    file: "src/hooks/workspaces/workflows/workspace-open-flow-finish.ts",
+    requiredMarks: ["finishRendererFlow"],
   },
   session_open: {
     file: "src/hooks/sessions/lifecycle/use-session-history-hydration.ts",

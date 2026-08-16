@@ -22,6 +22,7 @@ import { fetchSessionHistory } from "#product/lib/access/anyharness/session-runt
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import {
   applyHistoryStateToStores,
+  buildSessionHistoryFetchArgs,
   finishStandaloneApplyOperation,
   recordHistoryApplyStepMetrics,
   recordHistoryStateCounts,
@@ -31,6 +32,7 @@ import {
   SESSION_HISTORY_APPLY_MAX_DURATION_MS,
 } from "#product/hooks/sessions/lifecycle/session-history-hydration-helpers";
 import { useSessionHistorySubagentAuthority } from "#product/hooks/sessions/lifecycle/use-session-history-subagent-authority";
+import { dedupeSessionOpenHydration } from "#product/hooks/sessions/lifecycle/session-history-hydration-dedupe";
 import {
   beginRendererFlow,
   finishRendererFlow,
@@ -67,7 +69,7 @@ export function useSessionHistoryHydration() {
   const cloudClient = host.cloud.client;
   const reconcileHydratedSubagents = useSessionHistorySubagentAuthority();
 
-  const rehydrateSessionSlotFromHistory = useCallback(async (
+  const runHydration = useCallback(async (
     sessionId: string,
     options?: SessionHistoryHydrationOptions,
   ): Promise<boolean> => {
@@ -117,29 +119,17 @@ export function useSessionHistoryHydration() {
       const fetchStartedAt = performance.now();
       const events = await fetchSessionHistory(
         sessionId,
-        afterSeq != null
-          || beforeSeq != null
-          || options?.limit != null
-          || options?.turnLimit != null
-          || options?.requestHeaders
-          || requestMeasurementOperationId
-          || options?.timeoutMs != null
-          ? {
-            ...(afterSeq != null ? { afterSeq } : {}),
-            ...(beforeSeq != null ? { beforeSeq } : {}),
-            ...(options?.limit != null ? { limit: options.limit } : {}),
-            ...(options?.turnLimit != null ? { turnLimit: options.turnLimit } : {}),
-            ...(options?.requestHeaders
-              ? { requestHeaders: options.requestHeaders }
-              : {}),
-            ...(requestMeasurementOperationId
-              ? { measurementOperationId: requestMeasurementOperationId }
-              : {}),
-            ...(options?.timeoutMs != null ? { timeoutMs: options.timeoutMs } : {}),
-            ssh,
-            cloudClient,
-          }
-          : { ssh, cloudClient },
+        buildSessionHistoryFetchArgs({
+          afterSeq,
+          beforeSeq,
+          limit: options?.limit,
+          turnLimit: options?.turnLimit,
+          requestHeaders: options?.requestHeaders,
+          measurementOperationId: requestMeasurementOperationId,
+          timeoutMs: options?.timeoutMs,
+          ssh,
+          cloudClient,
+        }),
       );
       for (const operationId of historyApplyOperationIds) {
         recordMeasurementWorkflowStep({
@@ -392,6 +382,17 @@ export function useSessionHistoryHydration() {
       return false;
     }
   }, [cloudClient, reconcileHydratedSubagents, ssh]);
+
+  // UX-latency R14: full session-open hydrations dedupe by session id so the
+  // bootstrap kickoff and the transcript pane share one fetch + apply.
+  const rehydrateSessionSlotFromHistory = useCallback((
+    sessionId: string,
+    options?: SessionHistoryHydrationOptions,
+  ): Promise<boolean> => dedupeSessionOpenHydration(
+    sessionId,
+    options,
+    () => runHydration(sessionId, options),
+  ), [runHydration]);
 
   return {
     rehydrateSessionSlotFromHistory,
