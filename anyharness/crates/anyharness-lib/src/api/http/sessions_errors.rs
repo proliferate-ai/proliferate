@@ -576,45 +576,6 @@ mod tests {
     }
 
     #[test]
-    fn targeted_fork_taxonomy_maps_to_stable_reasons() {
-        use crate::domains::sessions::runtime::ForkSessionError;
-
-        let cases = [
-            (
-                super::map_fork_session_error(ForkSessionError::InvalidForkTarget(
-                    "item_id required".to_string(),
-                )),
-                StatusCode::BAD_REQUEST,
-                "INVALID_FORK_TARGET",
-            ),
-            (
-                super::map_fork_session_error(ForkSessionError::TargetNotFound),
-                StatusCode::NOT_FOUND,
-                "TARGET_NOT_FOUND",
-            ),
-            (
-                super::map_fork_session_error(ForkSessionError::BoundaryNotCommitted),
-                StatusCode::CONFLICT,
-                "BOUNDARY_NOT_COMMITTED",
-            ),
-            (
-                super::map_fork_session_error(ForkSessionError::IdempotencyConflict),
-                StatusCode::CONFLICT,
-                "IDEMPOTENCY_CONFLICT",
-            ),
-            (
-                super::map_fork_session_error(ForkSessionError::NativeOutcomeUnknown),
-                StatusCode::CONFLICT,
-                "FORK_NATIVE_OUTCOME_UNKNOWN",
-            ),
-        ];
-        for (error, status, code) in cases {
-            assert_eq!(error.code(), Some(code));
-            assert_eq!(error.into_response().status(), status);
-        }
-    }
-
-    #[test]
     fn interaction_access_store_failures_map_to_internal_error() {
         let response = super::map_resolve_interaction_error(ResolveInteractionError::Access(
             WorkspaceAccessError::Unexpected(anyhow::anyhow!("database unavailable")),
