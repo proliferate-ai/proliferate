@@ -1,8 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type JSX } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "@proliferate/design/motion";
-import { DotCellLoader } from "#product/primitives/DotCellLoader";
-import { ChatPreMessageCanvas } from "#product/components/workspace/chat/surface/ChatPreMessageCanvas";
-import { WorkspaceCreationReceipt } from "#product/components/workspace/chat/transcript/WorkspaceCreationReceipt";
 
 export type ChatLoadingHeroExitPhase = "idle" | "holding" | "fading";
 
@@ -13,8 +10,9 @@ export type ChatLoadingHeroExitPhase = "idle" | "holding" | "fading";
  * `ChatLoadingHero` itself cannot honor this — `ChatView` unmounts it
  * synchronously the instant `mode.kind` changes — so this hook tracks the
  * shown timestamp and reports a `phase` that `ChatContent` uses to keep a
- * frozen exit overlay mounted past that unmount, on top of whatever real
- * content `mode.kind` has already switched to underneath.
+ * frozen exit overlay (`ChatLoadingHeroExitOverlay`) mounted past that
+ * unmount, on top of whatever real content `mode.kind` has already switched
+ * to underneath.
  *
  * A load that never crosses the show-delay (mark never became visible) has
  * nothing to hold: `phase` stays `"idle"` and the mode switch takes effect
@@ -72,35 +70,4 @@ export function useChatLoadingHeroExit(isHeroMode: boolean): {
   }, [phase]);
 
   return { phase, handleTreatmentShown };
-}
-
-export function ChatLoadingHeroExitOverlay({
-  dockSafeAreaPx,
-  phase,
-}: {
-  dockSafeAreaPx: number;
-  phase: ChatLoadingHeroExitPhase;
-}): JSX.Element {
-  return (
-    <div
-      className="absolute inset-0"
-      data-chat-loading-hero-exit
-      style={{
-        opacity: phase === "fading" ? 0 : 1,
-        transitionProperty: "opacity",
-        transitionDuration: `${motion.duration.exitMs}ms`,
-        transitionTimingFunction: motion.ease.standard,
-        pointerEvents: "none",
-      }}
-    >
-      <ChatPreMessageCanvas
-        bottomInsetPx={dockSafeAreaPx}
-        topSlot={<WorkspaceCreationReceipt pendingOnly />}
-      >
-        <div className="flex flex-col items-center text-center" data-chat-loading-hero>
-          <DotCellLoader size="hero" />
-        </div>
-      </ChatPreMessageCanvas>
-    </div>
-  );
 }

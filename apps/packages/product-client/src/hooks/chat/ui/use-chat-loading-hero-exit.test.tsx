@@ -16,10 +16,8 @@ vi.mock("#product/components/workspace/chat/transcript/WorkspaceCreationReceipt"
   WorkspaceCreationReceipt: () => null,
 }));
 
-import {
-  ChatLoadingHeroExitOverlay,
-  useChatLoadingHeroExit,
-} from "./use-chat-loading-hero-exit";
+import { ChatLoadingHeroExitOverlay } from "#product/components/workspace/chat/surface/ChatLoadingHeroExitOverlay";
+import { useChatLoadingHeroExit } from "./use-chat-loading-hero-exit";
 
 let queryClient: QueryClient;
 

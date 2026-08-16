@@ -9,7 +9,8 @@ import {
   type DragEvent,
   type JSX,
 } from "react";
-import { useChatLoadingHeroExit, ChatLoadingHeroExitOverlay } from "#product/hooks/chat/ui/use-chat-loading-hero-exit";
+import { useChatLoadingHeroExit } from "#product/hooks/chat/ui/use-chat-loading-hero-exit";
+import { ChatLoadingHeroExitOverlay } from "#product/components/workspace/chat/surface/ChatLoadingHeroExitOverlay";
 import { ChatInput } from "#product/components/workspace/chat/input/ChatInput";
 import { ChatComposerDock } from "#product/components/workspace/chat/input/ChatComposerDock";
 import { TodoProgressPill } from "#product/components/workspace/chat/input/TodoProgressPill";
