@@ -7,12 +7,17 @@ import { createTranscriptState } from "@anyharness/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   assistantItem,
+  createPro292CompletedTurnFixture,
   terminalItem,
   toolItem,
   turnRecord,
   userItem,
 } from "#product/domain/chats/transcript/transcript-presentation-test-fixtures";
 import { buildTurnPresentation } from "#product/domain/chats/transcript/transcript-presentation";
+import {
+  buildTranscriptRowModel,
+  type TranscriptRow,
+} from "#product/domain/chats/transcript/transcript-row-model";
 import {
   constrainTurnItemSequencePresentation,
   resolveTurnItemFrontierBlockKey,
@@ -104,6 +109,64 @@ describe("CompletedHistorySequence", () => {
     expect(nestedDetailPanel).not.toBeUndefined();
     expect(nestedDetailPanel?.className).toMatch(/(?:^|\s)border(?:\s|$)/);
     expect(nestedDetailPanel?.className).toContain("rounded-md");
+  });
+
+  it("hydrates the PRO-292 projected rows with one whole-turn disclosure", async () => {
+    const user = userEvent.setup();
+    const fixture = createPro292CompletedTurnFixture();
+    const projectedTurnItems = buildTranscriptRowModel({
+      activeSessionId: fixture.transcript.sessionMeta.sessionId,
+      transcript: fixture.transcript,
+      visibleOptimisticPrompt: null,
+      latestTurnId: fixture.turn.turnId,
+      latestTurnHasAssistantRenderableContent: true,
+    }).filter(
+      (row): row is Extract<TranscriptRow, { kind: "turn" }> => row.kind === "turn",
+    );
+
+    const { container } = render(
+      <>
+        {projectedTurnItems.map((row) => (
+          <TurnItemSequence
+            key={row.key}
+            turn={fixture.turn}
+            transcript={fixture.transcript}
+            isTurnComplete
+            presentation={row.renderPresentation}
+            autoFollowCollapsedActionBlockId={null}
+            tailAssistantProseRootId={row.presentation.finalAssistantItemId}
+            completedHistoryLabel={null}
+            animateActivityEntry={false}
+            animateAssistantRevealItemId={null}
+            showCompletedArtifactFallback={false}
+            workspaceId={null}
+            onOpenArtifact={vi.fn()}
+          />
+        ))}
+      </>,
+    );
+
+    const disclosures = screen.getAllByRole("button", { name: "Worked for 7m 2s" });
+    expect(disclosures).toHaveLength(1);
+    await user.click(disclosures[0]!);
+
+    const completedHistorySequences = container.querySelectorAll(
+      "[data-completed-history-sequence]",
+    );
+    expect(completedHistorySequences).toHaveLength(1);
+    expect(completedHistorySequences[0]?.children).toHaveLength(8);
+    for (const assistantId of fixture.assistantItemIds.slice(0, -1)) {
+      expect(container.querySelectorAll(
+        `[data-rendered-transcript-item="${assistantId}"]`,
+      )).toHaveLength(1);
+    }
+    for (const receiptId of fixture.mutationReceiptItemIds) {
+      const receipt = container.querySelector(
+        `[data-rendered-transcript-item="${receiptId}"]`,
+      );
+      expect(receipt).not.toBeNull();
+      expect(completedHistorySequences[0]?.contains(receipt)).toBe(false);
+    }
   });
 });
 
