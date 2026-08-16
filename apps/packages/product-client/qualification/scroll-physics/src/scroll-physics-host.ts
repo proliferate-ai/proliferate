@@ -472,18 +472,31 @@ function metrics(): ViewportMetrics {
 // Per-frame scrollTop trace recorder: capture scrollTop on every rAF between
 // start and stop, so a spec can assert "no visible motion" (a flat trace).
 //
-// scrollTop alone conflates two different things: a real backward displacement
-// of the pinned reader's view, and the single writer correctly following a
-// content area that just got SMALLER (an estimate-to-measured height
-// correction shrinking the calibrated content, mid-stream). Both look like a
-// backward scrollTop step; only the first one is a bug. `bottomDistanceFrames`
-// is captured in the SAME rAF tick as `traceFrames` (frame-aligned, not a
-// second independent loop) so a spec can assert on the quantity the reader
-// actually perceives — distance from true bottom — which stays flat when
-// scrollHeight and scrollTop shrink together and only moves for a real
-// displacement.
+// A raw backward scrollTop step conflates two different legitimate causes
+// with one real bug:
+//  1. A real backward displacement of the pinned reader's view (the bug Q13
+//     exists to catch).
+//  2. The single writer correctly following a content area that just got
+//     SMALLER (an estimate-to-measured height correction shrinking the
+//     calibrated content, mid-stream) — scrollTop drops, but scrollHeight
+//     drops by the same amount, so the reader sees nothing move.
+// There is also a THIRD, unrelated reason scrollTop can look flat while the
+// reader's distance-from-bottom rises for one frame: ordinary content
+// GROWTH lag. When a chunk lands, scrollHeight can grow one frame before the
+// single writer's snap follows it (scrollTop stays flat that frame, catches
+// up the next) — completely normal steady-state streaming behavior, already
+// bounded by PIN_FOLLOW_MAX_DISTANCE_PX elsewhere, and NOT a backward bounce
+// of the reader's actual view position at all, since scrollTop never
+// decreased.
+//
+// `scrollHeightFrames` is captured in the SAME rAF tick as `traceFrames`
+// (frame-aligned, not a second independent loop), so a spec can compute, per
+// step, how much of a scrollTop drop is actually explained by a matching
+// scrollHeight shrink (case 2) and flag only the unexplained remainder
+// (case 1). Because this only fires when scrollTop itself drops, ordinary
+// growth-lag (case 3, scrollTop flat or rising) never trips it.
 let traceFrames: number[] = [];
-let bottomDistanceFrames: number[] = [];
+let scrollHeightFrames: number[] = [];
 let traceRafId = 0;
 let traceActive = false;
 
@@ -512,7 +525,7 @@ function traceTick(): void {
   }
   const el = viewport();
   traceFrames.push(el ? el.scrollTop : Number.NaN);
-  bottomDistanceFrames.push(el ? el.scrollHeight - el.clientHeight - el.scrollTop : Number.NaN);
+  scrollHeightFrames.push(el ? el.scrollHeight : Number.NaN);
   traceRafId = requestAnimationFrame(traceTick);
 }
 
@@ -578,12 +591,13 @@ export interface ScrollPhysicsDriver {
   startScrollTrace(): void;
   stopScrollTrace(): number[];
   // Frame-aligned with startScrollTrace/stopScrollTrace: the same rAF ticks,
-  // reporting bottomDistance (scrollHeight - clientHeight - scrollTop)
-  // instead of raw scrollTop. Use this to assert "the pinned reader never saw
-  // backward motion," which raw scrollTop cannot distinguish from the single
-  // writer legitimately following a content area that just shrank (an
-  // estimate-to-measured correction).
-  stopBottomDistanceTrace(): number[];
+  // reporting scrollHeight instead of scrollTop. Pair the two traces (same
+  // index = same frame) to compute, per step, how much of a scrollTop drop
+  // is explained by a matching scrollHeight shrink versus unexplained (a
+  // real backward bounce). Do not use scrollHeight alone as a "no backward
+  // motion" signal — it rises during ordinary content growth, which is not a
+  // bounce.
+  stopScrollHeightTrace(): number[];
   startContentHeightTrace(): void;
   stopContentHeightTrace(): number[];
   hasViewport(): boolean;
@@ -1021,7 +1035,7 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
 
   startScrollTrace(): void {
     traceFrames = [];
-    bottomDistanceFrames = [];
+    scrollHeightFrames = [];
     traceActive = true;
     traceRafId = requestAnimationFrame(traceTick);
   },
@@ -1035,13 +1049,13 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
     return traceFrames.slice();
   },
 
-  stopBottomDistanceTrace(): number[] {
+  stopScrollHeightTrace(): number[] {
     traceActive = false;
     if (traceRafId) {
       cancelAnimationFrame(traceRafId);
       traceRafId = 0;
     }
-    return bottomDistanceFrames.slice();
+    return scrollHeightFrames.slice();
   },
 
   startContentHeightTrace(): void {

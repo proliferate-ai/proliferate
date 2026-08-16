@@ -1095,33 +1095,64 @@ test.describe("transcript scroll physics", () => {
     // deferred landing frame is not pinned to trace index 1 under runner
     // load: on a slow attempt it can land one or more frames later, at a
     // trace index that only carries the tight `maxBouncePx` budget, and the
-    // assertion trips on a step that is not a displacement at all. The trace
-    // is built on raw scrollTop, which cannot tell a real backward
-    // displacement of the pinned reader's view apart from the single writer
-    // correctly following a content area (scrollHeight) that just shrank by
-    // the same amount — exactly what an estimate-to-measured correction
-    // does. bottomDistance (scrollHeight - clientHeight - scrollTop) is the
-    // quantity the reader actually perceives: it stays flat when scrollTop
-    // and scrollHeight move together, and it still catches a phantom
-    // reserved-slot bounce (the rung-10 defect class), which moves scrollTop
-    // WITHOUT a matching scrollHeight change. Assert on bottomDistance, not
-    // scrollTop, so the bound stays meaningful regardless of which frame the
-    // legitimate convergence lands on.
+    // assertion trips on a step that is not a displacement at all.
     //
-    // Direction note: this asserts on bottomDistance, not scrollTop, and the
-    // two move in OPPOSITE directions for the pinned reader. A backward
-    // bounce (the reader pushed away from the true bottom) shows up as
-    // bottomDistance going UP, not down, so the bound below caps how far
-    // bottomDistance may INCREASE between samples, not decrease.
+    // Round 5 tried asserting on bottomDistance (scrollHeight - clientHeight
+    // - scrollTop) instead of raw scrollTop, on the theory that it's the
+    // quantity the reader actually perceives. That broke on CI (round 6):
+    // the PROSE bracket streams real content every chunk, and ordinary
+    // per-chunk growth has scrollHeight grow one frame before the single
+    // writer's snap follows it (scrollTop flat that frame, catches up next)
+    // — a completely normal, already-bounded (PIN_FOLLOW_MAX_DISTANCE_PX)
+    // artifact of active streaming that has nothing to do with a backward
+    // bounce, since scrollTop itself never decreased. bottomDistance can't
+    // tell that apart from a real bounce, because it rises for BOTH reasons.
+    //
+    // The trace CI actually captured (job 95178602294, webkit): scrollTop
+    // [...,2562,2562,2584,...], scrollHeight [...,2962,2984,2984,...] — the
+    // 2562->2562 step is flat (no backward motion at all), while scrollHeight
+    // grew 22px (a chunk landing); bottomDistance briefly showed that 22px
+    // gap and then the very next frame closed it back to 0 in one cut. That
+    // is the expected steady-state catch-up, not a defect.
+    //
+    // The correct invariant checks scrollTop directly (a real bounce IS
+    // scrollTop dropping) but excuses a drop by however much scrollHeight
+    // shrank in the same step (the legitimate estimate-correction case,
+    // where the single writer follows a smaller bottom target and the
+    // reader sees nothing move). Growth-lag never trips this because
+    // scrollTop doesn't drop when content grows. A phantom reserved-slot
+    // bounce (the rung-10 defect class) still trips it because scrollTop
+    // drops with no matching scrollHeight shrink to explain it.
     function assertNoBackwardBounce(
-      trace: number[],
+      scrollTopTrace: number[],
+      scrollHeightTrace: number[],
       maxBouncePx: number,
       leadingBouncePx = maxBouncePx,
     ): void {
-      for (let i = 1; i < trace.length; i += 1) {
+      expect(scrollTopTrace.length).toBe(scrollHeightTrace.length);
+      for (let i = 1; i < scrollTopTrace.length; i += 1) {
         const bound = i === 1 ? leadingBouncePx : maxBouncePx;
-        expect(trace[i]).toBeLessThanOrEqual(trace[i - 1] + bound);
+        const scrollTopDrop = scrollTopTrace[i - 1] - scrollTopTrace[i];
+        const scrollHeightShrink = scrollHeightTrace[i - 1] - scrollHeightTrace[i];
+        const unexplainedDrop = scrollTopDrop - Math.max(0, scrollHeightShrink);
+        expect(unexplainedDrop).toBeLessThanOrEqual(bound);
       }
+    }
+
+    // Both traces are frame-aligned (same rAF ticks); filter NaN frames out
+    // in lockstep so indices stay paired, never independently.
+    async function pairedTraces(page: Page): Promise<{ scrollTop: number[]; scrollHeight: number[] }> {
+      const scrollTop = await drive<number[]>(page, "stopScrollTrace");
+      const scrollHeight = await drive<number[]>(page, "stopScrollHeightTrace");
+      const scrollTopOut: number[] = [];
+      const scrollHeightOut: number[] = [];
+      for (let i = 0; i < scrollTop.length; i += 1) {
+        if (Number.isFinite(scrollTop[i]) && Number.isFinite(scrollHeight[i])) {
+          scrollTopOut.push(scrollTop[i]);
+          scrollHeightOut.push(scrollHeight[i]);
+        }
+      }
+      return { scrollTop: scrollTopOut, scrollHeight: scrollHeightOut };
     }
 
     // Thought starts and streams a couple of deltas: private, reserved-slot
@@ -1132,10 +1163,10 @@ test.describe("transcript scroll physics", () => {
     await settle(page, 80);
     const afterThoughtStart = await metricsAfterFrame(page);
     expect(afterThoughtStart.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
-    assertNoBackwardBounce(
-      (await drive<number[]>(page, "stopBottomDistanceTrace")).filter((v) => Number.isFinite(v)),
-      INTERLEAVE_MAX_BACKWARD_BOUNCE_PX,
-    );
+    {
+      const { scrollTop, scrollHeight } = await pairedTraces(page);
+      assertNoBackwardBounce(scrollTop, scrollHeight, INTERLEAVE_MAX_BACKWARD_BOUNCE_PX);
+    }
 
     // Thought yields to a tool call mid-turn (thinking -> tool -> thinking is
     // the exact class the ADR's Cell 6 names). A real new row mounts here,
@@ -1150,52 +1181,36 @@ test.describe("transcript scroll physics", () => {
     await settle(page);
     const afterTool = await metricsAfterFrame(page);
     expect(afterTool.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
-    assertNoBackwardBounce(
-      (await drive<number[]>(page, "stopBottomDistanceTrace")).filter((v) => Number.isFinite(v)),
-      INTERLEAVE_MAX_BACKWARD_BOUNCE_PX,
-    );
+    {
+      const { scrollTop, scrollHeight } = await pairedTraces(page);
+      assertNoBackwardBounce(scrollTop, scrollHeight, INTERLEAVE_MAX_BACKWARD_BOUNCE_PX);
+    }
 
     // Prose resumes and grows the turn for real; THIS is content growth (not
     // lifecycle) on an already-mounted row. CI (rounds 2-3) showed the tool
     // row's deferred estimate-to-measured correction (~61px, deterministic
-    // on both browsers) lands on the FIRST remeasure pass that streaming
-    // prose triggers — i.e. the opening frame of THIS bracket — so only
-    // that leading step gets the wider, quantified convergence bound; every
-    // later step in this bracket is pure content growth and stays on the
-    // tight bound.
+    // on both browsers) usually lands on the FIRST remeasure pass that
+    // streaming prose triggers, so the leading step gets the wider,
+    // quantified convergence bound. Every step (leading or not) still runs
+    // through the shrink-adjusted formula above, so ordinary per-chunk
+    // growth-lag (scrollTop flat, scrollHeight rising) never counts against
+    // either budget, and a real lifecycle regression still fails at the
+    // tight bound wherever it lands.
     await drive(page, "startScrollTrace");
     await drive(page, "streamChunks", 5);
     await settle(page, 200);
     const afterProse = await metricsAfterFrame(page);
     expect(afterProse.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
     await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
-    // TEMP diagnostic (CI round 6, PR #1980): dump both traces unconditionally
-    // so a failure's per-frame scrollTop/bottomDistance/implied-scrollHeight
-    // sequence is visible in the CI log, not just the single offending delta.
-    // Remove once the round-6 investigation concludes.
-    const proseScrollTopTrace = (await drive<number[]>(page, "stopScrollTrace")).filter((v) =>
-      Number.isFinite(v),
-    );
-    const proseBottomDistanceTrace = (
-      await drive<number[]>(page, "stopBottomDistanceTrace")
-    ).filter((v) => Number.isFinite(v));
-    const proseClientHeight = (await metrics(page)).clientHeight;
-    // eslint-disable-next-line no-console
-    console.log(
-      "[Q13 round-6 diag] scrollTop:",
-      JSON.stringify(proseScrollTopTrace),
-      "bottomDistance:",
-      JSON.stringify(proseBottomDistanceTrace),
-      "impliedScrollHeight:",
-      JSON.stringify(
-        proseScrollTopTrace.map((st, i) => st + proseClientHeight + proseBottomDistanceTrace[i]),
-      ),
-    );
-    assertNoBackwardBounce(
-      proseBottomDistanceTrace,
-      INTERLEAVE_MAX_BACKWARD_BOUNCE_PX,
-      TOOL_ROW_ESTIMATE_CONVERGENCE_MAX_PX,
-    );
+    {
+      const { scrollTop, scrollHeight } = await pairedTraces(page);
+      assertNoBackwardBounce(
+        scrollTop,
+        scrollHeight,
+        INTERLEAVE_MAX_BACKWARD_BOUNCE_PX,
+        TOOL_ROW_ESTIMATE_CONVERGENCE_MAX_PX,
+      );
+    }
 
     await drive(page, "finalizeStreamingTurn");
     await settle(page);
