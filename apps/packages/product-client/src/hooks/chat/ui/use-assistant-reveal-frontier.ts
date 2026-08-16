@@ -1,6 +1,9 @@
 import { useCallback, useRef, useState } from "react";
 import type { AssistantMessageRevealState } from "#product/lib/domain/chat/transcript/assistant-message-reveal";
-import { getAssistantRevealProgress } from "#product/hooks/chat/ui/assistant-reveal-progress";
+import {
+  getAssistantRevealProgress,
+  recordAssistantRevealProgress,
+} from "#product/hooks/chat/ui/assistant-reveal-progress";
 import { logDevAssistantRevealState } from "#product/hooks/chat/ui/dev-assistant-reveal-log";
 
 type AssistantRevealClaim = {
@@ -31,6 +34,34 @@ export function useAssistantRevealFrontier({
     revealOriginRef.current = { turnId, wasLive: !turnCompletedAt };
   } else if (!turnCompletedAt) {
     revealOriginRef.current.wasLive = true;
+  }
+
+  // Streaming continuity (Chat Scroll ADR Q15): text that already exists when
+  // this row first renders is finalized history for this viewer — only deltas
+  // that arrive while the row is mounted may animate. Raising the shared
+  // reveal floor before child rows mount keeps a stream that kept ingesting
+  // while its workspace was backgrounded from re-playing on return. Items that
+  // appear on later renders start at floor zero, so a fresh live chunk still
+  // paces in through the frontier.
+  const appliedMountRevealFloorRef = useRef(false);
+  if (!appliedMountRevealFloorRef.current) {
+    appliedMountRevealFloorRef.current = true;
+    if (itemId !== null && targetLength > 0) {
+      const cachedAtMount = getAssistantRevealProgress(itemId);
+      if (
+        !cachedAtMount
+        || cachedAtMount.visibleLength < targetLength
+        || !cachedAtMount.complete
+      ) {
+        recordAssistantRevealProgress(itemId, {
+          complete: true,
+          phase: "idle",
+          visibleLength: Math.max(targetLength, cachedAtMount?.visibleLength ?? 0),
+          targetLength,
+          isStreaming: false,
+        });
+      }
+    }
   }
 
   const [assistantRevealClaim, setAssistantRevealClaim] =
