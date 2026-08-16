@@ -440,6 +440,79 @@ describe("useTranscriptStickToBottom", () => {
     expect(viewport.scrollTop).toBe(1000);
   });
 
+  // FR-2 (rung 6): finalized-session revisit restores the saved reading anchor
+  // instead of bottom-pinning, unpinned, and re-resolves it across the settle.
+  it("resetForSession restore places at the resolved target, unpins, and holds across settle", () => {
+    const handle = renderHarness();
+    const { viewport } = handle.current;
+    setMetrics(viewport, { scrollHeight: 2000, clientHeight: 300, scrollTop: 0 });
+
+    // A saved anchor that resolves to 450 now, then refines to 520 as the
+    // freshly-mounted rows above it measure taller during the glue window.
+    let resolved = 450;
+    act(() => {
+      handle.current.api.resetForSession({
+        kind: "restore",
+        resolveTargetTop: () => resolved,
+      });
+    });
+    // Placed pre-paint at the saved anchor, unpinned (a finalized revisit is a
+    // reading position, never a bottom-pin).
+    expect(handle.current.api.isPinnedToBottom).toBe(false);
+    expect(viewport.scrollTop).toBe(450);
+
+    // A late estimate-to-measured correction moves the anchor; the single frame
+    // writer re-resolves it each glued frame so the reading row stays put.
+    resolved = 520;
+    act(() => {
+      flushRafRound();
+    });
+    expect(viewport.scrollTop).toBe(520);
+    expect(handle.current.api.isPinnedToBottom).toBe(false);
+  });
+
+  it("resetForSession restore falls back to bottom-pin when the saved row is gone", () => {
+    const handle = renderHarness();
+    const { viewport } = handle.current;
+    setMetrics(viewport, { scrollHeight: 2000, clientHeight: 300, scrollTop: 0 });
+
+    act(() => {
+      handle.current.api.resetForSession({
+        kind: "restore",
+        resolveTargetTop: () => null,
+      });
+    });
+    // Conservative default: an unresolvable saved anchor bottom-pins.
+    expect(handle.current.api.isPinnedToBottom).toBe(true);
+    expect(viewport.scrollTop).toBe(2000);
+  });
+
+  it("resetForSession restore is cleared by a user scroll so the writer never fights the reader", () => {
+    const handle = renderHarness();
+    const { viewport } = handle.current;
+    setMetrics(viewport, { scrollHeight: 2000, clientHeight: 300, scrollTop: 0 });
+
+    act(() => {
+      handle.current.api.resetForSession({
+        kind: "restore",
+        resolveTargetTop: () => 450,
+      });
+    });
+    expect(viewport.scrollTop).toBe(450);
+
+    // The reader takes over (upward intent). The restore anchor must be dropped
+    // so the next glued frame does NOT re-place them at the saved anchor.
+    act(() => {
+      handle.current.api.notifyUserScrollIntent(-1);
+    });
+    viewport.scrollTop = 300;
+    act(() => {
+      flushRafRound();
+    });
+    expect(viewport.scrollTop).toBe(300);
+    expect(handle.current.api.isPinnedToBottom).toBe(false);
+  });
+
   it("glues to the bottom across a visibility-resume measurement backlog", () => {
     const handle = renderHarness();
     const { viewport } = handle.current;
