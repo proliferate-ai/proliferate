@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import type { AppCommandActions } from "#product/hooks/app/workflows/app-command-action-types";
 import { useSidebarShortcutTargets } from "#product/hooks/workspaces/derived/use-sidebar-shortcut-targets";
@@ -7,12 +9,14 @@ import {
   getFocusZone,
   isRightPanelFocusZone,
 } from "#product/lib/domain/focus-zone";
+import { resolveSidebarShortcutDigitTarget } from "#product/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
 import {
-  resolveAdjacentSidebarShortcutTarget,
-  resolveSidebarShortcutDigitTarget,
-} from "#product/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
+  createWorkspaceSwitchCursorController,
+  type WorkspaceSwitchCursorController,
+} from "#product/lib/domain/workspaces/sidebar/workspace-switch-cursor-controller";
 import { requestRightPanelTabByIndex } from "#product/lib/workflows/workspaces/right-panel-shortcut-requests";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSidebarSwitchCursorStore } from "#product/stores/workspaces/sidebar-switch-cursor-store";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { stepWindowZoomId } from "#product/lib/domain/preferences/appearance";
@@ -26,11 +30,71 @@ import {
 // workflow actions passed by the caller.
 export function useAppShortcuts(actions: AppCommandActions): void {
   const sidebarShortcutTargetIds = useSidebarShortcutTargets();
-  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
-  const selectedLogicalWorkspaceId = useSessionSelectionStore(
-    (state) => state.selectedLogicalWorkspaceId,
-  );
   const { selectWorkspaceFromSurface } = useWorkspaceNavigationWorkflow();
+
+  // Held-key workspace traversal (Cmd+Opt+Arrow) previews a lightweight cursor
+  // through the sidebar and commits the one expensive selection only once
+  // movement settles. The controller owns the throttle/settle/coalescing state
+  // machine; refs keep the once-created controller reading current values
+  // without re-subscribing the whole hook to selection changes.
+  const targetIdsRef = useRef(sidebarShortcutTargetIds);
+  targetIdsRef.current = sidebarShortcutTargetIds;
+  const selectWorkspaceFromSurfaceRef = useRef(selectWorkspaceFromSurface);
+  selectWorkspaceFromSurfaceRef.current = selectWorkspaceFromSurface;
+
+  const switchCursorControllerRef = useRef<WorkspaceSwitchCursorController | null>(null);
+  if (switchCursorControllerRef.current === null) {
+    switchCursorControllerRef.current = createWorkspaceSwitchCursorController({
+      now: () => performance.now(),
+      setTimer: (fn, ms) => window.setTimeout(fn, ms),
+      clearTimer: (handle) => window.clearTimeout(handle),
+      getTargetIds: () => targetIdsRef.current,
+      getCommittedId: () => {
+        const selection = useSessionSelectionStore.getState();
+        return selection.selectedLogicalWorkspaceId ?? selection.selectedWorkspaceId;
+      },
+      getCursorId: () => useSidebarSwitchCursorStore.getState().cursorId,
+      setCursorId: (cursorId) => useSidebarSwitchCursorStore.getState().setCursor(cursorId),
+      commitSelection: (workspaceId) =>
+        selectWorkspaceFromSurfaceRef.current(workspaceId, "shortcut"),
+    });
+  }
+
+  useEffect(() => {
+    const controller = switchCursorControllerRef.current;
+    if (controller === null) {
+      return undefined;
+    }
+    const readCommitted = (state: {
+      selectedLogicalWorkspaceId: string | null;
+      selectedWorkspaceId: string | null;
+    }) => state.selectedLogicalWorkspaceId ?? state.selectedWorkspaceId;
+    let lastCommitted = readCommitted(useSessionSelectionStore.getState());
+    const unsubscribe = useSessionSelectionStore.subscribe((state) => {
+      const committed = readCommitted(state);
+      if (committed === lastCommitted) {
+        return;
+      }
+      lastCommitted = committed;
+      controller.onCommittedChange(committed);
+    });
+    // Escape cancels an uncommitted preview. Capture-phase and side-effect free
+    // (no preventDefault) so any other Escape handling still runs, and it only
+    // acts while a cursor is actually pending.
+    const handleEscape = (event: KeyboardEvent) => {
+      if (
+        event.key === "Escape" &&
+        useSidebarSwitchCursorStore.getState().cursorId !== null
+      ) {
+        controller.cancel();
+      }
+    };
+    window.addEventListener("keydown", handleEscape, true);
+    return () => {
+      unsubscribe();
+      window.removeEventListener("keydown", handleEscape, true);
+    };
+  }, []);
 
   useShortcutHandler("app.open-settings", () => {
     actions.openSettings.execute("shortcut");
@@ -109,25 +173,11 @@ export function useAppShortcuts(actions: AppCommandActions): void {
   });
 
   useShortcutHandler("workspace.previous-workspace", () => {
-    const targetId = resolveAdjacentSidebarShortcutTarget(
-      sidebarShortcutTargetIds,
-      selectedLogicalWorkspaceId ?? selectedWorkspaceId,
-      -1,
-    );
-    if (targetId) {
-      selectWorkspaceFromSurface(targetId, "shortcut");
-    }
+    switchCursorControllerRef.current?.step(-1);
   });
 
   useShortcutHandler("workspace.next-workspace", () => {
-    const targetId = resolveAdjacentSidebarShortcutTarget(
-      sidebarShortcutTargetIds,
-      selectedLogicalWorkspaceId ?? selectedWorkspaceId,
-      1,
-    );
-    if (targetId) {
-      selectWorkspaceFromSurface(targetId, "shortcut");
-    }
+    switchCursorControllerRef.current?.step(1);
   });
 
   useShortcutHandler("workspace.toggle-cowork-threads", () => {
