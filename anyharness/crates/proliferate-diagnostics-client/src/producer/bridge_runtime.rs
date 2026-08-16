@@ -332,6 +332,28 @@ fn handle_parent_frame(
     Ok(())
 }
 
+impl ProducerInner {
+    /// Permanent bridge loss: no newer generation can arrive, so the sentinel
+    /// latches unavailable. Queued records retain routing until worker drain.
+    fn mark_bridge_lost(&self) {
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        if matches!(
+            &state.collector,
+            super::CollectorAvailability::Unavailable { generation } if *generation == MAX_SAFE_INTEGER
+        ) {
+            return;
+        }
+        state.collector = super::CollectorAvailability::Unavailable {
+            generation: MAX_SAFE_INTEGER,
+        };
+        if !state.in_flight.is_empty() {
+            state.delivery_fence_eligible = false;
+        }
+        drop(state);
+        self.notify.notify_one();
+    }
+}
+
 fn generation_is_newer(inner: &ProducerInner, generation: u64) -> bool {
     let state = inner
         .state

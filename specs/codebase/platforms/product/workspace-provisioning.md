@@ -6,8 +6,17 @@ owns the product row; AnyHarness owns runtime workspace and session truth.
 
 Workflow runs do not use this Cloud provisioning flow. Deterministic,
 idempotent placement of an isolated AnyHarness workspace for a Workflow run UUID
-is a separate purpose-built API — see
+is a separate purpose-built API, see
 [`specs/FEATURE_DOCS/WORKFLOWS.md`](../../../FEATURE_DOCS/WORKFLOWS.md).
+
+Cloud surfaces culled on the desktop client (PRO-10), backend dormant: this
+provisioning platform stays intact and continues to serve the web client, but no
+desktop client surface reaches it. The desktop cull removes or host-gates every
+user-facing cloud-workspace entry point (creation pickers, repo-scope cloud
+settings, deep links, automation cloud targets) while leaving these server and
+shared-client contracts in place and unreachable from desktop. Existing cloud
+rows are never deleted; they are filtered out of the desktop client at a single
+data-source seam.
 
 ## Mental Model
 

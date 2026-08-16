@@ -18,6 +18,7 @@ from typing import Any
 import yaml
 
 from proliferate.constants.agent_gateway import AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS
+from proliferate.server.catalogs.service import registry_gateway_capable_kinds
 
 _CONFIG_PATH = Path(__file__).resolve().parents[2] / "litellm" / "config.yaml"
 
@@ -67,6 +68,26 @@ class TestLitellmConfigAccessGroups:
             assert _CURSOR_HARNESS_KIND not in access_groups, (
                 f"{entry['model_name']} must not carry the cursor access group"
             )
+
+    def test_gateway_capable_constant_matches_registry_derivation(self) -> None:
+        # registry.json is the allow-list authority (agent-auth.md FR-4): the
+        # access-group check is anchored to the registry gateway derivation,
+        # not just the Python constant, so a config that drifts from the
+        # registry cannot pass by drifting the constant with it.
+        assert set(AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS) == set(
+            registry_gateway_capable_kinds()
+        )
+
+    def test_yaml_groups_are_a_subset_of_registry_gateway_capable_kinds(self) -> None:
+        registry_capable = set(registry_gateway_capable_kinds())
+        granted: set[str] = set()
+        for entry in _load_model_list():
+            granted.update(entry["model_info"]["access_groups"])
+        unknown = granted - registry_capable
+        assert not unknown, (
+            f"config.yaml grants access group(s) {unknown} that are not "
+            f"gateway-capable in the registry {sorted(registry_capable)}"
+        )
 
     def test_every_supported_harness_has_at_least_one_model(self) -> None:
         # Every gateway-capable harness_kind (AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS,

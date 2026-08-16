@@ -1,0 +1,508 @@
+# Server layer-boundary rules (SRV-API / SRV-SVC / SRV-STORE / SRV-DOMAIN /
+# SRV-ERR / SRV-MODELS / SRV-INTEG). The grid coordinate a file sits at decides
+# what it may import and call; see
+# specs/codebase/structures/server/guides/grid-ownership-model.md for the model
+# these records enforce.
+
+[[rule]]
+id = "SRV-API-1"
+title = "API routes do not import stores"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/server/**/api.py"
+
+rule = """api.py must not import db/store modules."""
+alternative = """Call the domain's service.py, which owns store calls."""
+why = """api.py is transport only: it parses requests, receives deps, calls
+services, and shapes responses. A route that reaches a store becomes an ad hoc
+persistence layer."""
+
+[rule.example]
+bad = "from proliferate.db.store.workspaces import get_workspace  # in api.py"
+good = "from proliferate.server.cloud.workspaces import service  # route calls service"
+
+[[rule]]
+id = "SRV-API-2"
+title = "API routes do not import SQLAlchemy"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/server/**/api.py"
+
+rule = """api.py must not import SQLAlchemy, except the single allowed
+type-only import of AsyncSession from sqlalchemy.ext.asyncio."""
+alternative = """Receive `db: AsyncSession = Depends(get_async_session)` using
+the one allowed type import and pass it to the service."""
+why = """Query construction is a store concern; db/store/** is the only layer
+that imports SQLAlchemy query APIs."""
+
+[rule.example]
+bad = "from sqlalchemy import select  # in api.py"
+good = "from sqlalchemy.ext.asyncio import AsyncSession  # annotation only"
+
+[[rule]]
+id = "SRV-API-3"
+title = "API routes do not own session or engine lifetime"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/server/**/api.py"
+
+rule = """api.py may import only get_async_session from proliferate.db.engine,
+for Depends injection, and must not import `engine` from proliferate.db at
+all."""
+alternative = """Inject the session with Depends(get_async_session); never touch
+the engine or the session factory in a route."""
+why = """Session and engine lifetime belong to the request dependency, not the
+route body."""
+
+[rule.example]
+bad = "from proliferate.db.engine import async_session_factory  # in api.py"
+good = "from proliferate.db.engine import get_async_session  # for Depends(...)"
+
+[[rule]]
+id = "SRV-API-4"
+title = "API routes do not import ORM models"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/server/**/api.py"
+
+rule = """api.py may import only `User` from proliferate.db.models.auth; no
+other ORM model may be imported by a route module."""
+alternative = """Accept and return Pydantic models from the domain's models.py
+and let the service return domain-typed data."""
+why = """ORM objects never leave the store boundary; the type pipeline is
+ORM -> frozen dataclass -> Pydantic. The one `User` exception is the
+authenticated-actor dependency type."""
+
+[rule.example]
+bad = "from proliferate.db.models.cloud.workspace import Workspace  # in api.py"
+good = "from proliferate.server.cloud.workspaces.models import WorkspaceResponse"
+
+[[rule]]
+id = "SRV-API-5"
+title = "API routes do not own the transaction"
+owner = "server"
+status = "holds"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/server/**/api.py"
+
+rule = """api.py must not call session methods (commit, rollback, execute, add,
+delete, refresh) on a db handle."""
+alternative = """Let the service own the transaction; the route only passes the
+session through."""
+why = """Request transaction ownership belongs to the service layer; a
+committing route hides the transaction boundary. The Accounts route move
+inherited 30 such calls, each one named in lints/server/exceptions.toml."""
+
+[rule.example]
+bad = "await db.commit()  # inside a route handler"
+good = "result = await service.link_identity(db, ...)  # service commits"
+
+[[rule]]
+id = "SRV-SVC-1"
+title = "Services do not build queries"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/server/**/service.py"
+
+rule = """service.py must not import SQLAlchemy query/building APIs; only the
+allowed type-only AsyncSession name is permitted, and a canonical
+worker/service.py may additionally import async_sessionmaker."""
+alternative = """Call a store function in db/store/**; it constructs the query
+and returns frozen dataclasses."""
+why = """Stores are the only layer that knows SQL."""
+
+[rule.example]
+bad = "from sqlalchemy import select  # in service.py"
+good = "from proliferate.db.store import workspaces as workspace_store"
+
+[[rule]]
+id = "SRV-SVC-2"
+title = "Services do not open sessions"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/server/**/service.py"
+
+rule = """service.py must not import DB session entrypoint helpers:
+proliferate.db.engine, proliferate.db.session_ops, or `engine`/`session_ops`
+from proliferate.db."""
+alternative = """Receive `db: AsyncSession` from the caller; a
+worker/service.py instead receives a task-created async_sessionmaker."""
+why = """Session and engine lifetime belong to the request dependency or the
+Celery task, not to orchestration; the worker service cannot construct an
+engine or import global engine helpers."""
+
+[rule.example]
+bad = "from proliferate.db.engine import get_async_session  # in service.py"
+good = "async def link(db: AsyncSession, ...) -> Result:  # caller owns the session"
+
+[[rule]]
+id = "SRV-SVC-3"
+title = "Services do not import ORM models"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/server/**/service.py"
+
+rule = """service.py must not import ORM models directly."""
+alternative = """Consume the frozen dataclasses the store returns and construct
+Pydantic models from them."""
+why = """A service never receives an ORM object; the pipeline stays
+ORM -> dataclass -> Pydantic."""
+
+[rule.example]
+bad = "from proliferate.db.models.billing import Subject  # in service.py"
+good = "record = await billing_store.load_subject(db, subject_id)  # dataclass"
+
+[[rule]]
+id = "SRV-SVC-4"
+title = "Services do not execute or commit"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/server/**/service.py"
+
+rule = """service.py must not call session methods on a db handle, nor session
+boundary helpers on a `db_session`/`session_ops` receiver; a canonical
+worker/service.py is held to the wider forbidden-method set."""
+alternative = """Call a store function and let the request dependency (or the
+task) own commit/rollback."""
+why = """Services orchestrate; they must not execute queries or commit."""
+
+[rule.example]
+bad = "await db.execute(stmt)  # in service.py"
+good = "rows = await workspace_store.list_for_owner(db, owner_id)"
+
+[[rule]]
+id = "SRV-STORE-1"
+title = "Stores do not import session factories"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/db/store/**"
+
+rule = """store modules must not import DB session factories
+(proliferate.db.engine, or `engine` from proliferate.db)."""
+alternative = """Take `db: AsyncSession` as a parameter from the caller."""
+why = """A store receives the caller's session and never opens one."""
+
+[rule.example]
+bad = "from proliferate.db.engine import async_session_factory  # in db/store/x.py"
+good = "async def load(db: AsyncSession, key: UUID) -> Record | None:"
+
+[[rule]]
+id = "SRV-STORE-2"
+title = "Stores are persistence leaves"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/db/store/**"
+
+rule = """store modules must not import FastAPI, integrations, or product
+server modules (proliferate.server.**)."""
+alternative = """Keep the store a persistence leaf: SQLAlchemy plus db/models
+plus frozen dataclasses only."""
+why = """Stores are leaves; importing upward makes persistence depend on
+transport and product policy."""
+
+[rule.example]
+bad = "from proliferate.server.cloud.workspaces.service import sync  # in db/store/x.py"
+good = "from proliferate.db.models.cloud.workspace import Workspace"
+
+[[rule]]
+id = "SRV-STORE-3"
+title = "Stores do not end transactions"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/db/store/**"
+
+rule = """store modules must not call session lifetime methods (commit,
+rollback) on a db handle."""
+alternative = """Return from the store and let the caller's transaction
+boundary commit."""
+why = """A store never opens, commits, or rolls back a session."""
+
+[rule.example]
+bad = "await db.commit()  # at the end of a store function"
+good = "db.add(row)  # caller commits"
+
+[[rule]]
+id = "SRV-STORE-4"
+title = "Stores do not open sessions"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/db/store/**"
+
+rule = """store modules must not open DB sessions by calling
+async_session_factory, bare or as an attribute."""
+alternative = """Accept the session as a parameter."""
+why = """Session ownership sits above the store."""
+
+[rule.example]
+bad = "async with async_session_factory() as db:  # inside db/store/x.py"
+good = "async def load(db: AsyncSession, key: UUID) -> Record | None:"
+
+[[rule]]
+id = "SRV-STORE-5"
+title = "Protected store mutations belong to their owning domain"
+owner = "server"
+status = "leaks"
+gap = "#1714"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/**"
+
+rule = """A named protected store mutation may be called only from its owning
+domain; cross-domain callers must go through the owner's public service."""
+alternative = """Call the owning domain's public service function named in the
+diagnostic's owner-service hint."""
+why = """Unrestricted foreign writes make responsibility and schema-change
+blast radius unknowable. Only the owner's service writes, so invariant
+enforcement has one write boundary. The named table is a bounded migration;
+the repository-wide owner table is still debt — see SRV-STORE-6."""
+
+[rule.example]
+bad = "organization_store.bind_team_checkout_session(...)  # from a billing service"
+good = "await organization_service.bind_team_checkout_session(...)"
+
+[[rule]]
+id = "SRV-DOMAIN-1"
+title = "Domain modules are pure"
+owner = "server"
+status = "holds"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/server/**/domain/**"
+
+rule = """domain modules must be pure and must not import framework, DB,
+config, or integration modules (FastAPI, SQLAlchemy, proliferate.config,
+proliferate.db.**, proliferate.integrations.**)."""
+alternative = """Take plain values and dataclasses as arguments and return
+verdicts; let the service do the I/O and read config."""
+why = """Pure product policy performs no I/O and could move to a different
+runtime without changing its inputs or outputs; it must be testable without
+FastAPI."""
+
+[rule.example]
+bad = "from proliferate.config import settings  # in domain/policy.py"
+good = "def decide(limit: int, usage: int) -> Verdict:  # caller reads config"
+
+[[rule]]
+id = "SRV-DOMAIN-2"
+title = "Domain modules do not call services"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/server/**/domain/**"
+
+rule = """domain modules must not import service.py."""
+alternative = """Invert the call: the service calls the domain."""
+why = """Domain sits below orchestration; the dependency direction is
+service -> domain."""
+
+[rule.example]
+bad = "from proliferate.server.billing.service import charge  # in domain/policy.py"
+good = "verdict = policy.decide(...)  # called from service.py"
+
+[[rule]]
+id = "SRV-DOMAIN-3"
+title = "Domain modules export no async functions"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/server/**/domain/**"
+
+rule = """domain modules must not export public async functions."""
+alternative = """Make the rule synchronous and let the service await the I/O
+around it."""
+why = """An async domain function implies I/O, which is exactly what domain
+purity forbids; pure product rules are synchronous."""
+
+[rule.example]
+bad = "async def decide_eligibility(...)  # module level in domain/policy.py"
+good = "def decide_eligibility(...) -> Verdict:"
+
+[[rule]]
+id = "SRV-ERR-1"
+title = "HTTPException stays at the HTTP boundary"
+owner = "server"
+status = "leaks"
+gap = "#1714"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/server/**/domain/**, server/proliferate/db/store/**, server/proliferate/integrations/**"
+
+rule = """HTTPException is banned outside HTTP boundary code: domain and
+integration modules must not import it, and domain, store, and integration
+code must not raise it."""
+alternative = """Raise a product or domain error (a ProliferateError subclass);
+the global FastAPI exception handler translates it into an HTTP response."""
+why = """Protocol-shaped errors scattered through services make response
+translation inconsistent and hard to test; with one handler the HTTP format
+changes once while product failures stay typed and independently testable.
+The checker still does not classify every service/internal module, and error
+codes are not gated for global uniqueness — that is the gap."""
+
+[rule.example]
+bad = "raise HTTPException(status_code=404, detail=...)  # in a store or domain module"
+good = "raise WorkspaceNotFound(workspace_id)  # global handler maps it"
+
+[[rule]]
+id = "SRV-MODELS-1"
+title = "Wire models do not import ORM models"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/server/**/models.py"
+
+rule = """server/<domain>/models.py must not import ORM models."""
+alternative = """Build the Pydantic model from the frozen dataclass the store
+returned."""
+why = """Public models.py is wire vocabulary; db/models/** is private ORM
+shape, and the two audiences must not merge."""
+
+[rule.example]
+bad = "from proliferate.db.models.cloud.workspace import Workspace  # in models.py"
+good = "class WorkspaceResponse(BaseModel): id: str  # built from a dataclass"
+
+[[rule]]
+id = "SRV-MODELS-2"
+title = "Response models do not map ORM objects"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/server/**/models.py"
+
+rule = """Pydantic response models must not map ORM objects with
+from_attributes (no `model_config = ConfigDict(from_attributes=True)`)."""
+alternative = """Construct the response model explicitly from a frozen
+dataclass."""
+why = """from_attributes maps ORM objects straight into responses, silently
+breaking the ORM -> dataclass -> Pydantic pipeline and leaking schema onto the
+wire."""
+
+[rule.example]
+bad = "model_config = ConfigDict(from_attributes=True)"
+good = "WorkspaceResponse(id=str(record.id), name=record.name)"
+
+[[rule]]
+id = "SRV-MODELS-3"
+title = "ORM models are dependency-free"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/db/models/**"
+
+rule = """db/models modules must not import stores, services, or
+integrations."""
+alternative = """Keep ORM table definitions dependency-free; put behavior in
+the store or the service."""
+why = """db/models/** owns table definitions only and is the lowest coordinate
+in the grid."""
+
+[rule.example]
+bad = "from proliferate.db.store.users import get_user  # in db/models/auth.py"
+good = "class User(Base): __tablename__ = \"users\""
+
+[[rule]]
+id = "SRV-INTEG-1"
+title = "Integrations do not touch the database"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/integrations/**"
+
+rule = """integrations must not import database modules
+(proliferate.db.**)."""
+alternative = """Return vendor data to the service; the service persists it
+through a store."""
+why = """Integrations own vendor mechanics only and are leaves below product
+domains."""
+
+[rule.example]
+bad = "from proliferate.db.engine import get_async_session  # in an integration"
+good = "return VendorSnapshot(...)  # the service persists it"
+
+[[rule]]
+id = "SRV-INTEG-2"
+title = "Integrations do not know product policy"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/integrations/**"
+
+rule = """integrations must not import product server domains
+(proliferate.server.**)."""
+alternative = """Let the service translate vendor results into product
+meaning."""
+why = """Vendor adapters must not know product policy; the dependency runs
+service -> integration."""
+
+[rule.example]
+bad = "from proliferate.server.cloud.workspaces.service import sync  # in an integration"
+good = "raise VendorRejected(response.status_code)  # the service translates it"
+
+[[rule]]
+id = "SRV-INTEG-3"
+title = "Integrations do not import stores"
+owner = "server"
+status = "law"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/integrations/**"
+
+rule = """integrations must not import db/store modules."""
+alternative = """Return data upward; the service calls the store."""
+why = """Same leaf rule as SRV-INTEG-1, stated for the store coordinate."""
+
+[rule.example]
+bad = "from proliferate.db.store.cloud_sync import upsert  # in an integration"
+good = "return VendorSnapshot(...)  # the service calls the store"
+
+[[rule]]
+id = "SRV-INTEG-4"
+title = "Product domains do not own raw HTTP clients"
+owner = "server"
+status = "holds"
+enforced_by = "scripts/check_server_boundaries.py"
+mode = "lint"
+scope = "server/proliferate/server/**"
+
+rule = """product domains must not own raw external HTTP clients: no top-level
+import of httpx or requests."""
+alternative = """Put the raw SDK or HTTP access behind integrations/**; the
+product domain orchestrates the results."""
+why = """Product domains orchestrate integration results; they do not become
+protocol clients. The managed sandbox gateway proxy is the one named exception
+in lints/server/exceptions.toml."""
+
+[rule.example]
+bad = "import httpx  # in server/proliferate/server/<domain>/**"
+good = "from proliferate.integrations.e2b import client  # vendor transport lives here"

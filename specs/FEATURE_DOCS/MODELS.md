@@ -337,6 +337,48 @@ last-failure detail, and `next_attempt_at` while in backoff. The agent-auth
 projection folds the same lifecycle into its facts, so a pane can render
 Probing or a scheduled next attempt without a second mechanism.
 
+### Gateway verification (two planes, ADR FR-3)
+
+Gateway enablement is verified on two independent planes, both read-only
+observations that feed the agent-auth facts, and both behind their own flag
+defaulting OFF.
+
+- **Runtime data plane** (`anyharness-lib`): a gateway-health check that rides
+  the Tier 1 trial's SAME `GET {base_url}/v1/models` fetch (one hit per poke,
+  never a second) and classifies it into three orthogonal verdicts:
+  - `Unreachable`: a network or timeout error. Folds to `Unavailable`.
+  - `Unauthorized`: a 401/403. Folds to `Expired`.
+  - `ModelsDrifted`: reachable and authorized, but the sorted model-id hash
+    differs from the last-known list for that harness. Folds to `Misconfigured`.
+  A first observation and any unchanged list read `Reachable`. Drift compares
+  against the previous observation, then advances the baseline, so the alarm
+  fires on the transition. The check is gated by the engine's
+  `gateway_health_enabled` tunable; when off, no health verdict is recorded and
+  the gateway fact stays empty. There is no ETag mechanism: an opencode gateway
+  probe already re-fetches the model list on a manual refresh (which invalidates
+  the memoized plan) and on any auth-changed revision (the plan memo is
+  revision-keyed, so an apply forces a miss), which is the freshness the plane
+  needs.
+- **Control plane** (server): a periodic asyncio loop
+  (`_verification_loop`, gated by `agent_gateway_verification_enabled` plus the
+  gateway being enabled and background workers on, on the
+  `agent_gateway_verification_interval_seconds` interval) that asks LiteLLM which
+  models each active enrollment key can see and DIFFS that observed set against the
+  EXPECTED access-group set for the key's `harness_kind`, derived from the deployed
+  `server/litellm/config.yaml` (the model ids whose `model_info.access_groups`
+  contain the `harness_kind`). An exact match records `ok`; any missing or extra
+  ids records `misconfigured` with a delta JSON (`{missing, extra, observed_count,
+  expected_count}`), which catches both a wrong-but-populated group and the
+  stale-deployed-image drift class (repo says X, proxy serves Y). If `config.yaml`
+  is genuinely absent the check degrades rather than crashing (a non-empty list
+  reads `ok` with a `config_unavailable` note, an empty list still `misconfigured`).
+  An error records NO verdict, so a transient blip never overwrites a
+  last-known-good, and the reported exception is key-redacted. The verdict
+  persists on the enrollment-key row (`verification_status`,
+  `verification_delta`, `verified_at`) and is surfaced additively on the gateway
+  capabilities response, never on key material and never on the pinned
+  `state.json` wire shape.
+
 ## The cloud copy
 
 The law first: **AnyHarness stores, never syncs.** The machine document

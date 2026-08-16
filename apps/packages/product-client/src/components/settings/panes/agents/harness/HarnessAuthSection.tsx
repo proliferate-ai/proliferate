@@ -19,6 +19,11 @@ import {
   deriveAuthStatus,
   HarnessAuthStatusAction,
 } from "#product/components/settings/panes/agents/harness/HarnessAuthStatusBadge";
+import {
+  HarnessAuthEvidenceBadge,
+  HarnessAuthEvidenceSummary,
+} from "#product/components/settings/panes/agents/harness/HarnessAuthEvidenceBadge";
+import { isFeatureEnabled } from "#product/config/feature-flags";
 
 export type { AuthMethod };
 
@@ -158,13 +163,27 @@ function HarnessAuthMethods({
     : null;
   const cardCount = gatewayCapable ? 3 : 2;
 
+  // Flag-ON path (ADR agent-auth rung 6): render the runtime's DERIVED
+  // authState verbatim — evidence-backed badge + next-action/probe/handoff
+  // lead — instead of the legacy locally-derived status. Falls back to the old
+  // badge only when the flag is off or the runtime carries no derived state.
+  const evidenceOn = isFeatureEnabled("agentAuthEvidencePanes");
+  const authState = evidenceOn ? editor.localAgent?.authState ?? null : null;
+
   return (
     <SettingsSection
       title={HARNESS_PANE_COPY.authenticationTitle}
       description={HARNESS_PANE_COPY.authenticationDescription(displayName, surface)}
       titleWeight="emphasized"
       surface="plain"
-      action={(
+      action={authState ? (
+        <HarnessAuthEvidenceBadge
+          authState={authState}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          data-harness-status={selectedMethod === "cli" ? "native" : selectedMethod}
+        />
+      ) : (
         <HarnessAuthStatusAction
           status={status}
           refreshing={refreshing}
@@ -173,6 +192,7 @@ function HarnessAuthMethods({
         />
       )}
     >
+      {authState ? <HarnessAuthEvidenceSummary authState={authState} /> : null}
       {editor.harnessDisallowed ? (
         <p className="pb-2 text-ui-sm text-muted-foreground">{POLICY_TOOLTIP}.</p>
       ) : null}

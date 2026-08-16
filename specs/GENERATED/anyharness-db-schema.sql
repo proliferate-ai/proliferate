@@ -111,6 +111,36 @@ CREATE TABLE feed_bindings (
     updated_at TEXT NOT NULL
 );
 
+-- table: fork_operations
+CREATE TABLE fork_operations (
+    id TEXT PRIMARY KEY,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    request_digest TEXT NOT NULL,
+    parent_session_id TEXT NOT NULL,
+    child_session_id TEXT NOT NULL UNIQUE,
+    phase TEXT NOT NULL CHECK (phase IN (
+        'prepared',
+        'native_call_in_flight',
+        'native_result_known',
+        'native_outcome_unknown',
+        'child_persisted',
+        'completed',
+        'failed'
+    )),
+    anchor_turn_id TEXT,
+    anchor_item_id TEXT,
+    provider_anchor_kind TEXT,
+    provider_anchor_value TEXT,
+    provider_anchor_inclusive INTEGER,
+    prefix_terminal_seq INTEGER,
+    prefix_digest TEXT,
+    adapter_version TEXT,
+    native_version TEXT,
+    native_child_session_id TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 -- table: goals
 CREATE TABLE goals (
     id TEXT PRIMARY KEY,
@@ -427,6 +457,14 @@ CREATE TABLE runtime_config_session_context (
   manifest_json TEXT NOT NULL,
   applied_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- table: session_adapter_markers
+CREATE TABLE session_adapter_markers (
+    session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+    adapter_version TEXT,
+    native_version TEXT,
+    created_at TEXT NOT NULL
 );
 
 -- table: session_background_work
@@ -759,6 +797,12 @@ CREATE INDEX idx_cowork_threads_workspace_id ON cowork_threads(workspace_id);
 -- index: idx_feed_bindings_owner
 CREATE UNIQUE INDEX idx_feed_bindings_owner
     ON feed_bindings(session_id, owner_kind, owner_id);
+
+-- index: idx_fork_operations_child
+CREATE INDEX idx_fork_operations_child ON fork_operations(child_session_id);
+
+-- index: idx_fork_operations_parent
+CREATE INDEX idx_fork_operations_parent ON fork_operations(parent_session_id);
 
 -- index: idx_goals_session_created
 CREATE INDEX idx_goals_session_created

@@ -9,33 +9,15 @@ import {
   useAuthSelections,
 } from "@proliferate/cloud-sdk-react";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
+import { getBundledHarnessCatalogSettings } from "#product/lib/domain/agents/bundled-agent-catalog";
+import type { CloudAgentCatalogSettingInput } from "#product/lib/domain/agents/cloud-launch-catalog-types";
 
 // --------------------------------------------------------------------------- #
-// Catalog-declared settings (mirrors catalogs/agents/catalog.json)
+// Catalog-declared settings — read from the bundled catalogs/agents/catalog.json
+// copy (agent-auth.md FR-4: the catalog is the authority; no re-literalled table).
 // --------------------------------------------------------------------------- #
 
-interface CatalogSetting {
-  key: string;
-  type: "boolean";
-  label: string;
-  description?: string;
-  default: boolean;
-  surfaces: AgentAuthSurface[];
-}
-
-const CATALOG_SETTINGS: Record<string, CatalogSetting[]> = {
-  claude: [
-    {
-      key: "chrome",
-      type: "boolean",
-      label: "Use Claude Code with Chrome",
-      description:
-        "Allow Claude Code to control your Chrome browser. Requires the Claude Code Chrome extension.",
-      default: false,
-      surfaces: ["local"],
-    },
-  ],
-};
+type CatalogSetting = CloudAgentCatalogSettingInput;
 
 // --------------------------------------------------------------------------- #
 // Component
@@ -54,10 +36,10 @@ export function HarnessSettingsSection({
   harnessKind,
   surface,
 }: HarnessSettingsSectionProps) {
-  const allSettings = CATALOG_SETTINGS[harnessKind];
-  const settings = allSettings?.filter((s) => s.surfaces.includes(surface));
+  const allSettings = getBundledHarnessCatalogSettings(harnessKind);
+  const settings = allSettings.filter((s) => s.surfaces.includes(surface));
 
-  if (!settings || settings.length === 0) {
+  if (settings.length === 0) {
     return null;
   }
 
@@ -134,7 +116,7 @@ function HarnessSettingRow({
   );
 
   return (
-    <SettingsRow label={setting.label} description={setting.description}>
+    <SettingsRow label={setting.label} description={setting.description ?? undefined}>
       <Switch
         checked={currentValue}
         onChange={handleToggle}

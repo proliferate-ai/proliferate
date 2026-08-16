@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import { useAuthSetupOnboardingStep } from "#product/hooks/agents/lifecycle/use-auth-setup-onboarding-step";
+import { useAuthSetupOnboardingEvidence } from "#product/hooks/agents/lifecycle/use-auth-setup-onboarding-evidence";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useAddRepo } from "#product/hooks/workspaces/workflows/use-add-repo";
 import { useAddRepoFlowStore } from "#product/stores/ui/add-repo-flow-store";
@@ -146,12 +147,16 @@ export function useHomeScreen() {
     [readyAgents],
   );
 
-  // Ack-gated onboarding "setting up" step (agent-auth.md, Proof C7).
+  // Ack-gated onboarding "setting up" step (agent-auth.md, Proof C7). The timer
+  // step and the evidence-bound card are mutually exclusive on the
+  // agentAuthEvidencePanes flag: exactly one is ever live, the other dormant.
   const authSetupStep = useAuthSetupOnboardingStep();
+  const authSetupEvidence = useAuthSetupOnboardingEvidence();
 
   return {
     onboardingCards,
     authSetupStep,
+    authSetupEvidence,
     isAddingRepo,
     handleHomeAction,
     // Model-probe card inputs (UX spec §10). The model count itself lives with

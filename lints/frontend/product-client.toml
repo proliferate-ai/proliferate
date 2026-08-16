@@ -1,0 +1,143 @@
+# ProductClient package rules — the shared frontend package consumed by
+# desktop, web, and mobile. Enforced by scripts/check_frontend_boundaries.py
+# over apps/packages/product-client/src/**.
+#
+# Grandfathered violation sites live in exceptions.toml, one entry per site.
+# See lints/README.md for the record and ledger contract.
+
+[[rule]]
+id = "FE-PC-1"
+title = "product-client domain has no .tsx files"
+owner = "frontend"
+status = "law"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/domain/**"
+
+rule = """product-client's domain layer must contain no .tsx files."""
+alternative = """Put the markup in a component under src/components/** and keep the domain module .ts-only."""
+why = """A .tsx file in domain proves the domain has rendered UI in it; the extension is the cheapest possible proof."""
+
+[rule.example]
+bad = """apps/packages/product-client/src/domain/chats/row.tsx"""
+good = """apps/packages/product-client/src/domain/chats/row-model.ts plus a component that renders it"""
+
+[[rule]]
+id = "FE-PC-2"
+title = "product-client domain imports only data contracts"
+owner = "frontend"
+status = "law"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/domain/**"
+
+rule = """product-client's domain layer may import only Cloud SDK contract types, AnyHarness contract types plus the four approved pure helpers, and test-only vitest. Style assets, SDK client/request/timing/transport plumbing, Cloud SDK runtime values, and any other external specifier are all rejected."""
+alternative = """Keep the domain a pure data and logic layer that any platform can consume; take runtime capabilities as injected parameters."""
+why = """product-client domain is the shared kernel for desktop, web, and mobile; anything platform-specific there blocks a platform."""
+
+[rule.example]
+bad = """`import * as React from "react";` in product-client/src/domain/**"""
+good = """`import type { Session } from "@anyharness/sdk";`"""
+
+[[rule]]
+id = "FE-PC-3"
+title = "product-client domain relative imports stay inside domain"
+owner = "frontend"
+status = "law"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/domain/**"
+
+rule = """product-client domain modules must not escape src/domain with a relative import; only the four named contract fixtures may resolve outside it."""
+alternative = """Import within the domain, or promote the shared type into the domain."""
+why = """Relative escapes are how a purity boundary is defeated without tripping a specifier match."""
+
+[rule.example]
+bad = """`import { x } from "../primitives/y";` in product-client/src/domain/**"""
+good = """`import { x } from "./y";`"""
+
+[[rule]]
+id = "FE-PC-4"
+title = "product-client domain uses no browser or Tauri globals"
+owner = "frontend"
+status = "law"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/domain/**"
+
+rule = """product-client domain modules must not reference forbidden browser globals or `__TAURI*` globals."""
+alternative = """Take the value as a parameter, injected by the platform layer through the host contract."""
+why = """A domain that touches `window` or a platform global cannot run under React Native or in a plain test harness."""
+
+[rule.example]
+bad = """`window.localStorage.getItem("k")` inside product-client domain"""
+good = """`function load(storage: ProductStorage)` with the platform supplying `storage`"""
+
+[[rule]]
+id = "FE-PC-5"
+title = "product-client stays host-agnostic"
+owner = "frontend"
+status = "holds"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**"
+
+rule = """product-client as a whole must not import platform-specific specifiers, and must not reference raw `__TAURI*` globals anywhere."""
+alternative = """Route the platform capability through an injected port supplied by the host app (see the ProductHost contract)."""
+why = """The shared package must remain host-agnostic; a raw global reference is the sneakiest way to break that, since no import statement reveals it."""
+
+[rule.example]
+bad = """`if ((window as any).__TAURI_INTERNALS__)` inside product-client"""
+good = """`if (host.capabilities.nativeShell)` against the injected host"""
+
+[[rule]]
+id = "FE-PC-6"
+title = "product-client imports flow downward through the layers"
+owner = "frontend"
+status = "leaks"
+gap = "#1715"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**"
+
+rule = """Inside product-client, imports must flow downward through the declared layer order; a lower layer may not import a higher one, and primitives may not import any other layer. Type-only edges count."""
+alternative = """Move the dependency or its owned type to the lower layer."""
+why = """A layered package with upward edges is not layered; the direction is what makes the package extractable and mobile-safe."""
+
+[rule.example]
+bad = """a lib/domain module importing a component-owned type"""
+good = """the shared type declared in lib/domain and imported by the component"""
+
+[[rule]]
+id = "FE-PC-7"
+title = "primitives/ holds root files plus named support directories"
+owner = "frontend"
+status = "law"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/primitives/"
+
+rule = """Every entry directly under apps/packages/product-client/src/primitives/ must be either a root .ts/.tsx source file or one of the support directories named by the component-library taxonomy: icons, patterns, utils, overlays, __tests__."""
+alternative = """Add the primitive as a root file under primitives/, or place supporting code in one of the named support directories."""
+why = """The flat root plus a closed set of support directories is what makes the design-system surface enumerable; a new nested directory forks the taxonomy silently."""
+
+[rule.example]
+bad = """apps/packages/product-client/src/primitives/button/button.tsx"""
+good = """apps/packages/product-client/src/primitives/button.tsx"""
+
+[[rule]]
+id = "FE-MOBILE-1"
+title = "mobile consumes product-client only through concrete domain files"
+owner = "frontend"
+status = "law"
+enforced_by = "scripts/check_frontend_boundaries.py"
+mode = "lint"
+scope = "apps/mobile/src/**"
+
+rule = """Mobile may consume product-client only as `@proliferate/product-client/internal/domain/<concrete-file>`: no relative source paths into the package, no non-domain subpaths, and no barrel or directory imports."""
+alternative = """Import `@proliferate/product-client/internal/domain/<concrete-file>` naming an existing src/domain TypeScript file."""
+why = """Mobile has no DOM; the domain layer is the only part of product-client guaranteed to run there, and concrete file edges keep barrels from pulling in DOM code."""
+
+[rule.example]
+bad = """`import { x } from "@proliferate/product-client/internal/domain";`"""
+good = """`import { x } from "@proliferate/product-client/internal/domain/chats/transcript/transcript-row-model";`"""

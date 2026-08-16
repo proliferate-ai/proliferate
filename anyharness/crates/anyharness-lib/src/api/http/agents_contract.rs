@@ -2,8 +2,8 @@
 //! no IO. The only file that sees both vocabularies for the agents family.
 
 use anyharness_contract::v1::{
-    AgentAuthCredentialEvidence, AgentAuthCredentialSource, AgentAuthDisplay,
-    AgentAuthEvidenceRef, AgentAuthEvidenceStrength, AgentAuthFactsSummary, AgentAuthGatewayHealth,
+    AgentAuthCredentialEvidence, AgentAuthCredentialSource, AgentAuthDisplay, AgentAuthEvidenceRef,
+    AgentAuthEvidenceStrength, AgentAuthFactsSummary, AgentAuthGatewayHealth,
     AgentAuthLoginHandoff, AgentAuthNextAction, AgentAuthProbeLifecycle, AgentAuthProbePhase,
     AgentAuthSelectionFact, AgentAuthStateSummary, AgentCliAuthState, AgentCredentialState,
     AgentInstallProgress, AgentInstallProgressComponent, AgentInstallProgressPhase,
@@ -180,9 +180,7 @@ fn reconcile_result_to_contract(result: &InternalAgentReconcileResult) -> Reconc
             AgentReconcileOutcome::Failed => ReconcileOutcome::Failed,
         },
         message: result.message.clone(),
-        failure_kind: result
-            .failure_kind
-            .map(|kind| kind.as_str().to_string()),
+        failure_kind: result.failure_kind.map(|kind| kind.as_str().to_string()),
         installed_artifacts: result
             .installed_artifacts
             .iter()
@@ -399,6 +397,8 @@ fn auth_gateway_to_contract(gateway: GatewayHealth) -> AgentAuthGatewayHealth {
     match gateway {
         GatewayHealth::Reachable => AgentAuthGatewayHealth::Reachable,
         GatewayHealth::Unreachable => AgentAuthGatewayHealth::Unreachable,
+        GatewayHealth::Unauthorized => AgentAuthGatewayHealth::Unauthorized,
+        GatewayHealth::ModelsDrifted => AgentAuthGatewayHealth::ModelsDrifted,
         GatewayHealth::BudgetExhausted => AgentAuthGatewayHealth::BudgetExhausted,
     }
 }

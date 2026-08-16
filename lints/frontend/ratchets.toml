@@ -1,0 +1,250 @@
+# Frontend measured size debt. A ratchet, not an exception ledger: max_lines
+# is the observed count allowed for this file and may only shrink. Growth
+# fails; so does a stale entry whose file is now under its allowance or gone.
+# Two tables, two readers: [[max_lines]] (PROD-SIZE-1, read by
+# scripts/check_max_lines.py) and [[frontend_structure]] (FE-SIZE-1, read by
+# scripts/report_frontend_structure.py) — the latter's files sit below
+# check_max_lines' caps, so they must not be listed under [[max_lines]].
+
+[[max_lines]]
+path = "apps/desktop/src-tauri/src/commands/ssh_tunnel.rs"
+max_lines = 729
+reason = "existing desktop native oversized file"
+
+[[max_lines]]
+path = "apps/desktop/src-tauri/src/diagnostics/support_snapshot/artifact_store/unix_fs.rs"
+max_lines = 658
+reason = "Support snapshot artifact store's Unix filesystem layer: private-by-construction root creation, metadata repair, and the O_NOFOLLOW open/read/write paths share the same permission constants and repair state machine, and the mkdir-mode hardening this slice adds is only meaningful next to the repair it guards. Split into unix_fs/{root,entry}.rs when a second artifact kind lands."
+
+[[max_lines]]
+path = "apps/desktop/src-tauri/src/diagnostics/support_snapshot/scrub/patterns.rs"
+max_lines = 610
+reason = "Support export scrub pattern table: the labelled, unlabelled-scheme, environment-assignment, provider-prefix, and opaque-catch-all rules form one ordered redaction pipeline whose precedence is load-bearing and pinned by the scrub tests, so a rule family cannot move without moving that order with it. Split into scrub/patterns/{labelled,unlabelled,opaque}.rs when a sixth rule family lands."
+
+[[max_lines]]
+path = "apps/desktop/src-tauri/src/diagnostics_collector/broker/server.rs"
+max_lines = 672
+reason = "Desktop diagnostics broker server: the accept loop, per-request admission, and the bounded connection/finite/tail/export permits all share one listener, one shutdown watch, and one BrokerLimits value that the handlers mutate in place, so no handler moves out without duplicating that state. Split into broker/server/{accept,admission,handlers}.rs when the next request type lands."
+
+[[max_lines]]
+path = "apps/packages/product-client/src/components/home/screen/HomeNextScreen.test.tsx"
+max_lines = 769
+reason = "home screen suite: unified-composer/target-persistence coverage joined by the PRO-165 home-attachment battery (+ button snapshot payload, whole-screen drop, dropped-path local_ref recovery, local/remote target-flip clearing, attachment-only launch, failure retention, chip removal)"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessPane.test.tsx"
+max_lines = 1208
+reason = "C-train composition: C-2 ack-status UI coverage joins the B-4 cut; P3 runtime catalog extends All-Models coverage + add-key modal flow + switch disambiguation + surface store mock + ProductHost test-host wiring + authenticated-without-cloud-compute BYOK gating cases + C3 model-snapshot status mock stub + review-fix refresh mutation stub + C1 cursor api_key/CLI method + CURSOR_API_KEY persistence cases; F-040 dropped the client-refresh-with-payload cases (no callable cloud refresh remains); agent-auth.md §5 provider-picker two-write assertion (vault api_key + one selection row) replaces the prefill-only case; the §1–§7 pane rebuild adds the collapsed-model-list expansion helper; review-fix non-orphaning provider-picker cases (PUT-failure revoke + rollback, close-only-after-PUT, bound-env-var pass-through, key-shaped env var for multi-field providers); PR-review fixes add the P0 anonymous-local Authenticate-gate regression, the P1-a supportsLogin&&canRunLogin regression, and the P1-b gateway-capabilities-pending loading-state regression; design-handoff v2 rewrite (cards + merged header badge + providers section + saved-keys segment)"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/chats/cloud/transcript-view.test.ts"
+max_lines = 1160
+reason = "relocated existing oversized domain test; no growth"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/chats/transcript/transcript-presentation.test.ts"
+max_lines = 864
+reason = "relocated existing oversized domain test; legacy Subagents MCP cases removed in PR10"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/chats/transcript/transcript-row-model.test.ts"
+max_lines = 1363
+reason = "relocated existing oversized domain test; +workspace-creation-receipt row coverage incl. after-first-user-message placement cases (composer-dock-receipt); receipt folded into first turn's Worked-for group; +frontier-hosting coverage on the last pending/outbox prompt row now that the standalone workspace_receipt row kind is gone (composer-dock-receipt placement fix)"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/chats/transcript/transcript-row-model.ts"
+max_lines = 1017
+reason = "relocated existing oversized domain source; receipt folded into first turn's Worked-for group; the standalone workspace_receipt row kind is deleted — before any turn exists the receipt instead hosts via hostsWorkspaceReceipt on the last pending/outbox prompt row (composer-dock-receipt placement fix)"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/sessions/activity.test.ts"
+max_lines = 660
+reason = "relocated existing oversized domain test; no growth"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/sessions/intents/session-intent.test.ts"
+max_lines = 659
+reason = "PRO-261 queued-intent echo regression test"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/domain/workspaces/cloud-work-inventory.test.ts"
+max_lines = 859
+reason = "relocated existing oversized domain test; no growth"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts"
+max_lines = 840
+reason = "managed sandbox cloud workspace indicators + PR 5 explicit-materialization attachment cases extend existing oversized test file"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/lib/domain/workspaces/sidebar/sidebar.test.ts"
+max_lines = 687
+reason = "workspace git-status threading extends existing oversized test file; R7 archiving-train hide-set deletion (§3.10) shrinks it further (archivedIds fixture removed)"
+
+[[max_lines]]
+path = "apps/packages/product-client/src/lib/infra/measurement/measurement-port.ts"
+max_lines = 734
+reason = "product-owned measurement port barrel (R1 ruling) mirroring the retained measurement surface through a swappable no-op sink; split deferred"
+
+# FE-SIZE-1 measured frontend size debt, read by
+# scripts/report_frontend_structure.py. Converted from the retired
+# scripts/frontend_structure_allowlist.txt; same paths, counts, and reasons.
+# Kept as its own table because these files sit below check_max_lines.py's caps,
+# so listing them under [[max_lines]] would register as stale entries there.
+# Same shrink-only contract as [[max_lines]]: growth fails, and so does an entry
+# whose file dropped back under the soft threshold or is gone.
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/workspace/chat/transcript/MarkdownBody.tsx"
+max_lines = 525
+reason = "existing markdown transcript renderer pending split"
+
+# Relocated from apps/desktop/src by the Desktop-product move into product-client
+# (web-desktop-unification slice 04). Same files, same counts/reasons — relocation,
+# not gate-weakening; product-client/src is a structure-report scan root. Counts
+# for status-card/git-review files carry main's post-merge content sizes.
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/content/ui/diff/ChatDiffViewer.tsx"
+max_lines = 550
+reason = "chat diff viewer pending row-renderer split"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/content/ui/diff/SplitDiffViewer.tsx"
+max_lines = 465
+reason = "split diff viewer pending row-renderer split"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/content/ui/diff/UnifiedDiffViewer.tsx"
+max_lines = 414
+reason = "unified diff viewer pending row-renderer split"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx"
+max_lines = 524
+reason = "connected sidebar host; main's pinned-section split landed alongside R7's lifecycle archive handlers (resolver, instant archive, optimistic-hide over groups+pinned, scenario dialog) in the merge; +3 from #1856's transparent-chrome vibrancy pass-through; extraction pending"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/workspace/repo-setup/CloudRepoActionDialogHost.tsx"
+max_lines = 433
+reason = "shared ordered-readiness continuation host for Cloud registration and retry-stable local clone; split by intent owner on next growth"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/hooks/sessions/workflows/session-replacement-tombstones.ts"
+max_lines = 414
+reason = "async ProductStorage hydration added to the in-memory tombstone model; R14 tombstone-commit listener notify wiring"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/hooks/sessions/workflows/use-session-creation-actions.ts"
+max_lines = 451
+reason = "session creation orchestrator (+lazy materialization and durable empty-create lifecycle, frozen-input replay, and acknowledgement seam); split deferred"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/lib/infra/measurement/measurement-port.ts"
+max_lines = 734
+reason = "product-owned measurement port barrel (R1 ruling) mirroring the retained measurement surface through a swappable no-op sink; split deferred"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/host/product-host.ts"
+max_lines = 420
+reason = "WDU slice 04 (G2/G4): host contract grew from getAnonymousInstallId + getSandboxGatewayAccessToken and their doc contracts"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/playground/WorkspaceStatusPlayground.tsx"
+max_lines = 450
+reason = "status-card playground fixtures pending scenario-module split (#1202 debt repair)"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/playground/GitReviewV2Playground.tsx"
+max_lines = 447
+reason = "git review playground fixtures pending scenario-module split; concrete icon-owner imports add two lines"
+
+[[frontend_structure]]
+path = "apps/packages/design/src/tokens.ts"
+max_lines = 2143
+reason = "single token authority: one entry per token with provenance by design; shape is a flat manifest, not logic"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/hooks/agents/workflows/use-harness-auth-editor.ts"
+max_lines = 410
+reason = "harness auth editor grew with v2 single-PUT replace semantics + provider-hint rows; split pending"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/primitives/icons/core.tsx"
+max_lines = 483
+reason = "existing consolidated icon module pending split"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/workspace/chat/input/ChatInput.tsx"
+max_lines = 447
+reason = "blocked-status composer takeover branch (textarea/control-row swap + focus restore); split on next growth"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/hooks/home/workflows/use-home-next-launch.ts"
+max_lines = 404
+reason = "PRO-230's full launch-outcome/attemptId machinery merged with main's attachmentSnapshots plumbing threaded through every target-kind branch; split on next growth"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-archive-actions.ts"
+max_lines = 471
+reason = "R7 lifecycle archive/unarchive orchestrator: verb posts, undo toasts, 409 scenario flow, optimistic-hide set with pending reconciliation; grew past 400 with the flicker-regression rider; PRO-257 adds the success-toast dwell"
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/lib/infra/terminals/terminal-stream-registry.ts"
+max_lines = 417
+reason = "terminal/feed stream registry (+open/close/error records woven into the existing callbacks; no seam short of splitting the registry itself)"
+
+# FE-CHATSCROLL-1 sanctioned scroll-position writers, read by
+# scripts/check_transcript_scroll_writer.py. File-level allowlist: any non-test
+# product-client source that assigns .scrollTop, calls .scrollTo/.scrollIntoView,
+# or sets overflow-anchor must appear here or the checker fails it as a net-new
+# writer. Shrink-only: an entry whose file no longer writes scroll (or is gone)
+# is stale and must be deleted in the same change. Seeded from current reality;
+# no net-new writers.
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/hooks/chat/ui/use-transcript-stick-to-bottom.ts"
+reason = "the stick-to-bottom engine — FR-1's sole sanctioned transcript-viewport scrollTop writer"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/hooks/chat/ui/use-above-change-compensation.ts"
+reason = "transcript engine sibling: above-change scroll compensation, part of the stick-to-bottom writer surface"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/components/workspace/chat/transcript/FullTranscriptRowList.tsx"
+reason = "transcript row list: engine-owned virtual-anchor scrollTop restore across height changes"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/components/workspace/chat/transcript/VirtualizedTranscriptRowList.tsx"
+reason = "virtualized transcript row list: engine-owned virtual-anchor scrollTop restore across height changes"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/primitives/patterns/AutoHideScrollArea.tsx"
+reason = "the scroll-area primitive that owns the viewport scrollTop write and the overflow-anchor treatment"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/components/playground/GitReviewV2Playground.tsx"
+reason = "pre-existing non-transcript scroller: git-review playground scrollIntoView; held so no net-new writer is added"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/components/workspace/git/GitPanel.tsx"
+reason = "pre-existing non-transcript scroller: git panel diff-entry scrollIntoView; held so no net-new writer is added"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/components/workspace/search/ContentSearchPill.tsx"
+reason = "pre-existing non-transcript scroller: content-search match scrollIntoView; held so no net-new writer is added"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/components/workspace/shell/topbar/HeaderTabs.tsx"
+reason = "pre-existing non-transcript scroller: topbar tab-strip scrollTo; held so no net-new writer is added"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/hooks/chat/ui/use-composer-menu-navigation.ts"
+reason = "pre-existing non-transcript scroller: composer menu keyboard-nav scrollTo/scrollIntoView; held so no net-new writer is added"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/hooks/chat/ui/use-model-picker-keyboard-nav.ts"
+reason = "pre-existing non-transcript scroller: model-picker keyboard-nav scrollIntoView; held so no net-new writer is added"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/lib/domain/content-search/chat-row-match-jump.ts"
+reason = "pre-existing non-transcript scroller: content-search row-match jump scrollIntoView; held so no net-new writer is added"

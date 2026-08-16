@@ -167,7 +167,7 @@ impl DiagnosticsCollectorSupervisor {
                 };
                 start_operation.terminal(outcome, Some(classification));
                 self.publish_degraded(classification, false);
-                if retryable(error.kind) && self.restart_burst_locked().await {
+                if retryable(error.kind) && self.restart_burst_locked(None).await {
                     self.resolve_startup(StartupBarrierResult::Ready);
                     self.spawn_monitor();
                     StartupBarrierResult::Ready

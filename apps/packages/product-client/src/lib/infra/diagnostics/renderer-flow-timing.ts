@@ -12,18 +12,25 @@ import {
  * This module is the single producer of the `renderer.flow.*` event family. It
  * sits alongside the existing renderer connection/stream diagnostics
  * (renderer-diagnostics-connection.ts, renderer-diagnostic-migrations.ts) and is
- * the one place the four canonical UX flows (workspace_open, settings_nav,
- * terminal_attach, session_open) emit stage timings. The older
- * `logLatency(...)` latency-flow API and the `startMeasurementOperation(...)`
- * measurement-port operation are no longer wired to these four flows; only
- * genuinely out-of-scope probes (typing/jank/scroll, incremental history
- * append/prepend, etc.) still use those APIs.
+ * the one place the canonical UX flows (workspace_open, settings_nav,
+ * terminal_attach, session_open, composer_submit, mode_switch) emit stage
+ * timings. The older `logLatency(...)` latency-flow API and the
+ * `startMeasurementOperation(...)` measurement-port operation are no longer
+ * wired to these flows; only genuinely out-of-scope probes (typing/jank/scroll,
+ * incremental history append/prepend, etc.) still use those APIs.
  *
  * The three stage timings the ADR requires:
  *
  *   - intent_to_shell_ms  (intent      -> shell_committed)
  *   - shell_to_data_ms    (shell        -> data_ready)
  *   - data_to_stable_ms   (data_ready   -> content_stable)
+ *
+ * composer_submit and mode_switch (R12 rung) are simpler two-point flows: they
+ * only call beginRendererFlow and finishRendererFlow, so shell_committed and
+ * data_ready are never reached and those two fields are omitted from their
+ * content_stable record; `intent_to_stable_ms` alone carries their timing
+ * (composer_submit: submit intent to first visible assistant content;
+ * mode_switch: mode-switch input to committed).
  *
  * IMPORTANT: these marks are store/data-boundary proxies, not real paint
  * commits. `shell_committed` fires when the shell's store state is in place and
@@ -43,7 +50,9 @@ export type RendererFlowKind =
   | "workspace_open"
   | "settings_nav"
   | "terminal_attach"
-  | "session_open";
+  | "session_open"
+  | "composer_submit"
+  | "mode_switch";
 
 export type RendererFlowStage =
   | "intent"
@@ -83,6 +92,18 @@ export const RENDERER_FLOW_BUDGETS: Record<RendererFlowKind, RendererFlowBudget>
   },
   session_open: {
     metric: "renderer.flow.session_open.data_to_stable_ms",
+    thresholdMs: null,
+  },
+  // composer_submit and mode_switch are two-point flows (intent -> stable,
+  // no shell/data-ready midpoints, so no data_to_stable_ms field is ever
+  // emitted for them): the budget metric names intent_to_stable_ms, the
+  // field these flows actually produce.
+  composer_submit: {
+    metric: "renderer.flow.composer_submit.intent_to_stable_ms",
+    thresholdMs: null,
+  },
+  mode_switch: {
+    metric: "renderer.flow.mode_switch.intent_to_stable_ms",
     thresholdMs: null,
   },
 };
@@ -249,10 +270,6 @@ export function finishRendererFlow(input: {
   const fields: Record<string, RendererDiagnosticField> = {
     flow_kind: diagnosticField(input.kind, "operational"),
     stages_completed: diagnosticField(stagesCompleted, "operational"),
-    data_to_stable_ms: diagnosticField(
-      round(now - (flow.dataAt ?? flow.shellAt ?? flow.startedAt)),
-      "operational",
-    ),
     intent_to_stable_ms: diagnosticField(round(now - flow.startedAt), "operational"),
     budget_metric: diagnosticField(budget.metric, "operational"),
     budget_threshold_ms: diagnosticField(budget.thresholdMs, "operational"),
@@ -269,6 +286,11 @@ export function finishRendererFlow(input: {
       round(flow.dataAt - (flow.shellAt ?? flow.startedAt)),
       "operational",
     );
+    // data_to_stable_ms is the "last-mile paint stage" that Honeycomb queries
+    // aggregate on; it's only meaningful once data_ready was actually
+    // reached. composer_submit/mode_switch (two-point flows, no data_ready)
+    // omit it rather than aliasing it to the whole-intent duration.
+    fields.data_to_stable_ms = diagnosticField(round(now - flow.dataAt), "operational");
   }
   recordRendererDiagnostic({
     name: "renderer.flow.content_stable",
@@ -315,6 +337,63 @@ export function abandonRendererFlow(input: {
   });
 }
 
+/**
+ * UX-latency R14: content_stable hand-off for workspace_open.
+ *
+ * The workspace-open flow no longer awaits transcript hydration on its critical
+ * path (that fetch moved to SessionTranscriptPane's self-hydration). So the
+ * bootstrap can no longer honestly finish the flow at its own completion — the
+ * transcript is not yet on screen. Instead the bootstrap DEFERS content_stable:
+ * it records the target session id whose committed transcript is the real
+ * "user can see it" signal, and the transcript pane finishes the flow when it
+ * actually commits that session's transcript.
+ *
+ * The founder's rule: never emit a stable mark before the user can see the
+ * transcript. A deferred flow that never commits (selection superseded before
+ * the pane mounts) simply ages out via pruneStaleFlows — no false milestone.
+ *
+ * The registry maps a session id -> the workspace_open flow correlation key the
+ * bootstrap opened for it. The bootstrap owns this mapping (it knows both the
+ * correlationKey it began the flow with AND the session it selected), so the
+ * pane never has to reconstruct the correlation key from workspace ids that may
+ * differ from the selected/materialized id.
+ */
+const deferredWorkspaceOpenBySession = new Map<string, string>();
+
+export function deferWorkspaceOpenContentStable(input: {
+  sessionId: string;
+  correlationKey: string;
+}): void {
+  // A single workspace_open flow settles on exactly one session. Drop any prior
+  // deferral pointing at the same flow so a superseded session can't leak an
+  // entry that never resolves.
+  for (const [sessionId, correlationKey] of deferredWorkspaceOpenBySession) {
+    if (correlationKey === input.correlationKey && sessionId !== input.sessionId) {
+      deferredWorkspaceOpenBySession.delete(sessionId);
+    }
+  }
+  deferredWorkspaceOpenBySession.set(input.sessionId, input.correlationKey);
+}
+
+/**
+ * Finish a deferred workspace_open flow because the transcript pane committed
+ * the session's transcript (the real content_stable signal). No-ops when the
+ * session has no deferred workspace_open flow (a plain in-workspace session
+ * switch, or an already-finished flow), so it is safe to call on every commit.
+ */
+export function finishDeferredWorkspaceOpenForSession(
+  sessionId: string,
+  detail?: RendererFlowDetail,
+): void {
+  const correlationKey = deferredWorkspaceOpenBySession.get(sessionId);
+  if (correlationKey === undefined) {
+    return;
+  }
+  deferredWorkspaceOpenBySession.delete(sessionId);
+  finishRendererFlow({ kind: "workspace_open", correlationKey, detail });
+}
+
 export function resetRendererFlowsForTest(): void {
   activeFlows.clear();
+  deferredWorkspaceOpenBySession.clear();
 }

@@ -22,6 +22,7 @@ pub use bridge::activation::{
 #[cfg(debug_assertions)]
 pub use bridge::activation::{
     DevEnvDiagnosticsBootstrap, DEV_CAPABILITY_ENV, DEV_COLLECTOR_BOOT_ID_ENV, DEV_ENDPOINT_ENV,
+    DEV_ENV_PATH_ENV,
 };
 pub use fallback::{
     parse_fallback_record_line, FallbackReason, FallbackRecordV1, FALLBACK_SCHEMA,

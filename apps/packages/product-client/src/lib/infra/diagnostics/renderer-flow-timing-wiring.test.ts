@@ -26,8 +26,16 @@ const FLOW_ENTRY_FILES: Record<
       "beginRendererFlow",
       "markRendererFlowShellCommitted",
       "markRendererFlowDataReady",
-      "finishRendererFlow",
+      // UX-latency R14: the finish decision (finish now / defer content_stable to
+      // the transcript pane / abandon) is extracted to workspace-open-flow-finish.ts
+      // to keep this hook under the frontend-structure line threshold; the actual
+      // finishRendererFlow call is asserted on that module below.
+      "finishWorkspaceOpenRendererFlow",
     ],
+  },
+  workspace_open_finish: {
+    file: "src/hooks/workspaces/workflows/workspace-open-flow-finish.ts",
+    requiredMarks: ["finishRendererFlow"],
   },
   session_open: {
     file: "src/hooks/sessions/lifecycle/use-session-history-hydration.ts",
@@ -60,6 +68,24 @@ const FLOW_ENTRY_FILES: Record<
       "markRendererFlowDataReady",
       "finishRendererFlow",
     ],
+  },
+  // composer_submit and mode_switch (R12) are two-point flows: begin/finish
+  // only, split across an intent-side file and a commit-side file each.
+  composer_submit_intent: {
+    file: "src/hooks/chat/workflows/use-chat-prompt-actions.ts",
+    requiredMarks: ["beginRendererFlow"],
+  },
+  composer_submit_stable: {
+    file: "src/hooks/sessions/lifecycle/session-stream-flush-apply.ts",
+    requiredMarks: ["finishRendererFlow"],
+  },
+  mode_switch_intent: {
+    file: "src/hooks/sessions/workflows/use-session-intent-actions.ts",
+    requiredMarks: ["beginRendererFlow"],
+  },
+  mode_switch_commit: {
+    file: "src/hooks/sessions/lifecycle/session-intent-config-dispatch.ts",
+    requiredMarks: ["finishRendererFlow"],
   },
 };
 

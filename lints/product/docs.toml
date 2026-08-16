@@ -1,0 +1,195 @@
+# Documentation integrity (PROD-DOCS). Enforced by scripts/check_docs.py in the
+# ci.yml repo-shape job. The tree these rules police is the prose tree itself,
+# so the rules are stated here rather than inside the documents they govern.
+#
+# In-code scope definitions kept in the checker (structural, not grandfathering):
+# REQUIRED_READMES (the enumerated routing roots), DEVELOPING_ROOTS (the closed
+# root set), EXTERNAL_PREFIXES (link schemes that are out of scope by design),
+# and the env-var catalog schema tables ENV_VAR_FIELDS / ENV_VAR_TAGS.
+
+[[rule]]
+id = "PROD-DOCS-1"
+title = "every documentation routing root has its README"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_docs.py"
+mode = "lint"
+scope = "the paths enumerated in REQUIRED_READMES (specs/**, guides/**)"
+
+rule = """Each path named in the checker's REQUIRED_READMES list must exist as a
+file; a documentation tree may not stand without the routing root that indexes
+it."""
+alternative = """Add the routing README for the new tree, or do not create the
+tree."""
+why = """The doc tree is navigable only if every root routes. A subtree with no
+root is unreachable: nothing links into it and nothing lists it, so it rots
+unread."""
+
+[rule.example]
+bad = "a new specs/codebase/systems/<x>/ directory with no README.md"
+good = "the new tree ships its README.md and is named in REQUIRED_READMES"
+
+[[rule]]
+id = "PROD-DOCS-2"
+title = "the Developing tree has a closed root set"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_docs.py"
+mode = "lint"
+scope = "specs/developing/**"
+
+rule = """A tracked file under specs/developing/ may only sit beneath one of the
+roots named in DEVELOPING_ROOTS; a new second-level directory there is a
+violation."""
+alternative = """File the document under an existing Developing root."""
+why = """A closed root set keeps the developing IA from sprawling one folder per
+topic. Once anyone may add a root, the index stops being a map and becomes a
+list of whatever was written last."""
+
+[rule.example]
+bad = "specs/developing/notes/scratch.md created ad hoc"
+good = "specs/developing/process/scratch.md, under an existing root"
+
+[[rule]]
+id = "PROD-DOCS-3"
+title = "in-repo Markdown links are relative"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_docs.py"
+mode = "lint"
+scope = "every tracked *.md file"
+
+rule = """A Markdown link to a path inside this repository must be written
+relative to the linking document, never as an absolute path rooted at /."""
+alternative = """Use a path relative to the linking document."""
+why = """Relative links survive moves and work in every viewer, including a
+plain checkout on disk. An absolute path only resolves on one host."""
+
+[rule.example]
+bad = "[x](/specs/codebase/README.md)"
+good = "[x](../codebase/README.md)"
+
+[[rule]]
+id = "PROD-DOCS-4"
+title = "a Markdown link does not escape the repository"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_docs.py"
+mode = "lint"
+scope = "every tracked *.md file"
+
+rule = """A relative Markdown link must resolve to a path inside the repository
+root; a target that climbs out of the checkout is a violation."""
+alternative = """Link to a real in-repo path."""
+why = """A link that escapes the repo is unverifiable here and broken for every
+reader, because what it points at depends on where the checkout happens to
+sit."""
+
+[rule.example]
+bad = "[x](../../../../../../elsewhere/file.md)"
+good = "[x](../../reference/file.md)"
+
+[[rule]]
+id = "PROD-DOCS-5"
+title = "every in-repo Markdown link target exists"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_docs.py"
+mode = "lint"
+scope = "every tracked *.md file"
+
+rule = """The resolved target of an in-repo Markdown link must exist on
+disk."""
+alternative = """Fix the path or remove the link."""
+why = """Docs describe the codebase, so a dead link is a false claim about it.
+Renames are the usual cause, and the rename is exactly when the claim silently
+stops being true."""
+
+[rule.example]
+bad = "a link left pointing at a doc that was renamed"
+good = "the link moves with the rename, in the same commit"
+
+[[rule]]
+id = "PROD-DOCS-6"
+title = "a link fragment names a heading that exists"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_docs.py"
+mode = "lint"
+scope = "every tracked *.md file linking to a *.md target with a #fragment"
+
+rule = """When a Markdown link carries a #fragment and its target is a Markdown
+file, the fragment must match a heading slug or an explicit HTML anchor in that
+target."""
+alternative = """Link to a heading that exists, or drop the fragment."""
+why = """Anchor rot is the most common silent doc failure: the link still
+resolves to a file, so nothing looks broken, and the reader simply lands in the
+wrong place."""
+
+[rule.example]
+bad = "[x](../README.md#ci-enforced-shape) after the heading was reworded"
+good = "the fragment is updated with the heading, or the link drops it"
+
+[[rule]]
+id = "PROD-DOCS-7"
+title = "checked-in JSON under specs/ parses"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_docs.py"
+mode = "lint"
+scope = "specs/**/*.json"
+
+rule = """Every tracked JSON file under specs/ must parse as JSON."""
+alternative = """Fix the JSON."""
+why = """Specs carry machine-read fixtures. An unparseable one fails somewhere
+downstream, at a distance from the file that caused it, instead of failing
+here."""
+
+[rule.example]
+bad = "a trailing comma in a specs fixture"
+good = "the fixture parses; the repo-shape job proves it on every push"
+
+[[rule]]
+id = "PROD-DOCS-8"
+title = "checked-in YAML under specs/ parses safely"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_docs.py"
+mode = "lint"
+scope = "specs/**/*.yaml, specs/**/*.yml"
+
+rule = """Every tracked YAML file under specs/ must load through a safe loader
+that permits no classes, no symbols, and no aliases."""
+alternative = """Fix the YAML, and express the data without tags or aliases."""
+why = """Same integrity argument as PROD-DOCS-7. The load runs in a Ruby
+subprocess on purpose, so the repo-shape job needs no Python YAML dependency,
+and the safe loader means a documentation fixture can never deserialize an
+object."""
+
+[rule.example]
+bad = "bad indentation, or a !ruby/object tag, in a specs YAML fixture"
+good = "plain mappings and sequences that safe_load accepts"
+
+[[rule]]
+id = "PROD-DOCS-9"
+title = "the environment-variable catalog satisfies its schema"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_docs.py"
+mode = "lint"
+scope = "specs/developing/reference/env-vars.yaml"
+
+rule = """The environment-variable catalog must be a list of entries carrying
+exactly the fields name, secret, default, description, and tags: a
+SCREAMING_SNAKE name unique across the catalog, a Boolean secret, a string
+default, a nonempty description, and a nonempty list of distinct tags drawn from
+the known deployment surfaces."""
+alternative = """Add the variable with all five catalog fields filled in, tagged
+with the surfaces it actually applies to."""
+why = """The catalog is the deployment contract: it is what tells an operator
+which variables a surface needs. A partially described variable is worse than an
+undescribed one, because it reads as complete."""
+
+[rule.example]
+bad = "a catalog entry with no description, or tagged with an unknown surface"
+good = "name, secret, default, description, and tags all present and valid"

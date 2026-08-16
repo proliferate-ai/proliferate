@@ -176,7 +176,30 @@ export interface CloudAgentCatalogAgentInput {
   harness?: Record<string, unknown> | null;
   authContexts?: CloudAgentCatalogAuthContextInput[];
   session: CloudAgentCatalogSessionInput;
+  settings?: CloudAgentCatalogSettingInput[];
   provenance?: Record<string, unknown> | null;
+}
+
+/**
+ * A harness-specific toggle declared in catalog.json (`agents[].settings[]`).
+ * The settings pane reads these from the bundled catalog copy rather than a
+ * re-literalled table; `mapping` names how the runtime applies the value
+ * (e.g. claude's `--chrome` cli_flag) and is carried through untouched.
+ */
+export interface CloudAgentCatalogSettingInput {
+  key: string;
+  type: "boolean";
+  label: string;
+  description?: string | null;
+  default: boolean;
+  surfaces: ("local" | "cloud")[];
+  mapping?: CloudAgentCatalogSettingMappingInput | null;
+}
+
+export interface CloudAgentCatalogSettingMappingInput {
+  kind: "cli_flag" | "env";
+  flag?: string | null;
+  env?: string | null;
 }
 
 export interface CloudAgentCatalogAuthContextInput {

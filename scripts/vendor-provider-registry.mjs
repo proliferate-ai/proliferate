@@ -6,7 +6,7 @@
 // (re-run whenever OpenCode-supported providers change upstream; the output
 // below is checked in, there is no build-time fetch).
 
-import { mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,6 +15,11 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 // the desktop host reads it through that package, so this is the only output.
 const productConfigDir = path.join(repoRoot, "apps/packages/product-client/src/config");
 const outputPath = path.join(productConfigDir, "provider-registry.generated.json");
+// Hand-curated documentation/console URLs for the featured provider tier
+// (PRO-206). models.dev does not publish console URLs and its `doc` field is
+// sparse, so this overlay is checked in and merged onto the vendored entries by
+// provider id (overlay wins). No network — it is read from disk.
+const docOverlayPath = path.join(productConfigDir, "provider-doc-overlay.json");
 // Vendored logo marks (models.dev repo is MIT; the marks are kept byte-for-byte
 // in their own currentColor mono form). Consumed via the generated URL map so
 // each mark is a bundler asset in the lazily-loaded picker chunk, never a
@@ -56,11 +61,30 @@ function reduceProviders(raw) {
     if (typeof provider.npm === "string" && provider.npm) {
       entry.npm = provider.npm;
     }
+    // models.dev sometimes carries a `doc` homepage URL upstream; keep it when
+    // present so a regeneration captures it automatically. The hand-curated
+    // overlay (mergeDocOverlay) still wins for the featured tier and adds the
+    // console URLs upstream never provides.
+    if (typeof provider.doc === "string" && provider.doc) {
+      entry.docsUrl = provider.doc;
+    }
     providers.push(entry);
   }
 
   providers.sort((a, b) => a.id.localeCompare(b.id));
   return providers;
+}
+
+// Merge the checked-in doc-URL overlay onto the vendored entries by id (overlay
+// wins). Read from disk, never the network, so the merge is deterministic and
+// reproducible from checked-in inputs alone.
+function mergeDocOverlay(providers) {
+  if (!existsSync(docOverlayPath)) return providers;
+  const overlay = JSON.parse(readFileSync(docOverlayPath, "utf8")).providers ?? {};
+  return providers.map((provider) => {
+    const patch = overlay[provider.id];
+    return patch ? { ...provider, ...patch } : provider;
+  });
 }
 
 // Download one mark per kept provider. A provider with no published logo is
@@ -139,7 +163,7 @@ function writeLogoMap(ids) {
 
 async function main() {
   const raw = await fetchProviders();
-  const providers = reduceProviders(raw);
+  const providers = mergeDocOverlay(reduceProviders(raw));
   mkdirSync(productConfigDir, { recursive: true });
   writeFileSync(outputPath, `${JSON.stringify(providers, null, 2)}\n`);
   console.log(`Wrote ${providers.length} providers to ${path.relative(repoRoot, outputPath)}`);

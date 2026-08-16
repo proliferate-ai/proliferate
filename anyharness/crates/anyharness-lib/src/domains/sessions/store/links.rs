@@ -1,5 +1,6 @@
 use rusqlite::{params, OptionalExtension};
 
+use super::fork_operations::{mark_fork_operation_child_persisted_row, ForkOperationChildResult};
 use super::sessions::{insert_session_row, map_session};
 use super::SessionStore;
 use crate::domains::sessions::links::model::{SessionLinkRecord, SessionLinkRelation};
@@ -45,6 +46,51 @@ impl SessionStore {
                  ORDER BY seq ASC",
                 params![record.id, link.parent_session_id],
             )?;
+            Ok(copied)
+        })
+    }
+
+    /// Forks ADR rung 2: insert the fork child + link and, atomically in the
+    /// same transaction, apply the resolved provenance to the durable fork
+    /// operation and move it to `child_persisted` (ADR 4.4). `snapshot_events`
+    /// copies the parent's `session_events` prefix for snapshot adapters (same
+    /// as [`insert_fork_session_with_link_and_event_snapshot`]).
+    pub fn insert_fork_child_with_link_and_operation(
+        &self,
+        record: &SessionRecord,
+        link: &SessionLinkRecord,
+        operation_id: &str,
+        result: &ForkOperationChildResult,
+        snapshot_events: bool,
+        now: &str,
+    ) -> anyhow::Result<usize> {
+        anyhow::ensure!(
+            link.relation == SessionLinkRelation::Fork,
+            "fork operations are only supported for fork links"
+        );
+        anyhow::ensure!(
+            link.child_session_id == record.id,
+            "fork link child id must match inserted session"
+        );
+
+        self.db.with_tx(|conn| {
+            insert_session_row(conn, record)?;
+            insert_session_link_row(conn, link)?;
+            let copied = if snapshot_events {
+                conn.execute(
+                    "INSERT INTO session_events (
+                        session_id, seq, timestamp, event_type, turn_id, item_id, payload_json
+                     )
+                     SELECT ?1, seq, timestamp, event_type, turn_id, item_id, payload_json
+                     FROM session_events
+                     WHERE session_id = ?2
+                     ORDER BY seq ASC",
+                    params![record.id, link.parent_session_id],
+                )?
+            } else {
+                0
+            };
+            mark_fork_operation_child_persisted_row(conn, operation_id, result, now)?;
             Ok(copied)
         })
     }

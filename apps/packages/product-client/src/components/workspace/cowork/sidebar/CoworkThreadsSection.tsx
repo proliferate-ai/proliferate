@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { SkeletonBlock } from "#product/primitives/Skeleton";
+import { LoadingBoundary } from "#product/primitives/LoadingBoundary";
 import { Plus } from "#product/primitives/icons/core";
 import { ProductSidebarShowToggleRow } from "#product/components/workspace/shell/sidebar/ProductSidebarShowToggleRow";
 import { useCoworkStatus } from "#product/hooks/access/anyharness/cowork/use-cowork-status";
@@ -137,43 +137,52 @@ export function CoworkThreadsSection() {
               label={entry.displayName}
             />
           ))}
-          {statusLoading || threadsLoading ? (
-            showPendingCoworkThreads ? null : (
-              <div className="flex flex-col gap-1 px-2 py-2" aria-label="Loading threads" role="status">
-                <SkeletonBlock className="h-7 w-full bg-surface-control" />
-                <SkeletonBlock className="h-7 w-[82%] bg-surface-control/80" />
-                <p className="sr-only">Loading threads</p>
-              </div>
-            )
-          ) : listedThreads.length === 0 ? (
-            showPendingCoworkThreads ? null : (
-              <div className="px-2 py-2 text-ui-sm text-sidebar-muted-foreground">
-                {isCreatingThread ? "Creating chat" : "No chats yet"}
-              </div>
-            )
-          ) : (
-            <>
-              {visibleThreads.map((thread) => (
-                <CoworkThreadItem
-                  key={thread.id}
-                  thread={thread}
-                  active={selectedWorkspaceId === thread.workspaceId}
-                  activity={workspaceActivities[thread.workspaceId]}
-                  expanded={expandedThreadIds.has(thread.id)}
-                  onToggleExpanded={() => toggleThreadExpanded(thread.id)}
-                  onSelect={() => { void openThread(thread.workspaceId); }}
-                  selectedWorkspaceId={selectedWorkspaceId}
-                  onOpenWorkspace={(workspaceId) => { void openThread(workspaceId); }}
-                />
-              ))}
-              {toggleLabel && (
-                <ProductSidebarShowToggleRow
-                  label={toggleLabel}
-                  onClick={handleToggleExpanded}
-                />
-              )}
-            </>
-          )}
+          {/* Class C big-surface treatment (UX Latency + Transitions ADR §4
+              Rung 4, FR-1): this thread list retired its placeholder-row
+              skeleton. The sidebar section header above is the stable shell.
+              "No chats yet" is a resolved outcome that may only render once
+              both status and thread queries settle (`state="empty"`), never
+              while either is still loading (Q19 empty split). Pending cowork
+              creations own their own rows above, so they suppress the empty
+              slot the same way the skeleton was suppressed before. */}
+          <LoadingBoundary
+            state={
+              statusLoading || threadsLoading
+                ? "pending"
+                : listedThreads.length === 0
+                  ? "empty"
+                  : "ready"
+            }
+            diagnostics={{ flow: "cowork_threads" }}
+            treatment={null}
+            emptyContent={
+              showPendingCoworkThreads ? null : (
+                <div className="px-2 py-2 text-ui-sm text-sidebar-muted-foreground">
+                  {isCreatingThread ? "Creating chat" : "No chats yet"}
+                </div>
+              )
+            }
+          >
+            {visibleThreads.map((thread) => (
+              <CoworkThreadItem
+                key={thread.id}
+                thread={thread}
+                active={selectedWorkspaceId === thread.workspaceId}
+                activity={workspaceActivities[thread.workspaceId]}
+                expanded={expandedThreadIds.has(thread.id)}
+                onToggleExpanded={() => toggleThreadExpanded(thread.id)}
+                onSelect={() => { void openThread(thread.workspaceId); }}
+                selectedWorkspaceId={selectedWorkspaceId}
+                onOpenWorkspace={(workspaceId) => { void openThread(workspaceId); }}
+              />
+            ))}
+            {toggleLabel && (
+              <ProductSidebarShowToggleRow
+                label={toggleLabel}
+                onClick={handleToggleExpanded}
+              />
+            )}
+          </LoadingBoundary>
         </div>
       )}
     </div>

@@ -1,0 +1,829 @@
+# Appearance scaling and the closed UI-foundation vocabulary (PROD-SCALE).
+# Enforced by scripts/check_appearance_scaling.py, in CI and in the pre-commit
+# hook.
+#
+# Appearance sizing is owned by semantic text utilities, readable-code variables,
+# and the --icon-* optical tiers. Structural geometry (rows, hit targets, media,
+# avatars, borders) is deliberately outside this check: it is not glyph geometry.
+# The same checker owns the finite foundation census — semantic type, state,
+# radius, layer, elevation, motion, raw color, spacing, composer backdrop, and
+# long lists.
+#
+# THE STAGED CENSUS (a ratchet, not an exception ledger)
+# -----------------------------------------------------
+# The token authority landed before its consumers were migrated, so several rule
+# families still carry thousands of legitimate pre-existing hits. Each such
+# family is named in STAGED_RULE_IDS and censused PER FILE in
+# scripts/appearance_scaling_baseline.json under `stagedViolations`, keyed
+# "<path>|<rule>" -> frozen count. The guard fails on any hit BEYOND a file's
+# frozen count, so no new violation can be introduced anywhere while the
+# migration burns the census down. A family whose census reaches zero entries is
+# from that moment an absolute ban with no further bookkeeping.
+#
+# The census is bounded from BOTH sides. Absorption is anonymous — it matches on
+# (file, rule), never on the site that earned the slot — so an entry allocating
+# more than its file now uses is a live allowance waiting to swallow the next new
+# violation there. PROD-SCALE-34 fails on that slack, which is what makes every
+# other staged family a real ratchet. `--write-baseline` may shrink freely and
+# refuses to grow any entry unless `censusGrowthSanctions` names that exact file
+# and count with a written justification; growth is legitimate in exactly one
+# situation, a regex widening that newly SEES pre-existing sites, and never for a
+# dead class from a removed token (that gets deleted at the call site).
+#
+# Two further censuses in the same file are keyed differently and govern only
+# their own rule: `standardNumericZ` ("<path>|<token>") for PROD-SCALE-32 and
+# `unvirtualizedLongLists` ("<path>|<owner>") for PROD-SCALE-33. Neither is a
+# per-site grandfathering ledger: they are measured counts that may only shrink.
+#
+# In-code scope definitions kept in the checker (structural, not grandfathering):
+# PRODUCTION_ROOTS (asserted equal to the @source roots Tailwind compiles, so a
+# new shipped package cannot arrive ungated), DESIGN_CSS_FILES and
+# DESIGN_TOKEN_FILE (the authority files, which have their own rule set),
+# EXTENSIONS, FIXED_TEXT_SOURCE_EXCEPTIONS (the three appearance ladder sources
+# that must name fixed sizes to DEFINE the ladder), RAW_HEX_FILE_ALLOWLIST (three
+# third-party brand/provider mark files), raw_hex_scope_excluded (playground and
+# fixture surfaces are outside the palette authority), the `.not.toContain(`
+# negative-assertion skip, the `/* activity-motion */` in-source marker, and the
+# single sanctioned `.chat-composer-surface` backdrop owner.
+
+[[rule]]
+id = "PROD-SCALE-1"
+title = "no stock Tailwind fixed text sizes"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx), except the three appearance-ladder definition sources in FIXED_TEXT_SOURCE_EXCEPTIONS, which state the ladder's numbers rather than consume them"
+
+rule = """A stock Tailwind fixed text-size utility (text-xs through text-9xl)
+must not appear in product source; type comes from the appearance-owned type
+ladder."""
+alternative = """Use the ruled semantic type utility so the size scales with the
+user's appearance setting."""
+why = """Fixed type does not respond to the appearance scale, so the whole
+scaling feature silently fails on that one element — and it fails only for the
+users who changed the setting, which is why nobody sees it."""
+
+[rule.example]
+bad = "className=\"text-sm\" in a product component"
+good = "className=\"text-ui\""
+
+[[rule]]
+id = "PROD-SCALE-2"
+title = "no repo-local fixed text or leading utilities"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx), except the three appearance-ladder definition sources in FIXED_TEXT_SOURCE_EXCEPTIONS, which state the ladder's numbers rather than consume them"
+
+rule = """An arbitrary-value text or leading utility — text-[13px],
+leading-[18px] — must not be authored in product source. The three appearance
+ladder sources listed in FIXED_TEXT_SOURCE_EXCEPTIONS are exempt because they
+DEFINE the ladder's numbers rather than consume them."""
+alternative = """Use the ruled semantic type / readable-code token."""
+why = """Same scaling failure as PROD-SCALE-1, reached through our own arbitrary
+utilities instead of Tailwind's stock ones."""
+
+[rule.example]
+bad = "className=\"text-[13px] leading-[18px]\""
+good = "className=\"text-ui\", or a readable-code variable for code surfaces"
+
+[[rule]]
+id = "PROD-SCALE-3"
+title = "no fixed inline fontSize"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx), except the three appearance-ladder definition sources in FIXED_TEXT_SOURCE_EXCEPTIONS, which state the ladder's numbers rather than consume them"
+
+rule = """A `fontSize` property must not be set to a fixed numeric or unit
+literal in TS/TSX."""
+alternative = """Apply the ruled semantic type utility, or derive a third-party
+component's fontSize from the active appearance preference."""
+why = """Inline sizes are the hardest scaling escapes to find by eye: they carry
+no class name to grep for and they usually sit inside a third-party component's
+options object."""
+
+[rule.example]
+bad = "style={{ fontSize: 12 }}"
+good = "className=\"text-ui\", or fontSize derived from the appearance preference"
+
+[[rule]]
+id = "PROD-SCALE-4"
+title = "no fixed authored font-size declaration"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx), except the three appearance-ladder definition sources in FIXED_TEXT_SOURCE_EXCEPTIONS, which state the ladder's numbers rather than consume them"
+
+rule = """A `font-size:` declaration with a fixed px/rem/em literal must not be
+authored."""
+alternative = """Reference the type ladder variable instead of a literal
+size."""
+why = """Same as PROD-SCALE-3 on the stylesheet side of the same defect."""
+
+[rule.example]
+bad = "font-size: 13px;"
+good = "font-size: var(--text-ui);"
+
+[[rule]]
+id = "PROD-SCALE-5"
+title = "no fixed glyph size attribute"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "glyph-bearing JSX tags (svg, imported icons, *Icon/*Glyph/*Logo/*Mark) under the production roots"
+
+rule = """A glyph tag must not carry a fixed `size`, `width`, or `height`
+attribute."""
+alternative = """Size the glyph through the canonical --icon-* ladder;
+hit-target geometry belongs on the wrapper, not the glyph."""
+why = """Glyphs that do not scale with type break optical alignment at every
+appearance setting other than the default — the text grows and the icon stays,
+so every row in the product goes subtly crooked."""
+
+[rule.example]
+bad = "<Icon size={14} />"
+good = "<Icon className=\"icon-paired\" />"
+
+[[rule]]
+id = "PROD-SCALE-6"
+title = "no fixed glyph inline style"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "glyph-bearing JSX tags under the production roots"
+
+rule = """A glyph tag must not be sized through an inline `width`, `height`, or
+`fontSize` style literal."""
+alternative = """Size through the --icon-* ladder."""
+why = """Same defect as PROD-SCALE-5 through a different authoring route."""
+
+[rule.example]
+bad = "<Icon style={{ width: 14, height: 14 }} />"
+good = "<Icon className=\"icon-paired\" />"
+
+[[rule]]
+id = "PROD-SCALE-7"
+title = "no fixed glyph size utility"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "glyph-bearing JSX tags under the production roots"
+
+rule = """A glyph tag must not carry a fixed size/h/w utility, whether numeric
+(size-4, h-3.5) or arbitrary (size-[18px])."""
+alternative = """Use the semantic icon-size class backed by the --icon-*
+ladder."""
+why = """Same defect as PROD-SCALE-5 through utility classes, which is the
+commonest spelling of it."""
+
+[rule.example]
+bad = "<Icon className=\"h-3.5 w-3.5\" />"
+good = "<Icon className=\"icon-paired\" />"
+
+[[rule]]
+id = "PROD-SCALE-8"
+title = "no fixed glyph size forwarded through a className prop"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """An `iconClassName` or `glyphClassName` prop value must not contain a
+fixed size/h/w utility."""
+alternative = """Pass a semantic icon-size class."""
+why = """Closes the prop-forwarding hole in PROD-SCALE-7: the class is written
+at the caller and applied to a glyph the caller never names."""
+
+[rule.example]
+bad = "<Button iconClassName=\"h-4 w-4\" />"
+good = "<Button iconClassName=\"icon-paired\" />"
+
+[[rule]]
+id = "PROD-SCALE-9"
+title = "no fixed glyph size behind a class alias"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """A constant whose name carries ICON or GLYPH must not be assigned a
+fixed size/h/w utility (BUTTON-named constants are excluded: they are hit-target
+geometry)."""
+alternative = """Use the semantic icon-size class in the alias too."""
+why = """Hiding the class behind a named constant is the cheapest way to escape a
+name-based glyph scan, and the alias then spreads the fixed size to every call
+site at once."""
+
+[rule.example]
+bad = "const MENU_ICON_CLASS = \"size-3.5\""
+good = "const MENU_ICON_CLASS = \"icon-paired\""
+
+[[rule]]
+id = "PROD-SCALE-10"
+title = "no fixed glyph size as a component default"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """A local glyph component (a function named *Icon, *Glyph, *Logo, or
+*Mark) must not declare a fixed size/h/w utility as its default `size` or
+`className` parameter."""
+alternative = """Default to the semantic icon-size class."""
+why = """A fixed default silently un-scales every call site that does not
+override it, so the violation count is one and the broken surfaces are
+dozens."""
+
+[rule.example]
+bad = "function StatusIcon({ className = \"size-3.5\" })"
+good = "function StatusIcon({ className = \"icon-status\" })"
+
+[[rule]]
+id = "PROD-SCALE-11"
+title = "no fixed size on an SVG descendant selector"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """An arbitrary-variant SVG descendant selector must not carry a fixed
+size utility — no `[&_svg]:size-4`, `[&>svg]:h-4`."""
+alternative = """Drive the descendant SVG from the --icon-* ladder."""
+why = """Descendant selectors size glyphs at a distance, so a per-element scan
+never sees them and neither does the person reading the icon's own file."""
+
+[rule.example]
+bad = "className=\"[&>svg]:size-4\""
+good = "className=\"[&>svg]:icon-paired\", or the tier on the glyph itself"
+
+[[rule]]
+id = "PROD-SCALE-12"
+title = "no fixed size on a status glyph"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "self-closing span/div status dots (rounded-full + bg-*) under the production roots"
+
+rule = """A status dot — a self-closing span or div carrying rounded-full and a
+bg-* fill — must not be sized with a fixed size utility. Toggle thumbs are
+excluded: a transition-transform track assumes a fixed thumb, so that is control
+geometry, not a status glyph."""
+alternative = """Use the icon-status semantic utility."""
+why = """Status glyphs are the densest glyph surface in the product, so their
+scaling is the most visible thing on the screen when it is wrong."""
+
+[rule.example]
+bad = "<span className=\"size-1.5 rounded-full bg-info\" />"
+good = "<span className=\"icon-status rounded-full bg-info\" />"
+
+[[rule]]
+id = "PROD-SCALE-13"
+title = "no bespoke glyph-size CSS variable"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/design/src/css/product.css"
+
+rule = """A custom property whose name contains `icon` or `glyph` and ends in
+`-size` must not be declared with a fixed px/rem/em literal. This rule is not
+staged: no census entry can absorb it."""
+alternative = """Add or reuse a rung of the canonical --icon-* ladder."""
+why = """A parallel glyph variable forks the ladder, and once there are two
+ladders the scaling contract is unenforceable — each surface picks one."""
+
+[rule.example]
+bad = "--status-icon-size: 12px;"
+good = "--status-icon-size: var(--icon-status);"
+
+[[rule]]
+id = "PROD-SCALE-14"
+title = "no arbitrary radius values"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """An arbitrary-value radius utility must not be authored, in the plain
+or any directional spelling — rounded-[7px], rounded-t-[13px], rounded-se-[4px]."""
+alternative = """Use the ruled semantic radius scale, including its directional
+radius utilities."""
+why = """One radius scale is what makes separate surfaces look like one product.
+An arbitrary value is unreviewable — nobody can tell whether 7px was a decision
+or a typo."""
+
+[rule.example]
+bad = "className=\"rounded-[7px]\""
+good = "className=\"rounded-xl\""
+
+[[rule]]
+id = "PROD-SCALE-15"
+title = "no arbitrary z-index values"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """An arbitrary-value z utility — z-[9999] — must not be authored."""
+alternative = """Use a semantic z-* layer utility."""
+why = """Stacking is a global property, so an arbitrary z is a private guess
+about every other layer in the application. The guesses always eventually
+collide."""
+
+[rule.example]
+bad = "className=\"z-[9999]\""
+good = "className=\"z-tooltip\""
+
+[[rule]]
+id = "PROD-SCALE-16"
+title = "no arbitrary gap values"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """An arbitrary-value gap utility — gap-[7px] — must not be authored."""
+alternative = """Use the ruled spacing scale."""
+why = """Spacing off the scale is the commonest source of visual drift between
+surfaces: two panels built a month apart end up 1px different for no reason
+anyone can reconstruct."""
+
+[rule.example]
+bad = "className=\"gap-[7px]\""
+good = "className=\"gap-1.5\""
+
+[[rule]]
+id = "PROD-SCALE-17"
+title = "no arbitrary width/height/size values"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """An arbitrary-value size utility — size-[18px] — must not be
+authored."""
+alternative = """Use the ruled size scale, or a semantic ladder rung."""
+why = """Arbitrary sizes do not scale with appearance and cannot be reasoned
+about across surfaces, because there is nothing to compare them to."""
+
+[rule.example]
+bad = "className=\"size-[18px]\""
+good = "className=\"size-5\", or the semantic icon tier for a glyph"
+
+[[rule]]
+id = "PROD-SCALE-18"
+title = "no retired or stock shadow utilities"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """A retired elevation utility must not be used, in any spelling:
+shadow-floating, shadow-floating-dark, shadow-keystone and its historical
+-sm/-md/-lg/-xl/-2xl variants, stock Tailwind shadow-sm/md/lg/xl/2xl/inner, and
+arbitrary shadow-[…]. The three generated roles (subtle, popover, modal) are the
+only sanctioned elevations."""
+alternative = """Use shadow-popover / shadow-modal / shadow-subtle, or remove
+the elevation."""
+why = """The token was removed by the design authority, so a surviving use is a
+dead class, not a pending migration — it paints nothing or paints a non-token
+shadow. Every spelling is one rule rather than a family of holes."""
+
+[rule.example]
+bad = "className=\"shadow-keystone-lg\""
+good = "className=\"shadow-popover\""
+
+[[rule]]
+id = "PROD-SCALE-19"
+title = "no retired accent state tokens"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """A retired accent-state fill must not be used in any variant position —
+bg-accent, bg-sidebar-accent, hover:bg-accent,
+data-[state=open]:bg-accent, with or without an alpha suffix. A
+`.not.toContain(` assertion naming the class is not a use."""
+alternative = """Use bg-hover / bg-active / bg-selected, or the ruled static
+surface."""
+why = """Same retirement-permanence argument as PROD-SCALE-18: the accent state
+tokens were replaced by the semantic state ramp, and a resurrected one reads as a
+fourth state nobody designed."""
+
+[rule.example]
+bad = "className=\"hover:bg-sidebar-accent\""
+good = "className=\"hover:bg-hover\""
+
+[[rule]]
+id = "PROD-SCALE-20"
+title = "no foundation surface built from a <=10% foreground overlay"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """A bg-foreground fill at 10% alpha or less must not be authored, in any
+Tailwind spelling (/5, /[0.05], /[8%]) and any variant position (static, hover:,
+active:, group-hover/item:, data-[state=open]:). Above 10% the fill is a
+deliberate surface and passes."""
+alternative = """Use a ruled semantic state or static surface instead of a
+<=10% foreground overlay."""
+why = """Sub-10% overlays are invisible in one theme and muddy in the other, and
+they defeat the theme contrast floors entirely because they are not tokens — the
+contrast checker measures tokens. All three spellings compile to the same
+color-mix() output, so banning one spelling would only move the defect. This is
+the one family carrying a censusGrowthSanctions entry, whose per-file map and
+written justification live beside the counts they authorize."""
+
+[rule.example]
+bad = "className=\"hover:bg-foreground/[0.045]\""
+good = "className=\"hover:bg-hover\""
+
+[[rule]]
+id = "PROD-SCALE-21"
+title = "no numeric animation durations"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """A numeric or arbitrary duration utility — duration-150,
+duration-[240ms] — must not be authored."""
+alternative = """Use the semantic duration-* utility."""
+why = """Motion timing is a system property. Per-site durations make the product
+feel assembled rather than designed, and they bypass the reduced-motion
+overrides that only the generated variables carry."""
+
+[rule.example]
+bad = "className=\"duration-[240ms]\""
+good = "className=\"duration-hover\""
+
+[[rule]]
+id = "PROD-SCALE-22"
+title = "no inline easing curves"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """A `cubic-bezier(` literal must not be written at a call site."""
+alternative = """Use a generated semantic easing token."""
+why = """Same system-property argument as PROD-SCALE-21. A hand-written curve is
+also the least reviewable thing in a diff: four numbers with no name."""
+
+[rule.example]
+bad = "transition: opacity 150ms cubic-bezier(0.4, 0, 0.2, 1)"
+good = "className=\"ease-out-quint\", or var(--ease-out-quint)"
+
+[[rule]]
+id = "PROD-SCALE-23"
+title = "no inline motion literals in markup or CSS"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """An animation or transition declaration must not carry a time or easing
+literal, unless the declaration is preceded by a `/* activity-motion */` marker
+comment declaring the motion activity-driven."""
+alternative = """Use generated semantic motion variables, or mark a genuine
+activity animation with `/* activity-motion */`."""
+why = """The marker is the point: it forces the author to state that the motion
+is activity-driven, which is a reviewable claim rather than an unexplained
+number."""
+
+[rule.example]
+bad = "transition: transform 200ms ease-out"
+good = "transition: transform var(--duration-hover) var(--ease-out-quint)"
+
+[[rule]]
+id = "PROD-SCALE-24"
+title = "no inline motion literals in TypeScript"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """A named motion constant that the design authority owns —
+THINKING_TEXT_DURATION_MS, SWAP_DURATION_MS, STREAM_REVEAL_FADE_MS,
+STREAM_REVEAL_HANDOFF_DELAY_MS, CARD_EXIT_DURATION_MS, HIDE_DELAY_MS,
+CLICKABLE_CARD_HIDE_DELAY_MS — must not be assigned a numeric literal in product
+source."""
+alternative = """Import the shared design motion authority."""
+why = """JS-driven motion escapes every CSS scan, so it is the half of the
+motion system that drifts silently. Non-motion clocks (a network timeout) are
+deliberately out of scope; the rule names the constants the authority owns."""
+
+[rule.example]
+bad = "const CARD_EXIT_DURATION_MS = 120"
+good = "import { motion } from \"@proliferate/design/motion\""
+
+[[rule]]
+id = "PROD-SCALE-25"
+title = "the design package authors no finite motion literals"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/design/src/css/product.css"
+
+rule = """A finite animation or transition declaration in the design package's
+authored CSS must not carry a time or easing literal. An infinite activity
+animation preceded by a `/* activity-motion */` marker is the one exemption.
+This rule is not staged: no census entry can absorb it."""
+alternative = """Define the value as a motion token so every consumer inherits
+it."""
+why = """The design package IS the token authority. A literal there is a token
+that was never declared, so no consumer can reference it and no reduced-motion
+override can reach it."""
+
+[rule.example]
+bad = "transition: opacity 150ms ease-out;  /* in product.css */"
+good = "transition: opacity var(--duration-hover) var(--ease-out-quint);"
+
+[[rule]]
+id = "PROD-SCALE-26"
+title = "the design package authors no easing literals"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/design/src/css/product.css"
+
+rule = """A `cubic-bezier(` literal must not appear in the design package's
+authored CSS, outside a marked infinite activity animation. This rule is not
+staged."""
+alternative = """Declare an easing token and reference it."""
+why = """Same token-authority argument as PROD-SCALE-25, for the easing half of
+the motion contract."""
+
+[rule.example]
+bad = "animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);"
+good = "animation-timing-function: var(--ease-out-quint);"
+
+[[rule]]
+id = "PROD-SCALE-27"
+title = "no authored backdrop-filter in product source"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """A `backdrop-filter:` or `-webkit-backdrop-filter:` declaration must
+not be authored in product source. Both spellings are in scope; the paired
+declaration therefore reports two hits on two lines, which is the honest
+count."""
+alternative = """Use an opaque or tokenized surface treatment; the composer
+surface in the design package owns the product's one blur."""
+why = """Backdrop filters are expensive and theme-fragile, and WebKit is the
+desktop shell's engine — so a prefixed-only declaration is the one that actually
+renders, and it must not be the spelling the gate cannot see."""
+
+[rule.example]
+bad = "const style = { cssText: \"backdrop-filter: blur(8px)\" }"
+good = "an opaque token surface, or the composer surface class"
+
+[[rule]]
+id = "PROD-SCALE-28"
+title = "only the composer surface owns a backdrop-filter"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/design/src/css/product.css"
+
+rule = """In the design package's authored CSS, a backdrop-filter declaration
+may only appear inside a rule whose selector names `.chat-composer-surface`. Any
+other owner is a violation. This rule is not staged."""
+alternative = """Drop the filter; the composer surface is the only sanctioned
+owner."""
+why = """The exception is stated positively so the exception itself cannot
+spread. A negative ban with one silent carve-out grows a second carve-out; a
+named single owner does not."""
+
+[rule.example]
+bad = "a second selector declaring backdrop-filter in product.css"
+good = ".chat-composer-surface { backdrop-filter: var(--composer-backdrop-filter); }"
+
+[[rule]]
+id = "PROD-SCALE-29"
+title = "no raw hex palette colors in rendered source"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx), excluding playground and fixture surfaces and the three third-party brand/provider mark files in RAW_HEX_FILE_ALLOWLIST"
+
+rule = """A hex color literal must not be authored in rendered product source.
+Out of scope by design: playground and fixture surfaces, `.not.toContain(`
+assertions, URLs and url() fragments, bare 3-4 digit numerals on a
+non-color-bearing line (a PR number is not a color), and the three third-party
+brand/provider mark files named in RAW_HEX_FILE_ALLOWLIST."""
+alternative = """Move rendered palette colors into the design token
+authority."""
+why = """A raw hex bypasses both the theme system and the contrast floors, so it
+can never be audited for accessibility and never flips with the mode. The brand
+marks are allowlisted because their hexes are a third-party contract, not our
+palette."""
+
+[rule.example]
+bad = "const color = \"#8a8f98\""
+good = "className=\"text-foreground-secondary\", or var(--color-foreground-secondary)"
+
+[[rule]]
+id = "PROD-SCALE-30"
+title = "no hand-authored theme block in product CSS"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/design/src/css/product.css"
+
+rule = """An `@theme` block must not be authored in product.css. This rule is
+not staged."""
+alternative = """Add the value to tokens.ts and let the build emit the theme."""
+why = """A hand-authored theme block competes with the generated one and is
+invisible to the contrast checker, which reads the BUILT stylesheet — so an
+unmeasured plane would ship looking green."""
+
+[rule.example]
+bad = "@theme { --color-surface-raised: #17181a; }"
+good = "the token is added to tokens.ts and generated"
+
+[[rule]]
+id = "PROD-SCALE-31"
+title = "no hand-declared global root token"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/design/src/css/product.css"
+
+rule = """A custom property must not be declared at a genuinely global `:root`
+scope in product.css, including `:root[data-mode=\"light\"]`. A component-scoped
+block such as `:root[data-mode=\"light\"] .right-panel-tab-system` declares
+component-local variables and stays authored. This rule is not staged."""
+alternative = """Add the token to tokens.ts and let the build emit it."""
+why = """One generator owns the global token surface. A hand-declared root token
+is untracked, unthemed, and again invisible to the built-stylesheet contrast
+check."""
+
+[rule.example]
+bad = ":root { --surface-raised: #17181a; }"
+good = "the token lives in tokens.ts; product.css only consumes var()"
+
+[[rule]]
+id = "PROD-SCALE-32"
+title = "no new standard numeric z-index sites"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """A standard numeric z utility (z-0, z-10, z-20, z-30, z-40, z-50) must
+not appear more often in a file than the `standardNumericZ` census in
+scripts/appearance_scaling_baseline.json records for that file and token. The
+existing sites are frozen; additions fail."""
+alternative = """Use a semantic z-* layer instead of a numeric one."""
+why = """The existing numeric sites are frozen debt. Closing additions is what
+turns stacking from a set of local guesses into a declared layer model — the
+migration can then proceed file by file without the ban weakening."""
+
+[rule.example]
+bad = "a new z-50 added to a popover"
+good = "className=\"z-popover\""
+
+[[rule]]
+id = "PROD-SCALE-33"
+title = "no new unvirtualized long lists"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """A render-position `.map()` over a collection whose owner name reads as
+an unbounded list (rows, runs, sessions, workspaces, files, threads) must not
+appear more often in a file than the `unvirtualizedLongLists` census records for
+that file and owner. Files that virtualize — named `*virtual*` or using
+useVirtual/virtualizer — are out of scope."""
+alternative = """Render the list through the repository's virtualization
+path."""
+why = """Unvirtualized long lists are this repo's recurring performance
+regression class. The census freezes the ones that exist and closes new ones, so
+the class stops growing while it is being paid down."""
+
+[rule.example]
+bad = "a new {sessions.map(renderRow)} rendering rows directly"
+good = "the list renders through the repository virtualization component"
+
+[[rule]]
+id = "PROD-SCALE-34"
+title = "a census entry may not allocate more than its file uses"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "scripts/appearance_scaling_baseline.json (stagedViolations), for every scanned file"
+
+rule = """A `stagedViolations` entry must not be frozen higher than the number of
+hits its file currently has. This rule is deliberately NOT staged: it is the
+guard on the census, so the census it guards can never absorb it. On a scoped run
+(the pre-commit hook's explicit file list) only entries for scanned files are
+judged — an unscanned file's count is unknown, not zero."""
+alternative = """Lower the frozen count, or delete the entry, in the same commit
+that removes the violations: run `python3
+scripts/check_appearance_scaling.py --write-baseline`, which can only shrink."""
+why = """This is the rule that makes every other staged family a real ratchet.
+Absorption is anonymous — it matches (file, rule), never the site that earned the
+slot — so a freed slot is a live allowance that silently pre-authorizes the next
+new violation in that file. Slack must fail, or the ban leaks while looking
+clean."""
+
+[rule.example]
+bad = "an entry frozen at 4 in a file that now has 2 hits"
+good = "the census shrinks to 2 in the same commit that fixed the two sites"
+
+[[rule]]
+id = "PROD-SCALE-35"
+title = "no arbitrary width/height/padding/margin/inset bracket geometry"
+owner = "product"
+status = "holds"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/**, apps/desktop/src/** (.ts/.tsx)"
+
+rule = """An arbitrary-value utility in the bare w-/h-/p-/m-/inset- bracket
+families — w-[200px], h-[38px], inset-[1px] — must not be authored. The prefixed
+and axis spellings (max-w-[…], min-h-[…], px-[…]) are outside this rule. Like the
+other staged families it is censused, not banned outright: a file may carry no
+more bracket-geometry hits than its recorded per-file count, which may only
+shrink."""
+alternative = """Use the ruled spacing/width scale. A genuinely measured or
+virtualization value needs a recorded cause at the site — a censusGrowthSanctions
+entry naming the file and count."""
+why = """Virtualization math, measured overlays and grid positioning produce
+legitimate bracket geometry, so the law is "no more than today, anywhere" and the
+per-file census burns down as surfaces migrate onto the spacing scale. The
+arbitrary-value rules above (radius/z/gap/size) deliberately stopped short of
+these families, which DESIGN_SYSTEM.md Current Gaps recorded as having no gate
+rule at all; this record closes that gap."""
+
+[rule.example]
+bad = "className=\"w-[200px] h-[38px]\""
+good = "className=\"w-52 h-9\", or a recorded cause for a measured value"
+
+[[rule]]
+id = "PROD-SCALE-36"
+title = "a sealed directory stays at zero, never re-baselined"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_appearance_scaling.py"
+mode = "lint"
+scope = "scripts/appearance_scaling_baseline.json (sealedDirectories), every scanned file under a sealed prefix"
+
+rule = """A staged-rule hit inside a directory listed in `sealedDirectories` must
+not appear. A finished directory re-baselines to nothing: `--write-baseline`
+refuses to record a census entry under a sealed prefix, so the hit is reported as
+a violation instead of quietly re-entering the census. This rule is deliberately
+NOT staged: like PROD-SCALE-34 it is the guard on the census, so the census it
+guards can never absorb it."""
+alternative = """Fix the site. If a sealed directory genuinely still carries
+pre-existing debt then it was sealed in error, and removing the seal is a
+founder-reviewed amendment, not a fix."""
+why = """The difference between "burning down" and "finished": the rest of the
+tree ratchets, but a directory a migration slice cleaned is an absolute ban, so a
+regression there is a regression, not a new pre-existing site. Each seal names the
+slice that cleaned it, so the pin is a record of work done rather than an opinion
+about a directory."""
+
+[rule.example]
+bad = "a w-[200px] reappears in a directory the workflows conformance slice sealed at zero"
+good = "the sealed directory stays clean; a new measured value lands in a still-staged directory with a recorded cause"

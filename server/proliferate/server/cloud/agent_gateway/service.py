@@ -31,9 +31,11 @@ from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store.agent_gateway import (
     AgentApiKeyRecord,
     AgentAuthSelectionRecord,
+    AgentGatewayEnrollmentKeyRecord,
     AgentGatewayEnrollmentRecord,
     DesiredAuthSource,
     OrgMemberRouteSelectionRecord,
+    list_active_enrollment_keys,
 )
 from proliferate.db.store.billing import list_entitlements
 from proliferate.db.store.billing_subscriptions import list_subscriptions
@@ -536,6 +538,25 @@ async def get_capabilities(
         settings.agent_gateway_litellm_public_base_url or None,
         enrollment.sync_status if enrollment is not None else _ENROLLMENT_STATUS_NONE,
     )
+
+
+async def get_verification_verdicts(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> list[AgentGatewayEnrollmentKeyRecord]:
+    """The per-harness gateway-enablement verdicts for the governing enrollment.
+
+    Surfaces the FR-3 verification loop's output additively on the capabilities
+    read (agent-auth.md): the enrollment-surface fallback rather than extending
+    the pinned ``state.json`` wire shape. Only keys with a recorded verdict are
+    returned; an unverified key is omitted.
+    """
+    enrollment = await get_gateway_enrollment_for_user(db, user_id)
+    if enrollment is None:
+        return []
+    keys = await list_active_enrollment_keys(db, enrollment_id=enrollment.id)
+    return [key for key in keys if key.verification_status is not None]
 
 
 async def get_enrollment(

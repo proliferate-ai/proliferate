@@ -1,0 +1,203 @@
+# Session mutation admission (AH-ADMIT) — the write-gate on session state.
+# Every entry point that can mutate a session — HTTP handler or background
+# pass — must declare its admission class, and a `fenced` entry point must
+# provably call the admission gate before performing any effect. Ordering is
+# the guarantee: an admit after the write admits nothing. Enforced by
+# scripts/check_session_mutation_admission.py.
+#
+# The classification ledgers (scripts/session_mutation_admission.txt and
+# scripts/session_mutation_admission_non_http.txt) are this checker's INPUT,
+# not an exception ledger: a classified handler is enforced, not excused.
+
+[[rule]]
+id = "AH-ADMIT-1"
+title = "every mutating handler carries an admission classification"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_session_mutation_admission.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/api/router.rs, anyharness/crates/anyharness-lib/src/api/router/**"
+
+rule = """Every mutating HTTP handler must carry a classification in scripts/session_mutation_admission.txt: one of fenced, derived-safe, read-like, cosmetic, creation, workspace-scoped, or workflow-plane."""
+alternative = """Add the handler with its true class and a written reason, or fence it and classify it `fenced`."""
+why = """New mutation surface must state its admission story explicitly; silence would default to unguarded."""
+
+[rule.example]
+bad = """a new `post(sessions::interrupt)` route with no ledger line"""
+good = """sessions::interrupt fenced — calls admit_session_mutation before any effect"""
+
+[[rule]]
+id = "AH-ADMIT-2"
+title = "every classified handler resolves to a real function"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_session_mutation_admission.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/api/http/**, anyharness/crates/anyharness-lib/src/api/*.rs"
+
+rule = """Every classified handler must resolve to a real function body in the tree."""
+alternative = """Update the ledger entry when the handler moves or is renamed (carry-forward), or delete the entry with the handler."""
+why = """A classification pointing at nothing is a hole that looks like coverage."""
+
+[rule.example]
+bad = """a ledger line naming `sessions::old_interrupt` after the function was renamed"""
+good = """the ledger entry moves with the handler when it is renamed"""
+
+[[rule]]
+id = "AH-ADMIT-3"
+title = "a fenced handler calls the admission gate"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_session_mutation_admission.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/api/http/**, anyharness/crates/anyharness-lib/src/api/*.rs"
+
+rule = """A handler classified `fenced` must actually call the admission gate in its body."""
+alternative = """Call the admission function, or reclassify the handler honestly."""
+why = """The class name is a claim; this rule makes the claim falsifiable."""
+
+[rule.example]
+bad = """a handler marked `fenced` whose body never calls admit"""
+good = """admit_session_mutation(..).await? as the handler's first act"""
+
+[[rule]]
+id = "AH-ADMIT-4"
+title = "admission precedes every effect in a fenced handler"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_session_mutation_admission.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/api/http/**, anyharness/crates/anyharness-lib/src/api/*.rs"
+
+rule = """In a fenced handler, no effect may be performed before the admission call — the admit must syntactically precede every EFFECT_TOKENS site."""
+alternative = """Move the admission call to the top of the handler, before any mutation."""
+why = """An admission check after the write admits nothing; ordering is the whole guarantee."""
+
+[rule.example]
+bad = """`state.sessions.mutate(..)` on line 12 with the admit call on line 20"""
+good = """admit first, then touch state.session_runtime"""
+
+[[rule]]
+id = "AH-ADMIT-5"
+title = "no stale admission classification"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_session_mutation_admission.py"
+mode = "lint"
+scope = "scripts/session_mutation_admission.txt"
+
+rule = """A ledger classification that no longer describes its handler is an error; the ledger may not carry stale claims."""
+alternative = """Re-derive and update the class in the same PR that changes the handler."""
+why = """Self-tightening: as handlers get fenced, their looser classifications must be surrendered."""
+
+[rule.example]
+bad = """a handler recorded `read-like` after it gained a mutation"""
+good = """the class is re-derived in the same PR that changes the handler"""
+
+[[rule]]
+id = "AH-ADMIT-6"
+title = "every route handler reference resolves to a module"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_session_mutation_admission.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/api/router.rs, anyharness/crates/anyharness-lib/src/api/router/**"
+
+rule = """A route registered with a bare handler name that the checker cannot resolve to a module is an error, not a skip."""
+alternative = """Register the handler with its module-qualified path so the scan can resolve it."""
+why = """Fail-closed: an unresolvable route would otherwise silently escape classification."""
+
+[rule.example]
+bad = """`post(interrupt)` where `interrupt` is glob-imported"""
+good = """post(sessions::interrupt) — module-qualified, resolvable"""
+
+[[rule]]
+id = "AH-ADMIT-7"
+title = "route handler paths stay within the resolver's depth"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_session_mutation_admission.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/api/router.rs, anyharness/crates/anyharness-lib/src/api/router/**"
+
+rule = """A route handler path with more segments than the resolver supports — e.g. `post(a::b::c)` — is an error rather than an unchecked route."""
+alternative = """Re-export the handler so it is reachable at a supported depth, or extend the checker deliberately."""
+why = """Fail-closed on parser limits instead of pretending the route does not exist."""
+
+[rule.example]
+bad = """`post(sessions::routes::handlers::interrupt)`"""
+good = """re-export the handler so post(sessions::interrupt) reaches it"""
+
+[[rule]]
+id = "AH-ADMIT-8"
+title = "session core does not depend on the workflow plane"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_session_mutation_admission.py"
+mode = "lint"
+scope = "anyharness/crates/anyharness-lib/src/domains/sessions/**"
+
+rule = """Code under domains/sessions/** must not reference `domains::workflows`."""
+alternative = """Keep the workflow plane above sessions: workflows may depend on sessions, never the reverse."""
+why = """Sessions are the core plane; a dependency on the workflow plane would make the admission model circular."""
+
+[rule.example]
+bad = """`crate::domains::workflows::RunId` used inside domains/sessions/service.rs"""
+good = """workflows depends on sessions; sessions stays unaware of workflows"""
+
+[[rule]]
+id = "AH-ADMIT-9"
+title = "non-HTTP mutation entry points call their declared admit"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_session_mutation_admission.py"
+mode = "lint"
+scope = "scripts/session_mutation_admission_non_http.txt entries"
+
+rule = """A non-HTTP mutation entry point listed in scripts/session_mutation_admission_non_http.txt must call its declared admit function."""
+alternative = """Call the declared admission function inside the entry point."""
+why = """Background and retention passes mutate the same state as handlers, so they need the same gate."""
+
+[rule.example]
+bad = """domains/workspaces/retention.rs::run_pass mutating without its declared admit"""
+good = """the retention pass calls admit_all_workspace_sessions before deleting"""
+
+[[rule]]
+id = "AH-ADMIT-10"
+title = "admission precedes every effect in a non-HTTP entry point"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_session_mutation_admission.py"
+mode = "lint"
+scope = "scripts/session_mutation_admission_non_http.txt entries"
+
+rule = """In a non-HTTP entry point, each declared effect token must appear only after the declared admit call."""
+alternative = """Hoist the admission call above every declared effect."""
+why = """Ordering, not presence, is the guarantee — identical reasoning to the HTTP arm."""
+
+[rule.example]
+bad = """a retention pass deleting rows and then calling admit"""
+good = """admit first, then run the declared effect"""
+
+[[rule]]
+id = "AH-ADMIT-11"
+title = "no stale non-HTTP owner entry"
+owner = "anyharness"
+status = "law"
+enforced_by = "scripts/check_session_mutation_admission.py"
+mode = "lint"
+scope = "scripts/session_mutation_admission_non_http.txt"
+
+rule = """A non-HTTP ledger entry must name a function that still exists; an entry whose `path::fn` no longer resolves is stale and must be corrected or removed."""
+alternative = """Move the entry with the function when it is renamed or relocated, and delete it when the entry point goes away."""
+why = """An entry pointing at nothing looks like coverage while fencing nothing — the same anti-slack reasoning as the HTTP arm's stale-classification rule.
+
+Scope note: the enforced half is existence. A declared effect token that no
+longer occurs in the body is NOT detected today (the ordering comparison
+silently passes on an absent token), so an over-broad declaration can outlive
+the effect it named. Tightening that is a rule change, not a bug fix, and needs
+its own PR."""
+
+[rule.example]
+bad = """an entry naming domains/workspaces/retention.rs::run_pass after the function was renamed"""
+good = """the entry names a function that still exists and still performs the declared effects"""

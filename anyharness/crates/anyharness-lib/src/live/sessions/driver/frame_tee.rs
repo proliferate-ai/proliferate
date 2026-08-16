@@ -2,7 +2,9 @@
 //!
 //! Every line the client writes to, or reads from, the agent process is
 //! recorded once at DEBUG under `anyharness.acp.send` / `anyharness.acp.recv`,
-//! notifications included. The frame is logged as the raw wire line — never a
+//! except the streaming notification methods in [`STREAMING_METHODS`], which
+//! are dropped by default and restored by `ANYHARNESS_ACP_TEE_FULL`. The
+//! frame is logged as the raw wire line — never a
 //! re-serialization of a parsed value — capped so one giant payload cannot
 //! push the diagnostics pipe over its per-record budget.
 
@@ -39,11 +41,36 @@ struct FrameHeader<'a> {
     id: Option<&'a RawValue>,
 }
 
+/// Streaming notification methods excluded from the tee by default: they are
+/// one record per token-ish chunk, and turn boundaries are already covered by
+/// `anyharness.turn.started/finished/failed`. Set `ANYHARNESS_ACP_TEE_FULL`
+/// to restore the full per-frame tee for deep wire debugging.
+const STREAMING_METHODS: &[&str] = &["session/update"];
+
+fn full_tee_enabled() -> bool {
+    static FULL: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *FULL.get_or_init(|| std::env::var_os("ANYHARNESS_ACP_TEE_FULL").is_some())
+}
+
+/// True when the frame is a streaming notification the tee drops by default.
+/// The diagnostics admission layer admits every self-named `anyharness.*`
+/// target at any level, so the gate has to live here at the emit site —
+/// demoting the record's level would change nothing.
+fn suppressed_streaming_frame(header: &FrameHeader<'_>, full_tee: bool) -> bool {
+    matches!(header.method, Some(m) if STREAMING_METHODS.contains(&m)) && !full_tee
+}
+
 pub(in crate::live::sessions) fn log_frame(
     session_id: &str,
     direction: FrameDirection,
     line: &str,
 ) {
+    log_frame_gated(session_id, direction, line, full_tee_enabled());
+}
+
+/// `full_tee` is threaded as a parameter so tests can exercise both sides of
+/// the gate without racing on process-global env state.
+fn log_frame_gated(session_id: &str, direction: FrameDirection, line: &str, full_tee: bool) {
     // Parsing and capping happen only when a subscriber wants the record:
     // with no diagnostics producer installed and the default console filter,
     // this is the whole cost of the tee.
@@ -53,6 +80,9 @@ pub(in crate::live::sessions) fn log_frame(
                 return;
             }
             let header = parse_header(line);
+            if suppressed_streaming_frame(&header, full_tee) {
+                return;
+            }
             let (payload, truncated) = cap_frame(line);
             tracing::debug!(
                 target: "anyharness.acp.send",
@@ -69,6 +99,9 @@ pub(in crate::live::sessions) fn log_frame(
                 return;
             }
             let header = parse_header(line);
+            if suppressed_streaming_frame(&header, full_tee) {
+                return;
+            }
             let (payload, truncated) = cap_frame(line);
             tracing::debug!(
                 target: "anyharness.acp.recv",
@@ -108,7 +141,80 @@ fn cap_frame(line: &str) -> (&str, bool) {
 
 #[cfg(test)]
 mod tests {
-    use super::{cap_frame, parse_header, rpc_id_text, MAX_LOGGED_FRAME_BYTES};
+    use super::{
+        cap_frame, log_frame_gated, parse_header, rpc_id_text, FrameDirection,
+        MAX_LOGGED_FRAME_BYTES,
+    };
+    use std::io;
+    use std::sync::{Arc, Mutex};
+
+    struct SharedLogWriter(Arc<Mutex<Vec<u8>>>);
+
+    impl io::Write for SharedLogWriter {
+        fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+            self.0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .extend_from_slice(buffer);
+            Ok(buffer.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// Runs `log_frame_gated` under a DEBUG-level capturing subscriber and
+    /// returns everything it logged.
+    fn capture_frame(direction: FrameDirection, line: &str, full_tee: bool) -> String {
+        let log_bytes = Arc::new(Mutex::new(Vec::new()));
+        let log_writer = Arc::clone(&log_bytes);
+        let subscriber = tracing_subscriber::fmt()
+            .without_time()
+            .with_ansi(false)
+            .with_max_level(tracing::Level::DEBUG)
+            .with_writer(move || SharedLogWriter(Arc::clone(&log_writer)))
+            .finish();
+        tracing::subscriber::with_default(subscriber, || {
+            log_frame_gated("session-1", direction, line, full_tee);
+        });
+        let bytes = log_bytes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        String::from_utf8(bytes).expect("formatted log is UTF-8")
+    }
+
+    #[test]
+    fn streaming_notifications_are_skipped_by_default_in_both_directions() {
+        let line = r#"{"jsonrpc":"2.0","method":"session/update","params":{}}"#;
+
+        assert_eq!(capture_frame(FrameDirection::Recv, line, false), "");
+        assert_eq!(capture_frame(FrameDirection::Send, line, false), "");
+    }
+
+    #[test]
+    fn non_streaming_requests_and_responses_are_still_logged() {
+        let request = r#"{"jsonrpc":"2.0","id":7,"method":"session/prompt"}"#;
+        let logged = capture_frame(FrameDirection::Send, request, false);
+        assert!(logged.contains("session/prompt"));
+        assert!(logged.contains("acp frame: send"));
+
+        // A response carries no method at all and must never hit the gate.
+        let response = r#"{"jsonrpc":"2.0","id":"call-1","result":{}}"#;
+        let logged = capture_frame(FrameDirection::Recv, response, false);
+        assert!(logged.contains("call-1"));
+        assert!(logged.contains("acp frame: recv"));
+    }
+
+    #[test]
+    fn full_tee_restores_streaming_notifications() {
+        let line = r#"{"jsonrpc":"2.0","method":"session/update","params":{}}"#;
+
+        let logged = capture_frame(FrameDirection::Recv, line, true);
+        assert!(logged.contains("session/update"));
+        assert!(logged.contains("acp frame: recv"));
+    }
 
     #[test]
     fn a_frame_within_the_cap_is_logged_whole() {

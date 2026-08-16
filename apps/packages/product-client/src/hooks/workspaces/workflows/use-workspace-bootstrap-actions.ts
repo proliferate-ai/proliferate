@@ -17,12 +17,11 @@ import {
   startLatencyTimer,
 } from "#product/lib/infra/measurement/measurement-port";
 import {
-  abandonRendererFlow,
   beginRendererFlow,
-  finishRendererFlow,
   markRendererFlowDataReady,
   markRendererFlowShellCommitted,
 } from "#product/lib/infra/diagnostics/renderer-flow-timing";
+import { finishWorkspaceOpenRendererFlow } from "#product/hooks/workspaces/workflows/workspace-open-flow-finish";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import {
   clearLastViewedSession,
@@ -109,7 +108,7 @@ export function useWorkspaceBootstrapActions() {
     startedAt,
     latencyFlowId,
     forceSessionDirectoryRefresh,
-    isCurrent,
+    isCurrent, signal,
   }: BootstrapWorkspaceInput): Promise<{ sessions: WorkspaceSession[] }> => {
     // UX-latency R1 (Q17): workspace_open emits ONLY through the renderer
     // flow-timing family. The old `startMeasurementOperation({kind:"workspace_open"})`
@@ -124,6 +123,11 @@ export function useWorkspaceBootstrapActions() {
     // abandon (the truthful replacement for the old cancelLatencyFlow staleness
     // signal). Superseded/stale exits set this so no false content_stable fires.
     let rendererFlowAbandonReason: string | null = null;
+    // UX-latency R14: when set, content_stable is DEFERRED to the transcript
+    // pane (its committed transcript is the real stable signal), so the finally
+    // neither finishes nor abandons the flow; it hands the mark off. Null =>
+    // finish/abandon here as before (empty workspace, error, stale).
+    let deferContentStableSessionId: string | null = null;
     let sessions: WorkspaceSession[] = [];
     // UX-latency R1 canonical flow marks (intent -> shell -> data -> stable).
     // COVERAGE LIMIT (honest): this intent mark fires here, after the caller
@@ -194,6 +198,7 @@ export function useWorkspaceBootstrapActions() {
         logicalWorkspaceId,
         measurementOperationId,
         requestOptions: sessionRequestOptions,
+        signal,
         forceInitialRefresh: forceSessionDirectoryRefresh,
         sessionsStartedAt,
         timeoutMs: WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS,
@@ -330,6 +335,9 @@ export function useWorkspaceBootstrapActions() {
           setActiveSessionId: (sessionId) =>
             useSessionSelectionStore.getState().setActiveSessionId(sessionId),
         });
+        if (rememberedBootstrap.contentStableSessionId) {
+          deferContentStableSessionId = rememberedBootstrap.contentStableSessionId;
+        }
         if (rememberedBootstrap.shouldReturn) {
           return { sessions };
         }
@@ -358,15 +366,13 @@ export function useWorkspaceBootstrapActions() {
       }
       return { sessions };
     } finally {
-      if (rendererFlowAbandonReason === null) {
-        finishRendererFlow({ kind: "workspace_open", correlationKey: workspaceId });
-      } else {
-        abandonRendererFlow({
-          kind: "workspace_open",
-          correlationKey: workspaceId,
-          reason: rendererFlowAbandonReason,
-        });
-      }
+      // UX-latency R14: abandon, defer content_stable to the transcript pane, or
+      // finish now (empty workspace). See finishWorkspaceOpenRendererFlow.
+      finishWorkspaceOpenRendererFlow({
+        workspaceId,
+        abandonReason: rendererFlowAbandonReason,
+        deferContentStableSessionId,
+      });
     }
   }, [
     applySessionSummary,

@@ -1,0 +1,276 @@
+diff --git a/src/AcpExtensions.ts b/src/AcpExtensions.ts
+index a469d51..2d3bbed 100644
+--- a/src/AcpExtensions.ts
++++ b/src/AcpExtensions.ts
+@@ -1,6 +1,7 @@
+ import type {
+     ClientContext,
+     ContentBlock,
++    ForkSessionResponse,
+     LoadSessionResponse,
+     NewSessionResponse,
+     ResumeSessionResponse,
+@@ -57,6 +58,10 @@ export type LegacyResumeSessionResponse = ResumeSessionResponse & {
+     models?: LegacySessionModelState | null;
+ }
+ 
++export type LegacyForkSessionResponse = ForkSessionResponse & {
++    models?: LegacySessionModelState | null;
++}
++
+ export type ExtMethodRequest =
+     AuthenticationStatusRequest
+     | AuthenticationLogoutRequest
+diff --git a/src/CodexAcpClient.ts b/src/CodexAcpClient.ts
+index 714d067..1b10222 100644
+--- a/src/CodexAcpClient.ts
++++ b/src/CodexAcpClient.ts
+@@ -9,6 +9,7 @@ import {
+ import type {EmbeddedResourceResource} from "@agentclientprotocol/sdk";
+ import * as acp from "@agentclientprotocol/sdk";
+ import {type McpServer, RequestError} from "@agentclientprotocol/sdk";
++import {forkAnchorLastTurnId} from "./anyharness-fork";
+ import type {
+     ApprovalHandler,
+     CodexAppServerClient,
+@@ -409,6 +410,37 @@ export class CodexAcpClient {
+         }
+     }
+ 
++    /** AnyHarness delta: fork the source thread into a NEW thread via the App
++     *  Server `thread/fork`, anchored (inclusive) on `lastTurnId` when the ACP
++     *  request carries `_meta.anyharness.lastTurnId`; absent = tip fork. Returns
++     *  metadata keyed on the NEW forked thread id (`response.thread.id`), not the
++     *  source. Mirrors {@link resumeSession}. */
++    async forkSession(request: acp.ForkSessionRequest, onSubscribed?: () => void): Promise<SessionMetadata> {
++        const additionalDirectories = readAdditionalDirectories(request.cwd, request.additionalDirectories, request._meta);
++        await this.refreshSkills(request.cwd, additionalDirectories);
++
++        const lastTurnId = forkAnchorLastTurnId(request._meta);
++        const response = await this.codexClient.threadFork({
++            config: await this.createSessionConfig(request.cwd, additionalDirectories, request.mcpServers ?? []),
++            cwd: request.cwd,
++            modelProvider: await this.getResumeModelProvider(),
++            threadId: request.sessionId,
++            ...(lastTurnId !== undefined && { lastTurnId }),
++        });
++        onSubscribed?.();
++        const codexModels = await this.fetchAvailableModels();
++        const currentModelId = this.createModelId(codexModels, response.model, response.reasoningEffort).toString();
++        return {
++            sessionId: response.thread.id,
++            currentModelId: currentModelId,
++            models: codexModels,
++            collaborationMode: this.getCollaborationMode(response.thread.id),
++            modelProvider: response.modelProvider,
++            currentServiceTier: response.serviceTier as ServiceTier ?? null,
++            additionalDirectories,
++        };
++    }
++
+     async loadSession(request: acp.LoadSessionRequest, onSubscribed?: () => void): Promise<SessionMetadataWithThread> {
+         const additionalDirectories = readAdditionalDirectories(request.cwd, request.additionalDirectories, request._meta);
+         await this.refreshSkills(request.cwd, additionalDirectories);
+diff --git a/src/CodexAcpServer.ts b/src/CodexAcpServer.ts
+index 3c321c8..d2cab44 100644
+--- a/src/CodexAcpServer.ts
++++ b/src/CodexAcpServer.ts
+@@ -49,6 +49,7 @@ import {
+     LEGACY_GOAL_CONTROL_METHOD,
+     LEGACY_SET_SESSION_MODEL_METHOD,
+     type LegacyLoadSessionResponse,
++    type LegacyForkSessionResponse,
+     type LegacyNewSessionResponse,
+     type LegacyResumeSessionResponse,
+     type LegacySessionModelState,
+@@ -149,6 +150,12 @@ interface ActivePrompt {
+     complete: () => void;
+ }
+ 
++/** Presence of this object routes {@link CodexAcpServer.getOrCreateSession} to
++ *  the fork path (App Server `thread/fork`) instead of resume/start. The
++ *  inclusive `lastTurnId` anchor itself travels on the request `_meta`
++ *  (`_meta.anyharness.lastTurnId`), read in `CodexAcpClient.forkSession`. */
++type ForkOptions = Record<string, never>;
++
+ export class CodexAcpServer {
+     private static readonly MODEL_NAME_TOKEN_OVERRIDES: Record<string, string> = {
+         gpt: "GPT",
+@@ -238,6 +245,11 @@ export class CodexAcpServer {
+                 },
+                 sessionCapabilities: {
+                     resume: { },
++                    // AnyHarness delta: `session/fork` mapped to App Server
++                    // `thread/fork` (inclusive `lastTurnId` anchor via
++                    // `_meta.anyharness.lastTurnId`). Canonical codex-acp does
++                    // not register fork; absence of this cap means unpatched.
++                    fork: { },
+                     list: { },
+                     close: { },
+                     delete: { },
+@@ -359,9 +371,12 @@ export class CodexAcpServer {
+         }
+     }
+ 
+-    async getOrCreateSession(request: acp.NewSessionRequest | acp.ResumeSessionRequest): Promise<[SessionId, LegacySessionModelState, SessionModeState]> {
++    async getOrCreateSession(
++        request: acp.NewSessionRequest | acp.ResumeSessionRequest | acp.ForkSessionRequest,
++        forkOptions?: ForkOptions,
++    ): Promise<[SessionId, LegacySessionModelState, SessionModeState]> {
+         try {
+-            return await this.tryCreateSession(request);
++            return await this.tryCreateSession(request, forkOptions);
+         } catch (e) {
+             const error = e instanceof Error ? e : new Error(String(e));
+             await this.handleError(error);
+@@ -450,8 +465,14 @@ export class CodexAcpServer {
+         return generation;
+     }
+ 
+-    async tryCreateSession(request: acp.NewSessionRequest | acp.ResumeSessionRequest): Promise<[SessionId, LegacySessionModelState, SessionModeState]> {
+-        const requestedSessionGeneration = "sessionId" in request
++    async tryCreateSession(
++        request: acp.NewSessionRequest | acp.ResumeSessionRequest | acp.ForkSessionRequest,
++        forkOptions?: ForkOptions,
++    ): Promise<[SessionId, LegacySessionModelState, SessionModeState]> {
++        // A fork installs under a NEW thread id (returned by the App Server),
++        // so — like a brand-new session — its session-open generation must be
++        // begun on that new id below (line ~495), NOT on the source id here.
++        const requestedSessionGeneration = "sessionId" in request && !forkOptions
+             ? this.beginSessionOpen(request.sessionId)
+             : null;
+         await this.checkAuthorization();
+@@ -462,7 +483,17 @@ export class CodexAcpServer {
+ 
+         let sessionMetadata: SessionMetadata;
+         let resumeSubscribed = false;
+-        if ("sessionId" in request) {
++        if (forkOptions) {
++            // AnyHarness delta: fork the source thread into a NEW thread. The
++            // returned metadata is keyed on the forked thread id, so the generic
++            // registration tail below installs the new session, not the source.
++            // Generation is begun on the new id (like a new session), so no
++            // source-id session-open cleanup is owed on failure.
++            logger.log(`Fork existing session: ${(request as acp.ForkSessionRequest).sessionId}...`);
++            sessionMetadata = await this.runWithProcessCheck(() =>
++                this.codexAcpClient.forkSession(request as acp.ForkSessionRequest)
++            );
++        } else if ("sessionId" in request) {
+             logger.log(`Resume existing session: ${request.sessionId}...`);
+             try {
+                 sessionMetadata = await this.runWithProcessCheck(() =>
+@@ -618,6 +649,23 @@ export class CodexAcpServer {
+         };
+     }
+ 
++    async unstable_forkSession(params: acp.ForkSessionRequest): Promise<LegacyForkSessionResponse> {
++        logger.log("Forking session...", {sessionId: params.sessionId});
++        const [sessionId, modelState, modeState] = await this.getOrCreateSession(params, {});
++        logger.log("Session forked", {
++            sourceSessionId: params.sessionId,
++            sessionId: sessionId,
++            modelId: modelState.currentModelId,
++            availableModelCount: modelState.availableModels.length,
++        });
++        return {
++            sessionId,
++            models: modelState,
++            modes: modeState,
++            ...this.createSessionConfigOptionsResponse(this.getSessionState(sessionId)),
++        };
++    }
++
+     async listSessions(params: acp.ListSessionsRequest): Promise<acp.ListSessionsResponse> {
+         logger.log("Listing sessions...", {cwd: params.cwd, cursor: params.cursor});
+         await this.checkAuthorization();
+diff --git a/src/CodexAppServerClient.ts b/src/CodexAppServerClient.ts
+index 50a95e4..d62a88b 100644
+--- a/src/CodexAppServerClient.ts
++++ b/src/CodexAppServerClient.ts
+@@ -72,6 +72,8 @@ import type {
+     PermissionsRequestApprovalParams,
+     PermissionsRequestApprovalResponse,
+     ItemCompletedNotification,
++    ThreadForkParams,
++    ThreadForkResponse,
+ } from "./app-server/v2";
+ 
+ export interface ApprovalHandler {
+@@ -530,6 +532,10 @@ export class CodexAppServerClient {
+         return await this.sendRequest({ method: "thread/resume", params: params });
+     }
+ 
++    async threadFork(params: ThreadForkParams): Promise<ThreadForkResponse> {
++        return await this.sendRequest({ method: "thread/fork", params: params });
++    }
++
+     getThreadSettings(threadId: string): ThreadSettings | undefined {
+         return this.threadSettings.get(threadId);
+     }
+diff --git a/src/__tests__/CodexACPAgent/initialize.test.ts b/src/__tests__/CodexACPAgent/initialize.test.ts
+index 7b5bd58..bed1c12 100644
+--- a/src/__tests__/CodexACPAgent/initialize.test.ts
++++ b/src/__tests__/CodexACPAgent/initialize.test.ts
+@@ -49,6 +49,9 @@ describe('CodexACPAgent - initialize', () => {
+                 },
+                 sessionCapabilities: {
+                     resume: {},
++                    // AnyHarness delta: session/fork registered (mapped to App
++                    // Server thread/fork). Canonical codex-acp omits this.
++                    fork: {},
+                     list: {},
+                     close: {},
+                     delete: {},
+diff --git a/src/anyharness-fork.ts b/src/anyharness-fork.ts
+new file mode 100644
+index 0000000..a018a3a
+--- /dev/null
++++ b/src/anyharness-fork.ts
+@@ -0,0 +1,35 @@
++import { RequestError } from "@agentclientprotocol/sdk";
++
++/** The Proliferate ("AnyHarness") thin delta over canonical `codex-acp`:
++ *  registration of the ACP `session/fork` method, mapped onto the native App
++ *  Server `thread/fork` (canonical registers `_session/goal` and
++ *  `_session/steering` already, but NOT `session/fork`).
++ *
++ *  The inclusive fork anchor rides in the `session/fork` request
++ *  `_meta.anyharness.lastTurnId`. Per the pinned App Server schema
++ *  (fixtures/contracts/codex-app-server-schema, native codex 0.147.0),
++ *  `ThreadForkParams.lastTurnId` is the ONLY fork anchor — "last turn id to
++ *  fork through, inclusive; turns after it are omitted; the referenced turn
++ *  cannot be in progress". There is no `beforeTurnId`/`excludeTurns`. The
++ *  runtime resolves the product boundary ("immediately before the selected
++ *  user message") to the preceding turn id and passes it here.
++ *
++ *  Absent anchor → an unanchored (tip) fork. A present-but-malformed anchor is
++ *  a HARD `invalidParams`, never a silent tip fork (Forks ADR §5 cardinal
++ *  sin). */
++export const ANYHARNESS_META_NAMESPACE = "anyharness";
++
++export function forkAnchorLastTurnId(meta: unknown): string | undefined {
++  if (!meta || typeof meta !== "object") return undefined;
++  const ns = (meta as Record<string, unknown>)[ANYHARNESS_META_NAMESPACE];
++  if (!ns || typeof ns !== "object") return undefined;
++  const anchor = (ns as Record<string, unknown>)["lastTurnId"];
++  if (anchor === undefined || anchor === null) return undefined;
++  if (typeof anchor !== "string" || anchor.length === 0) {
++    throw RequestError.invalidParams(
++      undefined,
++      "_meta.anyharness.lastTurnId must be a non-empty string when present",
++    );
++  }
++  return anchor;
++}
+diff --git a/src/index.ts b/src/index.ts
+index 0bddc4e..f6f835b 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -136,6 +136,7 @@ function startAcpServer() {
+         .onRequest(acp.methods.agent.initialize, (ctx) => getAgent().initialize(ctx.params))
+         .onRequest(acp.methods.agent.session.new, (ctx) => getAgent().newSession(ctx.params))
+         .onRequest(acp.methods.agent.session.load, (ctx) => getAgent().loadSession(ctx.params))
++        .onRequest(acp.methods.agent.session.fork, (ctx) => getAgent().unstable_forkSession(ctx.params))
+         .onRequest(acp.methods.agent.session.list, (ctx) => getAgent().listSessions(ctx.params))
+         .onRequest(acp.methods.agent.session.delete, (ctx) => getAgent().deleteSession(ctx.params))
+         .onRequest(acp.methods.agent.session.resume, (ctx) => getAgent().resumeSession(ctx.params))

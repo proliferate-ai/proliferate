@@ -2,6 +2,10 @@ import {
   type PersistedSessionReplacementTombstones,
   writeSessionReplacementTombstones,
 } from "#product/lib/access/persistence/session-replacement-tombstones-storage";
+import {
+  clearReplacedSessionTombstoneCommitListeners,
+  notifyReplacedSessionTombstoneCommitted,
+} from "#product/hooks/sessions/workflows/session-replacement-tombstone-listeners";
 
 type SessionIdentity = { id: string };
 
@@ -103,6 +107,7 @@ export function commitReplacedSessionTombstone(
   removeEntry(stagedByWorkspaceId, workspaceId, runtimeSessionId);
   replaceTombstoneSource(committedByWorkspaceId, nextCommitted);
   latestCommittedGeneration = commitGeneration;
+  notifyReplacedSessionTombstoneCommitted(workspaceId);
   return true;
 }
 
@@ -283,6 +288,7 @@ export function resetReplacedSessionTombstonesForTests(): void {
   retiredSuppressionByWorkspaceId.clear();
   retiredClientAliasesByWorkspaceId.clear();
   latestCommittedGeneration = 0;
+  clearReplacedSessionTombstoneCommitListeners();
   persistCommittedTombstones();
 }
 

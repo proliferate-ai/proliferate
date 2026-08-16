@@ -28,6 +28,7 @@ import type { SessionConfigOptionUpdateOptions } from "#product/hooks/sessions/w
 import {
   useSessionInteractionResolutionActions,
 } from "#product/hooks/sessions/workflows/use-session-interaction-resolution-actions";
+import { beginRendererFlow } from "#product/lib/infra/diagnostics/renderer-flow-timing";
 
 export interface SendPromptInput {
   sessionId: string;
@@ -174,7 +175,7 @@ export function useSessionIntentActions() {
     if (blockedReason) {
       throw new Error(blockedReason);
     }
-    useSessionIntentStore.getState().enqueueConfig({
+    const intent = useSessionIntentStore.getState().enqueueConfig({
       clientSessionId: sessionId,
       materializedSessionId: slot.materializedSessionId ?? null,
       workspaceId,
@@ -182,6 +183,17 @@ export function useSessionIntentActions() {
       value,
       persistDefaultPreference: options?.persistDefaultPreference !== false,
     });
+    if (configId === "mode") {
+      // UX-latency R12: keyed by intentId, which enqueueConfig keeps stable
+      // across PRO-261 tail coalescing (a burst of switches reuses the same
+      // queued intent), so re-begin here restarts the clock to the latest
+      // input, matching the coalesced value that actually gets dispatched.
+      beginRendererFlow({
+        kind: "mode_switch",
+        correlationKey: intent.intentId,
+        correlation: { sessionId, requestId: intent.intentId },
+      });
+    }
   }, [getWorkspaceRuntimeBlockReason]);
 
   return {

@@ -1,0 +1,65 @@
+# Agent-auth server rules (SRV-AGENTAUTH-*). Reserved family segment: AGENTAUTH
+# (see lints/README.md "Rule ID allocation"). FR-4 registry-authority invariants
+# on the server plane. Enforcement lands with the Agent Auth code ladder; these
+# records are authored on the lint-records foundation and reconcile with it at
+# integration.
+
+# FR-4 (1a): the deployed LiteLLM config's access groups are exactly the
+# gateway-capable harness kinds. A pure static check of a reviewed YAML file, so
+# it is a real, CI-wired test (server-ci.yml runs `pytest tests/unit`), and the
+# record points at that test directly (mode = "test").
+[[rule]]
+id = "SRV-AGENTAUTH-001"
+title = "LiteLLM config access groups are exactly the gateway-capable harness kinds"
+owner = "server"
+status = "law"
+enforced_by = "server/tests/unit/test_litellm_config_access_groups.py"
+mode = "test"
+scope = "server/litellm/config.yaml"
+
+rule = """Every `model_list` entry in `server/litellm/config.yaml` must carry a
+`model_info.access_groups` list whose names are exactly harness_kind identifiers
+drawn from `AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS`; `cursor` — which has no
+gateway recipe — must never appear in any entry's access groups."""
+alternative = """Name the access group with the harness_kind that owns the
+gateway route, and leave native-only harnesses (cursor) out of the config's
+access groups entirely."""
+why = """The one deployed config is the authority for which harness may reach
+which model through the gateway. An access group that is not a gateway-capable
+kind, or a cursor group, grants a route the registry says does not exist. (Agent
+Auth ADR FR-4, agents-impl-plan.md §4 B1.)"""
+
+[rule.example]
+bad = "a config.yaml model_list entry with access_groups = [\"cursor\"]"
+good = "access_groups naming only claude/codex/opencode/grok, per the constant"
+
+# FR-4 (1b): the Python gateway-capable constant is the registry's derivation,
+# not an independent hand-maintained list. The cross-source drift guard
+# (test_agent_registry_mirror_drift.py) lands with the FR-4 code ladder; on this
+# foundation branch there is no checker for it, so the record is honest debt.
+[[rule]]
+id = "SRV-AGENTAUTH-002"
+title = "The Python gateway-capable constant is the registry's derivation"
+owner = "server"
+status = "leaks"
+gap = "#1939"
+enforced_by = "review"
+mode = "review"
+scope = "server/proliferate/constants/agent_gateway.py, catalogs/agents/registry.json"
+
+rule = """`AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS` must equal the set of
+gateway-capable harness kinds derived from the agent registry
+(`catalogs/agents/registry.json`), not a separately edited list — the registry
+is the single authority and the Python constant is its mirror."""
+alternative = """When a harness gains or loses a gateway recipe, change the
+registry; regenerate/verify the Python mirror against it rather than editing the
+constant by hand."""
+why = """FR-4 makes the registry the one authority for gateway capability, with
+every language binding a checked mirror. The drift guard that asserts the Python
+mirror against the registry derivation lands with the FR-4 code ladder (#1939);
+until it is wired on this branch the invariant is unenforced, so this is tracked
+debt rather than a silent law."""
+
+[rule.example]
+bad = "editing AGENT_AUTH_GATEWAY_CAPABLE_HARNESS_KINDS without touching the registry"
+good = "the registry declares gateway capability; the constant mirrors it under a drift test"

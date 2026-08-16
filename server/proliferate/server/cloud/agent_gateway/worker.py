@@ -34,6 +34,10 @@ from proliferate.server.cloud.agent_gateway.usage_import import (
     UsageImportResult,
     run_usage_import,
 )
+from proliferate.server.cloud.agent_gateway.verification import (
+    VerificationResult,
+    run_verification,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +125,54 @@ async def start_agent_gateway_usage_import() -> asyncio.Task[None] | None:
 
 
 async def stop_agent_gateway_usage_import(
+    task: asyncio.Task[None] | None,
+) -> None:
+    if task is None:
+        return
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
+
+
+async def run_verification_once() -> VerificationResult:
+    async with db_session.open_async_transaction() as db:
+        return await run_verification(db)
+
+
+async def _verification_loop() -> None:
+    while True:
+        try:
+            result = await run_verification_once()
+            if result.misconfigured or result.errored:
+                logger.info(
+                    "Agent gateway verification tick recorded verdicts",
+                    extra={
+                        "checked": result.checked,
+                        "ok": result.ok,
+                        "misconfigured": result.misconfigured,
+                        "errored": result.errored,
+                    },
+                )
+        except Exception as exc:
+            report_critical(
+                exc,
+                tags={"domain": "agent_gateway", "action": "verification"},
+            )
+        await asyncio.sleep(settings.agent_gateway_verification_interval_seconds)
+
+
+async def start_agent_gateway_verification() -> asyncio.Task[None] | None:
+    if not settings.agent_gateway_enabled or not settings.run_background_workers:
+        return None
+    if not settings.agent_gateway_verification_enabled:
+        return None
+    return asyncio.create_task(
+        _verification_loop(),
+        name="agent-gateway-verification",
+    )
+
+
+async def stop_agent_gateway_verification(
     task: asyncio.Task[None] | None,
 ) -> None:
     if task is None:

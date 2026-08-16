@@ -25,6 +25,21 @@ export const LOSS_REASONS = [
   "invalid_receipt",
   "collector_rejection",
   "acknowledgement_timeout",
+  // Whole-batch invoke rejections, named after the native
+  // `renderer_ingest_*` classification suffixes so bursts can be attributed
+  // to a supervisor state instead of collapsing into `invoke_failure`.
+  // `collector_rejected` is the batch-level twin of the per-record
+  // `collector_rejection` above.
+  "wrong_window",
+  "invalid_batch",
+  "collector_starting",
+  "collector_unsupported",
+  "collector_degraded",
+  "collector_stopped",
+  "collector_replaced",
+  "broker_shutting_down",
+  "collector_rejected",
+  "deadline_exceeded",
 ] as const;
 
 export const SEVERITIES = ["trace", "debug", "info", "warn", "error"] as const;
