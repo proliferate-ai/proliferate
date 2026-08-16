@@ -4,6 +4,8 @@ import { createRef } from "react";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
+import { createPro292CompletedTurnFixture } from "#product/domain/chats/transcript/transcript-presentation-test-fixtures";
+import { buildTranscriptRowModel } from "#product/domain/chats/transcript/transcript-row-model";
 import { VirtualizedTranscriptRowList } from "./VirtualizedTranscriptRowList";
 
 const observedVirtualizerOptions = vi.hoisted(() => [] as Array<{
@@ -47,9 +49,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function makeProps() {
+function makeProps(rows: readonly TranscriptVirtualRow[] = ROWS) {
   return {
-    rows: ROWS,
+    rows,
     selectionRootRef: createRef<HTMLDivElement>(),
     hasOlderHistory: false,
     isLoadingOlderHistory: false,
@@ -112,6 +114,54 @@ describe("VirtualizedTranscriptRowList", () => {
     expect(observedVirtualizerOptions.length).toBeGreaterThan(optionCountBeforeScroll);
     expect(nextOptions?.getItemKey).toBe(firstOptions?.getItemKey);
     expect(nextOptions?.estimateSize).toBe(firstOptions?.estimateSize);
+  });
+
+  it("keeps PRO-292 production row keys unique across hydration and upward scroll", () => {
+    const fixture = createPro292CompletedTurnFixture();
+    const rows = buildTranscriptRowModel({
+      activeSessionId: fixture.transcript.sessionMeta.sessionId,
+      transcript: fixture.transcript,
+      visibleOptimisticPrompt: null,
+      latestTurnId: fixture.turn.turnId,
+      latestTurnHasAssistantRenderableContent: true,
+    });
+    const expectedKeys = rows.map((row) => row.key);
+    const rendered = render(
+      <VirtualizedTranscriptRowList {...makeProps(rows)} />,
+    );
+    const initialOptions = observedVirtualizerOptions.at(-1);
+    const initialGetItemKey = initialOptions?.getItemKey as
+      | ((index: number) => unknown)
+      | undefined;
+    expect(initialGetItemKey).toBeTruthy();
+
+    // The wrapper delegates to the real TanStack virtualizer. Evaluating its
+    // configured accessor for every production row preserves the ordered
+    // index-to-row mapping that measurement and scroll identity consume.
+    const initialKeys = rows.map((_, index) => initialGetItemKey!(index));
+    expect(initialKeys).toEqual(expectedKeys);
+    expect(new Set(initialKeys).size).toBe(initialKeys.length);
+
+    const optionCountBeforeScroll = observedVirtualizerOptions.length;
+    const viewport = getViewport(rendered.container);
+    Object.defineProperty(viewport, "clientHeight", { value: 300, configurable: true });
+    Object.defineProperty(viewport, "scrollHeight", { value: 2_000, configurable: true });
+    viewport.scrollTop = 1_200;
+    act(() => {
+      fireEvent.wheel(viewport, { deltaY: -80 });
+      viewport.scrollTop = 1_120;
+      fireEvent.scroll(viewport);
+    });
+
+    const postScrollOptions = observedVirtualizerOptions.at(-1);
+    const postScrollGetItemKey = postScrollOptions?.getItemKey as
+      | ((index: number) => unknown)
+      | undefined;
+    expect(observedVirtualizerOptions.length).toBeGreaterThan(optionCountBeforeScroll);
+    expect(postScrollGetItemKey).toBe(initialGetItemKey);
+    const postScrollKeys = rows.map((_, index) => postScrollGetItemKey!(index));
+    expect(postScrollKeys).toEqual(expectedKeys);
+    expect(new Set(postScrollKeys).size).toBe(postScrollKeys.length);
   });
 
   it("rotates measurement accessors only when ordered row composition changes", () => {

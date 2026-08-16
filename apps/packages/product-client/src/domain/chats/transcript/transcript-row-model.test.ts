@@ -6,17 +6,12 @@ import {
   type TranscriptRow,
 } from "./transcript-row-model";
 import { createPromptOutboxEntry } from "../../sessions/intents/session-intent-model";
-import {
-  resolveVirtualBottomDistance,
-} from "./transcript-virtual-rows";
+import { resolveVirtualBottomDistance } from "./transcript-virtual-rows";
 import {
   parseTranscriptVirtualizationMode,
   resolveTranscriptVirtualizationEnabled,
 } from "./transcript-virtualization-config";
-import {
-  terminalItem,
-  thoughtItem,
-} from "./transcript-presentation-test-fixtures";
+import { buildPro292RowModelProof, terminalItem, thoughtItem } from "./transcript-presentation-test-fixtures";
 import type { GoalTranscriptEvent } from "../../activity/goal-transcript-events";
 
 describe("buildTranscriptRowModel", () => {
@@ -177,6 +172,11 @@ describe("buildTranscriptRowModel", () => {
       isFirstTurnRow: false,
       isLastTurnRow: true,
     }));
+  });
+
+  it("projects one canonical completed-history row for the PRO-292 large turn", () => {
+    expect(buildPro292RowModelProof()).toEqual({ counts: [152, 152, 146, 5, 1, 8],
+      completedHistory: [1, 8], invariants: Array(8).fill(true) });
   });
 
   it("keeps large in-progress turns in one row so live action phases do not remount", () => {
