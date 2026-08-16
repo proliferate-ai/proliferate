@@ -13,6 +13,7 @@ import {
 import { WORKFLOW_NODE_CARD_COPY } from "#product/copy/workflows/workflow-node-card-copy";
 import { WORKFLOW_RUN_VIEW_COPY } from "#product/copy/workflows/workflow-run-view-copy";
 import { Badge } from "#product/primitives/Badge";
+import { Button } from "#product/primitives/Button";
 import { StatusDot, type StatusDotTone } from "#product/primitives/StatusDot";
 import { WorkflowCanvas } from "#product/components/workflows/canvas/WorkflowCanvas";
 
@@ -83,13 +84,15 @@ export function WorkflowGraphView({
         }
         const selected = placed.key === selectedNodeRowId;
         return (
-          <button
+          <Button
             key={placed.key}
             type="button"
+            variant="unstyled"
+            size="unstyled"
             aria-pressed={selected}
             onClick={() => onSelectNode(placed.key)}
             className={[
-              "absolute flex flex-col items-start gap-1 overflow-hidden rounded-lg border p-2.5 text-left shadow-subtle transition-colors",
+              "absolute flex flex-col items-start justify-start gap-1 overflow-hidden rounded-lg border p-2.5 text-left shadow-subtle transition-colors",
               placed.branch ? "bg-surface-tint" : "bg-surface-elevated",
               selected
                 ? "border-info ring-2 ring-info/30"
@@ -126,7 +129,7 @@ export function WorkflowGraphView({
                 {vm.node.prompt}
               </span>
             ) : null}
-          </button>
+          </Button>
         );
       })}
     </WorkflowCanvas>

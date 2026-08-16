@@ -9,6 +9,7 @@ import {
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
 import { WORKFLOW_NODE_CARD_COPY } from "#product/copy/workflows/workflow-node-card-copy";
 import type { WorkflowBuilderHarnessOption } from "#product/lib/domain/workflows/workflow-builder-authoring";
+import { Button } from "#product/primitives/Button";
 import { CircleAlert } from "#product/primitives/icons/status";
 import { StatusDot } from "#product/primitives/StatusDot";
 import { WorkflowCanvas } from "#product/components/workflows/canvas/WorkflowCanvas";
@@ -82,9 +83,11 @@ export function WorkflowBuilderChainCanvas({
         };
         if (placed.key === INPUT_KEY) {
           return (
-            <button
+            <Button
               key={placed.key}
               type="button"
+              variant="unstyled"
+              size="unstyled"
               aria-pressed={inputSelected}
               onClick={onSelectInput}
               className={cardClassName(inputSelected)}
@@ -102,7 +105,7 @@ export function WorkflowBuilderChainCanvas({
               <span className="line-clamp-2 w-full text-ui-sm text-muted-foreground">
                 {WORKFLOW_BUILDER_COPY.inputNodeSubtitle}
               </span>
-            </button>
+            </Button>
           );
         }
 
@@ -113,9 +116,11 @@ export function WorkflowBuilderChainCanvas({
         const selected = placed.key === selectedNodeId;
         const modelLine = nodeModelLine(node, harnesses);
         return (
-          <button
+          <Button
             key={placed.key}
             type="button"
+            variant="unstyled"
+            size="unstyled"
             aria-pressed={selected}
             onClick={() => onSelectNode(placed.key)}
             className={cardClassName(selected)}
@@ -148,7 +153,7 @@ export function WorkflowBuilderChainCanvas({
                 {node.prompt}
               </span>
             ) : null}
-          </button>
+          </Button>
         );
       })}
     </WorkflowCanvas>
@@ -157,7 +162,7 @@ export function WorkflowBuilderChainCanvas({
 
 function cardClassName(selected: boolean): string {
   return [
-    "absolute flex flex-col items-start gap-1 overflow-hidden rounded-lg border bg-surface-elevated p-2.5 text-left shadow-subtle transition-colors",
+    "absolute flex flex-col items-start justify-start gap-1 overflow-hidden rounded-lg border bg-surface-elevated p-2.5 text-left shadow-subtle transition-colors",
     selected ? "border-info ring-2 ring-info/30" : "border-border hover:border-border-heavy",
   ].join(" ");
 }

@@ -92,11 +92,13 @@ export function WorkflowBuilderRail({
           </p>
         ) : (
           docTemplates.map((doc, index) => (
-            <button
+            <Button
               key={index}
               type="button"
+              variant="unstyled"
+              size="unstyled"
               aria-pressed={index === selectedDocIndex}
-              className={`flex min-w-0 items-center gap-1.5 rounded-md border px-2 py-1.5 text-left transition-colors ${
+              className={`flex min-w-0 items-center justify-start gap-1.5 rounded-md border px-2 py-1.5 text-left transition-colors ${
                 index === selectedDocIndex
                   ? "border-info ring-2 ring-info/30"
                   : "border-transparent hover:bg-hover"
@@ -107,7 +109,7 @@ export function WorkflowBuilderRail({
               <span className="truncate font-mono text-ui-sm text-foreground">
                 {doc.slug.trim() || WORKFLOW_BUILDER_COPY.docUntitledRow}
               </span>
-            </button>
+            </Button>
           ))
         )}
       </section>
