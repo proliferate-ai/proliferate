@@ -362,7 +362,7 @@ mod tests {
         insert_session_row(&session_store, "workspace-1", "session-1", "idle");
         insert_session_row(&session_store, "workspace-1", "session-2", "idle");
         session_store
-            .link_workflow_columns("session-1", "run-x", "node-x", "01 · Node")
+            .link_workflow_columns("session-1", "run-x", "node-x")
             .expect("link workflow columns");
         WorkflowSessionExtension::new(session_store, WorkflowStore::new(db))
     }
