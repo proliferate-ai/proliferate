@@ -322,3 +322,54 @@ codex `rust-v0.144.5` → `rust-v0.147.0`. Both ride the founder-visible line it
 **Morning follow-ups (recorded, not tonight):** the `resolve-pins`
 pin-specific-native gap; and whether the three gateway-only codex models are
 still offered post-migration (no gateway probe context exists to prove launch).
+
+### AS-RUN #4 — rebase onto main + regenerate against merged registry (2026-08-16)
+
+**Root cause of the 8h missing CI (correction, supersedes the earlier
+"draft-gated" note):** `.github/workflows/ci.yml` triggers on a bare
+`pull_request:` with NO draft filter — the heavy suite *does* run on draft PRs,
+and did earlier on this branch at `61df7706`. CI stopped firing because the PR
+became **CONFLICTING with main**: GitHub cannot build the test-merge commit for
+a conflicted PR, so `pull_request`-event workflows never enqueue (only the
+`pull_request_target` metadata lane keeps running — the 3 lanes seen for 8h).
+Strike "draft-gated" wherever it appears in this record and the PR body.
+
+**Conflict source:** the Agent-Auth stack (#1939, merged mid-assembly) made
+`registry.json` the single allow-list authority — added a per-agent
+`authCardinality` field, bumped `registryVersion`/`catalogVersion` to
+`2026-08-16.1`, and added a `validateRegistryAuthority` gate to
+`scripts/validate-agent-catalog.mjs` (+29 lines: `authCardinality ∈
+{single,multi}`; a `multi` harness must declare a `gateway` slot). It touched
+`catalogs/agents/catalog.json` + `scripts/agent-catalog/catalog.draft.json` —
+the exact files the flip regenerates. Only those two conflicted; `registry.json`
+auto-merged (main's `authCardinality` on different lines from the flip's
+`agentProcess.install.package` refs).
+
+**Resolution (evidence-only-green, no new probes — committed snapshots remain
+the evidence):**
+1. `git rebase origin/main` (onto `caf288f57`). Conflict only in the two
+   catalog JSONs; took main's versions (`--ours`) so `catalog.draft.json`
+   reset to `2026-08-16.1`, then completed the rebase.
+2. Regenerated `catalog.draft.json` + `catalog.json` via
+   `node scripts/agent-catalog/build-catalog.mjs --require-complete-probe`
+   (node-only; consumes the committed `generated/*.probe.json` snapshots +
+   `.probe-logs/{run.state,resolved-candidate.json}`; `run.state complete=true`,
+   6/6 passed). Monotonic bump landed `2026-08-16.2` (next `.N` above main's
+   `.1`). `cp draft → catalog.json`; byte-identical confirmed.
+3. **JS validator (literal):** `agent catalog OK: 2026-08-16.2 (5 agents)`
+   (exit 0) — passes main's new `validateRegistryAuthority` gate (flip touches
+   neither `authCardinality` nor `auth.slots`).
+4. **Flip line items survived + re-validated against the new authCardinality
+   registry:** claude attestation `0.66.0-proliferate.1` / native `2.1.233`;
+   codex attestation `1.1.14-proliferate.1` / native `rust-v0.147.0` /
+   `unattendedModeId: agent-full-access`; 13/13 codex models-with-mode carry
+   `values:["read-only","agent","agent-full-access"]` (0 carry the old
+   `auto`/`full-access` vocab); the 3 gateway-only models
+   (`gpt-5.2-2025-12-11`, `gpt-5-mini`, `gpt-5-mini-2025-08-07`) carry NO
+   per-model `mode` (option-#2 inheritance intact). registry `authCardinality`:
+   claude/codex `single` (unchanged by the flip).
+5. Rust cargo gate (`validate_unattended_mode`) still authoritative in CI — the
+   mergeable branch now enqueues the full `pull_request` suite. No local build
+   (machine memory-pressure gate; none needed for this node-only rework).
+
+Branch rebased head carries the flip at a new SHA; force-with-lease pushed.
