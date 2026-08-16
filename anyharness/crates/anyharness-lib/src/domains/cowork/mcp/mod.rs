@@ -18,9 +18,10 @@ use self::auth::CoworkMcpAuth;
 use self::context::CoworkMcpContext;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
 use crate::domains::cowork::runtime::CoworkRuntime;
+use crate::integrations::mcp::capability_token::McpCapabilityTokenValidation;
 use crate::integrations::mcp::product_server::{
     ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDefinition, ProductMcpRequestContext,
-    ProductMcpServer, ProductMcpTokenValidation,
+    ProductMcpServer,
 };
 
 #[derive(Clone)]
@@ -56,7 +57,7 @@ impl ProductMcpServer for CoworkProductMcpServer {
         &self,
         header: ProductMcpAuthHeader<'_>,
         request: &ProductMcpRequestContext,
-    ) -> anyhow::Result<ProductMcpTokenValidation> {
+    ) -> anyhow::Result<McpCapabilityTokenValidation> {
         self.auth.validate_capability_header(header, request)
     }
 

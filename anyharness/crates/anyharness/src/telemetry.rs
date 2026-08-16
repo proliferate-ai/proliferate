@@ -3,7 +3,8 @@ use std::{borrow::Cow, path::PathBuf, sync::Arc, time::Duration};
 use anyharness_lib::{
     app::default_runtime_home,
     observability::{
-        AGENT_STDERR_TRACING_TARGET, RUNTIME_INCIDENT_TRACING_TARGET,
+        AGENT_STDERR_TRACING_TARGET, PRODUCT_MCP_AUTH_REJECTED_TRACING_TARGET,
+        RUNTIME_INCIDENT_TRACING_TARGET,
         WORKFLOW_BOOT_FENCE_TRACING_TARGET, WORKFLOW_INTERJECTION_HELD_TRACING_TARGET,
         WORKFLOW_INVARIANT_VIOLATION_TRACING_TARGET,
         WORKFLOW_NODE_INTERACTION_REQUESTED_TRACING_TARGET,
@@ -378,6 +379,10 @@ fn anyharness_target_mappings() -> TargetMappingConfig {
         TargetMapping::span_event(
             RUNTIME_INCIDENT_TRACING_TARGET,
             "anyharness.runtime.incident",
+        ),
+        TargetMapping::span_event(
+            PRODUCT_MCP_AUTH_REJECTED_TRACING_TARGET,
+            "anyharness.product_mcp.auth.rejected",
         ),
         TargetMapping::span_event(
             WORKFLOW_RUN_STARTED_TRACING_TARGET,

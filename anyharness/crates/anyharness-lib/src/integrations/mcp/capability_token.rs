@@ -46,6 +46,29 @@ pub struct ProductMcpCapabilityScope<'a> {
     pub product_mcp_id: &'a str,
 }
 
+/// Why a capability token was or was not accepted.
+///
+/// `Expired` is deliberately distinct from the invalid shapes: an expired
+/// token still proves the runtime minted it for exactly this scope, so the
+/// caller may consult durable session state before rejecting. The invalid
+/// shapes prove nothing and must always reject.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum McpCapabilityTokenValidation {
+    Valid,
+    /// Signature and scope verified; the embedded expiry is in the past.
+    Expired,
+    /// Missing parts, undecodable payload, or signature mismatch.
+    InvalidSignature,
+    /// Authentic token bound to a different workspace, session, or product.
+    ScopeMismatch,
+}
+
+impl McpCapabilityTokenValidation {
+    pub fn is_valid(self) -> bool {
+        matches!(self, Self::Valid)
+    }
+}
+
 #[derive(Clone)]
 pub struct McpCapabilityTokenIssuer {
     secret_path: PathBuf,
@@ -152,44 +175,55 @@ impl McpCapabilityTokenIssuer {
         &self,
         token: &str,
         scope: ProductMcpCapabilityScope<'_>,
-    ) -> anyhow::Result<bool> {
+    ) -> anyhow::Result<McpCapabilityTokenValidation> {
+        self.validate_product_mcp_token_at(token, scope, chrono::Utc::now().timestamp())
+    }
+
+    /// Validation against an injected clock (epoch seconds), so expiry
+    /// branches are testable without sleeping past a real TTL.
+    pub fn validate_product_mcp_token_at(
+        &self,
+        token: &str,
+        scope: ProductMcpCapabilityScope<'_>,
+        now_epoch_seconds: i64,
+    ) -> anyhow::Result<McpCapabilityTokenValidation> {
         let secret = self.load_or_create_secret()?;
         let mut parts = token.split('.');
         let Some(payload_encoded) = parts.next() else {
-            return Ok(false);
+            return Ok(McpCapabilityTokenValidation::InvalidSignature);
         };
         let Some(signature_encoded) = parts.next() else {
-            return Ok(false);
+            return Ok(McpCapabilityTokenValidation::InvalidSignature);
         };
         if parts.next().is_some() {
-            return Ok(false);
+            return Ok(McpCapabilityTokenValidation::InvalidSignature);
         }
 
         let expected = self.sign(&secret, payload_encoded.as_bytes());
         let Ok(provided) = URL_SAFE_NO_PAD.decode(signature_encoded) else {
-            return Ok(false);
+            return Ok(McpCapabilityTokenValidation::InvalidSignature);
         };
         if expected.as_slice().ct_eq(provided.as_slice()).unwrap_u8() != 1 {
-            return Ok(false);
+            return Ok(McpCapabilityTokenValidation::InvalidSignature);
         }
 
         let Ok(payload_json) = URL_SAFE_NO_PAD.decode(payload_encoded) else {
-            return Ok(false);
+            return Ok(McpCapabilityTokenValidation::InvalidSignature);
         };
         let Ok(payload) = serde_json::from_slice::<ProductCapabilityTokenPayload>(&payload_json)
         else {
-            return Ok(false);
+            return Ok(McpCapabilityTokenValidation::InvalidSignature);
         };
         if payload.workspace_id != scope.workspace_id
             || payload.session_id != scope.session_id
             || payload.product_mcp_id != scope.product_mcp_id
         {
-            return Ok(false);
+            return Ok(McpCapabilityTokenValidation::ScopeMismatch);
         }
-        if payload.exp < chrono::Utc::now().timestamp() {
-            return Ok(false);
+        if payload.exp < now_epoch_seconds {
+            return Ok(McpCapabilityTokenValidation::Expired);
         }
-        Ok(true)
+        Ok(McpCapabilityTokenValidation::Valid)
     }
 
     fn load_or_create_secret(&self) -> anyhow::Result<Vec<u8>> {
@@ -324,29 +358,108 @@ mod tests {
             })
             .unwrap();
 
-        assert!(issuer
-            .validate_product_mcp_token(
-                &token,
-                ProductMcpCapabilityScope {
-                    workspace_id: "workspace-1",
-                    session_id: "session-1",
-                    product_mcp_id: "reviews",
-                },
-            )
-            .unwrap());
-        assert!(!issuer
-            .validate_product_mcp_token(
-                &token,
-                ProductMcpCapabilityScope {
-                    workspace_id: "workspace-1",
-                    session_id: "session-1",
-                    product_mcp_id: "subagents",
-                },
-            )
-            .unwrap());
+        assert_eq!(
+            issuer
+                .validate_product_mcp_token(
+                    &token,
+                    ProductMcpCapabilityScope {
+                        workspace_id: "workspace-1",
+                        session_id: "session-1",
+                        product_mcp_id: "reviews",
+                    },
+                )
+                .unwrap(),
+            McpCapabilityTokenValidation::Valid,
+        );
+        assert_eq!(
+            issuer
+                .validate_product_mcp_token(
+                    &token,
+                    ProductMcpCapabilityScope {
+                        workspace_id: "workspace-1",
+                        session_id: "session-1",
+                        product_mcp_id: "subagents",
+                    },
+                )
+                .unwrap(),
+            McpCapabilityTokenValidation::ScopeMismatch,
+        );
         assert!(!issuer
             .validate_workspace_session_token(&token, "workspace-1", "session-1")
             .unwrap());
+
+        let _ = std::fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn product_token_expiry_is_judged_against_the_injected_clock() {
+        let home = runtime_home("product-clock");
+        let ttl_seconds = 60 * 60 * 12;
+        let issuer = McpCapabilityTokenIssuer::new(
+            home.clone(),
+            "product-clock.key",
+            McpCapabilityTokenSignature::HmacSha256,
+            ttl_seconds,
+        );
+        let scope = ProductMcpCapabilityScope {
+            workspace_id: "workspace-1",
+            session_id: "session-1",
+            product_mcp_id: "workspace",
+        };
+
+        let minted_at = chrono::Utc::now().timestamp();
+        let token = issuer.mint_product_mcp_token(scope.clone()).unwrap();
+
+        assert_eq!(
+            issuer
+                .validate_product_mcp_token_at(&token, scope.clone(), minted_at + ttl_seconds - 60)
+                .unwrap(),
+            McpCapabilityTokenValidation::Valid,
+        );
+        // Thirty hours in: the fixed TTL is long past, and the verdict says
+        // exactly that instead of collapsing into a generic rejection.
+        assert_eq!(
+            issuer
+                .validate_product_mcp_token_at(&token, scope, minted_at + 60 * 60 * 30)
+                .unwrap(),
+            McpCapabilityTokenValidation::Expired,
+        );
+
+        let _ = std::fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn tampered_product_tokens_are_invalid_not_expired() {
+        let home = runtime_home("product-tamper");
+        let issuer = McpCapabilityTokenIssuer::new(
+            home.clone(),
+            "product-tamper.key",
+            McpCapabilityTokenSignature::HmacSha256,
+            60,
+        );
+        let scope = ProductMcpCapabilityScope {
+            workspace_id: "workspace-1",
+            session_id: "session-1",
+            product_mcp_id: "workspace",
+        };
+        let token = issuer.mint_product_mcp_token(scope.clone()).unwrap();
+        let (payload, signature) = token.split_once('.').unwrap();
+
+        for tampered in [
+            String::new(),
+            "payload-only".to_string(),
+            format!("{token}.extra"),
+            format!("{payload}.not-base64!"),
+            format!("{payload}A.{signature}"),
+        ] {
+            assert_eq!(
+                issuer
+                    .validate_product_mcp_token(&tampered, scope.clone())
+                    .unwrap(),
+                McpCapabilityTokenValidation::InvalidSignature,
+                "token {tampered:?} should be invalid",
+            );
+        }
 
         let _ = std::fs::remove_dir_all(home);
     }

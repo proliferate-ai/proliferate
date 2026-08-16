@@ -8,10 +8,10 @@ use crate::domains::sessions::mcp_bindings::product_registry::{
     ProductMcpEndpointHandler, ProductMcpEndpointHandlerAdapter,
 };
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
+use crate::integrations::mcp::capability_token::McpCapabilityTokenValidation;
 use crate::integrations::mcp::product_server::{
     ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDefinition,
     ProductMcpEndpointOperation, ProductMcpRequestContext, ProductMcpServer,
-    ProductMcpTokenValidation,
 };
 
 struct TestProductMcpServer;
@@ -28,8 +28,8 @@ impl ProductMcpServer for TestProductMcpServer {
         &self,
         _header: ProductMcpAuthHeader<'_>,
         _request: &ProductMcpRequestContext,
-    ) -> anyhow::Result<ProductMcpTokenValidation> {
-        Ok(ProductMcpTokenValidation::Valid)
+    ) -> anyhow::Result<McpCapabilityTokenValidation> {
+        Ok(McpCapabilityTokenValidation::Valid)
     }
 
     fn resolve_context(

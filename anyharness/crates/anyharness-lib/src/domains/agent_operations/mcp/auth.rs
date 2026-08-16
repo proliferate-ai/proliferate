@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 
-use crate::integrations::mcp::capability_token::McpCapabilityTokenSignature;
+use crate::integrations::mcp::capability_token::{
+    McpCapabilityTokenSignature, McpCapabilityTokenValidation,
+};
 use crate::integrations::mcp::product_server::{
-    ProductMcpAuth, ProductMcpAuthHeader, ProductMcpRequestContext, ProductMcpTokenValidation,
+    ProductMcpAuth, ProductMcpAuthHeader, ProductMcpRequestContext,
 };
 
 const SECRET_FILE_NAME: &str = "workspace-mcp-token.key";
@@ -36,7 +38,7 @@ impl WorkspaceMcpAuth {
         &self,
         header: ProductMcpAuthHeader<'_>,
         request: &ProductMcpRequestContext,
-    ) -> anyhow::Result<ProductMcpTokenValidation> {
+    ) -> anyhow::Result<McpCapabilityTokenValidation> {
         self.inner.validate_capability_header(header, request)
     }
 }
