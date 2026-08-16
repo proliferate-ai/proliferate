@@ -1105,7 +1105,13 @@ test.describe("transcript scroll physics", () => {
     await drive(page, "startScrollTrace");
     await drive(page, "streamThoughtStop");
     await drive(page, "streamToolCall");
-    await settle(page, 80);
+    // Longer settle than the other phases (default 350ms, not the 80ms used
+    // for pure lifecycle transitions): the tool row's estimate-to-measured
+    // convergence must finish resolving INSIDE this phase's own trace
+    // window, not bleed into the next phase's tight-tolerance window. CI
+    // round 2 caught exactly that: an 80ms settle here let the correction
+    // land one frame late, inside the following (tight-bound) prose trace.
+    await settle(page);
     const afterTool = await metricsAfterFrame(page);
     expect(afterTool.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
     assertNoBackwardBounce(
