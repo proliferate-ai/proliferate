@@ -4,6 +4,7 @@ import { logicalWorkspaceRelatedIds } from "#product/lib/domain/workspaces/cloud
 
 export interface HotReopenSessionSlotSnapshot {
   sessionId: string;
+  materializedSessionId?: string | null;
   workspaceId: string | null;
   transcriptHydrated: boolean;
   events: readonly unknown[];
@@ -48,23 +49,38 @@ export function resolveHotReopenCandidate(input: {
   isPendingSessionId: (sessionId: string) => boolean;
   hiddenSessionIds?: ReadonlySet<string>;
 }): HotReopenCandidate | null {
-  const slotFor = (sessionId: string | null | undefined) =>
-    sessionId ? input.sessionSlots[sessionId] ?? null : null;
+  // Last-viewed bookkeeping stores materialized session ids (client ids are
+  // transient and never persisted), but a session created in this app run
+  // keeps its slot keyed by the client session id. Resolve through the slot's
+  // materialized id so a remembered id still finds its slot; otherwise the
+  // last-viewed candidate silently loses to an arbitrary cached slot.
+  const slotFor = (sessionId: string | null | undefined) => {
+    if (!sessionId) {
+      return null;
+    }
+    return input.sessionSlots[sessionId]
+      ?? Object.values(input.sessionSlots).find(
+        (slot) => slot.materializedSessionId === sessionId,
+      )
+      ?? null;
+  };
   const toCandidate = (
     sessionId: string | null | undefined,
     source: HotReopenCandidate["source"],
   ): HotReopenCandidate | null => {
+    const slot = slotFor(sessionId);
     // Implicit sources must not resurrect a session whose tab the user closed:
     // a hidden session gets no tab, so activating it strands the shell on the
-    // chat-shell surface with the composer armed at an invisible session.
+    // chat-shell surface with the composer armed at an invisible session. The
+    // hidden set holds slot keys while a remembered id may be the materialized
+    // alias, so check every id the session is known by.
     if (
       source !== "initial_active"
-      && sessionId
-      && input.hiddenSessionIds?.has(sessionId)
+      && [sessionId, slot?.sessionId, slot?.materializedSessionId]
+        .some((id) => id && input.hiddenSessionIds?.has(id))
     ) {
       return null;
     }
-    const slot = slotFor(sessionId);
     return isHotReopenEligibleSessionSlot(
       slot,
       input.resolvedWorkspaceId,
