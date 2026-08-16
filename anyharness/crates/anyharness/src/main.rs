@@ -17,7 +17,16 @@ async fn main() -> Result<()> {
 
     let result = match args.command {
         cli::Commands::Serve(serve_args) => commands::serve::run(serve_args).await,
-        cli::Commands::InstallAgents(install_args) => commands::install_agents::run(install_args),
+        // `install_agents::run` is synchronous and fetches artifacts via
+        // `reqwest::blocking`, which drops its own runtime. Under `#[tokio::main]`
+        // that must happen off the async runtime or it panics ("cannot drop a
+        // runtime in a context where blocking is not allowed").
+        cli::Commands::InstallAgents(install_args) => {
+            anyharness_lib::domains::agents::installer::off_runtime::run_installer_off_runtime(
+                move || commands::install_agents::run(install_args),
+            )
+            .await
+        }
         cli::Commands::PrintOpenapi => commands::print_openapi::run(),
         cli::Commands::CatalogProbe(probe_args) => commands::catalog_probe::run(probe_args).await,
     };

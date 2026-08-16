@@ -6,6 +6,7 @@ mod lock;
 pub(crate) mod managed_npm;
 pub mod manifest;
 mod npm;
+pub mod off_runtime;
 mod pinned;
 pub mod progress;
 pub mod reconcile;
