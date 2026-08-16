@@ -98,6 +98,26 @@ describe("hot-session-ingest-manager", () => {
     expect(deps.ensureSessionStreamConnected).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps a live stream open when its target is demoted to background_running", async () => {
+    putSessionRecord(createEmptySessionRecord("session-a", "codex", {
+      workspaceId: "workspace-1",
+    }));
+    const deps = depsWithEnsure(async () => {
+      patchSessionRecord("session-a", { streamConnectionState: "open" });
+    });
+
+    reconcileHotSessions([target("session-a", "selected")], deps);
+    await Promise.resolve();
+
+    reconcileHotSessions([target("session-a", "background_running")], deps);
+    await Promise.resolve();
+
+    expect(deps.closeSessionSlotStream).not.toHaveBeenCalled();
+    expect(deps.ensureSessionStreamConnected).toHaveBeenCalledTimes(1);
+    expect(useSessionIngestStore.getState().freshnessByClientSessionId["session-a"]?.freshness)
+      .toBe("current");
+  });
+
   it("hydrates an existing open-tab stream when it becomes selected", async () => {
     putSessionRecord(createEmptySessionRecord("session-a", "codex", {
       workspaceId: "workspace-1",

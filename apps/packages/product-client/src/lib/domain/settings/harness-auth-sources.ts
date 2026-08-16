@@ -3,6 +3,10 @@ import type {
   AgentAuthSource,
   AgentAuthSurface,
 } from "@proliferate/cloud-sdk";
+import {
+  isGatewayCapableHarness as registryIsGatewayCapableHarness,
+  isMultiSourceHarness as registryIsMultiSourceHarness,
+} from "#product/lib/domain/agents/bundled-agent-registry";
 
 // The three auth methods a harness surface can use. Single-source harnesses
 // hold exactly one (radio); multi-source (opencode) may combine gateway +
@@ -18,22 +22,21 @@ export function isValidEnvVarName(name: string): boolean {
 }
 
 // Harnesses that may keep more than one enabled source at once (contract §2).
-// Everything else is single-source (gateway XOR one api_key row).
+// Everything else is single-source (gateway XOR one api_key row). Derived from
+// registry.json's authCardinality (the single allow-list authority, agent-auth.md
+// FR-4) via the bundled registry copy — no re-literalled cursor/opencode set.
 export function isMultiSourceHarness(harnessKind: string): boolean {
-  return harnessKind === "opencode";
+  return registryIsMultiSourceHarness(harnessKind);
 }
 
-// Mirror of the server's GATEWAY_CAPABLE_HARNESSES (selection_rules.py) —
-// a positive allow-list, not a cursor-shaped negative check, so a future
-// harness with no gateway recipe fails closed (omitted here) by default
-// instead of silently inheriting gateway capability. cursor has no gateway
-// recipe (agent-auth.md's per-harness recipe table — "typed refusal, no
-// gateway route exists for cursor"), so it never offers the gateway method
+// The gateway-capable allow-list, derived from registry.json (an auth slot with
+// id "gateway" present) via the bundled registry copy. A positive allow-list,
+// so a future harness with no gateway recipe fails closed by default. cursor has
+// no gateway recipe (agent-auth.md's per-harness recipe table — "typed refusal,
+// no gateway route exists for cursor"), so it never offers the gateway method
 // and never carries a gateway source (see buildDesiredSources).
-const GATEWAY_CAPABLE_HARNESSES = new Set(["claude", "codex", "opencode", "grok"]);
-
 export function isGatewayCapableHarness(harnessKind: string): boolean {
-  return GATEWAY_CAPABLE_HARNESSES.has(harnessKind);
+  return registryIsGatewayCapableHarness(harnessKind);
 }
 
 export interface EditableApiKeyRow {

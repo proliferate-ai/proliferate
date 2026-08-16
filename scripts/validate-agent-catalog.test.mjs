@@ -57,7 +57,7 @@ function fixture() {
   };
   const registry = {
     registryVersion: "registry.1",
-    agents: [{ kind: "claude" }],
+    agents: [{ kind: "claude", authCardinality: "single" }],
   };
   const snapshot = {
     agentKind: "claude",

@@ -2,7 +2,7 @@ import { SettingsSection } from "#product/primitives/patterns/settings/SettingsS
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import { Button } from "#product/primitives/Button";
 import { ProgressBar } from "#product/primitives/ProgressBar";
-import { SkeletonBlock, shimmerDelay } from "#product/primitives/Skeleton";
+import { LoadingBoundary } from "#product/primitives/LoadingBoundary";
 import type { BillingUnitBalancePresentation } from "#product/lib/domain/settings/billing-settings-presentation";
 
 export function BillingUsageUnitsSection({
@@ -43,12 +43,17 @@ function BillingUnitPoolRow({
   const percent = balance.availablePercent ?? 0;
 
   if (balance.state === "loading") {
+    // Class C big-surface treatment (UX Latency + Transitions ADR §4 Rung 4,
+    // FR-1): retired the placeholder skeleton. The row's label + description
+    // are the stable shell; the balance slot shows nothing until the pool
+    // balance resolves.
     return (
       <SettingsRow label={balance.title} description={balance.description}>
-        <div className="flex flex-col gap-1.5" role="status" aria-label={`Loading ${balance.title}`}>
-          <SkeletonBlock className="h-3 w-32" style={shimmerDelay(0)} />
-          <SkeletonBlock className="h-1 w-24 rounded-full" style={shimmerDelay(1)} />
-        </div>
+        <LoadingBoundary
+          state="pending"
+          diagnostics={{ flow: "billing_unit_pool" }}
+          treatment={null}
+        />
       </SettingsRow>
     );
   }

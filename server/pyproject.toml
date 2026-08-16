@@ -41,6 +41,7 @@ dev = [
     "mypy==1.20.2",
     "ruff>=0.16.1",
     "sqlalchemy[mypy]>=2.0.0",
+    "types-PyYAML>=6.0.12",
 ]
 
 [tool.ruff]
@@ -112,6 +113,7 @@ module = [
     "proliferate.server.cloud.repos.models",
     "proliferate.server.cloud.integrations.action_approvals.models",
     "proliferate.server.support.models",
+    "proliferate.server.cloud.agent_gateway.models",
     "proliferate.config",
 ]
 disallow_any_explicit = false

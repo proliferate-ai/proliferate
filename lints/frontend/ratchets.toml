@@ -130,8 +130,8 @@ reason = "shared ordered-readiness continuation host for Cloud registration and 
 
 [[frontend_structure]]
 path = "apps/packages/product-client/src/hooks/sessions/workflows/session-replacement-tombstones.ts"
-max_lines = 408
-reason = "async ProductStorage hydration added to the in-memory tombstone model"
+max_lines = 414
+reason = "async ProductStorage hydration added to the in-memory tombstone model; R14 tombstone-commit listener notify wiring"
 
 [[frontend_structure]]
 path = "apps/packages/product-client/src/hooks/sessions/workflows/use-session-creation-actions.ts"

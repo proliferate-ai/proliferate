@@ -3,6 +3,7 @@ import {
   useAgentGatewayEnrollment,
   useAuthSelections,
 } from "@proliferate/cloud-sdk-react";
+import { isFeatureEnabled } from "#product/config/feature-flags";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import {
   AUTH_SETUP_GRACE_MS,
@@ -54,8 +55,15 @@ export function useAuthSetupOnboardingStep(): AuthSetupStepState {
   const settled = useAuthSetupOnboardingStore((store) => store.settled);
   const markSettled = useAuthSetupOnboardingStore((store) => store.markSettled);
 
+  // rung 7: the evidence-bound card (agentAuthEvidencePanes) replaces this
+  // timer step. With the flag ON this hook goes dormant — no watching, no
+  // polling, no latch write — and `useAuthSetupOnboardingEvidence` owns the
+  // card. With the flag OFF (the default) everything below is unchanged.
+  const evidenceOn = isFeatureEnabled("agentAuthEvidencePanes");
+
   const watching =
-    settled === null
+    !evidenceOn
+    && settled === null
     && adoptedHarnessKinds !== null
     && adoptedHarnessKinds.length > 0;
 
@@ -91,8 +99,9 @@ export function useAuthSetupOnboardingStep(): AuthSetupStepState {
     enrollmentQuery.data?.syncStatus
     ?? (enrollmentQuery.isError ? "none" : undefined);
 
-  const state: AuthSetupStepState =
-    settled
+  const state: AuthSetupStepState = evidenceOn
+    ? "hidden"
+    : settled
     ?? resolveAuthSetupStep({
       adoptedHarnessKinds,
       selections: selectionsQuery.data,

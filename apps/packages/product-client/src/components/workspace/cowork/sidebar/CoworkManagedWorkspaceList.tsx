@@ -1,5 +1,5 @@
 import type { CoworkManagedWorkspaceSummary } from "@anyharness/sdk";
-import { SkeletonBlock } from "#product/primitives/Skeleton";
+import { LoadingBoundary } from "#product/primitives/LoadingBoundary";
 import { SidebarRowSurface } from "#product/primitives/patterns/sidebar/SidebarRowSurface";
 
 function workspaceLabel(workspace: CoworkManagedWorkspaceSummary, index: number): string {
@@ -52,17 +52,17 @@ export function CoworkManagedWorkspaceList({
   selectedWorkspaceId,
   onOpenWorkspace,
 }: CoworkManagedWorkspaceListProps) {
-  if (isLoading) {
-    return (
-      <div className="flex h-[30px] items-center gap-2 pl-6 pr-2" aria-label="Loading coding workspaces" role="status">
-        <SkeletonBlock className="h-3 w-36 bg-surface-control" />
-        <span className="sr-only">Loading coding workspaces</span>
-      </div>
-    );
-  }
-
+  // Class C big-surface treatment (UX Latency + Transitions ADR §4 Rung 4,
+  // FR-1): this nested list retired its single-row skeleton. The parent
+  // disclosure row is the stable shell, so the list shows nothing until the
+  // Class C show-delay elapses.
   return (
-    <div className="flex min-w-0 flex-col">
+    <LoadingBoundary
+      state={isLoading ? "pending" : "ready"}
+      diagnostics={{ flow: "cowork_managed_workspaces" }}
+      treatment={null}
+      className="flex min-w-0 flex-col"
+    >
       {workspaces.map((workspace, index) => (
         <CoworkManagedWorkspaceBlock
           key={workspace.ownershipId}
@@ -72,6 +72,6 @@ export function CoworkManagedWorkspaceList({
           onOpenWorkspace={onOpenWorkspace}
         />
       ))}
-    </div>
+    </LoadingBoundary>
   );
 }

@@ -16,7 +16,7 @@ use super::super::test_support::{gateway_state, TempRuntimeHome};
 use super::{
     HttpTier1TrialProbe, Tier1TrialCheck, Tier1TrialEngine, Tier1TrialProbe, Tier1TrialVerdict,
 };
-use crate::domains::agents::auth_state::Tier1TrialFact;
+use crate::domains::agents::auth_state::{GatewayHealth, Tier1TrialFact};
 
 /// A stub check seam that answers with a fixed verdict, so the engine's verdict
 /// mapping and recording are testable without any network.
@@ -38,9 +38,9 @@ struct KeyedProbe {
 impl Tier1TrialProbe for KeyedProbe {
     async fn check(&self, _base_url: &str, key: &str) -> Tier1TrialCheck {
         if key == self.green_key {
-            Tier1TrialCheck::Green
+            Tier1TrialCheck::Green { model_ids: vec![] }
         } else {
-            Tier1TrialCheck::Inconclusive("rotated key not accepted here".into())
+            Tier1TrialCheck::Unreachable("rotated key not accepted here".into())
         }
     }
 }
@@ -54,7 +54,7 @@ struct CountingProbe {
 impl Tier1TrialProbe for CountingProbe {
     async fn check(&self, _base_url: &str, _key: &str) -> Tier1TrialCheck {
         self.checks.fetch_add(1, Ordering::SeqCst);
-        Tier1TrialCheck::Green
+        Tier1TrialCheck::Green { model_ids: vec![] }
     }
 }
 
@@ -70,7 +70,7 @@ impl Tier1TrialProbe for PanicOnceProbe {
         if self.checks.fetch_add(1, Ordering::SeqCst) == 0 {
             panic!("trial task blew up mid-check");
         }
-        Tier1TrialCheck::Green
+        Tier1TrialCheck::Green { model_ids: vec![] }
     }
 }
 
@@ -96,7 +96,7 @@ async fn wait_until(mut predicate: impl FnMut() -> bool) {
 
 #[tokio::test]
 async fn a_green_check_records_a_green_verdict_with_a_fresh_age() {
-    let engine = engine_with(Tier1TrialCheck::Green);
+    let engine = engine_with(Tier1TrialCheck::Green { model_ids: vec![] });
     engine
         .run_trial("claude", "http://gw".into(), "sk-key".into())
         .await;
@@ -127,7 +127,7 @@ async fn a_401_check_records_an_expired_verdict() {
 
 #[tokio::test]
 async fn an_inconclusive_check_records_nothing() {
-    let engine = engine_with(Tier1TrialCheck::Inconclusive("gateway unreachable".into()));
+    let engine = engine_with(Tier1TrialCheck::Unreachable("gateway unreachable".into()));
     engine
         .run_trial("claude", "http://gw".into(), "sk-key".into())
         .await;
@@ -142,7 +142,7 @@ fn the_flag_gates_the_engine() {
     let disabled = Tier1TrialEngine::with_probe(
         false,
         std::env::temp_dir(),
-        Arc::new(StubProbe(Tier1TrialCheck::Green)),
+        Arc::new(StubProbe(Tier1TrialCheck::Green { model_ids: vec![] })),
     );
     assert!(!disabled.enabled());
     // A poke on a disabled engine records nothing and never touches the network.
@@ -154,7 +154,7 @@ fn the_flag_gates_the_engine() {
 #[tokio::test]
 async fn poking_without_a_gateway_source_clears_a_stale_verdict() {
     // A green verdict is on the books...
-    let engine = Arc::new(engine_with(Tier1TrialCheck::Green));
+    let engine = Arc::new(engine_with(Tier1TrialCheck::Green { model_ids: vec![] }));
     engine
         .run_trial("claude", "https://gw".into(), "sk-key".into())
         .await;
@@ -303,7 +303,7 @@ fn one_shot_server(status_line: &'static str, body: &'static str) -> String {
 async fn http_probe_maps_200_to_green() {
     let base_url = one_shot_server("HTTP/1.1 200 OK", "{\"data\":[]}");
     let check = HttpTier1TrialProbe.check(&base_url, "sk-key").await;
-    assert_eq!(check, Tier1TrialCheck::Green);
+    assert_eq!(check, Tier1TrialCheck::Green { model_ids: vec![] });
 }
 
 #[tokio::test]
@@ -311,4 +311,187 @@ async fn http_probe_maps_401_to_expired() {
     let base_url = one_shot_server("HTTP/1.1 401 Unauthorized", "");
     let check = HttpTier1TrialProbe.check(&base_url, "sk-bad").await;
     assert_eq!(check, Tier1TrialCheck::Expired);
+}
+
+#[tokio::test]
+async fn http_probe_maps_500_to_other_status() {
+    let base_url = one_shot_server("HTTP/1.1 500 Internal Server Error", "");
+    let check = HttpTier1TrialProbe.check(&base_url, "sk-key").await;
+    assert_eq!(check, Tier1TrialCheck::OtherStatus(500));
+}
+
+// -- Gateway-health verdicts (ADR FR-3), shared off the trial's one fetch. -----
+
+/// A health-only engine (trial off, health on) driven by a stub check.
+fn health_engine_with(check: Tier1TrialCheck) -> Tier1TrialEngine {
+    Tier1TrialEngine::with_probe(false, unique_home(), Arc::new(StubProbe(check)))
+        .with_health(true)
+}
+
+#[tokio::test]
+async fn a_2xx_first_observation_reads_reachable() {
+    let engine = health_engine_with(Tier1TrialCheck::Green {
+        model_ids: vec!["claude-sonnet".into(), "claude-opus".into()],
+    });
+    engine
+        .run_trial("claude", "http://gw".into(), "sk-key".into())
+        .await;
+    assert_eq!(
+        engine.gateway_health("claude").map(|r| r.health),
+        Some(GatewayHealth::Reachable),
+    );
+    // Health-only: no trial verdict is recorded even on a green fetch.
+    assert!(engine.result("claude").is_none());
+}
+
+#[tokio::test]
+async fn a_changed_model_list_reads_models_drifted() {
+    let engine = Tier1TrialEngine::with_probe(
+        false,
+        unique_home(),
+        Arc::new(DriftingProbe {
+            checks: AtomicUsize::new(0),
+        }),
+    )
+    .with_health(true);
+
+    // First observation establishes the baseline: Reachable.
+    engine
+        .run_trial("claude", "http://gw".into(), "sk-key".into())
+        .await;
+    assert_eq!(
+        engine.gateway_health("claude").map(|r| r.health),
+        Some(GatewayHealth::Reachable),
+    );
+
+    // Second observation sees a different model list: drift.
+    engine
+        .run_trial("claude", "http://gw".into(), "sk-key".into())
+        .await;
+    assert_eq!(
+        engine.gateway_health("claude").map(|r| r.health),
+        Some(GatewayHealth::ModelsDrifted),
+    );
+}
+
+#[tokio::test]
+async fn a_401_reads_unauthorized() {
+    let engine = health_engine_with(Tier1TrialCheck::Expired);
+    engine
+        .run_trial("claude", "http://gw".into(), "sk-key".into())
+        .await;
+    assert_eq!(
+        engine.gateway_health("claude").map(|r| r.health),
+        Some(GatewayHealth::Unauthorized),
+    );
+}
+
+#[tokio::test]
+async fn a_network_error_reads_unreachable() {
+    let engine = health_engine_with(Tier1TrialCheck::Unreachable("timeout".into()));
+    engine
+        .run_trial("claude", "http://gw".into(), "sk-key".into())
+        .await;
+    assert_eq!(
+        engine.gateway_health("claude").map(|r| r.health),
+        Some(GatewayHealth::Unreachable),
+    );
+}
+
+#[tokio::test]
+async fn a_surprising_status_records_no_health_verdict() {
+    let engine = health_engine_with(Tier1TrialCheck::OtherStatus(500));
+    engine
+        .run_trial("claude", "http://gw".into(), "sk-key".into())
+        .await;
+    assert!(
+        engine.gateway_health("claude").is_none(),
+        "a reachable-but-surprising status says nothing about health"
+    );
+}
+
+#[test]
+fn both_flags_off_gates_the_engine() {
+    let engine = Arc::new(
+        Tier1TrialEngine::with_probe(
+            false,
+            std::env::temp_dir(),
+            Arc::new(StubProbe(Tier1TrialCheck::Green { model_ids: vec![] })),
+        )
+        .with_health(false),
+    );
+    engine.poke("claude");
+    assert!(engine.result("claude").is_none());
+    assert!(engine.gateway_health("claude").is_none());
+}
+
+#[tokio::test]
+async fn a_rotated_key_resets_the_health_baseline_instead_of_drifting() {
+    // The model list is a function of the KEY, so the same key is stable (no drift)
+    // and a rotated key presents a genuinely different list. Without the baseline
+    // reset on rotation, that different list would false-pulse ModelsDrifted; with
+    // it, the rotated key starts a fresh Reachable baseline.
+    let engine = Tier1TrialEngine::with_probe(
+        false,
+        unique_home(),
+        Arc::new(KeyedModelsProbe),
+    )
+    .with_health(true);
+
+    // Key A: first observation is the baseline.
+    engine
+        .run_trial("claude", "http://gw".into(), "key-a".into())
+        .await;
+    assert_eq!(
+        engine.gateway_health("claude").map(|r| r.health),
+        Some(GatewayHealth::Reachable),
+    );
+
+    // Key A again: same list, stable baseline, still Reachable.
+    engine
+        .run_trial("claude", "http://gw".into(), "key-a".into())
+        .await;
+    assert_eq!(
+        engine.gateway_health("claude").map(|r| r.health),
+        Some(GatewayHealth::Reachable),
+    );
+
+    // Key B (a rotation): a different list, but the rotation resets the baseline,
+    // so this reads Reachable (fresh) rather than ModelsDrifted.
+    engine
+        .run_trial("claude", "http://gw".into(), "key-b".into())
+        .await;
+    assert_eq!(
+        engine.gateway_health("claude").map(|r| r.health),
+        Some(GatewayHealth::Reachable),
+        "a rotated key must start a fresh baseline, not drift against the old key",
+    );
+}
+
+/// Green with a model list derived from the KEY, so a given key is stable and a
+/// different key presents a different list — the shape a rotation-reset test needs.
+struct KeyedModelsProbe;
+
+#[async_trait::async_trait]
+impl Tier1TrialProbe for KeyedModelsProbe {
+    async fn check(&self, _base_url: &str, key: &str) -> Tier1TrialCheck {
+        Tier1TrialCheck::Green {
+            model_ids: vec![format!("model-for-{key}")],
+        }
+    }
+}
+
+/// Green with a different model list on each successive check, to exercise drift.
+struct DriftingProbe {
+    checks: AtomicUsize,
+}
+
+#[async_trait::async_trait]
+impl Tier1TrialProbe for DriftingProbe {
+    async fn check(&self, _base_url: &str, _key: &str) -> Tier1TrialCheck {
+        let n = self.checks.fetch_add(1, Ordering::SeqCst);
+        Tier1TrialCheck::Green {
+            model_ids: vec![format!("model-{n}")],
+        }
+    }
 }

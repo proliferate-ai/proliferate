@@ -45,6 +45,7 @@ from proliferate.server.cloud.agent_gateway.models import (
     enrollment_payload,
     org_agent_policy_payload,
     org_agent_policy_violation_payload,
+    verification_verdict_payload,
 )
 from proliferate.server.cloud.errors import CloudApiError
 
@@ -260,10 +261,12 @@ async def get_agent_gateway_capabilities_endpoint(
         db,
         user_id=user.id,
     )
+    verdicts = await service.get_verification_verdicts(db, user_id=user.id)
     return AgentGatewayCapabilitiesResponse(
         gateway_enabled=gateway_enabled,
         public_base_url=public_base_url,
         enrollment_status=enrollment_status,
+        verifications=[verification_verdict_payload(record) for record in verdicts],
     )
 
 

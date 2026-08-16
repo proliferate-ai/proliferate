@@ -9,6 +9,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { HomeOnboardingCards } from "#product/components/home/screen/HomeOnboardingCards";
 import { HOME_SCREEN_LABELS } from "#product/copy/home/home-screen-copy";
 import type { HomeOnboardingCardModel } from "#product/lib/domain/home/home-screen";
+import type {
+  AuthSetupEvidence,
+  OnboardingAgentBadge,
+} from "#product/lib/domain/agents/auth-setup-badges";
 
 function card(id: HomeOnboardingCardModel["id"]): HomeOnboardingCardModel {
   return {
@@ -30,6 +34,29 @@ function renderCards(
       {...props}
     />,
   );
+}
+
+function badge(
+  overrides: Partial<OnboardingAgentBadge> = {},
+): OnboardingAgentBadge {
+  return {
+    harnessKind: "claude",
+    displayName: "Claude Code",
+    phase: "ready",
+    label: "Usable",
+    tone: "success",
+    pending: false,
+    terminal: true,
+    launchable: true,
+    actionLabel: null,
+    nextAttemptAt: null,
+    lastFailureDetail: null,
+    ...overrides,
+  };
+}
+
+function evidence(badges: OnboardingAgentBadge[]): AuthSetupEvidence {
+  return { badges, done: false };
 }
 
 afterEach(() => {
@@ -59,6 +86,20 @@ describe("HomeOnboardingCards auth-setup step", () => {
     expect(container.innerHTML).toBe("");
   });
 
+  it("keeps the 3-card cap with the evidence card leading", () => {
+    renderCards({
+      authSetupEvidence: evidence([badge({ harnessKind: "claude" })]),
+      cards: [
+        card("add-repository"),
+        card("agent-defaults"),
+        card("repository-settings"),
+      ],
+    });
+    expect(screen.getByText("title-add-repository")).toBeTruthy();
+    expect(screen.getByText("title-agent-defaults")).toBeTruthy();
+    expect(screen.queryByText("title-repository-settings")).toBeNull();
+  });
+
   it("keeps the 3-card cap with the setting-up card leading", () => {
     renderCards({
       authSetup: "settingUp",
@@ -73,5 +114,110 @@ describe("HomeOnboardingCards auth-setup step", () => {
     expect(screen.getByText("title-add-repository")).toBeTruthy();
     expect(screen.getByText("title-agent-defaults")).toBeTruthy();
     expect(screen.queryByText("title-repository-settings")).toBeNull();
+  });
+});
+
+describe("HomeOnboardingCards evidence-bound card (rung 7)", () => {
+  it("renders the evidence card with a badge per adopted agent", () => {
+    renderCards({
+      authSetupEvidence: evidence([
+        badge({ harnessKind: "claude", displayName: "Claude Code", label: "Usable" }),
+        badge({
+          harnessKind: "codex",
+          displayName: "Codex",
+          phase: "installing",
+          label: "Installing",
+          tone: "neutral",
+          pending: true,
+          terminal: false,
+          launchable: false,
+        }),
+      ]),
+    });
+    expect(screen.getByText("Claude Code")).toBeTruthy();
+    expect(screen.getByText("Codex")).toBeTruthy();
+    expect(screen.getByText("Usable")).toBeTruthy();
+    expect(screen.getByText("Installing")).toBeTruthy();
+  });
+
+  it("renders a next-action affordance for an actionable terminal state", () => {
+    const onOpenAgents = vi.fn();
+    renderCards({
+      authSetupEvidence: evidence([
+        badge({
+          harnessKind: "codex",
+          displayName: "Codex",
+          phase: "actionable",
+          label: "Installed",
+          tone: "neutral",
+          pending: false,
+          terminal: true,
+          launchable: false,
+          actionLabel: "Log in or paste a key",
+        }),
+      ]),
+      onOpenAgents,
+    });
+    const affordance = screen.getByText("Log in or paste a key");
+    affordance.click();
+    expect(onOpenAgents).toHaveBeenCalledTimes(1);
+  });
+
+  it("routes a null-action terminal (unsupported) to the pane fallback, never a dead end", () => {
+    renderCards({
+      authSetupEvidence: evidence([
+        badge({
+          harnessKind: "cursor",
+          displayName: "Cursor",
+          phase: "actionable",
+          label: "Unsupported",
+          tone: "neutral",
+          pending: false,
+          terminal: true,
+          launchable: false,
+          actionLabel: null,
+        }),
+      ]),
+    });
+    expect(screen.getByText(HOME_SCREEN_LABELS.authSetupOpenAgents)).toBeTruthy();
+  });
+
+  it("shows a backoff row's next attempt and failure detail VISIBLY instead of an eternal spinner", () => {
+    const future = new Date(Date.now() + 30_000).toISOString();
+    const { container } = renderCards({
+      authSetupEvidence: evidence([
+        badge({
+          harnessKind: "grok",
+          displayName: "Grok",
+          phase: "backoff",
+          label: "Unavailable",
+          tone: "warning",
+          pending: false,
+          terminal: true,
+          launchable: false,
+          actionLabel: "Top up or retry",
+          nextAttemptAt: future,
+          lastFailureDetail: "429 rate limited",
+        }),
+      ]),
+    });
+    const line = container.querySelector<HTMLElement>(
+      "[data-agent-onboarding-next-attempt]",
+    );
+    expect(line).toBeTruthy();
+    // Not sr-only: the line is visible text carrying both the countdown and
+    // the failure detail.
+    expect(line?.className).not.toContain("sr-only");
+    expect(line?.textContent).toContain("Next attempt in");
+    expect(line?.textContent).toContain("429 rate limited");
+    // A terminal backoff row shows no spinner.
+    expect(container.querySelector('[data-agent-onboarding-phase="backoff"] .animate-spin')).toBeNull();
+  });
+
+  it("renders nothing when the evidence card has no badges", () => {
+    const { container } = renderCards({
+      authSetupEvidence: { badges: [], done: false },
+    });
+    expect(container.innerHTML).toBe("");
   });
 });

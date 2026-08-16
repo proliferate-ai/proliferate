@@ -10,8 +10,8 @@ reason = "existing AnyHarness contract oversized file"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-contract/src/v1/sessions.rs"
-max_lines = 696
-reason = "existing AnyHarness contract oversized file (+caller-selected idempotent create id; stale fingerprint reduced after legacy public subagent response removal)"
+max_lines = 703
+reason = "existing AnyHarness contract oversized file (+caller-selected idempotent create id; stale fingerprint reduced after legacy public subagent response removal; +Forks ADR rung 2 caller-reserved fork child_session_id)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/api/openapi.rs"
@@ -89,9 +89,14 @@ max_lines = 1510
 reason = "existing AnyHarness oversized test file"
 
 [[max_lines]]
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/fork.rs"
+max_lines = 622
+reason = "Forks ADR rung 2 fork orchestration: access gate, item_id boundary validation, capability gate, canonical-digest idempotency (find-then-insert with a UNIQUE-constraint TOCTOU fallback that reconciles the winner), boundary resolution, durable-operation phase machine, and dispatch/start; split into fork/ per guides/domains.md when rung 3 wires targeted native dispatch"
+
+[[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs"
-max_lines = 1019
-reason = "existing AnyHarness oversized test file (launch-env tests moved to their owning module) + A9 Scope C resume/fork revoked-credentials regression tests (AgentNotReady at the common live-start seam) + a review-fix pin (unsatisfiable selection reports RouteAuth, not AgentNotReady, on resume)"
+max_lines = 1283
+reason = "existing AnyHarness oversized test file (launch-env tests moved to their owning module) + A9 Scope C resume/fork revoked-credentials regression tests (AgentNotReady at the common live-start seam) + a review-fix pin (unsatisfiable selection reports RouteAuth, not AgentNotReady, on resume) + Forks ADR rung 2 targeted-fork plumbing tests (item-less rejection, fail-closed no-child downgrade guard, idempotency conflict, unknown-outcome redispatch block, same-payload resume shared by the insert-time TOCTOU fallback)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs"

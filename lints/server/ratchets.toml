@@ -10,13 +10,13 @@ reason = "managed sandbox GitHub grant read path extends existing identity store
 
 [[max_lines]]
 path = "server/proliferate/config.py"
-max_lines = 621
-reason = "managed Cloud, GitHub App, and Workflow flags extend the centralized deployment settings surface; split pending; +7: publisher-lane agent_catalog_artifact_base_url/agent_catalog_channel settings (Update Flow ADR, FR-1)"
+max_lines = 627
+reason = "managed Cloud, GitHub App, and Workflow flags extend the centralized deployment settings surface; split pending; +7: publisher-lane agent_catalog_artifact_base_url/agent_catalog_channel settings (Update Flow ADR, FR-1); +6: FR-3 adds the two gateway-verification settings (flag + interval)"
 
 [[max_lines]]
 path = "server/proliferate/db/models/cloud/agent_gateway.py"
-max_lines = 643
-reason = "C-train composition: C-2 agent_auth_delivery_ack model joins the B/D cut; agent_gateway_enrollment_key model added for per-(subject,harness) scoped virtual keys (B2), then the agent_model_snapshot re-key (B4) documented why its scope carries NO unique key and what that costs the reader (the active row is plural in principle, so reads tie-break on id); AgentApiKey gains a kind column (D1); a module split is deferred to the model-taxonomy pass rather than done mid-stack; typed-config write gate loosens ck_agent_auth_selection_api_key_shape with a why-not-tighter comment; SG12 keeps the base docstring intact while the direct wall-clock owner import adds one line"
+max_lines = 651
+reason = "C-train composition: C-2 agent_auth_delivery_ack model joins the B/D cut; agent_gateway_enrollment_key model added for per-(subject,harness) scoped virtual keys (B2), then the agent_model_snapshot re-key (B4) documented why its scope carries NO unique key and what that costs the reader (the active row is plural in principle, so reads tie-break on id); AgentApiKey gains a kind column (D1); a module split is deferred to the model-taxonomy pass rather than done mid-stack; typed-config write gate loosens ck_agent_auth_selection_api_key_shape with a why-not-tighter comment; SG12 keeps the base docstring intact while the direct wall-clock owner import adds one line ; +8: FR-3 adds the three nullable gateway-verification columns (status, delta, verified_at) on the enrollment_key model"
 
 [[max_lines]]
 path = "server/proliferate/db/store/organizations.py"
@@ -40,8 +40,8 @@ reason = "C-train composition re-attaches C-1 both-surface sync-completion pokes
 
 [[max_lines]]
 path = "server/proliferate/server/cloud/agent_gateway/service.py"
-max_lines = 813
-reason = "delivery-ack hardening (server-bounded ack revision + trust-boundary docs) nudged the gateway service over the 800 server-layer cap; split pending with the service taxonomy pass; typed-config write gate threads the registry providerConfig vocabulary into the store put and pins R5's azure field set"
+max_lines = 834
+reason = "delivery-ack hardening (server-bounded ack revision + trust-boundary docs) nudged the gateway service over the 800 server-layer cap; split pending with the service taxonomy pass; typed-config write gate threads the registry providerConfig vocabulary into the store put and pins R5's azure field set ; +21: FR-3 adds get_verification_verdicts reading the governing enrollment's per-harness gateway-enablement verdicts for the additive capabilities surface"
 
 [[max_lines]]
 path = "server/proliferate/server/cloud/materialization/materialize/agent_auth.py"

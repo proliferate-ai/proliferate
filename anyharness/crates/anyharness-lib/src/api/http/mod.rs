@@ -31,6 +31,8 @@ pub mod sessions;
 pub mod sessions_config;
 mod sessions_contract;
 mod sessions_errors;
+#[cfg(test)]
+mod sessions_errors_fork_tests;
 pub mod sessions_events;
 pub mod sessions_fork;
 pub mod sessions_interactions;

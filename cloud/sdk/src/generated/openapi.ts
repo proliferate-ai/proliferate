@@ -3673,6 +3673,8 @@ export interface components {
             publicBaseUrl: string | null;
             /** Enrollmentstatus */
             enrollmentStatus: string;
+            /** Verifications */
+            verifications?: components["schemas"]["AgentGatewayVerificationVerdict"][];
         };
         /** AgentGatewayEnrollmentResponse */
         AgentGatewayEnrollmentResponse: {
@@ -3690,6 +3692,25 @@ export interface components {
             createdAt: string;
             /** Updatedat */
             updatedAt: string;
+        };
+        /**
+         * AgentGatewayVerificationVerdict
+         * @description One per-harness gateway-enablement verdict (agent-auth.md FR-3).
+         *
+         *     ``delta`` is the parsed verification-delta JSON (never key material); it is
+         *     present only for a ``misconfigured`` verdict.
+         */
+        AgentGatewayVerificationVerdict: {
+            /** Harnesskind */
+            harnessKind: string;
+            /** Status */
+            status: string;
+            /** Delta */
+            delta?: {
+                [key: string]: string[] | number | string;
+            } | null;
+            /** Verifiedat */
+            verifiedAt?: string | null;
         };
         /** AgentModelOverrideResponse */
         AgentModelOverrideResponse: {

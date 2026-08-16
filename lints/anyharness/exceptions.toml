@@ -542,14 +542,20 @@ reason = "1 wire type import below the mapper boundary; target = sessions domain
 [[exception]]
 rule = "AH-CONTRACT-1"
 path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/fork.rs"
-site = "anyharness_contract::v1::SessionExecutionPhase"
-reason = "1 wire type import + 1 inline wire path (:20 fn param) below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+site = "anyharness_contract::v1::ForkSessionTarget"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
 
 [[exception]]
 rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/fork.rs"
-site = "fn fork_session::anyharness_contract::v1::ForkSessionTarget"
-reason = "1 wire type import + 1 inline wire path (:20 fn param) below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/fork_boundary.rs"
+site = "anyharness_contract::v1::ForkSessionTarget"
+reason = "2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); the resolver reads wire SessionEvent/TranscriptItemKind to classify user-message boundaries; target = sessions domain twins (grid plan PR 10.x)"
+
+[[exception]]
+rule = "AH-CONTRACT-1"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/fork_boundary.rs"
+site = "mod tests::anyharness_contract::v1::ForkSessionTargetType"
+reason = "2 wire type imports below the mapper boundary (one inside the inline cfg(test) mod); the resolver reads wire SessionEvent/TranscriptItemKind to classify user-message boundaries; target = sessions domain twins (grid plan PR 10.x)"
 
 [[exception]]
 rule = "AH-CONTRACT-1"

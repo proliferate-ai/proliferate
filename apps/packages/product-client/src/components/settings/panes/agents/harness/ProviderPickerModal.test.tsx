@@ -4,6 +4,12 @@ import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProviderPickerModal } from "#product/components/settings/panes/agents/harness/ProviderPickerModal";
+import { productHostWrapper, makeTestProductHost } from "#product/test/product-host-test-utils";
+
+// ProviderRow reads the host's openExternal for the PRO-206 doc/console links,
+// so these renders need a ProductHostProvider above them.
+const providerModalHost = makeTestProductHost();
+const providerModalWrapper = productHostWrapper(providerModalHost);
 
 // ModalShell wraps Radix Dialog (no jsdom polyfills) — stub to a passthrough
 // that renders its body when open.
@@ -63,6 +69,7 @@ function renderModal(props: Partial<Parameters<typeof ProviderPickerModal>[0]> =
       onRemove={vi.fn()}
       {...props}
     />,
+    { wrapper: providerModalWrapper },
   );
 }
 
@@ -81,7 +88,9 @@ function renderModalControlled(
     onRemove: vi.fn(),
     ...props,
   };
-  const view = render(<ProviderPickerModal {...baseProps} />);
+  const view = render(<ProviderPickerModal {...baseProps} />, {
+    wrapper: providerModalWrapper,
+  });
   return {
     baseProps,
     rerender: (next: Parameters<typeof ProviderPickerModal>[0]) =>

@@ -8001,6 +8001,8 @@
         "enum": [
           "reachable",
           "unreachable",
+          "unauthorized",
+          "models_drifted",
           "budget_exhausted"
         ]
       },
@@ -11348,6 +11350,13 @@
       "ForkSessionRequest": {
         "type": "object",
         "properties": {
+          "childSessionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Forks ADR rung 2: optional caller-reserved child session id. When set it\nis both the child's durable id and the fork operation's idempotency key,\nso repeating the request with the same payload resumes/returns the same\nchild. An `Idempotency-Key` header serves the same role when this is\nabsent."
+          },
           "target": {
             "oneOf": [
               {

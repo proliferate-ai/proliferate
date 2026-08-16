@@ -30,6 +30,7 @@ const context = (workspaceId: string): WorkspaceSelectionContext => ({
   selectionNonce: 1,
   selectionStartedAt: 1,
   cloudWorkspaceId: null,
+  abortSignal: new AbortController().signal,
 });
 
 function deps(

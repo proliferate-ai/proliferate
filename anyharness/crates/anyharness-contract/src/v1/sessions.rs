@@ -184,6 +184,13 @@ pub struct CreateSessionRequest {
 pub struct ForkSessionRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target: Option<ForkSessionTarget>,
+    /// Forks ADR rung 2: optional caller-reserved child session id. When set it
+    /// is both the child's durable id and the fork operation's idempotency key,
+    /// so repeating the request with the same payload resumes/returns the same
+    /// child. An `Idempotency-Key` header serves the same role when this is
+    /// absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub child_session_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
