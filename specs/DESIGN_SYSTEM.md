@@ -603,6 +603,40 @@ choreography wait. `feedback.copiedResetMs: 2_000` is how long a control reads
 "Copied" before reverting to its resting label; every copy-to-clipboard
 control shares this one token rather than each owning its own reset literal.
 
+### Loading treatments
+
+| Value | ms | Role |
+| --- | --- | --- |
+| `loading.showDelayMs` | 200 | No loading treatment mounts until a wait has lasted this long. |
+| `loading.minDisplayMs` | 300 | A mounted treatment stays at least this long before it yields. |
+
+> **Loading is its own scale, and a treatment is gated, not free.** These two
+> waits are JS-scheduled and deliberately unaliased to the interaction or
+> activity numbers: `showDelayMs` is the Class C default window from the UX
+> Latency + Transitions ADR §4.2, and `minDisplayMs` is the anti-flicker floor.
+> Any wait that resolves faster than 200ms never mounts a treatment at all, so
+> fast paths stay treatment-free; once a treatment is up it holds for 300ms so a
+> just-appeared spinner cannot flash back out.
+
+The [`LoadingBoundary`](../apps/packages/product-client/src/primitives/LoadingBoundary.tsx)
+primitive is the single owner of that state machine. Surfaces never hand-roll a
+`content-fade-in` + `animation-delay` show-delay again; they pass a discriminated
+`pending | empty | ready` state and a treatment slot. Doctrine, all load-bearing:
+
+- The state is discriminated, never a boolean. `empty` is a resolved outcome and
+  may only render after data lands; while `pending` the boundary shows the class
+  treatment or nothing, never the empty slot.
+- The treatment is a call-site slot: Class A is `ProliferateLivingMark`, Class B
+  is `Spinner`. The boundary never renders two treatments inside one pending
+  window, and the treatment identity is stable for the whole window.
+- The one sanctioned reveal is `content-fade-in` at `--duration-enter`; reduced
+  motion disables the fade so content appears instantly. No treatment carries a
+  raw millisecond.
+- The boundary emits `renderer.loading.*` marks (`treatment_shown`,
+  `treatment_suppressed`, `settled`) through the same renderer diagnostics port
+  as the Rung 1 `renderer.flow.*` family, so the show-delay suppression and the
+  min-display hold are observable in telemetry.
+
 > **Raw time literals are illegal in the design CSS.** `check-theme.mjs`'s
 > `checkRawMotionAuthority` walks `product.css` and the generated
 > theme and fails any `animation`/`transition` declaration carrying a numeric
@@ -868,6 +902,7 @@ index is the closed set, not a sample of it. Closure is mechanical in both direc
 | `IconTile` | [IconTile.tsx](../apps/packages/product-client/src/primitives/IconTile.tsx) | Glyph in a rounded tinted square, `tone` × `size`; non-interactive by construction, so it owns no state stack and never becomes a button. Promoted from 14 hand-rolled tiles across harness, repo-setup, billing and transcript surfaces. Eight files consume it now — four in the harness area, two in the transcript, plan handoff and the workflow definition list. Most of the unmigrated remainder is off-step or off-tone — `HarnessPane`'s 28px tile, the repo-setup and restart-dialog tiles at a radius the step does not carry, and `BillingOwnerCard`'s elevated-and-bordered pair, which no single `tone` recipe spells. `HarnessAuthSection`'s tile is not: it paints `size-8 rounded-md bg-surface-control text-muted-foreground`, which is exactly `tone="control" size="md"`, and is an unmigrated exact instance rather than a gap in the axes. |
 | `Input` | [Input.tsx](../apps/packages/product-client/src/primitives/Input.tsx) | Text input field. |
 | `Label` | [Label.tsx](../apps/packages/product-client/src/primitives/Label.tsx) | Form field label. |
+| `LoadingBoundary` | [LoadingBoundary.tsx](../apps/packages/product-client/src/primitives/LoadingBoundary.tsx) | The shared loading primitive: takes `pending`/`empty`/`ready`, arms a treatment only after `loading.showDelayMs`, holds it at least `loading.minDisplayMs`, renders the empty slot only post-resolve, and exits through the one sanctioned content fade-in. |
 | `PaneIconButton` | [PaneIconButton.tsx](../apps/packages/product-client/src/primitives/PaneIconButton.tsx) | Pane-scoped icon button (24px box), composes `Button`. |
 | `Popover` | [Popover.tsx](../apps/packages/product-client/src/primitives/Popover.tsx) | Raw `@radix-ui/react-popover` wrapper; `PopoverButton` composes it. |
 | `PopoverButton` | [PopoverButton.tsx](../apps/packages/product-client/src/primitives/PopoverButton.tsx) | Popover-backed trigger/content wrapper with `triggerMode` (`click`/`doubleClick`/`contextMenu`); the sanctioned trigger for click-only popovers and menus (keyboard-navigable menus stay on `DropdownMenu` until parity — see DropdownMenu status below). |
