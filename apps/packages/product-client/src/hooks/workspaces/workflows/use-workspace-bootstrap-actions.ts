@@ -17,13 +17,11 @@ import {
   startLatencyTimer,
 } from "#product/lib/infra/measurement/measurement-port";
 import {
-  abandonRendererFlow,
   beginRendererFlow,
-  deferWorkspaceOpenContentStable,
-  finishRendererFlow,
   markRendererFlowDataReady,
   markRendererFlowShellCommitted,
 } from "#product/lib/infra/diagnostics/renderer-flow-timing";
+import { finishWorkspaceOpenRendererFlow } from "#product/hooks/workspaces/workflows/workspace-open-flow-finish";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import {
   clearLastViewedSession,
@@ -368,24 +366,13 @@ export function useWorkspaceBootstrapActions() {
       }
       return { sessions };
     } finally {
-      if (rendererFlowAbandonReason !== null) {
-        abandonRendererFlow({
-          kind: "workspace_open",
-          correlationKey: workspaceId,
-          reason: rendererFlowAbandonReason,
-        });
-      } else if (deferContentStableSessionId !== null) {
-        // Transcript hydration moved off the critical path (R14): the pane
-        // finishes this flow when the selected session's transcript commits.
-        // Emitting content_stable here would lie — the transcript is not yet
-        // on screen. Never emit a stable mark before the user can see it.
-        deferWorkspaceOpenContentStable({
-          sessionId: deferContentStableSessionId,
-          correlationKey: workspaceId,
-        });
-      } else {
-        finishRendererFlow({ kind: "workspace_open", correlationKey: workspaceId });
-      }
+      // UX-latency R14: abandon, defer content_stable to the transcript pane, or
+      // finish now (empty workspace). See finishWorkspaceOpenRendererFlow.
+      finishWorkspaceOpenRendererFlow({
+        workspaceId,
+        abandonReason: rendererFlowAbandonReason,
+        deferContentStableSessionId,
+      });
     }
   }, [
     applySessionSummary,

@@ -30,7 +30,7 @@ apps/packages/product-client/src/components/content/ui/diff/ChatDiffViewer.tsx 5
 apps/packages/product-client/src/components/content/ui/diff/SplitDiffViewer.tsx 465 split diff viewer pending row-renderer split
 apps/packages/product-client/src/components/content/ui/diff/UnifiedDiffViewer.tsx 414 unified diff viewer pending row-renderer split
 apps/packages/product-client/src/components/workspace/repo-setup/CloudRepoActionDialogHost.tsx 433 shared ordered-readiness continuation host for Cloud registration and retry-stable local clone; split by intent owner on next growth
-apps/packages/product-client/src/hooks/sessions/workflows/session-replacement-tombstones.ts 408 async ProductStorage hydration added to the in-memory tombstone model
+apps/packages/product-client/src/hooks/sessions/workflows/session-replacement-tombstones.ts 414 async ProductStorage hydration added to the in-memory tombstone model; R14 tombstone-commit listener notify wiring
 apps/packages/product-client/src/hooks/sessions/workflows/use-session-creation-actions.ts 460 session creation orchestrator (+lazy materialization and durable empty-create lifecycle, frozen-input replay, and acknowledgement seam); split deferred
 apps/packages/product-client/src/lib/infra/measurement/measurement-port.ts 734 product-owned measurement port barrel (R1 ruling) mirroring the retained measurement surface through a swappable no-op sink; split deferred
 apps/packages/product-client/src/host/product-host.ts 420 WDU slice 04 (G2/G4): host contract grew from getAnonymousInstallId + getSandboxGatewayAccessToken and their doc contracts

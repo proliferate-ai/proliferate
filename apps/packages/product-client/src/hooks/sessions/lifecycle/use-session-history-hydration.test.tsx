@@ -4,10 +4,10 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionEventEnvelope } from "@anyharness/sdk";
 import { replaySessionHistory } from "#product/lib/domain/sessions/stream/stream-state";
+import { useSessionHistoryHydration } from "#product/hooks/sessions/lifecycle/use-session-history-hydration";
 import {
   resetSessionHistoryHydrationInFlightForTest,
-  useSessionHistoryHydration,
-} from "#product/hooks/sessions/lifecycle/use-session-history-hydration";
+} from "#product/hooks/sessions/lifecycle/session-history-hydration-dedupe";
 import {
   createEmptySessionRecord,
   getSessionRecord,

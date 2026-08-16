@@ -22,7 +22,7 @@ import {
 } from "#product/hooks/sessions/workflows/session-replacement-dismissals";
 import {
   addReplacedSessionTombstoneCommitListener,
-} from "#product/hooks/sessions/workflows/session-replacement-tombstones";
+} from "#product/hooks/sessions/workflows/session-replacement-tombstone-listeners";
 import {
   pinWorkspaceSessionsQueryWarm,
 } from "#product/hooks/access/anyharness/workspaces/workspace-session-directory-keepalive";

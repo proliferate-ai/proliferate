@@ -22,6 +22,7 @@ import { fetchSessionHistory } from "#product/lib/access/anyharness/session-runt
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import {
   applyHistoryStateToStores,
+  buildSessionHistoryFetchArgs,
   finishStandaloneApplyOperation,
   recordHistoryApplyStepMetrics,
   recordHistoryStateCounts,
@@ -31,6 +32,7 @@ import {
   SESSION_HISTORY_APPLY_MAX_DURATION_MS,
 } from "#product/hooks/sessions/lifecycle/session-history-hydration-helpers";
 import { useSessionHistorySubagentAuthority } from "#product/hooks/sessions/lifecycle/use-session-history-subagent-authority";
+import { dedupeSessionOpenHydration } from "#product/hooks/sessions/lifecycle/session-history-hydration-dedupe";
 import {
   beginRendererFlow,
   finishRendererFlow,
@@ -44,25 +46,6 @@ import {
   buildSessionOpenShellCommittedParams,
   markSessionOpenFlowAbandoned,
 } from "#product/hooks/sessions/lifecycle/session-open-flow-marks";
-
-/**
- * UX-latency R14: in-flight dedupe for full session-open (non-incremental)
- * hydrations, keyed by session id. Two callers can now race for the same
- * session's transcript — the workspace-open bootstrap fires a fire-and-forget
- * kickoff (hydration moved off the critical path) and SessionTranscriptPane's
- * self-hydration effect fires independently. Without dedupe both would fetch
- * AND both would apply history to the stores and emit the session_open flow
- * marks twice. Sharing the whole operation (fetch + replay + store + marks)
- * guarantees exactly one fetch and one apply; the second caller receives the
- * first caller's result. Only full opens dedupe here — incremental
- * append/prepend fetches (afterSeq/beforeSeq) target different ranges and must
- * not share.
- */
-const inFlightSessionOpenHydrations = new Map<string, Promise<boolean>>();
-
-export function resetSessionHistoryHydrationInFlightForTest(): void {
-  inFlightSessionOpenHydrations.clear();
-}
 
 export interface SessionHistoryHydrationOptions {
   afterSeq?: number;
@@ -136,29 +119,17 @@ export function useSessionHistoryHydration() {
       const fetchStartedAt = performance.now();
       const events = await fetchSessionHistory(
         sessionId,
-        afterSeq != null
-          || beforeSeq != null
-          || options?.limit != null
-          || options?.turnLimit != null
-          || options?.requestHeaders
-          || requestMeasurementOperationId
-          || options?.timeoutMs != null
-          ? {
-            ...(afterSeq != null ? { afterSeq } : {}),
-            ...(beforeSeq != null ? { beforeSeq } : {}),
-            ...(options?.limit != null ? { limit: options.limit } : {}),
-            ...(options?.turnLimit != null ? { turnLimit: options.turnLimit } : {}),
-            ...(options?.requestHeaders
-              ? { requestHeaders: options.requestHeaders }
-              : {}),
-            ...(requestMeasurementOperationId
-              ? { measurementOperationId: requestMeasurementOperationId }
-              : {}),
-            ...(options?.timeoutMs != null ? { timeoutMs: options.timeoutMs } : {}),
-            ssh,
-            cloudClient,
-          }
-          : { ssh, cloudClient },
+        buildSessionHistoryFetchArgs({
+          afterSeq,
+          beforeSeq,
+          limit: options?.limit,
+          turnLimit: options?.turnLimit,
+          requestHeaders: options?.requestHeaders,
+          measurementOperationId: requestMeasurementOperationId,
+          timeoutMs: options?.timeoutMs,
+          ssh,
+          cloudClient,
+        }),
       );
       for (const operationId of historyApplyOperationIds) {
         recordMeasurementWorkflowStep({
@@ -412,29 +383,16 @@ export function useSessionHistoryHydration() {
     }
   }, [cloudClient, reconcileHydratedSubagents, ssh]);
 
+  // UX-latency R14: full session-open hydrations dedupe by session id so the
+  // bootstrap kickoff and the transcript pane share one fetch + apply.
   const rehydrateSessionSlotFromHistory = useCallback((
     sessionId: string,
     options?: SessionHistoryHydrationOptions,
-  ): Promise<boolean> => {
-    // Only full session-open hydrations dedupe (see inFlightSessionOpenHydrations).
-    const isSessionOpenHydration =
-      (options?.afterSeq ?? null) === null && (options?.beforeSeq ?? null) === null;
-    if (!isSessionOpenHydration) {
-      return runHydration(sessionId, options);
-    }
-    const inFlight = inFlightSessionOpenHydrations.get(sessionId);
-    if (inFlight) {
-      return inFlight;
-    }
-    const promise = runHydration(sessionId, options);
-    inFlightSessionOpenHydrations.set(sessionId, promise);
-    void promise.finally(() => {
-      if (inFlightSessionOpenHydrations.get(sessionId) === promise) {
-        inFlightSessionOpenHydrations.delete(sessionId);
-      }
-    });
-    return promise;
-  }, [runHydration]);
+  ): Promise<boolean> => dedupeSessionOpenHydration(
+    sessionId,
+    options,
+    () => runHydration(sessionId, options),
+  ), [runHydration]);
 
   return {
     rehydrateSessionSlotFromHistory,
