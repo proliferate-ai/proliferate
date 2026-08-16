@@ -1,13 +1,8 @@
 # UX Latency + Transitions
 
-Status: target. This document describes the accepted destination for
-perceived-latency behavior and loading/transition treatments across the
-product client. The body is written in the ideal state. Every difference
-from `main` today is listed in [Current gaps](#current-gaps); the list
-shrinks as the delivery ladder's PRs merge, and the label comes off when it
-is empty.
-
-Frozen delivery base: `6b5aa59896c9cdb90850db8fd9b9fea05971ffc2`.
+This document describes the current perceived-latency behavior and
+loading/transition treatments across the product client, delivered by the
+UX Latency + Transitions ADR's delivery ladder and merged to `main`.
 
 Owns the perceived-latency contract from the UX Latency + Transitions ADR:
 the loading-treatment state machine and its tokens, the chat pane's hero
@@ -19,10 +14,10 @@ emitted, not re-derived here.
 Fences, one owner per concern:
 
 - **This document owns the interaction/perception contract; [DESIGN_SYSTEM.md](../../../DESIGN_SYSTEM.md)
-  owns the token values and component tier placement.** Once the ladder
-  merges, the token and sanctioned-index entries below move into
-  DESIGN_SYSTEM.md's current material and this document stops repeating
-  them.
+  owns the token values and component tier placement.** Token values and the
+  `LoadingBoundary` sanctioned-index entry live in DESIGN_SYSTEM.md's current
+  material; this document does not repeat them, except the
+  `heroMinDisplayMs` value below, which DESIGN_SYSTEM.md does not yet carry.
 - **Session selection** ([workspaces/session-selection.md](workspaces/session-selection.md))
   owns which session is visible inside an already-open workspace; this
   document owns switching which workspace is open.
@@ -35,17 +30,17 @@ Fences, one owner per concern:
 
 ## Loading treatments
 
-A `LoadingBoundary` primitive (`apps/packages/product-client/src/primitives/LoadingBoundary.tsx`,
-not yet on `main`, see [Current gaps](#current-gaps))
+A `LoadingBoundary` primitive (`apps/packages/product-client/src/primitives/LoadingBoundary.tsx`)
 is the single owner of the loading-treatment state machine. Callers pass a
 discriminated `pending | empty | ready` state and a treatment slot; the
 boundary never hand-rolls a `content-fade-in` + `animation-delay` show-delay
-per call site.
+per call site. `loading.showDelayMs` and `loading.minDisplayMs` gate that
+state machine; see [DESIGN_SYSTEM.md's Loading treatments
+table](../../../DESIGN_SYSTEM.md#loading-treatments) for their values and
+role, and its sanctioned index for `LoadingBoundary`'s component-tier entry.
 
 | Value | ms | Role |
 | --- | --- | --- |
-| `loading.showDelayMs` | 200 | No loading treatment mounts until a wait has lasted this long, so a resolution faster than 200ms never flashes a treatment at all. |
-| `loading.minDisplayMs` | 300 | A mounted treatment stays at least this long before yielding to resolved or empty content, so a just-appeared treatment cannot flash back out. |
 | `loading.heroMinDisplayMs` | 420 | The chat loading hero's mark-specific floor (below), longer than the generic floor because the hero is a larger, more prominent mark. |
 
 Doctrine, all load-bearing:
@@ -91,8 +86,7 @@ this component down, not a state change this component owns.
 
 `ChatLoadingHero` instead reports the instant its treatment becomes visible
 through an `onTreatmentShown` callback. `useChatLoadingHeroExit`
-(`apps/packages/product-client/src/hooks/chat/ui/use-chat-loading-hero-exit.ts`,
-not yet on `main`, see [Current gaps](#current-gaps))
+(`apps/packages/product-client/src/hooks/chat/ui/use-chat-loading-hero-exit.ts`)
 owns the exit choreography from that instant: it holds a `holding` phase for
 `loading.heroMinDisplayMs` (420ms) past the shown timestamp even if
 `mode.kind` flips away sooner, then a `fading` phase for `duration.exitMs`
@@ -151,8 +145,7 @@ useAppShortcuts (React glue: refs to current target ids / commit action)
         └── WorkspaceItem                       displayedActive selector
 ```
 
-- `workspace-switch-cursor-controller.ts` (`apps/packages/product-client/src/lib/domain/workspaces/sidebar/workspace-switch-cursor-controller.ts`,
-  not yet on `main`, see [Current gaps](#current-gaps))
+- `workspace-switch-cursor-controller.ts` (`apps/packages/product-client/src/lib/domain/workspaces/sidebar/workspace-switch-cursor-controller.ts`)
   is free of React, DOM, and any concrete timer or store; `useAppShortcuts`
   injects `now`/`setTimer`/`clearTimer` and store accessors so the throttle,
   settle, and commit-reflection edges are unit-testable with fake timers.
@@ -197,6 +190,14 @@ source instead of requiring a package build first. It carries no runtime
 behavior; it exists only so the test lane keeps the same "tests run against
 source, never dist" rule the file already states for the `host/*` subpath.
 
+The ADR's two-phase switch originally scoped a third leg: deferring the
+expensive pane mount itself during a rapid sweep, on top of the
+preview-cursor leg documented above. It was left out by design: leg 1 (the
+preview cursor) already makes every intermediate workspace during a sweep
+vanish before its pane would ever mount, so a separate deferred-pane
+mechanism would be unmeasured machinery protecting against a case leg 1
+already eliminates.
+
 ### React-query stabilization (R19 companion)
 
 Two shell-wide query-hook fixes reduce the switch-triggered wide re-render
@@ -212,28 +213,11 @@ this two-phase switch exists to keep off the traversal path:
   shell re-render no longer rebuilds every query option object and forces
   react-query observer churn when the inputs are unchanged.
 
-## Current gaps
+## Open debt
 
-Deltas between this document and `main` today, each struck by its follow-up
-PR:
-
-- [ ] **Ladder not merged.** None of R1-R19 is on `main` yet. The full PR
-      chain: #1917, #1920, #1926, #1930 (R1-R4), #1913, #1918, #1924, #1914
-      (R5-R8), #1923 (R9), #1927 (R10), #1929 (R11), #1970 (R13),
-      #1968 (R14), #1969 (R15), and the R16/R17/R19 PRs delivering the
-      chat loading hero, the sidebar activation transition, and the
-      two-phase switch described above. All are CI-green and reviewed;
-      none merged as of this writing.
-- [ ] **R19 leg 3 (deferred pane) left out, by design, not by gap.** The
-      ADR's two-phase switch originally scoped a third leg: deferring the
-      expensive pane mount itself during a rapid sweep, on top of the
-      preview-cursor leg documented above. Leg 1 (the preview cursor) already
-      makes every intermediate workspace during a sweep vanish before its
-      pane would ever mount, so a separate deferred-pane mechanism would be
-      unmeasured machinery protecting against a case leg 1 already
-      eliminates. This is a closed scope decision, not an open item; it is
-      listed here only so a reader does not go looking for a third leg.
-- [ ] **T4 booted-app latency measurement stays open.** #1970 delivers the
+- **R8 (Q18 lint record, #1914)** rides the docs-v1/d6-lints train and merges
+      separately from the rest of this ladder.
+- **T4 booted-app latency measurement.** #1970 delivers the
       `composer_submit`/`mode_switch` instrumentation marks; the booted-app
       measurement run validating the ADR's latency budgets against real
       traces has not happened (no-app-boot constraint during the ladder's
