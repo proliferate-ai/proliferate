@@ -91,7 +91,7 @@ export interface TranscriptStickToBottom {
    * frame pass while unpinned until the compensation deadline lapses; a no-op
    * while pinned.
    */
-  startAboveChangeCompensation: (anchor: ContentHeightScrollAnchor) => void;
+  startAboveChangeCompensation: (anchor: ContentHeightScrollAnchor, cancelableByUpwardIntent: boolean) => void;
   /**
    * Cancel the pending frame pass / glue window. Registered as the transcript's
    * synchronous scroll-pause listener so a user scroll inside the input event's
@@ -137,6 +137,10 @@ export function useTranscriptStickToBottom({
   // loop). The deadline, not the glue window, bounds its life so a correction
   // arriving after the glue window ends is still absorbed.
   const compensationAnchorRef = useRef<ContentHeightScrollAnchor | null>(null);
+  // Whether the active compensation window cancels on upward user intent. True
+  // for a completed-turn split (autonomous insertion); false for a history
+  // prepend (reader-requested, must hold through the continuing upward gesture).
+  const compensationCancelableRef = useRef(false);
   // Deadline (interactionNow ms) past which the active above-change anchor is
   // stale: the single frame pass compensates each measurement correction that
   // arrives before it, then stops so ordinary below-the-viewport growth is free
@@ -183,16 +187,17 @@ export function useTranscriptStickToBottom({
   const notifyUserScrollIntent = useCallback((direction: -1 | 1) => {
     userScrollIntentUntilRef.current = interactionNow() + TRANSCRIPT_USER_SCROLL_SETTLE_MS;
     if (direction < 0) {
-      // Genuine upward intent cancels an active above-viewport compensation:
-      // the reader scrolling up during a completed-turn split or a settling
-      // prepend must never be re-anchored per-frame; the gesture wins (CSS
-      // scroll anchoring likewise suppresses adjustments during user scroll).
-      // Clearing the ANCHOR THAT EXISTS NOW is exactly the ruling's nuance: a
-      // window armed LATER (the wheel-up that triggered a prepend, since
-      // stopped) has no anchor yet and is untouched. Downward intent and the
-      // programmatic snaps routed through notifyProgrammaticScroll never reach
-      // here, so neither can cancel.
-      compensationAnchorRef.current = null;
+      // Genuine upward intent cancels a CANCELABLE above-change compensation (a
+      // completed-turn split): an unpinned reader scrolling up must never be
+      // re-anchored per-frame; the gesture wins (CSS scroll anchoring likewise
+      // suppresses adjustments during user scroll). A history PREPEND is armed
+      // NON-cancelable because the reader requested it by scrolling to the top,
+      // so its reading row holds even as the same upward gesture continues.
+      // Clearing the anchor that exists NOW also preserves the predates-window
+      // nuance; downward intent and programmatic snaps never reach here.
+      if (compensationCancelableRef.current) {
+        compensationAnchorRef.current = null;
+      }
       setPinned(false);
     }
     // Claim the frame at input time so it can't race a stream/reveal animation frame.
@@ -299,8 +304,12 @@ export function useTranscriptStickToBottom({
   // Sets the compensation anchor and starts a glue window; the single frame
   // writer re-applies the measured scrollHeight delta each glued frame (so the
   // anchor stays put as the estimate corrects) until the height settles.
-  const startAboveChangeCompensation = useCallback((anchor: ContentHeightScrollAnchor) => {
+  const startAboveChangeCompensation = useCallback((
+    anchor: ContentHeightScrollAnchor,
+    cancelableByUpwardIntent: boolean,
+  ) => {
     compensationAnchorRef.current = anchor;
+    compensationCancelableRef.current = cancelableByUpwardIntent;
     compensationDeadlineRef.current = interactionNow() + ABOVE_CHANGE_COMPENSATION_MAX_MS;
     beginGlue();
   }, [beginGlue]);
@@ -325,6 +334,7 @@ export function useTranscriptStickToBottom({
   const resetForSession = useCallback(() => {
     clearAllMarkers();
     compensationAnchorRef.current = null;
+    compensationCancelableRef.current = false;
     compensationDeadlineRef.current = 0;
     lastScrollTopRef.current = 0;
     lastContentHeightRef.current = 0;

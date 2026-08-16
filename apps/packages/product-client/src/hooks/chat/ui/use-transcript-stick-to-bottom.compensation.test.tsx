@@ -97,7 +97,7 @@ describe("useTranscriptStickToBottom above-change compensation (PRO-187, r4)", (
     // time (the height/top before the older rows mounted).
     act(() => {
       api.setPinned(false);
-      api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 1000 });
+      api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 1000 }, false);
     });
 
     // The forced-glue window runs, sees the height hold stable, and terminates on
@@ -139,7 +139,7 @@ describe("useTranscriptStickToBottom above-change compensation (PRO-187, r4)", (
 
       act(() => {
         api.setPinned(false);
-        api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 1000 });
+        api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 1000 }, false);
       });
       act(() => {
         flushRafRound();
@@ -159,5 +159,108 @@ describe("useTranscriptStickToBottom above-change compensation (PRO-187, r4)", (
     } finally {
       nowSpy.mockRestore();
     }
+  });
+});
+
+describe("above-change compensation cancels on upward user intent (PRO-187, r4)", () => {
+  it("stops re-anchoring the instant genuine upward intent arrives during the window", () => {
+    const handle = renderHarness();
+    const { viewport, api } = handle.current;
+    setContentHeight(viewport, 2000);
+    viewport.scrollTop = 1000;
+
+    act(() => {
+      api.setPinned(false);
+      api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 1000 }, true);
+    });
+    act(() => { flushRafRound(); });
+    act(() => { flushRafRound(); });
+
+    // The unpinned reader scrolls UP during the compensation window. The active
+    // gesture wins: the anchor is dropped and no later correction re-anchors.
+    act(() => { api.notifyUserScrollIntent(-1); });
+
+    setContentHeight(viewport, 2400);
+    act(() => { api.notifyContentResize(); });
+
+    // NEGATIVE CONTROL: remove the `compensationAnchorRef.current = null` on
+    // upward intent and this write lands at 1400 (per-frame re-anchor), dragging
+    // the reader back against their scroll. With the cancel, scrollTop is left
+    // exactly where the user's gesture put it.
+    expect(viewport.scrollTop).toBe(1000);
+  });
+
+  it("does NOT cancel on downward intent (only upward is a leave signal)", () => {
+    const handle = renderHarness();
+    const { viewport, api } = handle.current;
+    setContentHeight(viewport, 2000);
+    viewport.scrollTop = 1000;
+
+    act(() => {
+      api.setPinned(false);
+      api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 1000 }, true);
+    });
+    act(() => { flushRafRound(); });
+    act(() => { flushRafRound(); });
+
+    act(() => { api.notifyUserScrollIntent(1); });
+
+    setContentHeight(viewport, 2400);
+    act(() => { api.notifyContentResize(); });
+
+    // Downward intent never clears the anchor: compensation still absorbs the
+    // added-above delta (1000 + (2400 - 2000)).
+    expect(viewport.scrollTop).toBe(1400);
+  });
+
+  it("does NOT cancel on upward intent that predates the window (prepend trigger, since stopped)", () => {
+    const handle = renderHarness();
+    const { viewport, api } = handle.current;
+    setContentHeight(viewport, 2000);
+    viewport.scrollTop = 1000;
+
+    // The wheel-up that TRIGGERED the prepend fires BEFORE the anchor is armed.
+    act(() => { api.notifyUserScrollIntent(-1); });
+
+    act(() => {
+      api.setPinned(false);
+      api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 1000 }, true);
+    });
+    act(() => { flushRafRound(); });
+    act(() => { flushRafRound(); });
+
+    setContentHeight(viewport, 2400);
+    act(() => { api.notifyContentResize(); });
+
+    // A reader who scrolled up to cause the prepend and then holds still is still
+    // compensated: the pre-window intent cleared no live anchor.
+    expect(viewport.scrollTop).toBe(1400);
+  });
+
+  it("a PREPEND window (not cancelable) keeps compensating through continued upward intent", () => {
+    const handle = renderHarness();
+    const { viewport, api } = handle.current;
+    setContentHeight(viewport, 2000);
+    viewport.scrollTop = 1000;
+
+    // Prepend compensation is armed NON-cancelable (the reader requested it by
+    // scrolling to the top). This is the webkit wheelToTop scenario: upward
+    // intent keeps firing through the settle and must NOT strand the reader.
+    act(() => {
+      api.setPinned(false);
+      api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 2000, scrollTop: 1000 }, false);
+    });
+    act(() => { flushRafRound(); });
+    act(() => { flushRafRound(); });
+
+    act(() => { api.notifyUserScrollIntent(-1); });
+
+    setContentHeight(viewport, 2400);
+    act(() => { api.notifyContentResize(); });
+
+    // NEGATIVE CONTROL: arm this window cancelable (true) and the upward intent
+    // clears the anchor, leaving scrollTop at 1000 — the exact webkit prepend
+    // regression (reader stranded near the newly prepended top).
+    expect(viewport.scrollTop).toBe(1400);
   });
 });
