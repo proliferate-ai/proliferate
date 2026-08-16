@@ -15,18 +15,33 @@ const REPIN_BAND_PX = 24;
 // bound is the "still following" ceiling: comfortably above that resting gap,
 // far below the unbounded growth a lost follow would produce.
 const PIN_FOLLOW_MAX_DISTANCE_PX = 120;
-// Frame-to-frame backward-bounce ceiling for the Q13 interleave trace below.
-// This is a DIFFERENT quantity from PIN_FOLLOW_MAX_DISTANCE_PX (steady-state
-// bottomDistance while pinned): it bounds how far scrollTop may legitimately
-// snap backward between two consecutive trace samples when a newly-mounted
-// row's estimate (transcript-row-height-estimate.ts) corrects down once the
-// row is measured for real. The reserved live-turn slot
-// (ASSISTANT_ACTION_SLOT_HEIGHT, TranscriptTurnChrome.tsx, h-6 = 24px) is the
-// invariant Q13 exists to police, so this ceiling must stay strictly below
-// 24px: a phantom reserved-slot height briefly appearing and collapsing
-// would otherwise pass silently through a bound reused from an unrelated
-// quantity (see PR #1980 review finding 1).
+// Frame-to-frame backward-bounce ceiling for the Q13 interleave trace below,
+// for phases where NO new row mounts (thought start/delta/stop, prose
+// growth on an already-mounted row). This is a DIFFERENT quantity from
+// PIN_FOLLOW_MAX_DISTANCE_PX (steady-state bottomDistance while pinned): it
+// bounds how far scrollTop may snap backward between two consecutive trace
+// samples with no legitimate cause to move backward at all. The reserved
+// live-turn slot (ASSISTANT_ACTION_SLOT_HEIGHT, TranscriptTurnChrome.tsx,
+// h-6 = 24px) is the invariant Q13 exists to police, so this ceiling stays
+// strictly below 24px: a phantom reserved-slot height briefly appearing and
+// collapsing during a lifecycle-only transition would otherwise pass
+// silently through a bound reused from an unrelated quantity (see PR #1980
+// review finding 1).
 const INTERLEAVE_MAX_BACKWARD_BOUNCE_PX = 20;
+// Separate, wider ceiling for the ONE phase where a genuinely new row
+// mounts: `streamToolCall`. Unlike the thought/prose phases above, a new
+// tool-call row is a real virtualizer estimate
+// (transcript-row-height-estimate.ts: ESTIMATED_SINGLE_BLOCK_TURN_HEIGHT_PX
+// = 120) that corrects down once TanStack measures the real (smaller,
+// ESTIMATED_INLINE_TOOL_BLOCK_HEIGHT_PX = 56) row — a rung-5 estimate-churn
+// concern, not a rung-10 lifecycle-height violation. CI measured this
+// convergence deterministically at ~61px on both chromium and webkit
+// (PR #1980, round 2), consistent with the ~64px gap between those two
+// estimate constants. This ceiling exists ONLY to bound that specific,
+// already-quantified phenomenon to "still a single bounded correction, not
+// an unbounded runaway" — it must not be reused for the thought/prose
+// phases above, which have no such legitimate source of backward motion.
+const TOOL_ROW_ESTIMATE_CONVERGENCE_MAX_PX = 80;
 
 const VIEWPORT = "div.overflow-y-auto:has([data-transcript-virtualization-mode])";
 
@@ -1056,47 +1071,60 @@ test.describe("transcript scroll physics", () => {
     const baseline = await metricsAfterFrame(page);
     expect(baseline.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
 
-    await drive(page, "startScrollTrace");
+    // Trace phases separately rather than as one continuous sweep: the
+    // tool-call phase has a legitimate, quantified source of backward
+    // scrollTop motion (new-row estimate convergence, see
+    // TOOL_ROW_ESTIMATE_CONVERGENCE_MAX_PX above) that the thought and prose
+    // phases do not. Bracketing per-phase lets each get the tolerance that
+    // actually matches its physics, instead of one bound loose enough to
+    // hide a lifecycle-height regression in the phases that have no
+    // legitimate reason to bounce at all.
+    function assertNoBackwardBounce(trace: number[], maxBouncePx: number): void {
+      for (let i = 1; i < trace.length; i += 1) {
+        expect(trace[i]).toBeGreaterThanOrEqual(trace[i - 1] - maxBouncePx);
+      }
+    }
 
     // Thought starts and streams a couple of deltas: private, reserved-slot
-    // only, must not move the pinned reader.
+    // only, must not move the pinned reader. No new row mounts here, so the
+    // tight lifecycle-only bound applies.
+    await drive(page, "startScrollTrace");
     await drive(page, "streamThoughtStart");
     await settle(page, 80);
     const afterThoughtStart = await metricsAfterFrame(page);
     expect(afterThoughtStart.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
+    assertNoBackwardBounce(
+      (await drive<number[]>(page, "stopScrollTrace")).filter((v) => Number.isFinite(v)),
+      INTERLEAVE_MAX_BACKWARD_BOUNCE_PX,
+    );
 
     // Thought yields to a tool call mid-turn (thinking -> tool -> thinking is
-    // the exact class the ADR's Cell 6 names); still reserved-slot only.
+    // the exact class the ADR's Cell 6 names). This is the one phase where a
+    // real new row mounts, so it alone gets the wider, quantified
+    // convergence bound instead of the lifecycle-only one.
+    await drive(page, "startScrollTrace");
     await drive(page, "streamThoughtStop");
     await drive(page, "streamToolCall");
     await settle(page, 80);
     const afterTool = await metricsAfterFrame(page);
     expect(afterTool.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
+    assertNoBackwardBounce(
+      (await drive<number[]>(page, "stopScrollTrace")).filter((v) => Number.isFinite(v)),
+      TOOL_ROW_ESTIMATE_CONVERGENCE_MAX_PX,
+    );
 
     // Prose resumes and grows the turn for real; THIS is content growth (not
-    // lifecycle), so the follow continues to track it, still pinned.
+    // lifecycle) on an already-mounted row, so it's back to the tight bound.
+    await drive(page, "startScrollTrace");
     await drive(page, "streamChunks", 5);
     await settle(page, 200);
     const afterProse = await metricsAfterFrame(page);
     expect(afterProse.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
     await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
-
-    const trace = (await drive<number[]>(page, "stopScrollTrace")).filter((v) =>
-      Number.isFinite(v),
+    assertNoBackwardBounce(
+      (await drive<number[]>(page, "stopScrollTrace")).filter((v) => Number.isFinite(v)),
+      INTERLEAVE_MAX_BACKWARD_BOUNCE_PX,
     );
-    // No RUNAWAY double-scroll: `streamToolCall` mounts a real new row whose
-    // estimate-to-measured convergence (unrelated to rung 10, the same
-    // estimate churn rung 5 documents elsewhere) can legitimately correct
-    // scrollTop down a bounded amount once its true (smaller than the
-    // estimate) height measures in — that is NOT a lifecycle-height
-    // violation. A lifecycle-driven phantom slot height, by contrast, is
-    // exactly the ASSISTANT_ACTION_SLOT_HEIGHT-scale (24px) regression this
-    // rung targets, so the bound here is INTERLEAVE_MAX_BACKWARD_BOUNCE_PX
-    // (20px, strictly under the 24px slot), not the unrelated steady-state
-    // PIN_FOLLOW_MAX_DISTANCE_PX ceiling used above for bottomDistance.
-    for (let i = 1; i < trace.length; i += 1) {
-      expect(trace[i]).toBeGreaterThanOrEqual(trace[i - 1] - INTERLEAVE_MAX_BACKWARD_BOUNCE_PX);
-    }
 
     await drive(page, "finalizeStreamingTurn");
     await settle(page);
