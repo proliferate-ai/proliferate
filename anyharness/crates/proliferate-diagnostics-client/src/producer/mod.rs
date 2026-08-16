@@ -5,7 +5,7 @@ use std::{
 };
 use tokio::time::Instant as TokioInstant;
 
-use proliferate_diagnostics_protocol::v1::{limits::MAX_SAFE_INTEGER, types::ProducerRecordV1};
+use proliferate_diagnostics_protocol::v1::types::ProducerRecordV1;
 
 use crate::{
     bridge::activation::{BundledDesktopDiagnosticsBootstrap, InitialCollectorState},
@@ -18,6 +18,8 @@ mod admission;
 #[cfg(unix)]
 mod bridge_runtime;
 mod delivery_log;
+#[cfg(all(unix, debug_assertions))]
+mod dev_refresh;
 mod emit;
 mod fallback_runtime;
 pub(crate) mod record;
@@ -166,6 +168,8 @@ pub(crate) fn install(
     release: &str,
     environment: &str,
 ) -> Result<DiagnosticsInstallation, InstallError> {
+    #[cfg(all(unix, debug_assertions))]
+    let mut dev_env_path: Option<std::path::PathBuf> = None;
     #[cfg(unix)]
     let (initial_state, fallback_handle, degraded, platform_channels) = match activation {
         BundledDesktopDiagnosticsBootstrap::Ready(bootstrap) => (
@@ -186,7 +190,10 @@ pub(crate) fn install(
         ),
         // No inherited descriptors: no bridge thread, no fallback authority.
         #[cfg(debug_assertions)]
-        BundledDesktopDiagnosticsBootstrap::DevEnv(dev) => (dev.initial_state, None, None, None),
+        BundledDesktopDiagnosticsBootstrap::DevEnv(dev) => {
+            dev_env_path = dev.env_path;
+            (dev.initial_state, None, None, None)
+        }
     };
     #[cfg(not(unix))]
     let (initial_state, fallback_handle, degraded) = match activation {
@@ -275,6 +282,8 @@ pub(crate) fn install(
         })
         .transpose()
         .map_err(|_| InstallError::WorkerUnavailable)?;
+    #[cfg(all(unix, debug_assertions))]
+    dev_refresh::spawn_if_configured(&runtime, &inner, dev_env_path);
     let join = runtime.spawn(worker::run(Arc::clone(&inner)));
     let handle = DiagnosticsProducerHandle {
         inner: Arc::clone(&inner),
@@ -402,27 +411,6 @@ impl ProducerInner {
         // The parent signal transfers clock ownership immediately; dispatch
         // pauses until the request supplies the parent's remaining window.
         state.terminal_deadline = None;
-        drop(state);
-        self.notify.notify_one();
-    }
-
-    /// Permanent bridge loss: no newer generation can arrive, so the sentinel
-    /// latches unavailable. Queued records retain routing until worker drain.
-    #[cfg(unix)]
-    pub(crate) fn mark_bridge_lost(&self) {
-        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-        if matches!(
-            &state.collector,
-            CollectorAvailability::Unavailable { generation } if *generation == MAX_SAFE_INTEGER
-        ) {
-            return;
-        }
-        state.collector = CollectorAvailability::Unavailable {
-            generation: MAX_SAFE_INTEGER,
-        };
-        if !state.in_flight.is_empty() {
-            state.delivery_fence_eligible = false;
-        }
         drop(state);
         self.notify.notify_one();
     }
