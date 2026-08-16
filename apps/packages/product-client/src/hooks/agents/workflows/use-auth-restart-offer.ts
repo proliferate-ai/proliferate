@@ -37,8 +37,8 @@ export interface AuthRestartOfferApi {
  * answer time. Declining does nothing and persists nothing.
  */
 export function useAuthRestartOffer(): AuthRestartOfferApi {
-  const { authStatus, cloudEnabled } = useCloudAvailabilityState();
-  const authReady = authStatus === "authenticated" && cloudEnabled;
+  const { authStatus, controlPlaneReachable } = useCloudAvailabilityState();
+  const authReady = authStatus === "authenticated" && controlPlaneReachable;
   const host = useProductHost();
   const ssh = host.desktop?.ssh ?? null;
   const cloudClient = host.cloud.client;

@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
     sessionViewState: "idle",
     retryHistory: vi.fn(),
     reconnect: vi.fn(),
+    reconnectState: { attempt: 0, nextDelayMs: 0, reconnecting: false },
   },
   pane: {
     transcript: { sessionId: "client-a" } as object | null,

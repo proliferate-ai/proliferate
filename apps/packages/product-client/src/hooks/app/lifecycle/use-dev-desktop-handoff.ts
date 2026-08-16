@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { cadence } from "@proliferate/design/cadence";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import {
   markDevDesktopHandoffOpened,
@@ -10,7 +11,10 @@ import {
   productEntryRoute,
 } from "#product/lib/domain/auth/desktop-navigation";
 
-const DEV_HANDOFF_POLL_MS = 1000;
+// Was a raw 1000ms literal; already exactly on-scale, so this is a rename
+// onto `cadence.fastMs` rather than a value change (UX Latency + Transitions
+// ADR §4.7, Rung 6, Q8).
+const DEV_HANDOFF_POLL_MS = cadence.fastMs;
 const handledDevHandoffIds = new Set<string>();
 
 // Owns local-dev browser-to-desktop handoffs when OS scheme registration is unavailable.

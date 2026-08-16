@@ -2238,13 +2238,19 @@ export interface components {
         };
         /**
          * @description The runtime's active agent catalog version and its provenance. Read-only:
-         *     the runtime binary is the only catalog transport, so there is no apply
-         *     response shape to report.
+         *     there is no apply/push endpoint. Since rung 5 (FR-1) the runtime binary
+         *     is the FLOOR transport, not the only one — a signed, versioned artifact
+         *     may also be fetched once at boot, so `source` can now report either
+         *     provenance.
          */
         AgentCatalogVersionResponse: {
             /** @description The `catalogVersion` string from the active document. */
             catalogVersion: string;
-            /** @description Where the active catalog came from. Always `"bundled"`. */
+            /**
+             * @description Where the active catalog came from: `"bundled"` (the compiled-in
+             *     floor) or `"staged"` (a signed artifact fetched at boot and activated
+             *     because it validated and was strictly newer than the floor).
+             */
             source: string;
         };
         /** @enum {string} */
