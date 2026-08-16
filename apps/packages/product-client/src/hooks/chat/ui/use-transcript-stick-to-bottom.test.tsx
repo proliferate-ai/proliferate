@@ -57,7 +57,7 @@ function renderHarness(
     const api = useTranscriptStickToBottom({
       scrollRef,
       onScrollSample,
-      autoFollowBottomInsetPx: bottomInsetPx,
+      nonDisplacingBottomInsetPx: bottomInsetPx,
     });
     return (
       <div

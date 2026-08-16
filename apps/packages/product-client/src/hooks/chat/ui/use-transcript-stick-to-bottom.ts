@@ -39,11 +39,18 @@ export interface UseTranscriptStickToBottomOptions {
   /** px from the bottom within which a user scroll re-pins. */
   repinThresholdPx?: number;
   /**
+   * Structural (displacing) dock inset: composer height, status bar, footer.
+   * Reflected in scrollHeight as the virtualizer's paddingEnd. Fed to the
+   * consumed-inset machine so a structural shrink (composer collapse) marks its
+   * upward clamp while pinned instead of fighting the reader (rung 7 / Q6).
+   */
+  structuralBottomInsetPx?: number;
+  /**
    * Manual-only scroll range created by cards overlaying the transcript. Auto
    * follow stops before this range until the user explicitly reaches the hard
    * bottom or clicks the scroll-to-bottom button.
    */
-  autoFollowBottomInsetPx?: number;
+  nonDisplacingBottomInsetPx?: number;
   /**
    * Epoch ms of the newest prompt submission (outbox enqueue or session-level
    * optimistic prompt). A monotonic increase re-pins: sending is an explicit
@@ -118,7 +125,8 @@ export function useTranscriptStickToBottom({
   scrollRef,
   onScrollSample,
   repinThresholdPx = REPIN_BOTTOM_THRESHOLD_PX,
-  autoFollowBottomInsetPx = 0,
+  structuralBottomInsetPx = 0,
+  nonDisplacingBottomInsetPx = 0,
   lastPromptSubmittedAtMs = null,
   sessionKey,
 }: UseTranscriptStickToBottomOptions): TranscriptStickToBottom {
@@ -210,22 +218,29 @@ export function useTranscriptStickToBottom({
     onScrollSample({ programmatic: false, userInitiated: true });
   }, [onScrollSample, setPinned]);
 
-  // Owns the manual-only overlay inset, its scrollTop math, and the
+  // Owns the consumed-inset state machine, the follow-target math, and the
   // scroll-to-bottom callbacks. See use-transcript-auto-follow-bottom.ts.
   const {
-    consumedAutoFollowBottomInsetRef,
-    consumeFullInset,
+    dispatchInsetEvent,
     scrollToBottom,
     handleScrollToBottomClick,
   } = useTranscriptAutoFollowBottom({
     scrollRef,
-    autoFollowBottomInsetPx,
+    structuralBottomInsetPx,
+    nonDisplacingBottomInsetPx,
     pinnedRef,
     setPinned,
     lastScrollTopRef,
     markNonUserScrollPosition,
     notifyProgrammaticScroll,
   });
+
+  // Q6 (rung 7): a submit re-pins but does NOT consume the overlay. Routed
+  // through the consumed-inset machine as an explicit (no-op) transition so the
+  // rule lives in one place.
+  const submitRepin = useCallback(() => {
+    dispatchInsetEvent({ type: "submit_repin" });
+  }, [dispatchInsetEvent]);
 
   const onViewportScroll = useCallback((viewport: HTMLDivElement) => {
     const top = viewport.scrollTop;
@@ -268,11 +283,11 @@ export function useTranscriptStickToBottom({
       // browser to the not-yet-measured content max, not the reader; clearing it
       // would kill the frame writer's re-resolution before it converges. A real
       // reader takeover clears via notifyUserScrollIntent (restore also expires).
-      consumedAutoFollowBottomInsetRef.current = 0;
+      dispatchInsetEvent({ type: "leave_band" });
       setPinned(false);
     } else if (decision.pin === true) {
       if (decision.consumeInset === "full") {
-        consumeFullInset();
+        dispatchInsetEvent({ type: "consume_full" });
       }
       setPinned(true);
     }
@@ -284,7 +299,7 @@ export function useTranscriptStickToBottom({
         ? { programmatic: false, userInitiated: true }
         : { programmatic: false },
     );
-  }, [consumeFullInset, onScrollSample, pinnedRef, repinThresholdPx, setPinned]);
+  }, [dispatchInsetEvent, onScrollSample, pinnedRef, repinThresholdPx, setPinned]);
 
   // Session re-entry / submit / tab-resume "glue": snap each frame while a
   // freshly mounted or resumed measurement backlog lands, terminating when the
@@ -327,6 +342,7 @@ export function useTranscriptStickToBottom({
     setPinned,
     scrollToBottom,
     beginGlue,
+    onSubmitRepin: submitRepin,
   });
 
   // Session re-entry: snap instantly, then glue for a few frames so the
@@ -342,7 +358,7 @@ export function useTranscriptStickToBottom({
     restoreDeadlineRef.current = 0;
     lastScrollTopRef.current = 0;
     lastContentHeightRef.current = 0;
-    consumedAutoFollowBottomInsetRef.current = 0;
+    dispatchInsetEvent({ type: "reset" });
     userScrollIntentUntilRef.current = 0;
     // FR-2 (rung 6): restore a finalized session's saved reading position before
     // first paint; a streaming session, a missing plan, or a saved row now gone
@@ -360,7 +376,7 @@ export function useTranscriptStickToBottom({
       scrollToBottom();
     }
     beginGlue();
-  }, [beginGlue, clearAllMarkers, notifyProgrammaticScroll, scrollRef, scrollToBottom, setPinned]);
+  }, [beginGlue, clearAllMarkers, dispatchInsetEvent, notifyProgrammaticScroll, scrollRef, scrollToBottom, setPinned]);
 
   // Establish input ownership before the visibility lifecycle can resume the
   // pinned glue loop.
