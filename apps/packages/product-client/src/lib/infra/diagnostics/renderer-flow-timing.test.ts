@@ -23,6 +23,9 @@ const ALL_FLOWS: readonly RendererFlowKind[] = [
   "session_open",
 ];
 
+// R12: two-point flows (begin/finish only, no shell/data-ready midpoints).
+const TWO_POINT_FLOWS: readonly RendererFlowKind[] = ["composer_submit", "mode_switch"];
+
 describe("renderer flow timing", () => {
   let emitted: RendererDiagnosticInput[];
   let nowValue: number;
@@ -78,10 +81,47 @@ describe("renderer flow timing", () => {
   );
 
   it("keeps every flow budget an unenforced draft", () => {
-    for (const kind of ALL_FLOWS) {
+    for (const kind of [...ALL_FLOWS, ...TWO_POINT_FLOWS]) {
       expect(RENDERER_FLOW_BUDGETS[kind].thresholdMs).toBeNull();
       expect(RENDERER_FLOW_BUDGETS[kind].metric).toContain(kind);
     }
+  });
+
+  it.each(TWO_POINT_FLOWS)(
+    "emits an intent-to-stable timing for the two-point flow %s with no shell/data fields",
+    (kind) => {
+      const correlationKey = `${kind}-1`;
+      beginRendererFlow({ kind, correlationKey, correlation: { sessionId: "s1" } });
+      nowValue = 42;
+      finishRendererFlow({ kind, correlationKey });
+
+      const stable = fieldsOf("renderer.flow.content_stable");
+      expect(stable.intent_to_stable_ms).toBe(42);
+      expect(stable.stages_completed).toBe(0);
+      // Two-point flows never reach data_ready, so data_to_stable_ms (the
+      // last-mile paint stage Honeycomb aggregates separately) is omitted
+      // rather than aliased to the whole-intent duration.
+      expect("data_to_stable_ms" in stable).toBe(false);
+      expect("intent_to_shell_ms" in stable).toBe(false);
+      expect("shell_to_data_ms" in stable).toBe(false);
+      expect(stable.budget_metric).toBe(RENDERER_FLOW_BUDGETS[kind].metric);
+      expect(stable.budget_metric).toContain("intent_to_stable_ms");
+      expect(stable.budget_threshold_ms).toBeNull();
+    },
+  );
+
+  it("restarts a mode_switch flow's clock on re-begin (PRO-261 coalescing semantics)", () => {
+    beginRendererFlow({ kind: "mode_switch", correlationKey: "intent-1" });
+    nowValue = 30;
+    // A rapid second mode pick reuses the same intentId (tail coalescing), so
+    // the caller re-begins rather than opening a second flow.
+    beginRendererFlow({ kind: "mode_switch", correlationKey: "intent-1" });
+    nowValue = 55;
+    finishRendererFlow({ kind: "mode_switch", correlationKey: "intent-1" });
+
+    const stableRecords = emitted.filter((e) => e.name === "renderer.flow.content_stable");
+    expect(stableRecords).toHaveLength(1);
+    expect(fieldsOf("renderer.flow.content_stable").intent_to_stable_ms).toBe(25);
   });
 
   it("marks the correlation through on every emitted event", () => {
@@ -113,11 +153,15 @@ describe("renderer flow timing", () => {
     finishRendererFlow({ kind: "terminal_attach", correlationKey: "t1" });
     const stable = fieldsOf("renderer.flow.content_stable");
     // Skipped stages are OMITTED, never encoded as a -1 magic number that would
-    // poison later aggregation.
+    // poison later aggregation. data_to_stable_ms is the last-mile paint stage
+    // measured from data_ready; it's omitted too when data_ready was never
+    // reached, since aliasing it to the whole-intent duration would poison the
+    // Honeycomb aggregation that treats it as post-data_ready timing.
     expect("intent_to_shell_ms" in stable).toBe(false);
     expect("shell_to_data_ms" in stable).toBe(false);
     expect(stable.stages_completed).toBe(0);
-    expect(stable.data_to_stable_ms).toBe(40);
+    expect("data_to_stable_ms" in stable).toBe(false);
+    expect(stable.intent_to_stable_ms).toBe(40);
   });
 
   it("reports stages_completed for a partial (shell-only) flow", () => {
