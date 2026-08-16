@@ -7,6 +7,20 @@ import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-co
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { hasWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
 
+export interface ChatLoadingHeroProps {
+  /**
+   * Fires the instant the DotCellLoader mark actually mounts (show-delay
+   * elapsed). `ChatView` uses this to time its own exit hold (R16): the
+   * hero mark must stay visible for `motion.loading.heroMinDisplayMs` once
+   * shown, then fade over `motion.duration.exitMs`, even though `ChatView`
+   * may switch `mode.kind` away from this component before that window
+   * closes. This component cannot honor that hold itself — once `ChatView`
+   * stops rendering it, it is gone — so `ChatView` keeps a frozen exit
+   * overlay mounted past this component's own lifetime instead.
+   */
+  onTreatmentShown?: () => void;
+}
+
 /**
  * The chat pane's workspace-status/session-loading wait state (UX Latency +
  * Transitions ADR §4.3, Rung 3, R16). The dispatcher (ChatView) only mounts
@@ -17,17 +31,15 @@ import { hasWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lif
  * buys the 200ms show-delay so a sub-200ms workspace-status/session-loading
  * pass never flashes a treatment.
  *
- * `minDisplayMs` is set to the R16 420ms floor, but because `state` here is
- * hardcoded to `"pending"` for this component's whole life, `LoadingBoundary`'s
- * min-display/fade-out machinery (which only engages on a transition away from
- * `pending`) never actually fires from inside this component: resolution is
- * ChatView unmounting this component synchronously when `mode.kind` changes,
- * not a local state change. The 420ms floor is therefore configuration for
- * when ChatView grows exit-aware mounting (crossfading the outgoing hero with
- * the incoming transcript's `content-fade-in`), not an enforced guarantee
- * today — a gap called out in the PR body rather than papered over with a
- * standalone timer, which would incorrectly hide the mark mid-flight on
- * genuinely long loads.
+ * The hero's minimum-display + fade-out (R16) is owned by `ChatView`, not this
+ * component or `LoadingBoundary`: this component hardcodes `state="pending"`
+ * for its whole life, so `LoadingBoundary`'s own min-display/fade-out
+ * machinery (which only engages on a transition away from `pending`) never
+ * fires here — resolution is `ChatView` unmounting this component
+ * synchronously when `mode.kind` changes, not a local state change. This
+ * component only reports the moment its treatment becomes visible via
+ * `onTreatmentShown`; `ChatView` uses that instant to run its own exit-hold
+ * timer past this component's unmount.
  *
  * A workspace that has already bootstrapped in this session never mounts the
  * mark: `hasWorkspaceBootstrappedInSession` short-circuits to `null` so a
@@ -41,7 +53,7 @@ import { hasWorkspaceBootstrappedInSession } from "#product/hooks/workspaces/lif
  * min-display floor. Every other substep renders the DotCellLoader hero mark,
  * mark-only (no caption/workspace-name copy).
  */
-export function ChatLoadingHero() {
+export function ChatLoadingHero({ onTreatmentShown }: ChatLoadingHeroProps = {}) {
   useDebugRenderCount("chat-loading-hero");
   const { substep } = useChatLoadingSubstep();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
@@ -67,8 +79,8 @@ export function ChatLoadingHero() {
     <DebugProfiler id="chat-loading-hero">
       <LoadingBoundary
         state="pending"
-        minDisplayMs={420}
         diagnostics={{ flow: "chat_loading_hero" }}
+        onTreatmentShown={onTreatmentShown}
         className="flex flex-col items-center text-center"
         data-chat-loading-hero
         treatment={<DotCellLoader size="hero" />}
