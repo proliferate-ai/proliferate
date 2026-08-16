@@ -15,6 +15,18 @@ const REPIN_BAND_PX = 24;
 // bound is the "still following" ceiling: comfortably above that resting gap,
 // far below the unbounded growth a lost follow would produce.
 const PIN_FOLLOW_MAX_DISTANCE_PX = 120;
+// Frame-to-frame backward-bounce ceiling for the Q13 interleave trace below.
+// This is a DIFFERENT quantity from PIN_FOLLOW_MAX_DISTANCE_PX (steady-state
+// bottomDistance while pinned): it bounds how far scrollTop may legitimately
+// snap backward between two consecutive trace samples when a newly-mounted
+// row's estimate (transcript-row-height-estimate.ts) corrects down once the
+// row is measured for real. The reserved live-turn slot
+// (ASSISTANT_ACTION_SLOT_HEIGHT, TranscriptTurnChrome.tsx, h-6 = 24px) is the
+// invariant Q13 exists to police, so this ceiling must stay strictly below
+// 24px: a phantom reserved-slot height briefly appearing and collapsing
+// would otherwise pass silently through a bound reused from an unrelated
+// quantity (see PR #1980 review finding 1).
+const INTERLEAVE_MAX_BACKWARD_BOUNCE_PX = 20;
 
 const VIEWPORT = "div.overflow-y-auto:has([data-transcript-virtualization-mode])";
 
@@ -1076,13 +1088,14 @@ test.describe("transcript scroll physics", () => {
     // estimate-to-measured convergence (unrelated to rung 10, the same
     // estimate churn rung 5 documents elsewhere) can legitimately correct
     // scrollTop down a bounded amount once its true (smaller than the
-    // estimate) height measures in — that is NOT a lifecycle-height violation.
-    // A lifecycle-driven phantom slot height, by contrast, would show up as an
-    // UNBOUNDED bounce tracking the reserved slot's own height repeatedly
-    // appearing/disappearing, which this bounds against via the same
-    // steady-state ceiling as every other pinned-follow assertion above.
+    // estimate) height measures in — that is NOT a lifecycle-height
+    // violation. A lifecycle-driven phantom slot height, by contrast, is
+    // exactly the ASSISTANT_ACTION_SLOT_HEIGHT-scale (24px) regression this
+    // rung targets, so the bound here is INTERLEAVE_MAX_BACKWARD_BOUNCE_PX
+    // (20px, strictly under the 24px slot), not the unrelated steady-state
+    // PIN_FOLLOW_MAX_DISTANCE_PX ceiling used above for bottomDistance.
     for (let i = 1; i < trace.length; i += 1) {
-      expect(trace[i]).toBeGreaterThanOrEqual(trace[i - 1] - PIN_FOLLOW_MAX_DISTANCE_PX);
+      expect(trace[i]).toBeGreaterThanOrEqual(trace[i - 1] - INTERLEAVE_MAX_BACKWARD_BOUNCE_PX);
     }
 
     await drive(page, "finalizeStreamingTurn");
