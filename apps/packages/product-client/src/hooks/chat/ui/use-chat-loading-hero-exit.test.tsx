@@ -19,7 +19,7 @@ vi.mock("#product/components/workspace/chat/transcript/WorkspaceCreationReceipt"
 import {
   ChatLoadingHeroExitOverlay,
   useChatLoadingHeroExit,
-} from "./ChatView";
+} from "./use-chat-loading-hero-exit";
 
 let queryClient: QueryClient;
 
