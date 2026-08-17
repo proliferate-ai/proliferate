@@ -20,6 +20,9 @@ import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-st
 import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { isWorkspaceArchivedRefusal } from "#product/lib/domain/workspaces/archived/workspace-archived-refusal";
+import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-call-layout";
+import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 
 const LINE_TONE_CLASS = {
   default: "",
@@ -89,7 +92,7 @@ export function WorkspaceCreationReceiptView({
         onClick={hasLog ? onToggleExpanded : undefined}
         aria-expanded={hasLog ? expanded : undefined}
         aria-controls={hasLog ? logId : undefined}
-        className="group/receipt h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left text-chat font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline disabled:cursor-default disabled:opacity-100"
+        className="group/receipt h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left text-chat font-normal text-muted-foreground/60 hover:bg-transparent active:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline disabled:cursor-default disabled:opacity-100"
       >
         {/* The spinner owns the leading icon slot while work is in flight.
             Trailing the label instead means the indicator jumps to a new x
@@ -118,29 +121,32 @@ export function WorkspaceCreationReceiptView({
       </Button>
 
       {expanded && hasLog && (
-        // Recorded exclusion (DESIGN_SYSTEM.md § UI-conformance review,
-        // check 1): the setup log is an unfilled frame — a hairline around
-        // transcript ground, so the log reads as part of the column rather than
-        // as a raised card. `Card`'s two surfaces both paint a fill, and there
-        // is no borderless-with-edge spelling. Needs a ruling on `Card`.
-        <div
+        <ToolActionDetailsPanel
           id={logId}
           data-chat-transcript-ignore
-          className="group/receipt-log relative mt-1.5 max-w-full rounded-lg border border-border"
+          className="group/receipt-log relative mt-1.5 max-w-full"
         >
-          <div className="flex flex-col gap-0.5 overflow-x-auto px-3.5 py-3 font-mono text-readable-code text-muted-foreground">
-            {presentation.logLines.map((line, index) => (
-              <span key={index} className={`w-max whitespace-pre ${LINE_TONE_CLASS[line.tone]}`}>
-                {line.text}
-              </span>
-            ))}
-          </div>
+          <AutoHideScrollArea
+            className="w-full"
+            viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
+          >
+            <div className="flex flex-col gap-0.5 px-3 py-2 font-mono text-readable-code text-muted-foreground">
+              {presentation.logLines.map((line, index) => (
+                <span
+                  key={index}
+                  className={`whitespace-pre-wrap break-words ${LINE_TONE_CLASS[line.tone]}`}
+                >
+                  {line.text}
+                </span>
+              ))}
+            </div>
+          </AutoHideScrollArea>
           <div className="pointer-events-none absolute right-1 top-1 opacity-0 transition-opacity duration-hover group-hover/receipt-log:pointer-events-auto group-hover/receipt-log:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
             <IconButton title={labels.copyLogTitle} size="sm" onClick={handleCopy}>
               <Copy className="icon-paired" />
             </IconButton>
           </div>
-        </div>
+        </ToolActionDetailsPanel>
       )}
 
       {showActions && (

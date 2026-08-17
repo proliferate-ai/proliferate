@@ -190,8 +190,8 @@ reason = "workflows gen-2 transition suite: one test per ADR table row plus stal
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/workflows/actor.rs"
-max_lines = 606
-reason = "fix/wf2-run-cancel's Cancel command threads through the actor's transition-apply loop (+9 lines) alongside the gen-2 ADR's existing side-effect dispatch; grows the file past the repo-wide 600 cap for the first time"
+max_lines = 603
+reason = "fix/wf2-run-cancel's Cancel command threads through the actor's transition-apply loop alongside the gen-2 ADR's existing side-effect dispatch; grows the file past the repo-wide 600 cap for the first time (603 on main after #1996's revert landed under #1906's 606-line branch context)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/sessions/model.rs"

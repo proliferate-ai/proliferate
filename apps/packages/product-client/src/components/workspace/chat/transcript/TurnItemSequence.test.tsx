@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { ReactNode } from "react";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createTranscriptState } from "@anyharness/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,6 +23,15 @@ import { CompletedHistorySequence } from "#product/components/workspace/chat/tra
 import { resolveLeadingNonUserMessageBlockKey } from "#product/components/workspace/chat/transcript/TurnWorkspaceReceiptSlot";
 import type { TurnPresentation } from "#product/domain/chats/transcript/transcript-presentation";
 
+let pendingAnimationFrames: FrameRequestCallback[];
+
+function flushAnimationFrame() {
+  act(() => {
+    const frames = pendingAnimationFrames.splice(0);
+    for (const frame of frames) frame(0);
+  });
+}
+
 vi.mock("./TranscriptTreeNode", () => ({
   TranscriptTreeNode: ({ itemId }: { itemId: string }) => (
     <div data-rendered-transcript-item={itemId}>{itemId}</div>
@@ -30,6 +39,12 @@ vi.mock("./TranscriptTreeNode", () => ({
 }));
 
 beforeEach(() => {
+  pendingAnimationFrames = [];
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    pendingAnimationFrames.push(callback);
+    return pendingAnimationFrames.length;
+  });
+  vi.stubGlobal("cancelAnimationFrame", () => {});
   vi.stubGlobal("ResizeObserver", class ResizeObserver {
     observe() {}
     unobserve() {}
@@ -79,11 +94,13 @@ describe("CompletedHistorySequence", () => {
     expect(completedWorkDisclosure.className).not.toContain("rounded-md");
 
     await user.click(completedWorkDisclosure);
+    flushAnimationFrame();
     const sequence = container.querySelector<HTMLElement>("[data-completed-history-sequence]");
     expect(sequence).not.toBeNull();
 
     const actionSummary = within(sequence!).getByRole("button", { expanded: false });
     await user.click(actionSummary);
+    flushAnimationFrame();
     const ledger = container.querySelector<HTMLElement>("[data-collapsed-actions-ledger]");
     expect(ledger).not.toBeNull();
     expect(ledger?.className).toContain("max-h-56");
@@ -93,17 +110,17 @@ describe("CompletedHistorySequence", () => {
     const commandDisclosure = within(ledger!).getAllByRole("button", { expanded: false })[0]!;
     await user.click(commandDisclosure);
     // The nested panel is ToolActionDetailsPanel now, which is where the three
-    // inline copies of this shell folded — hence rounded-md, the radius the
-    // shared panel's other consumers already used.
+    // inline copies of this shell folded — hence the shared panel's
+    // code-block-card styling.
     const nestedDetailPanel = Array.from(ledger!.querySelectorAll<HTMLElement>("div"))
       .find((node) =>
-        node.className.includes("overflow-hidden")
-        && node.className.includes("rounded-md")
-        && node.className.includes("border-border/60")
+        node.className.includes("overflow-clip")
+        && node.className.includes("rounded-lg")
+        && node.className.includes("bg-[var(--color-code-block-background")
       );
     expect(nestedDetailPanel).not.toBeUndefined();
     expect(nestedDetailPanel?.className).toMatch(/(?:^|\s)border(?:\s|$)/);
-    expect(nestedDetailPanel?.className).toContain("rounded-md");
+    expect(nestedDetailPanel?.className).toContain("rounded-lg");
   });
 });
 

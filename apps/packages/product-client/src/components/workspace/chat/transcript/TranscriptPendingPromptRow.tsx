@@ -288,7 +288,7 @@ function OutboxTextActionButton({
       variant="ghost"
       size="sm"
       data-chat-transcript-ignore
-      className="h-auto rounded-none px-1 py-0 text-chat font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline"
+      className="h-auto rounded-none px-1 py-0 text-chat font-normal text-muted-foreground hover:bg-transparent active:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline"
       onClick={onClick}
     >
       {label}

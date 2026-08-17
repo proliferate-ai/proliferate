@@ -33,6 +33,20 @@ export const WORKFLOW_MAIN_COPY = {
   rowActionsLabel: (title: string) => `${title} actions`,
   deleteItemLabel: "Delete...",
 
+  filterPlaceholder: "Filter workflows...",
+  filterLabel: "Filter workflows",
+  filterNoMatches: "Nothing here matches this filter.",
+
+  savedGroupTitle: "Saved Workflows",
+  savedGroupDescription: "Definitions you can run, edit, or start a new run from.",
+
+  executionsGroupTitle: "Executions",
+  executionsGroupDescription:
+    "Runs recorded from these workflows. Selecting one opens its workspace.",
+  // `definitionJson` carries no title today; same fallback the resume popover
+  // wears until the frozen invocation contract grows one.
+  executionFallbackTitle: "Workflow run",
+
   legacyGroupTitle: "Legacy",
   legacyGroupDescription:
     "Saved before workflows were rebuilt. These cannot be opened or run here — rebuild the ones you still want, then delete them.",

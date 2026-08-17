@@ -77,7 +77,7 @@ export function ActionDisclosureRow({
       size="sm"
       data-chat-transcript-ignore
       aria-expanded={expanded}
-      className={`group/action-row h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal hover:bg-transparent focus-visible:ring-0 ${
+      className={`group/action-row h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal hover:bg-transparent active:bg-transparent focus-visible:ring-0 ${
         failed ? "text-destructive/80 hover:text-destructive" : "text-foreground/60 hover:text-foreground"
       }`}
       onClick={onToggle}

@@ -12,6 +12,7 @@ import {
   workflowNodeIsSideNode,
   workflowNodeStatusTone,
   workflowRunIsActive,
+  workflowRunStatusTone,
   workflowRunTakesSideNode,
 } from "./run-view-model";
 
@@ -129,6 +130,12 @@ describe("workflowRunIsActive", () => {
     expect(
       RUN_STATUSES.map((status) => workflowRunIsActive(run({ status }))),
     ).toEqual([true, true, true, false, false, false]);
+  });
+});
+
+describe("workflowRunStatusTone", () => {
+  it("presents a cancelled run with the neutral tone", () => {
+    expect(workflowRunStatusTone("cancelled")).toBe("neutral");
   });
 });
 

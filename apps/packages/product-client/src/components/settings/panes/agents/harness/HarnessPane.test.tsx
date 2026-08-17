@@ -306,12 +306,12 @@ function renderPane(harnessKind = "claude") {
   );
 }
 
-/**
- * §7's model list opens collapsed behind its own status row (agent-auth.md pane
- * anatomy §7), so the model toggles are aria-hidden until the row is clicked.
- */
+// §7's model list opens collapsed until clicked; flush the reveal's rAF.
 function expandModelList() {
+  const frames: FrameRequestCallback[] = [];
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => (frames.push(cb), frames.length));
   fireEvent.click(screen.getByRole("button", { name: "Models" }));
+  act(() => { while (frames.length > 0) frames.shift()?.(0); });
 }
 
 // One persisted opencode api_key selection — enough for the API-key detail

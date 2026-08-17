@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModelSnapshotStatus } from "@anyharness/sdk";
 import { HarnessAllModelsSection } from "#product/components/settings/panes/agents/harness/HarnessAllModelsSection";
 
@@ -88,9 +88,22 @@ function composedStatus(
  * collapsed subtree is aria-hidden, so role queries for the table's controls
  * need the row clicked first.
  */
+let pendingFrames: FrameRequestCallback[];
+
 function expandModelList() {
   fireEvent.click(screen.getByRole("button", { name: "Models" }));
+  act(() => {
+    pendingFrames.shift()?.(0);
+  });
 }
+
+beforeEach(() => {
+  pendingFrames = [];
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+    pendingFrames.push(callback);
+    return pendingFrames.length;
+  });
+});
 
 afterEach(() => {
   cleanup();

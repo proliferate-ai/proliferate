@@ -44,7 +44,6 @@ export function GenericActionRow({ item }: { item: ToolCallItem }) {
               <span>Result</span>
             </div>
             <AutoHideScrollArea
-              className="border-t border-border/60"
               viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
               allowHorizontal
             >
