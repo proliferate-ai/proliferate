@@ -19,9 +19,9 @@ pub(crate) enum ClaimedDeliveryEnqueueOutcome {
         delivery: CompletionDeliveryRecord,
         pending: PendingPromptRecord,
         inserted: bool,
-        /// An older queued wake for the same child whose queue row was
-        /// rewritten in place to carry this delivery; that delivery is retired
-        /// without its own wake turn.
+        /// An older eligible completed wake for the same child whose queue row
+        /// was rewritten in place to carry this delivery; that delivery is
+        /// retired without its own wake turn.
         superseded_delivery_id: Option<String>,
     },
     AlreadyVisible {

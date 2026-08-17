@@ -9,12 +9,12 @@ use crate::domains::sessions::extensions::SessionTurnOutcome;
 use crate::domains::sessions::model::PendingPromptRecord;
 use crate::domains::sessions::store::pending_prompts::map_pending_prompt;
 
-/// Coalesce a fresh delivery with an older wake for the same child that is
-/// still queued and unconsumed: rewrite that queue row in place (same seq and
-/// queue position, so no queue-visibility event is needed) to carry this
-/// delivery's canonical prompt, and retire the older delivery without its own
-/// wake turn. The parent then drains at most one wake per child, always with
-/// the newest completion output.
+/// Coalesce a fresh delivery with an older completed wake for the same child
+/// that is still queued and unconsumed: rewrite that queue row in place (same
+/// seq and queue position, so no queue-visibility event is needed) to carry
+/// this delivery's canonical prompt, and retire the older delivery without its
+/// own wake turn. Failed and cancelled siblings are never eligible because
+/// each actionable outcome must retain its own wake.
 pub(super) fn adopt_superseded_sibling_wake(
     tx: &rusqlite::Connection,
     delivery: &CompletionDeliveryRecord,
@@ -24,6 +24,7 @@ pub(super) fn adopt_superseded_sibling_wake(
         "SELECT * FROM session_link_completion_deliveries
          WHERE parent_session_id = ?1 AND child_session_id = ?2
            AND delivery_id != ?3 AND state = 'enqueued'
+           AND outcome = 'completed'
            AND lease_token IS NULL AND parent_prompt_seq IS NOT NULL
            AND created_at <= ?4
          ORDER BY parent_prompt_seq ASC",
