@@ -198,11 +198,6 @@ path = "apps/packages/product-client/src/components/workspace/chat/transcript/Vi
 max_lines = 403
 reason = "Background Work R2: reports the stick-to-bottom engine's own isPinnedToBottom state upward via a new onIsPinnedToBottomChange callback prop, so the background-work transcript row can hide itself when the user scrolls away from bottom instead of floating over mid-transcript content; split deferred"
 
-[[frontend_structure]]
-path = "apps/packages/product-client/src/components/workspace/chat/surface/SessionTranscriptPane.tsx"
-max_lines = 409
-reason = "Background Work R2: multi-round review geometry fix for the background-work tail row (measured-height reserve, isPinnedToBottom-gated render/anchor, review-round history recorded inline at the render site); split deferred"
-
 # FE-CHATSCROLL-1 sanctioned scroll-position writers, read by
 # scripts/check_transcript_scroll_writer.py. File-level allowlist: any non-test
 # product-client source that assigns .scrollTop, calls .scrollTo/.scrollIntoView,
