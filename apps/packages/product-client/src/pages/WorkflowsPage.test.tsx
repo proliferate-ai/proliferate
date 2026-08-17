@@ -78,9 +78,14 @@ vi.mock("#product/components/workflows/builder-v2/WorkflowBuilderSurface", () =>
     definitionId: string | null;
     template?: WorkflowStarterTemplateV2 | null;
     authCacheScope: string;
+    onBack?: () => void;
   }) => {
     builderSurface(props);
-    return <section data-testid="workflow-builder" />;
+    return (
+      <section data-testid="workflow-builder">
+        <button type="button" onClick={props.onBack}>go-back-to-workflows</button>
+      </section>
+    );
   },
 }));
 
@@ -206,6 +211,15 @@ describe("WorkflowsPage v2 routing", () => {
       definitionId: "wf-123",
       authCacheScope: "user-1",
     }));
+  });
+
+  it("navigates from the builder back to the workflows main page", () => {
+    renderWorkflows("/workflows/wf-123");
+
+    fireEvent.click(screen.getByText("go-back-to-workflows"));
+
+    expect(screen.getByTestId("workflows-main")).toBeTruthy();
+    expect(screen.queryByTestId("workflow-builder")).toBeNull();
   });
 
   it("renders the builder blank for the 'new' sentinel with no state", () => {

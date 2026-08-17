@@ -1,6 +1,6 @@
 import type { MouseEvent, ReactNode } from "react";
 import { CircleAlert } from "#product/primitives/icons/status";
-import { Clock } from "#product/primitives/icons/core";
+import { Clock, NodeTree } from "#product/primitives/icons/core";
 import { DotCellLoader } from "#product/primitives/DotCellLoader";
 import { IconButton } from "#product/primitives/IconButton";
 import { Tooltip } from "#product/primitives/Tooltip";
@@ -50,6 +50,12 @@ export function SidebarStatusGlyph({
       return <CircleAlert className="icon-compact text-sidebar-status-waiting [font-size:var(--text-sidebar-row)]" />;
     case "git_checks_failing":
       return <CircleAlert className="icon-compact text-sidebar-status-error [font-size:var(--text-sidebar-row)]" />;
+    // A finished workflow run reads as a graph tinted by outcome — the row's
+    // resting identity once the run's sessions have gone quiet.
+    case "workflow_run_succeeded":
+      return <NodeTree className="icon-compact text-success [font-size:var(--text-sidebar-row)]" />;
+    case "workflow_run_failed":
+      return <NodeTree className="icon-compact text-sidebar-status-error [font-size:var(--text-sidebar-row)]" />;
   }
 }
 

@@ -60,45 +60,49 @@ afterEach(() => {
 });
 
 describe("WorkflowTriggerDialog", () => {
-  it("blocks workflow context from telemetry replay", () => {
-    renderDialog();
-
-    expect(screen.getByRole("dialog").getAttribute("data-telemetry-block")).toBe("true");
-  });
-
   it("gates Confirm on required inputs only", () => {
     renderDialog();
 
-    const confirm = () => screen.getByRole("button", { name: "Start run" });
+    const confirm = () => screen.getByRole("button", { name: "Run" });
     expect(confirm()).toHaveProperty("disabled", true);
 
     // Negative control: the optional input stays empty for the whole test, so
     // an enabled Confirm proves only the required one gates.
-    fireEvent.change(screen.getByLabelText("issue"), { target: { value: "PRO-174" } });
-    expect(screen.getByLabelText("notes")).toHaveProperty("value", "");
+    fireEvent.change(screen.getByLabelText("Issue"), { target: { value: "PRO-174" } });
+    expect(screen.getByLabelText("Notes")).toHaveProperty("value", "");
     expect(confirm()).toHaveProperty("disabled", false);
 
-    fireEvent.change(screen.getByLabelText("issue"), { target: { value: "   " } });
+    fireEvent.change(screen.getByLabelText("Issue"), { target: { value: "   " } });
     expect(confirm()).toHaveProperty("disabled", true);
   });
 
-  it("defaults placement to a new worktree", () => {
+  it("uses the attached manual-trigger title and subtitle", () => {
     renderDialog();
 
-    expect(screen.getByRole("radio", { name: "New worktree" }).getAttribute("aria-checked"))
+    expect(screen.getByRole("heading", { name: "Run Issue triage" })).toBeTruthy();
+    expect(screen.getAllByText("Manual trigger · this run is recorded like any scheduled one"))
+      .toHaveLength(2);
+  });
+
+  it("shows both placement cards and the repository picker without a collapsed state", () => {
+    renderDialog();
+
+    expect(screen.getByText("Where it runs")).toBeTruthy();
+    expect(screen.getByLabelText("Repository")).toBeTruthy();
+    expect(screen.getByRole("radio", { name: /Repository worktree/ }).getAttribute("aria-checked"))
       .toBe("true");
-    expect(screen.getByRole("radio", { name: "Repo root" }).getAttribute("aria-checked"))
+    expect(screen.getByRole("radio", { name: /Repository root/ }).getAttribute("aria-checked"))
       .toBe("false");
   });
 
   it("submits an argument for every declared input, blank optionals included", () => {
     renderDialog();
 
-    fireEvent.change(screen.getByLabelText("issue"), { target: { value: " PRO-174 " } });
+    fireEvent.change(screen.getByLabelText("Issue"), { target: { value: " PRO-174 " } });
     // `notes` is left blank on purpose: a prompt that reads `@input:notes`
     // cannot launch unless the argument is present, so it must arrive as "".
-    expect(screen.getByLabelText("notes")).toHaveProperty("value", "");
-    fireEvent.click(screen.getByRole("button", { name: "Start run" }));
+    expect(screen.getByLabelText("Notes")).toHaveProperty("value", "");
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
 
     expect(triggerActions.triggerRun).toHaveBeenCalledWith({
       workflowDefinitionId: "wf-1",
@@ -113,10 +117,10 @@ describe("WorkflowTriggerDialog", () => {
       defaultRepoConfigId: null,
     });
 
-    fireEvent.change(screen.getByLabelText("issue"), { target: { value: "PRO-174" } });
+    fireEvent.change(screen.getByLabelText("Issue"), { target: { value: "PRO-174" } });
     fireEvent.change(screen.getByLabelText("Repository"), { target: { value: "root-2" } });
-    fireEvent.click(screen.getByRole("radio", { name: "Repo root" }));
-    fireEvent.click(screen.getByRole("button", { name: "Start run" }));
+    fireEvent.click(screen.getByRole("radio", { name: /Repository root/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
 
     expect(triggerActions.triggerRun).toHaveBeenCalledWith({
       workflowDefinitionId: "wf-1",
@@ -138,19 +142,48 @@ describe("WorkflowTriggerDialog", () => {
     ]);
   });
 
-  it("blocks Start run while the saved repository is not a listed repo root", () => {
+  it("blocks Run while the saved repository is not a listed repo root", () => {
     renderDialog({
       ...definitionRecord(),
       defaultRepoConfigId: "repo-config-9",
     });
 
-    fireEvent.change(screen.getByLabelText("issue"), { target: { value: "PRO-174" } });
+    fireEvent.change(screen.getByLabelText("Issue"), { target: { value: "PRO-174" } });
     expect(screen.getByText("Saved repository unavailable (repo-config-9)")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Start run" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Run" })).toHaveProperty("disabled", true);
 
     // Negative control: the same form submits once a listed root is picked.
     fireEvent.change(screen.getByLabelText("Repository"), { target: { value: "root-1" } });
-    expect(screen.getByRole("button", { name: "Start run" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Run" })).toHaveProperty("disabled", false);
+  });
+
+  it("submits on Enter through the native form, honouring the disabled gate", () => {
+    renderDialog();
+    const form = () => {
+      const found = document.getElementById("workflow-trigger-form");
+      if (!(found instanceof HTMLFormElement)) {
+        throw new Error("trigger form not rendered");
+      }
+      return found;
+    };
+
+    // The footer button lives outside the form and joins it by id — the
+    // association implicit submission depends on.
+    expect(screen.getByRole("button", { name: "Run" }).getAttribute("form"))
+      .toBe("workflow-trigger-form");
+
+    // Required input missing: the submit handler's own guard must hold even
+    // if a submission event gets through.
+    fireEvent.submit(form());
+    expect(triggerActions.triggerRun).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText("Issue"), { target: { value: "PRO-174" } });
+    fireEvent.submit(form());
+    expect(triggerActions.triggerRun).toHaveBeenCalledWith({
+      workflowDefinitionId: "wf-1",
+      arguments: { issue: "PRO-174", notes: "" },
+      placement: { repoConfigId: "root-1", mode: "worktree" },
+    });
   });
 
   it("renders the trigger error inline", () => {

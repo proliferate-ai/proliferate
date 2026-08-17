@@ -1,4 +1,4 @@
-import type { GitStatusSnapshot, RepoRoot } from "@anyharness/sdk";
+import type { GitStatusSnapshot, RepoRoot, WorkflowRunStatusV2 } from "@anyharness/sdk";
 import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
 import type { SidebarSessionActivityState } from "#product/domain/sessions/activity";
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
@@ -99,6 +99,7 @@ export function buildSidebarGroupStates(args: {
   desktopInstallId?: string | null;
   /** Whether Cloud compute is enabled on this deployment (PRO-10). */
   cloudComputeEnabled: boolean;
+  workflowRunStatusByWorkspaceId?: Record<string, WorkflowRunStatusV2>;
 }): SidebarGroupState[] {
   const visibleWorkspaceTypes = new Set(resolveSidebarWorkspaceTypes(args.workspaceTypes));
   const repoRootsByKey = new Map(
@@ -202,6 +203,7 @@ export function buildSidebarGroupStates(args: {
         suppressActiveNeedsReview: args.suppressActiveNeedsReview,
         desktopInstallId: args.desktopInstallId,
         cloudComputeEnabled: args.cloudComputeEnabled,
+        workflowRunStatusByWorkspaceId: args.workflowRunStatusByWorkspaceId,
       });
       const items = pendingItems.length > 0
         ? [...pendingItems, ...workspaceItems]

@@ -5,9 +5,15 @@
 
 import type { WorkflowGraphSlotVM } from "./run-view-model";
 
-/** Card geometry the design settles on: 200×92 cards on a 22px dot grid. */
+/**
+ * Card geometry the design settles on, per surface: the run graph draws
+ * 200×92 cards, the builder draws 208×84 (its cards carry a model line
+ * instead of a status header), both on a 22px dot grid.
+ */
 export const WORKFLOW_GRAPH_NODE_WIDTH = 200;
 export const WORKFLOW_GRAPH_NODE_HEIGHT = 92;
+export const WORKFLOW_BUILDER_NODE_WIDTH = 208;
+export const WORKFLOW_BUILDER_NODE_HEIGHT = 84;
 /** Vertical pitch between chain ranks (card height + drawn-edge room). */
 const RANK_GAP = 60;
 /** Horizontal pitch between lanes (card width + gutter). */
@@ -159,15 +165,21 @@ export function layoutWorkflowRunGraph(slots: readonly WorkflowGraphSlotVM[]): W
  * ids alone and invents nothing else.
  */
 export function layoutWorkflowChainGraph(nodeIds: readonly string[]): WorkflowGraphLayout {
+  const width = WORKFLOW_BUILDER_NODE_WIDTH;
+  const height = WORKFLOW_BUILDER_NODE_HEIGHT;
   const nodes = nodeIds.map((id, index): WorkflowGraphPlacedNode => ({
     key: id,
     x: 0,
-    y: index * (WORKFLOW_GRAPH_NODE_HEIGHT + RANK_GAP),
+    y: index * (height + RANK_GAP),
     branch: false,
   }));
+  const port = (node: WorkflowGraphPlacedNode, atBottom: boolean) => ({
+    x: node.x + width / 2,
+    y: node.y + (atBottom ? height : 0),
+  });
   const edges = nodes.slice(1).map((node, index): WorkflowGraphEdgeLayout => {
-    const from = bottomPort(nodes[index]);
-    const to = topPort(node);
+    const from = port(nodes[index], true);
+    const to = port(node, false);
     return {
       fromKey: nodes[index].key,
       toKey: node.key,
@@ -178,9 +190,7 @@ export function layoutWorkflowChainGraph(nodeIds: readonly string[]): WorkflowGr
   return {
     nodes,
     edges,
-    width: nodes.length === 0 ? 0 : WORKFLOW_GRAPH_NODE_WIDTH,
-    height: nodes.length === 0
-      ? 0
-      : nodes[nodes.length - 1].y + WORKFLOW_GRAPH_NODE_HEIGHT,
+    width: nodes.length === 0 ? 0 : width,
+    height: nodes.length === 0 ? 0 : nodes[nodes.length - 1].y + height,
   };
 }

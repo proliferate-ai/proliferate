@@ -20,7 +20,7 @@ describe("Workflows gen-2 surface boundary", () => {
     const files = [
       "apps/packages/product-client/src/components/workflows/main/WorkflowsMainSurface.tsx",
       "apps/packages/product-client/src/components/workflows/builder-v2/WorkflowBuilderDetailsCard.tsx",
-      "apps/packages/product-client/src/components/workflows/builder-v2/WorkflowBuilderNodeCard.tsx",
+      "apps/packages/product-client/src/components/workflows/builder-v2/WorkflowBuilderNodeInspector.tsx",
       "apps/packages/product-client/src/components/workflows/builder-v2/WorkflowBuilderDocInspector.tsx",
       "apps/packages/product-client/src/components/workflows/builder-v2/WorkflowBuilderInputsPanel.tsx",
       "apps/packages/product-client/src/components/workflows/builder-v2/WorkflowBuilderPromptField.tsx",

@@ -86,6 +86,99 @@ afterEach(() => {
 });
 
 describe("WorkflowBuilderSurface", () => {
+  it("starts the builder header at the top and sends Back to the owning route", () => {
+    const onBack = vi.fn();
+    const { container } = render(
+      <WorkflowBuilderSurface
+        definitionId={null}
+        template={null}
+        authCacheScope="user-1"
+        onBack={onBack}
+      />,
+    );
+
+    expect(container.querySelector("[data-workflow-builder-drag-clearance]")).toBeNull();
+    expect(screen.getByLabelText("Workflow title")).toHaveProperty("value", "untitled_workflow");
+    expect(screen.getByText("0 steps · 1 node")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("confirms an edited workflow name with the design check or Enter", () => {
+    render(
+      <WorkflowBuilderSurface
+        definitionId={null}
+        template={null}
+        authCacheScope="user-1"
+      />,
+    );
+
+    const title = screen.getByLabelText("Workflow title");
+    fireEvent.change(title, { target: { value: "issue_triage" } });
+    expect(screen.getByRole("button", { name: "Confirm name" })).toBeTruthy();
+
+    fireEvent.keyDown(title, { key: "Enter" });
+    expect(screen.queryByRole("button", { name: "Confirm name" })).toBeNull();
+
+    fireEvent.change(title, { target: { value: "issue_triage_v2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm name" }));
+    expect(screen.queryByRole("button", { name: "Confirm name" })).toBeNull();
+  });
+
+  it("resizes both side panes through the shared workspace separators", () => {
+    const { container } = render(
+      <WorkflowBuilderSurface
+        definitionId={null}
+        template={null}
+        authCacheScope="user-1"
+      />,
+    );
+
+    const rail = container.querySelector<HTMLElement>("#workflow-builder-rail");
+    const railSeparator = container.querySelector<HTMLElement>(
+      '[role="separator"][aria-controls="workflow-builder-rail"]',
+    );
+
+    expect(rail?.style.width).toBe("184px");
+    // The design keeps the canvas wide until a card is selected.
+    expect(container.querySelector("#workflow-builder-inspector")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add an agent step" }));
+    const inspector = container.querySelector<HTMLElement>("#workflow-builder-inspector");
+    const inspectorSeparator = container.querySelector<HTMLElement>(
+      '[role="separator"][aria-controls="workflow-builder-inspector"]',
+    );
+    expect(inspector?.style.width).toBe("312px");
+
+    fireEvent.mouseDown(railSeparator!, { clientX: 184 });
+    fireEvent.mouseMove(document, { clientX: 244 });
+    expect(rail?.style.width).toBe("244px");
+    fireEvent.mouseUp(document);
+
+    fireEvent.doubleClick(railSeparator!);
+    expect(rail?.style.width).toBe("184px");
+
+    fireEvent.mouseDown(railSeparator!, { clientX: 184 });
+    fireEvent.mouseMove(document, { clientX: 80 });
+    expect(rail?.style.width).toBe("52px");
+    expect(screen.queryByText("Add step")).toBeNull();
+    fireEvent.mouseUp(document);
+    fireEvent.doubleClick(railSeparator!);
+
+    // The inspector is anchored to the right, so dragging its left edge left
+    // grows the pane by the same distance.
+    fireEvent.mouseDown(inspectorSeparator!, { clientX: 700 });
+    fireEvent.mouseMove(document, { clientX: 640 });
+    expect(inspector?.style.width).toBe("372px");
+    fireEvent.mouseUp(document);
+    fireEvent.doubleClick(inspectorSeparator!);
+    expect(inspector?.style.width).toBe("312px");
+
+    fireEvent.pointerDown(screen.getByRole("group", { name: "Workflow chain" }));
+    expect(container.querySelector("#workflow-builder-inspector")).toBeNull();
+  });
+
   it("draws the template's chain on the canvas and edits one step at a time", () => {
     render(
       <WorkflowBuilderSurface
@@ -95,11 +188,10 @@ describe("WorkflowBuilderSurface", () => {
       />,
     );
 
-    // Both steps sit on the canvas as selectable cards; the inspector under
-    // it opens on the first step and edits exactly one at a time.
-    expect(screen.getByRole("button", { name: /Research/ })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Step 1" })).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "Step 2" })).toBeNull();
+    // Both steps sit on the canvas as selectable cards. The inspector opens
+    // only after a selection and edits exactly one at a time.
+    fireEvent.click(screen.getByRole("button", { name: /Research/ }));
+    expect(screen.getByLabelText("Step name")).toHaveProperty("value", "Research");
     // Step 1 heads the chain, so it cannot move up.
     expect(screen.getByRole("button", { name: "Move step 1 up" }))
       .toHaveProperty("disabled", true);
@@ -108,11 +200,32 @@ describe("WorkflowBuilderSurface", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Review the findings/ }));
 
-    expect(screen.getByRole("heading", { name: "Step 2" })).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "Step 1" })).toBeNull();
+    expect(screen.getByLabelText("Step name")).toHaveProperty("value", "Review the findings");
     // Step 2 tails the chain, so it cannot move down.
     expect(screen.getByRole("button", { name: "Move step 2 down" }))
       .toHaveProperty("disabled", true);
+  });
+
+  it("deletes a focused node with Return and restores it with Command+Z", () => {
+    render(
+      <WorkflowBuilderSurface
+        definitionId={null}
+        template={RESEARCH_AND_REVIEW}
+        authCacheScope="user-1"
+      />,
+    );
+
+    const researchNode = screen.getByRole("button", { name: /Research/ });
+    fireEvent.focus(researchNode);
+    expect(screen.getByLabelText("Step name")).toHaveProperty("value", "Research");
+
+    fireEvent.keyDown(researchNode, { key: "Enter" });
+    expect(screen.queryByRole("button", { name: /Research/ })).toBeNull();
+    expect(screen.getByText("1 step · 2 nodes")).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: "z", metaKey: true });
+    expect(screen.getByRole("button", { name: /Research/ })).toBeTruthy();
+    expect(screen.getByText("2 steps · 3 nodes")).toBeTruthy();
   });
 
   it("selects a just-added step so its fields are ready to edit", () => {
@@ -124,11 +237,14 @@ describe("WorkflowBuilderSurface", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Human in the loop" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add a human-in-the-loop step" }));
 
-    expect(screen.getByRole("heading", { name: "Step 3" })).toBeTruthy();
-    // The palette's second entry mints a gated step, not an agent.
-    expect(screen.getByLabelText("Requires approval").getAttribute("aria-checked")).toBe("true");
+    // The palette's second entry mints a gated step, not an agent, and the
+    // just-added step opens in the inspector.
+    expect(screen.getByLabelText("Step name")).toHaveProperty("value", "");
+    expect(screen.getByLabelText("Requires human approval").getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("button", { name: "Move step 3 down" }))
+      .toHaveProperty("disabled", true);
   });
 
   it("gates Save on a title and creates through the access seam", async () => {
@@ -142,6 +258,8 @@ describe("WorkflowBuilderSurface", () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add an agent step" }));
     expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", true);
 
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
@@ -163,6 +281,7 @@ describe("WorkflowBuilderSurface", () => {
     );
 
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add an agent step" }));
     fireEvent.change(screen.getByLabelText("Prompt"), {
       target: { value: "Write @doc:findings." },
     });
@@ -172,7 +291,7 @@ describe("WorkflowBuilderSurface", () => {
     expect(alerts.some((text) => text.includes("@doc:findings"))).toBe(true);
   });
 
-  it("offers the catalog's models once a harness is picked", () => {
+  it("groups the catalog's models by harness in the design's single picker", () => {
     render(
       <WorkflowBuilderSurface
         definitionId={null}
@@ -181,13 +300,16 @@ describe("WorkflowBuilderSurface", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Model")).toHaveProperty("disabled", true);
-    fireEvent.change(screen.getByLabelText("Harness"), { target: { value: "claude" } });
-
+    fireEvent.click(screen.getByRole("button", { name: "Add an agent step" }));
     const model = screen.getByLabelText("Model");
     expect(model).toHaveProperty("disabled", false);
     expect([...(model as HTMLSelectElement).options].map((option) => option.value))
-      .toEqual(["", "sonnet", "opus"]);
+      .toEqual([
+        "",
+        JSON.stringify(["claude", ""]),
+        JSON.stringify(["claude", "sonnet"]),
+        JSON.stringify(["claude", "opus"]),
+      ]);
   });
 
   it("keeps the model pick when a step is toggled to require approval", async () => {
@@ -200,16 +322,21 @@ describe("WorkflowBuilderSurface", () => {
     );
 
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
-    fireEvent.change(screen.getByLabelText("Harness"), { target: { value: "claude" } });
-    fireEvent.change(screen.getByLabelText("Model"), { target: { value: "opus" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add an agent step" }));
+    fireEvent.change(screen.getByLabelText("Model"), {
+      target: { value: JSON.stringify(["claude", "opus"]) },
+    });
 
-    fireEvent.click(screen.getByLabelText("Requires approval"));
+    fireEvent.click(screen.getByLabelText("Requires human approval"));
 
     // A gated step still runs an agent session, so the model configuration
     // survives the toggle: the fields stay rendered, editable, and populated.
-    expect(screen.getByText("The run pauses here until someone approves the step.")).toBeTruthy();
-    expect(screen.getByLabelText("Harness")).toHaveProperty("disabled", false);
-    expect(screen.getByLabelText("Model")).toHaveProperty("value", "opus");
+    expect(screen.queryByText("The run pauses here until someone approves the step.")).toBeNull();
+    expect(screen.queryByText(/stops for a person to review or decide/)).toBeNull();
+    expect(screen.getByLabelText("Model")).toHaveProperty(
+      "value",
+      JSON.stringify(["claude", "opus"]),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Save Workflow" }));
     await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(1));
@@ -221,8 +348,11 @@ describe("WorkflowBuilderSurface", () => {
     });
 
     // Toggling back off keeps it too — the toggle only moves `type`.
-    fireEvent.click(screen.getByLabelText("Requires approval"));
-    expect(screen.getByLabelText("Model")).toHaveProperty("value", "opus");
+    fireEvent.click(screen.getByLabelText("Requires human approval"));
+    expect(screen.getByLabelText("Model")).toHaveProperty(
+      "value",
+      JSON.stringify(["claude", "opus"]),
+    );
   });
 
   it("chips a malformed prompt reference and blocks Save", () => {
@@ -235,13 +365,15 @@ describe("WorkflowBuilderSurface", () => {
     );
 
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add an agent step" }));
     // `@doc:plan.md` is well-formed prose and a malformed reference: declaring
     // a document cannot rescue it, so it must block the save on its own.
     fireEvent.change(screen.getByLabelText("Prompt"), {
       target: { value: "Read @doc:plan.md first." },
     });
 
-    expect(screen.getByText("@doc:plan.md").getAttribute("data-malformed")).toBe("true");
+    expect(screen.getByLabelText("Prompt")).toHaveProperty("value", "Read @doc:plan.md first.");
+    expect(screen.queryByText("Prompt preview")).toBeNull();
     expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", true);
     const alerts = screen.getAllByRole("alert").map((node) => node.textContent ?? "");
     expect(alerts.some((text) => text.includes("malformed reference “@doc:plan.md”"))).toBe(true);
@@ -276,7 +408,11 @@ describe("WorkflowBuilderSurface", () => {
       />,
     );
 
-    expect(screen.getByText("2-step").getAttribute("data-invalid")).toBe("true");
+    // The refused id has no badge of its own anymore — the validator's message
+    // lands in the inspector's alert block, and the save gate holds.
+    fireEvent.click(screen.getByRole("button", { name: /Diagnose/ }));
+    const alerts = screen.getAllByRole("alert").map((node) => node.textContent ?? "");
+    expect(alerts.some((text) => text.includes("2-step"))).toBe(true);
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Renamed" } });
     expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", true);
   });
@@ -291,6 +427,7 @@ describe("WorkflowBuilderSurface", () => {
     );
 
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add an agent step" }));
     fireEvent.click(screen.getByRole("button", { name: /Trigger payload/ }));
     fireEvent.click(screen.getByRole("button", { name: "Add input" }));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "my input" } });
@@ -320,6 +457,7 @@ describe("WorkflowBuilderSurface", () => {
     );
 
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add an agent step" }));
     fireEvent.click(screen.getByRole("button", { name: "Add document" }));
     fireEvent.change(screen.getByLabelText("Slug"), { target: { value: " Research-Findings " } });
 
@@ -364,6 +502,7 @@ describe("WorkflowBuilderSurface", () => {
     );
 
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add an agent step" }));
     fireEvent.click(screen.getByRole("button", { name: /Trigger payload/ }));
     fireEvent.change(screen.getByLabelText("Default repository"), {
       target: { value: "root-2" },
@@ -416,6 +555,7 @@ describe("WorkflowBuilderSurface", () => {
     )).toBeTruthy();
     // A workflow that names no repository is still savable: the run picks one.
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add an agent step" }));
     expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", false);
   });
 

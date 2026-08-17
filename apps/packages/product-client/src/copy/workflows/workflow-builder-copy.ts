@@ -23,7 +23,8 @@ export const WORKFLOW_BUILDER_COPY = {
 
   detailsHeading: "Details",
   titleLabel: "Workflow title",
-  titlePlaceholder: "Issue triage",
+  titlePlaceholder: "untitled_workflow",
+  confirmTitleLabel: "Confirm name",
   descriptionLabel: "Description",
   descriptionPlaceholder: "What this workflow does and when to run it.",
   defaultRepositoryLabel: "Default repository",
@@ -37,30 +38,26 @@ export const WORKFLOW_BUILDER_COPY = {
   repositoriesLoadFailed:
     "Repositories could not be loaded from the runtime. Reconnect to change this workflow's default repository.",
 
-  issuesBanner: (count: number, firstMessage: string) =>
-    `Fix ${count} ${count === 1 ? "issue" : "issues"} before saving. ${firstMessage}`,
   catalogUnavailable:
     "The agent catalog could not be loaded. Steps save without a model and use the run's default.",
 
-  stepHeading: (position: number) => `Step ${position}`,
   /** Accessible name of the pannable chain canvas. */
   chainCanvasLabel: "Workflow chain",
   /** A canvas card whose title is still blank. */
   canvasUntitledStep: "Untitled step",
-  /** The destructive mark on a canvas card the validator has an issue on. */
-  canvasIssueMarkLabel: "This step has issues",
+  /** A step card's summary line while its prompt is still empty. */
+  canvasNoPrompt: "No prompt written yet",
 
   /** The left rail's step palette. */
   addStepHeading: "Add step",
   addAgentStepLabel: "Agent",
+  addAgentStepTitle: "Add an agent step",
   addHumanStepLabel: "Human in the loop",
-  railHelp:
-    "Steps run top to bottom from the input. Select a card to edit it in the inspector, and reorder from there.",
-
+  addHumanStepTitle: "Add a human-in-the-loop step",
   /** The left rail's context-docs section. */
   contextDocsHeading: "Context docs",
   contextDocsCount: (count: number) => (count === 1 ? "1 doc" : `${count} docs`),
-  contextDocsEmpty: "Documents steps write and later steps read.",
+  contextDocsEmpty: "Markdown notes every step in this workflow can read.",
   docUntitledRow: "untitled",
 
   /** The structural input node heading the chain. */
@@ -72,32 +69,25 @@ export const WORKFLOW_BUILDER_COPY = {
   statusSummary: (steps: number, nodes: number) =>
     `${steps} ${steps === 1 ? "step" : "steps"} · ${nodes} ${nodes === 1 ? "node" : "nodes"}`,
   statusValid: "Valid",
-  statusIssues: (count: number) => (count === 1 ? "1 issue" : `${count} issues`),
-  removeStepLabel: (position: number) => `Remove step ${position}`,
+  statusMoreIssues: (count: number) => `+${count} more`,
+
+  /** The top bar's destructive definition delete. */
+  deleteDefinitionLabel: "Delete",
+  deleteDefinitionTitle: "Delete this workflow definition",
   moveStepUpLabel: (position: number) => `Move step ${position} up`,
   moveStepDownLabel: (position: number) => `Move step ${position} down`,
-  stepTitleLabel: "Title",
+  stepTitleLabel: "Step name",
   stepTitlePlaceholder: "Draft the research questions",
-  requiresApprovalLabel: "Requires approval",
-  humanStepNote: "The run pauses here until someone approves the step.",
-  harnessLabel: "Harness",
+  requiresApprovalLabel: "Requires human approval",
+  modelSectionHeading: "Model",
+  deleteNodeLabel: "Delete node",
   harnessDefaultOption: "Run default",
-  harnessUnavailableOption: (agentKind: string) => `Unavailable harness (${agentKind})`,
   modelLabel: "Model",
-  modelDefaultOption: "Harness default",
+  modelHarnessDefaultOption: (harnessLabel: string) => `${harnessLabel} default`,
   modelUnavailableOption: (modelId: string) => `Unavailable model (${modelId})`,
 
   promptLabel: "Prompt",
   promptPlaceholder: "Investigate @input:goal and record what you find in @doc:findings.",
-  promptHelp:
-    "Write @input:name to read a run value and @doc:slug to read or write a document. Both must be declared below.",
-  promptPreviewLabel: "Prompt preview",
-  resolvedReferenceHint: (raw: string) => `${raw} is declared`,
-  unresolvedReferenceHint: (raw: string) => `${raw} is not declared yet`,
-  /** `reason` is `describeMalformedReference`'s fragment, so the grammar is stated once. */
-  malformedReferenceHint: (raw: string, reason: string) =>
-    `${raw} is not a valid reference: ${reason}`,
-
   inputsHeading: "Inputs",
   inputsDescription: "Values supplied when a run starts. Prompts read them as @input:name.",
   inputsEmpty: "This workflow takes no inputs.",
@@ -113,6 +103,11 @@ export const WORKFLOW_BUILDER_COPY = {
   addDocLabel: "Add document",
   removeDocLabel: (slug: string) => `Remove document ${slug}`,
   removeDocButtonLabel: "Remove doc",
+  docKindLabel: "Markdown",
+  docCloseLabel: "Close",
+  docContentsLabel: "Contents",
+  /** "Markdown · 12 words" — the doc's meta line under its slug. */
+  docMeta: (words: number) => `Markdown · ${words} ${words === 1 ? "word" : "words"}`,
   docSlugLabel: "Slug",
   docSlugPlaceholder: "findings",
   docProducingNodeLabel: "Written by",
@@ -120,6 +115,5 @@ export const WORKFLOW_BUILDER_COPY = {
   docProducingNodeOption: (position: number, title: string) =>
     title.trim().length > 0 ? `Step ${position} — ${title}` : `Step ${position}`,
   docProducingNodeUnavailableOption: (nodeId: string) => `Unavailable step (${nodeId})`,
-  docBodyLabel: "Starting body",
   docBodyPlaceholder: "# Findings\n\n## Answers\n",
 } as const;

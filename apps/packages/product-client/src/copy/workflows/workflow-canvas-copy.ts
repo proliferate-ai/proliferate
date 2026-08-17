@@ -7,7 +7,9 @@
 export const WORKFLOW_CANVAS_COPY = {
   zoomInLabel: "Zoom in",
   zoomOutLabel: "Zoom out",
-  zoomFitLabel: "Fit graph",
+  zoomFitLabel: "Fit to view",
+  /** The builder toolbar's visible Fit text. */
+  fitLabel: "Fit",
   /** "85%" — the zoom readout between the two buttons. */
   zoomLevel: (zoom: number): string => `${Math.round(zoom * 100)}%`,
 } as const;

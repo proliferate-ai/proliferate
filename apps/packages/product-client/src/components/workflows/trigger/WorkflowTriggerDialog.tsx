@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { useRepoRootsQuery } from "@anyharness/sdk-react";
 import type {
   WorkflowArgumentsV2,
@@ -12,27 +12,18 @@ import {
   type WorkflowTriggerLaunch,
 } from "#product/hooks/workflows/workflows/use-workflow-trigger-actions";
 import { workflowRepoRootOptions } from "#product/lib/domain/workflows/workflow-repo-root-options";
-import { Button } from "#product/primitives/Button";
-import { Input } from "#product/primitives/Input";
-import { Label } from "#product/primitives/Label";
 import { ModalShell } from "#product/primitives/patterns/ModalShell";
 import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
-import { SegmentedControl } from "#product/primitives/SegmentedControl";
-import { Select } from "#product/primitives/Select";
 
 export interface WorkflowTriggerDialogProps {
   definitionRecord: WorkflowDefinitionRecordV2;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onLaunched: (launch: WorkflowTriggerLaunch) => void;
-  /**
-   * Same per-account cache scope every other workflows surface threads from
-   * `WorkflowsPage` (the signed-in user id). Not defaulted here: a shared
-   * default would pool one account's invocations with another's. It does not
-   * scope the repo picker — repo roots are runtime-local, cached per runtime.
-   */
   authCacheScope: string;
 }
+
+const TRIGGER_FORM_ID = "workflow-trigger-form";
 
 interface TriggerFormState {
   key: string;
@@ -41,11 +32,58 @@ interface TriggerFormState {
   mode: WorkflowPlacementModeV2;
 }
 
+const sectionLabelStyle: CSSProperties = {
+  fontFamily: "var(--font-mono)",
+  letterSpacing: "0.07em",
+  textTransform: "uppercase",
+  color: "var(--color-faint)",
+};
+
+const fieldStyle: CSSProperties = {
+  width: "100%",
+  padding: "6px 8px",
+  borderRadius: 7,
+  border: "1px solid var(--color-border)",
+  background: "var(--color-surface-elevated-secondary)",
+  color: "var(--color-foreground)",
+  font: "inherit",
+  outline: "none",
+};
+
+function placementOptionStyle(selected: boolean): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 9,
+    width: "100%",
+    padding: "9px 10px",
+    borderRadius: 9,
+    border: `1px solid ${selected ? "var(--color-border-heavy)" : "var(--color-border)"}`,
+    background: selected ? "var(--color-surface-elevated-secondary)" : "transparent",
+    color: "var(--color-foreground)",
+    font: "inherit",
+    cursor: "pointer",
+    textAlign: "left",
+  };
+}
+
+function placementDotStyle(selected: boolean): CSSProperties {
+  return {
+    width: 12,
+    height: 12,
+    borderRadius: 999,
+    flex: "none",
+    marginTop: 2,
+    border: `1px solid ${selected ? "var(--color-info)" : "var(--color-border-heavy)"}`,
+    background: selected ? "var(--color-info)" : "transparent",
+    boxShadow: selected ? "inset 0 0 0 2px var(--color-surface-elevated)" : "none",
+  };
+}
+
 /**
- * The gen-2 "run this workflow" dialog: one field per declared input, where
- * the run should be placed, and a Confirm that hands the whole thing to the
- * trigger courier. It composes existing primitives only — the modal frame,
- * the field controls, and the placement segment all belong to the library.
+ * Manual workflow trigger rendered in the attached design's compact modal
+ * anatomy. The two placement cards map to the production v2 contract:
+ * an isolated repository worktree or the repository root's existing checkout.
  */
 export function WorkflowTriggerDialog({
   definitionRecord,
@@ -59,20 +97,12 @@ export function WorkflowTriggerDialog({
     authCacheScope,
     onLaunched,
   });
-  // v1 semantics: the runtime resolves `placement.repoConfigId` against its
-  // own repo-root id space (GET /v1/repo-roots), so the picker offers runtime
-  // repo roots and the picked id travels into the placement unchanged despite
-  // the field's name. Cloud repo-config ids are not interchangeable here and
-  // only return once an explicit cloud-to-runtime mapping exists.
   const repoRootsQuery = useRepoRootsQuery({ enabled: open });
   const repositories = useMemo(
     () => workflowRepoRootOptions(repoRootsQuery.data ?? []),
     [repoRootsQuery.data],
   );
 
-  // Re-seeding on the derived key (rather than an effect) is gen-1's
-  // argument-draft idiom: reopening the dialog, or opening it on another
-  // definition, starts from the definition's own defaults.
   const formKey = `${definitionRecord.id}:${definitionRecord.revision}:${open}`;
   const [formState, setFormState] = useState<TriggerFormState>(
     () => freshTriggerForm(formKey, definitionRecord),
@@ -81,9 +111,6 @@ export function WorkflowTriggerDialog({
     ? formState
     : freshTriggerForm(formKey, definitionRecord);
 
-  // A stored default the runtime does not list stays visible so the picker
-  // never misreports what is selected, but it is not submittable: the runtime
-  // rejects a repo-root id it does not own.
   const savedRepositoryUnavailable = form.repoConfigId.length > 0
     && !repositories.some((repository) => repository.id === form.repoConfigId);
   const requiredInputsSupplied = inputs.every(
@@ -107,35 +134,73 @@ export function WorkflowTriggerDialog({
       open={open}
       onClose={() => onOpenChange(false)}
       disableClose={triggering}
-      title={definitionRecord.title}
-      description={WORKFLOW_TRIGGER_COPY.description}
-      sizeClassName="max-w-lg"
+      title={`Run ${definitionRecord.title}`}
+      description={WORKFLOW_TRIGGER_COPY.manualDescription}
+      headerContent={(
+        <div className="flex flex-col gap-1">
+          <span className="text-ui font-medium text-foreground">
+            Run {definitionRecord.title}
+          </span>
+          <span className="text-ui-sm text-faint">
+            {WORKFLOW_TRIGGER_COPY.manualDescription}
+          </span>
+        </div>
+      )}
+      sizeClassName="max-w-[460px]"
+      showCloseButton={false}
       telemetryBlocked
+      overlayClassName="bg-black/45"
+      panelClassName="!gap-3.5 !rounded-xl border-border bg-surface-elevated shadow-modal"
+      headerClassName="shrink-0 px-4 pt-4"
+      bodyClassName="px-4"
+      footerClassName="flex shrink-0 items-center justify-end gap-2 px-4 pb-4"
       footer={(
         <>
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            size="md"
             disabled={triggering}
+            className="text-ui-sm cursor-pointer hover:bg-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            style={{
+              padding: "5px 11px",
+              borderRadius: 7,
+              border: "1px solid var(--color-border)",
+              background: "var(--color-surface-elevated)",
+              color: "var(--color-muted-foreground)",
+              font: "inherit",
+            }}
             onClick={() => onOpenChange(false)}
           >
             {WORKFLOW_TRIGGER_COPY.cancelLabel}
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            size="md"
-            loading={triggering}
+          </button>
+          <button
+            type="submit"
+            form={TRIGGER_FORM_ID}
             disabled={confirmDisabled}
-            onClick={submit}
+            className="text-ui-sm cursor-pointer font-medium hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+            style={{
+              padding: "5px 13px",
+              borderRadius: 7,
+              border: "1px solid var(--color-border-heavy)",
+              background: "var(--color-surface-elevated-secondary)",
+              color: "var(--color-foreground)",
+              font: "inherit",
+            }}
           >
-            {WORKFLOW_TRIGGER_COPY.confirmLabel}
-          </Button>
+            {triggering ? WORKFLOW_TRIGGER_COPY.runningLabel : WORKFLOW_TRIGGER_COPY.confirmLabel}
+          </button>
         </>
       )}
     >
-      <div className="space-y-4">
+      <form
+        id={TRIGGER_FORM_ID}
+        className="flex flex-col gap-3.5"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!confirmDisabled) {
+            submit();
+          }
+        }}
+      >
         {error ? <NoticeBanner tone="destructive">{error}</NoticeBanner> : null}
         {repoRootsQuery.isError ? (
           <NoticeBanner tone="warning">
@@ -143,23 +208,27 @@ export function WorkflowTriggerDialog({
           </NoticeBanner>
         ) : null}
 
-        {inputs.length === 0 ? (
-          <p className="text-ui text-muted-foreground">
-            {WORKFLOW_TRIGGER_COPY.inputsEmpty}
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {inputs.map((input) => {
+        {inputs.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            <span className="text-ui-sm" style={sectionLabelStyle}>{WORKFLOW_TRIGGER_COPY.inputsLabel}</span>
+            {inputs.map((input, index) => {
               const fieldId = `workflow-trigger-input-${input.name}`;
               const help = inputHelpText(input);
               return (
-                <div key={input.name}>
-                  <Label htmlFor={fieldId}>{input.name}</Label>
-                  <Input
+                <div key={input.name} className="flex flex-col gap-1.5">
+                  <label htmlFor={fieldId} className="text-ui-sm font-medium text-foreground">
+                    {workflowInputDisplayName(input.name)}
+                  </label>
+                  <input
                     id={fieldId}
                     value={form.values[input.name] ?? ""}
                     required={input.required}
                     disabled={triggering}
+                    autoFocus={index === 0}
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="text-ui-sm"
+                    style={fieldStyle}
                     onChange={(event) => setFormState({
                       ...form,
                       values: {
@@ -168,23 +237,63 @@ export function WorkflowTriggerDialog({
                       },
                     })}
                   />
-                  {help ? (
-                    <p className="mt-1 text-ui-sm text-muted-foreground">{help}</p>
-                  ) : null}
+                  {help ? <p className="text-ui-sm m-0 text-faint">{help}</p> : null}
                 </div>
               );
             })}
           </div>
-        )}
+        ) : null}
 
-        <div>
-          <Label htmlFor="workflow-trigger-repository">
+        <div className="flex flex-col gap-1.5" role="radiogroup" aria-label={WORKFLOW_TRIGGER_COPY.placementLabel}>
+          <span className="text-ui-sm" style={sectionLabelStyle}>{WORKFLOW_TRIGGER_COPY.whereItRunsLabel}</span>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={form.mode === "worktree"}
+            disabled={triggering}
+            style={placementOptionStyle(form.mode === "worktree")}
+            onClick={() => setFormState({ ...form, mode: "worktree" })}
+          >
+            <span aria-hidden style={placementDotStyle(form.mode === "worktree")} />
+            <span className="flex min-w-0 flex-col gap-0.5 text-left">
+              <span className="text-ui-sm text-foreground">
+                {WORKFLOW_TRIGGER_COPY.placementWorktree}
+              </span>
+              <span className="text-ui-sm text-faint">
+                {WORKFLOW_TRIGGER_COPY.placementWorktreeHelp}
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={form.mode === "repo_root"}
+            disabled={triggering}
+            style={placementOptionStyle(form.mode === "repo_root")}
+            onClick={() => setFormState({ ...form, mode: "repo_root" })}
+          >
+            <span aria-hidden style={placementDotStyle(form.mode === "repo_root")} />
+            <span className="flex min-w-0 flex-col gap-0.5 text-left">
+              <span className="text-ui-sm text-foreground">
+                {WORKFLOW_TRIGGER_COPY.placementRepoRoot}
+              </span>
+              <span className="text-ui-sm text-faint">
+                {WORKFLOW_TRIGGER_COPY.placementRepoRootHelp}
+              </span>
+            </span>
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-ui-sm" htmlFor="workflow-trigger-repository" style={sectionLabelStyle}>
             {WORKFLOW_TRIGGER_COPY.repositoryLabel}
-          </Label>
-          <Select
+          </label>
+          <select
             id="workflow-trigger-repository"
             value={form.repoConfigId}
             disabled={triggering || repoRootsQuery.isLoading}
+            className="text-ui-sm"
+            style={fieldStyle}
             onChange={(event) => setFormState({
               ...form,
               repoConfigId: event.currentTarget.value,
@@ -199,25 +308,9 @@ export function WorkflowTriggerDialog({
             {repositories.map((repository) => (
               <option key={repository.id} value={repository.id}>{repository.label}</option>
             ))}
-          </Select>
+          </select>
         </div>
-
-        <div>
-          <Label>{WORKFLOW_TRIGGER_COPY.placementLabel}</Label>
-          <SegmentedControl<WorkflowPlacementModeV2>
-            ariaLabel={WORKFLOW_TRIGGER_COPY.placementLabel}
-            value={form.mode}
-            items={[
-              { id: "worktree", label: WORKFLOW_TRIGGER_COPY.placementWorktree, disabled: triggering },
-              { id: "repo_root", label: WORKFLOW_TRIGGER_COPY.placementRepoRoot, disabled: triggering },
-            ]}
-            onChange={(mode) => setFormState({ ...form, mode })}
-          />
-          <p className="mt-1 text-ui-sm text-muted-foreground">
-            {WORKFLOW_TRIGGER_COPY.placementHelp}
-          </p>
-        </div>
-      </div>
+      </form>
     </ModalShell>
   );
 }
@@ -236,6 +329,14 @@ function freshTriggerForm(
   };
 }
 
+function workflowInputDisplayName(name: string): string {
+  const spaced = name.replace(/[_-]+/gu, " ").trim();
+  if (spaced.length === 0) {
+    return name;
+  }
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
 function inputHelpText(input: WorkflowInputV2): string | null {
   const parts = [
     input.description,
@@ -244,13 +345,6 @@ function inputHelpText(input: WorkflowInputV2): string | null {
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-/**
- * v1 strict rule: every prompt-referenced input needs an argument, enforced by
- * both control-plane validation and the runtime. A blank optional therefore
- * cannot be omitted — a definition whose prompt reads `@input:notes` would be
- * unlaunchable — so the client supplies "". Required inputs are gated by
- * `requiredInputsSupplied` before submit, not here.
- */
 function collectArguments(
   inputs: readonly WorkflowInputV2[],
   values: Record<string, string>,

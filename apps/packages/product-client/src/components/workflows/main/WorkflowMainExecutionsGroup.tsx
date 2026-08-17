@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, type CSSProperties } from "react";
 import type { WorkflowRunV2 } from "@anyharness/sdk";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { WORKFLOW_MAIN_COPY } from "#product/copy/workflows/workflow-main-copy";
@@ -9,23 +9,19 @@ import {
 } from "#product/domain/workflows/main-view-model";
 import { Spinner } from "#product/primitives/Spinner";
 import { CheckCircleFilled, CircleAlert } from "#product/primitives/icons/status";
-import { Clock } from "#product/primitives/icons/core";
-import { Card } from "#product/primitives/patterns/Card";
-import { RosterRow } from "#product/primitives/patterns/RosterRow";
+import { ChevronRight, Clock } from "#product/primitives/icons/core";
 import { formatRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
 
-/** Comfortable-density `RosterRow`'s resting height, used as the virtualizer's estimate. */
-const EXECUTION_ROW_ESTIMATE_PX = 52;
+/** The design's 36px index row, used as the virtualizer's estimate. */
+const EXECUTION_ROW_ESTIMATE_PX = 36;
 /** Caps the group's own scroll so a long execution history never grows the page past a few rows tall. */
 const EXECUTIONS_LIST_MAX_HEIGHT_PX = 420;
 
 /**
- * The runs recorded from this runtime's workflows, as the main page's second
- * group — the design's Executions list. Each row is the run's identity
- * (definition title, with the same no-title fallback the resume popover
- * wears), its state in words (the leading glyph is decorative — `RosterRow`
- * silences it), and when it happened; selecting a row opens the run's
- * workspace, where the execution pane owns everything deeper.
+ * The runs recorded from this runtime's workflows, in the design's index-row
+ * anatomy: a per-state glyph, the run's title, its mono short id, its state in
+ * words with the wall clock, and when it started. Selecting a row opens the
+ * run's workspace, where the execution pane owns everything deeper.
  */
 export function WorkflowMainExecutionsGroup({
   runs,
@@ -34,25 +30,7 @@ export function WorkflowMainExecutionsGroup({
   runs: readonly WorkflowRunV2[];
   onOpen: (run: WorkflowRunV2) => void;
 }) {
-  return (
-    <Card
-      surface="opaque"
-      as="section"
-      className="flex flex-col gap-0.5 p-2"
-      header={(
-        <div className="flex flex-col gap-0.5 px-3 py-2">
-          <h2 className="text-ui font-medium text-foreground">
-            {WORKFLOW_MAIN_COPY.executionsGroupTitle}
-          </h2>
-          <p className="text-ui-sm text-muted-foreground">
-            {WORKFLOW_MAIN_COPY.executionsGroupDescription}
-          </p>
-        </div>
-      )}
-    >
-      <VirtualizedExecutionRows runs={runs} onOpen={onOpen} />
-    </Card>
-  );
+  return <VirtualizedExecutionRows runs={runs} onOpen={onOpen} />;
 }
 
 /**
@@ -103,15 +81,7 @@ function VirtualizedExecutionRows({
                 transform: `translateY(${virtualItem.start}px)`,
               }}
             >
-              <RosterRow
-                density="comfortable"
-                leading={<WorkflowExecutionGlyph status={run.status} />}
-                title={workflowRunDefinitionTitle(run.definitionJson)
-                  ?? WORKFLOW_MAIN_COPY.executionFallbackTitle}
-                secondary={executionMetaLine(run)}
-                trailing={formatRelativeTime(run.createdAt)}
-                onSelect={() => onOpen(run)}
-              />
+              <WorkflowExecutionRow run={run} onOpen={onOpen} />
             </div>
           );
         })}
@@ -120,9 +90,69 @@ function VirtualizedExecutionRows({
   );
 }
 
+const executionRowStyle: CSSProperties = {
+  display: "flex",
+  width: "100%",
+  alignItems: "center",
+  gap: 12,
+  minHeight: 36,
+  padding: "5px 10px",
+  borderRadius: 8,
+  border: 0,
+  background: "transparent",
+  cursor: "pointer",
+  textAlign: "left",
+  font: "inherit",
+};
+
+function WorkflowExecutionRow({
+  run,
+  onOpen,
+}: {
+  run: WorkflowRunV2;
+  onOpen: (run: WorkflowRunV2) => void;
+}) {
+  const title = workflowRunDefinitionTitle(run.definitionJson)
+    ?? WORKFLOW_MAIN_COPY.executionFallbackTitle;
+  return (
+    <button type="button" className="hover:bg-hover" style={executionRowStyle} onClick={() => onOpen(run)}>
+      <span
+        className="flex flex-none items-center justify-center text-faint"
+        style={{ width: 16, height: 16 }}
+      >
+        <WorkflowExecutionGlyph status={run.status} />
+      </span>
+      <span className="flex min-w-0 flex-1 items-center" style={{ gap: 8 }}>
+        <span
+          className="text-ui truncate font-medium text-foreground"
+          style={{ flex: "0 1 200px", minWidth: 96 }}
+        >
+          {title}
+        </span>
+        <span className="flex flex-none text-faint">
+          <ChevronRight className="icon-paired" aria-hidden />
+        </span>
+        <span
+          className="text-ui-sm truncate font-mono text-muted-foreground"
+          style={{ flex: "0 1 auto", minWidth: 64, maxWidth: 260 }}
+        >
+          {run.id.slice(0, 8)}
+        </span>
+        <span
+          className="text-ui-sm truncate text-faint"
+          style={{ flex: "0 1 auto", minWidth: 88 }}
+        >
+          {executionMetaLine(run)}
+        </span>
+      </span>
+      <span className="text-ui-sm flex-none text-faint">{formatRelativeTime(run.createdAt)}</span>
+    </button>
+  );
+}
+
 /**
  * "Succeeded · 1m 40s" — the run's state in words plus its wall clock once it
- * has one. The words carry the status (the glyph beside them is aria-hidden);
+ * has one. The words carry the status (the glyph beside them is decorative);
  * a status this build has no label for renders nothing rather than a guess.
  */
 function executionMetaLine(run: WorkflowRunV2): string | undefined {
@@ -137,18 +167,16 @@ function executionMetaLine(run: WorkflowRunV2): string | undefined {
 /**
  * The design's per-state marks: a live spinner while the run still moves, the
  * filled check on success, the alert circle on failure, a clock while parked.
- * Decorative only — `RosterRow`'s leading slot is aria-hidden, and the words
- * in `secondary` carry the same state.
  */
 function WorkflowExecutionGlyph({ status }: { status: WorkflowRunV2["status"] }) {
   if (status === "running" || status === "awaiting_human") {
-    return <Spinner className="icon-compact text-muted-foreground" />;
+    return <Spinner className="icon-paired text-faint" />;
   }
   if (status === "completed") {
-    return <CheckCircleFilled className="icon-compact text-success" />;
+    return <CheckCircleFilled className="icon-paired text-success" />;
   }
   if (status === "failed") {
-    return <CircleAlert className="icon-compact text-destructive" />;
+    return <CircleAlert className="icon-paired text-destructive" />;
   }
-  return <Clock className="icon-compact text-muted-foreground" />;
+  return <Clock className="icon-paired text-faint" />;
 }

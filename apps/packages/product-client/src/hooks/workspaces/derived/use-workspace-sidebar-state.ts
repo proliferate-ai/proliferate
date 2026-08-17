@@ -1,4 +1,4 @@
-import type { GitStatusSnapshot } from "@anyharness/sdk";
+import type { GitStatusSnapshot, WorkflowRunStatusV2 } from "@anyharness/sdk";
 import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
 import { useEffect, useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -31,6 +31,7 @@ import { useSessionSelectionStore } from "#product/stores/sessions/session-selec
 import { usePendingWorkspaceEntries } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useDeferredHomeLaunchStore } from "#product/stores/home/deferred-home-launch-store";
+import { useWorkflowExecutions } from "#product/hooks/workflows/facade/use-workflow-executions";
 import { measureDebugComputation } from "#product/lib/infra/measurement/measurement-port";
 
 interface UseWorkspaceSidebarStateArgs {
@@ -162,6 +163,18 @@ export function useWorkspaceSidebarState({
     return counts;
   }, [deferredLaunchesById]);
 
+  // The same run roster the main page's Executions group watches (shared
+  // query cache entry). Rows are newest-first, so the first status seen for
+  // a workspace is its latest run's.
+  const { runs: workflowRuns } = useWorkflowExecutions();
+  const workflowRunStatusByWorkspaceId = useMemo(() => {
+    const statuses: Record<string, WorkflowRunStatusV2> = {};
+    for (const run of workflowRuns) {
+      statuses[run.workspaceId] ??= run.status;
+    }
+    return statuses;
+  }, [workflowRuns]);
+
   const groups = useMemo(() => measureDebugComputation({
     category: "workspace_sidebar_state.derive",
     label: "groups",
@@ -201,10 +214,12 @@ export function useWorkspaceSidebarState({
       suppressActiveNeedsReview: windowFocused,
       desktopInstallId,
       cloudComputeEnabled,
+      workflowRunStatusByWorkspaceId,
     })), [
     activeSessionTitle,
     cloudComputeEnabled,
     desktopInstallId,
+    workflowRunStatusByWorkspaceId,
     gitStatus,
     gitStatusesByLogicalId,
     hiddenRepoRootSet,

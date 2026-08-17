@@ -195,11 +195,12 @@ describe("WorkflowGraphView", () => {
     ).toBe("false");
   });
 
-  it("wears the needs-input badge instead of the prompt preview", () => {
+  it("wears the needs-input mark beside the kind header", () => {
     renderView([chainSlot(0, "Waiting step")], { needsInput: new Set(["node-0"]) });
 
     expect(screen.getByText("Needs input")).toBeTruthy();
-    expect(screen.queryByText("Original prompt")).toBeNull();
+    // The design keeps the prompt line; needs-input rides the header's right.
+    expect(screen.getByText("Original prompt")).toBeTruthy();
   });
 
   it("offers the zoom controls", () => {
@@ -207,6 +208,6 @@ describe("WorkflowGraphView", () => {
 
     expect(screen.getByRole("button", { name: "Zoom in" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Zoom out" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Fit graph" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Fit to view" })).toBeTruthy();
   });
 });
