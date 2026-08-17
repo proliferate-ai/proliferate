@@ -102,7 +102,7 @@ export function WorkflowBuilderChainCanvas({
               <span className="w-full truncate text-ui font-medium text-foreground">
                 {WORKFLOW_BUILDER_COPY.inputNodeTitle}
               </span>
-              <span className="line-clamp-2 w-full text-ui-sm text-muted-foreground">
+              <span className="line-clamp-2 w-full whitespace-normal text-ui-sm text-muted-foreground">
                 {WORKFLOW_BUILDER_COPY.inputNodeSubtitle}
               </span>
             </Button>
@@ -149,7 +149,7 @@ export function WorkflowBuilderChainCanvas({
                 {modelLine}
               </span>
             ) : node.prompt.trim().length > 0 ? (
-              <span className="line-clamp-2 w-full text-ui-sm text-muted-foreground">
+              <span className="line-clamp-2 w-full whitespace-normal text-ui-sm text-muted-foreground">
                 {node.prompt}
               </span>
             ) : null}
