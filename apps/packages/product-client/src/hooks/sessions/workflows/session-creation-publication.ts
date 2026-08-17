@@ -10,6 +10,9 @@ import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { rememberLastViewedSession } from "#product/stores/preferences/workspace-ui-store";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import {
+  applyConfigIntentSettlement,
+} from "#product/stores/sessions/session-intent-store-settlement";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
 import type {
@@ -38,9 +41,7 @@ export function publishCreatedSessionMaterialization(input: {
   workspaceId: string;
   workspaceKind: "cloud" | "local";
 }): void {
-  useSessionIntentStore.getState().applyConfigIntentSettlement(
-    input.configIntentSettlement,
-  );
+  applyConfigIntentSettlement(input.configIntentSettlement);
   materializeSessionRecord(
     input.pendingSessionId,
     input.session.id,

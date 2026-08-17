@@ -15,12 +15,13 @@ export function recordSessionIntentStoreAction(
   action: string,
   before: SessionIntentStateShape,
   after: SessionIntentStateShape,
-  metadata: Record<string, unknown>,
+  createMetadata: () => Record<string, unknown>,
   startedAtMs: number | null,
 ): void {
   if (startedAtMs === null) {
     return;
   }
+  const metadata = createMetadata();
   const clientSessionId = typeof metadata.clientSessionId === "string"
     ? metadata.clientSessionId
     : null;

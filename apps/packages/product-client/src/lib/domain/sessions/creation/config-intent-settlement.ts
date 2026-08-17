@@ -5,9 +5,6 @@ import type {
 import type {
   SessionIntent,
 } from "#product/domain/sessions/intents/session-intent-model";
-import type {
-  SessionIntentStateShape,
-} from "#product/domain/sessions/intents/session-intent-state";
 
 export interface PreMaterializationConfigIntentSnapshotEntry {
   intentId: string;
@@ -147,69 +144,6 @@ export function planAdoptedSessionConfigIntentResolution(input: {
       }];
     }),
   };
-}
-
-export function applyConfigIntentSettlementPlan(
-  state: SessionIntentStateShape,
-  plan: ConfigIntentSettlementPlan,
-  now = new Date().toISOString(),
-): SessionIntentStateShape {
-  let changed = false;
-  const entriesById = { ...state.entriesById };
-  for (const patch of plan.patches) {
-    const intent = entriesById[patch.intentId];
-    if (
-      !intent
-      || intent.kind !== "update_config"
-      || intent.generation !== patch.generation
-      || intent.status !== "queued"
-      || intent.materializedSessionId !== null
-    ) {
-      continue;
-    }
-    changed = true;
-    entriesById[patch.intentId] = {
-      ...intent,
-      rawConfigId: patch.rawConfigId,
-      status: patch.status,
-      errorMessage: patch.status === "failed"
-        ? "Launch default was not confirmed by authoritative session config."
-        : null,
-      updatedAt: now,
-      reconciledAt: patch.status === "reconciled" ? now : null,
-    };
-  }
-  return changed ? { ...state, entriesById } : state;
-}
-
-export function applyAdoptedSessionConfigIntentResolutionPlan(
-  state: SessionIntentStateShape,
-  plan: AdoptedSessionConfigIntentResolutionPlan,
-  now = new Date().toISOString(),
-): SessionIntentStateShape {
-  let changed = false;
-  const entriesById = { ...state.entriesById };
-  for (const patch of plan.patches) {
-    const intent = entriesById[patch.intentId];
-    if (
-      !intent
-      || intent.kind !== "update_config"
-      || intent.generation !== patch.generation
-      || intent.status !== "queued"
-      || intent.materializedSessionId !== null
-    ) {
-      continue;
-    }
-    changed = true;
-    entriesById[patch.intentId] = {
-      ...intent,
-      rawConfigId: patch.rawConfigId,
-      status: patch.status,
-      errorMessage: null,
-      updatedAt: now,
-    };
-  }
-  return changed ? { ...state, entriesById } : state;
 }
 
 function findNormalizedControl(

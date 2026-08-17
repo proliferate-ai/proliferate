@@ -8,6 +8,7 @@ import {
   createEditPendingPromptIntent,
   createPromptOutboxEntry,
   createResolveInteractionIntent,
+  createUpdateConfigIntent,
   type PromptOutboxCreateInput,
   type PromptOutboxEntry,
   type SessionDeletePendingPromptIntent,
@@ -17,19 +18,13 @@ import {
   type SessionUpdateConfigIntent,
 } from "#product/domain/sessions/intents/session-intent-model";
 import {
-  applyAdoptedSessionConfigIntentResolutionPlan,
-  applyConfigIntentSettlementPlan,
-  type AdoptedSessionConfigIntentResolutionPlan,
-  type ConfigIntentSettlementPlan,
-} from "#product/lib/domain/sessions/creation/config-intent-settlement";
-import {
   pruneEchoedOutboxTombstones,
   pruneEchoedOutboxTombstonesForTranscript,
   reconcileOutboxFromEnvelopes,
 } from "#product/domain/sessions/intents/session-intent-reconciliation";
 import {
   bindSessionIntentMaterialization,
-  createOrSupersedeConfigIntent,
+  findSupersedableTailConfigIntent,
   getPromptEntryByPromptId,
   patchSessionIntent,
   removeSessionIntent,
@@ -59,9 +54,8 @@ interface SessionIntentStoreState extends SessionIntentStateShape {
   patchIntent: (intentId: string, patch: Partial<SessionIntent>) => void;
   removeIntent: (intentId: string) => void;
   bindMaterializedSession: (clientSessionId: string, materializedSessionId: string) => void;
-  applyConfigIntentSettlement: (plan: ConfigIntentSettlementPlan) => void;
-  applyAdoptedSessionConfigIntentResolution: (
-    plan: AdoptedSessionConfigIntentResolutionPlan,
+  settleConfig: (
+    resolve: (state: SessionIntentStateShape) => SessionIntentStateShape,
   ) => void;
   reassignClientSession: (clientSessionId: string, nextClientSessionId: string) => void;
   reconcileFromEnvelopes: (
@@ -90,12 +84,12 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
     const entry = createPromptOutboxEntry(input);
     set((state) => {
       const next = withDispatchVersion(state, upsertSessionIntent(state, entry));
-      recordSessionIntentStoreAction("enqueuePrompt", state, next, {
+      recordSessionIntentStoreAction("enqueuePrompt", state, next, () => ({
         clientSessionId: entry.clientSessionId,
         intentKind: entry.kind,
         placement: entry.placement,
         workspaceId: entry.workspaceId,
-      }, debugStartedAtMs);
+      }), debugStartedAtMs);
       return next;
     });
     return entry;
@@ -103,21 +97,41 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
 
   enqueueConfig: (input) => {
     const debugStartedAtMs = startSessionIntentStoreActionTrace();
-    const { intent, superseded } = createOrSupersedeConfigIntent(
-      useSessionIntentStore.getState(),
-      input,
-      () => createSessionIntentId("config"),
-    );
+    const controlKey = (input.controlKey ?? input.configId) as string;
+    const supersedable = input.intentId
+      ? null
+      : findSupersedableTailConfigIntent(
+        useSessionIntentStore.getState(),
+        input.clientSessionId,
+        controlKey,
+      );
+    const intent: SessionUpdateConfigIntent = supersedable
+      ? {
+        ...supersedable,
+        generation: supersedable.generation + 1,
+        rawConfigId: input.configId,
+        value: input.value,
+        materializedSessionId: input.materializedSessionId ?? supersedable.materializedSessionId,
+        workspaceId: input.workspaceId ?? supersedable.workspaceId,
+        persistDefaultPreference: input.persistDefaultPreference ?? supersedable.persistDefaultPreference,
+        updatedAt: new Date().toISOString(),
+      }
+      : createUpdateConfigIntent({
+        ...input,
+        controlKey,
+        rawConfigId: input.configId,
+        intentId: input.intentId ?? createSessionIntentId("config"),
+      });
     set((state) => {
       const next = withDispatchVersion(state, upsertSessionIntent(state, intent));
-      recordSessionIntentStoreAction("enqueueConfig", state, next, {
+      recordSessionIntentStoreAction("enqueueConfig", state, next, () => ({
         clientSessionId: intent.clientSessionId,
         controlKey: intent.controlKey,
         rawConfigId: intent.rawConfigId,
         intentKind: intent.kind,
-        superseded,
+        superseded: Boolean(supersedable),
         workspaceId: intent.workspaceId,
-      }, debugStartedAtMs);
+      }), debugStartedAtMs);
       return next;
     });
     return intent;
@@ -131,12 +145,12 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
     });
     set((state) => {
       const next = withDispatchVersion(state, upsertSessionIntent(state, intent));
-      recordSessionIntentStoreAction("enqueueInteraction", state, next, {
+      recordSessionIntentStoreAction("enqueueInteraction", state, next, () => ({
         action: intent.action,
         clientSessionId: intent.clientSessionId,
         intentKind: intent.kind,
         workspaceId: intent.workspaceId,
-      }, debugStartedAtMs);
+      }), debugStartedAtMs);
       return next;
     });
     return intent;
@@ -150,12 +164,12 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
     });
     set((state) => {
       const next = withDispatchVersion(state, upsertSessionIntent(state, intent));
-      recordSessionIntentStoreAction("enqueueEditPendingPrompt", state, next, {
+      recordSessionIntentStoreAction("enqueueEditPendingPrompt", state, next, () => ({
         clientSessionId: intent.clientSessionId,
         intentKind: intent.kind,
         seq: intent.seq,
         workspaceId: intent.workspaceId,
-      }, debugStartedAtMs);
+      }), debugStartedAtMs);
       return next;
     });
     return intent;
@@ -169,12 +183,12 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
     });
     set((state) => {
       const next = withDispatchVersion(state, upsertSessionIntent(state, intent));
-      recordSessionIntentStoreAction("enqueueDeletePendingPrompt", state, next, {
+      recordSessionIntentStoreAction("enqueueDeletePendingPrompt", state, next, () => ({
         clientSessionId: intent.clientSessionId,
         intentKind: intent.kind,
         seq: intent.seq,
         workspaceId: intent.workspaceId,
-      }, debugStartedAtMs);
+      }), debugStartedAtMs);
       return next;
     });
     return intent;
@@ -185,12 +199,12 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
     set((state) => {
       const existing = state.entriesById[intentId];
       const next = withDispatchVersion(state, patchSessionIntent(state, intentId, patch));
-      recordSessionIntentStoreAction("patchIntent", state, next, {
+      recordSessionIntentStoreAction("patchIntent", state, next, () => ({
         clientSessionId: existing?.clientSessionId ?? null,
         intentKind: existing?.kind ?? null,
         status: "status" in patch ? patch.status ?? null : null,
         workspaceId: existing?.workspaceId ?? null,
-      }, debugStartedAtMs);
+      }), debugStartedAtMs);
       return next;
     });
   },
@@ -200,11 +214,11 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
     set((state) => {
       const existing = state.entriesById[intentId];
       const next = withDispatchVersion(state, removeSessionIntent(state, intentId));
-      recordSessionIntentStoreAction("removeIntent", state, next, {
+      recordSessionIntentStoreAction("removeIntent", state, next, () => ({
         clientSessionId: existing?.clientSessionId ?? null,
         intentKind: existing?.kind ?? null,
         workspaceId: existing?.workspaceId ?? null,
-      }, debugStartedAtMs);
+      }), debugStartedAtMs);
       return next;
     });
   },
@@ -216,50 +230,16 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
         state,
         bindSessionIntentMaterialization(state, clientSessionId, materializedSessionId),
       );
-      recordSessionIntentStoreAction("bindMaterializedSession", state, next, {
+      recordSessionIntentStoreAction("bindMaterializedSession", state, next, () => ({
         clientSessionId,
         materializedSessionId,
-      }, debugStartedAtMs);
+      }), debugStartedAtMs);
       return next;
     });
   },
 
-  applyConfigIntentSettlement: (plan) => {
-    if (plan.patches.length === 0) {
-      return;
-    }
-    const debugStartedAtMs = startSessionIntentStoreActionTrace();
-    set((state) => {
-      const next = withDispatchVersion(
-        state,
-        applyConfigIntentSettlementPlan(state, plan),
-      );
-      recordSessionIntentStoreAction("applyConfigIntentSettlement", state, next, {
-        patchCount: plan.patches.length,
-      }, debugStartedAtMs);
-      return next;
-    });
-  },
-
-  applyAdoptedSessionConfigIntentResolution: (plan) => {
-    if (plan.patches.length === 0) {
-      return;
-    }
-    const debugStartedAtMs = startSessionIntentStoreActionTrace();
-    set((state) => {
-      const next = withDispatchVersion(
-        state,
-        applyAdoptedSessionConfigIntentResolutionPlan(state, plan),
-      );
-      recordSessionIntentStoreAction(
-        "applyAdoptedSessionConfigIntentResolution",
-        state,
-        next,
-        { patchCount: plan.patches.length },
-        debugStartedAtMs,
-      );
-      return next;
-    });
+  settleConfig: (resolve) => {
+    set((state) => withDispatchVersion(state, resolve(state)));
   },
 
   reassignClientSession: (clientSessionId, nextClientSessionId) => {
@@ -281,10 +261,10 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
         });
       }
       const versionedNext = withDispatchVersion(state, next);
-      recordSessionIntentStoreAction("reassignClientSession", state, versionedNext, {
+      recordSessionIntentStoreAction("reassignClientSession", state, versionedNext, () => ({
         clientSessionId,
         nextClientSessionId,
-      }, debugStartedAtMs);
+      }), debugStartedAtMs);
       return versionedNext;
     });
   },
@@ -300,10 +280,10 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
         ? pruneEchoedOutboxTombstonesForTranscript(reconciled, transcript)
         : reconciled;
       const next = withDispatchVersion(state, pruned);
-      recordSessionIntentStoreAction("reconcileFromEnvelopes", state, next, {
+      recordSessionIntentStoreAction("reconcileFromEnvelopes", state, next, () => ({
         clientSessionId,
         envelopeCount: envelopes.length,
-      }, debugStartedAtMs);
+      }), debugStartedAtMs);
       return next;
     });
   },
@@ -312,7 +292,13 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
     const debugStartedAtMs = startSessionIntentStoreActionTrace();
     set((state) => {
       const next = withDispatchVersion(state, pruneEchoedOutboxTombstones(state));
-      recordSessionIntentStoreAction("pruneEchoedTombstones", state, next, {}, debugStartedAtMs);
+      recordSessionIntentStoreAction(
+        "pruneEchoedTombstones",
+        state,
+        next,
+        () => ({}),
+        debugStartedAtMs,
+      );
       return next;
     });
   },
@@ -329,9 +315,9 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
         next = removeSessionIntent(next, entry.intentId);
       }
       const versionedNext = withDispatchVersion(state, next);
-      recordSessionIntentStoreAction("clearSession", state, versionedNext, {
+      recordSessionIntentStoreAction("clearSession", state, versionedNext, () => ({
         clientSessionId,
-      }, debugStartedAtMs);
+      }), debugStartedAtMs);
       return versionedNext;
     });
   },
@@ -343,7 +329,7 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
         ...EMPTY_SESSION_INTENT_STATE,
         dispatchVersion: state.dispatchVersion + 1,
       };
-      recordSessionIntentStoreAction("clear", state, next, {}, debugStartedAtMs);
+      recordSessionIntentStoreAction("clear", state, next, () => ({}), debugStartedAtMs);
       return next;
     });
   },

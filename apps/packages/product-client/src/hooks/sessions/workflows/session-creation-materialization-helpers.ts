@@ -19,6 +19,9 @@ import {
   getSessionRecord,
 } from "#product/stores/sessions/session-records";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import {
+  applyAdoptedSessionConfigIntentResolution,
+} from "#product/stores/sessions/session-intent-store-settlement";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
 
@@ -62,7 +65,7 @@ export function materializeExistingSession({
   const configIntentSnapshot = snapshotPreMaterializationConfigIntents(
     sessionIntentsForSession(intentStore, pendingSessionId),
   );
-  intentStore.applyAdoptedSessionConfigIntentResolution(
+  applyAdoptedSessionConfigIntentResolution(
     planAdoptedSessionConfigIntentResolution({
       snapshot: configIntentSnapshot,
       liveConfig: existingSession.liveConfig ?? null,
