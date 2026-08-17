@@ -9,6 +9,9 @@ import {
   TRANSCRIPT_USER_SCROLL_SETTLE_MS,
   type TranscriptScrollSample,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
+import { decideTranscriptScrollPin } from "#product/hooks/chat/ui/transcript-scroll-pin-decision";
+import { resolveAutoFollowScrollTop } from "#product/hooks/chat/ui/transcript-auto-follow-target";
+import { TranscriptScrollOwnershipMarkers } from "#product/hooks/chat/ui/transcript-scroll-ownership";
 import { useTranscriptSubmitStampRepin } from "#product/hooks/chat/ui/use-transcript-submit-stamp-repin";
 import { useTranscriptUserScrollIntent } from "#product/hooks/chat/ui/use-transcript-user-scroll-intent";
 
@@ -63,6 +66,7 @@ export interface TranscriptStickToBottom {
   handleScrollToBottomClick: () => void;
   /** Wrap ANY external scrollTop/scrollToOffset write so its scroll event is excluded from pin/direction. */
   notifyProgrammaticScroll: (write: () => void) => void;
+  userScrollUpIntentAtRef: RefObject<number>; // last UPWARD-intent `performance.now`; use-above-change-compensation cancels on it
   /** Force the pin state (history prepend / anchor restore intentionally unpin to hold the user's position). */
   setPinned: (pinned: boolean) => void;
   /** Reset all tracking and re-pin for a session/workspace switch. */
@@ -87,11 +91,21 @@ export function useTranscriptStickToBottom({
   const pinnedRef = useRef(true);
   const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
   const lastScrollTopRef = useRef(0);
-  const programmaticRef = useRef<{ expectedTop: number; frame: number } | null>(null);
+  // Last observed content height, tracked so a scroll event can tell a genuine
+  // user displacement (bottom-distance opened up while the content stayed the
+  // same size) apart from our own snap lagging a growing stream (bottom-distance
+  // opened up BECAUSE the content just grew). Only the former unpins a pinned
+  // viewport. See the pin decision in onViewportScroll.
+  const lastContentHeightRef = useRef(0);
+  // Ownership markers: the PRIMARY classification signal telling our own
+  // writes apart from a user scroll. See transcript-scroll-ownership.ts.
+  // `useRef`'s initializer only takes effect on the first render.
+  const ownershipMarkersRef = useRef(new TranscriptScrollOwnershipMarkers());
   const glueFrameRef = useRef<number | null>(null);
   const autoFollowBottomInsetRef = useRef(Math.max(0, autoFollowBottomInsetPx));
   const consumedAutoFollowBottomInsetRef = useRef(0);
   const userScrollIntentUntilRef = useRef(0);
+  const userScrollUpIntentAtRef = useRef(0);
 
   const setPinned = useCallback((next: boolean) => {
     if (pinnedRef.current === next) {
@@ -101,23 +115,21 @@ export function useTranscriptStickToBottom({
     setIsPinnedToBottom(next);
   }, []);
 
+  const clearAllMarkers = useCallback(() => {
+    ownershipMarkersRef.current.clear();
+  }, []);
+
   const markNonUserScrollPosition = useCallback((viewport: HTMLDivElement) => {
     const expectedTop = viewport.scrollTop;
-    if (programmaticRef.current?.frame != null) {
-      cancelAnimationFrame(programmaticRef.current.frame);
-    }
-    // Watchdog: a write that changes nothing (or a browser clamp whose event
-    // never arrives) must not leak its marker into the next user scroll.
-    // Identity-check the marker so synchronous test rAF implementations stay
-    // safe even before the real frame id has been assigned.
-    const marker: { expectedTop: number; frame: number } = { expectedTop, frame: 0 };
-    programmaticRef.current = marker;
-    marker.frame = requestAnimationFrame(() => {
-      if (programmaticRef.current === marker) {
-        programmaticRef.current = null;
-      }
-    });
+    // Record ownership without disturbing markers already in flight: several
+    // programmatic writes can await their events at once (see
+    // transcript-scroll-ownership.ts).
+    ownershipMarkersRef.current.record(expectedTop);
     lastScrollTopRef.current = expectedTop;
+    // Baseline the content-size detector to the height we just snapped against,
+    // so a later scroll event only counts as a resize when the content actually
+    // changed size past this write (not merely because this write settled).
+    lastContentHeightRef.current = viewport.scrollHeight;
   }, []);
 
   const notifyProgrammaticScroll = useCallback((write: () => void) => {
@@ -130,13 +142,12 @@ export function useTranscriptStickToBottom({
   }, [markNonUserScrollPosition, scrollRef]);
 
   const notifyUserScrollIntent = useCallback((direction: -1 | 1) => {
-    userScrollIntentUntilRef.current =
-      interactionNow() + TRANSCRIPT_USER_SCROLL_SETTLE_MS;
+    userScrollIntentUntilRef.current = interactionNow() + TRANSCRIPT_USER_SCROLL_SETTLE_MS;
     if (direction < 0) {
+      userScrollUpIntentAtRef.current = interactionNow();
       setPinned(false);
     }
-    // Claim the frame at input time instead of waiting for the browser's later
-    // scroll event, which can otherwise race a stream/reveal animation frame.
+    // Claim the frame at input time so it can't race a stream/reveal animation frame.
     onScrollSample({ programmatic: false, userInitiated: true });
   }, [onScrollSample, setPinned]);
 
@@ -218,47 +229,54 @@ export function useTranscriptStickToBottom({
     const previousTop = lastScrollTopRef.current;
     lastScrollTopRef.current = top;
 
-    const pending = programmaticRef.current;
-    if (pending && Math.abs(top - pending.expectedTop) <= PROGRAMMATIC_MATCH_TOL_PX) {
-      // Our own snap — don't touch pin state or direction, but still probe perf.
-      cancelAnimationFrame(pending.frame);
-      programmaticRef.current = null;
+    // Classification ladder. PRIMARY: ownership markers. A live marker recorded
+    // by one of our own writes owns this event — clear it and never touch pin
+    // state or direction. Because markers are queued, a burst of glue writes no
+    // longer loses attribution to a single overwritten slot. See
+    // transcript-scroll-ownership.ts for the queue implementation.
+    if (ownershipMarkersRef.current.matchByValue(top)) {
       onScrollSample({ programmatic: true });
       return;
     }
 
-    // H2 hardening: when a programmatic marker is pending but the tolerance
-    // missed (scrollHeight changed between our write and this event, or a
-    // second snap overwrote the marker before the first event dispatched),
-    // treat the event as programmatic if the scroll moved downward. Unpinning
-    // here would be a false positive — the user never scrolled.
-    if (pending && pinnedRef.current && top >= pending.expectedTop - PROGRAMMATIC_MATCH_TOL_PX) {
-      cancelAnimationFrame(pending.frame);
-      programmaticRef.current = null;
-      onScrollSample({ programmatic: true });
-      return;
-    }
-
+    // No live marker owns this event: it is a user scroll (intent-attributed
+    // below) or an unattributed scroll. Either way the user-scroll-wins pin
+    // logic runs unchanged. The `userInitiated` flag distinguishes the two for
+    // the perf probe (and, later, rung 11's unattributed-scroll handling).
     const distance = resolveVirtualBottomDistance({
       scrollOffset: top,
       viewportSize: viewport.clientHeight,
       totalVirtualSize: viewport.scrollHeight,
     });
     const delta = top - previousTop;
-    if (distance > repinThresholdPx) {
+
+    // Content-size change is observed here (not inferred from a marker) so it is
+    // the durable signal that our own follow — not the user — opened the
+    // bottom-distance. The classification itself (content-size hold, direction
+    // gate, repin band) lives in decideTranscriptScrollPin; this hook only reads
+    // the geometry and applies the returned decision to pin + inset state.
+    const scrollHeightChanged =
+      lastContentHeightRef.current > 0
+      && Math.abs(viewport.scrollHeight - lastContentHeightRef.current) > DIRECTION_EPSILON_PX;
+    lastContentHeightRef.current = viewport.scrollHeight;
+    const decision = decideTranscriptScrollPin({
+      distance,
+      delta,
+      scrollHeightChanged,
+      pinned: pinnedRef.current,
+      repinThresholdPx,
+    });
+    if (decision.pin === false) {
       consumedAutoFollowBottomInsetRef.current = 0;
       setPinned(false);
-    } else if (delta > -DIRECTION_EPSILON_PX) {
-      // Within the bottom band and not moving up — the user returned to bottom.
-      if (distance <= PROGRAMMATIC_MATCH_TOL_PX) {
+    } else if (decision.pin === true) {
+      if (decision.consumeInset === "full") {
         consumedAutoFollowBottomInsetRef.current = autoFollowBottomInsetRef.current;
       }
       setPinned(true);
-    } else {
-      // Within the band but still moving up — the user is leaving.
-      consumedAutoFollowBottomInsetRef.current = 0;
-      setPinned(false);
     }
+    // decision.pin === "hold": our own resize lag — leave pin and inset as they
+    // are so a lagging follow is never misread as the user leaving.
     const userInitiated = interactionNow() < userScrollIntentUntilRef.current;
     onScrollSample(
       userInitiated
@@ -320,17 +338,16 @@ export function useTranscriptStickToBottom({
   // correcting to real heights) lands as one silent jump instead of a visible
   // scroll from an old position to the bottom.
   const resetForSession = useCallback(() => {
-    if (programmaticRef.current?.frame != null) {
-      cancelAnimationFrame(programmaticRef.current.frame);
-    }
-    programmaticRef.current = null;
+    clearAllMarkers();
     lastScrollTopRef.current = 0;
+    lastContentHeightRef.current = 0;
     consumedAutoFollowBottomInsetRef.current = 0;
     userScrollIntentUntilRef.current = 0;
+    userScrollUpIntentAtRef.current = 0;
     setPinned(true);
     scrollToBottom();
     startGlueLoop();
-  }, [scrollToBottom, setPinned, startGlueLoop]);
+  }, [clearAllMarkers, scrollToBottom, setPinned, startGlueLoop]);
 
   // Establish input ownership before the visibility lifecycle can resume the
   // pinned glue loop.
@@ -362,13 +379,11 @@ export function useTranscriptStickToBottom({
   }, [startGlueLoop]);
 
   useEffect(() => () => {
-    if (programmaticRef.current?.frame != null) {
-      cancelAnimationFrame(programmaticRef.current.frame);
-    }
+    clearAllMarkers();
     if (glueFrameRef.current != null) {
       cancelAnimationFrame(glueFrameRef.current);
     }
-  }, []);
+  }, [clearAllMarkers]);
 
   return {
     isPinnedToBottom,
@@ -380,20 +395,6 @@ export function useTranscriptStickToBottom({
     notifyProgrammaticScroll,
     setPinned,
     resetForSession,
+    userScrollUpIntentAtRef,
   };
-}
-
-function resolveAutoFollowScrollTop(
-  viewport: HTMLDivElement,
-  bottomInsetPx: number,
-  consumedBottomInsetPx: number,
-): number {
-  const remainingManualInsetPx = Math.max(0, bottomInsetPx - consumedBottomInsetPx);
-  if (remainingManualInsetPx <= 0) {
-    // Preserve the established write-to-scrollHeight behavior: browsers clamp
-    // this to their exact maximum scrollTop without subpixel bookkeeping.
-    return viewport.scrollHeight;
-  }
-  const hardBottom = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
-  return Math.max(0, hardBottom - remainingManualInsetPx);
 }

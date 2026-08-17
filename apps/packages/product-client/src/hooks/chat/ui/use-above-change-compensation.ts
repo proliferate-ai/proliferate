@@ -1,62 +1,130 @@
 import { useCallback, useEffect, useRef, type RefObject } from "react";
-import {
-  GLUE_MAX_FRAMES,
-  GLUE_STABLE_FRAMES,
-  type ContentHeightScrollAnchor,
-} from "#product/hooks/chat/ui/transcript-row-list-model";
+import type { ContentHeightScrollAnchor } from "#product/hooks/chat/ui/transcript-row-list-model";
+
+// How long after an older-history prepend the loop keeps re-applying the
+// measured scrollHeight delta so the reading row stays fixed while the freshly
+// mounted older rows correct their estimated heights. Those corrections arrive
+// in spurts spread across several frames — more, and more spread out, on a slow
+// or cold CI runner — so a stable-frame / frame-budget termination ends the
+// loop a spurt early (3 quiet frames BETWEEN spurts read as "settled") and
+// loses the last estimate-to-measured correction: the ~39px under-absorption CI
+// caught (chromium 564 vs > 602.4) and, when the loop terminated before the
+// first correction even landed, the total anchor miss (webkit 0). A wall-clock
+// deadline bounds the loop instead; the delta write is idempotent once the
+// height holds, so running spare frames to the deadline is harmless and
+// guarantees every correction inside the window is absorbed.
+const ABOVE_CHANGE_COMPENSATION_MAX_MS = 500;
+
+function compensationNow(): number {
+  return typeof performance === "undefined" ? Date.now() : performance.now();
+}
+
+// The freshly-prepended older rows' estimate-to-measured height correction can
+// make the virtualizer's reported scrollHeight move NON-MONOTONICALLY for a
+// beat (a transient dip below a height already observed this window, or even
+// below the anchor's own pre-prepend height) before settling at its real,
+// taller value. Sampling a delta against a dipped total would shrink the
+// compensation and jump the reader UP toward the freshly-prepended top, and —
+// worse — if the browser's own scrollTop clamp fires during that same dip
+// (scrollHeight transiently near the viewport height forces scrollTop toward
+// 0) and the deadline lapses before the recovery pass runs, releasing the
+// anchor without a final corrective write stranded the reader at the
+// freshly-prepended top for good (CI webkit "scrollTop Expected > 150 /
+// Received 0"). Track the running max scrollHeight observed so the delta is
+// monotonic non-decreasing, and always perform one last forward-only write
+// against that max before releasing the anchor at the deadline, so a late dip
+// can never leave the reader displaced.
+interface CompensationFloor {
+  anchor: ContentHeightScrollAnchor | null;
+  maxScrollHeight: number;
+}
 
 interface UseAboveChangeCompensationParams {
   scrollRef: RefObject<HTMLDivElement | null>;
   pinnedRef: RefObject<boolean>;
   notifyProgrammaticScroll: (write: () => void) => void;
+  /**
+   * Timestamp of the last genuine upward user scroll intent (see
+   * use-transcript-stick-to-bottom). For a CANCELABLE compensation window (a
+   * completed-turn split, see below), an upward gesture arriving AFTER the
+   * window opens cancels the remaining per-frame re-anchoring so an unpinned
+   * reader scrolling up is never dragged back per-frame; the active gesture
+   * wins (platform precedent: CSS scroll anchoring suppresses adjustments
+   * during user scroll). Intent predating the window does not cancel.
+   */
+  userScrollUpIntentAtRef: RefObject<number>;
 }
 
 // Hold the anchored content in place while a freshly-inserted row above it
 // measures in. Re-applies the measured scrollHeight delta each frame (so the
-// anchor stays put as the estimate corrects), stopping once the height is
-// stable or a frame budget is hit.
+// anchor stays put as the estimate corrects) until a wall-clock deadline lapses
+// or the user re-pins.
 export function useAboveChangeCompensation({
   scrollRef,
   pinnedRef,
   notifyProgrammaticScroll,
+  userScrollUpIntentAtRef,
 }: UseAboveChangeCompensationParams) {
   const compensateFrameRef = useRef<number | null>(null);
+  const floorRef = useRef<CompensationFloor>({ anchor: null, maxScrollHeight: 0 });
 
-  const startAboveChangeCompensation = useCallback((anchor: ContentHeightScrollAnchor) => {
+  // `cancelableByUpwardIntent` is true ONLY for the completed-turn split: an
+  // autonomous insertion above an unpinned reader, where an active upward
+  // gesture must win over per-frame re-anchoring. It is FALSE for a history
+  // prepend, which the reader REQUESTED by scrolling to the top: there the
+  // added-above content must keep the reading row fixed even as the same
+  // upward gesture continues (the reader is loading and reading older history),
+  // so the window is immune to the upward-intent cancel.
+  const startAboveChangeCompensation = useCallback((
+    anchor: ContentHeightScrollAnchor,
+    cancelableByUpwardIntent: boolean,
+  ) => {
     if (typeof window === "undefined") {
       return;
     }
     if (compensateFrameRef.current != null) {
       cancelAnimationFrame(compensateFrameRef.current);
     }
-    let lastHeight = -1;
-    let stableFrames = 0;
-    let totalFrames = 0;
+    const startedAt = compensationNow();
+    const deadline = startedAt + ABOVE_CHANGE_COMPENSATION_MAX_MS;
+    floorRef.current = { anchor, maxScrollHeight: anchor.scrollHeight };
     const tick = () => {
       const viewport = scrollRef.current;
       if (!viewport || pinnedRef.current) {
         compensateFrameRef.current = null;
         return;
       }
-      notifyProgrammaticScroll(() => {
-        viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
-      });
-      const height = viewport.scrollHeight;
-      if (height === lastHeight) {
-        stableFrames += 1;
-      } else {
-        stableFrames = 0;
-        lastHeight = height;
+      // Genuine upward user intent that arrived AFTER this window opened wins
+      // for a cancelable (completed-turn) window: stop re-anchoring so the
+      // active gesture is never fought per-frame. Intent predating the window
+      // never cancels; a prepend window is never cancelable.
+      if (cancelableByUpwardIntent && userScrollUpIntentAtRef.current > startedAt) {
+        compensateFrameRef.current = null;
+        return;
       }
-      totalFrames += 1;
-      if (stableFrames >= GLUE_STABLE_FRAMES || totalFrames >= GLUE_MAX_FRAMES) {
+      const floor = floorRef.current;
+      if (viewport.scrollHeight > floor.maxScrollHeight) {
+        floor.maxScrollHeight = viewport.scrollHeight;
+      }
+      const target = anchor.scrollTop + (floor.maxScrollHeight - anchor.scrollHeight);
+      notifyProgrammaticScroll(() => {
+        // Forward-only: the anchored scrollTop only ever moves down (or holds)
+        // as the prepended rows measure taller. A transient dip in the reported
+        // total (or the browser's own scrollTop clamp firing during that dip)
+        // must never be allowed to jump the reader back toward the freshly
+        // prepended top.
+        if (target > viewport.scrollTop) {
+          viewport.scrollTop = target;
+        }
+      });
+      if (compensationNow() >= deadline) {
         compensateFrameRef.current = null;
         return;
       }
       compensateFrameRef.current = requestAnimationFrame(tick);
     };
     compensateFrameRef.current = requestAnimationFrame(tick);
-  }, [notifyProgrammaticScroll, pinnedRef, scrollRef]);
+  }, [notifyProgrammaticScroll, pinnedRef, scrollRef, userScrollUpIntentAtRef]);
 
   useEffect(() => () => {
     if (compensateFrameRef.current != null) {

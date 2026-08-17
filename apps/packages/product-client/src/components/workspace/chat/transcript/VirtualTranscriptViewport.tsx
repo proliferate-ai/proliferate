@@ -54,6 +54,7 @@ export function VirtualTranscriptViewport({
     <AutoHideScrollArea
       className="h-full"
       ref={scrollRef}
+      stableScrollAnchor
       onUserScrollIntent={onUserScrollIntent}
       onViewportScroll={onViewportScroll}
       contentClassName={`${gutterClassName} relative flex min-h-full flex-col`}

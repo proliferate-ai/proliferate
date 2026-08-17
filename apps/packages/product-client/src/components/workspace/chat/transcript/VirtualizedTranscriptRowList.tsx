@@ -15,6 +15,7 @@ import {
 import { TranscriptFloatingControls } from "./TranscriptRowListShared";
 import { useAboveChangeCompensation } from "#product/hooks/chat/ui/use-above-change-compensation";
 import { useTranscriptStickToBottom } from "#product/hooks/chat/ui/use-transcript-stick-to-bottom";
+import { useTranscriptCompletedTurnAnchor } from "#product/hooks/chat/ui/use-transcript-completed-turn-anchor";
 import { VirtualTranscriptViewport } from "./VirtualTranscriptViewport";
 import { PREPEND_BLANK_FALLBACK_GRACE_MS, useTranscriptVirtualizerBlankFallback } from "#product/hooks/chat/ui/use-transcript-virtualizer-blank-fallback";
 import { useTranscriptVirtualAnchorCapture } from "#product/hooks/chat/ui/use-transcript-virtual-anchor-capture";
@@ -70,6 +71,7 @@ export function VirtualizedTranscriptRowList({
     notifyProgrammaticScroll,
     setPinned,
     resetForSession,
+    userScrollUpIntentAtRef,
   } = useTranscriptStickToBottom({
     scrollRef,
     onScrollSample,
@@ -222,6 +224,13 @@ export function VirtualizedTranscriptRowList({
     onViewportScroll,
   ]);
 
+  const startAboveChangeCompensation = useAboveChangeCompensation({
+    scrollRef,
+    pinnedRef,
+    notifyProgrammaticScroll,
+    userScrollUpIntentAtRef,
+  });
+
   useLayoutEffect(() => {
     lastBlankReportSignatureRef.current = null;
     pendingPrependAnchorRef.current = null;
@@ -249,9 +258,21 @@ export function VirtualizedTranscriptRowList({
     notifyProgrammaticScroll(() => {
       viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
     });
-    // Open the blank-fallback grace window: the anchor write above lands against the still-estimated short scrollHeight.
+    // The synchronous write above lands against the CURRENT scrollHeight, which
+    // still reflects the virtualizer's 360px estimate for the freshly-mounted
+    // older rows. On Chromium the transcript runs with `overflow-anchor: none`
+    // (the single-writer ruling), so the browser no longer silently corrects
+    // that shortfall as the real, taller row heights measure in a frame later —
+    // the reading row would drift down by the estimate-to-measured difference.
+    // Re-apply the same delta each frame while the prepended rows settle (a no-op
+    // once pinned or height-stable), so scrollTop absorbs the full added-above
+    // height and the reading row stays fixed on every engine. NOT cancelable by
+    // upward intent: the reader requested this prepend by scrolling to the top,
+    // so the reading row must hold even as that same upward gesture continues.
+    startAboveChangeCompensation(anchor, false);
+    // Open the blank-fallback grace window: the anchored scrollTop sits ahead of the still-estimated mounted range until those rows measure taller.
     prependSettleUntilRef.current = (typeof performance === "undefined" ? Date.now() : performance.now()) + PREPEND_BLANK_FALLBACK_GRACE_MS;
-  }, [notifyProgrammaticScroll, olderHistoryCursor, rows.length, setPinned]);
+  }, [notifyProgrammaticScroll, olderHistoryCursor, rows.length, setPinned, startAboveChangeCompensation]);
 
   useEffect(() => {
     const anchor = pendingPrependAnchorRef.current;
@@ -272,54 +293,14 @@ export function VirtualizedTranscriptRowList({
     return () => { window.cancelAnimationFrame(frame); };
   }, [isLoadingOlderHistory, maybeLoadOlderHistory, rows.length]);
 
-  const startAboveChangeCompensation = useAboveChangeCompensation({
-    scrollRef,
-    pinnedRef,
-    notifyProgrammaticScroll,
-  });
-
-  // While unpinned, a completing turn can split one row into completed-history +
-  // content — a new, unmeasured row inserted ABOVE the anchored row. The
-  // getOffsetForIndex + offsetWithinRowPx restore lands against the 360px
-  // estimate and bumps when measurement corrects. When rows were inserted above
-  // the anchor, hold the user's position with the measured scrollHeight delta;
-  // pure shifts and below-the-viewport appends keep the offset reposition / no-op.
-  useLayoutEffect(() => {
-    const anchor = pendingAnchorRef.current;
-    pendingAnchorRef.current = null;
-    if (!anchor || pinnedRef.current) {
-      return;
-    }
-    if (
-      anchor.rowCount === renderableRows.length
-      && renderableRows[anchor.rowIndex]?.key === anchor.key
-    ) {
-      return;
-    }
-
-    const nextIndex = renderableRows.findIndex((row) => row.key === anchor.key);
-    if (nextIndex < 0) {
-      return;
-    }
-
-    if (nextIndex > anchor.rowIndex) {
-      startAboveChangeCompensation(anchor);
-      return;
-    }
-
-    const offsetInfo = virtualizer.getOffsetForIndex(nextIndex, "start");
-    if (!offsetInfo) return;
-    notifyProgrammaticScroll(() => {
-      virtualizer.scrollToOffset(offsetInfo[0] + anchor.offsetWithinRowPx);
-    });
-  }, [
-    notifyProgrammaticScroll,
+  useTranscriptCompletedTurnAnchor({
+    pendingAnchorRef,
     pinnedRef,
     renderableRows,
-    rows.length,
-    startAboveChangeCompensation,
     virtualizer,
-  ]);
+    notifyProgrammaticScroll,
+    startAboveChangeCompensation,
+  });
 
   useLayoutEffect(() => {
     if (!pinnedRef.current) {
