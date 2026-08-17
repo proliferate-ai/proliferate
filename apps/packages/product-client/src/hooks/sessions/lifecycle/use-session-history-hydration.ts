@@ -46,6 +46,7 @@ import {
   buildSessionOpenShellCommittedParams,
   markSessionOpenFlowAbandoned,
 } from "#product/hooks/sessions/lifecycle/session-open-flow-marks";
+import { useWorkspacePinIntentReconciliation } from "#product/hooks/sessions/lifecycle/use-workspace-pin-intent-reconciliation";
 
 export interface SessionHistoryHydrationOptions {
   afterSeq?: number;
@@ -68,6 +69,7 @@ export function useSessionHistoryHydration() {
   const ssh = host.desktop?.ssh ?? null;
   const cloudClient = host.cloud.client;
   const reconcileHydratedSubagents = useSessionHistorySubagentAuthority();
+  const reconcileWorkspacePinIntents = useWorkspacePinIntentReconciliation();
 
   const runHydration = useCallback(async (
     sessionId: string,
@@ -173,6 +175,7 @@ export function useSessionHistoryHydration() {
         });
 
         if (!nextState.applied) {
+          reconcileWorkspacePinIntents(events);
           const mountStartedAt = performance.now();
           if (!await reconcileHydratedSubagents({
             sessionId,
@@ -206,6 +209,7 @@ export function useSessionHistoryHydration() {
           transcript: nextState.state.transcript,
           reconcileEnvelopes: events,
         });
+        reconcileWorkspacePinIntents(events);
         recordHistoryApplyStepMetrics(historyApplyOperationIds, {
           phase: "store",
           startedAt: storeStartedAt,
@@ -264,6 +268,7 @@ export function useSessionHistoryHydration() {
           transcript: nextState.transcript,
           reconcileEnvelopes: events,
         });
+        reconcileWorkspacePinIntents(events);
         recordHistoryApplyStepMetrics(historyApplyOperationIds, {
           phase: "store",
           startedAt: storeStartedAt,
@@ -320,6 +325,7 @@ export function useSessionHistoryHydration() {
         transcript: nextState.transcript,
         reconcileEnvelopes: replacementEvents,
       });
+      reconcileWorkspacePinIntents(replacementEvents);
       recordHistoryApplyStepMetrics(historyApplyOperationIds, {
         phase: "store",
         startedAt: storeStartedAt,
@@ -381,7 +387,7 @@ export function useSessionHistoryHydration() {
       finishStandaloneApplyOperation(standaloneMeasurementOperationId, "error_sanitized");
       return false;
     }
-  }, [cloudClient, reconcileHydratedSubagents, ssh]);
+  }, [cloudClient, reconcileHydratedSubagents, reconcileWorkspacePinIntents, ssh]);
 
   // UX-latency R14: full session-open hydrations dedupe by session id so the
   // bootstrap kickoff and the transcript pane share one fetch + apply.

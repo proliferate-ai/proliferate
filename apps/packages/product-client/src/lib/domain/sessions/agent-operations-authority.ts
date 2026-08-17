@@ -150,6 +150,8 @@ const AGENT_OPERATIONS_CAPABILITIES = new Set([
   "list_workspaces",
   "list_workspace_options",
   "create_workspace",
+  "pin_workspace",
+  "unpin_workspace",
   "list_agents",
   "get_agent",
   "list_subagents",

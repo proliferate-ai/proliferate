@@ -3,11 +3,11 @@
 Status: authoritative current definition for the Workspace product MCP,
 session attachment, current-role authorization, and agent product context.
 
-Workspace is the agent-facing surface for discovering workspaces and agents,
-creating and configuring agents, messaging them, and managing delegated-agent
-lifecycle. A delegated agent remains a normal durable session. Its authority
-comes from current workspace and relationship state, not from the role it had
-when its MCP capability token was minted.
+Workspace is the agent-facing surface for discovering and pinning workspaces,
+discovering agents, creating and configuring agents, messaging them, and
+managing delegated-agent lifecycle. A delegated agent remains a normal durable
+session. Its authority comes from current workspace and relationship state,
+not from the role it had when its MCP capability token was minted.
 
 The stable product MCP id and generic endpoint route slug are `workspace`.
 The ACP-visible server name is `proliferate_workspace`, so native tool names
@@ -17,7 +17,7 @@ their `serverName`.
 
 ## Tool Contract
 
-`initialize` and `tools/list` expose exactly these 18 tools. Argument and return
+`initialize` and `tools/list` expose exactly these 20 tools. Argument and return
 schemas remain code-owned:
 
 ```text
@@ -31,6 +31,8 @@ list_agent_launch_options
 list_agent_config_options
 get_task_output
 create_workspace
+pin_workspace
+unpin_workspace
 create_agent
 configure_agent
 resume_agent
@@ -90,6 +92,28 @@ Agent Operations owns the role and relationship projection. Session app
 composition injects that capability into the live session manager; live actor
 code does not derive a second role model or depend on Agent Operations
 application composition.
+
+## Client-Local Pin Requests
+
+`pin_workspace` and `unpin_workspace` validate the current caller, capability,
+runtime boundary, and exact workspace target. A valid call first persists and
+broadcasts a runtime-owned `workspace_pin_intent` session event, then returns
+the resolved workspace, the event's UUID `requestId`, the requested `pinned`
+state, and `status: "requested"`. Requested does not claim that any client has
+applied the preference.
+
+The runtime and server do not own or persist pin state. Each connected product
+client accepts only that typed session event from the authenticated live stream
+or hydrated history. ACP tool result text and `structuredContent` are display
+data and never authorize the preference mutation. The event's
+`sourceSessionId` must equal its envelope session, which rejects remapped replay
+sessions. Unknown local workspace targets cannot mutate preferences. The client
+expands logical workspace aliases and applies the request to its device-local
+`workspace_ui` preferences. A persisted latest request per runtime, session,
+and logical target prevents replayed or older same-target history from
+overwriting a later manual pin change while allowing delayed requests for other
+targets. Every client that observes the event applies it locally; the tool does
+not promise cross-device synchronization.
 
 ## Per-Turn Product Context
 
@@ -190,6 +214,8 @@ The current implementation retains:
 
 - Workspace create, configure, messaging, interrupt, Close, Open, and Promote
   behavior and strict live/history receipt correlation
+- Workspace pin and unpin validation, runtime-owned live/history intent events,
+  replay rejection, alias expansion, and device-local preference application
 - `PromptProvenance::SubagentWake`, `persist_subagent_wake_turn`, durable
   completion delivery, automatic parent notifications, and delegated-work
   notification rendering; these are completion admission/provenance, not the
@@ -218,7 +244,7 @@ The Workspace contract is complete when tests and live proof establish:
 - attachment failures have the exact bounded 500 receipt above, start no ACP,
   expose no internals, leave no stale binding summary, and succeed on a later
   valid retry
-- `initialize` and `tools/list` expose exactly the 18 tools, with a valid call
+- `initialize` and `tools/list` expose exactly the 20 tools, with a valid call
   for each, malformed-input coverage for each schema, applicable caller/target
   denials, and representative domain failures by operation family
 - every turn resolves ordinary or delegated context immediately before render;
@@ -228,6 +254,10 @@ The Workspace contract is complete when tests and live proof establish:
   persistence, unload, and later-retry laws above
 - Workspace create and promote receipts retain strict live/history authority
   after legacy presentation branches are removed
+- Workspace pin and unpin events validate the exact target, source session, and
+  request state; live and hydrated-history application converges once per
+  runtime request and target, tolerates delayed different-target history, and
+  cannot replay over a later manual pin change
 - committed completion delivery survives restart, appears once to the parent,
   and converges without a duplicate replay
 - replacement searches find no production `mcp__subagents__*` branch,

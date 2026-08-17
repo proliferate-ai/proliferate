@@ -246,7 +246,11 @@ export function AgentOperationsToolActionRow({
       onToggleDetails={toggleDetails}
       detailsExpanded={expanded}
     />
-  ) : presentation.action === "create_workspace" ? (
+  ) : (
+    presentation.action === "create_workspace"
+    || presentation.action === "pin_workspace"
+    || presentation.action === "unpin_workspace"
+  ) ? (
     <AgentOperationsWorkspaceReceipt
       presentation={presentation}
       onOpen={presentation.workspace?.workspaceId

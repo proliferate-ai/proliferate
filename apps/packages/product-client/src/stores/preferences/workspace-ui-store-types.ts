@@ -25,6 +25,7 @@ export interface PendingBackgroundSubagentSelection {
 export interface WorkspaceUiState {
   _hydrated: boolean;
   pinnedWorkspaceIds: string[];
+  workspacePinIntentReceiptByTarget: PersistedWorkspaceUiState["workspacePinIntentReceiptByTarget"];
   hiddenRepoRootIds: string[];
   collapsedRepoGroups: string[];
   showArchived: boolean;
@@ -99,6 +100,7 @@ export interface WorkspaceUiState {
   hydrate: (state: PersistedWorkspaceUiState) => void;
   pinWorkspace: (id: string) => void;
   unpinWorkspace: (ids: string[]) => void;
+  applyWorkspacePinIntentBatch: (input: WorkspacePinIntentBatch) => void;
   hideRepoRoot: (repoRootId: string) => void;
   unhideRepoRoot: (repoRootId: string) => void;
   toggleRepoGroupCollapsed: (repoKey: string) => void;
@@ -228,6 +230,18 @@ export interface WorkspaceUiState {
   ) => void;
   stampWorkspaceGitPrompt: (logicalWorkspaceId: string, at: string) => void;
   pruneWorkspaceGitStatusSnapshots: (liveLogicalWorkspaceIds: string[]) => void;
+}
+
+export interface WorkspacePinIntentBatch {
+  intents: Array<{
+    requestId: string;
+    runtimeId: string;
+    sessionId: string;
+    seq: number;
+    pinId: string;
+    relatedIds: string[];
+    pinned: boolean;
+  }>;
 }
 
 export interface ShellIntentResult {

@@ -5,6 +5,7 @@ import {
   formatWorkspaceDetail,
   parseAgentTarget,
   parseCreateWorkspaceEnvelope,
+  parseWorkspacePinEnvelope,
   parseWorkspaceTarget,
   readString,
   targetAgentFromDurableId,
@@ -32,6 +33,8 @@ export const AGENT_OPERATIONS_READ_ACTIONS = [
 
 export const AGENT_OPERATIONS_RECEIPT_ACTIONS = [
   "create_workspace",
+  "pin_workspace",
+  "unpin_workspace",
   "create_agent",
   "configure_agent",
   "resume_agent",
@@ -175,8 +178,14 @@ export function deriveAgentOperationsReceiptPresentation(
   const isFailed = item.status === "failed";
   const targetAgentId = readString(input, "agentId");
 
-  if (action === "create_workspace") {
-    const workspaceEnvelope = parseCreateWorkspaceEnvelope(output);
+  if (
+    action === "create_workspace"
+    || action === "pin_workspace"
+    || action === "unpin_workspace"
+  ) {
+    const workspaceEnvelope = action === "create_workspace"
+      ? parseCreateWorkspaceEnvelope(output)
+      : parseWorkspacePinEnvelope(output, action === "pin_workspace");
     const workspace = workspaceEnvelope
       ? parseWorkspaceTarget(workspaceEnvelope.workspace, workspaceEnvelope.envelope, input)
       : null;
@@ -188,7 +197,9 @@ export function deriveAgentOperationsReceiptPresentation(
       agent: null,
       workspace,
       message: null,
-      detailLabel: workspace ? formatWorkspaceDetail(workspace) : null,
+      detailLabel: action === "create_workspace" && workspace
+        ? formatWorkspaceDetail(workspace)
+        : null,
       isRunning,
       isFailed,
     };
@@ -233,6 +244,10 @@ function actionLabel(
   switch (action) {
     case "create_workspace":
       return running ? "Creating workspace" : failed ? "Failed to create workspace" : "Created workspace";
+    case "pin_workspace":
+      return running ? "Pinning workspace" : failed ? "Failed to pin workspace" : "Pinned workspace";
+    case "unpin_workspace":
+      return running ? "Unpinning workspace" : failed ? "Failed to unpin workspace" : "Unpinned workspace";
     case "create_agent":
       return running ? "Creating agent" : failed ? "Failed to create agent" : "Created agent";
     case "configure_agent":

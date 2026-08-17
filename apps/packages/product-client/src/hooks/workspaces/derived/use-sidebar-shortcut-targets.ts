@@ -9,7 +9,10 @@ import {
 import {
   SIDEBAR_REPO_GROUP_ITEM_LIMIT,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
-import { visibleSidebarShortcutTargetIds } from "#product/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
+import {
+  numberedSidebarShortcutTargetIds,
+  visibleSidebarShortcutTargetIds,
+} from "#product/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useWorkspaceSidebarShowMoreStore } from "#product/stores/workspaces/workspace-sidebar-show-more-store";
@@ -18,7 +21,12 @@ const EMPTY_WORKSPACE_ACTIVITIES = {};
 const EMPTY_PENDING_PROMPT_COUNTS = {};
 const EMPTY_LAST_VIEWED_AT = {};
 
-export function useSidebarShortcutTargets(): string[] {
+export interface SidebarShortcutTargets {
+  digitTargetIds: string[];
+  traversalTargetIds: string[];
+}
+
+export function useSidebarShortcutTargets(): SidebarShortcutTargets {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
@@ -27,11 +35,13 @@ export function useSidebarShortcutTargets(): string[] {
   const { repoRoots } = useStandardRepoProjection();
   const { cloudComputeEnabled } = useAppCapabilities();
   const {
+    pinnedWorkspaceIds,
     hiddenRepoRootIds,
     collapsedRepoGroups,
     workspaceTypes,
     workspaceLastInteracted,
   } = useWorkspaceUiStore(useShallow((state) => ({
+    pinnedWorkspaceIds: state.pinnedWorkspaceIds,
     hiddenRepoRootIds: state.hiddenRepoRootIds,
     collapsedRepoGroups: state.collapsedRepoGroups,
     workspaceTypes: state.workspaceTypes,
@@ -44,6 +54,10 @@ export function useSidebarShortcutTargets(): string[] {
   const hiddenRepoRootSet = useMemo(
     () => new Set(hiddenRepoRootIds),
     [hiddenRepoRootIds],
+  );
+  const pinnedSet = useMemo(
+    () => new Set(pinnedWorkspaceIds),
+    [pinnedWorkspaceIds],
   );
   const collapsedRepoGroupKeys = useMemo(
     () => new Set(collapsedRepoGroups),
@@ -59,6 +73,7 @@ export function useSidebarShortcutTargets(): string[] {
     logicalWorkspaces,
     showArchived: false,
     workspaceTypes,
+    pinnedSet,
     hiddenRepoRootIds: hiddenRepoRootSet,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
@@ -73,6 +88,7 @@ export function useSidebarShortcutTargets(): string[] {
     cloudComputeEnabled,
     hiddenRepoRootSet,
     logicalWorkspaces,
+    pinnedSet,
     repoRoots,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
@@ -80,14 +96,24 @@ export function useSidebarShortcutTargets(): string[] {
     workspaceTypes,
   ]);
 
-  return useMemo(() => visibleSidebarShortcutTargetIds({
-    groups,
-    collapsedRepoGroupKeys,
-    repoGroupsShownMore: repoGroupsShownMoreKeys,
-    itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+  return useMemo(() => ({
+    digitTargetIds: numberedSidebarShortcutTargetIds({
+      groups,
+      pinnedWorkspaceIds,
+      collapsedRepoGroupKeys,
+      repoGroupsShownMore: repoGroupsShownMoreKeys,
+      itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+    }),
+    traversalTargetIds: visibleSidebarShortcutTargetIds({
+      groups,
+      collapsedRepoGroupKeys,
+      repoGroupsShownMore: repoGroupsShownMoreKeys,
+      itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+    }),
   }), [
     collapsedRepoGroupKeys,
     groups,
+    pinnedWorkspaceIds,
     repoGroupsShownMoreKeys,
   ]);
 }

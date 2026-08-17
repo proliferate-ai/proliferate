@@ -20,7 +20,7 @@ export function targetAgentFromDurableId(sessionId: string): AgentOperationsAgen
 }
 
 export function extractAgentRecord(
-  action: Exclude<AgentOperationsReceiptAction, "create_workspace">,
+  action: Exclude<AgentOperationsReceiptAction, "create_workspace" | "pin_workspace" | "unpin_workspace">,
   output: Record<string, unknown> | null,
 ): Record<string, unknown> | null {
   if (!output) {
@@ -77,6 +77,25 @@ export function parseCreateWorkspaceEnvelope(
     return null;
   }
   return { workspace, envelope: output };
+}
+
+export function parseWorkspacePinEnvelope(
+  output: Record<string, unknown> | null,
+  pinned: boolean,
+): {
+  workspace: Record<string, unknown>;
+  envelope: Record<string, unknown>;
+} | null {
+  if (
+    !output
+    || !readString(output, "requestId")
+    || output.status !== "requested"
+    || output.pinned !== pinned
+  ) {
+    return null;
+  }
+  const workspace = coerceRecord(output.workspace);
+  return workspace ? { workspace, envelope: output } : null;
 }
 
 function looksLikeDirectAgentView(value: Record<string, unknown>): boolean {
@@ -222,7 +241,10 @@ export function formatWorkspaceDetail(
 }
 
 export function detailLabel(
-  action: Exclude<AgentOperationsReceiptAction, "create_workspace">,
+  action: Exclude<
+    AgentOperationsReceiptAction,
+    "create_workspace" | "pin_workspace" | "unpin_workspace"
+  >,
   output: Record<string, unknown> | null,
 ): string | null {
   if (!output) {

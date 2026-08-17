@@ -58,6 +58,8 @@ pub enum AgentOperationsCapability {
     ListWorkspaces,
     ListWorkspaceOptions,
     CreateWorkspace,
+    PinWorkspace,
+    UnpinWorkspace,
     ListAgents,
     GetAgent,
     ListSubagents,

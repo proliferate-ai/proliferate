@@ -19,6 +19,8 @@ type ConfigOptionUpdatePayload =
 type SessionStateUpdatePayload =
   components["schemas"]["SessionStateUpdatePayload"];
 type SessionInfoUpdatePayload = components["schemas"]["SessionInfoUpdatePayload"];
+type WorkspacePinIntentPayload =
+  components["schemas"]["WorkspacePinIntentPayload"];
 type SubagentTurnCompletedPayload =
   components["schemas"]["SubagentTurnCompletedPayload"];
 type SessionLinkTurnCompletedPayload =
@@ -101,6 +103,9 @@ export type SessionStateUpdateEvent = SessionStateUpdatePayload & {
 };
 export type SessionInfoUpdateEvent = SessionInfoUpdatePayload & {
   type: "session_info_update";
+};
+export type WorkspacePinIntentEvent = WorkspacePinIntentPayload & {
+  type: "workspace_pin_intent";
 };
 export type SubagentTurnCompletedEvent = SubagentTurnCompletedPayload & {
   type: "subagent_turn_completed";
@@ -229,6 +234,7 @@ export type SessionEvent =
   | ConfigOptionUpdateEvent
   | SessionStateUpdateEvent
   | SessionInfoUpdateEvent
+  | WorkspacePinIntentEvent
   | SubagentTurnCompletedEvent
   | SessionLinkTurnCompletedEvent
   | ReviewRunUpdatedEvent

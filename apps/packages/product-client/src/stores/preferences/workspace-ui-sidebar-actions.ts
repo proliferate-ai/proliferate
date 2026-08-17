@@ -3,6 +3,7 @@ import {
   toggleSidebarWorkspaceTypeSelection,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-workspace-types";
 import { clampWorkspaceSidebarWidth } from "#product/lib/domain/preferences/workspace-ui/sidebar";
+import { workspacePinIntentTargetKey } from "#product/lib/domain/workspaces/sidebar/workspace-pin-intents";
 import { resolveStateValue } from "#product/stores/preferences/workspace-ui-state-value";
 import type { WorkspaceUiGet, WorkspaceUiSet, WorkspaceUiState } from "#product/stores/preferences/workspace-ui-store-types";
 
@@ -10,6 +11,7 @@ type WorkspaceUiSidebarActions = Pick<
   WorkspaceUiState,
   | "pinWorkspace"
   | "unpinWorkspace"
+  | "applyWorkspacePinIntentBatch"
   | "hideRepoRoot"
   | "unhideRepoRoot"
   | "toggleRepoGroupCollapsed"
@@ -46,6 +48,51 @@ export function createWorkspaceUiSidebarActions(
         return;
       }
       set({ pinnedWorkspaceIds: next });
+    },
+
+    applyWorkspacePinIntentBatch: (input) => {
+      set((state) => {
+        let pinnedWorkspaceIds = state.pinnedWorkspaceIds;
+        let receiptByTarget = state.workspacePinIntentReceiptByTarget;
+        let didApply = false;
+        for (const intent of [...input.intents].sort((left, right) => left.seq - right.seq)) {
+          const targetKey = workspacePinIntentTargetKey(
+            intent.runtimeId,
+            intent.sessionId,
+            intent.pinId,
+          );
+          const previousReceipt = receiptByTarget[targetKey];
+          if (
+            previousReceipt
+            && (
+              previousReceipt.requestId === intent.requestId
+              || previousReceipt.seq >= intent.seq
+            )
+          ) {
+            continue;
+          }
+          if (intent.pinned) {
+            if (!intent.relatedIds.some((id) => pinnedWorkspaceIds.includes(id))) {
+              pinnedWorkspaceIds = [...pinnedWorkspaceIds, intent.pinId];
+            }
+          } else {
+            const relatedIds = new Set(intent.relatedIds);
+            pinnedWorkspaceIds = pinnedWorkspaceIds.filter((id) => !relatedIds.has(id));
+          }
+          receiptByTarget = {
+            ...receiptByTarget,
+            [targetKey]: { requestId: intent.requestId, seq: intent.seq },
+          };
+          didApply = true;
+        }
+        if (!didApply) {
+          return {};
+        }
+        return {
+          pinnedWorkspaceIds,
+          workspacePinIntentReceiptByTarget: receiptByTarget,
+        };
+      });
     },
 
     hideRepoRoot: (repoRootId) => {

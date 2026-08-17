@@ -389,6 +389,7 @@ export type {
   ConfigOptionUpdateEvent,
   SessionStateUpdateEvent,
   SessionInfoUpdateEvent,
+  WorkspacePinIntentEvent,
   UsageUpdateEvent,
   GoalUpdatedEvent,
   GoalMetEvent,

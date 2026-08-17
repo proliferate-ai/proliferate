@@ -135,6 +135,11 @@ Held-key workspace traversal (`Cmd+Opt+Left/Right`,
 switch: a cheap preview cursor during traversal, one expensive selection
 commit after it settles.
 
+Numbered workspace shortcuts use pinned workspaces first in persisted pin
+order, followed by visible unpinned repository rows. A pinned workspace remains
+a numbered shortcut target when its repository group is collapsed. Held-key
+traversal retains repository row order independently of pin order.
+
 ```text
 useAppShortcuts (React glue: refs to current target ids / commit action)
   └── createWorkspaceSwitchCursorController   pure state machine, no React/DOM

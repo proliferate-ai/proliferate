@@ -34,12 +34,20 @@ import { WORKSPACE_SIDEBAR_DEFAULT_WIDTH } from "#product/lib/domain/preferences
  * lifecycle filter (`lifecycle=archived`) is now the single source of
  * truth for which workspaces are archived, so a stale persisted id can no
  * longer resurrect a hidden row.
+ * v16: track the latest applied Workspace MCP pin receipt per session target
+ * so replayed session history cannot overwrite a later manual pin choice.
  */
-export const WORKSPACE_UI_MIGRATION_VERSION = 15;
+export const WORKSPACE_UI_MIGRATION_VERSION = 16;
+
+export interface WorkspacePinIntentReceipt {
+  requestId: string;
+  seq: number;
+}
 
 export interface PersistedWorkspaceUiState {
   migrationVersion?: number;
   pinnedWorkspaceIds: string[];
+  workspacePinIntentReceiptByTarget: Record<string, WorkspacePinIntentReceipt>;
   hiddenRepoRootIds: string[];
   collapsedRepoGroups: string[];
   showArchived: boolean;
@@ -75,6 +83,7 @@ export interface WorkspaceUiChangeTrackedState extends PersistedWorkspaceUiState
 
 export const WORKSPACE_UI_DEFAULTS: PersistedWorkspaceUiState = {
   pinnedWorkspaceIds: [],
+  workspacePinIntentReceiptByTarget: {},
   hiddenRepoRootIds: [],
   collapsedRepoGroups: [],
   showArchived: false,

@@ -16,6 +16,7 @@ import {
   createSessionStreamFlushController,
   type SessionStreamFlushScheduler,
 } from "#product/hooks/sessions/lifecycle/use-session-stream-flush";
+import type { SessionStreamFlushFactoryDeps } from "#product/hooks/sessions/lifecycle/session-stream-flush-types";
 import type { SessionStreamCache } from "#product/hooks/sessions/cache/use-session-stream-cache";
 
 const originalPatchTranscriptEntry = useSessionTranscriptStore.getState().patchEntry;
@@ -50,19 +51,29 @@ describe("session stream flush controller", () => {
   it("applies queued stream events with one store patch per scheduled flush", () => {
     const scheduled = createManualScheduler();
     const patchSpy = spyOnTranscriptPatch();
-    const controller = createTestController({ scheduler: scheduled.scheduler });
+    const reconcileWorkspacePinIntents = vi.fn<
+      SessionStreamFlushFactoryDeps["reconcileWorkspacePinIntents"]
+    >();
+    const controller = createTestController({
+      scheduler: scheduled.scheduler,
+      reconcileWorkspacePinIntents,
+    });
 
     controller.enqueue(assistantStarted(2, "assistant-1", "Hel"));
     controller.enqueue(assistantDelta(3, "assistant-1", "lo"));
     controller.enqueue(assistantCompleted(4, "assistant-1", "Hello"));
+    controller.enqueue(workspacePinIntent(5));
 
     expect(patchSpy).not.toHaveBeenCalled();
     scheduled.flush();
 
     expect(patchSpy).toHaveBeenCalledTimes(1);
     const slot = getSessionRecord("session-1")!;
-    expect(slot.events.map((event) => event.seq)).toEqual([1, 2, 3, 4]);
-    expect(slot.transcript.lastSeq).toBe(4);
+    expect(slot.events.map((event) => event.seq)).toEqual([1, 2, 3, 4, 5]);
+    expect(slot.transcript.lastSeq).toBe(5);
+    expect(reconcileWorkspacePinIntents).toHaveBeenCalledTimes(1);
+    expect(reconcileWorkspacePinIntents.mock.calls[0]?.[0].map((event) => event.seq))
+      .toEqual([2, 3, 4, 5]);
   });
 
   it("clears optimistic prompt when the stream echoes the user message", () => {
@@ -265,6 +276,7 @@ function createTestController(options?: {
   scheduleActiveSummaryRefresh?: () => void;
   refreshSessionSlotMeta?: () => Promise<void>;
   rehydrateSessionSlotFromHistory?: () => Promise<boolean>;
+  reconcileWorkspacePinIntents?: SessionStreamFlushFactoryDeps["reconcileWorkspacePinIntents"];
 }) {
   return createSessionStreamFlushController({
     sessionStreamCache: createTestSessionStreamCache(),
@@ -272,6 +284,7 @@ function createTestController(options?: {
     persistReconciledControlPreferences: vi.fn(),
     refreshSessionSlotMeta: options?.refreshSessionSlotMeta ?? vi.fn(),
     rehydrateSessionSlotFromHistory: options?.rehydrateSessionSlotFromHistory ?? vi.fn().mockResolvedValue(false),
+    reconcileWorkspacePinIntents: options?.reconcileWorkspacePinIntents ?? vi.fn(),
     showToast: vi.fn(),
     scheduler: options?.scheduler,
     sessionId: "session-1",
@@ -400,6 +413,22 @@ function sessionStateUpdate(seq: number): SessionEventEnvelope {
     event: {
       type: "session_state_update",
       modelId: "codex-model",
+    },
+  };
+}
+
+function workspacePinIntent(seq: number): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-04-04T00:00:0${seq}Z`,
+    event: {
+      type: "workspace_pin_intent",
+      requestId: "11111111-1111-4111-8111-111111111111",
+      runtimeId: "runtime-1",
+      sourceSessionId: "session-1",
+      workspaceId: "workspace-1",
+      pinned: true,
     },
   };
 }

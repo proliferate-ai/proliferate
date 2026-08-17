@@ -18,7 +18,7 @@ export function AgentOperationsWorkspaceReceipt({
   const workspace = presentation.workspace;
   return (
     <div
-      data-agent-operations-receipt="create_workspace"
+      data-agent-operations-receipt={presentation.action}
       className={`flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap text-chat ${
         presentation.isFailed ? "text-destructive/80" : "text-muted-foreground/60"
       }`}

@@ -1,6 +1,7 @@
 use anyharness_contract::v1::{
     ReviewRunUpdatedPayload, SessionEvent, SessionEventEnvelope, SessionInfoUpdatePayload,
     SessionLinkTurnCompletedPayload, SubagentTurnCompletedPayload, SubagentTurnOutcome,
+    WorkspacePinIntentPayload,
 };
 
 use crate::domains::sessions::extensions::SessionTurnOutcome;
@@ -34,6 +35,13 @@ pub(crate) enum RuntimeInjectedSessionEvent {
     SessionInfoUpdate {
         title: Option<String>,
         updated_at: Option<String>,
+    },
+    WorkspacePinIntent {
+        request_id: String,
+        runtime_id: String,
+        source_session_id: String,
+        workspace_id: String,
+        pinned: bool,
     },
     SubagentTurnCompleted(SubagentTurnCompletedPayload),
     SessionLinkTurnCompleted(SessionLinkTurnCompletedPayload),
@@ -72,6 +80,19 @@ impl RuntimeInjectedSessionEvent {
             Self::SessionInfoUpdate { title, updated_at } => {
                 SessionEvent::SessionInfoUpdate(SessionInfoUpdatePayload { title, updated_at })
             }
+            Self::WorkspacePinIntent {
+                request_id,
+                runtime_id,
+                source_session_id,
+                workspace_id,
+                pinned,
+            } => SessionEvent::WorkspacePinIntent(WorkspacePinIntentPayload {
+                request_id,
+                runtime_id,
+                source_session_id,
+                workspace_id,
+                pinned,
+            }),
             Self::SubagentTurnCompleted(payload) => SessionEvent::SubagentTurnCompleted(payload),
             Self::SessionLinkTurnCompleted(payload) => {
                 SessionEvent::SessionLinkTurnCompleted(payload)

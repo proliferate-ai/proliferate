@@ -76,6 +76,16 @@ fn valid_tool_calls() -> Vec<ToolCallCase> {
             outcome: DomainError("WORKSPACE_REPOSITORY_NOT_FOUND"),
         },
         ToolCallCase {
+            name: "pin_workspace",
+            arguments: json!({ "workspaceId": "workspace-a" }),
+            outcome: Success,
+        },
+        ToolCallCase {
+            name: "unpin_workspace",
+            arguments: json!({ "workspaceId": "workspace-a" }),
+            outcome: Success,
+        },
+        ToolCallCase {
             name: "create_agent",
             arguments: json!({
                 "workspaceId": "workspace-a",
@@ -146,6 +156,8 @@ fn malformed_tool_calls() -> Vec<(&'static str, Value)> {
             "create_workspace",
             json!({ "repositoryId": "repo-missing" }),
         ),
+        ("pin_workspace", json!({})),
+        ("unpin_workspace", json!({ "workspaceId": 7 })),
         (
             "create_agent",
             json!({ "workspaceId": "workspace-a", "kind": "unknown" }),
@@ -205,7 +217,7 @@ async fn every_workspace_tool_accepts_one_schema_valid_call_through_the_dispatch
     let cases = valid_tool_calls();
     assert_exact_tool_coverage(cases.iter().map(|case| case.name));
 
-    let (server, auth, _) = server();
+    let (server, auth, _, _) = server();
     let token = auth
         .mint_capability_token("workspace-a", "P")
         .expect("mint Workspace capability token");
@@ -248,7 +260,7 @@ async fn every_workspace_tool_accepts_one_schema_valid_call_through_the_dispatch
 
 #[tokio::test]
 async fn list_subagents_returns_the_agent_page_object() {
-    let (server, auth, _) = server();
+    let (server, auth, _, _) = server();
     let token = auth
         .mint_capability_token("workspace-a", "P")
         .expect("mint Workspace capability token");
@@ -264,7 +276,7 @@ async fn every_workspace_tool_rejects_one_schema_invalid_call_through_the_dispat
     let cases = malformed_tool_calls();
     assert_exact_tool_coverage(cases.iter().map(|(name, _)| *name));
 
-    let (server, auth, _) = server();
+    let (server, auth, _, _) = server();
     let token = auth
         .mint_capability_token("workspace-a", "P")
         .expect("mint Workspace capability token");

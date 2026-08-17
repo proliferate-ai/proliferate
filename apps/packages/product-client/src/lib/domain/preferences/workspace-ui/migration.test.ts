@@ -111,6 +111,25 @@ describe("workspace UI state migration", () => {
     expect(state.lastViewedSessionErrorAtBySession).toEqual({});
   });
 
+  it("defaults and sanitizes Workspace MCP pin receipt records", () => {
+    const { state, didMigrate } = migrateWorkspaceUiState({
+      ...WORKSPACE_UI_DEFAULTS,
+      migrationVersion: 15,
+      workspacePinIntentReceiptByTarget: {
+        valid: { requestId: "request-1", seq: 12 },
+        missingOperation: { seq: 10 } as never,
+        negative: { requestId: "request-2", seq: -1 },
+        fractional: { requestId: "request-3", seq: 2.5 },
+        invalid: "3" as never,
+      },
+    });
+
+    expect(didMigrate).toBe(true);
+    expect(state.workspacePinIntentReceiptByTarget).toEqual({
+      valid: { requestId: "request-1", seq: 12 },
+    });
+  });
+
   it("sanitizes malformed manual chat groups during migration", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,

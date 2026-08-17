@@ -9,6 +9,8 @@ use super::SessionLiveConfigSnapshot;
 
 mod pending_prompts;
 pub use pending_prompts::*;
+mod runtime_metadata;
+pub use runtime_metadata::*;
 
 // ---------------------------------------------------------------------------
 // Envelope
@@ -57,6 +59,7 @@ pub enum SessionEvent {
     ConfigOptionUpdate(ConfigOptionUpdatePayload),
     SessionStateUpdate(SessionStateUpdatePayload),
     SessionInfoUpdate(SessionInfoUpdatePayload),
+    WorkspacePinIntent(WorkspacePinIntentPayload),
     SubagentTurnCompleted(SubagentTurnCompletedPayload),
     SessionLinkTurnCompleted(SessionLinkTurnCompletedPayload),
     ReviewRunUpdated(ReviewRunUpdatedPayload),
@@ -103,6 +106,7 @@ impl SessionEvent {
             Self::ConfigOptionUpdate(_) => "config_option_update",
             Self::SessionStateUpdate(_) => "session_state_update",
             Self::SessionInfoUpdate(_) => "session_info_update",
+            Self::WorkspacePinIntent(_) => "workspace_pin_intent",
             Self::SubagentTurnCompleted(_) => "subagent_turn_completed",
             Self::SessionLinkTurnCompleted(_) => "session_link_turn_completed",
             Self::ReviewRunUpdated(_) => "review_run_updated",
@@ -649,15 +653,6 @@ pub struct SessionStateUpdatePayload {
     pub mode_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub requested_mode_id: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionInfoUpdatePayload {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub updated_at: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

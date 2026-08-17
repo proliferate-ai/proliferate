@@ -85,6 +85,17 @@ export function migrateWorkspaceUiState(
     didMigrate = true;
   }
 
+  const workspacePinIntentReceiptByTarget = sanitizeWorkspacePinIntentReceipts(
+    state.workspacePinIntentReceiptByTarget,
+  );
+  if (
+    JSON.stringify(workspacePinIntentReceiptByTarget)
+    !== JSON.stringify(state.workspacePinIntentReceiptByTarget)
+  ) {
+    state.workspacePinIntentReceiptByTarget = workspacePinIntentReceiptByTarget;
+    didMigrate = true;
+  }
+
   if (!Array.isArray(state.collapsedRepoGroups)) {
     const legacy = state.collapsedRepoGroups as unknown as Record<string, boolean>;
     state.collapsedRepoGroups = Object.keys(legacy).filter((k) => legacy[k]);
@@ -244,4 +255,30 @@ export function migrateWorkspaceUiState(
   }
 
   return { state, didMigrate };
+}
+
+function sanitizeWorkspacePinIntentReceipts(
+  value: unknown,
+): PersistedWorkspaceUiState["workspacePinIntentReceiptByTarget"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(value).filter(([targetKey, receipt]) => {
+      if (
+        targetKey.trim().length === 0
+        || !receipt
+        || typeof receipt !== "object"
+        || Array.isArray(receipt)
+      ) {
+        return false;
+      }
+      const candidate = receipt as Record<string, unknown>;
+      return typeof candidate.requestId === "string"
+        && candidate.requestId.trim().length > 0
+        && typeof candidate.seq === "number"
+        && Number.isSafeInteger(candidate.seq)
+        && candidate.seq >= 0;
+    }),
+  );
 }

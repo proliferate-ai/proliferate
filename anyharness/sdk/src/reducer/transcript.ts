@@ -254,8 +254,8 @@ function applyEvent(
       };
       break;
     }
-
     case "review_run_updated":
+    case "workspace_pin_intent":
       break;
 
     case "usage_update":

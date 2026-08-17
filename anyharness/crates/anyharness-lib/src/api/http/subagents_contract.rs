@@ -154,6 +154,8 @@ fn capability_to_contract(capability: AgentCapability) -> AgentOperationsCapabil
         AgentCapability::ListWorkspaces => AgentOperationsCapability::ListWorkspaces,
         AgentCapability::ListWorkspaceOptions => AgentOperationsCapability::ListWorkspaceOptions,
         AgentCapability::CreateWorkspace => AgentOperationsCapability::CreateWorkspace,
+        AgentCapability::PinWorkspace => AgentOperationsCapability::PinWorkspace,
+        AgentCapability::UnpinWorkspace => AgentOperationsCapability::UnpinWorkspace,
         AgentCapability::ListAgents => AgentOperationsCapability::ListAgents,
         AgentCapability::GetAgent => AgentOperationsCapability::GetAgent,
         AgentCapability::ListSubagents => AgentOperationsCapability::ListSubagents,

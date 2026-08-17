@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SIDEBAR_REPO_GROUP_ITEM_LIMIT } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import {
+  numberedSidebarShortcutTargetIds,
   resolveAdjacentSidebarShortcutTarget,
   resolveSidebarShortcutDigitTarget,
   visibleSidebarShortcutTargetIds,
@@ -225,6 +226,53 @@ describe("visibleSidebarShortcutTargetIds", () => {
     });
 
     expect(readTargets(visualGroups)).toEqual(readTargets(baseGroups));
+  });
+
+  it("puts pinned workspaces first in persisted pin order", () => {
+    const pinnedWorkspaceIds = ["repo-b-pinned", "repo-a-pinned"];
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "repo-a-visible",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+        }),
+        makeLocalLogicalWorkspace({
+          id: "repo-a-pinned",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+        }),
+        makeLocalLogicalWorkspace({
+          id: "repo-b-pinned",
+          repoKey: "/tmp/repo-b",
+          repoName: "repo-b",
+        }),
+      ],
+      pinnedIds: pinnedWorkspaceIds,
+    });
+
+    expect(numberedSidebarShortcutTargetIds({
+      groups,
+      pinnedWorkspaceIds,
+      collapsedRepoGroupKeys: new Set(["/tmp/repo-b"]),
+      repoGroupsShownMore: new Set(),
+      itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+    })).toEqual([
+      "repo-b-pinned",
+      "repo-a-pinned",
+      "repo-a-visible",
+    ]);
+
+    expect(visibleSidebarShortcutTargetIds({
+      groups,
+      collapsedRepoGroupKeys: new Set(["/tmp/repo-b"]),
+      repoGroupsShownMore: new Set(),
+      itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+    })).toEqual([
+      "repo-a-visible",
+      "repo-a-pinned",
+    ]);
   });
 });
 

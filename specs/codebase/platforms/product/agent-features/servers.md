@@ -607,6 +607,10 @@ If a product MCP changes durable product state independently, the owning domain
 may also expose normal API/UI refresh state. That does not belong in
 `integrations/mcp`.
 
+A renderer-local effect must not treat the agent-visible ACP tool result as an
+authority channel. It requires a narrow runtime-owned session event emitted
+after authorization; `workspace_pin_intent` is the current example.
+
 ## Internal vs User-Selectable
 
 Internal product MCPs:

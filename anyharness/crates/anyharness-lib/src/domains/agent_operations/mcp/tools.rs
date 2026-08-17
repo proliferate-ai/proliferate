@@ -2,7 +2,7 @@ use serde_json::{json, Value};
 
 use crate::integrations::mcp::tools::tool_definition;
 
-pub const TOOL_NAMES: [&str; 18] = [
+pub const TOOL_NAMES: [&str; 20] = [
     "whoami",
     "list_workspaces",
     "list_workspace_options",
@@ -13,6 +13,8 @@ pub const TOOL_NAMES: [&str; 18] = [
     "list_agent_config_options",
     "get_task_output",
     "create_workspace",
+    "pin_workspace",
+    "unpin_workspace",
     "create_agent",
     "configure_agent",
     "resume_agent",
@@ -28,6 +30,8 @@ const AGENT_ID_DESCRIPTION: &str =
 
 pub const MUTATING_TOOL_NAMES: &[&str] = &[
     "create_workspace",
+    "pin_workspace",
+    "unpin_workspace",
     "create_agent",
     "configure_agent",
     "resume_agent",
@@ -116,6 +120,16 @@ pub fn build_tool_list() -> Vec<Value> {
                 },
                 "required": ["repositoryId", "creationMode"]
             }),
+        ),
+        tool_definition(
+            "pin_workspace",
+            "Request that the connected Proliferate client pin a workspace in its device-local sidebar preferences.",
+            workspace_schema(),
+        ),
+        tool_definition(
+            "unpin_workspace",
+            "Request that the connected Proliferate client unpin a workspace from its device-local sidebar preferences.",
+            workspace_schema(),
         ),
         tool_definition(
             "create_agent",
@@ -226,7 +240,7 @@ mod tests {
             .map(|tool| tool["name"].as_str().expect("tool name"))
             .collect::<Vec<_>>();
         assert_eq!(names, TOOL_NAMES);
-        assert_eq!(tools.len(), 18);
+        assert_eq!(tools.len(), 20);
     }
 
     #[test]
@@ -322,6 +336,14 @@ mod tests {
             (
                 "create_workspace",
                 "b19bb55531b302386a061881ab9c7c2a3c77448e1af4900db63c936eca1eeb1d".to_string(),
+            ),
+            (
+                "pin_workspace",
+                "0d410ecafd8bb89b734fbe54575ce1321e07445554ed19942980c506ca093f31".to_string(),
+            ),
+            (
+                "unpin_workspace",
+                "0d410ecafd8bb89b734fbe54575ce1321e07445554ed19942980c506ca093f31".to_string(),
             ),
             (
                 "create_agent",

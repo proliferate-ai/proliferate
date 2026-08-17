@@ -92,7 +92,7 @@ export const MainSidebar = memo(function MainSidebar({
   const { notice, dismissNotice, openChangelog } = useReleaseNotice();
   const actions = useWorkspaceSidebarActions();
   const shortcutRevealVisible = useShortcutRevealVisible();
-  const sidebarShortcutTargetIds = useSidebarShortcutTargets();
+  const { digitTargetIds } = useSidebarShortcutTargets();
   const { cloudActive, cloudUnavailable, authStatus: cloudAuthStatus, cloudComputeEnabled } =
     useCloudAvailabilityState();
   const { data: billingPlan } = useCloudBilling();
@@ -398,8 +398,8 @@ export const MainSidebar = memo(function MainSidebar({
   }, [repositoriesCollapsed, setRepositoriesCollapsed]);
   const filtersActive = !isDefaultSidebarWorkspaceTypes(workspaceTypes);
   const sidebarShortcutLabelById = useMemo(
-    () => buildShortcutRangeLabelById(sidebarShortcutTargetIds, SHORTCUTS.workspaceByIndex),
-    [sidebarShortcutTargetIds],
+    () => buildShortcutRangeLabelById(digitTargetIds, SHORTCUTS.workspaceByIndex),
+    [digitTargetIds],
   );
 
   return (
