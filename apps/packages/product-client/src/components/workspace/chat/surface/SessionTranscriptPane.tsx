@@ -8,6 +8,8 @@ import { ConnectedPlanHandoffDialog } from "#product/components/workspace/chat/p
 import { usePlanHandoffDialogState } from "#product/hooks/plans/ui/use-plan-handoff-dialog-state";
 import { useBackgroundWorkRowCounts } from "#product/hooks/activity/derived/use-background-work-row";
 import { useOpenBackgroundWorkPane } from "#product/hooks/activity/workflows/use-open-background-work-pane";
+import { useResizeObserverHeight } from "#product/hooks/ui/layout/use-resize-observer-height";
+import { resolveTranscriptBottomInsets } from "#product/hooks/chat/ui/transcript-row-list-model";
 import { useSessionHistoryHydration } from "#product/hooks/sessions/lifecycle/use-session-history-hydration";
 import { useTranscriptSessionNavigationActions } from "#product/hooks/chat/workflows/use-transcript-session-navigation-actions";
 import { useWorkspaceCreationReceiptKey } from "#product/hooks/workspaces/derived/use-workspace-creation-receipt";
@@ -47,6 +49,21 @@ export function SessionTranscriptPane({
   const hasBackgroundWork = backgroundWorkRowCounts.runningCount > 0
     || backgroundWorkRowCounts.finishedCount > 0;
   const openBackgroundWorkPane = useOpenBackgroundWorkPane();
+  // Review fix (bgwork R2 round 2): the row is a real content element sitting
+  // ABOVE MessageList's own reserved end-padding, not decoration inside it —
+  // so its own height must ALSO be reserved, or it paints over the last
+  // turn's tail (see the comment at the row's render site below for the
+  // full geometry). Measure it live rather than hardcoding a row height:
+  // the row's rendered height moves with the appearance-scaling multiplier.
+  const { ref: backgroundWorkRowRef, height: backgroundWorkRowHeightPx } =
+    useResizeObserverHeight<HTMLDivElement>();
+  const { structural: structuralBottomInsetPx } = resolveTranscriptBottomInsets(
+    bottomInsetPx,
+    nonDisplacingBottomInsetPx,
+  );
+  const messageListBottomInsetPx = hasBackgroundWork
+    ? bottomInsetPx + backgroundWorkRowHeightPx
+    : bottomInsetPx;
   const { rehydrateSessionSlotFromHistory } = useSessionHistoryHydration();
   const [olderHistoryLoadingSessionId, setOlderHistoryLoadingSessionId] = useState<string | null>(null);
   const immediatePaneState = useActiveTranscriptPaneState();
@@ -235,19 +252,35 @@ export function SessionTranscriptPane({
           from the SAME `bottomInsetPx` via the virtualizer's `paddingEnd`),
           so a dock card growing while idle+pinned could clip the last turn
           until the next unrelated resize (carried R1 item 1).
-          Fix: stop clamping — MessageList gets the real, live
+          Fix round 1: stop clamping — MessageList gets the real, live
           `bottomInsetPx`/`nonDisplacingBottomInsetPx` exactly as it does on
           every other session, restoring that reactivity for free (no
           separate "force a re-pin" hook needed: the existing effect already
-          keys off this same prop's downstream value). The row is
-          `position: absolute`, anchored `bottom: bottomInsetPx` in a
-          `relative` wrapper around MessageList, so it paints inside the
-          scroll region's own reserved end-padding (the same gutter it used
-          to sit in as an external spacer) instead of needing a second,
-          separately-sized reserve. This does not achieve the handoff's
-          literal "last row of the transcript column" in-scroll placement
-          (an actual virtualized row) — that remains out of this rung's
-          scope; see the PR body. */}
+          keys off this same prop's downstream value). Review round 2 caught
+          that round 1's row placement painted OVER the last turn's tail
+          instead of clearing it: `bottomInsetPx` splits into a `structural`
+          share (real, reserved-as-blank scroll space — the virtualizer's
+          `paddingEnd`) and a `nonDisplacing` share (the composer's own
+          translucent overlap zone, which is DELIBERATELY allowed to sit over
+          the last turn's tail — see `useChatDockInset`'s
+          `composerSurfaceOffsetTopPx`). Anchoring the row at the full
+          `bottomInsetPx` placed its entire box inside the content-occupied
+          range (everything above `structural`), regardless of
+          `nonDisplacing` — the row is real, distinct content, not a scrim,
+          so it may not share that overlap allowance.
+          Fix round 2: feed MessageList `bottomInsetPx` PLUS the row's own
+          live-measured height while it is visible — reserving one extra
+          band the exact size of the row, immediately above where content
+          used to stop — and anchor the row at `bottom: structuralBottomInsetPx`
+          (the ORIGINAL, unaugmented structural share), so the row's box
+          exactly fills that new band: its bottom edge sits precisely where
+          content used to end (and where the composer's own nonDisplacing
+          overlap zone still begins, untouched), and its top edge is exactly
+          where content now ends post-augmentation. No overlap with either
+          real content or the composer's own scrim in either direction.
+          This still does not achieve the handoff's literal "last row of the
+          transcript column" in-scroll placement (an actual virtualized row)
+          — that remains out of this rung's scope; see the PR body. */}
       <div className="relative flex min-h-0 flex-1 flex-col">
         <MessageList
           activeSessionId={activeSessionId}
@@ -261,7 +294,7 @@ export function SessionTranscriptPane({
           hasOlderHistory={hasOlderHistory}
           isLoadingOlderHistory={isLoadingOlderHistory}
           olderHistoryCursor={oldestLoadedEventSeq}
-          bottomInsetPx={bottomInsetPx}
+          bottomInsetPx={messageListBottomInsetPx}
           nonDisplacingBottomInsetPx={nonDisplacingBottomInsetPx}
           onLoadOlderHistory={loadOlderHistory}
           onHandOffPlanToNewSession={handoff.open}
@@ -270,8 +303,10 @@ export function SessionTranscriptPane({
         />
         {hasBackgroundWork && (
           <div
+            ref={backgroundWorkRowRef}
+            data-testid="background-work-row-anchor"
             className={`absolute inset-x-0 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}
-            style={{ bottom: bottomInsetPx }}
+            style={{ bottom: structuralBottomInsetPx }}
           >
             <div
               className={`${CHAT_COLUMN_CLASSNAME} pt-transcript-turn-tight pb-2`}

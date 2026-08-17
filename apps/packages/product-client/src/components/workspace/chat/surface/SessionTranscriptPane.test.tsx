@@ -230,4 +230,53 @@ describe("SessionTranscriptPane background-work row (carried R1 items)", () => {
 
     expect(backgroundWorkMocks.openBackgroundWorkPane).toHaveBeenCalledTimes(1);
   });
+
+  // Review round 2 (geometry fix): the row is real content sitting ABOVE
+  // MessageList's own reserved end-padding, not a scrim inside it — its own
+  // height must be reserved too, or it paints over the last turn's tail.
+  // jsdom's `getBoundingClientRect` returns all-zero rects by default, so this
+  // test spies it to a fixed, nonzero row height to exercise the real
+  // measure -> augment -> anchor wiring (the actual pixel geometry is proven
+  // end-to-end by the throwaway Playwright fixture, not by this unit test).
+  it("reserves the row's own measured height on top of the live bottomInsetPx, and anchors the row at the ORIGINAL structural share (not the raw bottomInsetPx)", () => {
+    backgroundWorkMocks.rowCounts = { runningCount: 1, finishedCount: 0 };
+    const rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      height: 32,
+      width: 0,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    try {
+      beginDeferredColdOpen();
+      render(<SessionTranscriptPane bottomInsetPx={64} nonDisplacingBottomInsetPx={8} />);
+
+      const messageList = screen.getByTestId("message-list");
+      // structural = 64 - 8 = 56; augmented total fed to MessageList = 64 + 32 (row height).
+      expect(messageList.getAttribute("data-bottom-inset-px")).toBe("96");
+      expect(messageList.getAttribute("data-non-displacing-bottom-inset-px")).toBe("8");
+
+      const rowAnchor = screen.getByTestId("background-work-row-anchor");
+      // Anchored at the ORIGINAL structural share (56), not the raw
+      // bottomInsetPx (64) — the delta is exactly the composer's own
+      // nonDisplacing overlap zone (8), which the row must clear entirely.
+      expect(rowAnchor.style.bottom).toBe("56px");
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
+
+  it("does not augment MessageList's bottomInsetPx when there is no background work, even if a stale row height was measured earlier", () => {
+    backgroundWorkMocks.rowCounts = { runningCount: 0, finishedCount: 0 };
+    beginDeferredColdOpen();
+    render(<SessionTranscriptPane bottomInsetPx={64} nonDisplacingBottomInsetPx={8} />);
+
+    const messageList = screen.getByTestId("message-list");
+    expect(messageList.getAttribute("data-bottom-inset-px")).toBe("64");
+    expect(screen.queryByTestId("background-work-row-anchor")).toBeNull();
+  });
 });
