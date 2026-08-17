@@ -18,6 +18,7 @@ const HEADER_ORDER: RightPanelHeaderEntryKey[] = [
   "tool:scratch",
   "tool:git",
   "tool:agents",
+  "tool:background",
   "tool:workflow",
 ];
 

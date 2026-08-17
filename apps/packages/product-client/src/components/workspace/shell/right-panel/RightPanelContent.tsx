@@ -2,11 +2,13 @@ import { FileEditorView } from "#product/components/workspace/files/FileEditorVi
 import { PromptAttachmentViewer } from "#product/components/workspace/files/PromptAttachmentViewer";
 import { GitPanel } from "#product/components/workspace/git/GitPanel";
 import { AgentsPane } from "#product/components/workspace/delegated-work/agents-pane/AgentsPane";
+import { BackgroundWorkPane } from "#product/components/workspace/activity/background-pane/BackgroundWorkPane";
 import { WorkflowPane } from "#product/components/workflows/run-view/WorkflowPane";
 import { ScratchPadPanel } from "#product/components/workspace/scratch/ScratchPadPanel";
 import { RightPanelPlaceholder } from "#product/components/workspace/shell/right-panel/RightPanelPlaceholder";
 import { TerminalPanel } from "#product/components/workspace/terminals/TerminalPanel";
 import { TERMINAL_GRID_PROBE_ATTRIBUTE } from "#product/lib/infra/terminals/terminal-grid-probe";
+import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
 import type { TerminalRecord } from "@anyharness/sdk";
 import type {
   RightPanelActiveEntryKey,
@@ -63,6 +65,7 @@ export function RightPanelContent({
   onCloseTerminal,
   onRenameTerminal,
 }: RightPanelContentProps) {
+  const activeSessionId = useActiveSessionId();
   return (
     <div
       data-panel="true"
@@ -95,6 +98,16 @@ export function RightPanelContent({
           {activeTool === "workflow" && workspaceId && (
             <div className="absolute inset-0">
               <WorkflowPane key={workspaceId} workspaceId={workspaceId} />
+            </div>
+          )}
+          {activeTool === "background" && workspaceId && activeSessionId && (
+            <div className="absolute inset-0">
+              <BackgroundWorkPane
+                key={activeSessionId}
+                workspaceId={workspaceId}
+                sessionId={activeSessionId}
+                isOpen={isOpen}
+              />
             </div>
           )}
           {activeViewerTarget && (

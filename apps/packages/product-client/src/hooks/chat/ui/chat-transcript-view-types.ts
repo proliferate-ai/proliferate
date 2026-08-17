@@ -78,6 +78,8 @@ export interface ChatTranscriptViewProps {
   state: ChatTranscriptState;
   outboxActions?: ChatTranscriptOutboxActions;
   onScrollSample?: (sample?: import("./transcript-row-list-model").TranscriptScrollSample) => void;
+  /** The row list's live stick-to-bottom pin state (see `TranscriptRowListBaseProps`). */
+  onIsPinnedToBottomChange?: (isPinnedToBottom: boolean) => void;
   renderPendingPromptRow: (input: ChatTranscriptPendingPromptRenderInput) => ReactNode;
   renderTurnRow: (input: ChatTranscriptTurnRowRenderInput) => ReactNode;
   renderPendingPromptTrailingStatus?: (input: ChatTranscriptPendingStatusInput) => ReactNode;

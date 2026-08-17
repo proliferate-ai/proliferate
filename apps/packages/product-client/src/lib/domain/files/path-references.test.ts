@@ -95,6 +95,20 @@ describe("resolveFileReference", () => {
     });
   });
 
+  it("expands a home-relative hidden path without treating it as a workspace path", () => {
+    expect(resolveFileReference({
+      rawPath: "~/.proliferate-local/dev/app/diagnostics-dev.env:12",
+      workspaceRoot: "/repo",
+      resolveAbsolute: () => null,
+      homeDirectory: "/Users/pablo/",
+    })).toMatchObject({
+      path: "~/.proliferate-local/dev/app/diagnostics-dev.env",
+      line: 12,
+      absolutePath: "/Users/pablo/.proliferate-local/dev/app/diagnostics-dev.env",
+      workspacePath: null,
+    });
+  });
+
   it("normalizes absolute traversal before deciding workspace membership", () => {
     expect(resolveFileReference({
       rawPath: "/repo/sub/../../tmp/file.txt",
