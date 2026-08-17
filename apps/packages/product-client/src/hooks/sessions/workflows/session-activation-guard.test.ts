@@ -15,6 +15,7 @@ import { selectSessionWithShellIntentRollback } from "#product/hooks/sessions/wo
 import {
   beginSessionActivationIntent,
   commitActiveSession,
+  commitHotActiveSession,
   invalidateSessionActivationIntent,
   isSessionActivationCurrent,
 } from "#product/hooks/sessions/workflows/session-activation-guard";
@@ -168,7 +169,7 @@ describe("session activation guard", () => {
       .toBeUndefined();
   });
 
-  it("remembers guarded session commits under the selected logical workspace key", () => {
+  it("remembers guarded session commits under both workspace keys", () => {
     selectWorkspace("materialized-workspace", "logical-workspace");
     putSessionRecord(
       createEmptySessionRecord("session-1", "assistant", {
@@ -183,7 +184,31 @@ describe("session activation guard", () => {
     expect(useWorkspaceUiStore.getState().lastViewedSessionByWorkspace["logical-workspace"])
       .toBe("session-1");
     expect(useWorkspaceUiStore.getState().lastViewedSessionByWorkspace["materialized-workspace"])
-      .toBeUndefined();
+      .toBe("session-1");
+  });
+
+  it("remembers guarded hot session commits under both workspace keys", () => {
+    selectWorkspace("materialized-workspace", "logical-workspace");
+    putSessionRecord(
+      createEmptySessionRecord("session-1", "assistant", {
+        workspaceId: "materialized-workspace",
+      }),
+    );
+
+    const guard = beginSessionActivationIntent("materialized-workspace");
+    const outcome = commitHotActiveSession("session-1", guard, {
+      kind: "session_hot_switch",
+      workspaceId: "materialized-workspace",
+      sessionId: "session-1",
+      nonce: guard.workspaceSelectionNonce,
+      operationId: null,
+    });
+
+    expect(outcome.result).toBe("completed");
+    expect(useWorkspaceUiStore.getState().lastViewedSessionByWorkspace["logical-workspace"])
+      .toBe("session-1");
+    expect(useWorkspaceUiStore.getState().lastViewedSessionByWorkspace["materialized-workspace"])
+      .toBe("session-1");
   });
 
   it("guards backend reuse shell selection and rolls back logical shell intent on stale", async () => {

@@ -371,6 +371,9 @@ it("restores composer focus after Enter selects a searched model", async () => {
 
   openModelOptions(container);
   const search = document.querySelector<HTMLInputElement>('input[placeholder="Search models"]')!;
+  expect(search.getAttribute("autocorrect")).toBe("off");
+  expect(search.getAttribute("spellcheck")).toBe("false");
+  fireEvent.change(search, { target: { value: "a" } });
   fireEvent.keyDown(search, { key: "ArrowDown", code: "ArrowDown" });
   fireEvent.keyDown(search, { key: "Enter", code: "Enter" });
 

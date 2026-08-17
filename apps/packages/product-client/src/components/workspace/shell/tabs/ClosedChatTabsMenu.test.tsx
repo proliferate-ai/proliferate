@@ -112,6 +112,11 @@ describe("ClosedChatTabsMenu", () => {
     await act(async () => {
       vi.advanceTimersByTime(motion.duration.disclosureMs);
     });
+    // The archive-failed revert re-expands the row, which (re)schedules the
+    // stabilization frame from scratch; flush it before asserting.
+    act(() => {
+      vi.advanceTimersByTime(16);
+    });
     expect(rowDisclosure(container, "Session a")?.getAttribute("data-expanded")).toBe("true");
   });
 });

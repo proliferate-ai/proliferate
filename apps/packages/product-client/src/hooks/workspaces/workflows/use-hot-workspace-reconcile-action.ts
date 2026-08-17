@@ -168,15 +168,18 @@ export function useHotWorkspaceReconcileAction({
         return "stale";
       }
 
-      const sessionMeta = sessions.find((session) =>
-        session.id === sessionId && !session.dismissedAt
-      ) ?? null;
-      if (!sessionMeta) {
-        return "session_missing";
-      }
-
       const currentSlot = getSessionRecord(sessionId);
       if (!currentSlot) {
+        return "session_missing";
+      }
+      // Runtime sessions carry materialized ids while a slot created in this
+      // app run stays keyed by its client session id; compare through the
+      // slot's materialized id or every such session reconciles as missing.
+      const runtimeSessionId = currentSlot.materializedSessionId ?? sessionId;
+      const sessionMeta = sessions.find((session) =>
+        session.id === runtimeSessionId && !session.dismissedAt
+      ) ?? null;
+      if (!sessionMeta) {
         return "session_missing";
       }
       const storeStartedAt = performance.now();

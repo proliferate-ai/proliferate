@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { ReactNode } from "react";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createTranscriptState } from "@anyharness/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,6 +23,15 @@ import { CompletedHistorySequence } from "#product/components/workspace/chat/tra
 import { resolveLeadingNonUserMessageBlockKey } from "#product/components/workspace/chat/transcript/TurnWorkspaceReceiptSlot";
 import type { TurnPresentation } from "#product/domain/chats/transcript/transcript-presentation";
 
+let pendingAnimationFrames: FrameRequestCallback[];
+
+function flushAnimationFrame() {
+  act(() => {
+    const frames = pendingAnimationFrames.splice(0);
+    for (const frame of frames) frame(0);
+  });
+}
+
 vi.mock("./TranscriptTreeNode", () => ({
   TranscriptTreeNode: ({ itemId }: { itemId: string }) => (
     <div data-rendered-transcript-item={itemId}>{itemId}</div>
@@ -30,6 +39,12 @@ vi.mock("./TranscriptTreeNode", () => ({
 }));
 
 beforeEach(() => {
+  pendingAnimationFrames = [];
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    pendingAnimationFrames.push(callback);
+    return pendingAnimationFrames.length;
+  });
+  vi.stubGlobal("cancelAnimationFrame", () => {});
   vi.stubGlobal("ResizeObserver", class ResizeObserver {
     observe() {}
     unobserve() {}
@@ -79,11 +94,13 @@ describe("CompletedHistorySequence", () => {
     expect(completedWorkDisclosure.className).not.toContain("rounded-md");
 
     await user.click(completedWorkDisclosure);
+    flushAnimationFrame();
     const sequence = container.querySelector<HTMLElement>("[data-completed-history-sequence]");
     expect(sequence).not.toBeNull();
 
     const actionSummary = within(sequence!).getByRole("button", { expanded: false });
     await user.click(actionSummary);
+    flushAnimationFrame();
     const ledger = container.querySelector<HTMLElement>("[data-collapsed-actions-ledger]");
     expect(ledger).not.toBeNull();
     expect(ledger?.className).toContain("max-h-56");

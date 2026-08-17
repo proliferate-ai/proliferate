@@ -29,12 +29,6 @@ export const SCROLLABLE_OVERFLOW_EPSILON_PX = 1;
 // User input and the rendering gate share one expiry so a late native or
 // virtualizer correction cannot re-open a gate after the proven intent ended.
 export const TRANSCRIPT_USER_SCROLL_SETTLE_MS = 150;
-// Visibility-resume glue loop: hold the viewport at the bottom each frame until
-// measured scrollHeight is stable for this many consecutive frames, capped at
-// GLUE_MAX_FRAMES, so a suspended-then-resumed measurement backlog collapses
-// into one jump instead of a visible crawl.
-export const GLUE_STABLE_FRAMES = 3;
-export const GLUE_MAX_FRAMES = 12;
 export const HISTORY_PREFETCH_TOP_THRESHOLD_PX = 480;
 export const HISTORY_LOADING_ROW_KEY = "history-loader";
 const ESTIMATED_TURN_HEIGHT_PX = 360;

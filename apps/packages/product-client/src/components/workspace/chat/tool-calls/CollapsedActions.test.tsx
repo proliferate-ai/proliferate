@@ -2,13 +2,14 @@
 
 import type { PropsWithChildren, ReactElement } from "react";
 import {
+  act,
   cleanup,
   fireEvent,
   render as testingRender,
   screen,
 } from "@testing-library/react";
 import { createTranscriptState } from "@anyharness/sdk";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import {
@@ -26,6 +27,15 @@ function WebProductHostWrapper({ children }: PropsWithChildren) {
 
 function render(ui: ReactElement) {
   return testingRender(ui, { wrapper: WebProductHostWrapper });
+}
+
+let pendingFrames: FrameRequestCallback[];
+
+function openActions(button: HTMLElement) {
+  fireEvent.click(button);
+  act(() => {
+    pendingFrames.shift()?.(0);
+  });
 }
 
 vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
@@ -56,8 +66,17 @@ vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", 
   },
 }));
 
+beforeEach(() => {
+  pendingFrames = [];
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+    pendingFrames.push(callback);
+    return pendingFrames.length;
+  });
+});
+
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
 });
 
 describe("CollapsedActions", () => {
@@ -78,15 +97,31 @@ describe("CollapsedActions", () => {
 
     expect(document.querySelector("[data-collapsed-actions-ledger]")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /Reading read\.ts/i }));
+    const header = screen.getByRole("button", { name: /Reading read\.ts/i });
+    fireEvent.click(header);
 
     expect(document.querySelector("[data-collapsed-actions-ledger]")).not.toBeNull();
     expect(screen.getAllByText("Reading read.ts").length).toBeGreaterThan(0);
     const motionShell = document.querySelector("[data-animated-collapsible-content]");
+    expect(header.getAttribute("aria-expanded")).toBe("true");
+    expect(motionShell?.getAttribute("data-expanded")).toBe("false");
+    expect((motionShell as HTMLElement | null)?.style.gridTemplateRows).toBe("0fr");
+    expect(motionShell?.className).toContain("opacity-0");
+    expect(motionShell?.className).toContain("transform-gpu");
+    expect(motionShell?.className).toContain("will-change-[opacity]");
+
+    act(() => {
+      pendingFrames.shift()?.(0);
+    });
+
     expect(motionShell?.getAttribute("data-expanded")).toBe("true");
+    expect((motionShell as HTMLElement | null)?.style.gridTemplateRows).toBe("1fr");
+    expect(motionShell?.className).toContain("opacity-100");
+    expect(motionShell?.className).toContain("transform-gpu");
+    expect(motionShell?.className).toContain("will-change-[opacity]");
     expect(motionShell?.className).toContain("duration-disclosure");
 
-    fireEvent.click(screen.getByRole("button", { name: /Reading read\.ts/i }));
+    fireEvent.click(header);
     expect(motionShell?.getAttribute("data-expanded")).toBe("false");
     expect((motionShell as HTMLElement | null)?.style.gridTemplateRows).toBe("0fr");
     expect(document.querySelector("[data-collapsed-actions-ledger]")).not.toBeNull();
@@ -127,6 +162,8 @@ describe("CollapsedActions", () => {
     expect(disclosureChevron?.getAttribute("class")).toContain("icon-compact");
     expect(disclosureChevron?.getAttribute("class")).toContain("transition-transform");
     expect(disclosureChevron?.getAttribute("class")).toContain("duration-disclosure");
+    expect(disclosureChevron?.getAttribute("class")).toContain("transform-gpu");
+    expect(disclosureChevron?.getAttribute("class")).toContain("will-change-transform");
     expect(disclosureChevron?.getAttribute("viewBox")).toBe("0 0 20 20");
     expect(disclosureChevron?.querySelector("path")?.getAttribute("d")).toContain("7.52925 3.7793");
     expect(disclosureChevron?.getAttribute("class")).toContain("opacity-0");
@@ -167,7 +204,7 @@ describe("CollapsedActions", () => {
     expect(button.querySelector("svg")?.getAttribute("viewBox")).toBe("0 0 20 20");
     expect(button.querySelector("path")?.getAttribute("d")).toContain("16.3965 5.01128");
 
-    fireEvent.click(button);
+    openActions(button);
     expect(screen.getByRole("button", { name: /Ran pnpm test/i })).toBeTruthy();
     expect(screen.getAllByText("Reading read.ts").length).toBeGreaterThan(0);
   });
@@ -313,7 +350,7 @@ describe("CollapsedActions", () => {
         transcript={transcript}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Edited a file/i }));
+    openActions(screen.getByRole("button", { name: /Edited a file/i }));
 
     const html = document.body.innerHTML;
     expect(html).toContain("data-collapsed-actions-ledger");
@@ -338,7 +375,7 @@ describe("CollapsedActions", () => {
         autoFollow
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Read files/i }));
+    openActions(screen.getByRole("button", { name: /Read files/i }));
 
     const html = document.body.innerHTML;
     expect(html).toContain("data-collapsed-actions-ledger");
@@ -368,7 +405,7 @@ describe("CollapsedActions", () => {
         autoFollow
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Running command/i }));
+    openActions(screen.getByRole("button", { name: /Running command/i }));
 
     const ledger = document.querySelector<HTMLElement>("[data-collapsed-actions-ledger]");
     expect(ledger?.getAttribute("data-live")).toBe("true");
@@ -400,7 +437,7 @@ describe("CollapsedActions", () => {
         transcript={transcript}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /command/i }));
+    openActions(screen.getByRole("button", { name: /command/i }));
 
     const commandRow = screen.getByRole("button", { name: /Ran pnpm test/i });
     const readRow = screen.getByText("Read").parentElement?.parentElement;
@@ -428,7 +465,7 @@ describe("CollapsedActions", () => {
         transcript={transcript}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Edited files" }));
+    openActions(screen.getByRole("button", { name: "Edited files" }));
 
     const ledger = document.querySelector("[data-collapsed-actions-ledger]");
     expect(ledger?.firstElementChild?.className).toContain("flex flex-col gap-1");
@@ -471,7 +508,7 @@ describe("CollapsedActions", () => {
     const summary = screen.getByRole("button", { name: "Edited files" });
     expect(summary.getAttribute("aria-expanded")).toBe("false");
 
-    fireEvent.click(summary);
+    openActions(summary);
     expect(summary.getAttribute("aria-expanded")).toBe("true");
     expect(document.querySelector("[data-collapsed-actions-ledger]")).not.toBeNull();
 
@@ -495,7 +532,7 @@ describe("CollapsedActions", () => {
         transcript={transcript}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Read files, ran a command/i }));
+    openActions(screen.getByRole("button", { name: /Read files, ran a command/i }));
 
     const searchRow = screen.getByText("Searched for anchor").parentElement;
     const readRow = screen.getByText("Read").parentElement?.parentElement;
@@ -533,7 +570,7 @@ describe("CollapsedActions", () => {
 
     const header = screen.getByRole("button", { name: /Ran an action/i });
     const headerIcon = header.querySelector("svg");
-    fireEvent.click(header);
+    openActions(header);
     const ledger = document.querySelector("[data-collapsed-actions-ledger]");
     const detailIcon = ledger?.querySelector("svg");
 

@@ -44,6 +44,13 @@ export function ensureDesktopWorker(
   deps: EnsureDesktopWorkerDeps,
 ): Promise<boolean> {
   return enqueueWorkerLifecycleTask(async () => {
+    // No native transport to enroll over (e.g. the Desktop web build running
+    // without its Tauri shell, as in intent tests). This is an expected
+    // environment shape, not a failure: skip silently, same as the
+    // pending-ticket-fencing rollout gate below.
+    if (!worker.isSupported()) {
+      return false;
+    }
     try {
       const desktopInstallId = await worker.getInstallId();
       const enrollment = await enrollDesktopWorker(

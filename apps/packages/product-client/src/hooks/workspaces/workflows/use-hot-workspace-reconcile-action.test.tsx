@@ -141,6 +141,34 @@ describe("useHotWorkspaceReconcileAction transcript hydration", () => {
     expect(rehydrate).toHaveBeenCalledTimes(1);
   });
 
+  it("reconciles a client-keyed slot through its materialized session id", async () => {
+    const clientSessionId = "client-session:r15";
+    removeSessionRecord(clientSessionId);
+    putSessionRecord(createEmptySessionRecord(clientSessionId, "codex", {
+      workspaceId: WORKSPACE_ID,
+      materializedSessionId: SESSION_ID,
+    }));
+    patchSessionRecord(clientSessionId, {
+      streamConnectionState: "open",
+      transcriptHydrated: true,
+    });
+    useSessionIngestStore.getState().applyStreamProgress(clientSessionId, {
+      lastAppliedSeq: 42,
+      lastObservedSeq: 42,
+      gapAfterSeq: null,
+    });
+    const rehydrate = vi.fn(async () => true);
+
+    const reconcile = renderReconcile(rehydrate);
+    const outcome = await reconcile({
+      ...reconcileInput(),
+      sessionId: clientSessionId,
+    });
+
+    expect(outcome).toBe("completed");
+    removeSessionRecord(clientSessionId);
+  });
+
   it("does not trust an open stream whose ingest state reports a gap", async () => {
     patchSessionRecord(SESSION_ID, {
       streamConnectionState: "open",
