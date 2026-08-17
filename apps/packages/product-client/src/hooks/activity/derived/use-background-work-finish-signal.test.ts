@@ -15,8 +15,14 @@ let sessionActivity: SessionActivityState = {
   agents: [],
 };
 
+// Keyed by session id so a test can prove the hook reads exactly the
+// session it was ASKED about rather than falling back to some other
+// globally-active session — the R5 review round 2 MAJOR this rewrite fixes.
+let sessionActivityBySessionId: Record<string, SessionActivityState> = {};
+
 vi.mock("#product/hooks/activity/derived/use-session-activity", () => ({
-  useSessionActivity: () => sessionActivity,
+  useSessionActivityForSession: (sessionId: string | null) =>
+    (sessionId ? sessionActivityBySessionId[sessionId] : undefined) ?? sessionActivity,
 }));
 
 function makeProcess(overrides: Partial<ActivityProcessWire>): ActivityProcessWire {
@@ -54,6 +60,7 @@ afterEach(() => {
     processes: [],
     agents: [],
   };
+  sessionActivityBySessionId = {};
   cleanup();
   useWorkspaceUiStore.setState({
     backgroundWorkLastFinishedSubagentBySession: {},
@@ -110,7 +117,7 @@ describe("useBackgroundWorkFinishSignal", () => {
     const agent = makeAgent({ id: "agent-42" });
     useWorkspaceUiStore.setState({
       backgroundWorkLastFinishedSubagentBySession: {
-        "sess-1": { subagent: agent, atMs: 1_000 },
+        "sess-1": { subagent: agent, detectedAtMs: 1_000 },
       },
     });
     const { result } = renderHook(() => useBackgroundWorkFinishSignal("sess-1"));
@@ -122,10 +129,37 @@ describe("useBackgroundWorkFinishSignal", () => {
     const agent = makeAgent({ id: "agent-42" });
     useWorkspaceUiStore.setState({
       backgroundWorkLastFinishedSubagentBySession: {
-        "sess-other": { subagent: agent, atMs: 1_000 },
+        "sess-other": { subagent: agent, detectedAtMs: 1_000 },
       },
     });
     const { result } = renderHook(() => useBackgroundWorkFinishSignal("sess-1"));
     expect(result.current).toEqual({ signal: null, dirty: false });
+  });
+
+  // R5 review round 2 — MAJOR: this hook must read the roster for the
+  // `sessionId` it was CALLED with, not whatever session happens to be
+  // globally active elsewhere. The mock's `sessionActivityBySessionId` map
+  // gives each session id a genuinely distinct roster, so this fails under
+  // the old "always reads the active session" implementation and passes
+  // only once the read is truly per-session.
+  it("reads the roster for the requested sessionId, not a different session's roster", () => {
+    const exitedInSessionOne = makeProcess({
+      id: "proc-in-sess-1",
+      status: { status: "exited", exitCode: 0 },
+      endedAt: "2026-08-17T00:05:00.000Z",
+    });
+    sessionActivityBySessionId = {
+      "sess-1": { ...sessionActivity, processes: [exitedInSessionOne] },
+      "sess-2": { ...sessionActivity, processes: [] },
+    };
+
+    const forSessionOne = renderHook(() => useBackgroundWorkFinishSignal("sess-1"));
+    expect(forSessionOne.result.current.signal?.kind).toBe("process");
+    expect((forSessionOne.result.current.signal as { atMs: number } | null)?.atMs).toBe(
+      Date.parse("2026-08-17T00:05:00.000Z"),
+    );
+
+    const forSessionTwo = renderHook(() => useBackgroundWorkFinishSignal("sess-2"));
+    expect(forSessionTwo.result.current).toEqual({ signal: null, dirty: false });
   });
 });

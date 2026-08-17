@@ -149,16 +149,16 @@ export function createWorkspaceUiRightPanelActions(
     // the only place a finished-and-vanished subagent's last snapshot
     // survives. Monotonic per session — a later observation never regresses
     // an already-recorded finish.
-    recordBackgroundWorkFinishedSubagentForSession: (sessionId, subagent, atMs) => {
+    recordBackgroundWorkFinishedSubagentForSession: (sessionId, subagent, detectedAtMs) => {
       set((state) => {
         const current = state.backgroundWorkLastFinishedSubagentBySession[sessionId];
-        if (current && current.atMs >= atMs) {
+        if (current && current.detectedAtMs >= detectedAtMs) {
           return state;
         }
         return {
           backgroundWorkLastFinishedSubagentBySession: {
             ...state.backgroundWorkLastFinishedSubagentBySession,
-            [sessionId]: { subagent, atMs },
+            [sessionId]: { subagent, detectedAtMs },
           },
         };
       });

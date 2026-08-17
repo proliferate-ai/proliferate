@@ -18,6 +18,14 @@ let rowCounts: BackgroundWorkRowCounts = { runningCount: 0, finishedCount: 0 };
 
 vi.mock("#product/hooks/activity/derived/use-session-activity", () => ({
   useSessionActivity: () => sessionActivity,
+  // `useBackgroundWorkFinishSignal` (feeding this pane's NoticeBanner rung)
+  // reads the per-session accessor rather than the active-session-only one
+  // (R5 review round 2 — MAJOR fix). This pane is always scoped to the
+  // active session, so mirroring the same fixture here is faithful — the
+  // per-session-vs-active-session distinction itself is covered by
+  // `use-background-work-finish-signal.test.ts` and
+  // `use-background-work-finish-signal-tracking.test.ts`, not here.
+  useSessionActivityForSession: () => sessionActivity,
 }));
 vi.mock("#product/hooks/activity/derived/use-background-work-row", () => ({
   useBackgroundWorkRowCounts: () => rowCounts,

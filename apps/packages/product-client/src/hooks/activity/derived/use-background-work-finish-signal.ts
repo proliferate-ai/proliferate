@@ -4,7 +4,7 @@ import {
   deriveLatestBackgroundWorkFinishSignal,
   type BackgroundWorkFinishSignal,
 } from "#product/domain/activity/background-work-finish-signal";
-import { useSessionActivity } from "#product/hooks/activity/derived/use-session-activity";
+import { useSessionActivityForSession } from "#product/hooks/activity/derived/use-session-activity";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 export interface BackgroundWorkFinishSignalState {
@@ -22,25 +22,24 @@ export interface BackgroundWorkFinishSignalState {
 const NO_SIGNAL: BackgroundWorkFinishSignalState = { signal: null, dirty: false };
 
 /**
- * Read-side of the finish-signal ladder for `sessionId`. Combines the live
- * roster (`useSessionActivity` — processes never leave it, so their
- * `endedAt` is read straight off it) with the cached subagent-finish
- * observation `useBackgroundWorkFinishSignalTracking` writes (subagents DO
- * leave the roster the instant they finish).
+ * Read-side of the finish-signal ladder for `sessionId`. Combines the
+ * roster (`useSessionActivityForSession(sessionId)` — processes never leave
+ * it, so their `endedAt` is read straight off it) with the cached
+ * subagent-finish observation `useBackgroundWorkFinishSignalTracking`
+ * writes (subagents DO leave the roster the instant they finish).
  *
- * `sessionId` is an explicit parameter rather than re-derived internally via
- * `useActiveSessionId()` — every call site already has its own session
- * identity (a prop, or a locally-computed active id with its own
- * deferred/session-switch semantics), and this hook must agree with THAT
- * one rather than risk racing a second, independently-read source during a
- * session switch. `useSessionActivity()` itself still only ever reports the
- * globally active session's roster (there is no per-session variant), which
- * is fine here: every caller only ever passes the session it also renders.
+ * `sessionId` is an explicit parameter, and — R5 review round 2 (MAJOR) —
+ * reads the roster via `useSessionActivityForSession(sessionId)` rather
+ * than the active-session-only `useSessionActivity()`: every call site
+ * already has its own session identity (a prop, or a locally-computed
+ * active id with its own deferred/session-switch semantics), and this hook
+ * must agree with THAT one, not silently swap in whatever session happens
+ * to be globally active on a given render.
  */
 export function useBackgroundWorkFinishSignal(
   sessionId: string | null,
 ): BackgroundWorkFinishSignalState {
-  const activity = useSessionActivity();
+  const activity = useSessionActivityForSession(sessionId);
   const cachedFinishedSubagent = useWorkspaceUiStore((state) =>
     sessionId ? state.backgroundWorkLastFinishedSubagentBySession[sessionId] ?? null : null
   );
@@ -55,6 +54,7 @@ export function useBackgroundWorkFinishSignal(
     const signal = deriveLatestBackgroundWorkFinishSignal({
       processes: activity.processes,
       cachedFinishedSubagent,
+      lastViewedAtMs,
     });
     const dirty = deriveBackgroundWorkDirty({
       latestFinishAtMs: signal?.atMs ?? null,

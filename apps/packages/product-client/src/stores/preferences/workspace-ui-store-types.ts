@@ -71,13 +71,15 @@ export interface WorkspaceUiState {
    * finish that will ever exist. Subagents leave the roster the instant
    * they finish, so `useBackgroundWorkFinishSignalTracking` caches the last
    * snapshot it observed (running, or already flipped if the wire ever
-   * shows that before removal) plus the epoch-ms moment it noticed the
-   * disappearance. Session-scoped, never persisted — same ephemeral
-   * placement as `pendingBackgroundSubagentSelectionByWorkspace` above.
+   * shows that before removal) plus `detectedAtMs`: the epoch-ms moment it
+   * noticed the disappearance, deliberately NOT the subagent's real finish
+   * time (which is unknowable client-side — R5 review round 2). Session-
+   * scoped, never persisted — same ephemeral placement as
+   * `pendingBackgroundSubagentSelectionByWorkspace` above.
    */
   backgroundWorkLastFinishedSubagentBySession: Record<
     string,
-    { subagent: ActivitySubagentWire; atMs: number } | null
+    { subagent: ActivitySubagentWire; detectedAtMs: number } | null
   >;
   urgentHighlightedChatSessionByWorkspace: Record<string, string | null>;
   workspaceTypes: SidebarWorkspaceVariant[];
@@ -135,7 +137,7 @@ export interface WorkspaceUiState {
   recordBackgroundWorkFinishedSubagentForSession: (
     sessionId: string,
     subagent: ActivitySubagentWire,
-    atMs: number,
+    detectedAtMs: number,
   ) => void;
   setActiveShellTabKeyForWorkspace: (
     workspaceId: string,
