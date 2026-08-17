@@ -78,6 +78,9 @@ const RUN_STATUS_TONE: Record<WorkflowRunV2["status"], WorkflowRunTone> = {
   interrupted: "warning",
   completed: "success",
   failed: "danger",
+  // Terminal-inert, same reasoning as NODE_STATUS_TONE's `cancelled`: a
+  // deliberate stop, not an error; matches the unknown-status fallback.
+  cancelled: "neutral",
 };
 
 export function workflowRunStatusTone(status: WorkflowRunV2["status"]): WorkflowRunTone {
