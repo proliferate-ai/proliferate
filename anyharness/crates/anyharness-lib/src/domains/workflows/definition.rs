@@ -107,6 +107,11 @@ pub struct InvocationSnapshot {
 pub struct InvocationPlacement {
     pub repo_config_id: String,
     pub mode: PlacementMode,
+    /// The adopted workspace, required iff `mode` is `ExistingWorkspace`
+    /// (F-A1): the run executes in exactly this workspace, creates no
+    /// worktree, and teardown never touches it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -114,6 +119,19 @@ pub struct InvocationPlacement {
 pub enum PlacementMode {
     Worktree,
     RepoRoot,
+    ExistingWorkspace,
+}
+
+impl InvocationPlacement {
+    /// The one-live-run law's re-scoped predicate (F-A1): Worktree and
+    /// RepoRoot placements keep exclusive occupancy; ExistingWorkspace admits
+    /// N concurrent runs — the user explicitly chose to stack work onto a
+    /// workspace they own. Both enforcement halves (route pre-check and the
+    /// store's in-transaction re-check) apply exactly this predicate so the
+    /// race protection survives the re-scoping.
+    pub fn enforces_exclusive_occupancy(&self) -> bool {
+        self.mode != PlacementMode::ExistingWorkspace
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -551,6 +569,22 @@ impl InvocationSnapshot {
                     "argument '{name}' is not a declared input"
                 )));
             }
+        }
+        // F-A1: workspaceId travels iff the placement adopts one — present
+        // under any other mode it is a malformed snapshot, not dead weight.
+        match (self.placement.mode, self.placement.workspace_id.as_deref()) {
+            (PlacementMode::ExistingWorkspace, None | Some("")) => {
+                return Err(invalid(
+                    "placement mode existing_workspace requires a workspaceId",
+                ));
+            }
+            (PlacementMode::Worktree | PlacementMode::RepoRoot, Some(_)) => {
+                return Err(invalid(format!(
+                    "placement workspaceId is only valid with mode existing_workspace, got {:?}",
+                    self.placement.mode
+                )));
+            }
+            _ => {}
         }
         Ok(chain)
     }

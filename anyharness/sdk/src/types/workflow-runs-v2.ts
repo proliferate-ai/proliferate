@@ -51,7 +51,9 @@ export interface WorkflowInvocationJsonV2 {
   arguments: Record<string, string | number | boolean>;
   placement: {
     repoConfigId: string;
-    mode: "worktree" | "repo_root";
+    mode: "worktree" | "repo_root" | "existing_workspace";
+    /** Required iff mode is "existing_workspace": the adopted workspace (F-A1). */
+    workspaceId?: string;
   };
 }
 

@@ -28,7 +28,7 @@ use crate::domains::workflows::materialize::{materialize_planned_context, plan_c
 use crate::domains::workflows::projection::{run_view, RunProjection, RunView};
 use crate::domains::workflows::store::{NewRunParams, WorkspaceOccupied};
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{WorkspaceLifecycleState, WorkspaceRecord};
 use crate::domains::workspaces::workflow_placement::{
     ResolvedWorkflowPlacement, WorkflowPlacementError, WorkflowPlacementRequest,
 };
@@ -48,6 +48,14 @@ pub(super) const MATERIALIZATION_FAILED: &str = "WORKFLOW_WORKSPACE_MATERIALIZAT
 /// Retrying the same snapshot cannot fix it, so it is a 409, never the
 /// retry-safe 503.
 pub(super) const PLACEMENT_CONFLICT: &str = "WORKFLOW_PLACEMENT_CONFLICT";
+/// ExistingWorkspace placement (F-A1) names a workspace id this runtime does
+/// not know. 404: the reference is dangling, not a conflict.
+pub(super) const WORKSPACE_NOT_FOUND: &str = "WORKFLOW_WORKSPACE_NOT_FOUND";
+/// ExistingWorkspace placement names a real workspace that cannot host a run:
+/// archived, checkout gone, not a local checkout, or registered to a
+/// different repo root than the snapshot claims. Retrying the same snapshot
+/// cannot fix it — 409.
+pub(super) const WORKSPACE_NOT_ELIGIBLE: &str = "WORKFLOW_WORKSPACE_NOT_ELIGIBLE";
 
 /// The workflow-runs route table, merged into the v1 router by `build_router`
 /// — the handlers' own module carries it so `router.rs` stays under the
@@ -219,6 +227,54 @@ async fn place_workspace(
         })?
     };
 
+    // F-A1: ExistingWorkspace ADOPTS the caller's workspace after validation
+    // (exists, active, repo-backed and present on disk, registered to the
+    // snapshot's repo root). Adoption records the association on the run row
+    // alone — no creator-context rewrite, no worktree artifact, and therefore
+    // nothing for compensation to tear down.
+    if placement.mode == PlacementMode::ExistingWorkspace {
+        let workspace_id = placement
+            .workspace_id
+            .clone()
+            .expect("validate() checked existing_workspace carries a workspaceId");
+        let workspace = {
+            let workspace_runtime = state.workspace_runtime.clone();
+            let lookup_id = workspace_id.clone();
+            run_blocking("workflow_run_adopt_workspace", move || {
+                workspace_runtime.get_workspace(&lookup_id)
+            })
+            .await?
+            .map_err(|error| ApiError::internal(format!("workspace lookup: {error}")))?
+            .ok_or_else(|| {
+                ApiError::not_found(
+                    format!("workspace {workspace_id} not found"),
+                    WORKSPACE_NOT_FOUND,
+                )
+            })?
+        };
+        if workspace.lifecycle_state != WorkspaceLifecycleState::Active {
+            return Err(ApiError::conflict(
+                format!("workspace {} is archived", workspace.id),
+                WORKSPACE_NOT_ELIGIBLE,
+            ));
+        }
+        if !workspace.has_local_checkout() || workspace.checkout_directory_missing() {
+            return Err(ApiError::conflict(
+                format!("workspace {} has no usable local checkout", workspace.id),
+                WORKSPACE_NOT_ELIGIBLE,
+            ));
+        }
+        // Deliberately NOT checked: workspace.repo_root_id vs the snapshot's
+        // repoConfigId. Workspace registration can mint its own repo-root row
+        // for the same checkout, so an equality check would reject the very
+        // workspaces this mode exists for; the id was still validated as a
+        // known repo root above (Ruling A).
+        return Ok(PlacedWorkspace {
+            workspace,
+            worktree: None,
+        });
+    }
+
     let workspace_runtime = state.workspace_runtime.clone();
     let run_id = run_id.to_string();
     let mode = placement.mode;
@@ -258,6 +314,9 @@ async fn place_workspace(
                 worktree: None,
             })
         }
+        PlacementMode::ExistingWorkspace => {
+            unreachable!("existing_workspace placements return before this match")
+        }
     })
     .await?
     .map_err(map_placement_error)
@@ -287,7 +346,8 @@ async fn compensate_placement(state: &AppState, placed: &PlacedWorkspace) {
         (status = 201, description = "Run placed and started", body = RunProjection),
         (status = 200, description = "Idempotent replay: the existing run, untouched", body = RunProjection),
         (status = 400, description = "WORKFLOW_SNAPSHOT_INVALID (malformed body, non-UUID run id, unknown repo root id)"),
-        (status = 409, description = "WORKFLOW_PLACEMENT_CONFLICT, zero rows inserted"),
+        (status = 404, description = "WORKFLOW_WORKSPACE_NOT_FOUND (existing_workspace placement names an unknown workspace)"),
+        (status = 409, description = "WORKFLOW_PLACEMENT_CONFLICT or WORKFLOW_WORKSPACE_NOT_ELIGIBLE, zero rows inserted. Note: sessions of concurrent runs under existing_workspace placement share one working tree with no write isolation; coordinating write-heavy workflows is the caller's decision"),
         (status = 503, description = "WORKFLOW_WORKSPACE_MATERIALIZATION_FAILED, zero rows inserted"),
     ),
     tag = "workflow-runs"
@@ -369,8 +429,8 @@ pub async fn put_workflow_run(
 
     // The one-live-run pre-check (Ruling B), before this PUT touches the
     // workspace's checkout; the store re-enforces it inside the insert
-    // transaction against races.
-    {
+    // transaction against races. Re-scoped per F-A1 by the shared predicate.
+    if snapshot.placement.enforces_exclusive_occupancy() {
         let store = state.workflow_store.clone();
         let workspace_id = placed.workspace.id.clone();
         let occupant = run_blocking("workflow_run_occupancy", move || {

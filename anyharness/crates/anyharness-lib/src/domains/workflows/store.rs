@@ -137,9 +137,7 @@ impl WorkflowStore {
     /// definition's templates. Replaying an existing run id returns the stored
     /// rows untouched. Emits `workflow.run.started` after the commit.
     pub fn create_run_with_first_node(&self, params: NewRunParams) -> anyhow::Result<CreatedRun> {
-        let chain = params
-            .snapshot
-            .validate()
+        let chain = (params.snapshot.validate())
             .map_err(|error| anyhow::anyhow!("invalid invocation snapshot: {error}"))?;
 
         let created = self.db.with_tx_anyhow(|tx| {
@@ -158,11 +156,13 @@ impl WorkflowStore {
                 });
             }
 
-            // The one-live-run law (Ruling B), enforced inside the insert
-            // transaction so racing PUTs of different run ids into one
-            // workspace cannot both pass a route-level pre-check.
-            if let Some(occupant_run_id) =
-                Self::non_terminal_run_for_workspace_tx(tx, &params.workspace_id)?
+            // The one-live-run law (Ruling B) inside the insert transaction,
+            // against racing PUTs; re-scoped per F-A1 by the shared predicate.
+            let placement = &params.snapshot.placement;
+            if let Some(occupant_run_id) = (placement.enforces_exclusive_occupancy())
+                .then(|| Self::non_terminal_run_for_workspace_tx(tx, &params.workspace_id))
+                .transpose()?
+                .flatten()
             {
                 return Err(anyhow::Error::new(WorkspaceOccupied {
                     workspace_id: params.workspace_id.clone(),
