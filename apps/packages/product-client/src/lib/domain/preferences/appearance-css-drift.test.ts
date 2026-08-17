@@ -426,7 +426,6 @@ describe("chat retune tokens", () => {
     expect(themeDeclarations["--color-composer-background"]).toBe(COMPOSER_DARK_HEX);
     const darkRoot = readRule(generatedThemeCss, /:root\s*\{([\s\S]*?)\n\}/);
     expect(darkRoot).toContain(`--color-composer-background: ${COMPOSER_DARK_HEX};`);
-
     const lightRoot = readRule(generatedThemeCss, /:root\[data-mode="light"\]\s*\{([\s\S]*?)\n\}/);
     expect(lightRoot).toContain(`--color-composer-background: ${COMPOSER_LIGHT_HEX};`);
 
@@ -437,9 +436,7 @@ describe("chat retune tokens", () => {
     expect(composerSurfaceRule).toContain("background-color: var(--color-composer-background);");
     expect(composerSurfaceRule).toContain("var(--color-composer-backdrop-filter)");
     expect(composerSurfaceRule).toContain("box-shadow: var(--shadow-composer);");
-
-    // The same production rule resolves per mode: light gets a complete
-    // perimeter + lift while dark remains fill-only.
+    // The production rule resolves to light depth while dark remains fill-only.
     expect(themeDeclarations["--shadow-composer"]).toBe("var(--elevation-composer)");
     expect(darkRoot).toContain("--elevation-composer: none;");
     expect(lightRoot).toContain(
