@@ -77,7 +77,10 @@ export function SessionTranscriptPane({
   // `autoFollowBottomInsetPx`), so the clamp-driven scroll event would strand
   // the viewport at bottom-but-unpinned with auto-follow off. The band is
   // below the fold while unpinned, so the constant reserve has no visible
-  // cost.
+  // cost. Accepted residual: if `hasBackgroundWork` itself flips false while
+  // the user is parked unpinned within this reserved band, the same
+  // uncovered structural shrink can still occur — a pre-existing guard gap
+  // shared with any composer-driven inset change, out of this rung's scope.
   const messageListBottomInsetPx = hasBackgroundWork
     ? bottomInsetPx + backgroundWorkRowHeightPx
     : bottomInsetPx;

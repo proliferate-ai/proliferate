@@ -28,13 +28,13 @@ import { useSessionSelectionStore } from "#product/stores/sessions/session-selec
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 
 // Heavy leaf UI is not under test — the deferred content_stable hand-off is.
-// The mock echoes the two inset props it received as data attributes so the
-// carried R1 item 1 fix (dock-reactivity while the background-work row is
-// visible) can be asserted without needing the real virtualized transcript.
-// It also exposes two plain buttons that invoke `onIsPinnedToBottomChange`,
-// standing in for the REAL stick-to-bottom engine's reported pin state (fix
-// round 3: the row hides while scrolled away) — this suite doesn't mount the
-// real virtualized row list, so it can't fire a genuine scroll event.
+// The mock echoes the two inset props it received as data attributes so
+// dock-reactivity (the background-work row staying live-reactive to
+// bottomInsetPx/nonDisplacingBottomInsetPx) can be asserted without needing
+// the real virtualized transcript. It also exposes two plain buttons that
+// invoke `onIsPinnedToBottomChange`, standing in for the REAL stick-to-bottom
+// engine's reported pin state — this suite doesn't mount the real virtualized
+// row list, so it can't fire a genuine scroll event.
 vi.mock("#product/components/workspace/chat/transcript/MessageList", () => ({
   MessageList: (props: {
     bottomInsetPx: number;
@@ -251,11 +251,11 @@ describe("SessionTranscriptPane background-work row (carried R1 items)", () => {
     expect(backgroundWorkMocks.openBackgroundWorkPane).toHaveBeenCalledTimes(1);
   });
 
-  // Review round 2 (geometry fix): the row is real content sitting ABOVE
-  // MessageList's own reserved end-padding, not a scrim inside it — its own
-  // height must be reserved too, or it paints over the last turn's tail.
-  // jsdom's `getBoundingClientRect` returns all-zero rects by default, so this
-  // test spies it to a fixed, nonzero row height to exercise the real
+  // The row is real content sitting ABOVE MessageList's own reserved
+  // end-padding, not a scrim inside it — its own height must be reserved
+  // too, or it paints over the last turn's tail. jsdom's
+  // `getBoundingClientRect` returns all-zero rects by default, so this test
+  // spies it to a fixed, nonzero row height to exercise the real
   // measure -> augment -> anchor wiring (the actual pixel geometry is proven
   // end-to-end by the throwaway Playwright fixture, not by this unit test).
   it("reserves the row's own measured height on top of the live bottomInsetPx, and anchors the row at the raw bottomInsetPx regardless of nonDisplacing", () => {
@@ -306,23 +306,19 @@ describe("SessionTranscriptPane background-work row (carried R1 items)", () => {
     expect(screen.queryByTestId("background-work-row-anchor")).toBeNull();
   });
 
-  // Review round 3/4: a floating row that stays visible while the user has
-  // scrolled away from the bottom paints over arbitrary mid-transcript
-  // content — not acceptable, per review. The row must hide the instant the
-  // transcript is no longer pinned to bottom, reusing the SAME
-  // `isPinnedToBottom` signal the stick-to-bottom engine already computes
-  // (reported here via the mocked MessageList's `onIsPinnedToBottomChange`,
-  // standing in for a real scroll).
-  //
-  // Review round 5 (MINOR, corrects round 4): the RESERVE must NOT drop when
-  // merely unpinned — only `MessageList`'s own paddingEnd shrinking
-  // mid-scroll from unpinning alone can strand the viewport at zero
-  // distance-from-bottom but unpinned, since the stick-to-bottom engine's
-  // non-user-scroll guard is keyed only on `autoFollowBottomInsetPx`, not
-  // this row's height. The reserved band is below the fold and invisible
-  // while unpinned regardless, so the inset stays augmented for as long as
-  // background work EXISTS; only the row's own render/anchor reacts to pin
-  // state.
+  // A floating row that stays visible while the user has scrolled away from
+  // the bottom would paint over arbitrary mid-transcript content, so the row
+  // must hide the instant the transcript is no longer pinned to bottom,
+  // reusing the SAME `isPinnedToBottom` signal the stick-to-bottom engine
+  // already computes (reported here via the mocked MessageList's
+  // `onIsPinnedToBottomChange`, standing in for a real scroll). The reserve
+  // stays constant across pin flips; only the row's render reacts to pin —
+  // shrinking `paddingEnd` on unpin isn't covered by the stick-to-bottom
+  // engine's non-user-scroll guard (keyed only on `autoFollowBottomInsetPx`,
+  // not this row's height), so a live shrink could strand the viewport at
+  // zero distance-from-bottom but unpinned. The reserved band is below the
+  // fold and invisible while unpinned regardless, so there is no visible
+  // cost to keeping it constant for as long as background work exists.
   it("hides the row (but keeps the reserved inset) the instant the transcript scrolls away from the bottom, then restores the row on return to bottom", () => {
     backgroundWorkMocks.rowCounts = { runningCount: 1, finishedCount: 0 };
     const rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
