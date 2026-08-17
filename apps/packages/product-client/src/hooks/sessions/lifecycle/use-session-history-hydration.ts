@@ -30,6 +30,7 @@ import {
   resolveHistoryApplyOperationKind,
   SESSION_APPLY_MEASUREMENT_SURFACES,
   SESSION_HISTORY_APPLY_MAX_DURATION_MS,
+  type SessionHistoryHydrationOptions,
 } from "#product/hooks/sessions/lifecycle/session-history-hydration-helpers";
 import { useSessionHistorySubagentAuthority } from "#product/hooks/sessions/lifecycle/use-session-history-subagent-authority";
 import { dedupeSessionOpenHydration } from "#product/hooks/sessions/lifecycle/session-history-hydration-dedupe";
@@ -47,18 +48,6 @@ import {
   markSessionOpenFlowAbandoned,
 } from "#product/hooks/sessions/lifecycle/session-open-flow-marks";
 import { useWorkspacePinIntentReconciliation } from "#product/hooks/sessions/lifecycle/use-workspace-pin-intent-reconciliation";
-
-export interface SessionHistoryHydrationOptions {
-  afterSeq?: number;
-  beforeSeq?: number;
-  limit?: number;
-  turnLimit?: number;
-  replace?: boolean;
-  requestHeaders?: HeadersInit;
-  measurementOperationId?: MeasurementOperationId | null;
-  timeoutMs?: number;
-  isCurrent?: () => boolean;
-}
 
 /**
  * Owns fetching, replaying, and applying historical session events.
