@@ -30,9 +30,8 @@ export function GoalBarResultPopover({ state, onDismiss, onSetNewGoal }: GoalBar
   const stats = goalResultStats(state.goal);
   return (
     <div
-      // C4: matches ActivityChips.tsx's popover width so the two goal-bar
-      // popovers size alike; `min` keeps it from overflowing a narrow
-      // viewport.
+      // C4: a comfortable fixed popover width; `min` keeps it from
+      // overflowing a narrow viewport.
       className="w-[min(22rem,calc(100vw-1rem))]"
       data-goal-bar-result-popover
     >

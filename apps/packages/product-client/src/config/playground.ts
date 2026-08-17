@@ -103,16 +103,6 @@ export type ScenarioKey =
   | "goal-pending-write"
   | "goal-empty"
   | "goal-transcript-lifecycle"
-  | "activity-loops-native"
-  | "activity-loops-many"
-  | "activity-loops-emulated"
-  | "activity-loops-fired-sequence"
-  | "activity-terminals-running"
-  | "activity-terminals-mixed"
-  | "activity-agents-mixed"
-  | "activity-all-kinds"
-  | "activity-with-goal"
-  | "activity-empty"
   | "loading-states";
 
 interface Scenario {
@@ -224,16 +214,6 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "goal-pending-write": { label: "Goal pending write" },
   "goal-empty": { label: "Goal empty" },
   "goal-transcript-lifecycle": { label: "Goal lifecycle in transcript" },
-  "activity-loops-native": { label: "Loops (native)" },
-  "activity-loops-many": { label: "Loops (many)" },
-  "activity-loops-emulated": { label: "Loops (emulated)" },
-  "activity-loops-fired-sequence": { label: "Loops (fired sequence)" },
-  "activity-terminals-running": { label: "Terminals (running)" },
-  "activity-terminals-mixed": { label: "Terminals (mixed exit)" },
-  "activity-agents-mixed": { label: "Agents (mixed status)" },
-  "activity-all-kinds": { label: "Activity chips (all kinds)" },
-  "activity-with-goal": { label: "Activity chips + goal" },
-  "activity-empty": { label: "Activity chips empty" },
   "loading-states": { label: "Loading states" },
 };
 

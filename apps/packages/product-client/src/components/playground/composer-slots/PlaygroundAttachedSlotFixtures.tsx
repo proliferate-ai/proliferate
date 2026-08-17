@@ -1,10 +1,6 @@
 import type { ReactNode } from "react";
 import type { ScenarioKey } from "#product/config/playground";
 import { renderGoalBarSlot } from "#product/components/playground/activity/GoalBarFixtures";
-import {
-  renderActivityChipsSlot,
-  renderActivityWithGoalSlot,
-} from "#product/components/playground/activity/ActivityFixtures";
 import { renderDelegationSlot } from "#product/components/playground/delegation/PlaygroundComposerDelegation";
 import { renderPanelSlotFixture } from "#product/components/playground/composer-slots/PlaygroundPanelSlotFixtures";
 import { WorkspaceActivityComposerCard } from "#product/components/workspace/chat/input/workspace-activity/WorkspaceActivityComposerCard";
@@ -23,7 +19,6 @@ export function renderAttachedSlot(scenario: ScenarioKey): ReactNode | null {
   })();
   const delegationPanel = renderDelegationSlot(scenario);
   const goalBar = renderGoalBarSlot(scenario);
-  const activityChips = renderActivityChipsSlot(scenario) ?? renderActivityWithGoalSlot(scenario);
   // The Git/PR cap renders last so it docks flush onto the composer,
   // matching useComposerDockSlots ordering in the product.
   const workspaceActivityCap = scenario === "workspace-activity-card"
@@ -40,7 +35,7 @@ export function renderAttachedSlot(scenario: ScenarioKey): ReactNode | null {
     )
     : null;
 
-  if (!contextPanel && !delegationPanel && !goalBar && !activityChips && !workspaceActivityCap) {
+  if (!contextPanel && !delegationPanel && !goalBar && !workspaceActivityCap) {
     return null;
   }
 
@@ -49,7 +44,6 @@ export function renderAttachedSlot(scenario: ScenarioKey): ReactNode | null {
       {contextPanel}
       {delegationPanel}
       {goalBar}
-      {activityChips}
       {workspaceActivityCap}
     </>
   );

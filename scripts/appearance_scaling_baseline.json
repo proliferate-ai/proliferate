@@ -135,7 +135,6 @@
     "apps/packages/product-client/src/components/settings/panes/organization/OrganizationMembersSection.tsx|PROD-SCALE-35": 1,
     "apps/packages/product-client/src/components/settings/screen/SettingsScreen.tsx|PROD-SCALE-35": 2,
     "apps/packages/product-client/src/components/settings/shared/AgentHarnessConfigComposer.tsx|PROD-SCALE-35": 1,
-    "apps/packages/product-client/src/components/workspace/activity/ActivityChips.tsx|PROD-SCALE-35": 1,
     "apps/packages/product-client/src/components/workspace/activity/GoalBarResultPopover.tsx|PROD-SCALE-35": 1,
     "apps/packages/product-client/src/components/workspace/chat/content/PromptAttachmentCard.styles.test.tsx|PROD-SCALE-35": 3,
     "apps/packages/product-client/src/components/workspace/chat/input/ComposerIntegrationsControl.tsx|PROD-SCALE-35": 1,

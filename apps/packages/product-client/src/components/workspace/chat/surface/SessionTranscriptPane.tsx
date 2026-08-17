@@ -3,13 +3,19 @@ import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { useActiveTranscriptPaneState } from "#product/hooks/chat/derived/use-active-session-transcript-state";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { MessageList } from "#product/components/workspace/chat/transcript/MessageList";
+import { BackgroundWorkTranscriptRow } from "#product/components/workspace/activity/BackgroundWorkTranscriptRow";
 import { ConnectedPlanHandoffDialog } from "#product/components/workspace/chat/plans/ConnectedPlanHandoffDialog";
 import { usePlanHandoffDialogState } from "#product/hooks/plans/ui/use-plan-handoff-dialog-state";
+import { useBackgroundWorkRowCounts } from "#product/hooks/activity/derived/use-background-work-row";
 import { useSessionHistoryHydration } from "#product/hooks/sessions/lifecycle/use-session-history-hydration";
 import { useTranscriptSessionNavigationActions } from "#product/hooks/chat/workflows/use-transcript-session-navigation-actions";
 import { useWorkspaceCreationReceiptKey } from "#product/hooks/workspaces/derived/use-workspace-creation-receipt";
 import { TranscriptSwitchingPlaceholder } from "#product/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
 import type { GoalTranscriptEvent } from "#product/domain/activity/goal-transcript-events";
+import {
+  CHAT_COLUMN_CLASSNAME,
+  CHAT_SURFACE_GUTTER_CLASSNAME,
+} from "#product/config/chat-layout";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
 import { finishDeferredWorkspaceOpenForSession } from "#product/lib/infra/diagnostics/renderer-flow-timing";
 import {
@@ -36,6 +42,9 @@ export function SessionTranscriptPane({
   useDebugRenderCount("session-transcript-pane");
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const handoff = usePlanHandoffDialogState();
+  const backgroundWorkRowCounts = useBackgroundWorkRowCounts();
+  const hasBackgroundWork = backgroundWorkRowCounts.runningCount > 0
+    || backgroundWorkRowCounts.finishedCount > 0;
   const { rehydrateSessionSlotFromHistory } = useSessionHistoryHydration();
   const [olderHistoryLoadingSessionId, setOlderHistoryLoadingSessionId] = useState<string | null>(null);
   const immediatePaneState = useActiveTranscriptPaneState();
@@ -233,6 +242,27 @@ export function SessionTranscriptPane({
         onOpenSession={openTranscriptSession}
         canOpenSession={canOpenTranscriptSession}
       />
+      {hasBackgroundWork && (
+        // Last row of the transcript column, in the turn stack's own tight
+        // intra-turn rhythm (HANDOFF-background-work.md placement note) — the
+        // scroll region above shrinks by exactly this row's height via its own
+        // `flex-1 min-h-0`, so the row always sits directly under the last
+        // turn and above the (absolutely positioned) composer dock, never
+        // inside it.
+        <div
+          className={`${CHAT_SURFACE_GUTTER_CLASSNAME} ${CHAT_COLUMN_CLASSNAME} pt-transcript-turn-tight pb-2`}
+        >
+          <BackgroundWorkTranscriptRow
+            runningCount={backgroundWorkRowCounts.runningCount}
+            finishedCount={backgroundWorkRowCounts.finishedCount}
+            // SEAM (delivery spec rung R2): the Background work pane doesn't
+            // exist yet, so there is nowhere for this to open to. R2 mounts
+            // `BackgroundWorkPane` in `RightPanelContent` and replaces this
+            // no-op with the real open action.
+            onOpen={() => {}}
+          />
+        </div>
+      )}
       {handoff.plan && (
         <ConnectedPlanHandoffDialog
           plan={handoff.plan}
