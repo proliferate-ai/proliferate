@@ -13,12 +13,17 @@ import {
 // Owns global app shortcut registration. App command behavior stays in the
 // workflow actions passed by the caller. The workspace-switch shortcuts
 // (Cmd+1..9, Cmd+Opt+Arrow) live in useWorkspaceSwitchShortcuts instead of
-// here (login runtime-budget fix): they are the only shortcuts that need
-// useWorkspaceNavigationWorkflow's selectWorkspaceFromSurface, which pulls in
-// the workspace-selection / agent-catalog / session-creation graph, and that
-// hook is mounted authenticated-only so the /login first-load chunk never
-// parses it. See AuthenticatedWorkspaceSwitchShortcuts /
-// ProductLifecycleRoot.tsx for the mount point.
+// here (login runtime-budget fix): they were the only unconditional
+// (pre-auth) callers of useSidebarShortcutTargets and the held-key traversal
+// cursor machinery, so moving them to an authenticated-only mount is what
+// keeps that sidebar-projection / cursor-controller code off the /login
+// first-load chunk. (useWorkspaceNavigationWorkflow itself -- and the
+// workspace-selection / agent-catalog / session-creation graph it pulls in --
+// is unrelated to this split: it is still called unconditionally elsewhere,
+// via useAppNavigationCommandActions / useAppNewWorkspaceCommandActions, so
+// it remains in the login chunk regardless.) See
+// AuthenticatedWorkspaceSwitchShortcuts / ProductLifecycleRoot.tsx for the
+// mount point.
 export function useAppShortcuts(actions: AppCommandActions): void {
   useShortcutHandler("app.open-settings", () => {
     actions.openSettings.execute("shortcut");

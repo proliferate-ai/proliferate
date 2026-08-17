@@ -83,8 +83,14 @@ vi.mock("#product/providers/AuthenticatedBackgroundLifecycles", () => ({
   ),
 }));
 
-vi.mock("#product/providers/AuthenticatedWorkspaceSwitchShortcuts", () => ({
-  AuthenticatedWorkspaceSwitchShortcuts: () => null,
+// Not mocked as a component (unlike AuthenticatedBackgroundLifecycles above):
+// the real AuthenticatedWorkspaceSwitchShortcuts renders, but its underlying
+// hook is mocked below, matching the stronger AuthenticatedLaunchLifecycles /
+// useHomeDeferredLaunchRunner pattern -- so a regression that drops the
+// `authStatus === "authenticated"` guard around it is actually caught (see
+// "keeps the workspace-switch shortcuts off the signed-out shell..." below).
+vi.mock("#product/hooks/app/lifecycle/use-workspace-switch-shortcuts", () => ({
+  useWorkspaceSwitchShortcuts: vi.fn(),
 }));
 
 // Counted rather than stubbed away: where this hook runs relative to the auth
@@ -107,6 +113,7 @@ vi.mock("#product/providers/DesktopProductLifecycleRoot", () => ({
 import { ProductLifecycleRoot } from "#product/providers/ProductLifecycleRoot";
 import { useAppCommandActionsContext } from "#product/providers/AppCommandActionsProvider";
 import { useHomeDeferredLaunchRunner } from "#product/hooks/home/lifecycle/use-home-deferred-launch-runner";
+import { useWorkspaceSwitchShortcuts } from "#product/hooks/app/lifecycle/use-workspace-switch-shortcuts";
 
 function CommandContextProbe() {
   const actions = useAppCommandActionsContext();
@@ -295,6 +302,39 @@ describe("ProductLifecycleRoot", () => {
     rerender(tree());
 
     await waitFor(() => expect(useHomeDeferredLaunchRunner).toHaveBeenCalled());
+  });
+
+  it("keeps the workspace-switch shortcuts off the signed-out shell and mounts them once authenticated", async () => {
+    // Mirrors "keeps the launch lifecycles off the signed-out shell..." above:
+    // the shortcuts' held-key traversal cursor and sidebar-target projection
+    // only make sense for a signed-in viewer with workspaces, so the owner is
+    // mounted behind the authenticated gate as a lazy chunk, which is what
+    // keeps that code out of the login first-load budget. Asserting the
+    // underlying hook call (rather than mocking the whole component away, as
+    // AuthenticatedBackgroundLifecycles's mock does above) means a regression
+    // that drops the auth gate around <AuthenticatedWorkspaceSwitchShortcuts />
+    // actually fails this test.
+    authStatus.value = "anonymous";
+    const host = makeTestProductHost({
+      auth: { restoreSession: vi.fn().mockResolvedValue(undefined) },
+    });
+    const tree = () => (
+      <ProductHostProvider host={host}>
+        <ProductLifecycleRoot>
+          <div data-testid="app-tree">app</div>
+        </ProductLifecycleRoot>
+      </ProductHostProvider>
+    );
+
+    const { rerender } = render(tree());
+
+    expect(screen.getByTestId("app-tree")).toBeTruthy();
+    expect(useWorkspaceSwitchShortcuts).not.toHaveBeenCalled();
+
+    authStatus.value = "authenticated";
+    rerender(tree());
+
+    await waitFor(() => expect(useWorkspaceSwitchShortcuts).toHaveBeenCalled());
   });
 
   it("keeps a single Desktop lifecycle mount under StrictMode", () => {

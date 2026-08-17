@@ -9,7 +9,10 @@ import {
 } from "#product/lib/domain/shortcuts/registry";
 import { requestRightPanelTabByIndex } from "#product/lib/workflows/workspaces/right-panel-shortcut-requests";
 import { useSidebarSwitchCursorStore } from "#product/stores/workspaces/sidebar-switch-cursor-store";
-import { WORKSPACE_CURSOR_SETTLE_MS } from "#product/lib/domain/workspaces/sidebar/workspace-switch-cursor-controller";
+import {
+  WORKSPACE_CURSOR_COMMIT_FALLBACK_MS,
+  WORKSPACE_CURSOR_SETTLE_MS,
+} from "#product/lib/domain/workspaces/sidebar/workspace-switch-cursor-controller";
 
 const navigationMocks = vi.hoisted(() => ({
   selectWorkspaceFromSurface: vi.fn(),
@@ -120,6 +123,30 @@ describe("useWorkspaceSwitchShortcuts", () => {
 
       act(() => {
         vi.advanceTimersByTime(WORKSPACE_CURSOR_SETTLE_MS);
+      });
+      expect(navigationMocks.selectWorkspaceFromSurface).not.toHaveBeenCalled();
+    });
+
+    it("clears pending settle/fallback timers on unmount so a stale commit never fires (auth-flap mid-traversal)", () => {
+      // This owner mounts/unmounts with authStatus (ProductLifecycleRoot only
+      // renders it while authenticated), so an auth flap can unmount it while a
+      // step is still previewing, inside the settle window. Without cleanup the
+      // queued timer would call commitSelection (selectWorkspaceFromSurface)
+      // after unmount, against refs captured before the flap.
+      harnessState.selectedWorkspaceId = "workspace-1";
+      harnessState.selectedLogicalWorkspaceId = "workspace-1";
+      harnessState.traversalShortcutTargets = ["workspace-1", "workspace-2", "workspace-3"];
+      vi.useFakeTimers();
+
+      const { unmount } = renderHook(() => useWorkspaceSwitchShortcuts());
+
+      runShortcutHandler("workspace.next-workspace", { source: "keyboard" });
+      expect(useSidebarSwitchCursorStore.getState().cursorId).toBe("workspace-2");
+
+      unmount();
+
+      act(() => {
+        vi.advanceTimersByTime(WORKSPACE_CURSOR_SETTLE_MS + WORKSPACE_CURSOR_COMMIT_FALLBACK_MS);
       });
       expect(navigationMocks.selectWorkspaceFromSurface).not.toHaveBeenCalled();
     });

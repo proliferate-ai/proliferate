@@ -14,15 +14,27 @@ import { useSessionSelectionStore } from "#product/stores/sessions/session-selec
 import { useSidebarSwitchCursorStore } from "#product/stores/workspaces/sidebar-switch-cursor-store";
 
 // Split out of use-app-shortcuts.ts (login runtime-budget fix). These three
-// handlers (Cmd+1..9 by sidebar position, Cmd+Opt+Arrow traversal) are the
-// only shortcuts that need useWorkspaceNavigationWorkflow's
-// selectWorkspaceFromSurface, which pulls in workspace selection, the agent
-// catalog, and session-creation machinery -- none of it relevant before a
-// workspace exists, i.e. before auth. Pre-auth these shortcuts were already
-// no-ops (no sidebar targets to select, no committed workspace to step from);
-// mounting this hook only once authenticated (see
-// AuthenticatedWorkspaceSwitchShortcuts / ProductLifecycleRoot.tsx) changes
-// only when the handlers are registered, never what they do.
+// handlers (Cmd+1..9 by sidebar position, Cmd+Opt+Arrow traversal) were the
+// only unconditional (pre-auth) callers of useSidebarShortcutTargets and of
+// the traversal cursor machinery (workspace-switch-cursor-controller.ts,
+// sidebar-switch-cursor-store.ts) -- useSidebarShortcutTargets's only other
+// caller, MainSidebar.tsx, is already inside the authenticated lazy chunk.
+// Gating this hook behind auth is what removed those modules (sidebar-groups
+// projection, the cursor controller/store) from the /login first-load chunk.
+//
+// NOTE this does NOT remove useWorkspaceNavigationWorkflow (or what it pulls
+// in: useWorkspaceSelection, the bundled agent-catalog JSON, the
+// session-creation graph) from the login chunk -- that hook is still called
+// unconditionally, pre-auth, from useAppNavigationCommandActions and
+// useAppNewWorkspaceCommandActions (both reached via useAppCommandActions at
+// ProductLifecycleRoot.tsx). Getting that graph off /login too is a candidate
+// follow-up, not something this mechanical split attempted.
+//
+// Pre-auth these three shortcuts were already no-ops (no sidebar targets to
+// select, no committed workspace to step from); mounting this hook only once
+// authenticated (see AuthenticatedWorkspaceSwitchShortcuts /
+// ProductLifecycleRoot.tsx) changes only when the handlers are registered,
+// never what they do.
 export function useWorkspaceSwitchShortcuts(): void {
   const { digitTargetIds, traversalTargetIds } = useSidebarShortcutTargets();
   const { selectWorkspaceFromSurface } = useWorkspaceNavigationWorkflow();
@@ -88,6 +100,12 @@ export function useWorkspaceSwitchShortcuts(): void {
     return () => {
       unsubscribe();
       window.removeEventListener("keydown", handleEscape, true);
+      // This owner now mounts/unmounts with authStatus (it did not before this
+      // split), so an in-flight settle/fallback timer can outlive it -- an auth
+      // flap mid-traversal would otherwise let commitSelection fire after
+      // unmount, acting on stale refs. cancel() clears both timers (and any
+      // pending commit/cursor state) so nothing fires post-unmount.
+      controller.cancel();
     };
   }, []);
 
