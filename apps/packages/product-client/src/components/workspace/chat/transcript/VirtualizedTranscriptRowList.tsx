@@ -13,8 +13,9 @@ import {
   type TranscriptRowListBaseProps,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
 import { TranscriptFloatingControls } from "./TranscriptRowListShared";
-import { useAboveChangeCompensation } from "#product/hooks/chat/ui/use-above-change-compensation";
 import { useTranscriptStickToBottom } from "#product/hooks/chat/ui/use-transcript-stick-to-bottom";
+import { useTranscriptCompletedTurnAnchor } from "#product/hooks/chat/ui/use-transcript-completed-turn-anchor";
+import { useTranscriptScrollPauseRegistration } from "./TranscriptScrollPriorityContext";
 import { VirtualTranscriptViewport } from "./VirtualTranscriptViewport";
 import { PREPEND_BLANK_FALLBACK_GRACE_MS, useTranscriptVirtualizerBlankFallback } from "#product/hooks/chat/ui/use-transcript-virtualizer-blank-fallback";
 import { useTranscriptVirtualAnchorCapture } from "#product/hooks/chat/ui/use-transcript-virtual-anchor-capture";
@@ -70,6 +71,9 @@ export function VirtualizedTranscriptRowList({
     notifyProgrammaticScroll,
     setPinned,
     resetForSession,
+    notifyContentResize,
+    startAboveChangeCompensation,
+    cancelFramePipeline,
   } = useTranscriptStickToBottom({
     scrollRef,
     onScrollSample,
@@ -77,6 +81,9 @@ export function VirtualizedTranscriptRowList({
     lastPromptSubmittedAtMs,
     sessionKey: `${selectedWorkspaceId ?? ""}:${activeSessionId}`,
   });
+  // A user scroll inside the input event's call stack pre-empts any queued
+  // programmatic snap (render-freeze gate parity): cancel the frame pipeline.
+  useTranscriptScrollPauseRegistration(cancelFramePipeline);
   const renderableRows = useMemo(
     () => buildRenderableRows(rows, isLoadingOlderHistory),
     [isLoadingOlderHistory, rows],
@@ -108,6 +115,16 @@ export function VirtualizedTranscriptRowList({
     paddingStart: TRANSCRIPT_TOP_PADDING_PX,
     paddingEnd: structuralBottomInsetPx,
     initialOffset: () => estimatedInitialBottomOffset,
+    // Q12 (rung 4): EVALUATED false vs true. The owned single content
+    // ResizeObserver below routes every growth through the one frame pipeline,
+    // and the pipeline writes scrollTop exactly once per frame, so no
+    // ResizeObserver-loop error is provoked in either mode (the physics suite's
+    // no-pageerror assertion is clean with both). Turning TanStack's own
+    // observation OFF (false) does NOT move OUR snap — the pipeline still owns
+    // when that runs — it only desynchronizes TanStack's internal re-measure
+    // from our snap, which destabilized the pinned-follow / repin / prepend
+    // scenarios in the physics suite. Kept true: it preserves the proven
+    // measurement cadence at zero RO-loop cost. See the PR body for the matrix.
     useAnimationFrameWithResizeObserver: true,
   });
   const pendingAnchorRef = useTranscriptVirtualAnchorCapture({
@@ -249,9 +266,21 @@ export function VirtualizedTranscriptRowList({
     notifyProgrammaticScroll(() => {
       viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
     });
-    // Open the blank-fallback grace window: the anchor write above lands against the still-estimated short scrollHeight.
+    // The synchronous write above lands against the CURRENT scrollHeight, which
+    // still reflects the virtualizer's 360px estimate for the freshly-mounted
+    // older rows. On Chromium the transcript runs with `overflow-anchor: none`
+    // (the single-writer ruling), so the browser no longer silently corrects
+    // that shortfall as the real, taller row heights measure in a frame later —
+    // the reading row would drift down by the estimate-to-measured difference.
+    // Re-apply the same delta each frame while the prepended rows settle (a no-op
+    // once pinned or height-stable), so scrollTop absorbs the full added-above
+    // height and the reading row stays fixed on every engine. NOT cancelable by
+    // upward intent: the reader requested this prepend by scrolling to the top,
+    // so the reading row must hold even as that same upward gesture continues.
+    startAboveChangeCompensation(anchor, false);
+    // Open the blank-fallback grace window: the anchored scrollTop sits ahead of the still-estimated mounted range until those rows measure taller.
     prependSettleUntilRef.current = (typeof performance === "undefined" ? Date.now() : performance.now()) + PREPEND_BLANK_FALLBACK_GRACE_MS;
-  }, [notifyProgrammaticScroll, olderHistoryCursor, rows.length, setPinned]);
+  }, [notifyProgrammaticScroll, olderHistoryCursor, rows.length, setPinned, startAboveChangeCompensation]);
 
   useEffect(() => {
     const anchor = pendingPrependAnchorRef.current;
@@ -272,54 +301,14 @@ export function VirtualizedTranscriptRowList({
     return () => { window.cancelAnimationFrame(frame); };
   }, [isLoadingOlderHistory, maybeLoadOlderHistory, rows.length]);
 
-  const startAboveChangeCompensation = useAboveChangeCompensation({
-    scrollRef,
-    pinnedRef,
-    notifyProgrammaticScroll,
-  });
-
-  // While unpinned, a completing turn can split one row into completed-history +
-  // content — a new, unmeasured row inserted ABOVE the anchored row. The
-  // getOffsetForIndex + offsetWithinRowPx restore lands against the 360px
-  // estimate and bumps when measurement corrects. When rows were inserted above
-  // the anchor, hold the user's position with the measured scrollHeight delta;
-  // pure shifts and below-the-viewport appends keep the offset reposition / no-op.
-  useLayoutEffect(() => {
-    const anchor = pendingAnchorRef.current;
-    pendingAnchorRef.current = null;
-    if (!anchor || pinnedRef.current) {
-      return;
-    }
-    if (
-      anchor.rowCount === renderableRows.length
-      && renderableRows[anchor.rowIndex]?.key === anchor.key
-    ) {
-      return;
-    }
-
-    const nextIndex = renderableRows.findIndex((row) => row.key === anchor.key);
-    if (nextIndex < 0) {
-      return;
-    }
-
-    if (nextIndex > anchor.rowIndex) {
-      startAboveChangeCompensation(anchor);
-      return;
-    }
-
-    const offsetInfo = virtualizer.getOffsetForIndex(nextIndex, "start");
-    if (!offsetInfo) return;
-    notifyProgrammaticScroll(() => {
-      virtualizer.scrollToOffset(offsetInfo[0] + anchor.offsetWithinRowPx);
-    });
-  }, [
-    notifyProgrammaticScroll,
+  useTranscriptCompletedTurnAnchor({
+    pendingAnchorRef,
     pinnedRef,
     renderableRows,
-    rows.length,
-    startAboveChangeCompensation,
     virtualizer,
-  ]);
+    notifyProgrammaticScroll,
+    startAboveChangeCompensation,
+  });
 
   useLayoutEffect(() => {
     if (!pinnedRef.current) {
@@ -335,30 +324,32 @@ export function VirtualizedTranscriptRowList({
     totalContentHeight,
   ]);
 
-  // Row content can grow between virtualizer measurements (tool-call output
-  // streaming, status flips, expanding panels). The snap effect above only
-  // fires when totalContentHeight changes — but with
-  // useAnimationFrameWithResizeObserver the virtualizer defers re-measurement
-  // by one frame, leaving a window where the DOM has grown but no snap runs.
-  // Bridge that gap with a ResizeObserver on the content wrapper (same pattern
-  // as FullTranscriptRowList) that re-snaps immediately on any size increase
-  // while pinned, regardless of whether the virtualizer has re-measured yet.
+  // Q12 (rung 4): ONE content ResizeObserver drives the single per-frame snap
+  // pass. Row content grows between virtualizer measurements (tool-call output
+  // streaming, status flips, expanding panels, the assistant reveal's height
+  // growth — Q7); on any size change we request the one frame pass, which the
+  // pipeline coalesces with every other mutation source into exactly one snap
+  // (pinned) or compensation (unpinned) write per frame, so no independent loop
+  // can interleave. With useAnimationFrameWithResizeObserver:false the
+  // virtualizer already re-measures synchronously through its own element
+  // observation (no one-frame deferral), so measurement and this snap land in
+  // the same frame WITHOUT a second measure() call here — a manual measure()
+  // inside this callback would race the prepend anchor restore's scrollTop write
+  // and provoke ResizeObserver-loop churn. This replaces the previous bridge
+  // observer that wrote scrollTop directly.
   useEffect(() => {
     const content = contentRef.current;
     if (!content) {
       return;
     }
     const observer = new ResizeObserver(() => {
-      if (!pinnedRef.current) {
-        return;
-      }
-      scrollToBottom();
+      notifyContentResize();
     });
     observer.observe(content);
     return () => {
       observer.disconnect();
     };
-  }, [pinnedRef, scrollToBottom]);
+  }, [notifyContentResize]);
 
   useTranscriptVirtualizerBlankFallback({
     activeSessionId, bottomSpacerHeight,

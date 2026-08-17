@@ -53,6 +53,53 @@ async function settle(page: Page, ms = 350): Promise<void> {
   await page.waitForTimeout(ms);
 }
 
+// Frame-aligned metrics read. `settle`'s wall clock elapses even on a starved
+// CI renderer that painted ZERO frames, so a probe taken right after it can
+// sample the transient state that exists between a DOM growth mutation and the
+// pre-paint ResizeObserver snap the engine applies before the next paint — a
+// state no painted frame ever shows (this is the source of the load-dependent
+// bottomDistance 132 CI caught). FR-1's follow invariant is defined per painted
+// frame, so growth-then-measure assertions must read a frame that actually
+// rendered. This captures the metrics snapshot INSIDE the evaluate, phased to
+// land after a frame's ResizeObserver snap AND paint (see the per-line note on
+// the read hop below). The read must be INSIDE the same evaluate: a separate
+// `metrics()` call after a bare settle runs on a later task and can land on a
+// fresh frame whose pre-paint RO snap has not yet run, reopening the exact gap
+// this closes (verified: the separate-read form still samples 132; this form
+// does not). Bounded so a genuinely frozen renderer fails rather than hangs.
+async function metricsAfterFrame(page: Page, timeoutMs = 4000): Promise<Metrics> {
+  return page.evaluate(
+    (timeout) =>
+      new Promise<Metrics>((resolve) => {
+        const read = () =>
+          (
+            window.__scrollPhysics as unknown as { getMetrics: () => Metrics }
+          ).getMetrics();
+        const bail = setTimeout(() => resolve(read()), timeout);
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            // Read AFTER the frame's ResizeObserver delivery + paint, not just
+            // after the frame boundary: rAF callbacks run BEFORE RO delivery in
+            // the rendering steps, and the product's stick-to-bottom snap writes
+            // scrollTop during RO delivery. Reading inside the rAF callback
+            // therefore samples the pre-snap leading edge of the frame — the
+            // exact transient (bottomDistance 132) that no frame actually paints
+            // — so this hops one setTimeout(0) macrotask, which lands after the
+            // frame's RO snap and paint have completed, reflecting the snapped,
+            // painted state. (Verified: reading inside the rAF callback still
+            // sampled 132; the post-paint hop does not, with zero frame-budget
+            // timeouts.)
+            setTimeout(() => {
+              clearTimeout(bail);
+              resolve(read());
+            }, 0);
+          }),
+        );
+      }),
+    timeoutMs,
+  );
+}
+
 async function waitForViewport(page: Page): Promise<void> {
   await page.waitForFunction(() => window.__scrollPhysics.hasViewport());
 }
@@ -146,12 +193,33 @@ async function wheelToBottom(page: Page): Promise<void> {
 }
 
 test.describe("transcript scroll physics", () => {
-  // Intra-stack degradation window (PRO-187): MAIN's rAF-loop stick engine, driven by
-  // r1's honest turn_ended fixture, cannot hold the per-painted-frame follow cadence under
-  // the taller seeded turns on slow-CI WebKit (CI: [webkit] bottomDistance 132 > 120). The
-  // single-writer pin decision plus the synchronous ResizeObserver-notify snap that closes
-  // it land at r4 (#1945); un-fixme'd there. Chromium already passes here.
-  test.fixme("pinned-follow: bottom distance stays ~0 across streaming growth", async ({ page }) => {
+  // Rung 4 (PRO-187): the one owned per-frame snap pass writes scrollTop exactly
+  // once per frame, so no snap/measure feedback can provoke the browser's
+  // "ResizeObserver loop completed with undelivered notifications" error. Every
+  // spec fails if any page error or that console error surfaces during the run.
+  let pageErrors: string[] = [];
+  test.beforeEach(({ page }) => {
+    pageErrors = [];
+    page.on("pageerror", (error) => {
+      pageErrors.push(String(error));
+    });
+    page.on("console", (message) => {
+      const text = message.text();
+      if (message.type() === "error" && /ResizeObserver loop/i.test(text)) {
+        pageErrors.push(text);
+      }
+    });
+  });
+  test.afterEach(() => {
+    expect(pageErrors, `unexpected page/ResizeObserver-loop errors:\n${pageErrors.join("\n")}`)
+      .toEqual([]);
+  });
+
+  // Rung 4 un-fixmes pinned-follow: PR #1938 (r3) marks it test.fixme because the
+  // single-writer pin decision alone cannot hold the follow cadence on slow CI
+  // runners (bottomDistance 132 > 120 on both engines). The synchronous
+  // ResizeObserver-notify snap this rung adds fixes it, proven green on CI here.
+  test("pinned-follow: bottom distance stays ~0 across streaming growth", async ({ page }) => {
     await ready(page);
     await drive(page, "reset");
     await drive(page, "seedFinalizedConversation", 6);
@@ -177,7 +245,10 @@ test.describe("transcript scroll physics", () => {
     for (let batch = 0; batch < 25; batch += 1) {
       await drive(page, "streamChunk");
       await settle(page, 60);
-      const m = await metrics(page);
+      // Read a frame that actually painted: `settle`'s wall clock can elapse on
+      // a starved CI renderer between the growth mutation and the pre-paint RO
+      // snap, sampling a mid-growth bottomDistance no rendered frame shows.
+      const m = await metricsAfterFrame(page);
       // Pinned follow: the viewport stays glued near the growing bottom, the
       // distance stays bounded and never runs away. (The pin FLAG can flicker
       // for a frame on WebKit as a growth scroll is classified, so the physical
@@ -191,11 +262,11 @@ test.describe("transcript scroll physics", () => {
     expect((await metrics(page)).bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
   });
 
-  // Intra-stack degradation window (PRO-187): MAIN's single-slot pixel pin classification
-  // misreads a programmatic growth write as a user scroll on slow-CI WebKit and drops the
-  // pin (CI: [webkit] isPinned Received false). The marker-based ownership classification
-  // that fixes it lands at r3 (#1938); un-fixme'd there. Chromium already passes here.
-  test.fixme("unpin mid-stream: reading holds unpinned, no snap-back to bottom", async ({ page }) => {
+  // Un-fixme'd at rung 3 (#1938): the marker-based ownership classification this rung adds
+  // fixes the r1/r2 degradation window where MAIN's single-slot pixel classification misread
+  // a programmatic growth write as a user scroll on slow-CI WebKit and dropped the pin
+  // ([webkit] isPinned Received false). CI proves this test passes on both engines at r3.
+  test("unpin mid-stream: reading holds unpinned, no snap-back to bottom", async ({ page }) => {
     await ready(page);
     await drive(page, "reset");
     await drive(page, "seedFinalizedConversation", 8);
@@ -243,12 +314,12 @@ test.describe("transcript scroll physics", () => {
     await drive(page, "finalizeStreamingTurn");
   });
 
-  // Intra-stack degradation window (PRO-187): under the honest turn_ended fixture MAIN's
-  // pin classification cannot hold the post-repin follow cadence on slow-CI WebKit (CI:
-  // [webkit] re-pin isPinned Expected true / Received false). The single-writer pin
-  // decision plus the synchronous ResizeObserver-notify snap close it at r4 (#1945);
-  // un-fixme'd there. Chromium passes here.
-  test.fixme("repin band edge: returning into the bottom band re-pins; staying above does not", async ({
+  // Rung 4 un-fixmes repin-band-edge: PR #1938 (r3) marks it test.fixme because
+  // the single-writer pin decision alone cannot hold the post-repin follow
+  // cadence on slow CI runners (webkit bottomDistance 332 > 202 after the
+  // repin-and-stream arm). The synchronous ResizeObserver-notify snap this rung
+  // adds fixes it, proven green on CI here.
+  test("repin band edge: returning into the bottom band re-pins; staying above does not", async ({
     page,
   }) => {
     await ready(page);
@@ -317,9 +388,152 @@ test.describe("transcript scroll physics", () => {
     }
     await settle(page, 1000);
     // Re-pinned, so streaming growth is followed again (pin holds, distance
-    // stays bounded near the bottom) once settled.
+    // stays bounded near the bottom) once settled. Read a painted frame so a
+    // starved renderer cannot leave the probe sampling the mid-growth transient
+    // between the last mutation and its pre-paint RO snap.
     await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
-    expect((await metrics(page)).bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
+    expect((await metricsAfterFrame(page)).bottomDistance).toBeLessThanOrEqual(
+      PIN_FOLLOW_MAX_DISTANCE_PX,
+    );
+    await drive(page, "finalizeStreamingTurn");
+  });
+
+  test("single-writer: transcript viewport runs with overflow-anchor none", async ({
+    page,
+  }, testInfo) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 6);
+    await waitForViewport(page);
+    await settle(page);
+
+    // WebKit does not implement the overflow-anchor property (it has no native
+    // scroll anchoring to suppress), so the computed value is only meaningful on
+    // Chromium. There the transcript must opt out of scroll anchoring so the
+    // stick-to-bottom engine is the sole writer of scrollTop.
+    test.skip(testInfo.project.name !== "chromium", "overflow-anchor is Chromium-only");
+    const overflowAnchor = await page.evaluate((selector) => {
+      const el = document.querySelector(selector);
+      return el ? getComputedStyle(el).overflowAnchor : null;
+    }, VIEWPORT);
+    expect(overflowAnchor).toBe("none");
+  });
+
+  test("no-false-unpin: rapid glue writes during growth never unpin without user input", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 6);
+    await waitForViewport(page);
+    await settle(page);
+
+    // Deterministic pinned baseline across engines.
+    await wheelToBottom(page);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+
+    const before = await metrics(page);
+
+    // Engineer the marker-tolerance-miss precondition the single-slot pixel
+    // classification papered over: grow the transcript on a tight cadence so
+    // scrollHeight changes between a glue write and the scroll event it
+    // produces, with several programmatic writes in flight at once. Under that
+    // classification a later write overwrote an earlier marker and the stale
+    // event was misread as a USER scroll, dropping the pin. A dropped pin gates
+    // off the content-resize follow (the ResizeObserver re-stick is guarded by
+    // the pin ref), so a false unpin stops the follow and the bottom distance
+    // runs away without bound. The invariant here is therefore physical: with
+    // no synthetic user input the viewport keeps following the growing bottom,
+    // its distance staying small — never the unbounded growth a lost follow
+    // produces. (The pin FLAG read from the floating control is intentionally
+    // not asserted per-frame: it can transiently flicker as a growth scroll is
+    // classified, so the physical follow distance is the load-bearing signal,
+    // exactly as in the pinned-follow scenario.)
+    //
+    // The end-state is the robust assertion. Nothing re-pins the transcript
+    // without synthetic user input or a submit stamp (neither occurs here), so a
+    // pin dropped by a misclassified growth event gates off the content-resize
+    // follow permanently and leaves the viewport hundreds of pixels behind after
+    // this much growth. A viewport still glued to the bottom AFTER the whole
+    // rapid-growth run therefore proves the pin was never lost during it. A
+    // per-frame distance bound mid-run is deliberately avoided: the glue
+    // catch-up can lag a frame under machine load and briefly widen the gap
+    // without the pin being lost.
+    //
+    // Growth is driven by appending finalized turns on a tight cadence rather
+    // than a live assistant stream: a finalized turn hydrates inert (turn_ended)
+    // and renders its full tall height in the commit it lands, so every batch is
+    // hundreds of pixels of REAL, immediately-measured content growth. A live
+    // assistant stream would instead be gated by the typewriter reveal (capped
+    // at a few hundred characters per second), which delivers too little visible
+    // height per second to prove genuine growth in a bounded run once the seeded
+    // turns hydrate inert. Each append fires the pinned content-resize snap, so
+    // the rapid cadence still keeps several programmatic glue writes racing
+    // scroll events, exactly the precondition this scenario guards.
+    for (let batch = 0; batch < 12; batch += 1) {
+      await drive(page, "appendFinalizedTurns", 1);
+      await settle(page, 80);
+    }
+    await settle(page, 500);
+    const after = await metrics(page);
+
+    // Load-invariant proof that the follow was never lost: the content grew by
+    // `addedHeight` during the run; a held follow leaves the resting bottom gap
+    // a small fraction of that growth (the viewport advanced with the content),
+    // while a follow lost early leaves the viewport ~`addedHeight` behind (the
+    // full growth accumulated below a stationary viewport). A ratio, not an
+    // absolute px bound, so machine load cannot flip it (mirrors the
+    // prepend-anchoring scenario's ratio band).
+    const addedHeight = after.scrollHeight - before.scrollHeight;
+    expect(addedHeight, "growth must actually grow the transcript").toBeGreaterThan(300);
+    // A follow that survived leaves the resting gap well under the full growth
+    // (the viewport advanced with the content); a follow lost early leaves the
+    // viewport frozen with ~all the growth accumulated below it (ratio near 1).
+    // The band is generous so rAF glue starvation under concurrent-browser load
+    // cannot flip it, while still failing hard on a frozen viewport. The precise
+    // marker lifecycle (multiple in-flight markers, expiry, fallback gating) is
+    // proven deterministically in the colocated unit tests; this is the
+    // real-browser smoke that the follow survives rapid growth on both engines.
+    expect(after.bottomDistance).toBeLessThan(addedHeight * 0.6);
+  });
+
+  test("swallowed-user-scroll: wheel-up during heavy programmatic snap wins", async ({ page }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 8);
+    await waitForViewport(page);
+    await settle(page);
+    await wheelToBottom(page);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+
+    // Kick off heavy programmatic snap activity: a large synchronous growth
+    // batch leaves a burst of pinned glue/resize writes settling, then the user
+    // wheels up in the middle of it. User ownership is claimed at input time
+    // and must win: the transcript unpins and holds its position rather than
+    // being snapped back by the in-flight programmatic writes.
+    await drive(page, "beginStreamingTurn");
+    await drive(page, "streamChunks", 24);
+    await keyboardScrollUp(page, 5);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+    const held = await metrics(page);
+    expect(held.bottomDistance).toBeGreaterThan(REPIN_BAND_PX * 4);
+
+    // Continued growth must not re-snap the reader to the bottom. The pin FLAG
+    // can read stale for a single frame right as a growth batch is classified
+    // (same rationale as the unpin-mid-stream scenario), so the per-batch
+    // assertion is the physics invariant, not the flag; the flag is asserted
+    // at the settled points before and after this loop.
+    for (let batch = 0; batch < 15; batch += 1) {
+      await drive(page, "streamChunk");
+      await settle(page, 40);
+      const m = await metrics(page);
+      expect(m.bottomDistance).toBeGreaterThan(REPIN_BAND_PX);
+    }
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+    expect((await metrics(page)).bottomDistance).toBeGreaterThan(REPIN_BAND_PX * 4);
     await drive(page, "finalizeStreamingTurn");
   });
 
@@ -366,8 +580,23 @@ test.describe("transcript scroll physics", () => {
     },
   );
 
-  test("prepend anchoring: older-history prepend keeps the reading row fixed", async ({ page }) => {
+  test("prepend anchoring: older-history prepend keeps the reading row fixed", async ({
+    page,
+  }, testInfo) => {
     await ready(page);
+    // Slow the main thread so the freshly-mounted older rows' estimate-to-measured
+    // height corrections land over several spread-out frames, exactly as they do
+    // on a loaded CI runner. Unthrottled this scenario settles inside a frame or
+    // two and passes even with a compensation window that ends a frame early; the
+    // throttle is what turns that early-end into the ~39px under-absorption CI
+    // caught (chromium 550 vs > 589.2). CPU throttling is a Chromium/CDP-only
+    // capability; WebKit runs unthrottled and still exercises the same anchor
+    // path. This is the negative control: revert the deadline-gated compensation
+    // in use-transcript-frame-pipeline-lifecycle.ts and this arm fails on chromium.
+    if (testInfo.project.name === "chromium") {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 6 });
+    }
     await drive(page, "reset");
     await drive(page, "seedFinalizedConversation", 12);
     // Exactly one prepend's worth of reservoir, so the anchor event is single
@@ -387,7 +616,11 @@ test.describe("transcript scroll physics", () => {
       "getLastPrependEvidence",
     );
     expect(evidence, "a prepend should have been triggered by scrolling to the top").not.toBeNull();
-    const after = await metrics(page);
+    // Read a painted frame: the prepend's estimate-to-measured corrections land
+    // over several frames, and `settle`'s wall clock can elapse on a starved
+    // (here CPU-throttled) renderer mid-correction, sampling a scrollTop no
+    // painted frame shows.
+    const after = await metricsAfterFrame(page);
 
     // Anchor invariant: scrollTop absorbs essentially all of the height added
     // above, so the reading row stays put. The anchoring signature is
