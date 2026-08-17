@@ -452,7 +452,9 @@ export interface ScrollPhysicsDriver {
   appendFinalizedTurns(turns: number): void;
   prependOlderHistory(turns?: number): void;
   switchSession(sessionId: string, seedTurns: number): void;
+  switchSessionStreaming(sessionId: string, seedTurns: number): void;
   getMetrics(): ViewportMetrics;
+  getTopVisibleText(): string | null;
   scrollToBottomInstant(): void;
   scrollToTopInstant(): void;
   sweepEveryRowIntoView(stepDelayMs?: number): Promise<void>;
@@ -672,8 +674,46 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
     this.seedFinalizedConversation(seedTurns, sessionId);
   },
 
+  // FR-2 (rung 6): revisit a session that is actively STREAMING. Seeds the
+  // session content (same deterministic row keys as a finalized revisit) but
+  // marks it busy, so the revisit must bottom-pin regardless of any saved
+  // reading position — the streaming arm of the FR-2 contract.
+  switchSessionStreaming(sessionId: string, seedTurns: number): void {
+    this.seedFinalizedConversation(seedTurns, sessionId);
+    commit({ ...snapshot, sessionBusy: true });
+  },
+
   getMetrics(): ViewportMetrics {
     return metrics();
+  },
+
+  // Estimate-immune reading-position probe: the text of the transcript row
+  // under the viewport's top edge. FR-2 restores {rowKey, offsetWithinRow}, so
+  // the correct restore lands the SAME row under the top edge even when the
+  // off-screen rows above it are estimated to a different total (a raw scrollTop
+  // would differ; the row under the top edge is the observable invariant).
+  getTopVisibleText(): string | null {
+    const el = viewport();
+    if (!el) {
+      return null;
+    }
+    const rect = el.getBoundingClientRect();
+    const probe = document.elementFromPoint(rect.left + rect.width / 2, rect.top + 4);
+    if (!probe) {
+      return null;
+    }
+    const row = probe.closest("[data-index]") ?? probe;
+    // Strip the volatile relative timestamp ("Dec 31 · 4:00 pm") so this probe is
+    // a STABLE reading-position identity across the fixture's re-seeds: the
+    // seq-derived timestamps advance on a global counter, so the same turn
+    // renders a later time on a second seed, but its row key and prompt/reply
+    // text do not change. FR-2 restores by row key, so the row is identical; only
+    // this rendered timestamp would differ, which is not a reading-position move.
+    const text = (row.textContent ?? "").replace(
+      /[A-Z][a-z]{2} \d{1,2} · \d{1,2}:\d{2} ?[ap]m/gi,
+      "",
+    );
+    return text.trim().slice(0, 48);
   },
 
   // Engine-portable pin-to-bottom baseline: sets scrollTop directly, which

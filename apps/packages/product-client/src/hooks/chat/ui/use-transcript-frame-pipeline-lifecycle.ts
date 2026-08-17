@@ -37,6 +37,16 @@ export interface UseTranscriptFramePipelineLifecycleOptions {
    * deadline passes so ordinary below-the-viewport growth can move the reader.
    */
   compensationDeadlineRef: RefObject<number>;
+  /**
+   * FR-2 restore (rung 6): while unpinned on a finalized-session revisit, this
+   * resolves the saved reading anchor to a scrollTop (or null when the saved
+   * row is gone). The single frame writer re-applies it each glued frame so the
+   * reading row stays put as freshly-mounted rows correct their heights, until
+   * the deadline below lapses.
+   */
+  restoreResolverRef: RefObject<((viewport: HTMLElement) => number | null) | null>;
+  /** Deadline (interactionNow ms) past which the restore anchor is released. */
+  restoreDeadlineRef: RefObject<number>;
   /** Snap to the active follow target (the pinned write). */
   scrollToBottom: () => void;
   /** Wrap a scrollTop write so its event is excluded from pin/direction. */
@@ -64,6 +74,8 @@ export function useTranscriptFramePipelineLifecycle({
   pinnedRef,
   compensationAnchorRef,
   compensationDeadlineRef,
+  restoreResolverRef,
+  restoreDeadlineRef,
   scrollToBottom,
   notifyProgrammaticScroll,
   clearAllMarkers,
@@ -89,6 +101,42 @@ export function useTranscriptFramePipelineLifecycle({
     if (pinnedRef.current) {
       scrollToBottom();
       return;
+    }
+    // FR-2 restore (rung 6): re-resolve the saved reading anchor to scrollTop
+    // each frame until the deadline, so the reading row holds under the top edge
+    // as freshly-mounted rows settle their heights. Writing the resolved target
+    // directly (clamped reachable) keeps the placement estimate-immune and, with
+    // rung-5's warmed heights, stable frame-to-frame (zero visible motion).
+    const restore = restoreResolverRef.current;
+    if (restore) {
+      const restoreNow = typeof performance === "undefined" ? Date.now() : performance.now();
+      if (restoreNow >= restoreDeadlineRef.current) {
+        restoreResolverRef.current = null;
+      } else {
+        const target = restore(viewport);
+        if (target == null) {
+          restoreResolverRef.current = null;
+        } else {
+          const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+          // Only place when the saved anchor's scrollTop is actually reachable.
+          // Once the anchor row is mounted the resolver returns an estimate-immune
+          // target derived from its real rendered position, which is always within
+          // the current content, so this holds. When the row is NOT yet mounted
+          // the resolver falls back to the coarse index-sum estimate, which can
+          // exceed the freshly-switched content's not-yet-measured max height;
+          // writing it then would paint a clamped intermediate (a visible extra
+          // frame). Waiting a frame instead lets the content measure taller (and
+          // the carried-over scroll position keeps the anchor row in the render
+          // window so the estimate-immune path takes over), so the restore lands
+          // in a single instant cut with zero intermediate motion.
+          if (target <= maxTop + 1) {
+            notifyProgrammaticScroll(() => {
+              viewport.scrollTop = target;
+            });
+          }
+        }
+        return;
+      }
     }
     const anchor = compensationAnchorRef.current;
     if (!anchor) {
@@ -184,6 +232,8 @@ export function useTranscriptFramePipelineLifecycle({
   }, [
     compensationAnchorRef,
     compensationDeadlineRef,
+    restoreResolverRef,
+    restoreDeadlineRef,
     notifyProgrammaticScroll,
     pinnedRef,
     scrollRef,
@@ -201,12 +251,23 @@ export function useTranscriptFramePipelineLifecycle({
           return false;
         }
         // A pinned burst glues to the bottom; an unpinned burst glues an active
-        // above-change compensation anchor. Either way the user reclaiming
-        // control (unpin with no anchor) ends the window.
-        return pinnedRef.current || compensationAnchorRef.current != null;
+        // above-change compensation anchor or an FR-2 restore anchor. Either way
+        // the user reclaiming control (unpin with no anchor) ends the window.
+        return (
+          pinnedRef.current
+          || compensationAnchorRef.current != null
+          || restoreResolverRef.current != null
+        );
       },
     });
-  }, [compensationAnchorRef, pinnedRef, pipelineRef, runFramePass, scrollRef]);
+  }, [
+    compensationAnchorRef,
+    restoreResolverRef,
+    pinnedRef,
+    pipelineRef,
+    runFramePass,
+    scrollRef,
+  ]);
 
   // On tab/window re-show while pinned, glue to the bottom for a few frames so
   // the suspended-then-resumed measurement backlog lands as one jump. Listen to

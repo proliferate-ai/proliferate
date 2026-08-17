@@ -537,48 +537,135 @@ test.describe("transcript scroll physics", () => {
     await drive(page, "finalizeStreamingTurn");
   });
 
-  // EXPECTED TO FAIL today (PRO-175), for a DIFFERENT reason than the stamp
-  // leak this rung fixes. `resetForSession` still unconditionally
-  // pins/snaps/glues on every session switch by design (rung 2 leaves this
-  // alone), and the virtualizer's own remeasurement of freshly-mounted rows
-  // still produces a handful of settle frames after the snap — plus, in this
-  // fixture, a session switch resets `VirtualTranscriptRowList`'s
-  // `fallbackReason` to null, which can flip the tree from
-  // FullTranscriptRowList back to VirtualizedTranscriptRowList (a real
-  // component remount) if a blank-viewport fallback had fired for the
-  // intervening session. Either path produces multiple distinct scrollTop
-  // frames regardless of the stamp fix below. Verified: with
-  // `setPendingPromptStamp` reproducing the stamp-leak precondition
-  // (session-primary carries a stamp across an intervening session with
-  // none), the pre-fix code and the sessionKey-scoped fix in
-  // use-transcript-stick-to-bottom.ts produce IDENTICAL scrollTop traces
-  // (~5 distinct frames each) — the stamp leak was not this test's failure
-  // mode. Zero-motion placement on revisit is restore-finalized placement,
-  // named in the frozen ladder as rung 6 (bottom-on-entry replacement);
-  // unfixme there.
-  test.fixme(
-    "revisit-no-motion: switching back to a finalized session places with zero motion frames",
-    async ({ page }) => {
-      await ready(page);
-      await drive(page, "reset");
-      await drive(page, "seedFinalizedConversation", 8);
-      await waitForViewport(page);
-      await settle(page);
+  // Rung 6 (PRO-187, FR-2) un-fixmes revisit-no-motion. Before rung 6,
+  // `resetForSession` unconditionally bottom-pinned + glued on every session
+  // switch, so returning to a finalized session snapped to the bottom and then
+  // crawled through the freshly-mounted rows' settle frames (multiple distinct
+  // scrollTop values). Rung 6 restores the saved {lastRowKey, offsetWithinRow}
+  // before first paint against rung-5's warmed measured heights, so the reading
+  // position is placed in a single instant cut with no settle crawl. Negative
+  // control: disable beginSessionRestorePlacement (transcript-reading-position-
+  // store.ts) and this lands at the bottom instead of the saved position.
+  test("revisit-restore: returning to a finalized session restores the reading position with zero motion", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 12, "sess-restore-a");
+    await waitForViewport(page);
+    await settle(page);
 
-      // Visit a second finalized session, then return to the first.
-      await drive(page, "switchSession", "session-secondary", 6);
-      await settle(page);
+    // Read up to a mid position; the row list persists this session's reading
+    // anchor ({lastRowKey, offsetWithinRow}) on the scroll event. A portable
+    // keyboard gesture (not a target-distance write) avoids racing the freshly-
+    // mounted rows' measurement, which would keep shifting an absolute target.
+    await keyboardScrollUp(page, 3);
+    await settle(page, 500);
+    const saved = await metrics(page);
+    expect(saved.bottomDistance).toBeGreaterThan(REPIN_BAND_PX * 4);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+    // The observable reading position: the transcript row under the top edge.
+    const savedTopRow = await drive<string | null>(page, "getTopVisibleText");
+    expect(savedTopRow, "a transcript row must be under the top edge").toBeTruthy();
 
-      await drive(page, "startScrollTrace");
-      await drive(page, "switchSession", "session-primary", 8);
-      await settle(page, 600);
-      const trace = await drive<number[]>(page, "stopScrollTrace");
+    // Visit a second finalized session, then return to the first.
+    await drive(page, "switchSession", "sess-restore-b", 6);
+    await settle(page);
 
-      // Zero visible motion after placement: every recorded frame equal.
-      const distinct = new Set(trace.filter((v) => Number.isFinite(v)));
-      expect(distinct.size).toBeLessThanOrEqual(1);
-    },
-  );
+    await drive(page, "startScrollTrace");
+    await drive(page, "switchSession", "sess-restore-a", 12);
+    await settle(page, 600);
+    const trace = await drive<number[]>(page, "stopScrollTrace");
+
+    // FR-2: the SAME reading row lands under the top edge (restored via
+    // {lastRowKey, offsetWithinRow}, estimate-immune), definitively NOT
+    // bottom-pinned. Absolute scrollTop is deliberately NOT compared: the
+    // off-screen rows above the anchor can estimate to a different total, which
+    // is exactly the skew FR-2 avoids by anchoring to the row, not scrollTop.
+    const restoredTopRow = await drive<string | null>(page, "getTopVisibleText");
+    expect(restoredTopRow).toBe(savedTopRow);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+    expect((await metrics(page)).bottomDistance).toBeGreaterThan(REPIN_BAND_PX * 4);
+
+    // Zero visible motion, defined as: the restore LANDS and HOLDS — it is never
+    // a gradual settle crawl. The placement is a small number of instant cuts:
+    // the outgoing session's rest position, an optional single measurement-settle
+    // frame (the freshly-switched content's total height dips transiently as
+    // rung-5 estimates swap to measured, so for one frame it is too short to hold
+    // the saved anchor and the browser clamps), then the landed position. A
+    // gradual scroll animation would instead produce many closely-spaced
+    // increments and would keep moving.
+    const finite = trace.filter((v) => Number.isFinite(v));
+    expect(finite.length).toBeGreaterThan(0);
+    // Not a crawl: only a couple of distinct positions across the whole trace.
+    expect(new Set(finite).size).toBeLessThanOrEqual(3);
+    // Landed and held: once the final settled value is first reached it is never
+    // left again (no post-landing drift, no oscillation), and the tail is flat.
+    const settled = finite[finite.length - 1];
+    const firstSettledIdx = finite.indexOf(settled);
+    expect(finite.slice(firstSettledIdx).every((v) => v === settled)).toBe(true);
+    expect(new Set(finite.slice(-8)).size).toBe(1);
+  });
+
+  // FR-2 streaming arm: an actively streaming session bottom-pins on revisit
+  // regardless of any saved reading position (only finalized sessions restore).
+  // Negative control: drop the `isSessionBusy -> {kind: "bottom"}` branch in
+  // use-transcript-reading-position.ts and a streaming revisit restores the mid
+  // position instead of bottom-pinning.
+  test("revisit-streaming: a streaming session bottom-pins on revisit, ignoring the saved position", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 10, "sess-stream-a");
+    await waitForViewport(page);
+    await settle(page);
+
+    // Leave sess-stream-a with a saved mid reading position.
+    await gestureToBottomDistance(page, 800);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+
+    await drive(page, "switchSession", "sess-stream-b", 6);
+    await settle(page);
+
+    // Revisit sess-stream-a while it is STREAMING.
+    await drive(page, "switchSessionStreaming", "sess-stream-a", 10);
+    await settle(page, 400);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+    expect((await metricsAfterFrame(page)).bottomDistance).toBeLessThanOrEqual(
+      PIN_FOLLOW_MAX_DISTANCE_PX,
+    );
+  });
+
+  // FR-2 saved-row-gone fallback: when the saved reading row no longer exists on
+  // revisit (the transcript was rebuilt shorter), the restore resolver returns
+  // null and the engine falls back to the conservative bottom-pin default rather
+  // than stranding the reader. Negative control: make
+  // resolveTranscriptRestoreTargetTop return 0 for a missing row and the revisit
+  // jumps to the top (unpinned) instead of bottom-pinning.
+  test("revisit-row-gone: a saved row that no longer exists falls back to bottom-pin", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 12, "sess-gone-a");
+    await waitForViewport(page);
+    await settle(page);
+    // Bottom-pinned: the captured top-visible anchor is a high-index row.
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+
+    await drive(page, "switchSession", "sess-gone-b", 6);
+    await settle(page);
+
+    // Return, but rebuilt with far fewer turns: the saved high-index row is gone.
+    await drive(page, "switchSession", "sess-gone-a", 3);
+    await settle(page, 400);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+    expect((await metricsAfterFrame(page)).bottomDistance).toBeLessThanOrEqual(
+      PIN_FOLLOW_MAX_DISTANCE_PX,
+    );
+  });
 
   test("prepend anchoring: older-history prepend keeps the reading row fixed", async ({
     page,

@@ -248,3 +248,7 @@ reason = "pre-existing non-transcript scroller: model-picker keyboard-nav scroll
 [[transcript_scroll_writer]]
 path = "apps/packages/product-client/src/lib/domain/content-search/chat-row-match-jump.ts"
 reason = "pre-existing non-transcript scroller: content-search row-match jump scrollIntoView; held so no net-new writer is added"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/hooks/chat/ui/transcript-reading-position-store.ts"
+reason = "rung 6 FR-2 restore: single frame writer that re-resolves the estimate-immune reading-position anchor each glued frame and writes the exact scrollTop, avoiding the coarse index-sum estimate's skew"
