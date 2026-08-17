@@ -489,3 +489,7 @@ describe("useTranscriptStickToBottom", () => {
     expect(viewport.scrollTop).toBe(700);
   });
 });
+
+// The submit-stamp / session-identity scoping scenarios (PRO-175) live in
+// ./use-transcript-stick-to-bottom.session-stamp.test.tsx (split out to keep
+// this file under the repo's max-lines threshold).

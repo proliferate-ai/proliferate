@@ -9,6 +9,7 @@ import {
   TRANSCRIPT_USER_SCROLL_SETTLE_MS,
   type TranscriptScrollSample,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
+import { useTranscriptSubmitStampRepin } from "#product/hooks/chat/ui/use-transcript-submit-stamp-repin";
 import { useTranscriptUserScrollIntent } from "#product/hooks/chat/ui/use-transcript-user-scroll-intent";
 
 function interactionNow(): number {
@@ -35,6 +36,16 @@ export interface UseTranscriptStickToBottomOptions {
    * can only lower the stamp and must not re-pin.
    */
   lastPromptSubmittedAtMs?: number | null;
+  /**
+   * Identity of the session/workspace currently mounted (e.g.
+   * `${workspaceId}:${sessionId}`). The row lists never remount across a
+   * session switch, so `lastPromptSubmittedAtMs` alone can't distinguish "a
+   * fresh submit in this session" from "the incoming session's own current
+   * stamp, carried over from a stale prior comparison." A change here
+   * re-baselines the submit-stamp tracking to the incoming session's current
+   * value instead of comparing across the switch.
+   */
+  sessionKey?: string;
 }
 
 export interface TranscriptStickToBottom {
@@ -71,6 +82,7 @@ export function useTranscriptStickToBottom({
   repinThresholdPx = REPIN_BOTTOM_THRESHOLD_PX,
   autoFollowBottomInsetPx = 0,
   lastPromptSubmittedAtMs = null,
+  sessionKey,
 }: UseTranscriptStickToBottomOptions): TranscriptStickToBottom {
   const pinnedRef = useRef(true);
   const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
@@ -290,31 +302,18 @@ export function useTranscriptStickToBottom({
     glueFrameRef.current = requestAnimationFrame(tick);
   }, [scrollRef, scrollToBottom]);
 
-  // A prompt submit is an explicit return-to-bottom intent: re-pin even when
-  // the pin was silently lost earlier (so the sent bubble can never render
-  // clipped behind the dock), snap, and glue across the composer-collapse /
-  // row-measurement settle so the multi-frame geometry change lands as one
-  // silent jump, exactly like session re-entry. Unlike the scroll-to-bottom
-  // button, a submit does NOT consume the manual-only overlay range: the
-  // follow target stays the soft bottom above any dock-slot card, so the
-  // stream never slides under it (a range the user already consumed stays
-  // consumed until they scroll away). Registered after the inset effect above but
-  // before consumer layout effects, so their pinned snaps read the restored
-  // pin. Only a monotonic increase of the submission stamp qualifies — see
-  // the option's contract.
-  const lastPromptSubmittedAtRef = useRef(lastPromptSubmittedAtMs);
-  useLayoutEffect(() => {
-    const previous = lastPromptSubmittedAtRef.current;
-    lastPromptSubmittedAtRef.current = lastPromptSubmittedAtMs;
-    if (
-      lastPromptSubmittedAtMs != null
-      && (previous == null || lastPromptSubmittedAtMs > previous)
-    ) {
-      setPinned(true);
-      scrollToBottom();
-      startGlueLoop();
-    }
-  }, [lastPromptSubmittedAtMs, scrollToBottom, setPinned, startGlueLoop]);
+  // A prompt submit is an explicit return-to-bottom intent (PRO-175 scopes it
+  // to session identity so a session switch can't misfire it) — see
+  // use-transcript-submit-stamp-repin.ts. Registered after the inset effect
+  // above but before consumer layout effects, so their pinned snaps read the
+  // restored pin.
+  useTranscriptSubmitStampRepin({
+    lastPromptSubmittedAtMs,
+    sessionKey,
+    setPinned,
+    scrollToBottom,
+    startGlueLoop,
+  });
 
   // Session re-entry: snap instantly, then glue for a few frames so the
   // measurement backlog of freshly mounted rows (virtualizer estimates

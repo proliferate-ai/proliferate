@@ -16,7 +16,7 @@ import { TranscriptFloatingControls } from "./TranscriptRowListShared";
 import { useAboveChangeCompensation } from "#product/hooks/chat/ui/use-above-change-compensation";
 import { useTranscriptStickToBottom } from "#product/hooks/chat/ui/use-transcript-stick-to-bottom";
 import { VirtualTranscriptViewport } from "./VirtualTranscriptViewport";
-import { useTranscriptVirtualizerBlankFallback } from "#product/hooks/chat/ui/use-transcript-virtualizer-blank-fallback";
+import { PREPEND_BLANK_FALLBACK_GRACE_MS, useTranscriptVirtualizerBlankFallback } from "#product/hooks/chat/ui/use-transcript-virtualizer-blank-fallback";
 import { useTranscriptVirtualAnchorCapture } from "#product/hooks/chat/ui/use-transcript-virtual-anchor-capture";
 import { useTranscriptVirtualMeasurementModel } from "#product/hooks/chat/ui/use-transcript-virtual-measurement-model";
 
@@ -55,6 +55,7 @@ export function VirtualizedTranscriptRowList({
   const lastOlderHistoryCursorRequestRef = useRef<number | null>(null);
   const lastPrefetchDecisionLogRef = useRef<string | null>(null);
   const lastBlankReportSignatureRef = useRef<string | null>(null);
+  const prependSettleUntilRef = useRef(0);
   const {
     structural: structuralBottomInsetPx,
     nonDisplacing: effectiveNonDisplacingBottomInsetPx,
@@ -74,6 +75,7 @@ export function VirtualizedTranscriptRowList({
     onScrollSample,
     autoFollowBottomInsetPx: effectiveNonDisplacingBottomInsetPx,
     lastPromptSubmittedAtMs,
+    sessionKey: `${selectedWorkspaceId ?? ""}:${activeSessionId}`,
   });
   const renderableRows = useMemo(
     () => buildRenderableRows(rows, isLoadingOlderHistory),
@@ -247,6 +249,8 @@ export function VirtualizedTranscriptRowList({
     notifyProgrammaticScroll(() => {
       viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
     });
+    // Open the blank-fallback grace window: the anchor write above lands against the still-estimated short scrollHeight.
+    prependSettleUntilRef.current = (typeof performance === "undefined" ? Date.now() : performance.now()) + PREPEND_BLANK_FALLBACK_GRACE_MS;
   }, [notifyProgrammaticScroll, olderHistoryCursor, rows.length, setPinned]);
 
   useEffect(() => {
@@ -360,7 +364,7 @@ export function VirtualizedTranscriptRowList({
     activeSessionId, bottomSpacerHeight,
     firstVirtualItem, lastVirtualItem,
     lastBlankReportSignatureRef, rowCount: rows.length,
-    onFallback, renderableRowCount: renderableRows.length,
+    onFallback, prependSettleUntilRef, renderableRowCount: renderableRows.length,
     scrollRef, selectedWorkspaceId,
     topSpacerHeight, totalContentHeight,
     virtualItemCount: virtualItems.length,
