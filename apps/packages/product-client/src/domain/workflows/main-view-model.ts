@@ -1,4 +1,5 @@
 import type { WorkflowDefinitionListRowV2 } from "@proliferate/cloud-sdk";
+import type { WorkflowRunV2 } from "@anyharness/sdk";
 
 /**
  * A row as the main list renders it: just what the row shows
@@ -60,6 +61,74 @@ export function selectWorkflowLegacyDefinitionRows(
   rows: readonly WorkflowDefinitionListRowV2[],
 ): WorkflowMainListItem[] {
   return rows.filter((row) => row.schemaVersion !== 2).map(toListItem);
+}
+
+/**
+ * The main page's Executions group: every run this runtime knows about,
+ * newest first, ties broken by id — the same total order
+ * `selectNewestWorkflowRun` (run-selection.ts) resolves a single run with, so
+ * the run the pane would pick is also the run this list puts on top.
+ */
+export function selectWorkflowExecutionRows(
+  runs: readonly WorkflowRunV2[] | undefined,
+): WorkflowRunV2[] {
+  return [...(runs ?? [])].sort((a, b) => {
+    if (a.createdAt !== b.createdAt) {
+      return a.createdAt < b.createdAt ? 1 : -1;
+    }
+    return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+  });
+}
+
+/**
+ * The definition title a run was started from, read out of the run's frozen
+ * `definitionJson`. The contract does not promise a title there today — this
+ * is defensive against it growing one (top-level or nested under
+ * `definition`), the same reading `WorkflowResumePopoverPresenter` documents —
+ * so `null` means "this build has no name for it" and the caller supplies its
+ * own fallback copy.
+ */
+export function workflowRunDefinitionTitle(definitionJson: string): string | null {
+  try {
+    const parsed = JSON.parse(definitionJson) as {
+      title?: unknown;
+      definition?: { title?: unknown };
+    };
+    const candidate = parsed?.title ?? parsed?.definition?.title;
+    return typeof candidate === "string" && candidate.trim().length > 0
+      ? candidate.trim()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * "1m 40s" — the run's wall clock, only once it has one. A run that has not
+ * completed yet has no honest elapsed figure here (the projection polls; the
+ * list does not tick), so this returns `null` rather than a stale count.
+ */
+export function formatWorkflowRunElapsed(
+  run: Pick<WorkflowRunV2, "createdAt" | "completedAt">,
+): string | null {
+  if (!run.completedAt) {
+    return null;
+  }
+  const elapsedMs = Date.parse(run.completedAt) - Date.parse(run.createdAt);
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) {
+    return null;
+  }
+  const totalSeconds = Math.round(elapsedMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+  return `${seconds}s`;
 }
 
 /**

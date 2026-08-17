@@ -141,7 +141,7 @@ describe("WorkflowGraphNodeCard", () => {
   it("fires onFocusSession when the card body is clicked", () => {
     const { onFocusSession } = renderCard({ vm: buildVm() });
 
-    fireEvent.click(rowOf("03 · Research the topic"));
+    fireEvent.click(rowOf("Research the topic"));
 
     expect(onFocusSession).toHaveBeenCalledWith("node-1");
   });
@@ -238,7 +238,9 @@ describe("WorkflowGraphNodeCard", () => {
     const unknownTone = "verifying" as WorkflowNodeTone;
     const { container } = renderCard({ vm: buildVm({ tone: unknownTone }) });
 
-    expect(screen.getByText("03 · Research the topic")).toBeTruthy();
+    expect(screen.getByText("Research the topic")).toBeTruthy();
+    // The chain-index mark renders beside the title, mono and zero-padded.
+    expect(screen.getByText("03").className).toContain("font-mono");
     expect(statusDotOf(container).className).toContain("bg-muted-foreground");
   });
 
@@ -263,10 +265,10 @@ describe("WorkflowGraphNodeCard", () => {
 
   it("gives the current node's title extra weight (structure, not color) instead of the rest", () => {
     renderCard({ vm: buildVm({ isCurrent: true }) });
-    expect(screen.getByText("03 · Research the topic").className).toContain("font-semibold");
+    expect(screen.getByText("Research the topic").className).toContain("font-semibold");
 
     cleanup();
     renderCard({ vm: buildVm({ isCurrent: false }) });
-    expect(screen.getByText("03 · Research the topic").className).not.toContain("font-semibold");
+    expect(screen.getByText("Research the topic").className).not.toContain("font-semibold");
   });
 });
