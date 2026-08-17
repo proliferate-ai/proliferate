@@ -71,10 +71,21 @@ export function SessionTranscriptPane({
   // proven otherwise.
   const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
   const isBackgroundWorkRowVisible = hasBackgroundWork && isPinnedToBottom;
-  // Only reserve the row's height while it is actually shown — scrolled away,
-  // MessageList must fall back to the plain `bottomInsetPx` so no empty
-  // "ghost band" appears while the user is reading history.
-  const messageListBottomInsetPx = isBackgroundWorkRowVisible
+  // Review fix (bgwork R2 round 4, MINOR): the reserve must NOT drop when the
+  // user merely scrolls away — only when the background work itself ends.
+  // Gating the reserve on `isBackgroundWorkRowVisible` (as round 3 did) means
+  // unpinning shrinks `paddingEnd` by `rowHeight` mid-scroll, which
+  // `use-transcript-stick-to-bottom`'s non-user-scroll guard does not cover
+  // (it's keyed only on `autoFollowBottomInsetPx`, not this row's height): a
+  // user scrolling up by X where `nonDisplacing < X < rowHeight` hits
+  // unpin -> scrollHeight shrinks -> the browser clamps scrollTop -> the
+  // resulting scroll event reads as "still moving up" -> the viewport ends
+  // up stranded at distance 0 but unpinned, with no auto-follow until a
+  // manual scroll-to-bottom. The reserve is below the fold and invisible
+  // while unpinned regardless (no ghost band the user can see), so there is
+  // no visual cost to keeping it constant for as long as background work
+  // exists — only the row's render/anchor needs to react to pin state.
+  const messageListBottomInsetPx = hasBackgroundWork
     ? bottomInsetPx + backgroundWorkRowHeightPx
     : bottomInsetPx;
   const { rehydrateSessionSlotFromHistory } = useSessionHistoryHydration();
@@ -320,14 +331,30 @@ export function SessionTranscriptPane({
           Fix round 4: round 2/3's anchor fix only addressed the AT-BOTTOM
           case — scrolled away, the row (still `position: absolute` in this
           static-height wrapper) floated over arbitrary mid-transcript
-          content, since it never tracked scroll. Now gated on
-          `isBackgroundWorkRowVisible` (`hasBackgroundWork &&
-          isPinnedToBottom`): both the row's render and the extra reserved
-          height drop out together the moment the user scrolls away, so no
-          ghost band survives either. `isPinnedToBottom` is the SAME state
-          the stick-to-bottom engine already computes for the in-list
-          scroll-to-bottom button — reported upward through
-          `onIsPinnedToBottomChange` rather than a second scroll listener.
+          content, since it never tracked scroll. The row's render/anchor is
+          gated on `isBackgroundWorkRowVisible` (`hasBackgroundWork &&
+          isPinnedToBottom`), reported upward through
+          `onIsPinnedToBottomChange` (the SAME state the stick-to-bottom
+          engine already computes for the in-list scroll-to-bottom button —
+          no second scroll listener).
+          Fix round 5 (MINOR, corrects round 4): round 4 also dropped the
+          extra reserved height whenever the row hid, keyed on the SAME
+          `isBackgroundWorkRowVisible` flag as the row itself. That shrinks
+          `paddingEnd` mid-scroll purely from unpinning — a case
+          `use-transcript-stick-to-bottom`'s non-user-scroll guard does not
+          cover (it is keyed only on `autoFollowBottomInsetPx`, unaware of
+          this row's height): a user scrolling up by an amount between the
+          composer's nonDisplacing zone and the row's height can hit
+          unpin -> scrollHeight shrinks -> the browser clamps `scrollTop` ->
+          the resulting scroll event reads as "still moving up" -> the
+          viewport ends up stranded at zero distance from bottom but
+          unpinned, with no auto-follow until a manual scroll-to-bottom. The
+          reserved band sits below the fold and is invisible while unpinned
+          regardless (no ghost the user can see), so there is no visual cost
+          to keeping `MessageList`'s inset augmented for as long as
+          background work exists — see `messageListBottomInsetPx` above,
+          which now keys on `hasBackgroundWork` alone. Only the row's own
+          render/anchor still reacts to `isPinnedToBottom`.
           This still does not achieve the handoff's literal "last row of the
           transcript column" in-scroll placement (an actual virtualized row)
           — that remains out of this rung's scope; see the PR body. */}

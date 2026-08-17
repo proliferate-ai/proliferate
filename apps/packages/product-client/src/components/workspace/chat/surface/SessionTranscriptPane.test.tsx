@@ -306,14 +306,24 @@ describe("SessionTranscriptPane background-work row (carried R1 items)", () => {
     expect(screen.queryByTestId("background-work-row-anchor")).toBeNull();
   });
 
-  // Review round 3: a floating row that stays visible while the user has
+  // Review round 3/4: a floating row that stays visible while the user has
   // scrolled away from the bottom paints over arbitrary mid-transcript
-  // content — not acceptable, per review. The row must hide (and its extra
-  // reserved height must drop) the instant the transcript is no longer
-  // pinned to bottom, reusing the SAME `isPinnedToBottom` signal the stick-
-  // to-bottom engine already computes (reported here via the mocked
-  // MessageList's `onIsPinnedToBottomChange`, standing in for a real scroll).
-  it("hides the row and drops its reserved height the instant the transcript scrolls away from the bottom, then restores both on return to bottom", () => {
+  // content — not acceptable, per review. The row must hide the instant the
+  // transcript is no longer pinned to bottom, reusing the SAME
+  // `isPinnedToBottom` signal the stick-to-bottom engine already computes
+  // (reported here via the mocked MessageList's `onIsPinnedToBottomChange`,
+  // standing in for a real scroll).
+  //
+  // Review round 5 (MINOR, corrects round 4): the RESERVE must NOT drop when
+  // merely unpinned — only `MessageList`'s own paddingEnd shrinking
+  // mid-scroll from unpinning alone can strand the viewport at zero
+  // distance-from-bottom but unpinned, since the stick-to-bottom engine's
+  // non-user-scroll guard is keyed only on `autoFollowBottomInsetPx`, not
+  // this row's height. The reserved band is below the fold and invisible
+  // while unpinned regardless, so the inset stays augmented for as long as
+  // background work EXISTS; only the row's own render/anchor reacts to pin
+  // state.
+  it("hides the row (but keeps the reserved inset) the instant the transcript scrolls away from the bottom, then restores the row on return to bottom", () => {
     backgroundWorkMocks.rowCounts = { runningCount: 1, finishedCount: 0 };
     const rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
       height: 32,
@@ -334,15 +344,50 @@ describe("SessionTranscriptPane background-work row (carried R1 items)", () => {
       expect(screen.getByTestId("background-work-row-anchor")).toBeTruthy();
       expect(screen.getByTestId("message-list").getAttribute("data-bottom-inset-px")).toBe("96");
 
-      // Scrolled away: row disappears, and NO ghost band survives in the inset.
+      // Scrolled away: only the row disappears — the reserve stays augmented
+      // (it's below the fold, invisible while unpinned, and must not shrink
+      // paddingEnd mid-scroll purely from unpinning).
       fireEvent.click(screen.getByTestId("simulate-scroll-away"));
       expect(screen.queryByTestId("background-work-row-anchor")).toBeNull();
-      expect(screen.getByTestId("message-list").getAttribute("data-bottom-inset-px")).toBe("64");
+      expect(screen.getByTestId("message-list").getAttribute("data-bottom-inset-px")).toBe("96");
 
-      // Back to bottom: row and its reserved height both come back.
+      // Back to bottom: the row reappears; the inset was never disturbed.
       fireEvent.click(screen.getByTestId("simulate-scroll-to-bottom"));
       expect(screen.getByTestId("background-work-row-anchor")).toBeTruthy();
       expect(screen.getByTestId("message-list").getAttribute("data-bottom-inset-px")).toBe("96");
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
+
+  it("drops the reserved inset to the plain bottomInsetPx only when background work itself ends, even while unpinned", () => {
+    backgroundWorkMocks.rowCounts = { runningCount: 1, finishedCount: 0 };
+    const rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      height: 32,
+      width: 0,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    try {
+      beginDeferredColdOpen();
+      const { rerender } = render(
+        <SessionTranscriptPane bottomInsetPx={64} nonDisplacingBottomInsetPx={8} />,
+      );
+
+      fireEvent.click(screen.getByTestId("simulate-scroll-away"));
+      expect(screen.getByTestId("message-list").getAttribute("data-bottom-inset-px")).toBe("96");
+
+      // Background work itself ends (independent of pin state): the reserve
+      // must drop back to the plain bottomInsetPx — no ghost band.
+      backgroundWorkMocks.rowCounts = { runningCount: 0, finishedCount: 0 };
+      rerender(<SessionTranscriptPane bottomInsetPx={64} nonDisplacingBottomInsetPx={8} />);
+      expect(screen.getByTestId("message-list").getAttribute("data-bottom-inset-px")).toBe("64");
+      expect(screen.queryByTestId("background-work-row-anchor")).toBeNull();
     } finally {
       rectSpy.mockRestore();
     }
