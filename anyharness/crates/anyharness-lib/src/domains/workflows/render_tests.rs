@@ -282,3 +282,35 @@ fn node_session_title_clips_to_the_session_title_cap() {
     assert!(title.starts_with("01 x"));
     assert!(title.ends_with('\u{2026}'));
 }
+
+/// R3 invariant: rendered against a run-scoped context dir (the layout the
+/// engine actually resolves — `run_context_dir_relative`), every doc path in
+/// the first message AND every path in the preamble carries the run id, so
+/// concurrent runs' sessions can never be pointed at each other's docs.
+#[test]
+fn rendered_prompt_and_preamble_paths_are_run_scoped() {
+    let docs = vec![doc("plan-doc", "00-plan-doc.md"), doc("notes", "notes.md")];
+    let context_dir = Path::new("/ws").join(super::render::run_context_dir_relative("run-1"));
+    let envelope = render_envelope(&RenderInputs {
+        node_type: WorkflowNodeType::Agent,
+        prompt: "update @doc:plan-doc and @doc:notes",
+        mode: ResolveMode::Strict,
+        arguments: &arguments(&[]),
+        docs: &docs,
+        context_dir: &context_dir,
+    })
+    .expect("render");
+    assert_eq!(
+        envelope.first_message,
+        "update /ws/.proliferate/context/run-1/00-plan-doc.md and /ws/.proliferate/context/run-1/notes.md"
+    );
+    let preamble = &envelope.instruction_blocks[0];
+    for line in preamble.lines().filter(|line| line.contains(".proliferate/context")) {
+        assert!(
+            line.contains("/.proliferate/context/run-1"),
+            "every preamble context path must be run-scoped, got: {line}"
+        );
+    }
+    assert!(preamble.contains("/ws/.proliferate/context/run-1/00-plan-doc.md"));
+    assert!(preamble.contains("/ws/.proliferate/context/run-1/notes.md"));
+}

@@ -56,7 +56,7 @@ import type { PlannedCellV1 } from "../runner/result.js";
  *    placement}` materializes a workspace and starts node 1.
  * 2. The agent node's session prompt honors the runtime's wrapped preamble
  *    (assert the wrapper's presence, not its exact text).
- * 3. The findings doc materializes as a REAL file under `.proliferate/context/`
+ * 3. The findings doc materializes as a REAL file under `.proliferate/context/<run_id>/`
  *    in the materialized workspace.
  * 4. The run parks at the human gate: `run.status === "awaiting_human"`, the
  *    gate node is `awaiting_human`, and it HOLDS — no auto-advance.
@@ -89,7 +89,7 @@ export const t3Wf1: MatrixScenarioDefinition = {
     },
     {
       description:
-        `[${cell.cell_id}] the findings doc materializes as a real file under .proliferate/context/ in the ` +
+        `[${cell.cell_id}] the findings doc materializes as a real file under .proliferate/context/<run_id>/ in the ` +
         "materialized workspace",
     },
     {
@@ -383,7 +383,7 @@ async function runResearchAndReviewJourney(
     const workspaces = await runtime.listWorkspaces();
     const workspace = workspaces.find((candidate) => candidate.id === projection.run.workspaceId);
     assert.ok(workspace, "T3-WF-1: the materialized workspace must still be resolvable by id");
-    const docPath = path.join(workspace!.path, ".proliferate", "context", findingsDoc!.filename);
+    const docPath = path.join(workspace!.path, ".proliferate", "context", runId, findingsDoc!.filename);
     const docContent = await readFile(docPath, "utf8");
     assert.ok(docContent.trim().length > 0, `T3-WF-1: the findings doc must be a real, non-empty file at ${docPath}`);
 

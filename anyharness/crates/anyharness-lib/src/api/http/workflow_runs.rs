@@ -400,9 +400,11 @@ pub async fn put_workflow_run(
         let doc_count = planned_docs.len();
         let templates = snapshot.definition.doc_templates.clone();
         let workspace_path = placed.workspace.path.clone();
+        let materialize_run_id = run_id.clone();
         let materialized = run_blocking("workflow_run_materialize", move || {
             materialize_planned_context(
                 std::path::Path::new(&workspace_path),
+                &materialize_run_id,
                 &planned_docs,
                 &templates,
             )
