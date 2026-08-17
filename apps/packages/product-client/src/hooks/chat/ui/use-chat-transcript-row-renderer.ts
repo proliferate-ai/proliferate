@@ -75,6 +75,7 @@ export function useChatTranscriptRowRenderer({
         outboxEntry: target.outboxEntry,
         optimisticTrailingStatus: optimisticPromptTrailingStatus,
         outboxActions,
+        sessionViewState,
       });
     }
 
@@ -147,6 +148,7 @@ export function useChatTranscriptRowRenderer({
     outboxActions,
     renderPendingPromptRow,
     selectedWorkspaceId,
+    sessionViewState,
     transcript.linkCompletionsByCompletionId,
     visibleOptimisticPrompt,
     visibleOutboxEntries,

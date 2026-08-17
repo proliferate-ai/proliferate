@@ -2,6 +2,7 @@
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
+import { resolveSessionViewState } from "#product/domain/sessions/activity";
 import { useHotWorkspaceReconcileAction } from "#product/hooks/workspaces/workflows/use-hot-workspace-reconcile-action";
 import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useSessionIngestStore } from "#product/stores/sessions/session-ingest-store";
@@ -27,11 +28,16 @@ const sessionMeta = {
   dismissedAt: null,
 } as unknown as WorkspaceSession;
 
-function renderReconcile(rehydrate: ReturnType<typeof vi.fn>) {
+function renderReconcile(
+  rehydrate: ReturnType<typeof vi.fn>,
+  applySessionSummary = vi.fn(),
+  sessions: WorkspaceSession[] = [sessionMeta],
+) {
   const { result } = renderHook(() =>
     useHotWorkspaceReconcileAction({
+      applySessionSummary,
       cancelDeferredFileTreePrefetch: vi.fn(),
-      loadWorkspaceSessions: vi.fn(async () => [sessionMeta]),
+      loadWorkspaceSessions: vi.fn(async () => sessions),
       prepareFileWorkspace: vi.fn(),
       rehydrateSessionSlotFromHistory: rehydrate,
       scheduleDeferredFileTreePrefetch: vi.fn(),
@@ -120,6 +126,60 @@ describe("useHotWorkspaceReconcileAction transcript hydration", () => {
     expect(outcome).toBe("completed");
     expect(rehydrate).toHaveBeenCalledTimes(2);
     expect(rehydrate.mock.calls[1]?.[1]).toMatchObject({ replace: true });
+    expect(getSessionRecord(SESSION_ID)?.transcriptHydrated).toBe(true);
+  });
+
+  it("keeps failed large-history recovery retryable after applying terminal authority", async () => {
+    const current = getSessionRecord(SESSION_ID)!;
+    patchSessionRecord(SESSION_ID, {
+      status: "running",
+      executionSummary: {
+        phase: "running",
+        hasLiveHandle: true,
+        pendingInteractions: [],
+        updatedAt: "2026-08-17T21:56:47Z",
+      },
+      transcript: {
+        ...current.transcript,
+        isStreaming: true,
+      },
+      transcriptHydrated: false,
+    });
+    const terminalSession = {
+      ...sessionMeta,
+      status: "idle",
+      executionSummary: {
+        phase: "idle",
+        hasLiveHandle: false,
+        pendingInteractions: [],
+        updatedAt: "2026-08-17T21:59:22Z",
+      },
+    } as WorkspaceSession;
+    const applySessionSummary = vi.fn((clientSessionId: string, session: WorkspaceSession) => {
+      patchSessionRecord(clientSessionId, {
+        status: session.status,
+        executionSummary: session.executionSummary,
+      });
+    });
+    const rehydrate = vi.fn(async () => false);
+
+    const reconcile = renderReconcile(
+      rehydrate,
+      applySessionSummary,
+      [terminalSession],
+    );
+    const outcome = await reconcile(reconcileInput());
+
+    expect(outcome).toBe("completed");
+    expect(applySessionSummary).toHaveBeenCalledWith(
+      SESSION_ID,
+      terminalSession,
+      WORKSPACE_ID,
+    );
+    expect(rehydrate).toHaveBeenCalledTimes(2);
+    expect(rehydrate.mock.calls[1]?.[1]).toMatchObject({ replace: true });
+    expect(getSessionRecord(SESSION_ID)?.transcriptHydrated).toBe(false);
+    expect(resolveSessionViewState(getSessionRecord(SESSION_ID))).toBe("idle");
   });
 
   it("never trusts a slot that was not transcript-hydrated, even with a live stream", async () => {

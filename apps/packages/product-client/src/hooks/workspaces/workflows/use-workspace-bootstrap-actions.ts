@@ -78,10 +78,7 @@ export function useWorkspaceBootstrapActions() {
   const lastViewedSessionByWorkspace = useWorkspaceUiStore(
     (state) => state.lastViewedSessionByWorkspace,
   );
-  const {
-    prepareFileWorkspace,
-    prefetchWorkspaceDirectories,
-  } = useWorkspaceFileActions();
+  const { prepareFileWorkspace, prefetchWorkspaceDirectories } = useWorkspaceFileActions();
   const { createEmptySessionWithResolvedConfig } = useSessionCreationActions();
   const { rehydrateSessionSlotFromHistory } = useSessionHistoryHydration();
   const { applySessionSummary } = useSessionSummaryActions();
@@ -93,6 +90,7 @@ export function useWorkspaceBootstrapActions() {
     prefetchWorkspaceDirectories,
   });
   const reconcileHotWorkspace = useHotWorkspaceReconcileAction({
+    applySessionSummary,
     cancelDeferredFileTreePrefetch,
     loadWorkspaceSessions,
     prepareFileWorkspace,

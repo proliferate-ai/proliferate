@@ -166,7 +166,10 @@ export function SessionTranscriptPane({
           && state.activeSessionId === activeSessionId
           && state.selectedWorkspaceId === workspaceIdAtStart;
       },
-    }).finally(() => {
+    }).then((hydrated) => {
+      if (!hydrated) {
+        return;
+      }
       const state = useSessionSelectionStore.getState();
       if (
         state.workspaceSelectionNonce === selectionNonce

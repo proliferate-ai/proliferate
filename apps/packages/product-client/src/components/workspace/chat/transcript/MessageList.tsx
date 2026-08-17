@@ -277,6 +277,7 @@ export function MessageList({
       outboxEntry={input.outboxEntry}
       optimisticTrailingStatus={input.optimisticTrailingStatus}
       outboxActions={input.outboxActions}
+      sessionViewState={input.sessionViewState}
       workspaceReceipt={input.row.hostsWorkspaceReceipt ? <WorkspaceCreationReceipt /> : null}
     />
   ), []);
