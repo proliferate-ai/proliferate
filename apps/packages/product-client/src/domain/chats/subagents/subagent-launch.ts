@@ -2,6 +2,7 @@ import type {
   ToolBackgroundWorkMetadata,
   ToolCallItem,
   ToolResultTextContentPart,
+  TranscriptState,
 } from "@anyharness/sdk";
 import { parseToolBackgroundWork } from "@anyharness/sdk";
 
@@ -12,6 +13,30 @@ export type SubagentExecutionState =
   | "expired_background"
   | "completed"
   | "failed";
+
+/**
+ * Execution states whose `formatLaunchStatus` label used to render as a
+ * muted status line inside `SubagentLaunchLedger`'s transcript row
+ * (`Creating` / `Running in background` / `Completed in background`). The
+ * handoff's MODIFIED `SubagentLaunchLedger` entry (Delivery Spec —
+ * Background Work Slice 1, rung R4) retires all three: the creation chip and
+ * the command row's own trailing slot already carry that state, and the
+ * prompt disclosure this row used to gate on moves to `BackgroundSubagentView`.
+ * `formatLaunchStatus` itself is unchanged — only these transcript call sites
+ * go.
+ */
+const TRANSCRIPT_SUPPRESSED_LAUNCH_STATES: ReadonlySet<SubagentExecutionState> = new Set([
+  "running",
+  "background",
+  "completed_background",
+]);
+
+/** Whether `SubagentLaunchLedger` should render its status line in the transcript. */
+export function isSubagentLaunchStatusVisibleInTranscript(
+  executionState: SubagentExecutionState,
+): boolean {
+  return !TRANSCRIPT_SUPPRESSED_LAUNCH_STATES.has(executionState);
+}
 
 export interface AsyncSubagentLaunch {
   rawText: string;
@@ -93,6 +118,33 @@ export function resolveSubagentLaunchDisplay(
     meta: null,
     prompt,
   };
+}
+
+/**
+ * Finds the parent transcript's native Agent/Task launch tool call for a
+ * harness-native subagent id (the activity roster's `ActivitySubagentWire.id`
+ * — Claude's Task `agentId`). Reuses the one existing tool-call correlation
+ * in this repo, `ToolBackgroundWorkMetadata.agentId` (see
+ * `@anyharness/sdk`'s `parseToolBackgroundWork`), which `trackerKind:
+ * "claude_async_agent"` scopes to Claude's async launch receipts specifically.
+ * Other harnesses have no equivalent correlation yet, so this returns null
+ * for them — `BackgroundSubagentView` treats a missing item the same as "no
+ * initial prompt available," the same graceful fallback
+ * `SubagentLaunchLedger` already used for an absent prompt.
+ */
+export function findSubagentLaunchItem(
+  transcript: TranscriptState,
+  subagentId: string,
+): ToolCallItem | null {
+  for (const item of Object.values(transcript.itemsById)) {
+    if (item.kind !== "tool_call") {
+      continue;
+    }
+    if (parseToolBackgroundWork(item.rawOutput)?.agentId === subagentId) {
+      return item;
+    }
+  }
+  return null;
 }
 
 export function parseAsyncSubagentLaunch(

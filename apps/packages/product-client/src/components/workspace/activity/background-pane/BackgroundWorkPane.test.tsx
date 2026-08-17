@@ -80,6 +80,7 @@ vi.mock("#product/components/workspace/activity/AgentsRosterPanel", () => ({
     onOpen,
   }: {
     agents: ActivitySubagentWire[];
+    workspaceId: string;
     onOpen?: (id: string) => void;
   }) => (
     <div data-testid="agents-roster-panel">
@@ -94,6 +95,25 @@ vi.mock("#product/components/workspace/activity/AgentsRosterPanel", () => ({
           {agent.id}
         </div>
       ))}
+    </div>
+  ),
+}));
+vi.mock("#product/components/workspace/activity/background-pane/BackgroundSubagentView", () => ({
+  BackgroundSubagentView: ({
+    subagent,
+    onBack,
+  }: {
+    subagent: ActivitySubagentWire;
+    onBack: () => void;
+  }) => (
+    <div
+      data-testid="background-subagent-view"
+      data-subagent-id={subagent.id}
+      data-feed-enabled={String(subagent.feed !== null)}
+    >
+      <button type="button" onClick={onBack}>
+        Back to background work
+      </button>
     </div>
   ),
 }));
@@ -208,7 +228,7 @@ describe("BackgroundWorkPane", () => {
     expect(container.querySelectorAll("select").length).toBe(0);
   });
 
-  it("opening a subagent replaces the roster with the R4 placeholder seam, and back returns", () => {
+  it("opening a subagent replaces the roster with the real BackgroundSubagentView, and back returns", () => {
     sessionActivity = {
       loops: [],
       loopCapabilities: { supported: false, native: false },
@@ -219,15 +239,69 @@ describe("BackgroundWorkPane", () => {
 
     fireEvent.click(screen.getByTestId("open-subagent-agent-42"));
 
-    const seam = document.querySelector("[data-background-work-subagent-seam]");
-    expect(seam).not.toBeNull();
-    expect(seam?.getAttribute("data-subagent-id")).toBe("agent-42");
+    const view = screen.getByTestId("background-subagent-view");
+    expect(view.getAttribute("data-subagent-id")).toBe("agent-42");
     expect(screen.queryByTestId("agents-roster-panel")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Back to background work" }));
 
-    expect(document.querySelector("[data-background-work-subagent-seam]")).toBeNull();
+    expect(screen.queryByTestId("background-subagent-view")).toBeNull();
     expect(screen.getByTestId("agents-roster-panel")).toBeTruthy();
+  });
+
+  it("bounces back to the roster once a viewed subagent leaves it (finished)", () => {
+    sessionActivity = {
+      loops: [],
+      loopCapabilities: { supported: false, native: false },
+      processes: [],
+      agents: [makeAgent({ id: "agent-42" })],
+    };
+    const { rerender } = render(
+      <BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />,
+    );
+
+    fireEvent.click(screen.getByTestId("open-subagent-agent-42"));
+    expect(screen.getByTestId("background-subagent-view")).toBeTruthy();
+
+    // Subagents leave the roster the instant they finish (unlike processes),
+    // so the next activity snapshot simply omits it.
+    sessionActivity = { ...sessionActivity, agents: [] };
+    rerender(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />);
+
+    expect(screen.queryByTestId("background-subagent-view")).toBeNull();
+    expect(screen.getByTestId("agents-roster-panel")).toBeTruthy();
+  });
+
+  it("disables the subagent feed while the right panel is collapsed, and re-enables it on reopen", () => {
+    sessionActivity = {
+      loops: [],
+      loopCapabilities: { supported: false, native: false },
+      processes: [],
+      agents: [
+        makeAgent({ id: "agent-live", feed: { feedId: "feed-2", kind: "transcript" } }),
+      ],
+    };
+    const { rerender } = render(
+      <BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />,
+    );
+
+    fireEvent.click(screen.getByTestId("open-subagent-agent-live"));
+    expect(
+      screen.getByTestId("background-subagent-view").getAttribute("data-feed-enabled"),
+    ).toBe("true");
+
+    rerender(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen={false} />);
+
+    expect(screen.getByTestId("background-subagent-view")).toBeTruthy();
+    expect(
+      screen.getByTestId("background-subagent-view").getAttribute("data-feed-enabled"),
+    ).toBe("false");
+
+    rerender(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />);
+
+    expect(
+      screen.getByTestId("background-subagent-view").getAttribute("data-feed-enabled"),
+    ).toBe("true");
   });
 
   it("opening a terminal process replaces the roster with the real BackgroundTerminalView, and back returns", () => {
@@ -298,11 +372,11 @@ describe("BackgroundWorkPane", () => {
     );
 
     fireEvent.click(screen.getByTestId("open-subagent-agent-99"));
-    expect(document.querySelector("[data-background-work-subagent-seam]")).not.toBeNull();
+    expect(screen.getByTestId("background-subagent-view")).toBeTruthy();
 
     rerender(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-2" isOpen />);
 
-    expect(document.querySelector("[data-background-work-subagent-seam]")).toBeNull();
+    expect(screen.queryByTestId("background-subagent-view")).toBeNull();
   });
 
   it("closes the terminal detail seam when the session id changes", () => {

@@ -22,6 +22,7 @@ import {
   resolveSubagentExecutionState,
   resolveSubagentLaunchDisplay,
   isSubagentExecutionStateRunning,
+  isSubagentLaunchStatusVisibleInTranscript,
   isSubagentWorkComplete,
 } from "#product/domain/chats/subagents/subagent-launch";
 import {
@@ -61,8 +62,12 @@ export function TranscriptAgentGroupBlock({
   const [expanded, setExpanded] = useState(false);
   const [workExpanded, setWorkExpanded] = useState(false);
 
+  // The initial prompt this display used to surface is no longer shown
+  // inline (Design Handoff — MODIFIED `SubagentLaunchLedger`; Delivery Spec
+  // — Background Work Slice 1, rung R4): it moved to
+  // `BackgroundSubagentView`'s dedicated "Initial prompt" panel, reached via
+  // the activity roster, not this transcript group.
   const subagentDisplay = resolveSubagentLaunchDisplay(item);
-  const normalizedPrompt = subagentDisplay.prompt?.trim() ?? "";
 
   // Only ever surface the structured `rawOutput.summary` — the clean result
   // the parent agent received. NEVER the raw tool_result_text content parts:
@@ -92,7 +97,7 @@ export function TranscriptAgentGroupBlock({
   const shouldShowDescription = description.length > 0
     && description.toLowerCase() !== "subagent";
   const hasWork = childIds.length > 0;
-  const hasLaunchLedger = !!normalizedPrompt;
+  const hasLaunchLedger = isSubagentLaunchStatusVisibleInTranscript(executionState);
   const hasBodyContent = hasWork || hasLaunchLedger || !!normalizedAgentResult;
   // The activity roster is a session-level summary. This durable transcript
   // item is the canonical place to inspect the native subagent's nested work.
@@ -152,10 +157,7 @@ export function TranscriptAgentGroupBlock({
 
       {expanded && hasBodyContent && <div className="ml-1 border-l border-border/70 pl-2">
         {hasLaunchLedger && (
-          <SubagentLaunchLedger
-            prompt={normalizedPrompt || null}
-            executionState={executionState}
-          />
+          <SubagentLaunchLedger executionState={executionState} />
         )}
 
         {hasWork && (

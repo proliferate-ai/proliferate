@@ -1,5 +1,8 @@
+// @vitest-environment jsdom
+
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import {
   createTranscriptState,
   reduceEvents,
@@ -9,7 +12,7 @@ import type {
   ToolCallItem,
   TranscriptState,
 } from "@anyharness/sdk";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildTurnPresentation,
 } from "#product/domain/chats/transcript/transcript-presentation";
@@ -96,6 +99,77 @@ const fixtures = {
   claude: claudeFixtureJson as unknown as NativeSubagentFixture,
   codex: codexFixtureJson as unknown as NativeSubagentFixture,
 };
+
+afterEach(cleanup);
+
+describe("TranscriptAgentGroupBlock muted status lines", () => {
+  // Design Handoff — MODIFIED `SubagentLaunchLedger`; Delivery Spec —
+  // Background Work Slice 1, rung R4, acceptance line 52: "the two muted
+  // transcript status lines no longer render." (A third — `Creating` — was
+  // also retired; see the handoff's exact three-state list.)
+  it("never shows Creating/Running in background/Completed in background once expanded", () => {
+    const transcript = createTranscriptState("session-1");
+    const item: ToolCallItem = {
+      ...toolItem("native-task", "turn-1", 1, "subagent", "completed"),
+      title: "Inspect the repository",
+      nativeToolName: "Task",
+      rawInput: { run_in_background: true, prompt: "Inspect the transcript pipeline" },
+      rawOutput: {
+        isAsync: true,
+        agentId: "agent-1",
+        outputFile: "/tmp/task.output",
+        _anyharness: { backgroundWork: { trackerKind: "claude_async_agent", state: "pending" } },
+      },
+    };
+    const childItem: ToolCallItem = toolItem("child-tool", "turn-1", 2, "other", "completed");
+    transcript.itemsById[item.itemId] = item;
+    transcript.itemsById[childItem.itemId] = childItem;
+
+    const { getByText, container } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [childItem.itemId],
+        transcript,
+        childrenByParentId: new Map([[item.itemId, [childItem.itemId]]]),
+        renderChild: () => null,
+      }),
+    );
+
+    fireEvent.click(getByText("Creating subagent"));
+
+    // The header verb itself is allowed to read "Creating subagent" — it is
+    // the retired *status line* (rendered on its own, muted, below the
+    // header) that must be gone.
+    expect(container.textContent).not.toContain("Running in background");
+    expect(container.textContent).not.toContain("Completed in background");
+    expect(container.textContent).not.toContain("View initial prompt");
+  });
+
+  it("still shows the non-retired status lines (e.g. Launch failed) once expanded", () => {
+    const transcript = createTranscriptState("session-1");
+    const item: ToolCallItem = {
+      ...toolItem("native-task-failed", "turn-1", 1, "subagent", "failed"),
+      title: "Inspect the repository",
+      nativeToolName: "Task",
+      rawInput: { prompt: "Inspect the transcript pipeline" },
+    };
+    transcript.itemsById[item.itemId] = item;
+
+    const { getByText } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [],
+        transcript,
+        childrenByParentId: new Map(),
+        renderChild: () => null,
+      }),
+    );
+
+    fireEvent.click(getByText("Subagent launch failed"));
+
+    expect(getByText("Launch failed")).not.toBeNull();
+  });
+});
 
 describe.each(["in_progress", "completed"] as const)(
   "TranscriptAgentGroupBlock %s",
