@@ -8,6 +8,7 @@
     "core:default",
     "core:event:default",
     "core:window:allow-hide",
+    "core:window:allow-set-theme",
     "core:window:allow-start-dragging",
     "deep-link:default",
     "opener:default",

@@ -155,7 +155,11 @@ marker; CSS hiding is not a substitute for not mounting native behavior.
 Desktop-only product lifecycles include local runtime UI, local automation,
 worker enrollment tied to product auth, updater watching/presentation, native
 menu command handling, local-agent credential synchronization, SSH/tunnel UI,
-and native support/diagnostic collection.
+and native support/diagnostic collection. Host-owned window-lifetime behavior,
+including native appearance synchronization, is installed by the Desktop entry
+instead of crossing the product bridge. Native appearance follows the hydrated
+selected color mode: explicit light or dark modes set an AppKit override, while
+system mode clears the override so AppKit continues following the OS.
 
 ### Application-entry contract
 

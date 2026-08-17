@@ -19,10 +19,6 @@ import {
 export const COLOR_MODES = ["dark", "light", "system"] as const;
 export type ColorMode = (typeof COLOR_MODES)[number];
 
-function isValidMode(v: string | null | undefined): v is ColorMode {
-  return COLOR_MODES.includes(v as ColorMode);
-}
-
 // ---------------------------------------------------------------------------
 // Resolve "system" to actual dark/light
 // ---------------------------------------------------------------------------
@@ -137,10 +133,7 @@ export function getResolvedMode(): "dark" | "light" {
     // Theme-aware consumers can be imported in non-DOM test contexts.
     return "dark";
   }
-  const mode = document.documentElement.dataset.mode;
-  return isValidMode(mode)
-    ? (mode === "system" ? "dark" : mode)
-    : "dark";
+  return document.documentElement.dataset.mode === "light" ? "light" : "dark";
 }
 
 export function getTerminalTheme(): Record<string, string> {
