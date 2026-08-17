@@ -315,24 +315,29 @@ fn scan_for_needles(dir: &std::path::Path, needles: &[String], offenders: &mut V
 /// **Trial-verified rows survive the observation's silence**, against the real
 /// catalog and the real probe fixture.
 ///
-/// `claude.anthropic-api.probe.json` advertises exactly four selectors (`default`,
-/// `sonnet`, `haiku`, `opus[1m]`) while the shipped catalog carries `claude-fable-5`
-/// and `claude-opus-4-8` for that same auth as `viaTrialOnly` — the pipeline
-/// verified them by launching them, *because* the harness does not list them. A plain
-/// observation-first refusal would refuse launches that provably work; the exemption
-/// is what makes the strict reading safe.
+/// `claude.anthropic-api.probe.json` (harness 2.1.233) advertises exactly five
+/// selectors (`default`, `opus[1m]`, `sonnet`, `haiku`, and `claude-opus-4-8` —
+/// the last as "Newer version available · select Opus for Opus 5") while the
+/// shipped catalog additionally carries `claude-fable-5` for that same auth as
+/// `viaTrialOnly` — the pipeline verified it by launching it, *because* the
+/// harness does not list it. A plain observation-first refusal would refuse a
+/// launch that provably works; the exemption is what makes the strict reading
+/// safe. `claude-opus-4-8` graduated OUT of the exemption when 2.1.233 began
+/// listing it directly: it launches via the observed path, and its flag is
+/// pinned `false` below so a future catalog cannot silently re-enroll it.
 ///
-/// The first assertion pins the catalog fact the exemption depends on, so this fails
-/// loudly if a future catalog drops the flag rather than silently changing behavior.
+/// The first assertions pin the catalog facts the exemption depends on, so this
+/// fails loudly if a future catalog drops or re-adds a flag rather than
+/// silently changing behavior.
 #[test]
 fn trial_verified_models_stay_launchable_against_the_real_probe_fixture() {
     let catalog = draft_catalog();
     let active = contexts(&["anthropic-api"]);
     // Exactly what the real fixture advertises.
-    let universe = observed(&["default", "opus[1m]", "sonnet", "haiku"]);
+    let universe = observed(&["default", "opus[1m]", "sonnet", "haiku", "claude-opus-4-8"]);
 
     let agent = catalog.agent("claude").expect("claude");
-    for id in ["claude-fable-5", "claude-opus-4-8"] {
+    for (id, trial_only) in [("claude-fable-5", true), ("claude-opus-4-8", false)] {
         let model = agent
             .session
             .models
@@ -344,9 +349,11 @@ fn trial_verified_models_stay_launchable_against_the_real_probe_fixture() {
                 .provenance
                 .as_ref()
                 .and_then(|provenance| provenance.via_trial_only),
-            Some(true),
-            "{id} must be marked viaTrialOnly, or the exemption below does not apply \
-             and this launch legitimately regresses"
+            Some(trial_only),
+            "{id} viaTrialOnly must match the 2.1.233 probe fixture (fable-5 is \
+             trial-verified because the harness does not list it; opus-4-8 is \
+             listed directly), or the exemption below is mis-scoped and a launch \
+             legitimately regresses"
         );
         let selection = catalog
             .validate_launch_in_universe("claude", &active, Some(id), None, &universe)
@@ -355,7 +362,7 @@ fn trial_verified_models_stay_launchable_against_the_real_probe_fixture() {
     }
 
     // Against the real catalog, every `anthropic-api` model is either one of the
-    // fixture's four observed selectors or `viaTrialOnly`. This asserts that set is
+    // fixture's five observed selectors or `viaTrialOnly`. This asserts that set is
     // empty, not merely convenient — a future catalog addition that is neither
     // observed nor trial-flagged would silently skip the refusal check instead
     // of failing loudly, so the emptiness itself is pinned first.
@@ -374,7 +381,8 @@ fn trial_verified_models_stay_launchable_against_the_real_probe_fixture() {
                     .as_ref()
                     .and_then(|provenance| provenance.via_trial_only)
                     != Some(true)
-                && !["default", "opus[1m]", "sonnet", "haiku"].contains(&model.id.as_str())
+                && !["default", "opus[1m]", "sonnet", "haiku", "claude-opus-4-8"]
+                    .contains(&model.id.as_str())
         })
         .map(|model| model.id.as_str())
         .collect();

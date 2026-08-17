@@ -410,12 +410,12 @@ async fn internal_poke_waits_for_compatible_job_then_runs_a_fresh_pass_on_active
         .pin_overrides("codex")
         .and_then(|pins| pins.agent_process)
         .expect("bundled codex pin");
-    let active_package = match catalog
+    let active_git_ref = match catalog
         .pin_overrides("codex")
         .and_then(|pins| pins.agent_process_source)
     {
-        Some(ResolvedPinSource::Npm { package, .. }) => package,
-        other => panic!("codex adapter must use an npm pin, got {other:?}"),
+        Some(ResolvedPinSource::Git { git_ref, .. }) => git_ref,
+        other => panic!("codex adapter must use a git pin (Forks ADR rung-1 fork), got {other:?}"),
     };
 
     let first = runtime
@@ -497,7 +497,7 @@ async fn internal_poke_waits_for_compatible_job_then_runs_a_fresh_pass_on_active
     assert_eq!(used_pins.agent_process.as_deref(), Some(active_pin.as_str()));
     assert!(matches!(
         used_pins.agent_process_source,
-        Some(ResolvedPinSource::Npm { package, .. }) if package == active_package
+        Some(ResolvedPinSource::Git { git_ref, .. }) if git_ref == active_git_ref
     ));
     drop(job);
 
