@@ -326,6 +326,7 @@ fn snapshot(definition: WorkflowDefinition) -> InvocationSnapshot {
         placement: InvocationPlacement {
             repo_config_id: "rc-1".into(),
             mode: PlacementMode::Worktree,
+            workspace_id: None,
         },
     }
 }
@@ -393,4 +394,36 @@ fn definition_json_round_trips_the_wire_shape() {
     let mut with_unknown = json;
     with_unknown["surprise"] = serde_json::Value::Bool(true);
     assert!(serde_json::from_value::<WorkflowDefinition>(with_unknown).is_err());
+}
+
+/// F-A1: workspaceId travels iff the mode adopts one — required under
+/// existing_workspace, rejected under every other mode.
+#[test]
+fn snapshot_pins_the_workspace_id_to_the_existing_workspace_mode() {
+    let mut valid = snapshot(three_node_definition());
+    valid.placement.mode = PlacementMode::ExistingWorkspace;
+    valid.placement.workspace_id = Some("ws-1".into());
+    valid.validate().expect("existing_workspace with a workspaceId is valid");
+
+    let mut missing = snapshot(three_node_definition());
+    missing.placement.mode = PlacementMode::ExistingWorkspace;
+    let error = missing.validate().expect_err("workspaceId is required");
+    assert!(error.detail.contains("requires a workspaceId"), "{}", error.detail);
+
+    let mut empty = snapshot(three_node_definition());
+    empty.placement.mode = PlacementMode::ExistingWorkspace;
+    empty.placement.workspace_id = Some(String::new());
+    empty.validate().expect_err("an empty workspaceId is missing");
+
+    for mode in [PlacementMode::Worktree, PlacementMode::RepoRoot] {
+        let mut stray = snapshot(three_node_definition());
+        stray.placement.mode = mode;
+        stray.placement.workspace_id = Some("ws-1".into());
+        let error = stray.validate().expect_err("stray workspaceId is malformed");
+        assert!(
+            error.detail.contains("only valid with mode existing_workspace"),
+            "{}",
+            error.detail
+        );
+    }
 }
