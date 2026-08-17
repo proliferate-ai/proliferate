@@ -5,6 +5,7 @@ const sdkMocks = vi.hoisted(() => ({
   enrollDesktopWorker: vi.fn(),
 }));
 const tauriMocks = vi.hoisted(() => ({
+  isSupported: vi.fn(),
   getDesktopInstallId: vi.fn(),
   ensureDesktopDispatchWorker: vi.fn(),
   stopDesktopDispatchWorker: vi.fn(),
@@ -24,6 +25,7 @@ import {
 const captureException = vi.fn();
 
 const worker = {
+  isSupported: tauriMocks.isSupported,
   getInstallId: tauriMocks.getDesktopInstallId,
   ensure: tauriMocks.ensureDesktopDispatchWorker,
   stop: tauriMocks.stopDesktopDispatchWorker,
@@ -32,6 +34,7 @@ const worker = {
 describe("ensureDesktopWorker", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    tauriMocks.isSupported.mockReturnValue(true);
     tauriMocks.getDesktopInstallId.mockResolvedValue("install-1");
     tauriMocks.ensureDesktopDispatchWorker.mockResolvedValue(undefined);
     sdkMocks.enrollDesktopWorker.mockResolvedValue({
@@ -77,6 +80,20 @@ describe("ensureDesktopWorker", () => {
       fingerprint: ["{{ default }}", "ensure-desktop-worker"],
     });
     expect(onFailure).toHaveBeenCalledWith(error);
+  });
+
+  it("skips enrollment silently when the bridge has no native transport", async () => {
+    tauriMocks.isSupported.mockReturnValue(false);
+    const onFailure = vi.fn();
+
+    await expect(
+      ensureDesktopWorker(null, worker, { onFailure, captureException }),
+    ).resolves.toBe(false);
+
+    expect(tauriMocks.getDesktopInstallId).not.toHaveBeenCalled();
+    expect(sdkMocks.enrollDesktopWorker).not.toHaveBeenCalled();
+    expect(onFailure).not.toHaveBeenCalled();
+    expect(captureException).not.toHaveBeenCalled();
   });
 
   it("defers native cutover until the server advertises newest-ticket fencing", async () => {
