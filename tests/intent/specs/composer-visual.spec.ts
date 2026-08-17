@@ -192,6 +192,7 @@ async function prepareComposerCapture(
 async function expectRenderedLightDepth(
   page: Page,
   clip: Awaited<ReturnType<typeof prepareComposerCapture>>,
+  { elevatedTop = true }: { elevatedTop?: boolean } = {},
 ) {
   const screenshot = await page.screenshot({ clip, scale: "device" });
   const raster = await page.evaluate(async (dataUrl) => {
@@ -254,7 +255,13 @@ async function expectRenderedLightDepth(
   // implementation paints no ink there. Reading the actual browser screenshot
   // preserves the production shadow's ordering, clipping, blur, and device-scale
   // rasterization instead of replacing depth with a CSS-string assertion.
-  expect(outsideInk.top).toBeGreaterThan(0.5);
+  if (elevatedTop) {
+    expect(outsideInk.top).toBeGreaterThan(0.5);
+  } else {
+    // The attached activity cap deliberately owns only its one-pixel ring;
+    // it must not grow a second elevation stack above the composite surface.
+    expect(outsideInk.top).toBeLessThan(0.5);
+  }
   expect(outsideInk.right).toBeGreaterThan(0.5);
   expect(outsideInk.bottom).toBeGreaterThan(0.5);
   expect(outsideInk.left).toBeGreaterThan(0.5);
@@ -300,6 +307,7 @@ test("light composer depth preserves the workspace activity cap seam", async ({ 
     "workspace-activity-card",
     true,
   );
+  await expectRenderedLightDepth(page, clip, { elevatedTop: false });
   await expectDarwinScreenshot(page, "composer-activity-cap-light.png", clip);
 });
 
