@@ -144,8 +144,7 @@ fn models_intersect_availability_with_active_contexts() {
             "claude-opus-4-8"
         ]
     );
-    // claude-fable-5 is api-only: the 2.1.234 oauth probe's trial launch of it
-    // was refused, so oauth availability excludes it.
+    // claude-fable-5 is api-only: the 2.1.234 oauth trial launch was refused.
     assert_eq!(
         model_ids(catalog.models("claude", &contexts(&["anthropic-oauth"]))),
         vec![
