@@ -166,6 +166,7 @@ impl SessionExtension for WorkflowSessionExtension {
             &run_id,
             TurnFinished {
                 node_row_id,
+                session_id: Some(ctx.session_id.clone()),
                 stop_reason,
                 queue_empty,
             },

@@ -676,6 +676,18 @@ CREATE TABLE workflow_run_docs (
     UNIQUE (run_id, filename)
 );
 
+-- table: workflow_run_node_sessions
+CREATE TABLE workflow_run_node_sessions (
+    node_row_id  TEXT NOT NULL REFERENCES workflow_run_nodes(id) ON DELETE CASCADE,
+    leg_index    INTEGER NOT NULL,
+    session_id   TEXT,
+    status       TEXT NOT NULL CHECK (status IN (
+                     'running','done','cancelled','forced_unload',
+                     'node_launch_failed','turn_error','refusal','empty_turn','harness_cap')),
+    completed_at TEXT,
+    UNIQUE (node_row_id, leg_index)
+);
+
 -- table: workflow_run_nodes
 CREATE TABLE workflow_run_nodes (
     id                    TEXT PRIMARY KEY,          -- the node row id, the API-addressable identity
@@ -995,6 +1007,10 @@ CREATE INDEX idx_terminal_command_runs_workspace_created
 
 -- index: idx_workflow_run_docs_run_id
 CREATE INDEX idx_workflow_run_docs_run_id ON workflow_run_docs(run_id);
+
+-- index: idx_workflow_run_node_sessions_node_row_id
+CREATE INDEX idx_workflow_run_node_sessions_node_row_id
+    ON workflow_run_node_sessions(node_row_id);
 
 -- index: idx_workflow_run_nodes_run_id
 CREATE INDEX idx_workflow_run_nodes_run_id ON workflow_run_nodes(run_id);

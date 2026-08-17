@@ -1,8 +1,6 @@
-//! Store tests against the real migration ladder (`Db::open_in_memory`), so
-//! every test doubles as a fresh-DB replay proof for migration 0069. Lifecycle
-//! flows drive the pure transition function and apply its decisions — the
-//! same path the live engine takes — with the invariant sweep asserted after
-//! every commit.
+//! Store tests against the real migration ladder (`Db::open_in_memory`), so every test
+//! doubles as a fresh-DB replay proof for migration 0069. Lifecycle flows drive the pure
+//! transition function and apply its decisions with the invariant sweep asserted after commit.
 
 use crate::persistence::Db;
 
@@ -161,6 +159,7 @@ fn decide_and_apply(
 fn clean_turn(node_row_id: &str) -> WorkflowEvent {
     WorkflowEvent::TurnFinished(TurnFinished {
         node_row_id: node_row_id.into(),
+        session_id: None,
         stop_reason: TurnStopReason::CleanEndTurn,
         queue_empty: true,
     })
@@ -467,6 +466,7 @@ fn fail_and_redo_persists_a_running_replacement() {
     // The plan turn errors: node failed, run failed.
     let errored = WorkflowEvent::TurnFinished(TurnFinished {
         node_row_id: plan_id.clone(),
+        session_id: None,
         stop_reason: TurnStopReason::Error,
         queue_empty: true,
     });
@@ -970,8 +970,7 @@ fn undo_window_closes_after_first_turn_and_reopens_on_reexecution() {
         .stamp_session(&review_id, "sess-review", Some("prompt-review"), None)
         .expect("stamp");
 
-    // Ruling J: the review session finishes its first turn — the undo window
-    // closes, even though nothing else about the state changed.
+    // Ruling J: the review's first turn closes the undo window (one-leg node).
     store
         .note_first_turn_finished(&review_id)
         .expect("note first turn");
@@ -1007,8 +1006,7 @@ fn undo_window_closes_after_first_turn_and_reopens_on_reexecution() {
         stamped_at
     );
 
-    // Re-execution reopens the window: fence the run, resume it — the node
-    // restarts fresh (stamp cleared), so undo is legal again.
+    // Re-execution reopens the window: fence+resume restarts the node fresh.
     let fence = WorkflowEvent::BootFence {
         code: WorkflowInterruptionCode::RuntimeRestarted,
     };
@@ -1567,6 +1565,7 @@ fn fail_node_transition_event_carries_named_target_and_failure_code() {
     let plan_id = created.first_node_row_id.clone();
     let errored = WorkflowEvent::TurnFinished(TurnFinished {
         node_row_id: plan_id.clone(),
+        session_id: None,
         stop_reason: TurnStopReason::Error,
         queue_empty: true,
     });
@@ -1614,6 +1613,7 @@ fn interjection_hold_emits_the_named_target_not_stale() {
     let plan_id = created.first_node_row_id.clone();
     let held = WorkflowEvent::TurnFinished(TurnFinished {
         node_row_id: plan_id.clone(),
+        session_id: None,
         stop_reason: TurnStopReason::CleanEndTurn,
         queue_empty: false,
     });

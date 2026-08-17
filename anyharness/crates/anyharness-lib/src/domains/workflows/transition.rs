@@ -8,17 +8,20 @@
 //! turn reports racing undo or redo) come back as `Decision::Hold`.
 
 use super::model::{
-    RenderedEnvelope, WorkflowInterruptionCode, WorkflowNodeFailureCode, WorkflowNodeKind,
-    WorkflowNodeStatus, WorkflowNodeType, WorkflowRunNodeRecord, WorkflowRunRecord,
-    WorkflowRunStatus,
+    RenderedEnvelope, WorkflowInterruptionCode, WorkflowLegStatus, WorkflowNodeFailureCode,
+    WorkflowNodeKind, WorkflowNodeStatus, WorkflowNodeType, WorkflowRunNodeRecord,
+    WorkflowRunNodeSessionRecord, WorkflowRunRecord, WorkflowRunStatus,
 };
 
 /// The in-memory image of one run: a cache of the rows, loaded once per actor
-/// and updated only after a commit.
+/// and updated only after a commit. `node_legs` is the fan-in ledger slice
+/// (ruling F1) so the pure table answers "are all legs terminal?" without the
+/// store; one row per launched node while every definition stays one-leg.
 #[derive(Debug, Clone)]
 pub struct RunState {
     pub run: WorkflowRunRecord,
     pub nodes: Vec<WorkflowRunNodeRecord>,
+    pub node_legs: Vec<WorkflowRunNodeSessionRecord>,
 }
 
 impl RunState {
@@ -67,6 +70,14 @@ impl RunState {
         let chain = self.effective_chain();
         let position = chain.iter().position(|node| node.id == node_row_id)?;
         position.checked_sub(1).and_then(|i| chain.get(i)).copied()
+    }
+
+    /// The fan-in ledger rows of one node.
+    pub fn legs_of(&self, node_row_id: &str) -> Vec<&WorkflowRunNodeSessionRecord> {
+        self.node_legs
+            .iter()
+            .filter(|leg| leg.node_row_id == node_row_id)
+            .collect()
     }
 }
 
@@ -124,6 +135,9 @@ impl WorkflowCommand {
 #[derive(Debug, Clone)]
 pub struct TurnFinished {
     pub node_row_id: String,
+    /// The leg that finished (R6); `None` on the one-leg path falls back to the
+    /// node's representative session.
+    pub session_id: Option<String>,
     pub stop_reason: TurnStopReason,
     pub queue_empty: bool,
 }
@@ -158,7 +172,7 @@ impl TurnStopReason {
         }
     }
 
-    fn failure_code(&self) -> Option<WorkflowNodeFailureCode> {
+    pub(super) fn failure_code(&self) -> Option<WorkflowNodeFailureCode> {
         match self {
             Self::Refusal => Some(WorkflowNodeFailureCode::Refusal),
             Self::EmptyTurn => Some(WorkflowNodeFailureCode::EmptyTurn),
@@ -211,6 +225,15 @@ pub enum Transition {
     CompleteRun {
         completed_node_row_id: String,
         completed_node_type: Option<WorkflowNodeType>,
+    },
+    /// A parallel leg finished but the node has legs still outstanding
+    /// (ruling F1): record this leg's terminal status in the ledger and hold
+    /// the node. Never produced with one leg — the finishing leg is then the
+    /// last, so the node aggregates immediately.
+    RecordLegThenHold {
+        node_row_id: String,
+        session_id: String,
+        leg_status: WorkflowLegStatus,
     },
     /// A human_in_loop turn ended cleanly: the gate renders.
     GateNode { node_row_id: String },
@@ -284,6 +307,7 @@ impl Transition {
         match self {
             Self::AdvanceToNext { .. } => "advance_to_next",
             Self::CompleteRun { .. } => "complete_run",
+            Self::RecordLegThenHold { .. } => "record_leg",
             Self::GateNode { .. } => "gate_node",
             Self::FailNode { .. } => "fail_node",
             Self::InterruptNode { .. } => "interrupt_node",
@@ -380,36 +404,12 @@ fn on_turn_finished(state: &RunState, turn: &TurnFinished) -> Decision {
         return Decision::Hold;
     }
 
-    match turn.stop_reason {
-        TurnStopReason::CleanEndTurn if !turn.queue_empty => {
-            // A queued interjection holds the node open: the queued turn runs
-            // and completion waits for a turn that ends with an empty queue.
-            Decision::Hold
-        }
-        TurnStopReason::CleanEndTurn => match node.node_type {
-            WorkflowNodeType::Agent => advance_or_complete(state, node, None),
-            WorkflowNodeType::HumanInLoop => Decision::Transition(Transition::GateNode {
-                node_row_id: node.id.clone(),
-            }),
-        },
-        TurnStopReason::Cancelled => Decision::Transition(Transition::InterruptNode {
-            node_row_id: node.id.clone(),
-            code: WorkflowInterruptionCode::UserCancel,
-        }),
-        TurnStopReason::ForcedUnload => Decision::Transition(Transition::InterruptNode {
-            node_row_id: node.id.clone(),
-            code: WorkflowInterruptionCode::AppShutdown,
-        }),
-        reason => Decision::Transition(Transition::FailNode {
-            node_row_id: node.id.clone(),
-            code: reason
-                .failure_code()
-                .unwrap_or(WorkflowNodeFailureCode::TurnError),
-        }),
-    }
+    // The clean/hold/aggregate decision for a live chain leg (ruling F1) lives
+    // in `fanin`; with one leg it reduces to the pre-ledger single-turn table.
+    super::fanin::resolve_chain_turn(state, node, turn)
 }
 
-fn advance_or_complete(
+pub(super) fn advance_or_complete(
     state: &RunState,
     node: &WorkflowRunNodeRecord,
     completed_node_type: Option<WorkflowNodeType>,

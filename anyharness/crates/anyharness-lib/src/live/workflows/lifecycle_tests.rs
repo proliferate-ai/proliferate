@@ -817,14 +817,14 @@ async fn a_stale_turn_report_after_undo_neither_moves_rows_nor_closes_the_window
     assert_eq!(second.session_id, None);
     assert!(second.first_turn_finished_at.is_none(), "window open");
 
-    // The disposed session's dying report was already in flight when undo
-    // landed: replay that straggler by hand. The unlinked row makes it stale,
-    // so it must move no rows AND must not stamp shut the undo window the
-    // undo just reopened (Ruling J's ordering: staleness before the stamp).
+    // The disposed session's dying report was already in flight when undo landed:
+    // replay that straggler by hand. The unlinked row makes it stale, so it moves
+    // no rows AND must not reclose the undo window (Ruling J: staleness first).
     fixture.state.workflow_manager.notify(
         "run-stale",
         TurnFinished {
             node_row_id: second.id.clone(),
+            session_id: Some("sess-straggler".into()),
             stop_reason: TurnStopReason::CleanEndTurn,
             queue_empty: true,
         },
@@ -941,15 +941,15 @@ async fn turn_reports_never_block_even_while_the_actor_is_busy() {
 
     // The session actor's finish path calls notify() synchronously, so it
     // must never wait on the workflow actor, whatever that actor is doing.
-    // Scope honesty: this pins the fire-and-forget unbounded send and the
-    // brief registry lock — a bounded wall clock for a thousand sends while
-    // the actor works its mailbox.
+    // Scope honesty: this pins the fire-and-forget unbounded send and the brief
+    // registry lock — a bounded wall clock for a thousand sends off the mailbox.
     let spam_started = std::time::Instant::now();
     for i in 0..1000 {
         fixture.state.workflow_manager.notify(
             "run-wedge",
             TurnFinished {
                 node_row_id: format!("junk-{i}"),
+                session_id: None,
                 stop_reason: TurnStopReason::CleanEndTurn,
                 queue_empty: true,
             },

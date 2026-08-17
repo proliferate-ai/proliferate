@@ -252,6 +252,16 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0074_opencode_message_ids",
         include_str!("sql/0074_opencode_message_ids.sql"),
     ),
+    // Fan-in ledger for parallel workflow-node legs (Follow-up Workflows ADR,
+    // ruling F1). Forward-references workflow_run_nodes, which the custom
+    // migration 0069 creates AFTER every plain migration; SQLite resolves the
+    // parent lazily at DML time, so a plain CREATE TABLE here is well-formed.
+    // Numbered 0076: 0075 is reserved for workspace_checkpoints (#2033),
+    // serialized by merge order.
+    (
+        "0076_workflow_run_node_sessions",
+        include_str!("sql/0076_workflow_run_node_sessions.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

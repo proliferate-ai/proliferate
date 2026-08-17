@@ -8,14 +8,17 @@
 //! come from rows, and actors are reconstructible from rows.
 
 pub mod definition;
+pub mod fanin;
 pub mod invariants;
 pub mod materialize;
 pub mod model;
+pub mod node_sessions;
 pub mod policy;
 pub mod projection;
 pub mod render;
 pub mod session_extension;
 pub mod store;
+pub mod store_rows;
 pub mod transition;
 
 #[cfg(test)]
@@ -34,5 +37,11 @@ mod render_tests;
 #[path = "store_tests.rs"]
 mod store_tests;
 #[cfg(test)]
+#[path = "store_fanin_tests.rs"]
+mod store_fanin_tests;
+#[cfg(test)]
 #[path = "transition_tests.rs"]
 mod transition_tests;
+#[cfg(test)]
+#[path = "transition_fanin_tests.rs"]
+mod transition_fanin_tests;
