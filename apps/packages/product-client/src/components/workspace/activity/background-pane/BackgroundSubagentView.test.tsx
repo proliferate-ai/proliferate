@@ -16,6 +16,8 @@ const useFeedStreamMock = vi.fn(() => feedStreamState);
 let transcriptState: { transcript: TranscriptState | null } = { transcript: null };
 let sessionAgentKind: string | null = "claude";
 
+const messageListPropsSpy = vi.fn();
+
 vi.mock("#product/stores/sessions/session-directory-store", () => ({
   useSessionDirectoryStore: (selector: (state: {
     entriesById: Record<string, { agentKind: string } | undefined>;
@@ -31,6 +33,30 @@ vi.mock("#product/hooks/chat/derived/use-active-session-transcript-state", () =>
 }));
 vi.mock("#product/hooks/activity/derived/use-feed-stream", () => ({
   useFeedStream: (...args: unknown[]) => useFeedStreamMock(...args),
+}));
+// Mirrors AgentsPaneDetail.test.tsx's convention: MessageList's own row
+// rendering is its own test's responsibility. Here we assert on the
+// `transcript` prop it receives, which is where BackgroundSubagentView's
+// translation wiring actually lives.
+vi.mock("#product/components/workspace/chat/transcript/MessageList", () => ({
+  MessageList: (props: { transcript: TranscriptState; sessionViewState: string; activeSessionId: string }) => {
+    messageListPropsSpy(props);
+    return (
+      <div data-testid="message-list">
+        {props.transcript.turnOrder.flatMap((turnId) =>
+          (props.transcript.turnsById[turnId]?.itemOrder ?? []).map((itemId) => {
+            const item = props.transcript.itemsById[itemId];
+            const text = item && "text" in item ? item.text : null;
+            return (
+              <div key={itemId} data-testid="transcript-row" data-item-kind={item?.kind}>
+                {text}
+              </div>
+            );
+          }),
+        )}
+      </div>
+    );
+  },
 }));
 
 function makeSubagent(overrides: Partial<ActivitySubagentWire> = {}): ActivitySubagentWire {
@@ -79,11 +105,43 @@ function launchToolCallItem(overrides: Partial<ToolCallItem> = {}): ToolCallItem
   } as ToolCallItem;
 }
 
+/** A synthetic, fully fictional Claude-CLI session-log JSONL tail — one
+ * user prompt and one assistant text reply — used to exercise the real
+ * `claude-session-log` translator end to end. */
+function syntheticClaudeSessionLogJsonl(): string {
+  const userLine = {
+    type: "user",
+    uuid: "line-u1",
+    parentUuid: null,
+    isSidechain: false,
+    timestamp: "2026-08-17T00:00:00.000Z",
+    sessionId: "child-session-1",
+    message: { role: "user", content: "Summarize the fixture directory." },
+  };
+  const assistantLine = {
+    type: "assistant",
+    uuid: "line-a1",
+    parentUuid: "line-u1",
+    isSidechain: false,
+    timestamp: "2026-08-17T00:00:01.000Z",
+    sessionId: "child-session-1",
+    message: {
+      role: "assistant",
+      id: "msg-a1",
+      model: "claude-test",
+      content: [{ type: "text", text: "It holds three example fixtures." }],
+      stop_reason: "end_turn",
+    },
+  };
+  return `${JSON.stringify(userLine)}\n${JSON.stringify(assistantLine)}\n`;
+}
+
 afterEach(() => {
   feedStreamState = { content: "", connected: false, error: null };
   transcriptState = { transcript: null };
   sessionAgentKind = "claude";
   useFeedStreamMock.mockClear();
+  messageListPropsSpy.mockClear();
   cleanup();
 });
 
@@ -136,19 +194,6 @@ describe("BackgroundSubagentView", () => {
     );
 
     expect(screen.queryByText("Initial prompt")).toBeNull();
-  });
-
-  it("renders the feed's raw tail content (raw-tail fallback used for every harness)", () => {
-    feedStreamState = { content: "Working on the task…\n", connected: true, error: null };
-    render(
-      <BackgroundSubagentView
-        subagent={makeSubagent()}
-        sessionId="session-1"
-        workspaceId="workspace-1"
-        onBack={() => {}}
-      />,
-    );
-    expect(screen.getByText(/Working on the task…/)).toBeTruthy();
   });
 
   it("renders the exact read-only footer copy and no composer", () => {
@@ -221,5 +266,83 @@ describe("BackgroundSubagentView", () => {
       null,
       { workspaceId: "workspace-1", enabled: false },
     );
+  });
+
+  describe("transcript-shaped rendering (rung R4b)", () => {
+    it("claude: maps the tail_file JSONL into a TranscriptState and hands it to MessageList", () => {
+      feedStreamState = { content: syntheticClaudeSessionLogJsonl(), connected: true, error: null };
+      sessionAgentKind = "claude";
+
+      render(
+        <BackgroundSubagentView
+          subagent={makeSubagent()}
+          sessionId="session-1"
+          workspaceId="workspace-1"
+          onBack={() => {}}
+        />,
+      );
+
+      expect(screen.getByTestId("message-list")).toBeTruthy();
+      expect(screen.getByText("Summarize the fixture directory.")).toBeTruthy();
+      expect(screen.getByText("It holds three example fixtures.")).toBeTruthy();
+      expect(messageListPropsSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionViewState: "idle", activeSessionId: "agent-1" }),
+      );
+      const passedTranscript = messageListPropsSpy.mock.calls[0]?.[0]?.transcript as TranscriptState;
+      expect(passedTranscript.turnOrder.length).toBeGreaterThan(0);
+    });
+
+    it("codex: the identical JSONL text renders as raw tail, never through MessageList (negative control on the provider gate)", () => {
+      feedStreamState = { content: syntheticClaudeSessionLogJsonl(), connected: true, error: null };
+      sessionAgentKind = "codex";
+
+      render(
+        <BackgroundSubagentView
+          subagent={makeSubagent()}
+          sessionId="session-1"
+          workspaceId="workspace-1"
+          onBack={() => {}}
+        />,
+      );
+
+      expect(screen.queryByTestId("message-list")).toBeNull();
+      expect(messageListPropsSpy).not.toHaveBeenCalled();
+      expect(screen.getByText(/Summarize the fixture directory\./)).toBeTruthy();
+    });
+
+    it("claude with a malformed feed degrades to the raw-tail view rather than an empty transcript (no crash)", () => {
+      feedStreamState = { content: "not json at all, just a log line\n", connected: true, error: null };
+      sessionAgentKind = "claude";
+
+      render(
+        <BackgroundSubagentView
+          subagent={makeSubagent()}
+          sessionId="session-1"
+          workspaceId="workspace-1"
+          onBack={() => {}}
+        />,
+      );
+
+      expect(screen.queryByTestId("message-list")).toBeNull();
+      expect(messageListPropsSpy).not.toHaveBeenCalled();
+      expect(screen.getByText(/not json at all, just a log line/)).toBeTruthy();
+    });
+
+    it("claude with no feed content yet shows the connecting/raw-tail state, not an empty MessageList", () => {
+      feedStreamState = { content: "", connected: false, error: null };
+      sessionAgentKind = "claude";
+
+      render(
+        <BackgroundSubagentView
+          subagent={makeSubagent()}
+          sessionId="session-1"
+          workspaceId="workspace-1"
+          onBack={() => {}}
+        />,
+      );
+
+      expect(screen.queryByTestId("message-list")).toBeNull();
+      expect(screen.getByText("Connecting…")).toBeTruthy();
+    });
   });
 });
