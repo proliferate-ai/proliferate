@@ -24,6 +24,15 @@ interface AutoHideScrollAreaProps {
   overscrollBehaviorX?: CSSProperties["overscrollBehaviorX"];
   overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
   chainVerticalWheel?: boolean;
+  /**
+   * Opt in to `overflow-anchor: none` on the viewport. Off by default so the
+   * shared primitive keeps the browser's native scroll-anchoring for ordinary
+   * consumers. The chat transcript sets this so Chromium and WKWebView run the
+   * identical single-writer stick-to-bottom regime: browser scroll anchoring
+   * would otherwise adjust scrollTop underneath the transcript engine, a second
+   * writer the ownership-marker classification cannot attribute.
+   */
+  stableScrollAnchor?: boolean;
   onViewportScroll?: (viewport: HTMLDivElement) => void;
   onUserScrollIntent?: (direction: -1 | 1) => void;
 }
@@ -54,6 +63,7 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
       overscrollBehaviorX,
       overscrollBehaviorY,
       chainVerticalWheel = true,
+      stableScrollAnchor = false,
       onViewportScroll,
       onUserScrollIntent,
     },
@@ -261,6 +271,9 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
       overscrollBehaviorX,
       overscrollBehaviorY,
     );
+    if (stableScrollAnchor) {
+      viewportStyle.overflowAnchor = "none";
+    }
     const handleViewportWheel = useChainedVerticalWheel(chainVerticalWheel);
 
     return (

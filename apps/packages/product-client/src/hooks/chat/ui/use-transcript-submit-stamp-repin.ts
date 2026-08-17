@@ -20,7 +20,7 @@ export interface UseTranscriptSubmitStampRepinOptions {
   sessionKey: string | undefined;
   setPinned: (pinned: boolean) => void;
   scrollToBottom: () => void;
-  startGlueLoop: () => void;
+  beginGlue: () => void;
 }
 
 /**
@@ -54,7 +54,7 @@ export function useTranscriptSubmitStampRepin({
   sessionKey,
   setPinned,
   scrollToBottom,
-  startGlueLoop,
+  beginGlue,
 }: UseTranscriptSubmitStampRepinOptions): void {
   const lastPromptSubmittedAtRef = useRef(lastPromptSubmittedAtMs);
   const sessionKeyRef = useRef(sessionKey);
@@ -74,7 +74,7 @@ export function useTranscriptSubmitStampRepin({
     ) {
       setPinned(true);
       scrollToBottom();
-      startGlueLoop();
+      beginGlue();
     }
-  }, [lastPromptSubmittedAtMs, scrollToBottom, sessionKey, setPinned, startGlueLoop]);
+  }, [beginGlue, lastPromptSubmittedAtMs, scrollToBottom, sessionKey, setPinned]);
 }

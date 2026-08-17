@@ -30,6 +30,7 @@ import {
   TranscriptHistoryLoadingRow,
 } from "./TranscriptRowListShared";
 import { useTranscriptStickToBottom } from "#product/hooks/chat/ui/use-transcript-stick-to-bottom";
+import { useTranscriptScrollPauseRegistration } from "./TranscriptScrollPriorityContext";
 import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
 
 type TranscriptRowRenderer = (
@@ -83,6 +84,8 @@ export function FullTranscriptRowList({
     notifyProgrammaticScroll,
     setPinned,
     resetForSession,
+    notifyContentResize,
+    cancelFramePipeline,
   } = useTranscriptStickToBottom({
     scrollRef,
     onScrollSample,
@@ -90,6 +93,9 @@ export function FullTranscriptRowList({
     lastPromptSubmittedAtMs,
     sessionKey: `${selectedWorkspaceId ?? ""}:${activeSessionId}`,
   });
+  // A user scroll inside the input event's call stack pre-empts any queued
+  // programmatic snap (render-freeze gate parity): cancel the frame pipeline.
+  useTranscriptScrollPauseRegistration(cancelFramePipeline);
 
   // Content-search jump-to-match. The full list mounts every row, so the
   // overlay can scroll the target mark into view directly; we only release the
@@ -237,31 +243,31 @@ export function FullTranscriptRowList({
   ]);
 
   // Content can grow after the React commit (images decoding, async diff
-  // panels, code-highlight reflow). Re-stick on any content resize so a
-  // pinned viewport stays at the true bottom; the stickiness ref is the
-  // guard, so we always observe.
+  // panels, code-highlight reflow, the assistant reveal's height growth). The
+  // single content ResizeObserver routes every such growth through the one
+  // frame pipeline (rung 4) instead of writing scrollTop directly, so the snap
+  // is coalesced into the one per-frame pass and cannot interleave with a glue
+  // or compensation write. The pin guard now lives in the pipeline's writer.
   useEffect(() => {
     const content = contentRef.current;
     if (!content) {
       return;
     }
     const observer = new ResizeObserver(() => {
-      if (!pinnedRef.current) {
-        return;
-      }
-      scrollToBottom();
+      notifyContentResize();
     });
     observer.observe(content);
     return () => {
       observer.disconnect();
     };
-  }, [pinnedRef, scrollToBottom]);
+  }, [notifyContentResize]);
 
   return (
     <div className="relative h-full">
       <AutoHideScrollArea
         className="h-full"
         ref={scrollRef}
+        stableScrollAnchor
         onUserScrollIntent={notifyUserScrollIntent}
         onViewportScroll={handleViewportScroll}
         contentClassName={`${gutterClassName} relative flex min-h-full flex-col`}

@@ -360,6 +360,7 @@ export interface ScrollPhysicsDriver {
   finalizeStreamingTurn(): void;
   appendLargeToolOutput(): void;
   appendCodeBlockTurn(): void;
+  appendFinalizedTurns(turns: number): void;
   prependOlderHistory(turns?: number): void;
   switchSession(sessionId: string, seedTurns: number): void;
   getMetrics(): ViewportMetrics;
@@ -474,6 +475,24 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
       assistantCompleted(sessionId, turnId, itemId, codeBlockText(`gen${nextSeq()}`)),
       turnEnded(sessionId, turnId),
     ]);
+  },
+
+  // Appends `turns` finalized user+assistant turns AFTER whatever is already in
+  // the transcript (unlike seedFinalizedConversation, which REPLACES it). Each
+  // hydrates inert (turn_ended), so it renders its full tall height in the
+  // commit it lands: a deterministic source of real, immediately-measured
+  // content growth with no dependence on the throttled assistant reveal.
+  appendFinalizedTurns(turns: number): void {
+    const sessionId = snapshot.activeSessionId;
+    const batch: SessionEventEnvelope[] = [];
+    for (let t = 0; t < turns; t += 1) {
+      const turnId = `${sessionId}-fill-${nextSeq()}`;
+      const assistantItemId = `${turnId}-assistant`;
+      batch.push(userMessage(sessionId, turnId, `Prompt fill ${t}: please continue.`));
+      batch.push(assistantCompleted(sessionId, turnId, assistantItemId, tallText(`Fill ${t}`)));
+      batch.push(turnEnded(sessionId, turnId));
+    }
+    apply(batch);
   },
 
   prependOlderHistory(turns = 3): void {
