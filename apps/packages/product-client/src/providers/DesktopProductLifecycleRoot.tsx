@@ -10,6 +10,7 @@ import { useDesktopRuntimeBootstrapLifecycle } from "#product/hooks/app/lifecycl
 import { useUpdateRestartWatcher } from "#product/hooks/access/tauri/use-update-restart-watcher";
 import { useDesktopWorkerEnrollment } from "#product/hooks/cloud/lifecycle/use-desktop-worker-enrollment";
 import { useWorkspaceActivityIndicator } from "#product/hooks/app/lifecycle/use-workspace-activity-indicator";
+import { useDesktopWindowThemeLifecycle } from "#product/hooks/preferences/lifecycle/use-desktop-window-theme-lifecycle";
 import { useDesktopZoomPreferenceLifecycle } from "#product/hooks/preferences/lifecycle/use-desktop-zoom-preference-lifecycle";
 import { useNativeMenuCommandDispatcher } from "#product/hooks/shortcuts/lifecycle/use-native-menu-command-dispatcher";
 import { recordBootDiagnosticOnce } from "#product/lib/infra/measurement/measurement-port";
@@ -61,6 +62,7 @@ function DesktopProductLifecycles({
   recordBootDiagnosticOnce("app_runtime.render.before.use_workspace_activity_indicator");
   useWorkspaceActivityIndicator(nativeUi.setWorkspaceActivity);
   recordBootDiagnosticOnce("app_runtime.render.after.use_workspace_activity_indicator");
+  useDesktopWindowThemeLifecycle(nativeUi.setWindowTheme);
   useDesktopZoomPreferenceLifecycle(nativeUi.setZoom);
   useComposerActivationFocus();
   return null;
