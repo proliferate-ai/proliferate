@@ -81,13 +81,21 @@ export function useWorkflowRunRoster(workspaceId: string): WorkflowRunRoster {
     () => selectVisibleWorkflowRuns(runsQuery.data?.runs),
     [runsQuery.data],
   );
+  // With exactly one visible run the pane must load/error exactly as it did
+  // when it owned the projection query itself: the roster probes that run's
+  // detail (react-query dedupes with the rail's own query), so the container
+  // keeps the pre-concurrent-runs wrapper and aria-busy through the ordinary
+  // roster-resolved-but-detail-fetching window. With N > 1 each rail reports
+  // its own loading state and the roster is ready once the run list is.
+  const soloRunId = visibleRuns.length === 1 ? visibleRuns[0].id : "";
+  const soloRunQuery = useWorkflowRunQuery(soloRunId, { enabled: soloRunId.length > 0 });
   return {
     status: resolveWorkflowPaneStatus({
       runsLoaded: runsQuery.data !== undefined,
       runsFailed: runsQuery.isError,
       hasRun: visibleRuns.length > 0,
-      projectionLoaded: true,
-      projectionFailed: false,
+      projectionLoaded: soloRunId.length === 0 || soloRunQuery.data !== undefined,
+      projectionFailed: soloRunId.length > 0 && soloRunQuery.isError,
     }),
     visibleRuns,
   };

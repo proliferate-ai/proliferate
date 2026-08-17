@@ -434,11 +434,50 @@ describe("useWorkflowRunRoster", () => {
 
   it("is ready with exactly one visible run for an ordinary single-run workspace", () => {
     mocks.runsQuery.data = { runs: [run({ id: "solo", status: "running" })] };
+    mocks.runQuery.data = projection();
 
     const { result } = renderHook(() => useWorkflowRunRoster(WORKSPACE_ID));
 
     expect(result.current.status).toBe("ready");
     expect(result.current.visibleRuns.map((candidate) => candidate.id)).toEqual(["solo"]);
+  });
+
+  it("stays loading through the single run's own detail fetch — pre-rail behavior", () => {
+    // The ordinary initial-load sequence: roster resolved, projection still in
+    // flight. The container's wrapper and aria-busy key off this status, so it
+    // must not flip ready before the projection lands (the single-run pane
+    // rendered a loading state here before concurrent runs existed).
+    mocks.runsQuery.data = { runs: [run({ id: "solo", status: "running" })] };
+    mocks.runQuery.data = undefined;
+
+    const { result } = renderHook(() => useWorkflowRunRoster(WORKSPACE_ID));
+
+    expect(result.current.status).toBe("loading");
+    expect(mocks.runQueryCalls).toContain("solo");
+  });
+
+  it("is error when the single run's detail fetch failed with nothing cached", () => {
+    mocks.runsQuery.data = { runs: [run({ id: "solo", status: "running" })] };
+    mocks.runQuery.data = undefined;
+    mocks.runQuery.isError = true;
+
+    const { result } = renderHook(() => useWorkflowRunRoster(WORKSPACE_ID));
+
+    expect(result.current.status).toBe("error");
+  });
+
+  it("is ready without a detail probe when several runs are visible — rails own their own loading", () => {
+    mocks.runsQuery.data = {
+      runs: [
+        run({ id: "older", status: "running", createdAt: "2026-08-14T00:00:00Z" }),
+        run({ id: "newer", status: "running", createdAt: "2026-08-14T09:00:00Z" }),
+      ],
+    };
+    mocks.runQuery.data = undefined;
+
+    const { result } = renderHook(() => useWorkflowRunRoster(WORKSPACE_ID));
+
+    expect(result.current.status).toBe("ready");
   });
 
   it("surfaces two live runs — the concurrent-run case the rail exists for", () => {
