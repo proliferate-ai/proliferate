@@ -59,6 +59,7 @@ export function resolveFileReference(args: {
   rawPath: string;
   workspaceRoot: string | null;
   resolveAbsolute: (rawPath: string) => string | null;
+  homeDirectory?: string | null;
   workspacePathOverride?: string | null;
 }): ResolvedFileReference {
   const trimmed = args.rawPath.trim();
@@ -74,9 +75,35 @@ export function resolveFileReference(args: {
     path,
     line,
     column,
-    absolutePath: args.resolveAbsolute(path),
+    absolutePath: resolveAbsoluteFileReferencePath(
+      path,
+      args.homeDirectory,
+      args.resolveAbsolute,
+    ),
     workspacePath,
   };
+}
+
+export function isHomeRelativeFileReference(value: string): boolean {
+  const { path } = splitPathLineSuffix(value.trim());
+  return path === "~" || path.startsWith("~/");
+}
+
+function resolveAbsoluteFileReferencePath(
+  path: string,
+  homeDirectory: string | null | undefined,
+  resolveAbsolute: (rawPath: string) => string | null,
+): string | null {
+  if (!isHomeRelativeFileReference(path)) {
+    return resolveAbsolute(path);
+  }
+  const trimmedHome = homeDirectory?.trim();
+  if (!trimmedHome) {
+    return null;
+  }
+  const homeRoot = trimmedHome === "/" ? "" : trimmedHome.replace(/\/+$/, "");
+  const suffix = path === "~" ? "" : path.slice(1);
+  return `${homeRoot}${suffix}` || "/";
 }
 
 /**
