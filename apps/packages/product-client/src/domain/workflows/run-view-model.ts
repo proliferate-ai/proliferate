@@ -78,6 +78,7 @@ const RUN_STATUS_TONE: Record<WorkflowRunV2["status"], WorkflowRunTone> = {
   interrupted: "warning",
   completed: "success",
   failed: "danger",
+  cancelled: "neutral",
 };
 
 export function workflowRunStatusTone(status: WorkflowRunV2["status"]): WorkflowRunTone {
