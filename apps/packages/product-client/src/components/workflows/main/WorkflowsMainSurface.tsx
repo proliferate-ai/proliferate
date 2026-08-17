@@ -1,7 +1,6 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useState } from "react";
 import type { WorkflowDefinitionRecordV2 } from "@proliferate/cloud-sdk";
 import type { WorkflowStarterTemplateV2 } from "#product/config/workflows/starter-templates";
-import { WORKFLOW_STARTER_TEMPLATES_V2 } from "#product/config/workflows/starter-templates";
 import { WORKFLOW_MAIN_COPY } from "#product/copy/workflows/workflow-main-copy";
 import {
   useWorkflowDefinitionsV2ListAccess,
@@ -10,34 +9,22 @@ import {
 } from "#product/hooks/access/cloud/workflows/use-workflow-definitions-v2-access";
 import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 import {
-  formatWorkflowUpdatedAt,
   selectWorkflowLegacyDefinitionRows,
   selectWorkflowV2DefinitionRows,
-  workflowRunDefinitionTitle,
   type WorkflowMainListItem,
 } from "#product/domain/workflows/main-view-model";
+import { WorkflowMainDefinitionRow } from "#product/components/workflows/main/WorkflowMainDefinitionRow";
 import { WorkflowMainDeleteDialog } from "#product/components/workflows/main/WorkflowMainDeleteDialog";
-import { WorkflowMainExecutionsGroup } from "#product/components/workflows/main/WorkflowMainExecutionsGroup";
+import { WorkflowMainEmptyState } from "#product/components/workflows/main/WorkflowMainEmptyState";
+import { WorkflowMainLegacyGroup } from "#product/components/workflows/main/WorkflowMainLegacyGroup";
+import { WorkflowMainNewMenu } from "#product/components/workflows/main/WorkflowMainNewMenu";
 import { WorkflowTriggerDialog } from "#product/components/workflows/trigger/WorkflowTriggerDialog";
-import { useWorkflowExecutions } from "#product/hooks/workflows/facade/use-workflow-executions";
 import type { WorkflowTriggerLaunch } from "#product/hooks/workflows/workflows/use-workflow-trigger-actions";
 import { Button } from "#product/primitives/Button";
-import { ChevronRight, Play, Plus, RotateCcw, Search, Trash } from "#product/primitives/icons/core";
-import { FileCode, StackedFiles } from "#product/primitives/icons/workspace";
+import { RotateCcw } from "#product/primitives/icons/core";
+import { Card } from "#product/primitives/patterns/Card";
 import { EmptyState } from "#product/primitives/patterns/EmptyState";
-
-/** The design's 24px icon-button on a row (Play, and the legacy trash). */
-export const WORKFLOW_INDEX_ROW_ACTION_STYLE: CSSProperties = {
-  display: "grid",
-  placeItems: "center",
-  width: 24,
-  height: 24,
-  flex: "none",
-  borderRadius: 7,
-  border: 0,
-  background: "transparent",
-  cursor: "pointer",
-};
+import { ProductPageShell } from "#product/primitives/patterns/ProductPageShell";
 
 export interface WorkflowsMainSurfaceProps {
   authCacheScope: string;
@@ -46,12 +33,21 @@ export interface WorkflowsMainSurfaceProps {
 }
 
 /**
- * The workflows index, in the design's page anatomy: a borderless filter bar,
- * the "Create workflows" section (an empty graph, or one row per starter
- * template), then caption-headed groups — Saved Workflows, Executions, Legacy
- * — of 36px hover-washed rows. A definition row opens the builder and carries
- * the Play affordance; an execution row opens its workspace; a legacy row is
- * delete-only by construction.
+ * The Workflows gen-2 main page: the list of a user's saved (schema_version 2)
+ * definitions, the entry points onto the builder (blank or from a starter
+ * template), and the Run/Edit/Delete row actions.
+ *
+ * Split at the row (`WorkflowMainDefinitionRow`), the empty state
+ * (`WorkflowMainEmptyState`), the legacy group
+ * (`WorkflowMainLegacyGroup`) and the "new workflow" menu
+ * (`WorkflowMainNewMenu`) so this file stays the orchestrator: it owns the
+ * list query, the run-record fetch a Run click needs, the delete mutation,
+ * and nothing about how any one piece paints.
+ *
+ * The shared list route returns gen-1 rows alongside gen-2 ones. They cannot
+ * open in the v2 builder, so they get their own delete-only group rather than
+ * being filtered away — a definition the user saved must not disappear with
+ * nothing on screen accounting for it.
  */
 export function WorkflowsMainSurface({
   authCacheScope,
@@ -62,9 +58,7 @@ export function WorkflowsMainSurface({
   const { deleteWorkflowDefinitionV2, deletingWorkflowDefinitionV2 } =
     useWorkflowDefinitionV2MutationsAccess(authCacheScope);
   const { selectWorkspaceFromSurface } = useWorkspaceNavigationWorkflow();
-  const executions = useWorkflowExecutions();
 
-  const [filterText, setFilterText] = useState("");
   const [runningId, setRunningId] = useState<string | null>(null);
   const runQuery = useWorkflowDefinitionV2Access(runningId, authCacheScope, runningId !== null);
 
@@ -101,17 +95,17 @@ export function WorkflowsMainSurface({
 
   if (listQuery.isLoading) {
     return (
-      <WorkflowIndexFrame>
-        <p className="text-body py-6 text-muted-foreground" role="status">
+      <ProductPageShell title={WORKFLOW_MAIN_COPY.pageTitle} maxWidthClassName="max-w-5xl" telemetryBlocked>
+        <p className="py-6 text-body text-muted-foreground" role="status">
           {WORKFLOW_MAIN_COPY.loadingTitle}
         </p>
-      </WorkflowIndexFrame>
+      </ProductPageShell>
     );
   }
 
   if (listQuery.isError) {
     return (
-      <WorkflowIndexFrame>
+      <ProductPageShell title={WORKFLOW_MAIN_COPY.pageTitle} maxWidthClassName="max-w-5xl" telemetryBlocked>
         <EmptyState
           title={WORKFLOW_MAIN_COPY.errorTitle}
           description={WORKFLOW_MAIN_COPY.errorDescription}
@@ -122,7 +116,7 @@ export function WorkflowsMainSurface({
             </Button>
           )}
         />
-      </WorkflowIndexFrame>
+      </ProductPageShell>
     );
   }
 
@@ -132,184 +126,42 @@ export function WorkflowsMainSurface({
   const runningRecord: WorkflowDefinitionRecordV2 | undefined =
     runningId !== null && runQuery.data?.id === runningId ? runQuery.data : undefined;
 
-  // One filter over every group, the way the design's index reads: substring
-  // matching on what the rows visibly say, never on hidden identifiers.
-  const needle = filterText.trim().toLowerCase();
-  const matches = (...haystacks: (string | null)[]) =>
-    needle.length === 0
-    || haystacks.some((value) => value !== null && value.toLowerCase().includes(needle));
-  const visibleItems = items.filter((item) => matches(item.title, item.description));
-  const visibleLegacy = legacyItems.filter((item) => matches(item.title, item.description));
-  const visibleRuns = executions.runs.filter((run) => matches(
-    workflowRunDefinitionTitle(run.definitionJson) ?? WORKFLOW_MAIN_COPY.executionFallbackTitle,
-  ));
-
   return (
-    <WorkflowIndexFrame>
-      <div
-        className="flex items-center border-b border-border"
-        style={{ gap: 10, padding: "8px 10px 12px" }}
-      >
-        <span className="flex text-faint">
-          <Search className="icon-paired" aria-hidden />
-        </span>
-        <input
-          type="text"
-          value={filterText}
-          placeholder={WORKFLOW_MAIN_COPY.filterPlaceholder}
-          aria-label={WORKFLOW_MAIN_COPY.filterLabel}
-          className="text-body min-w-0 flex-1 border-0 bg-transparent text-foreground outline-none"
-          style={{ font: "inherit" }}
-          onChange={(event) => setFilterText(event.target.value)}
-        />
-      </div>
-
-      <div style={{ paddingTop: 10 }}>
-        <GroupCaption label={WORKFLOW_MAIN_COPY.createGroupTitle} />
-        <button
-          type="button"
-          className="hover:bg-hover"
-          style={indexRowStyle}
-          onClick={() => onNew(null)}
-        >
-          <span className="flex flex-none items-center justify-center text-faint" style={{ width: 16, height: 16 }}>
-            <Plus className="icon-paired" aria-hidden />
-          </span>
-          <span className="text-ui flex-none font-medium">{WORKFLOW_MAIN_COPY.createBlankTitle}</span>
-          <span className="text-ui-sm min-w-0 truncate text-faint">
-            {WORKFLOW_MAIN_COPY.createBlankSubtitle}
-          </span>
-          <span className="flex-1" />
-        </button>
-        {WORKFLOW_STARTER_TEMPLATES_V2.map((template) => (
-          <button
-            key={template.slug}
-            type="button"
-            className="hover:bg-hover"
-            style={indexRowStyle}
-            onClick={() => onNew(template)}
-          >
-            <span className="flex flex-none items-center justify-center text-faint" style={{ width: 16, height: 16 }}>
-              <StackedFiles className="icon-paired" aria-hidden />
-            </span>
-            <span className="text-ui flex-none font-medium">{template.title}</span>
-            <span className="text-ui-sm min-w-0 truncate text-faint">{template.description}</span>
-            <span className="flex-1" />
-          </button>
-        ))}
-      </div>
-
-      <div style={{ paddingTop: 18 }}>
-        <GroupCaption
-          label={WORKFLOW_MAIN_COPY.savedGroupTitle}
-          count={visibleItems.length}
-        />
-        {visibleItems.map((item) => (
-          <div
-            key={item.id}
-            role="button"
-            tabIndex={0}
-            className="hover:bg-hover"
-            style={indexRowStyle}
-            onClick={() => onEdit(item.id)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onEdit(item.id);
-              }
-            }}
-          >
-            <span className="flex flex-none items-center justify-center text-faint" style={{ width: 16, height: 16 }}>
-              <FileCode className="icon-paired" aria-hidden />
-            </span>
-            <span className="flex min-w-0 flex-1 items-center" style={{ gap: 8 }}>
-              <span className="text-ui truncate font-medium text-foreground" style={{ flex: "0 1 200px", minWidth: 96 }}>
-                {item.title}
-              </span>
-              <span className="flex flex-none text-faint">
-                <ChevronRight className="icon-paired" aria-hidden />
-              </span>
-              <span
-                className="text-ui-sm truncate text-faint"
-                style={{ flex: "0 1 auto", minWidth: 88 }}
-              >
-                {item.description}
-              </span>
-            </span>
-            <span className="text-ui-sm flex-none text-faint">
-              {formatWorkflowUpdatedAt(item.updatedAt)}
-            </span>
-            <button
-              type="button"
-              title={WORKFLOW_MAIN_COPY.runRowTitle}
-              aria-label={WORKFLOW_MAIN_COPY.runLabel(item.title)}
-              className="text-faint hover:bg-hover hover:text-foreground"
-              style={WORKFLOW_INDEX_ROW_ACTION_STYLE}
-              onClick={(event) => {
-                event.stopPropagation();
-                handleRun(item.id);
+    <ProductPageShell
+      title={WORKFLOW_MAIN_COPY.pageTitle}
+      description={WORKFLOW_MAIN_COPY.pageDescription}
+      actions={<WorkflowMainNewMenu onNew={onNew} />}
+      maxWidthClassName="max-w-5xl"
+      telemetryBlocked
+    >
+      {items.length === 0 ? (
+        <WorkflowMainEmptyState onNew={onNew} legacyPresent={legacyItems.length > 0} />
+      ) : (
+        <Card surface="opaque" className="flex flex-col gap-0.5 p-2">
+          {items.map((item) => (
+            <WorkflowMainDefinitionRow
+              key={item.id}
+              item={item}
+              running={runningId === item.id && runQuery.isLoading}
+              onRun={() => handleRun(item.id)}
+              onEdit={() => onEdit(item.id)}
+              onDelete={() => {
+                setDeleteError(null);
+                setDeleteTarget(item);
               }}
-            >
-              <Play className="icon-paired" aria-hidden />
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {visibleRuns.length > 0 ? (
-        <div style={{ paddingTop: 18 }}>
-          <GroupCaption
-            label={WORKFLOW_MAIN_COPY.executionsGroupTitle}
-            count={visibleRuns.length}
-          />
-          <WorkflowMainExecutionsGroup
-            runs={visibleRuns}
-            onOpen={(run) => selectWorkspaceFromSurface(run.workspaceId, "workflows-main-surface")}
-          />
-        </div>
-      ) : null}
-
-      {visibleLegacy.length > 0 ? (
-        <div style={{ paddingTop: 18 }}>
-          <GroupCaption
-            label={WORKFLOW_MAIN_COPY.legacyGroupTitle}
-            count={visibleLegacy.length}
-          />
-          <p className="text-ui-sm m-0 text-faint" style={{ padding: "0 10px 6px" }}>
-            {WORKFLOW_MAIN_COPY.legacyGroupDescription}
-          </p>
-          {visibleLegacy.map((item) => (
-            <div key={item.id} style={indexRowStyle}>
-              <span className="flex flex-none items-center justify-center text-faint" style={{ width: 16, height: 16 }}>
-                <FileCode className="icon-paired" aria-hidden />
-              </span>
-              <span className="flex min-w-0 flex-1 items-center" style={{ gap: 8 }}>
-                <span className="text-ui truncate font-medium text-foreground" style={{ flex: "0 1 200px", minWidth: 96 }}>
-                  {item.title}
-                </span>
-                <span className="text-ui-sm font-mono text-muted-foreground">
-                  {WORKFLOW_MAIN_COPY.legacyBadgeLabel}
-                </span>
-              </span>
-              <span className="text-ui-sm flex-none text-faint">
-                {formatWorkflowUpdatedAt(item.updatedAt)}
-              </span>
-              <button
-                type="button"
-                aria-label={WORKFLOW_MAIN_COPY.legacyDeleteLabel(item.title)}
-                title={WORKFLOW_MAIN_COPY.legacyDeleteLabel(item.title)}
-                className="text-faint hover:bg-hover hover:text-destructive"
-                style={WORKFLOW_INDEX_ROW_ACTION_STYLE}
-                onClick={() => {
-                  setDeleteError(null);
-                  setDeleteTarget(item);
-                }}
-              >
-                <Trash className="icon-paired" aria-hidden />
-              </button>
-            </div>
+            />
           ))}
-        </div>
+        </Card>
+      )}
+
+      {legacyItems.length > 0 ? (
+        <WorkflowMainLegacyGroup
+          items={legacyItems}
+          onDelete={(item) => {
+            setDeleteError(null);
+            setDeleteTarget(item);
+          }}
+        />
       ) : null}
 
       {runningRecord ? (
@@ -334,47 +186,6 @@ export function WorkflowsMainSurface({
         onCancel={() => setDeleteTarget(null)}
         onConfirm={handleDeleteConfirm}
       />
-    </WorkflowIndexFrame>
-  );
-}
-
-/** The design's 36px hover-washed index row. */
-const indexRowStyle: CSSProperties = {
-  display: "flex",
-  width: "100%",
-  alignItems: "center",
-  gap: 12,
-  minHeight: 36,
-  padding: "5px 10px",
-  borderRadius: 8,
-  border: 0,
-  background: "transparent",
-  cursor: "pointer",
-  textAlign: "left",
-  font: "inherit",
-};
-
-function GroupCaption({ label, count }: { label: string; count?: number }) {
-  return (
-    <div className="flex items-center" style={{ gap: 8, padding: "6px 10px" }}>
-      <span className="text-ui-sm text-faint">{label}</span>
-      {count !== undefined ? (
-        <span className="text-ui-sm" style={{ color: "var(--color-border-heavy)" }}>{count}</span>
-      ) : null}
-    </div>
-  );
-}
-
-/** The design's index frame: a centered 1120px column inside its own scroller. */
-function WorkflowIndexFrame({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-background" data-telemetry-block>
-      <div
-        className="flex w-full flex-col"
-        style={{ maxWidth: 1120, margin: "0 auto", padding: "20px 24px 72px" }}
-      >
-        {children}
-      </div>
-    </div>
+    </ProductPageShell>
   );
 }

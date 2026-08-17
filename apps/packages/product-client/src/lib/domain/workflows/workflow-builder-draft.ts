@@ -102,10 +102,10 @@ export function nextNodeId(nodes: readonly WorkflowNodeV2[]): string {
 
 export function blankWorkflowBuilderDraft(): WorkflowBuilderDraft {
   return {
-    title: "",
+    title: "untitled_workflow",
     description: "",
     defaultRepoConfigId: "",
-    nodes: [{ id: "step-1", type: "agent", title: "", prompt: "" }],
+    nodes: [],
     inputs: [],
     docTemplates: [],
   };

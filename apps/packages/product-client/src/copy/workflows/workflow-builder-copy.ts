@@ -23,7 +23,8 @@ export const WORKFLOW_BUILDER_COPY = {
 
   detailsHeading: "Details",
   titleLabel: "Workflow title",
-  titlePlaceholder: "Issue triage",
+  titlePlaceholder: "untitled_workflow",
+  confirmTitleLabel: "Confirm name",
   descriptionLabel: "Description",
   descriptionPlaceholder: "What this workflow does and when to run it.",
   defaultRepositoryLabel: "Default repository",
@@ -53,13 +54,10 @@ export const WORKFLOW_BUILDER_COPY = {
   addAgentStepTitle: "Add an agent step",
   addHumanStepLabel: "Human in the loop",
   addHumanStepTitle: "Add a human-in-the-loop step",
-  railHelp:
-    "Steps run top to bottom and are numbered outward from the input. Select a card to edit it in the inspector.",
-
   /** The left rail's context-docs section. */
   contextDocsHeading: "Context docs",
   contextDocsCount: (count: number) => (count === 1 ? "1 doc" : `${count} docs`),
-  contextDocsEmpty: "Documents steps write and later steps read.",
+  contextDocsEmpty: "Markdown notes every step in this workflow can read.",
   docUntitledRow: "untitled",
 
   /** The structural input node heading the chain. */
@@ -84,11 +82,9 @@ export const WORKFLOW_BUILDER_COPY = {
   humanStepNote: "The run pauses here until someone approves the step.",
   modelSectionHeading: "Model",
   deleteNodeLabel: "Delete node",
-  harnessLabel: "Harness",
   harnessDefaultOption: "Run default",
-  harnessUnavailableOption: (agentKind: string) => `Unavailable harness (${agentKind})`,
   modelLabel: "Model",
-  modelDefaultOption: "Harness default",
+  modelHarnessDefaultOption: (harnessLabel: string) => `${harnessLabel} default`,
   modelUnavailableOption: (modelId: string) => `Unavailable model (${modelId})`,
 
   promptLabel: "Prompt",

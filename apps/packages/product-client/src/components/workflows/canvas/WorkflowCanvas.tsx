@@ -38,6 +38,8 @@ export interface WorkflowCanvasProps {
   zoomChrome: "builder" | "run";
   /** The builder's bottom-left status pill (step counts, validity). */
   statusSlot?: ReactNode;
+  /** Called when the author presses the empty canvas rather than a card/control. */
+  onBackgroundPress?: () => void;
   className?: string;
 }
 
@@ -60,11 +62,13 @@ export function WorkflowCanvas({
   ariaLabel,
   zoomChrome,
   statusSlot,
+  onBackgroundPress,
   className = "",
 }: WorkflowCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: FIT_PADDING, y: FIT_PADDING });
+  const [containerWidth, setContainerWidth] = useState(0);
   /** Once the user pans or zooms, content changes stop re-framing the view. */
   const touchedRef = useRef(false);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; panX: number; panY: number } | null>(null);
@@ -99,6 +103,22 @@ export function WorkflowCanvas({
     }
   }, [fit]);
 
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(([entry]) => {
+      const width = entry?.contentRect.width ?? container.clientWidth;
+      setContainerWidth(width);
+      if (!touchedRef.current) {
+        window.requestAnimationFrame(fit);
+      }
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [fit]);
+
   const zoomBy = (factor: number) => {
     touchedRef.current = true;
     setZoom((current) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, current * factor)));
@@ -110,6 +130,7 @@ export function WorkflowCanvas({
     if (event.target instanceof Element && event.target.closest("button")) {
       return;
     }
+    onBackgroundPress?.();
     touchedRef.current = true;
     dragRef.current = {
       pointerId: event.pointerId,
@@ -218,10 +239,12 @@ export function WorkflowCanvas({
           className="absolute flex flex-col items-start"
           style={{
             left: 12,
-            bottom: 12,
+            bottom: containerWidth > 0 && containerWidth < 340 ? 52 : 12,
             width: 264,
             minWidth: 172,
-            maxWidth: "calc(100% - 156px)",
+            maxWidth: containerWidth > 0 && containerWidth < 340
+              ? "calc(100% - 24px)"
+              : "calc(100% - 156px)",
             gap: 3,
             padding: "6px 9px",
             borderRadius: 9,

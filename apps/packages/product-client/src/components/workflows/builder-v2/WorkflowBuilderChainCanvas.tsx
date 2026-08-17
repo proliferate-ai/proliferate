@@ -6,7 +6,6 @@ import {
   WORKFLOW_BUILDER_NODE_WIDTH,
 } from "#product/domain/workflows/graph-layout";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
-import { WORKFLOW_NODE_CARD_COPY } from "#product/copy/workflows/workflow-node-card-copy";
 import type { WorkflowBuilderHarnessOption } from "#product/lib/domain/workflows/workflow-builder-authoring";
 import { WorkflowCanvas } from "#product/components/workflows/canvas/WorkflowCanvas";
 
@@ -35,6 +34,7 @@ export interface WorkflowBuilderChainCanvasProps {
   statusSlot?: ReactNode;
   onSelectNode(nodeId: string): void;
   onSelectInput(): void;
+  onClearSelection(): void;
   className?: string;
 }
 
@@ -55,6 +55,7 @@ export function WorkflowBuilderChainCanvas({
   statusSlot,
   onSelectNode,
   onSelectInput,
+  onClearSelection,
   className,
 }: WorkflowBuilderChainCanvasProps) {
   const layout = useMemo(
@@ -74,6 +75,7 @@ export function WorkflowBuilderChainCanvas({
       ariaLabel={WORKFLOW_BUILDER_COPY.chainCanvasLabel}
       zoomChrome="builder"
       statusSlot={statusSlot}
+      onBackgroundPress={onClearSelection}
       className={className}
     >
       {layout.nodes.map((placed, index) => {
@@ -111,7 +113,7 @@ export function WorkflowBuilderChainCanvas({
             accent={kind.accent}
             selected={placed.key === selectedNodeId}
             kindLabel={kind.label}
-            indexLabel={WORKFLOW_NODE_CARD_COPY.nodeIndexLabel(index - 1)}
+            indexLabel={String(index - 1).padStart(2, "0")}
             title={node.title.trim() || WORKFLOW_BUILDER_COPY.canvasUntitledStep}
             summary={promptLine ?? WORKFLOW_BUILDER_COPY.canvasNoPrompt}
             summaryPresent={promptLine !== null}

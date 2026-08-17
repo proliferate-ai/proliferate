@@ -7,30 +7,31 @@ export const WORKFLOW_MAIN_COPY = {
   pageTitle: "Workflows",
   pageDescription: "Reusable agent chains you can run against any repository.",
 
+  newWorkflowLabel: "New workflow",
+  newBlankLabel: "Blank workflow",
+  newFromTemplateSectionLabel: "From a template",
+  newMenuLabel: "New workflow options",
+
   loadingTitle: "Loading workflows",
   loadingDescription: "Loading your saved workflows.",
   errorTitle: "Could not load workflows",
   errorDescription: "Refresh the page or sign in again.",
   retryLabel: "Retry",
 
+  emptyTitle: "No workflows yet",
+  emptyDescription: "Start from a template or build one from a blank chain.",
+  // A visible legacy group below contradicts "no workflows yet", so the empty
+  // state says what is actually empty.
+  emptyWithLegacyTitle: "Nothing rebuilt yet",
+  emptyWithLegacyDescription:
+    "Your earlier workflows are listed below as legacy. Start from a template or a blank chain to rebuild one.",
+  useTemplateLabel: "Use template",
+  startBlankLabel: "Start blank",
+
   runLabel: (title: string) => `Run ${title}`,
-
-  filterPlaceholder: "Filter workflows...",
-  filterLabel: "Filter workflows",
-
-  createGroupTitle: "Create workflows",
-  createBlankTitle: "Create a new workflow",
-  createBlankSubtitle: "Start from an empty graph",
-  runRowTitle: "Run this workflow",
-
-  savedGroupTitle: "Saved Workflows",
-
-  executionsGroupTitle: "Executions",
-  executionsGroupDescription:
-    "Runs recorded from these workflows. Selecting one opens its workspace.",
-  // `definitionJson` carries no title today; same fallback the resume popover
-  // wears until the frozen invocation contract grows one.
-  executionFallbackTitle: "Workflow run",
+  editLabel: (title: string) => `Edit ${title}`,
+  rowActionsLabel: (title: string) => `${title} actions`,
+  deleteItemLabel: "Delete...",
 
   legacyGroupTitle: "Legacy",
   legacyGroupDescription:

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { IconButton } from "#product/primitives/IconButton";
 import { SplitPanelLeft } from "#product/primitives/icons/app-shell";
 import { useWorkspaceSidebarResize } from "#product/hooks/preferences/ui/use-workspace-sidebar-resize";
+import { useShortcutHandler } from "#product/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import {
   useHasMacWindowControls,
   useMacWindowControlsInsetClass,
@@ -25,6 +26,9 @@ interface MainSidebarPageShellProps {
 export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
   const sidebarOpen = useWorkspaceUiStore((s) => s.sidebarOpen);
   const setSidebarOpen = useWorkspaceUiStore((s) => s.setSidebarOpen);
+  useShortcutHandler("workspace.toggle-left-sidebar", () => {
+    setSidebarOpen((open) => !open);
+  });
   const {
     sidebarWidth,
     sidebarResizing,

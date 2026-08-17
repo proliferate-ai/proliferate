@@ -2,10 +2,7 @@ import type { CSSProperties } from "react";
 import type { WorkflowNodeV2 } from "@proliferate/cloud-sdk";
 
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
-import {
-  workflowBuilderModelOptions,
-  type WorkflowBuilderHarnessOption,
-} from "#product/lib/domain/workflows/workflow-builder-authoring";
+import type { WorkflowBuilderHarnessOption } from "#product/lib/domain/workflows/workflow-builder-authoring";
 import type { WorkflowBuilderIssue } from "#product/lib/domain/workflows/workflow-builder-validation";
 import { WorkflowBuilderPromptField } from "#product/components/workflows/builder-v2/WorkflowBuilderPromptField";
 import { ArrowDown, ArrowUp } from "#product/primitives/icons/core";
@@ -60,8 +57,8 @@ const KIND = {
 
 export interface WorkflowBuilderNodeInspectorProps {
   node: WorkflowNodeV2;
-  /** 1-based position in the chain; the chain IS the card order. */
-  position: number;
+  /** Zero-based index outward from the structural input node. */
+  index: number;
   nodeCount: number;
   harnesses: readonly WorkflowBuilderHarnessOption[];
   /** Validator issues already narrowed to this node. */
@@ -85,7 +82,7 @@ export interface WorkflowBuilderNodeInspectorProps {
  */
 export function WorkflowBuilderNodeInspector({
   node,
-  position,
+  index,
   nodeCount,
   harnesses,
   issues,
@@ -98,6 +95,7 @@ export function WorkflowBuilderNodeInspector({
   onMoveDown,
 }: WorkflowBuilderNodeInspectorProps) {
   const kind = node.type === "human_in_loop" ? KIND.human_in_loop : KIND.agent;
+  const position = index + 1;
   const fieldPrefix = `workflow-builder-node-${node.id}`;
   const promptInvalid = issues.some((issue) =>
     issue.code === "malformed_reference"
@@ -105,11 +103,12 @@ export function WorkflowBuilderNodeInspector({
     || issue.code === "unknown_doc_ref");
   const agentKind = node.model?.agentKind ?? "";
   const modelId = node.model?.modelId ?? "";
-  const modelOptions = workflowBuilderModelOptions(harnesses, agentKind);
-  const harnessUnavailable = agentKind.length > 0
-    && !harnesses.some((harness) => harness.agentKind === agentKind);
-  const modelUnavailable = modelId.length > 0
-    && !modelOptions.some((option) => option.id === modelId);
+  const selectedModelValue = agentKind.length > 0
+    ? modelSelectValue(agentKind, modelId)
+    : "";
+  const selectedModelAvailable = agentKind.length === 0 || harnesses.some((harness) =>
+    harness.agentKind === agentKind
+    && (modelId.length === 0 || harness.models.some((model) => model.id === modelId)));
 
   return (
     <div className="flex flex-col" style={{ gap: 14 }}>
@@ -126,7 +125,7 @@ export function WorkflowBuilderNodeInspector({
             {kind.label}
           </span>
           <span className="text-ui-sm ml-auto flex-none font-mono text-faint">
-            {String(position).padStart(2, "0")}
+            {String(index).padStart(2, "0")}
           </span>
         </div>
         <input
@@ -175,48 +174,49 @@ export function WorkflowBuilderNodeInspector({
           {WORKFLOW_BUILDER_COPY.modelSectionHeading}
         </span>
         <select
-          value={agentKind}
-          aria-label={WORKFLOW_BUILDER_COPY.harnessLabel}
+          value={selectedModelValue}
+          aria-label={WORKFLOW_BUILDER_COPY.modelLabel}
           disabled={disabled}
           className={INSPECTOR_FIELD_CLASS}
           style={INSPECTOR_FIELD_STYLE}
           onChange={(event) => {
-            const nextAgentKind = event.currentTarget.value;
-            // Clearing the harness clears the whole model: a modelId without
-            // the harness that names it is not a resolvable selection.
+            const value = event.currentTarget.value;
+            if (value.length === 0) {
+              onChange({ model: null });
+              return;
+            }
+            const [nextAgentKind, nextModelId] = JSON.parse(value) as [string, string];
             onChange({
-              model: nextAgentKind.length > 0 ? { agentKind: nextAgentKind } : null,
+              model: {
+                agentKind: nextAgentKind,
+                modelId: nextModelId || null,
+                modeId: node.model?.modeId ?? null,
+              },
             });
           }}
         >
           <option value="">{WORKFLOW_BUILDER_COPY.harnessDefaultOption}</option>
-          {harnessUnavailable ? (
-            <option value={agentKind}>
-              {WORKFLOW_BUILDER_COPY.harnessUnavailableOption(agentKind)}
+          {!selectedModelAvailable ? (
+            <option value={selectedModelValue}>
+              {WORKFLOW_BUILDER_COPY.modelUnavailableOption(
+                modelId.length > 0 ? `${agentKind} · ${modelId}` : agentKind,
+              )}
             </option>
           ) : null}
           {harnesses.map((harness) => (
-            <option key={harness.agentKind} value={harness.agentKind}>{harness.label}</option>
-          ))}
-        </select>
-        <select
-          value={modelId}
-          aria-label={WORKFLOW_BUILDER_COPY.modelLabel}
-          disabled={disabled || agentKind.length === 0}
-          className={INSPECTOR_FIELD_CLASS}
-          style={INSPECTOR_FIELD_STYLE}
-          onChange={(event) => onChange({
-            model: { agentKind, modelId: event.currentTarget.value || null },
-          })}
-        >
-          <option value="">{WORKFLOW_BUILDER_COPY.modelDefaultOption}</option>
-          {modelUnavailable ? (
-            <option value={modelId}>
-              {WORKFLOW_BUILDER_COPY.modelUnavailableOption(modelId)}
-            </option>
-          ) : null}
-          {modelOptions.map((option) => (
-            <option key={option.id} value={option.id}>{option.label}</option>
+            <optgroup key={harness.agentKind} label={harness.label}>
+              <option value={modelSelectValue(harness.agentKind, "")}>
+                {WORKFLOW_BUILDER_COPY.modelHarnessDefaultOption(harness.label)}
+              </option>
+              {harness.models.map((model) => (
+                <option
+                  key={model.id}
+                  value={modelSelectValue(harness.agentKind, model.id)}
+                >
+                  {model.label}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </div>
@@ -277,4 +277,8 @@ export function WorkflowBuilderNodeInspector({
       </div>
     </div>
   );
+}
+
+function modelSelectValue(agentKind: string, modelId: string): string {
+  return JSON.stringify([agentKind, modelId]);
 }

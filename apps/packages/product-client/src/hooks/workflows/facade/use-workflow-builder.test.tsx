@@ -56,6 +56,7 @@ describe("useWorkflowBuilder validation gating", () => {
 
     act(() => {
       result.current.actions.setTitle("Issue triage");
+      result.current.actions.addNode();
       result.current.actions.updateNode("step-1", {
         prompt: "Record what you find in @doc:findings.",
       });
@@ -79,6 +80,7 @@ describe("useWorkflowBuilder validation gating", () => {
 
     act(() => {
       result.current.actions.setTitle("Issue triage");
+      result.current.actions.addNode();
       result.current.actions.updateNode("step-1", {
         prompt: "Record what you find in @doc:findings.",
       });
@@ -154,6 +156,7 @@ describe("useWorkflowBuilder save mapping", () => {
 
     act(() => {
       result.current.actions.setTitle("  Issue triage  ");
+      result.current.actions.addNode();
     });
     await act(async () => {
       await result.current.save();
@@ -244,6 +247,7 @@ describe("useWorkflowBuilder declaration grammar gating", () => {
 
     act(() => {
       result.current.actions.setTitle("Issue triage");
+      result.current.actions.addNode();
       result.current.actions.addInput();
     });
     act(() => {
@@ -265,6 +269,7 @@ describe("useWorkflowBuilder declaration grammar gating", () => {
 
     act(() => {
       result.current.actions.setTitle("Issue triage");
+      result.current.actions.addNode();
       result.current.actions.addInput();
     });
     // The name is the ONLY difference from the test above.
@@ -285,6 +290,7 @@ describe("useWorkflowBuilder declaration grammar gating", () => {
 
     act(() => {
       result.current.actions.setTitle("Issue triage");
+      result.current.actions.addNode();
       result.current.actions.addDocTemplate();
     });
     act(() => {
@@ -310,6 +316,7 @@ describe("useWorkflowBuilder default repository", () => {
 
     act(() => {
       result.current.actions.setTitle("Issue triage");
+      result.current.actions.addNode();
       result.current.actions.setDefaultRepoConfigId("repo-2");
     });
 
@@ -369,6 +376,7 @@ describe("useWorkflowBuilder default repository", () => {
     const fresh = renderBuilder({ availableRepoRootIds: null });
     act(() => {
       fresh.result.current.actions.setTitle("Issue triage");
+      fresh.result.current.actions.addNode();
     });
     expect(fresh.result.current.canSave).toBe(true);
   });

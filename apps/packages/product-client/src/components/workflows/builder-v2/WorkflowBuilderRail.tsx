@@ -24,6 +24,8 @@ const RAIL_BUTTON_STYLE: CSSProperties = {
 };
 
 export interface WorkflowBuilderRailProps {
+  width: number;
+  compact: boolean;
   docTemplates: readonly WorkflowDocTemplateV2[];
   /** Index of the doc selected in the inspector, or `null`. */
   selectedDocIndex: number | null;
@@ -42,6 +44,8 @@ export interface WorkflowBuilderRailProps {
  * the inspector on the other side of the canvas.
  */
 export function WorkflowBuilderRail({
+  width,
+  compact,
   docTemplates,
   selectedDocIndex,
   disabled,
@@ -52,27 +56,42 @@ export function WorkflowBuilderRail({
 }: WorkflowBuilderRailProps) {
   return (
     <div
+      id="workflow-builder-rail"
       className="flex shrink-0 flex-col overflow-y-auto overflow-x-hidden border-r border-border bg-sidebar-background"
-      style={{ width: 184, gap: 14, padding: "14px 12px" }}
+      style={{
+        width,
+        gap: 14,
+        padding: compact ? "14px 8px" : "14px 12px",
+        alignItems: compact ? "center" : "stretch",
+      }}
     >
       <div className="flex flex-col" style={{ gap: 6 }}>
-        <span className={EYEBROW_CLASS} style={EYEBROW_STYLE}>
-          {WORKFLOW_BUILDER_COPY.addStepHeading}
-        </span>
+        {!compact ? (
+          <span className={EYEBROW_CLASS} style={EYEBROW_STYLE}>
+            {WORKFLOW_BUILDER_COPY.addStepHeading}
+          </span>
+        ) : null}
         <button
           type="button"
           title={WORKFLOW_BUILDER_COPY.addAgentStepTitle}
           aria-label={WORKFLOW_BUILDER_COPY.addAgentStepTitle}
           disabled={disabled}
           className="text-ui-sm text-foreground hover:border-border-heavy hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
-          style={RAIL_BUTTON_STYLE}
+          style={{
+            ...RAIL_BUTTON_STYLE,
+            gap: compact ? 0 : 8,
+            justifyContent: compact ? "center" : "flex-start",
+            width: compact ? 34 : "100%",
+            height: compact ? 34 : "auto",
+            padding: compact ? 0 : "8px 9px",
+          }}
           onClick={() => onAddStep("agent")}
         >
           <span
             aria-hidden
             style={{ width: 7, height: 7, borderRadius: 999, flex: "none", background: "var(--color-info)" }}
           />
-          <span>{WORKFLOW_BUILDER_COPY.addAgentStepLabel}</span>
+          {!compact ? <span>{WORKFLOW_BUILDER_COPY.addAgentStepLabel}</span> : null}
         </button>
         <button
           type="button"
@@ -80,7 +99,14 @@ export function WorkflowBuilderRail({
           aria-label={WORKFLOW_BUILDER_COPY.addHumanStepTitle}
           disabled={disabled}
           className="text-ui-sm text-foreground hover:border-border-heavy hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
-          style={RAIL_BUTTON_STYLE}
+          style={{
+            ...RAIL_BUTTON_STYLE,
+            gap: compact ? 0 : 8,
+            justifyContent: compact ? "center" : "flex-start",
+            width: compact ? 34 : "100%",
+            height: compact ? 34 : "auto",
+            padding: compact ? 0 : "8px 9px",
+          }}
           onClick={() => onAddStep("human_in_loop")}
         >
           <span
@@ -93,25 +119,26 @@ export function WorkflowBuilderRail({
               background: "var(--color-compute-target-amber)",
             }}
           />
-          <span>{WORKFLOW_BUILDER_COPY.addHumanStepLabel}</span>
+          {!compact ? <span>{WORKFLOW_BUILDER_COPY.addHumanStepLabel}</span> : null}
         </button>
       </div>
 
-      <p className="text-ui-sm m-0 text-faint" style={{ textWrap: "pretty" }}>
-        {WORKFLOW_BUILDER_COPY.railHelp}
-      </p>
-
-      <div className="flex flex-col border-t border-border" style={{ gap: 6, paddingTop: 12 }}>
-        <div className="flex w-full items-center" style={{ gap: 6 }}>
-          <span className={EYEBROW_CLASS} style={EYEBROW_STYLE}>
-            {WORKFLOW_BUILDER_COPY.contextDocsHeading}
-          </span>
-          {docTemplates.length > 0 ? (
+      <div className="flex w-full flex-col border-t border-border" style={{ gap: 6, paddingTop: 12 }}>
+        <div
+          className="flex w-full items-center"
+          style={{ gap: compact ? 0 : 6, justifyContent: compact ? "center" : "flex-start" }}
+        >
+          {!compact ? (
+            <span className={EYEBROW_CLASS} style={EYEBROW_STYLE}>
+              {WORKFLOW_BUILDER_COPY.contextDocsHeading}
+            </span>
+          ) : null}
+          {!compact && docTemplates.length > 0 ? (
             <span className="text-ui-sm font-mono text-faint">
               {WORKFLOW_BUILDER_COPY.contextDocsCount(docTemplates.length)}
             </span>
           ) : null}
-          <span className="flex-1" />
+          {!compact ? <span className="flex-1" /> : null}
           <button
             type="button"
             aria-label={WORKFLOW_BUILDER_COPY.addDocLabel}
@@ -124,7 +151,7 @@ export function WorkflowBuilderRail({
             <Plus className="icon-paired" aria-hidden />
           </button>
         </div>
-        {docTemplates.length === 0 ? (
+        {!compact && docTemplates.length === 0 ? (
           <p className="text-ui-sm m-0 text-faint" style={{ textWrap: "pretty" }}>
             {WORKFLOW_BUILDER_COPY.contextDocsEmpty}
           </p>
@@ -141,10 +168,11 @@ export function WorkflowBuilderRail({
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 7,
-                    justifyContent: "flex-start",
-                    padding: "5px 7px",
-                    width: "100%",
+                    gap: compact ? 0 : 7,
+                    justifyContent: compact ? "center" : "flex-start",
+                    padding: compact ? 0 : "5px 7px",
+                    width: compact ? 34 : "100%",
+                    height: compact ? 34 : "auto",
                     borderRadius: 8,
                     border: `1px solid ${selected ? "var(--color-border-heavy)" : "transparent"}`,
                     background: selected ? "var(--color-surface-elevated)" : "transparent",
@@ -158,9 +186,11 @@ export function WorkflowBuilderRail({
                   <span className="flex shrink-0 text-faint">
                     <FileCode className="icon-paired" aria-hidden />
                   </span>
-                  <span className="min-w-0 truncate">
-                    {doc.slug.trim() || WORKFLOW_BUILDER_COPY.docUntitledRow}
-                  </span>
+                  {!compact ? (
+                    <span className="min-w-0 truncate">
+                      {doc.slug.trim() || WORKFLOW_BUILDER_COPY.docUntitledRow}
+                    </span>
+                  ) : null}
                 </button>
               );
             })}

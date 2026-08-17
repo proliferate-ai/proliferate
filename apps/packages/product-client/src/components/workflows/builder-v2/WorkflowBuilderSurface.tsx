@@ -1,4 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type MouseEvent,
+} from "react";
 import { useRepoRootsQuery } from "@anyharness/sdk-react";
 import type { WorkflowStarterTemplateV2 } from "#product/config/workflows/starter-templates";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
@@ -16,8 +25,21 @@ import { WorkflowBuilderNodeInspector } from "#product/components/workflows/buil
 import { WorkflowBuilderRail } from "#product/components/workflows/builder-v2/WorkflowBuilderRail";
 import { WorkflowMainDeleteDialog } from "#product/components/workflows/main/WorkflowMainDeleteDialog";
 import { WorkflowResourceState } from "#product/components/workflows/WorkflowResourceState";
-import { ChevronRight } from "#product/primitives/icons/core";
+import { WorkspaceResizeSeparator } from "#product/components/workspace/shell/screen/WorkspaceResizeSeparator";
+import { useResize } from "#product/hooks/ui/layout/use-resize";
+import { Check, ChevronRight } from "#product/primitives/icons/core";
 import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
+
+const BUILDER_RAIL_DEFAULT_WIDTH = 184;
+const BUILDER_RAIL_COLLAPSED_WIDTH = 52;
+const BUILDER_RAIL_SNAP_WIDTH = 100;
+const BUILDER_RAIL_MIN_WIDE_WIDTH = 100;
+const BUILDER_RAIL_MAX_WIDTH = 340;
+const BUILDER_INSPECTOR_DEFAULT_WIDTH = 312;
+const BUILDER_INSPECTOR_MIN_WIDTH = 232;
+const BUILDER_INSPECTOR_MAX_WIDTH = 520;
+/** Keep the graph viewport useful while either adjacent pane is widened. */
+const BUILDER_CANVAS_MIN_WIDTH = 280;
 
 export interface WorkflowBuilderSurfaceProps {
   /** `null` = a new workflow, blank or seeded from `template`. */
@@ -40,13 +62,13 @@ type BuilderSelection =
   | { kind: "input" };
 
 /**
- * A stale selection (removed step, removed doc) falls back to the first step,
- * then to the input card — the inspector always edits something real.
+ * A stale selection (removed step or document) closes the inspector. The
+ * supplied builder keeps the graph full-width until the author selects a card.
  */
 function resolveSelection(
   selection: BuilderSelection | null,
   draft: WorkflowBuilderDraft,
-): BuilderSelection {
+): BuilderSelection | null {
   if (selection?.kind === "node" && draft.nodes.some((node) => node.id === selection.id)) {
     return selection;
   }
@@ -56,9 +78,7 @@ function resolveSelection(
   if (selection?.kind === "input") {
     return selection;
   }
-  return draft.nodes.length > 0
-    ? { kind: "node", id: draft.nodes[0].id }
-    : { kind: "input" };
+  return null;
 }
 
 /**
@@ -119,6 +139,92 @@ export function WorkflowBuilderSurface({
   const [selection, setSelection] = useState<BuilderSelection | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [railWidth, setRailWidth] = useState(BUILDER_RAIL_DEFAULT_WIDTH);
+  const [inspectorWidth, setInspectorWidth] = useState(BUILDER_INSPECTOR_DEFAULT_WIDTH);
+  const [paneRowWidth, setPaneRowWidth] = useState(0);
+  const [confirmedTitle, setConfirmedTitle] = useState(draft.title);
+  const paneRowRef = useRef<HTMLDivElement>(null);
+  const railDragMaxRef = useRef(BUILDER_RAIL_MAX_WIDTH);
+  const inspectorDragMaxRef = useRef(BUILDER_INSPECTOR_MAX_WIDTH);
+
+  const resizeRail = useCallback((rawWidth: number) => {
+    const clamped = Math.min(
+      railDragMaxRef.current,
+      Math.max(BUILDER_RAIL_COLLAPSED_WIDTH, rawWidth),
+    );
+    setRailWidth(clamped < BUILDER_RAIL_SNAP_WIDTH
+      ? BUILDER_RAIL_COLLAPSED_WIDTH
+      : clamped);
+  }, []);
+  const resizeInspector = useCallback((rawWidth: number) => {
+    setInspectorWidth(Math.min(
+      inspectorDragMaxRef.current,
+      Math.max(BUILDER_INSPECTOR_MIN_WIDTH, rawWidth),
+    ));
+  }, []);
+  const beginRailResize = useResize({
+    direction: "horizontal",
+    size: railWidth,
+    resolveSize: () => {
+      const renderedWidth = paneRowRef.current
+        ?.querySelector<HTMLElement>("#workflow-builder-rail")
+        ?.getBoundingClientRect().width ?? 0;
+      return renderedWidth > 0 ? renderedWidth : railWidth;
+    },
+    onResize: resizeRail,
+  });
+  const beginInspectorResize = useResize({
+    direction: "horizontal",
+    size: inspectorWidth,
+    onResize: resizeInspector,
+    reverse: true,
+  });
+  const onRailSeparatorDown = useCallback((event: MouseEvent) => {
+    const rowWidth = paneRowRef.current?.getBoundingClientRect().width ?? 0;
+    const openInspectorWidth = selection === null ? 0 : inspectorWidth;
+    railDragMaxRef.current = rowWidth > 0
+      ? Math.max(
+          BUILDER_RAIL_MIN_WIDE_WIDTH,
+          Math.min(
+            BUILDER_RAIL_MAX_WIDTH,
+            rowWidth - openInspectorWidth - BUILDER_CANVAS_MIN_WIDTH,
+          ),
+        )
+      : BUILDER_RAIL_MAX_WIDTH;
+    beginRailResize(event);
+  }, [beginRailResize, inspectorWidth, selection]);
+  const onInspectorSeparatorDown = useCallback((event: MouseEvent) => {
+    const rowWidth = paneRowRef.current?.getBoundingClientRect().width ?? 0;
+    const renderedRailWidth = paneRowRef.current
+      ?.querySelector<HTMLElement>("#workflow-builder-rail")
+      ?.getBoundingClientRect().width ?? railWidth;
+    inspectorDragMaxRef.current = rowWidth > 0
+      ? Math.max(
+          BUILDER_INSPECTOR_MIN_WIDTH,
+          Math.min(
+            BUILDER_INSPECTOR_MAX_WIDTH,
+            rowWidth - renderedRailWidth - BUILDER_CANVAS_MIN_WIDTH,
+          ),
+        )
+      : BUILDER_INSPECTOR_MAX_WIDTH;
+    beginInspectorResize(event);
+  }, [beginInspectorResize, railWidth]);
+  useEffect(() => {
+    const row = paneRowRef.current;
+    if (!row || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(([entry]) => {
+      setPaneRowWidth(entry?.contentRect.width ?? row.clientWidth);
+    });
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    if (!builder.dirty) {
+      setConfirmedTitle(draft.title);
+    }
+  }, [builder.dirty, draft.title]);
   // A just-added step selects itself so the palette lands the user in the
   // fields they came for. Docs do the same, but synchronously in the add
   // handler (the new doc's index is known there).
@@ -130,10 +236,28 @@ export function WorkflowBuilderSurface({
     previousNodeCountRef.current = draft.nodes.length;
   }, [draft.nodes]);
   const active = resolveSelection(selection, draft);
-  const selectedNode = active.kind === "node"
+  const selectedNode = active?.kind === "node"
     ? draft.nodes.find((node) => node.id === active.id) ?? null
     : null;
-  const selectedDoc = active.kind === "doc" ? draft.docTemplates[active.index] : null;
+  const selectedDoc = active?.kind === "doc" ? draft.docTemplates[active.index] : null;
+  const inspectorOpen = active !== null;
+  const autoCompactRail = inspectorOpen
+    && paneRowWidth > 0
+    && paneRowWidth < railWidth + BUILDER_CANVAS_MIN_WIDTH + inspectorWidth;
+  const compactRail = autoCompactRail || railWidth < BUILDER_RAIL_MIN_WIDE_WIDTH;
+  const renderedRailWidth = autoCompactRail ? BUILDER_RAIL_COLLAPSED_WIDTH : railWidth;
+  const titleDirty = draft.title !== confirmedTitle;
+
+  const confirmTitle = () => setConfirmedTitle(draft.title);
+  const onTitleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      confirmTitle();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      event.currentTarget.blur();
+    }
+  };
 
   if (builder.status !== "ready") {
     return (
@@ -199,6 +323,15 @@ export function WorkflowBuilderSurface({
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background" data-telemetry-block>
+      {/* MainSidebarPageShell owns the first 46px as native window chrome. A
+          directly nested page header must clear that drag layer or its
+          controls receive no pointer events. */}
+      <div
+        className="shrink-0"
+        style={{ height: 46 }}
+        data-tauri-drag-region="true"
+        data-workflow-builder-drag-clearance
+      />
       <header
         className="flex shrink-0 items-center border-b border-border bg-background"
         style={{ gap: 12, height: 46, padding: "0 12px" }}
@@ -233,7 +366,20 @@ export function WorkflowBuilderSurface({
             color: "var(--color-foreground)",
           }}
           onChange={(event) => actions.setTitle(event.currentTarget.value)}
+          onKeyDown={onTitleKeyDown}
         />
+        {titleDirty ? (
+          <button
+            type="button"
+            title={WORKFLOW_BUILDER_COPY.confirmTitleLabel}
+            aria-label={WORKFLOW_BUILDER_COPY.confirmTitleLabel}
+            className="grid shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-success hover:bg-hover"
+            style={{ width: 22, height: 22 }}
+            onClick={confirmTitle}
+          >
+            <Check className="icon-paired" aria-hidden />
+          </button>
+        ) : null}
         <div className="flex min-w-0 flex-1 items-center justify-end" style={{ gap: 10 }}>
           {builder.saved ? (
             <span className="text-ui-sm min-w-0 truncate text-muted-foreground">
@@ -281,10 +427,12 @@ export function WorkflowBuilderSurface({
         <div className="flex shrink-0 flex-col gap-2 px-3 pt-3">{banners}</div>
       ) : null}
 
-      <div className="relative flex min-h-0 flex-1">
+      <div ref={paneRowRef} className="relative flex min-h-0 flex-1" data-workflow-builder-pane-row>
         <WorkflowBuilderRail
+          width={renderedRailWidth}
+          compact={compactRail}
           docTemplates={draft.docTemplates}
-          selectedDocIndex={active.kind === "doc" ? active.index : null}
+          selectedDocIndex={active?.kind === "doc" ? active.index : null}
           disabled={builder.saving}
           addDocDisabled={draft.nodes.length === 0}
           onAddStep={(type) => actions.addNode(type)}
@@ -295,12 +443,21 @@ export function WorkflowBuilderSurface({
           onSelectDoc={(index) => setSelection({ kind: "doc", index })}
         />
 
+        <WorkspaceResizeSeparator
+          edge="left"
+          ariaControls="workflow-builder-rail"
+          ariaLabel="Resize step rail"
+          title="Drag to resize · double-click to reset"
+          onMouseDown={onRailSeparatorDown}
+          onDoubleClick={() => setRailWidth(BUILDER_RAIL_DEFAULT_WIDTH)}
+        />
+
         <WorkflowBuilderChainCanvas
-          className="min-w-0 flex-1"
+          className="min-w-[280px] flex-1"
           nodes={draft.nodes}
           harnesses={harnesses}
           selectedNodeId={selectedNode?.id ?? null}
-          inputSelected={active.kind === "input"}
+          inputSelected={active?.kind === "input"}
           statusSlot={(
             <>
               <span className="text-ui-sm whitespace-nowrap text-faint">
@@ -343,67 +500,82 @@ export function WorkflowBuilderSurface({
           )}
           onSelectNode={(id) => setSelection({ kind: "node", id })}
           onSelectInput={() => setSelection({ kind: "input" })}
+          onClearSelection={() => setSelection(null)}
         />
 
-        <aside
-          className="flex shrink-0 flex-col overflow-y-auto border-l border-border bg-sidebar-background"
-          style={{ width: 312, gap: 14, padding: 14 }}
-        >
-          {active.kind === "input" ? (
-            <>
-              <WorkflowBuilderDetailsCard
-                description={draft.description}
-                defaultRepoConfigId={draft.defaultRepoConfigId}
-                repositories={repositories}
-                repositoriesLoading={repoRootsQuery.isLoading}
-                repoDefaultUnavailable={builder.repoDefaultUnavailable}
+        {inspectorOpen ? (
+          <WorkspaceResizeSeparator
+            edge="right"
+            ariaControls="workflow-builder-inspector"
+            ariaLabel="Resize inspector"
+            title="Drag to resize · double-click to reset"
+            onMouseDown={onInspectorSeparatorDown}
+            onDoubleClick={() => setInspectorWidth(BUILDER_INSPECTOR_DEFAULT_WIDTH)}
+          />
+        ) : null}
+
+        {inspectorOpen ? (
+          <aside
+            id="workflow-builder-inspector"
+            className="flex shrink-0 flex-col overflow-y-auto border-l border-border bg-sidebar-background"
+            style={{ width: inspectorWidth, gap: 14, padding: 14 }}
+          >
+            {active?.kind === "input" ? (
+              <>
+                <WorkflowBuilderDetailsCard
+                  description={draft.description}
+                  defaultRepoConfigId={draft.defaultRepoConfigId}
+                  repositories={repositories}
+                  repositoriesLoading={repoRootsQuery.isLoading}
+                  repoDefaultUnavailable={builder.repoDefaultUnavailable}
+                  disabled={builder.saving}
+                  onDescriptionChange={actions.setDescription}
+                  onDefaultRepoConfigIdChange={actions.setDefaultRepoConfigId}
+                />
+                <WorkflowBuilderInputsPanel
+                  inputs={draft.inputs}
+                  issues={issues}
+                  disabled={builder.saving}
+                  onAdd={actions.addInput}
+                  onRemove={actions.removeInput}
+                  onChange={actions.updateInput}
+                />
+              </>
+            ) : null}
+
+            {selectedNode ? (
+              <WorkflowBuilderNodeInspector
+                key={selectedNode.id}
+                node={selectedNode}
+                index={draft.nodes.findIndex((node) => node.id === selectedNode.id)}
+                nodeCount={draft.nodes.length}
+                harnesses={harnesses}
+                issues={issues.filter((issue) => issue.nodeId === selectedNode.id)}
+                inputNames={inputNames}
+                docSlugs={docSlugs}
                 disabled={builder.saving}
-                onDescriptionChange={actions.setDescription}
-                onDefaultRepoConfigIdChange={actions.setDefaultRepoConfigId}
+                onChange={(patch) => actions.updateNode(selectedNode.id, patch)}
+                onRemove={() => actions.removeNode(selectedNode.id)}
+                onMoveUp={() => actions.moveNodeUp(selectedNode.id)}
+                onMoveDown={() => actions.moveNodeDown(selectedNode.id)}
               />
-              <WorkflowBuilderInputsPanel
-                inputs={draft.inputs}
+            ) : null}
+
+            {selectedDoc && active?.kind === "doc" ? (
+              <WorkflowBuilderDocInspector
+                key={active.index}
+                doc={selectedDoc}
+                index={active.index}
+                nodes={draft.nodes}
                 issues={issues}
                 disabled={builder.saving}
-                onAdd={actions.addInput}
-                onRemove={actions.removeInput}
-                onChange={actions.updateInput}
+                onClose={() => setSelection(null)}
+                onRemove={() => actions.removeDocTemplate(active.index)}
+                onChange={(patch) => actions.updateDocTemplate(active.index, patch)}
               />
-            </>
-          ) : null}
-
-          {selectedNode ? (
-            <WorkflowBuilderNodeInspector
-              key={selectedNode.id}
-              node={selectedNode}
-              position={draft.nodes.findIndex((node) => node.id === selectedNode.id) + 1}
-              nodeCount={draft.nodes.length}
-              harnesses={harnesses}
-              issues={issues.filter((issue) => issue.nodeId === selectedNode.id)}
-              inputNames={inputNames}
-              docSlugs={docSlugs}
-              disabled={builder.saving}
-              onChange={(patch) => actions.updateNode(selectedNode.id, patch)}
-              onRemove={() => actions.removeNode(selectedNode.id)}
-              onMoveUp={() => actions.moveNodeUp(selectedNode.id)}
-              onMoveDown={() => actions.moveNodeDown(selectedNode.id)}
-            />
-          ) : null}
-
-          {selectedDoc && active.kind === "doc" ? (
-            <WorkflowBuilderDocInspector
-              key={active.index}
-              doc={selectedDoc}
-              index={active.index}
-              nodes={draft.nodes}
-              issues={issues}
-              disabled={builder.saving}
-              onClose={() => setSelection(null)}
-              onRemove={() => actions.removeDocTemplate(active.index)}
-              onChange={(patch) => actions.updateDocTemplate(active.index, patch)}
-            />
-          ) : null}
-        </aside>
+            ) : null}
+          </aside>
+        ) : null}
       </div>
 
       <WorkflowMainDeleteDialog
