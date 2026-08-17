@@ -37,7 +37,6 @@ export function CommandActionRow({ item }: { item: ToolCallItem }) {
             </code>
           </div>
           <AutoHideScrollArea
-            className="border-t border-border/60"
             viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
             allowHorizontal
           >

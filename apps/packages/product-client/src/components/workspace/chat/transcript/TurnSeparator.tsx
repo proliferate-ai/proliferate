@@ -26,7 +26,7 @@ export function TurnSeparator({
         size="sm"
         data-chat-transcript-ignore
         onClick={onClick}
-        className={`group/turn-separator h-auto max-w-full justify-start gap-1 whitespace-normal bg-transparent px-0 py-0 text-chat font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:underline ${
+        className={`group/turn-separator h-auto max-w-full justify-start gap-1 whitespace-normal bg-transparent px-0 py-0 text-chat font-normal text-muted-foreground hover:bg-transparent active:bg-transparent hover:text-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:underline ${
           borderless ? "rounded-none border-0" : "rounded-md border border-transparent"
         }`}
         aria-expanded={expanded}
