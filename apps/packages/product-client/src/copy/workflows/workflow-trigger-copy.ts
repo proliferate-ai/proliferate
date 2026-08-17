@@ -5,6 +5,7 @@
  * authored text, not presentation logic.
  */
 export const WORKFLOW_TRIGGER_COPY = {
+  description: "Fill in this workflow's inputs and choose where the run works.",
   inputsEmpty: "This workflow takes no inputs.",
   optionalHint: "Optional",
   repositoryLabel: "Repository",
@@ -18,8 +19,6 @@ export const WORKFLOW_TRIGGER_COPY = {
   placementRepoRoot: "Repo root",
   placementHelp:
     "A new worktree keeps this run isolated. Repo root runs in the existing checkout.",
-  locationSummaryPrefix: "Runs in",
-  changeLocationLabel: "Change",
   cancelLabel: "Cancel",
   confirmLabel: "Start run",
 } as const;

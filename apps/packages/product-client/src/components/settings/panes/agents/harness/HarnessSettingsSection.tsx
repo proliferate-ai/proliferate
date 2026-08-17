@@ -81,11 +81,18 @@ function HarnessSettingRow({
   const selectionsQuery = useAuthSelections(surface, queriesEnabled);
   const putSelections = usePutAuthSelections();
 
-  // Read persisted value from the auth state response.
+  // Read the persisted value from the state response's `harness_settings`
+  // rider. The rendered document only carries a harness's `settings`
+  // passenger when that harness has an enabled selection (the fail-closed law
+  // forbids a settings-only harness entry), so a native-auth harness — the
+  // default local Claude login — has NO entry there and reading the document
+  // alone snaps every toggle back to its default (PRO-129). The per-harness
+  // passenger remains as the fallback for servers that predate the rider.
   const harness = stateQuery.data?.harnesses?.find(
     (h) => h.harness_kind === harnessKind,
   );
-  const persisted = harness?.settings as Record<string, boolean> | undefined;
+  const persisted = (stateQuery.data?.harness_settings?.[harnessKind]
+    ?? harness?.settings) as Record<string, boolean> | undefined;
   const currentValue = persisted?.[setting.key] ?? setting.default;
 
   // Build the current sources for this harness+surface so the PUT does not
@@ -121,7 +128,15 @@ function HarnessSettingRow({
         checked={currentValue}
         onChange={handleToggle}
         aria-label={setting.label}
-        disabled={!isLocalSurface && !cloudActive}
+        // Both reads must have resolved before a toggle is safe: the PUT is
+        // full desired state, so committing while selections are still
+        // loading would silently clear the harness's auth sources, and
+        // committing before the state read would drop sibling setting keys.
+        disabled={
+          (!isLocalSurface && !cloudActive)
+          || stateQuery.data === undefined
+          || selectionsQuery.data === undefined
+        }
       />
     </SettingsRow>
   );

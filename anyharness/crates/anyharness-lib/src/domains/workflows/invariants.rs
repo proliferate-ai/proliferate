@@ -80,7 +80,9 @@ pub fn sweep(state: &RunState) -> Vec<InvariantViolation> {
                     WorkflowRunStatus::Running => Some(WorkflowNodeStatus::Running),
                     WorkflowRunStatus::AwaitingHuman => Some(WorkflowNodeStatus::AwaitingHuman),
                     WorkflowRunStatus::Interrupted => Some(WorkflowNodeStatus::NeedsAttention),
-                    WorkflowRunStatus::Completed | WorkflowRunStatus::Failed => None,
+                    WorkflowRunStatus::Completed
+                    | WorkflowRunStatus::Failed
+                    | WorkflowRunStatus::Cancelled => None,
                 };
                 if let Some(expected) = expected {
                     if current.status != expected {

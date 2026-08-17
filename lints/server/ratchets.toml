@@ -40,8 +40,8 @@ reason = "C-train composition re-attaches C-1 both-surface sync-completion pokes
 
 [[max_lines]]
 path = "server/proliferate/server/cloud/agent_gateway/service.py"
-max_lines = 834
-reason = "delivery-ack hardening (server-bounded ack revision + trust-boundary docs) nudged the gateway service over the 800 server-layer cap; split pending with the service taxonomy pass; typed-config write gate threads the registry providerConfig vocabulary into the store put and pins R5's azure field set ; +21: FR-3 adds get_verification_verdicts reading the governing enrollment's per-harness gateway-enablement verdicts for the additive capabilities surface"
+max_lines = 820
+reason = "delivery-ack hardening (server-bounded ack revision + trust-boundary docs) nudged the gateway service over the 800 server-layer cap; split pending with the service taxonomy pass; typed-config write gate threads the registry providerConfig vocabulary into the store put and pins R5's azure field set ; +21: FR-3 adds get_verification_verdicts reading the governing enrollment's per-harness gateway-enablement verdicts for the additive capabilities surface; PRO-129 splits put_harness_settings out to a dedicated harness_settings.py module (settings are not auth), pulling the file back down to 820"
 
 [[max_lines]]
 path = "server/proliferate/server/cloud/materialization/materialize/agent_auth.py"

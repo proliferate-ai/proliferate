@@ -16,6 +16,7 @@ use crate::{
 };
 
 mod completion_delivery_crash_tests;
+mod product_mcp_auth_tests;
 
 fn run_git(path: &Path, args: &[&str]) {
     let output = Command::new("git")

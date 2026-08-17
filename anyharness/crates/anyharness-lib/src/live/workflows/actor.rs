@@ -155,6 +155,15 @@ impl WorkflowActor {
                     self.dispose_session(&session_id).await;
                     break;
                 }
+                ResolvedSideEffect::DisposeSessions { session_ids } => {
+                    // Cancel's compound effect: every running row's session,
+                    // chain or adhoc. Nothing starts after — the run is
+                    // terminal.
+                    for session_id in &session_ids {
+                        self.dispose_session(session_id).await;
+                    }
+                    break;
+                }
                 ResolvedSideEffect::DisposeThenStart {
                     session_id,
                     node_row_id,
@@ -334,12 +343,9 @@ impl WorkflowActor {
         // through the sessions columns, and the extension matches turn reports
         // through them.
         let prompt_id = format!("wf2-{}", node.id);
-        self.deps.session_store.link_workflow_columns(
-            &session.id,
-            &self.run_id,
-            &node.id,
-            &node.session_title(),
-        )?;
+        self.deps
+            .session_store
+            .link_workflow_columns(&session.id, &self.run_id, &node.id)?;
         self.deps
             .store
             .stamp_session(&node.id, &session.id, Some(&prompt_id), Some(agent_kind))?;

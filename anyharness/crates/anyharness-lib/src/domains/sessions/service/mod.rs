@@ -9,6 +9,7 @@ use crate::domains::agents::model_snapshot::universe::ObservedUniverseSource;
 use crate::domains::workspaces::store::WorkspaceStore;
 
 pub(crate) mod attachments;
+mod capability;
 mod config;
 mod create;
 #[cfg(test)]

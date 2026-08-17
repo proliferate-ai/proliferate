@@ -312,4 +312,48 @@ describe("WorkspaceItem", () => {
 
     expect(onOpenPullRequest).toHaveBeenCalledWith("https://github.com/acme/repo/pull/805");
   });
+
+  it("pins the workspace from the hover action, left of Archive, without selecting the row", () => {
+    const onSelect = vi.fn();
+    const onPin = vi.fn();
+
+    renderWithProductHost(
+      <WorkspaceItem
+        name="Feature worktree"
+        variant="worktree"
+        onSelect={onSelect}
+        onPin={onPin}
+        onArchive={vi.fn()}
+      />,
+    );
+
+    const pin = screen.getByRole("button", { name: "Pin workspace" });
+    const archive = screen.getByRole("button", { name: "Archive workspace (⌘⇧A)" });
+    expect(pin.compareDocumentPosition(archive) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(pin.querySelector("svg")?.getAttribute("class") ?? "").not.toContain("fill-current");
+
+    fireEvent.click(pin);
+    expect(onPin).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("offers Unpin in the hover slot for a pinned row", () => {
+    const onUnpin = vi.fn();
+
+    renderWithProductHost(
+      <WorkspaceItem
+        name="Feature worktree"
+        variant="worktree"
+        pinned
+        onUnpin={onUnpin}
+        onArchive={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Pin workspace" })).toBeNull();
+    const unpin = screen.getByRole("button", { name: "Unpin workspace" });
+    expect(unpin.querySelector("svg")?.getAttribute("class")).toContain("fill-current");
+    fireEvent.click(unpin);
+    expect(onUnpin).toHaveBeenCalledTimes(1);
+  });
 });

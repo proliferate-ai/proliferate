@@ -12,6 +12,7 @@ import {
   workflowNodeIsSideNode,
   workflowNodeStatusTone,
   workflowRunIsActive,
+  workflowRunStatusTone,
   workflowRunTakesSideNode,
 } from "./run-view-model";
 
@@ -22,6 +23,7 @@ const NODE_STATUSES: WorkflowRunNodeStatusV2[] = [
   "awaiting_human",
   "completed",
   "failed",
+  "cancelled",
 ];
 
 const RUN_STATUSES: WorkflowRunStatusV2[] = [
@@ -30,6 +32,7 @@ const RUN_STATUSES: WorkflowRunStatusV2[] = [
   "interrupted",
   "completed",
   "failed",
+  "cancelled",
 ];
 
 function run(overrides: Partial<WorkflowRunV2> = {}): WorkflowRunV2 {
@@ -90,6 +93,7 @@ describe("workflowNodeStatusTone", () => {
       "info",
       "success",
       "danger",
+      "muted",
     ]);
   });
 
@@ -122,10 +126,16 @@ describe("workflowNodeStatusTone", () => {
 });
 
 describe("workflowRunIsActive", () => {
-  it("is true for every non-terminal run status and false for both terminal ones", () => {
+  it("is true for every non-terminal run status and false for every terminal one", () => {
     expect(
       RUN_STATUSES.map((status) => workflowRunIsActive(run({ status }))),
-    ).toEqual([true, true, true, false, false]);
+    ).toEqual([true, true, true, false, false, false]);
+  });
+});
+
+describe("workflowRunStatusTone", () => {
+  it("presents a cancelled run with the neutral tone", () => {
+    expect(workflowRunStatusTone("cancelled")).toBe("neutral");
   });
 });
 
@@ -135,7 +145,7 @@ describe("workflowRunTakesSideNode", () => {
   it("excludes interrupted, which workflowRunIsActive includes", () => {
     expect(
       RUN_STATUSES.map((status) => workflowRunTakesSideNode(run({ status }))),
-    ).toEqual([true, true, false, false, false]);
+    ).toEqual([true, true, false, false, false, false]);
     expect(workflowRunIsActive(run({ status: "interrupted" }))).toBe(true);
   });
 });

@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 
 use super::definition::ProductMcpDefinition;
+use crate::integrations::mcp::capability_token::McpCapabilityTokenValidation;
 use crate::integrations::mcp::json_rpc::{
     jsonrpc_error, jsonrpc_result, CallToolParams, InitializeParams, JsonRpcRequest,
 };
@@ -74,18 +75,6 @@ pub enum ProductMcpAuthHeader<'a> {
     Product { value: &'a str },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ProductMcpTokenValidation {
-    Valid,
-    Invalid,
-}
-
-impl ProductMcpTokenValidation {
-    pub fn is_valid(self) -> bool {
-        matches!(self, Self::Valid)
-    }
-}
-
 // ── Initialize response ──────────────────────────────────────────────────────
 
 pub fn initialize_response(
@@ -119,7 +108,7 @@ pub trait ProductMcpServer: Send + Sync {
         &self,
         header: ProductMcpAuthHeader<'_>,
         request: &ProductMcpRequestContext,
-    ) -> anyhow::Result<ProductMcpTokenValidation>;
+    ) -> anyhow::Result<McpCapabilityTokenValidation>;
 
     fn resolve_context(
         &self,
@@ -274,8 +263,8 @@ mod tests {
             &self,
             _header: ProductMcpAuthHeader<'_>,
             _request: &ProductMcpRequestContext,
-        ) -> anyhow::Result<ProductMcpTokenValidation> {
-            Ok(ProductMcpTokenValidation::Valid)
+        ) -> anyhow::Result<McpCapabilityTokenValidation> {
+            Ok(McpCapabilityTokenValidation::Valid)
         }
 
         fn resolve_context(
@@ -361,8 +350,8 @@ mod tests {
             &self,
             _header: ProductMcpAuthHeader<'_>,
             _request: &ProductMcpRequestContext,
-        ) -> anyhow::Result<ProductMcpTokenValidation> {
-            Ok(ProductMcpTokenValidation::Valid)
+        ) -> anyhow::Result<McpCapabilityTokenValidation> {
+            Ok(McpCapabilityTokenValidation::Valid)
         }
 
         fn resolve_context(

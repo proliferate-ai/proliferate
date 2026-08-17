@@ -129,6 +129,22 @@ describe("stampIssuingServerOrigin", () => {
     });
   });
 
+  it("strips the harness_settings rider before the runtime push", () => {
+    // `harness_settings` is the settings pane's read of persisted toggles for
+    // harnesses with no enabled selection; the runtime's copy is the
+    // per-harness `settings` passenger inside `harnesses`, so the rider must
+    // never reach the persisted state.json.
+    const stamped = stampIssuingServerOrigin(
+      { ...state(), harness_settings: { claude: { chrome: true } } },
+      "https://proliferate.corp.example",
+    );
+    expect("harness_settings" in stamped).toBe(false);
+    expect(stamped).toEqual({
+      ...state(),
+      issuing_server_origin: "https://proliferate.corp.example",
+    });
+  });
+
   it("overwrites a previous stamp on re-push after a server switch", () => {
     const first = stampIssuingServerOrigin(state(), "https://old-server.example");
     const second = stampIssuingServerOrigin(first, "https://new-server.example");

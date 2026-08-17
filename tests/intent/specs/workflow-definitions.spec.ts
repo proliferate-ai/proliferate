@@ -105,9 +105,16 @@ test("creates, reloads, reopens, edits, and deletes a durable gen-2 definition",
   await page.getByRole("button", { name: "New workflow options", exact: true }).click();
   await page.getByRole("menuitem", { name: "Blank workflow", exact: true }).click();
   await expect(page).toHaveURL(`${webBaseUrl()}/workflows/new`);
-  await expect(page.getByRole("heading", { name: "New workflow", exact: true, level: 1 })).toBeVisible();
+  // The three-pane builder has no page heading — the title lives in the top
+  // bar beside Save, as an aria-labelled input rather than an id (there is no
+  // `#workflow-builder-title` anymore).
+  const titleField = page.getByRole("textbox", { name: "Workflow title", exact: true });
+  await expect(titleField).toBeVisible();
+  await titleField.fill(ORIGINAL_TITLE);
 
-  await page.locator("#workflow-builder-title").fill(ORIGINAL_TITLE);
+  // Description and inputs now live in the inspector behind the chain's
+  // structural input card ("Inputs"), not a always-visible page section.
+  await selectInputCard(page);
   await page.locator("#workflow-builder-description").fill(ORIGINAL_DESCRIPTION);
 
   // Two uniquely identifiable inputs, declared before the prompts that
@@ -124,21 +131,26 @@ test("creates, reloads, reopens, edits, and deletes a durable gen-2 definition",
   await page.locator("#workflow-builder-input-1-required").click();
   await expect(page.locator("#workflow-builder-input-1-required")).not.toBeChecked();
 
-  // Node 1 (step-1, agent): both @input: refs already resolved by the inputs
-  // above, so this alone introduces no issue.
+  // Node 1 (step-1, agent) is only selected by default while nothing else
+  // has been selected — `selectInputCard` above moved selection onto the
+  // input card, so it needs reselecting here before its fields exist in the
+  // DOM. Both @input: refs are already resolved by the inputs above, so this
+  // alone introduces no issue.
+  await selectNodeCard(page, "Untitled step");
   await page.locator("#workflow-builder-node-step-1-title").fill(NODE1_TITLE);
   await page.locator("#workflow-builder-node-step-1-prompt").fill(STAGE1_PROMPT);
 
-  // Node 2 (step-2, human_in_loop): references @doc:findings, which is not
-  // declared yet — this is the negative control.
-  await page.getByRole("button", { name: "Add step", exact: true }).click();
-  await page.locator("#workflow-builder-node-step-2-approval").click();
+  // Node 2 (step-2, human_in_loop): the rail's step palette adds the type
+  // directly (no separate approval toggle) and selects the new step in the
+  // inspector. Its prompt references @doc:findings, which is not declared
+  // yet — this is the negative control.
+  await page.getByRole("button", { name: "Human in the loop", exact: true }).click();
   await page.locator("#workflow-builder-node-step-2-title").fill(NODE2_TITLE);
   await page.locator("#workflow-builder-node-step-2-prompt").fill(STAGE2_PROMPT);
 
   // Negative control: an unresolved @doc: reference blocks save with an
   // exact, non-generic message, and the chip preview marks it unresolved.
-  const saveButton = page.getByRole("button", { name: "Save", exact: true });
+  const saveButton = page.getByRole("button", { name: "Save Workflow", exact: true });
   await expect(
     page.getByText(
       "Fix 1 issue before saving. Node “step-2” prompt references unknown doc template “@doc:findings”.",
@@ -149,14 +161,25 @@ test("creates, reloads, reopens, edits, and deletes a durable gen-2 definition",
   await expect(page.locator('span[data-resolved="false"]')).toHaveCount(1);
   await expect(page.locator('span[data-resolved="false"]')).toHaveText("@doc:findings");
 
-  // Fix: declare the doc template the prompt already references. Save
-  // unblocks the instant the reference resolves.
+  // Fix: declare the doc template the prompt already references (auto-selects
+  // the new doc in the inspector, taking the focus off step-2). Save unblocks
+  // the instant the reference resolves.
   await page.getByRole("button", { name: "Add document", exact: true }).click();
   await page.locator("#workflow-builder-doc-0-slug").fill("findings");
   await page.locator("#workflow-builder-doc-0-producing-node").selectOption("step-1");
   await page.locator("#workflow-builder-doc-0-body").fill(DOC_BODY);
-  await expect(page.locator('span[data-resolved="false"]')).toHaveCount(0);
   await expect(saveButton).toBeEnabled();
+
+  // Reselect step-2 on the canvas to confirm its own reference actually
+  // resolved, rather than merely leaving the inspector that showed it. The
+  // prompt also references @input:ticket (resolved from the start), so the
+  // doc chip needs picking out by its own text rather than the bare
+  // `data-resolved="true"` selector, which now matches both refs.
+  await selectNodeCard(page, NODE2_TITLE);
+  await expect(page.locator('span[data-resolved="false"]')).toHaveCount(0);
+  await expect(
+    page.locator('span[data-resolved="true"]').filter({ hasText: "@doc:findings" }),
+  ).toHaveText("@doc:findings");
 
   const createResponsePromise = page.waitForResponse((response) =>
     response.request().method() === "POST"
@@ -218,9 +241,13 @@ test("creates, reloads, reopens, edits, and deletes a durable gen-2 definition",
 
   // Edit: title/description, reorder the chain (step-2 moves up), and edit
   // step-2's prompt — content and order both change, so reload cannot pass
-  // by re-reading either the old order or the old text.
-  await page.locator("#workflow-builder-title").fill(UPDATED_TITLE);
+  // by re-reading either the old order or the old text. `expectBuilderState`
+  // above leaves step-2 selected (the last node in `ORIGINAL_NODES`), so its
+  // move affordance is already visible without an extra canvas click.
+  await titleField.fill(UPDATED_TITLE);
+  await selectInputCard(page);
   await page.locator("#workflow-builder-description").fill(UPDATED_DESCRIPTION);
+  await selectNodeCard(page, NODE2_TITLE);
   await page.getByRole("button", { name: "Move step 2 up", exact: true }).click();
   await page.locator("#workflow-builder-node-step-2-prompt").fill(UPDATED_STAGE2_PROMPT);
 
@@ -429,17 +456,60 @@ async function awaitWorkflowDeleted(page: Page, definitionId: string): Promise<v
   );
 }
 
+/**
+ * Select the chain's structural input card on the canvas (the workflow
+ * details/inputs live in the inspector behind it, not an always-visible page
+ * section).
+ */
+async function selectInputCard(page: Page): Promise<void> {
+  await page.getByRole("group", { name: "Workflow chain", exact: true })
+    .getByRole("button")
+    .filter({ hasText: "Trigger payload entering the workflow" })
+    .click();
+}
+
+/**
+ * Select a chain step on the canvas by its (unique) title text — the three-
+ * pane builder draws steps as canvas cards rather than an always-visible
+ * stacked list, so only the selected step's fields exist in the DOM at a
+ * time.
+ */
+async function selectNodeCard(page: Page, title: string): Promise<void> {
+  await page.getByRole("group", { name: "Workflow chain", exact: true })
+    .getByRole("button")
+    .filter({ hasText: title })
+    .click();
+}
+
 /** Assert the full builder state: title/description plus every ordered node's
  * id/type/title/prompt, the inputs, and the doc template — so reload/reopen
- * cannot pass on a subset. */
+ * cannot pass on a subset. Each pane (input card / step / doc) is a separate
+ * inspector selection in the three-pane builder, so this walks them in turn
+ * rather than reading everything out of one static page. */
 async function expectBuilderState(
   page: Page,
   expected: { title: string; description: string; nodes: ComparableNode[] },
 ): Promise<void> {
-  await expect(page.locator("#workflow-builder-title")).toHaveValue(expected.title);
-  await expect(page.locator("#workflow-builder-description")).toHaveValue(expected.description);
+  await expect(page.getByRole("textbox", { name: "Workflow title", exact: true })).toHaveValue(expected.title);
 
-  for (const [index, node] of expected.nodes.entries()) {
+  // The canvas's bottom-left readout names the step/node counts independently
+  // of which pane is selected — the three-pane builder has no standing list
+  // of node ids to assert an (N+1)th one is absent from.
+  const stepWord = expected.nodes.length === 1 ? "step" : "steps";
+  await expect(page.getByText(
+    `${expected.nodes.length} ${stepWord} · ${expected.nodes.length + 1} nodes`,
+    { exact: true },
+  )).toBeVisible();
+
+  await selectInputCard(page);
+  await expect(page.locator("#workflow-builder-description")).toHaveValue(expected.description);
+  await expect(page.locator("#workflow-builder-input-0-name")).toHaveValue("ticket");
+  await expect(page.locator("#workflow-builder-input-0-required")).toBeChecked();
+  await expect(page.locator("#workflow-builder-input-1-name")).toHaveValue("severity");
+  await expect(page.locator("#workflow-builder-input-1-required")).not.toBeChecked();
+
+  for (const node of expected.nodes) {
+    await selectNodeCard(page, node.title);
     await expect(page.locator(`#workflow-builder-node-${node.id}-title`)).toHaveValue(node.title);
     await expect(page.locator(`#workflow-builder-node-${node.id}-prompt`)).toHaveValue(node.prompt);
     // The "Requires approval" Switch (role="switch") replaced the old
@@ -451,13 +521,8 @@ async function expectBuilderState(
       node.type === "human_in_loop" ? "true" : "false",
     );
   }
-  await expect(page.locator(`#workflow-builder-node-step-${expected.nodes.length + 1}-title`)).toHaveCount(0);
 
-  await expect(page.locator("#workflow-builder-input-0-name")).toHaveValue("ticket");
-  await expect(page.locator("#workflow-builder-input-0-required")).toBeChecked();
-  await expect(page.locator("#workflow-builder-input-1-name")).toHaveValue("severity");
-  await expect(page.locator("#workflow-builder-input-1-required")).not.toBeChecked();
-
+  await page.getByRole("button", { name: "findings", exact: true }).click();
   await expect(page.locator("#workflow-builder-doc-0-slug")).toHaveValue("findings");
   await expect(page.locator("#workflow-builder-doc-0-producing-node")).toHaveValue("step-1");
   await expect(page.locator("#workflow-builder-doc-0-body")).toHaveValue(DOC_BODY);

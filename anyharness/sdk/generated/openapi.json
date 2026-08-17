@@ -4461,6 +4461,42 @@
         }
       }
     },
+    "/v1/workflow-runs/{run_id}/cancel": {
+      "post": {
+        "tags": [
+          "workflow-runs"
+        ],
+        "operationId": "cancel_workflow_run",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Run cancelled; the fresh projection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunProjection"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "WORKFLOW_RUN_NOT_FOUND"
+          },
+          "409": {
+            "description": "WORKFLOW_TRANSITION_ILLEGAL"
+          }
+        }
+      }
+    },
     "/v1/workflow-runs/{run_id}/nodes/{node_row_id}/approve": {
       "post": {
         "tags": [
@@ -20379,7 +20415,8 @@
           "needs_attention",
           "awaiting_human",
           "completed",
-          "failed"
+          "failed",
+          "cancelled"
         ]
       },
       "WorkflowNodeType": {
@@ -20480,7 +20517,8 @@
           "awaiting_human",
           "interrupted",
           "completed",
-          "failed"
+          "failed",
+          "cancelled"
         ]
       },
       "WorkflowRunsListResponse": {

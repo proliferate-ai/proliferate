@@ -1,13 +1,11 @@
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
 import type { WorkflowRepoRootOption } from "#product/lib/domain/workflows/workflow-repo-root-options";
-import { Input } from "#product/primitives/Input";
 import { Label } from "#product/primitives/Label";
 import { Card } from "#product/primitives/patterns/Card";
 import { Select } from "#product/primitives/Select";
 import { Textarea } from "#product/primitives/Textarea";
 
 export interface WorkflowBuilderDetailsCardProps {
-  title: string;
   description: string;
   /** The RUNTIME repo-root id saved as this workflow's default; `""` = none. */
   defaultRepoConfigId: string;
@@ -16,13 +14,14 @@ export interface WorkflowBuilderDetailsCardProps {
   /** The saved default is not one the runtime lists, so it cannot be saved back. */
   repoDefaultUnavailable: boolean;
   disabled: boolean;
-  onTitleChange: (title: string) => void;
   onDescriptionChange: (description: string) => void;
   onDefaultRepoConfigIdChange: (repoConfigId: string) => void;
 }
 
 /**
- * Title, description, and the repository runs of this workflow start in.
+ * Description and the repository runs of this workflow start in. The title is
+ * not here: it lives in the builder's top bar, beside Save, the way the
+ * design names the workflow.
  *
  * The repository picker offers RUNTIME repo roots, mirroring
  * `WorkflowTriggerDialog`: the runtime resolves `placement.repoConfigId` in its
@@ -32,14 +31,12 @@ export interface WorkflowBuilderDetailsCardProps {
  * not submittable, and the save gate refuses it.
  */
 export function WorkflowBuilderDetailsCard({
-  title,
   description,
   defaultRepoConfigId,
   repositories,
   repositoriesLoading,
   repoDefaultUnavailable,
   disabled,
-  onTitleChange,
   onDescriptionChange,
   onDefaultRepoConfigIdChange,
 }: WorkflowBuilderDetailsCardProps) {
@@ -48,23 +45,6 @@ export function WorkflowBuilderDetailsCard({
       <h2 className="text-heading font-medium text-foreground">
         {WORKFLOW_BUILDER_COPY.detailsHeading}
       </h2>
-      <div className="mt-3">
-        <Label htmlFor="workflow-builder-title">
-          {WORKFLOW_BUILDER_COPY.titleLabel}
-        </Label>
-        <Input
-          id="workflow-builder-title"
-          value={title}
-          disabled={disabled}
-          placeholder={WORKFLOW_BUILDER_COPY.titlePlaceholder}
-          onChange={(event) => onTitleChange(event.currentTarget.value)}
-        />
-        {title.trim().length === 0 ? (
-          <p className="mt-1 text-ui-sm text-muted-foreground">
-            {WORKFLOW_BUILDER_COPY.titleRequiredHint}
-          </p>
-        ) : null}
-      </div>
       <div className="mt-3">
         <Label htmlFor="workflow-builder-description">
           {WORKFLOW_BUILDER_COPY.descriptionLabel}

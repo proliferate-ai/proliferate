@@ -119,6 +119,40 @@ asserts the *seam that decides* which flow fires. Run locally:
 `pnpm -C tests/intent test` (`TIER2_INTENT_SKIP_RUNTIME=1` skips building the
 Rust runtime; `TIER2_INTENT_PROFILE=<name>` isolates parallel worktrees).
 
+### Scroll-physics suite (transcript renderer)
+
+A Tier-2-style merge-gating suite for chat transcript scroll behavior. The real
+transcript renderer (`MessageList`) mounts in real Chromium AND real WebKit,
+driven by the real `@anyharness/sdk` reducer over scripted event batches. There
+is no server, sandbox, LLM, or network: a `window.__scrollPhysics` driver owns
+every state transition, so physics like pinned-follow, mid-stream unpin, repin
+band edges, older-history prepend anchoring, and session-revisit placement are
+measured against the exact code that ships rather than a simulated DOM.
+
+It sits with Tier 2 because the boundary is identical: real renderer plus a real
+browser, everything external absent, deterministic fixture. It differs only in
+that the browser engine itself is the system under test, so both Blink and
+WebKit run. Specs assert observable invariants from DOM probes (viewport
+`scrollTop`/`scrollHeight`/`clientHeight`) and a per-frame `scrollTop` trace,
+never internal component state. Scenarios that today reproduce a known bug
+documented in the Chat Scroll ADR are marked `test.fixme` with the rung that
+owns the fix.
+
+Lives in `apps/packages/product-client/qualification/scroll-physics/` (Vite
+fixture host plus `specs/`), alongside the browser-build fixture. The fixture
+resolves the shipped renderer through `#product/*` -> `dist`, so `pnpm shared:build`
+must be run first (once, or whenever product-client/design source changes) to
+produce that `dist`. Run locally:
+
+```
+pnpm shared:build
+pnpm --filter @proliferate/product-client test:scroll-physics
+```
+
+(`test:scroll-physics` builds the Vite fixture itself, then runs Playwright at
+`workers=1`; it does not rebuild `dist`.) CI runs it in the `scroll-physics`
+job, which builds the shared packages and installs both browser engines.
+
 ## Tier 3 — live end-to-end
 
 Tests the **deploy artifact, not just the code** in three deliberately

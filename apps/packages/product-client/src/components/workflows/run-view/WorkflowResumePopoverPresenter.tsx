@@ -4,35 +4,11 @@ import { Button } from "#product/primitives/Button";
 import { ActionRow } from "#product/primitives/patterns/ActionRow";
 import { Popover, PopoverAnchor, PopoverContent } from "#product/primitives/Popover";
 import { WORKFLOW_RESUME_COPY } from "#product/copy/workflows/workflow-resume-copy";
+import { workflowRunDefinitionTitle } from "#product/domain/workflows/main-view-model";
 import { useWorkflowResumePopover } from "#product/hooks/workflows/lifecycle/use-workflow-resume-popover";
 import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";
 import { findLogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import { formatRelativeTime } from "#product/lib/domain/workspaces/display/workspace-display";
-
-/**
- * `WorkflowRunV2.definitionJson` is the frozen invocation JSON
- * (`WorkflowInvocationJsonV2` in `@anyharness/sdk`), and that frozen contract
- * carries no `title` field today — only `workflowDefinitionId`, `definition`
- * (nodes/edges/inputs/docTemplates), `arguments`, and `placement`. This parse
- * is defensive against the contract growing one (top-level or nested under
- * `definition`) rather than a confirmed field: until it does, every row falls
- * back to `WORKFLOW_RESUME_COPY.fallbackRunTitle`. Reported as a contradiction
- * in the PR6 lane-C report rather than resolved by inventing a title source.
- */
-function parseWorkflowRunDefinitionTitle(definitionJson: string): string {
-  try {
-    const parsed = JSON.parse(definitionJson) as {
-      title?: unknown;
-      definition?: { title?: unknown };
-    };
-    const candidate = parsed?.title ?? parsed?.definition?.title;
-    return typeof candidate === "string" && candidate.trim().length > 0
-      ? candidate.trim()
-      : WORKFLOW_RESUME_COPY.fallbackRunTitle;
-  } catch {
-    return WORKFLOW_RESUME_COPY.fallbackRunTitle;
-  }
-}
 
 /**
  * Mounted globally (beside `HarnessUpdateToastPresenter` in
@@ -131,8 +107,14 @@ function InterruptedRunRow({
   onResume: () => void;
   onDismiss: () => void;
 }) {
+  // `definitionJson` carries no title today (`WorkflowInvocationJsonV2` is
+  // only workflowDefinitionId/definition/arguments/placement) — the shared
+  // domain parse is defensive against the contract growing one, and until it
+  // does every row falls back to `fallbackRunTitle`. Reported as a
+  // contradiction in the PR6 lane-C report rather than resolved by inventing
+  // a title source.
   const title = useMemo(
-    () => parseWorkflowRunDefinitionTitle(run.definitionJson),
+    () => workflowRunDefinitionTitle(run.definitionJson) ?? WORKFLOW_RESUME_COPY.fallbackRunTitle,
     [run.definitionJson],
   );
   const interruptedLabel = `Interrupted ${formatRelativeTime(run.updatedAt)}`;

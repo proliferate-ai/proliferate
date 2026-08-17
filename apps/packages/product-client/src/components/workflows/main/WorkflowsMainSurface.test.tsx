@@ -18,6 +18,23 @@ class TestIntersectionObserver {
 
 vi.stubGlobal("IntersectionObserver", TestIntersectionObserver);
 
+// `WorkflowMainExecutionsGroup` virtualizes its rows (`@tanstack/react-virtual`),
+// which measures the scrollport via `offsetHeight` — always 0 in jsdom (no
+// layout engine), so the real virtualizer renders zero rows here regardless of
+// list length. Stub it to render every row, the same fake `FileTreeOverlay`'s
+// own virtualized-list test uses for the identical reason.
+vi.mock("@tanstack/react-virtual", () => ({
+  useVirtualizer: ({ count }: { count: number }) => ({
+    getTotalSize: () => count * 52,
+    getVirtualItems: () => Array.from({ length: count }, (_, index) => ({
+      index,
+      key: index,
+      start: index * 52,
+    })),
+    measureElement: vi.fn(),
+  }),
+}));
+
 const mocks = vi.hoisted(() => ({
   listQuery: {
     data: undefined as { workflows: WorkflowDefinitionListRowV2[] } | undefined,
@@ -35,6 +52,14 @@ const mocks = vi.hoisted(() => ({
   deletingWorkflowDefinitionV2: false,
   selectWorkspaceFromSurface: vi.fn(),
   triggerDialog: vi.fn(),
+  executions: {
+    runs: [] as import("@anyharness/sdk").WorkflowRunV2[],
+    loaded: true,
+  },
+}));
+
+vi.mock("#product/hooks/workflows/facade/use-workflow-executions", () => ({
+  useWorkflowExecutions: () => mocks.executions,
 }));
 
 vi.mock("#product/hooks/access/cloud/workflows/use-workflow-definitions-v2-access", () => ({
@@ -79,6 +104,8 @@ beforeEach(() => {
   mocks.deleteWorkflowDefinitionV2.mockResolvedValue(undefined);
   mocks.selectWorkspaceFromSurface.mockClear();
   mocks.triggerDialog.mockClear();
+  mocks.executions.runs = [];
+  mocks.executions.loaded = true;
 });
 
 afterEach(() => {
@@ -310,5 +337,94 @@ describe("WorkflowsMainSurface legacy group", () => {
     expect(screen.getByRole("heading", { name: "Legacy" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Delete Legacy workflow" })).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Use template" }).length).toBeGreaterThan(0);
+  });
+});
+
+function executionRun(
+  overrides: Partial<import("@anyharness/sdk").WorkflowRunV2> = {},
+): import("@anyharness/sdk").WorkflowRunV2 {
+  return {
+    id: "run-1",
+    invocationId: "inv-1",
+    definitionJson: "{}",
+    argumentsJson: "{}",
+    workspaceId: "ws-1",
+    status: "completed",
+    currentNodeRowId: null,
+    failureCode: null,
+    interruptionCode: null,
+    createdAt: "2020-03-05T00:00:00Z",
+    updatedAt: "2020-03-05T00:01:40Z",
+    completedAt: "2020-03-05T00:01:40Z",
+    ...overrides,
+  };
+}
+
+describe("WorkflowsMainSurface executions group", () => {
+  it("lists a run under Executions with its state and wall clock, and opens its workspace", () => {
+    mocks.listQuery.data = { workflows: [listRow()] };
+    mocks.executions.runs = [executionRun()];
+
+    render(
+      <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Executions" })).toBeTruthy();
+    // definitionJson carries no title today, so the row wears the fallback.
+    expect(screen.getByText("Workflow run")).toBeTruthy();
+    expect(screen.getByText("Succeeded · 1m 40s")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Workflow run"));
+    expect(mocks.selectWorkspaceFromSurface).toHaveBeenCalledWith("ws-1", "workflows-main-surface");
+  });
+
+  it("renders no Executions group while the roster is empty or unloaded", () => {
+    mocks.listQuery.data = { workflows: [listRow()] };
+    mocks.executions.runs = [];
+
+    render(
+      <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
+    );
+
+    expect(screen.queryByText("Executions")).toBeNull();
+  });
+});
+
+describe("WorkflowsMainSurface filter", () => {
+  it("filters every group by what the rows visibly say", () => {
+    mocks.listQuery.data = {
+      workflows: [
+        listRow({ id: "wf-1", title: "Issue triage" }),
+        listRow({ id: "wf-2", title: "Release notes" }),
+      ],
+    };
+    mocks.executions.runs = [executionRun()];
+
+    render(
+      <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Filter workflows"), {
+      target: { value: "release" },
+    });
+
+    expect(screen.getByText("Release notes")).toBeTruthy();
+    expect(screen.queryByText("Issue triage")).toBeNull();
+    // "release" matches no run title, so the whole group drops out.
+    expect(screen.queryByText("Executions")).toBeNull();
+  });
+
+  it("says so when nothing matches the filter", () => {
+    mocks.listQuery.data = { workflows: [listRow()] };
+
+    render(
+      <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Filter workflows"), {
+      target: { value: "zzz" },
+    });
+
+    expect(screen.getByText("Nothing here matches this filter.")).toBeTruthy();
   });
 });
