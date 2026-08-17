@@ -43,6 +43,8 @@ export function PopoverSearchField({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         autoFocus={autoFocus}
+        autoCorrect="off"
+        spellCheck={false}
         aria-label={ariaLabel}
         onKeyDown={onKeyDown}
         className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-ui text-foreground shadow-none outline-none placeholder:text-muted-foreground focus:ring-0 disabled:opacity-60"
