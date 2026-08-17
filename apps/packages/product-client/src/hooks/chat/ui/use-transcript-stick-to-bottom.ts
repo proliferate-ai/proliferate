@@ -27,7 +27,7 @@ import {
   recordTranscriptPinTransition,
   recordTranscriptUserScrollIntent,
   type TranscriptPinTransitionCause,
-} from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+} from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations-transcript";
 
 export type { TranscriptStickToBottom, UseTranscriptStickToBottomOptions };
 

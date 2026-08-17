@@ -4,7 +4,7 @@ import type {
   TranscriptScrollSample,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
 import type { TranscriptSessionRestorePlan } from "#product/hooks/chat/ui/transcript-reading-position-store";
-import type { TranscriptPinTransitionCause } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+import type { TranscriptPinTransitionCause } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations-transcript";
 
 /**
  * Split out of use-transcript-stick-to-bottom.ts (capped near 400 lines,

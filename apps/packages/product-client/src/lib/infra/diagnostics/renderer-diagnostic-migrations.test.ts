@@ -5,10 +5,12 @@ import {
   recordHotWorkspaceReconcileFailure,
   recordSessionHistoryRehydrateFailure,
   recordSessionMetadataRefreshFailure,
+} from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+import {
   recordTranscriptPinTransition,
   recordTranscriptUserScrollIntent,
   recordTranscriptVirtualizerBlank,
-} from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+} from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations-transcript";
 import {
   resetRendererDiagnosticsSinkForTest,
   setRendererDiagnosticsSink,

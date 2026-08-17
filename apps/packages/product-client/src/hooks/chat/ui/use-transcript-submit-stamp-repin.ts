@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
-import type { TranscriptPinTransitionCause } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+import type { TranscriptPinTransitionCause } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations-transcript";
 
 export interface UseTranscriptSubmitStampRepinOptions {
   /**

@@ -3,7 +3,7 @@ import {
   hashMeasurementScope,
   isMainThreadMeasurementEnabled,
 } from "#product/lib/infra/measurement/measurement-port";
-import { recordTranscriptVirtualizerBlank } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+import { recordTranscriptVirtualizerBlank } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations-transcript";
 
 // Founder Ruling 3(c), rung 10 (PRO-187): this used to be an INDEPENDENT fixed
 // 3s timer, started the instant a prepend fired regardless of whether the

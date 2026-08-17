@@ -11,7 +11,7 @@ import {
   PROGRAMMATIC_MATCH_TOL_PX,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
 import { resolveTranscriptFollowTarget } from "#product/hooks/chat/ui/transcript-follow-target";
-import type { TranscriptPinTransitionCause } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations";
+import type { TranscriptPinTransitionCause } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations-transcript";
 import {
   initialTranscriptInsetState,
   reduceTranscriptInset,
