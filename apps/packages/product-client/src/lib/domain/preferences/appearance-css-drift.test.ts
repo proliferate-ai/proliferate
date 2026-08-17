@@ -443,7 +443,7 @@ describe("chat retune tokens", () => {
     expect(themeDeclarations["--shadow-composer"]).toBe("var(--elevation-composer)");
     expect(darkRoot).toContain("--elevation-composer: none;");
     expect(lightRoot).toContain(
-      "--elevation-composer: 0 0 0 0.5px var(--color-border), 0 1px 3px rgba(26, 28, 31, 0.08), 0 4px 12px rgba(26, 28, 31, 0.06);",
+      "--elevation-composer: 0 0 0 1px var(--color-border-heavy), 0 2px 5px rgba(26, 28, 31, 0.10), 0 8px 20px rgba(26, 28, 31, 0.07);",
     );
   });
 

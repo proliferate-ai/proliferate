@@ -69,7 +69,7 @@ Non-negotiable:
 - **No `backdrop-blur` on the dock's transcript-covering layer.** That layer sits over the scrolling transcript, and backdrop blur forces WKWebView to re-blur everything behind it on every frame. The implementation is a gradient fade into an opaque-ish `bg-background/95` sheet (`ChatComposerDock.tsx`), not a blur.
 - **`ChatInput` is the composer surface only.** It does not own any of the outer wrapping. It takes no `topSlot` prop. Everything above and below the composer surface is the dock's responsibility; product-specific footer context must render through the dock rather than ad hoc workspace logic in `ChatInput.tsx`.
 - **Do not add in-composer read-only status badges.** MCP/plugin state belongs in settings, session details, or explicit action surfaces, not as a persistent strip inside `ChatInput`.
-- **The composer surface paints the seam.** There is no `flatTop` prop or alternate composer mode. Ordinary light composers own one complete depth recipe: a border-role perimeter plus shallow ink-tinted lift; dark composers remain fill-only. Ordinary dock-region panels remain narrower attached trays above the composer. When the full-width workspace-activity cap is present, `ChatComposerDock` squares the composer's top corners with a local `:has()` selector so the cap and input read as one card; removing the cap restores the normal composer radius. The composer still paints after the dock regions so its own top edge remains visible at the seam.
+- **The composer surface paints the seam.** There is no `flatTop` prop or alternate composer mode. Ordinary light composers own one complete depth recipe: a full border-heavy perimeter plus controlled ink-tinted lift; dark composers remain fill-only. Ordinary dock-region panels remain narrower attached trays above the composer. When the full-width workspace-activity cap is present, `ChatComposerDock` squares the composer's top corners with a local `:has()` selector so the cap and input read as one card; removing the cap restores the normal composer radius. The composer still paints after the dock regions so its own top edge remains visible at the seam.
 - **Composer command overlays are composer-local, not dock-region inhabitants.** The slash-command tray renders from `ChatInput` in a small host directly above `ChatComposerSurface` while a prompt-leading `/` trigger is active. It is transient editor UI and does not participate in `useComposerDockSlots` precedence.
 
 ### Editor behavior
@@ -781,7 +781,7 @@ the `chat-composer-surface` class, whose paint lives in
 - Background: `--color-composer-background`. Opaque in both modes; light takes
   the `#f6f6f6` rail plane and dark takes the `#2d2d2d` lifted surface.
 - Depth: ordinary light composers paint `--shadow-composer`, which combines one
-  0.5 CSS-pixel `--color-border` perimeter with shallow 3px and 12px
+  full CSS-pixel `--color-border-heavy` perimeter with controlled 5px and 20px
   ink-tinted layers. It consumes no layout space and makes the opaque rail fill
   read as an available input even when the editor is empty and the send action
   is disabled. Dark resolves the same token to `none` and stays fill-only. Dock
