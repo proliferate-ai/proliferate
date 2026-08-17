@@ -8,9 +8,8 @@ import {
   AppShellTabCloseIcon,
   AppShellTerminalIcon,
 } from "#product/primitives/icons/app-shell";
-import { Fork } from "#product/primitives/icons/core";
 import { UsersRound } from "#product/primitives/icons/platform";
-import { ScratchPadIcon } from "#product/primitives/icons/product";
+import { ScratchPadIcon, Workflow } from "#product/primitives/icons/product";
 import { WORKFLOW_RUN_VIEW_COPY } from "#product/copy/workflows/workflow-run-view-copy";
 import type { IconProps } from "#product/primitives/icons/types";
 import { RightPanelHeaderEntryDropZone } from "#product/components/workspace/shell/right-panel/RightPanelHeaderEntryDropZone";
@@ -44,10 +43,7 @@ const PANEL_TOOLS: Record<RightPanelTool, ToolConfig> = {
   scratch: { label: "Scratch", icon: ScratchPadIcon },
   git: { label: "Changes", icon: AppShellReviewIcon },
   agents: { label: "Agents", icon: UsersRound },
-  // The `Fork` mark, not the `Workflow` tile: the execution tab is the same
-  // concept the sidebar's Workflows nav row carries, and that row already
-  // settled on `Fork` — one glyph per concept, wherever it appears.
-  workflow: { label: WORKFLOW_RUN_VIEW_COPY.paneTitle, icon: Fork },
+  workflow: { label: WORKFLOW_RUN_VIEW_COPY.paneTitle, icon: Workflow },
 };
 
 interface RightPanelHeaderEntryListProps {

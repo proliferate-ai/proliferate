@@ -185,13 +185,8 @@ export function availableRightPanelTools(
   _isCloudWorkspaceSelected: boolean,
   workflowsV2Enabled: boolean = isWorkflowsV2Enabled(),
 ): RightPanelTool[] {
-  // The execution tab leads the strip: a workspace that carries a workflow
-  // run reads run-first, the same order the workflows design settles on. An
-  // already-persisted header order keeps its stored positions — normalization
-  // only appends tools it finds missing — so this order is what a fresh
-  // workspace starts from, not a migration.
   return workflowsV2Enabled
-    ? ["workflow", ...DEFAULT_RIGHT_PANEL_TOOL_ORDER]
+    ? [...DEFAULT_RIGHT_PANEL_TOOL_ORDER, "workflow"]
     : DEFAULT_RIGHT_PANEL_TOOL_ORDER;
 }
 

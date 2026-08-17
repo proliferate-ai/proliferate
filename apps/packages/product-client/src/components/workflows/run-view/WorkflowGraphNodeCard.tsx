@@ -169,32 +169,17 @@ export function WorkflowGraphNodeCard({
           density="comfortable"
           leading={<StatusDot tone={statusDotToneFor(tone)} />}
           title={(
-            // The design's card header, in row order: the mono chain-index
-            // mark, then the title. The index is faint and fixed-width-ish
-            // (two digits) so a column of cards reads as a numbered chain.
-            <span className="flex min-w-0 items-baseline gap-1.5">
-              <span className="shrink-0 font-mono text-ui-sm text-muted-foreground">
-                {WORKFLOW_NODE_CARD_COPY.nodeIndexLabel(node.chainIndex)}
-              </span>
-              <span className={isCurrent ? "truncate font-semibold" : "truncate"}>
-                {node.title}
-              </span>
+            <span className={isCurrent ? "font-semibold" : undefined}>
+              {WORKFLOW_NODE_CARD_COPY.nodeIndexTitle(node.chainIndex, node.title)}
             </span>
           )}
           secondary={(
-            <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                <span className="font-mono uppercase tracking-wide">
-                  {WORKFLOW_NODE_CARD_COPY.kindLine(node.nodeType, node.kind)}
-                </span>
-                {needsInput ? (
-                  <Badge tone="info" size="micro">
-                    {WORKFLOW_NODE_CARD_COPY.needsInputBadge}
-                  </Badge>
-                ) : null}
-              </span>
-              {node.prompt.trim().length > 0 ? (
-                <span className="line-clamp-2">{node.prompt}</span>
+            <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+              <span>{WORKFLOW_NODE_CARD_COPY.kindLine(node.nodeType, node.kind)}</span>
+              {needsInput ? (
+                <Badge tone="info" size="micro">
+                  {WORKFLOW_NODE_CARD_COPY.needsInputBadge}
+                </Badge>
               ) : null}
             </span>
           )}

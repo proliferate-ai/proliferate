@@ -151,10 +151,7 @@ describe("workspace UI state persistence", () => {
     expect(selected.shellTabOrderByWorkspace).toEqual({ w1: [fileKey] });
     expect(selected.rightPanelMaterializedByWorkspace.w1).toEqual({
       activeEntryKey: "tool:scratch",
-      // `availableRightPanelTools` leads with `workflow` ahead of the default
-      // scratch/git/agents order when workflows v2 is enabled — normalization
-      // appends missing tools in that order.
-      headerOrder: [fileKey, "tool:workflow", "tool:scratch", "tool:git", "tool:agents"],
+      headerOrder: [fileKey, "tool:scratch", "tool:git", "tool:agents", "tool:workflow"],
     });
   });
 });

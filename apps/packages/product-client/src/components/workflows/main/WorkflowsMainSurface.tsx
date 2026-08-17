@@ -11,21 +11,17 @@ import { useWorkspaceNavigationWorkflow } from "#product/hooks/workspaces/workfl
 import {
   selectWorkflowLegacyDefinitionRows,
   selectWorkflowV2DefinitionRows,
-  workflowRunDefinitionTitle,
   type WorkflowMainListItem,
 } from "#product/domain/workflows/main-view-model";
 import { WorkflowMainDefinitionRow } from "#product/components/workflows/main/WorkflowMainDefinitionRow";
 import { WorkflowMainDeleteDialog } from "#product/components/workflows/main/WorkflowMainDeleteDialog";
 import { WorkflowMainEmptyState } from "#product/components/workflows/main/WorkflowMainEmptyState";
-import { WorkflowMainExecutionsGroup } from "#product/components/workflows/main/WorkflowMainExecutionsGroup";
 import { WorkflowMainLegacyGroup } from "#product/components/workflows/main/WorkflowMainLegacyGroup";
 import { WorkflowMainNewMenu } from "#product/components/workflows/main/WorkflowMainNewMenu";
 import { WorkflowTriggerDialog } from "#product/components/workflows/trigger/WorkflowTriggerDialog";
-import { useWorkflowExecutions } from "#product/hooks/workflows/facade/use-workflow-executions";
 import type { WorkflowTriggerLaunch } from "#product/hooks/workflows/workflows/use-workflow-trigger-actions";
 import { Button } from "#product/primitives/Button";
-import { Input } from "#product/primitives/Input";
-import { RotateCcw, Search } from "#product/primitives/icons/core";
+import { RotateCcw } from "#product/primitives/icons/core";
 import { Card } from "#product/primitives/patterns/Card";
 import { EmptyState } from "#product/primitives/patterns/EmptyState";
 import { ProductPageShell } from "#product/primitives/patterns/ProductPageShell";
@@ -62,9 +58,7 @@ export function WorkflowsMainSurface({
   const { deleteWorkflowDefinitionV2, deletingWorkflowDefinitionV2 } =
     useWorkflowDefinitionV2MutationsAccess(authCacheScope);
   const { selectWorkspaceFromSurface } = useWorkspaceNavigationWorkflow();
-  const executions = useWorkflowExecutions();
 
-  const [filterText, setFilterText] = useState("");
   const [runningId, setRunningId] = useState<string | null>(null);
   const runQuery = useWorkflowDefinitionV2Access(runningId, authCacheScope, runningId !== null);
 
@@ -132,24 +126,6 @@ export function WorkflowsMainSurface({
   const runningRecord: WorkflowDefinitionRecordV2 | undefined =
     runningId !== null && runQuery.data?.id === runningId ? runQuery.data : undefined;
 
-  // One filter over every group, the way the design's index reads: a group a
-  // query empties simply drops out. The needle is plain substring matching on
-  // what the rows visibly say — title/description for definitions, the
-  // resolved title for executions — never on hidden identifiers.
-  const needle = filterText.trim().toLowerCase();
-  const matches = (...haystacks: (string | null)[]) =>
-    needle.length === 0
-    || haystacks.some((value) => value !== null && value.toLowerCase().includes(needle));
-  const visibleItems = items.filter((item) => matches(item.title, item.description));
-  const visibleLegacy = legacyItems.filter((item) => matches(item.title, item.description));
-  const visibleRuns = executions.runs.filter((run) => matches(
-    workflowRunDefinitionTitle(run.definitionJson) ?? WORKFLOW_MAIN_COPY.executionFallbackTitle,
-  ));
-  const filterable = items.length + legacyItems.length + executions.runs.length > 0;
-  const nothingMatches = needle.length > 0
-    && filterable
-    && visibleItems.length + visibleLegacy.length + visibleRuns.length === 0;
-
   return (
     <ProductPageShell
       title={WORKFLOW_MAIN_COPY.pageTitle}
@@ -158,41 +134,11 @@ export function WorkflowsMainSurface({
       maxWidthClassName="max-w-5xl"
       telemetryBlocked
     >
-      {filterable ? (
-        // The same filter-row recipe `HarnessAllModelsSection` composes from
-        // `PopoverSearchField`'s anatomy: leading Search glyph, borderless
-        // Input, hairline underneath.
-        <div className="flex items-center gap-2 border-b border-border px-2.5 py-[7px]">
-          <Search className="icon-paired shrink-0 text-muted-foreground/75" />
-          <Input
-            aria-label={WORKFLOW_MAIN_COPY.filterLabel}
-            placeholder={WORKFLOW_MAIN_COPY.filterPlaceholder}
-            value={filterText}
-            className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-ui shadow-none focus:ring-0"
-            onChange={(event) => setFilterText(event.target.value)}
-          />
-        </div>
-      ) : null}
-
       {items.length === 0 ? (
         <WorkflowMainEmptyState onNew={onNew} legacyPresent={legacyItems.length > 0} />
-      ) : visibleItems.length > 0 ? (
-        <Card
-          surface="opaque"
-          as="section"
-          className="flex flex-col gap-0.5 p-2"
-          header={(
-            <div className="flex flex-col gap-0.5 px-3 py-2">
-              <h2 className="text-ui font-medium text-foreground">
-                {WORKFLOW_MAIN_COPY.savedGroupTitle}
-              </h2>
-              <p className="text-ui-sm text-muted-foreground">
-                {WORKFLOW_MAIN_COPY.savedGroupDescription}
-              </p>
-            </div>
-          )}
-        >
-          {visibleItems.map((item) => (
+      ) : (
+        <Card surface="opaque" className="flex flex-col gap-0.5 p-2">
+          {items.map((item) => (
             <WorkflowMainDefinitionRow
               key={item.id}
               item={item}
@@ -206,24 +152,11 @@ export function WorkflowsMainSurface({
             />
           ))}
         </Card>
-      ) : null}
+      )}
 
-      {visibleRuns.length > 0 ? (
-        <WorkflowMainExecutionsGroup
-          runs={visibleRuns}
-          onOpen={(run) => selectWorkspaceFromSurface(run.workspaceId, "workflows-main-surface")}
-        />
-      ) : null}
-
-      {nothingMatches ? (
-        <p className="px-1 text-ui-sm text-muted-foreground" role="status">
-          {WORKFLOW_MAIN_COPY.filterNoMatches}
-        </p>
-      ) : null}
-
-      {visibleLegacy.length > 0 ? (
+      {legacyItems.length > 0 ? (
         <WorkflowMainLegacyGroup
-          items={visibleLegacy}
+          items={legacyItems}
           onDelete={(item) => {
             setDeleteError(null);
             setDeleteTarget(item);

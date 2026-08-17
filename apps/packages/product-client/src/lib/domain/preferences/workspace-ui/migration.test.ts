@@ -348,16 +348,13 @@ describe("workspace UI state migration", () => {
     });
     expect(state.rightPanelMaterializedByWorkspace.w1).toEqual({
       activeEntryKey: "terminal:terminal-b",
-      // `availableRightPanelTools` leads with `workflow` ahead of the default
-      // scratch/git/agents order when workflows v2 is enabled — normalization
-      // appends missing tools in that order.
       headerOrder: [
         "tool:git",
         "terminal:terminal-b",
         "terminal:terminal-a",
-        "tool:workflow",
         "tool:scratch",
         "tool:agents",
+        "tool:workflow",
       ],
     });
   });
@@ -390,15 +387,12 @@ describe("workspace UI state migration", () => {
     });
     expect(state.rightPanelMaterializedByWorkspace.w1).toEqual({
       activeEntryKey: "terminal:t1",
-      // `availableRightPanelTools` leads with `workflow` ahead of the default
-      // scratch/git/agents order when workflows v2 is enabled — normalization
-      // appends missing tools in that order.
       headerOrder: [
         "terminal:t1",
         "tool:git",
-        "tool:workflow",
         "tool:scratch",
         "tool:agents",
+        "tool:workflow",
       ],
     });
     expect(state.rightPanelDurableByWorkspace.w1).not.toHaveProperty("toolOrder");

@@ -11,7 +11,7 @@ export function RightPanelPlaceholder({ activeEntryKey }: { activeEntryKey: Righ
     : kind === "agents"
       ? "Agents are getting ready"
     : kind === "workflow"
-      ? "Execution is getting ready"
+      ? "Workflow is getting ready"
     : kind === "terminal"
       ? "Terminals are getting ready"
       : "Git view is getting ready";

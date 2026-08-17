@@ -10,22 +10,7 @@
  */
 export const WORKFLOW_RUN_VIEW_COPY = {
   /** Right-panel header title, and the header entry's tab label. */
-  paneTitle: "Execution",
-
-  /**
-   * The run's own state, worn on the pane header. One label per contract
-   * status — read partially on purpose (this module stays free of SDK types),
-   * so the pane hides the status for a value this build has no words for
-   * rather than inventing one. The tone that colors the dot beside the label
-   * lives in `run-view-model.ts` (`workflowRunStatusTone`).
-   */
-  runStatusLabel: (status: string): string | undefined => ({
-    running: "Running",
-    awaiting_human: "Waiting on approval",
-    interrupted: "Paused",
-    completed: "Succeeded",
-    failed: "Failed",
-  } as Partial<Record<string, string>>)[status],
+  paneTitle: "Workflow",
 
   /** The run exists but the projection has not arrived yet. */
   loading: "Loading run…",
@@ -38,11 +23,8 @@ export const WORKFLOW_RUN_VIEW_COPY = {
   errorDescription:
     "The runtime did not return this workflow run. It may still be starting up.",
 
-  /** Accessible name of the pannable graph surface. */
-  graphCanvasLabel: "Run graph",
-  /** The docked inspector under the canvas, for the selected node. */
-  inspectorTitle: "Selected step",
-  inspectorCloseLabel: "Clear selection",
+  /** Section labels inside the pane. */
+  graphSectionTitle: "Steps",
   docsSectionTitle: "Documents",
   /** The run exists and has produced no documents yet. */
   docsEmpty: "No documents yet. Nodes write them as they finish.",

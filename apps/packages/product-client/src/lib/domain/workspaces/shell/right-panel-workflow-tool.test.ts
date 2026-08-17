@@ -49,14 +49,14 @@ describe("resolveWorkflowToolAvailability", () => {
 });
 
 describe("right-panel state reconciliation against the workflow run", () => {
-  const gatedOnTools = ["tool:workflow", "tool:scratch", "tool:git", "tool:agents"];
+  const gatedOnTools = ["tool:scratch", "tool:git", "tool:agents", "tool:workflow"];
 
   it("has the workflow tool in the gated-on header order", () => {
     expect(availableRightPanelTools(false)).toEqual([
-      "workflow",
       "scratch",
       "git",
       "agents",
+      "workflow",
     ]);
   });
 
