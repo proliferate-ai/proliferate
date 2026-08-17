@@ -41,7 +41,7 @@ async fn repo_root_mode_reuses_the_workspace_and_enforces_one_live_run() {
     // Context docs materialized into the user's checkout.
     assert!(fixture
         .repo_dir()
-        .join(".proliferate/context/00-notes.md")
+        .join(format!(".proliferate/context/{first_run}/00-notes.md"))
         .is_file());
 
     // The one-live-run law: a second run cannot land in the workspace while

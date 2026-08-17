@@ -22,7 +22,7 @@ use crate::domains::workflows::model::{
 };
 use crate::domains::workflows::projection::RunProjection;
 use crate::domains::workflows::render::{
-    node_session_title, render_envelope, RenderInputs, CONTEXT_DIR_RELATIVE,
+    node_session_title, render_envelope, run_context_dir_relative, RenderInputs,
 };
 use crate::domains::workflows::store::{emit_decision_events, ResolvedSideEffect, WorkflowStore};
 use crate::domains::workflows::transition::{
@@ -453,7 +453,7 @@ impl WorkflowActor {
         let arguments: serde_json::Map<String, serde_json::Value> =
             serde_json::from_str(&state.run.arguments_json)?;
         let docs = self.deps.store.list_docs(&self.run_id)?;
-        let context_dir = Path::new(&workspace.path).join(CONTEXT_DIR_RELATIVE);
+        let context_dir = Path::new(&workspace.path).join(run_context_dir_relative(&self.run_id));
         render_envelope(&RenderInputs {
             node_type: node.node_type,
             prompt: &node.prompt,
