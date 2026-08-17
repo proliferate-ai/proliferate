@@ -23,7 +23,7 @@ describe("setWindowTheme", () => {
     expect(tauriMocks.setTheme).not.toHaveBeenCalled();
   });
 
-  it("applies the resolved product theme to the current native window", async () => {
+  it("applies the selected product theme to the current native window", async () => {
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
       configurable: true,
       value: {},
@@ -32,5 +32,16 @@ describe("setWindowTheme", () => {
     await setWindowTheme("light");
 
     expect(tauriMocks.setTheme).toHaveBeenCalledExactlyOnceWith("light");
+  });
+
+  it("clears the native override for system mode", async () => {
+    Object.defineProperty(window, "__TAURI_INTERNALS__", {
+      configurable: true,
+      value: {},
+    });
+
+    await setWindowTheme(null);
+
+    expect(tauriMocks.setTheme).toHaveBeenCalledExactlyOnceWith(null);
   });
 });

@@ -34,7 +34,9 @@ export async function setWebviewZoom(scaleFactor: number): Promise<void> {
   await invoke("set_webview_zoom", { scaleFactor });
 }
 
-export async function setWindowTheme(theme: "dark" | "light"): Promise<void> {
+export async function setWindowTheme(
+  theme: "dark" | "light" | null,
+): Promise<void> {
   if (!isTauriWindowApiAvailable()) {
     return;
   }
