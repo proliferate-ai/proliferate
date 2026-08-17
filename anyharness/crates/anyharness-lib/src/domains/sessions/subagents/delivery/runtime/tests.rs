@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use anyharness_contract::v1::PendingPromptAddedPayload;
+
 use super::*;
 use crate::app::{test_support, AppState};
 use crate::domains::agents::installer::seed::AgentSeedStore;
@@ -270,6 +272,125 @@ async fn suppressed_completion_injects_metadata_without_a_wake_prompt() {
             .len(),
         1
     );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn mixed_message_suppression_persists_retired_wake_removal() {
+    let _lock = test_support::lock_env();
+    let _bearer = test_support::set_bearer_token_env(None);
+    let _data_key = test_support::set_data_key_env(None);
+    let state = subagent_with_captured_completion().await;
+    let worker = worker(&state);
+    worker.process_available().await;
+
+    let delivery_store = CompletionDeliveryStore::new(state.db.clone());
+    let first = delivery_store
+        .list_all_for_test()
+        .expect("deliveries")
+        .into_iter()
+        .next()
+        .expect("first delivery");
+    let first_pending = SessionStore::new(state.db.clone())
+        .find_pending_prompt(PARENT_ID, first.parent_prompt_seq.expect("first wake seq"))
+        .expect("load first wake")
+        .expect("first wake remains queued");
+    state
+        .session_runtime
+        .emit_runtime_event(
+            PARENT_ID,
+            RuntimeInjectedSessionEvent::pending_prompt_added(PendingPromptAddedPayload {
+                seq: first_pending.seq,
+                prompt_id: first_pending.prompt_id.clone(),
+                text: first_pending.text.clone(),
+                content_parts: first_pending.prompt_payload().content_parts(),
+                queued_at: first_pending.queued_at.clone(),
+                prompt_provenance: first_pending.prompt_payload().public_provenance(),
+            }),
+        )
+        .await
+        .expect("make first wake visible to queue replay");
+
+    let store = SessionStore::new(state.db.clone());
+    store
+        .append_event(&SessionEventRecord {
+            id: 0,
+            session_id: CHILD_ID.into(),
+            seq: 3,
+            timestamp: "2026-08-11T00:03:00Z".into(),
+            event_type: "turn_started".into(),
+            turn_id: Some("turn-follow-up".into()),
+            item_id: None,
+            payload_json: r#"{"type":"turn_started"}"#.into(),
+        })
+        .expect("start follow-up turn");
+    store
+        .persist_terminal_turn_record(&DurableTerminalTurn {
+            terminal_id: "terminal-follow-up".into(),
+            session_id: CHILD_ID.into(),
+            turn_id: "turn-follow-up".into(),
+            outcome: SessionTurnOutcome::Completed,
+            assistant_text: Some("newest final output".into()),
+            events: vec![SessionEventRecord {
+                id: 0,
+                session_id: CHILD_ID.into(),
+                seq: 4,
+                timestamp: "2026-08-11T00:04:00Z".into(),
+                turn_id: Some("turn-follow-up".into()),
+                item_id: None,
+                event_type: "turn_ended".into(),
+                payload_json: r#"{"type":"turn_ended","stopReason":"end_turn"}"#.into(),
+            }],
+            completed_at: "2026-08-11T00:04:00Z".into(),
+        })
+        .expect("capture follow-up completion");
+    let message = store
+        .insert_pending_prompt_payload(
+            PARENT_ID,
+            &PromptPayload::text("newest final output".into()).with_provenance(
+                PromptProvenance::AgentSession {
+                    source_session_id: CHILD_ID.into(),
+                    session_link_id: None,
+                    label: Some("worker".into()),
+                },
+            ),
+            None,
+        )
+        .expect("queue follow-up child message");
+
+    worker.process_available().await;
+
+    let queue = store
+        .list_pending_prompts(PARENT_ID)
+        .expect("remaining parent queue");
+    assert_eq!(
+        queue.iter().map(|row| row.seq).collect::<Vec<_>>(),
+        vec![message.seq]
+    );
+    let removed = store
+        .list_events(PARENT_ID)
+        .expect("parent events")
+        .into_iter()
+        .filter(|event| event.event_type == "pending_prompt_removed")
+        .find(|event| {
+            serde_json::from_str::<serde_json::Value>(&event.payload_json)
+                .is_ok_and(|payload| payload["seq"] == first_pending.seq)
+        })
+        .expect("persisted pending prompt removal");
+    let payload: serde_json::Value =
+        serde_json::from_str(&removed.payload_json).expect("removal payload");
+    assert_eq!(payload["seq"], first_pending.seq);
+    assert_eq!(payload["promptId"], first_pending.prompt_id.unwrap());
+    assert_eq!(payload["reason"], "deleted");
+    let deliveries = delivery_store.list_all_for_test().expect("deliveries");
+    assert_eq!(deliveries.len(), 2);
+    assert_eq!(
+        deliveries
+            .iter()
+            .filter(|delivery| delivery.state == CompletionDeliveryState::Delivered)
+            .count(),
+        2
+    );
+    assert_eq!(parent_completion_events(&state).len(), 2);
 }
 
 fn worker(state: &AppState) -> CompletionDeliveryWorker {

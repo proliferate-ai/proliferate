@@ -38,6 +38,29 @@ impl SessionStore {
         })
     }
 
+    pub(crate) fn has_pending_prompt_added_event(
+        &self,
+        session_id: &str,
+        pending_prompt_seq: i64,
+    ) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT payload_json FROM session_events
+                 WHERE session_id = ?1 AND event_type = 'pending_prompt_added'",
+            )?;
+            let payloads = stmt.query_map([session_id], |row| row.get::<_, String>(0))?;
+            for payload in payloads {
+                let Ok(value) = serde_json::from_str::<serde_json::Value>(&payload?) else {
+                    continue;
+                };
+                if value["seq"].as_i64() == Some(pending_prompt_seq) {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        })
+    }
+
     pub fn append_event(&self, event: &SessionEventRecord) -> anyhow::Result<()> {
         self.db.with_conn(|conn| {
             insert_event_row(conn, event)?;

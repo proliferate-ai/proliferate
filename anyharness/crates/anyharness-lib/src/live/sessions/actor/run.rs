@@ -205,6 +205,15 @@ impl SessionActor {
                     startup_drain_grace = false;
                     let (payload, prompt_id, seq) =
                         queued_prompt.expect("guarded queued prompt must exist");
+                    if let Err(error) = self.ensure_prequeued_pending_prompt_added(seq).await {
+                        tracing::warn!(
+                            session_id = %self.session_id,
+                            seq,
+                            error = ?error,
+                            "queued prompt drain halted before durable visibility event"
+                        );
+                        return ActorExitDisposition::Unload;
+                    }
                     let (respond_to, _response_rx) = oneshot::channel();
                     if let Some(exit) = self
                         .run_turn(

@@ -6,7 +6,10 @@ use super::super::canonical::{
     pending_prompt_agent_session_source, pending_prompt_matches_delivery,
 };
 use super::super::{completion_delivery_error, map_delivery, CompletionDeliveryRecord};
-use super::{canonical_wake_payload, sql_conversion_error, update_completion_projection};
+use super::{
+    canonical_wake_payload, sql_conversion_error, update_completion_projection,
+    RetiredCompletionWake,
+};
 use crate::domains::sessions::extensions::SessionTurnOutcome;
 use crate::domains::sessions::model::PendingPromptRecord;
 use crate::domains::sessions::store::pending_prompts::map_pending_prompt;
@@ -68,8 +71,8 @@ pub(super) fn retire_older_completed_sibling_wakes(
     tx: &rusqlite::Connection,
     delivery: &CompletionDeliveryRecord,
     now: &str,
-) -> rusqlite::Result<Vec<String>> {
-    let mut retired_ids = Vec::new();
+) -> rusqlite::Result<Vec<RetiredCompletionWake>> {
+    let mut retired_wakes = Vec::new();
     for sibling in older_queued_completed_siblings(tx, delivery)? {
         let Some(pending) = canonical_pending_for_delivery(tx, &sibling)? else {
             continue;
@@ -84,22 +87,27 @@ pub(super) fn retire_older_completed_sibling_wakes(
             ));
         }
         retire_enqueued_completed_delivery(tx, &sibling, now)?;
-        retired_ids.push(sibling.delivery_id);
+        retired_wakes.push(RetiredCompletionWake {
+            delivery_id: sibling.delivery_id,
+            parent_prompt_seq: pending.seq,
+            prompt_id: pending.prompt_id,
+        });
     }
-    Ok(retired_ids)
+    Ok(retired_wakes)
 }
 
-/// A retry may run an older completion after a later completion was already
-/// recorded. The durable child event sequence, not worker claim order or wall
-/// clock time, decides which completion is newer.
-pub(super) fn newer_completed_delivery_id(
+/// A retry may run an older completion after a later terminal outcome was
+/// already recorded. The durable child event sequence, not worker claim order
+/// or wall-clock time, decides which result is newer. Failed and cancelled
+/// successors remain actionable; only the stale older completed wake retires.
+pub(super) fn newer_terminal_delivery_id(
     tx: &rusqlite::Connection,
     delivery: &CompletionDeliveryRecord,
 ) -> rusqlite::Result<Option<String>> {
     tx.query_row(
         "SELECT delivery_id FROM session_link_completion_deliveries
          WHERE parent_session_id = ?1 AND child_session_id = ?2
-           AND delivery_id != ?3 AND outcome = 'completed'
+           AND delivery_id != ?3
            AND state IN ('pending', 'enqueued', 'delivered')
            AND child_last_event_seq > ?4
          ORDER BY child_last_event_seq DESC, created_at DESC, delivery_id DESC

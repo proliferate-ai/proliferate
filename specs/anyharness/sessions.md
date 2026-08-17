@@ -274,17 +274,27 @@ enqueue time, in the same transaction that would have inserted the wake:
   unconsumed. Its queue row is rewritten in place (same seq and queue
   position) to carry the newest delivery's canonical prompt, and the older
   delivery is retired, so the parent drains at most one wake per child and
-  always sees the newest completion output. Durable child event sequence,
-  rather than worker claim order, decides which result is newest: if restart
-  or retry processes the older delivery second, that older delivery retires
-  without adding a stale wake.
+  always sees the newest terminal result. Durable child event sequence, rather
+  than worker claim order, decides which result is newest: if restart or retry
+  processes an older completed delivery after a newer completed, failed, or
+  cancelled result, that stale completed delivery retires without adding a
+  second wake. The newer failed or cancelled result itself always keeps its
+  actionable wake.
 - `redundant_child_message` — the child's own `agent_session` message for the
   completed terminal turn already reached the parent (still queued since the
   child turn started, or correlated after execution through its durable queue
   identity and original `queued_at`), so the message is the wake and a second
   turn would be redundant. The same transaction also retires an older queued
-  completed wake that the message supersedes. This never applies to failed or
-  cancelled turns; those always materialize a wake turn.
+  completed wake that the message supersedes. The worker then persists
+  `pending_prompt_removed` for that retired queue identity so live and replayed
+  queue projections converge. This never applies to failed or cancelled turns;
+  those always materialize a wake turn.
+
+Every automatic durable-queue drain first ensures that the row's
+`pending_prompt_added` event is persisted. Detached activation and startup
+replay therefore preserve the original queue identity and `queued_at` before
+the row can become an executed transcript item, including across a crash
+between queue commit and activation.
 
 Neither applies to a delivery that ever reached the parent queue
 (recreate/retry reconciliation keeps its legacy exactly-once path). A retired

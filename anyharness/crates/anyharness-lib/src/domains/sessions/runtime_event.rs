@@ -1,4 +1,5 @@
 use anyharness_contract::v1::{
+    PendingPromptAddedPayload, PendingPromptRemovalReason, PendingPromptRemovedPayload,
     ReviewRunUpdatedPayload, SessionEvent, SessionEventEnvelope, SessionInfoUpdatePayload,
     SessionLinkTurnCompletedPayload, SubagentTurnCompletedPayload, SubagentTurnOutcome,
     WorkspacePinIntentPayload,
@@ -43,12 +44,26 @@ pub(crate) enum RuntimeInjectedSessionEvent {
         workspace_id: String,
         pinned: bool,
     },
+    PendingPromptAdded(PendingPromptAddedPayload),
+    PendingPromptRemoved(PendingPromptRemovedPayload),
     SubagentTurnCompleted(SubagentTurnCompletedPayload),
     SessionLinkTurnCompleted(SessionLinkTurnCompletedPayload),
     ReviewRunUpdated(ReviewRunUpdatedPayload),
 }
 
 impl RuntimeInjectedSessionEvent {
+    pub(crate) fn pending_prompt_added(payload: PendingPromptAddedPayload) -> Self {
+        Self::PendingPromptAdded(payload)
+    }
+
+    pub(crate) fn pending_prompt_removed(seq: i64, prompt_id: Option<String>) -> Self {
+        Self::PendingPromptRemoved(PendingPromptRemovedPayload {
+            seq,
+            prompt_id,
+            reason: PendingPromptRemovalReason::Deleted,
+        })
+    }
+
     pub(crate) fn subagent_turn_completed(completion: SubagentTurnCompletion) -> Self {
         Self::SubagentTurnCompleted(SubagentTurnCompletedPayload {
             completion_id: completion.completion_id,
@@ -93,6 +108,8 @@ impl RuntimeInjectedSessionEvent {
                 workspace_id,
                 pinned,
             }),
+            Self::PendingPromptAdded(payload) => SessionEvent::PendingPromptAdded(payload),
+            Self::PendingPromptRemoved(payload) => SessionEvent::PendingPromptRemoved(payload),
             Self::SubagentTurnCompleted(payload) => SessionEvent::SubagentTurnCompleted(payload),
             Self::SessionLinkTurnCompleted(payload) => {
                 SessionEvent::SessionLinkTurnCompleted(payload)

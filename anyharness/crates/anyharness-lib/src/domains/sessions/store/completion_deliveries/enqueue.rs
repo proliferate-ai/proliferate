@@ -29,6 +29,13 @@ impl CompletionWakeSuppressionReason {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RetiredCompletionWake {
+    pub(crate) delivery_id: String,
+    pub(crate) parent_prompt_seq: i64,
+    pub(crate) prompt_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ClaimedDeliveryEnqueueOutcome {
     Enqueued {
         delivery: CompletionDeliveryRecord,
@@ -50,7 +57,7 @@ pub(crate) enum ClaimedDeliveryEnqueueOutcome {
     Suppressed {
         delivery: CompletionDeliveryRecord,
         reason: CompletionWakeSuppressionReason,
-        coalesced_delivery_ids: Vec<String>,
+        retired_wakes: Vec<RetiredCompletionWake>,
     },
     Stale,
 }
@@ -174,7 +181,7 @@ impl CompletionDeliveryStore {
                     == crate::domains::sessions::extensions::SessionTurnOutcome::Completed
                 && coalescing::wake_is_redundant_with_child_message(tx, &delivery)?
             {
-                let coalesced_delivery_ids =
+                let retired_wakes =
                     coalescing::retire_older_completed_sibling_wakes(tx, &delivery, now)?;
                 let suppressed = finalize_claimed_without_prompt(
                     tx,
@@ -186,15 +193,15 @@ impl CompletionDeliveryStore {
                 return Ok(ClaimedDeliveryEnqueueOutcome::Suppressed {
                     delivery: suppressed,
                     reason: CompletionWakeSuppressionReason::RedundantChildMessage,
-                    coalesced_delivery_ids,
+                    retired_wakes,
                 });
             }
             if is_fresh
                 && delivery.outcome
                     == crate::domains::sessions::extensions::SessionTurnOutcome::Completed
-                && coalescing::newer_completed_delivery_id(tx, &delivery)?.is_some()
+                && coalescing::newer_terminal_delivery_id(tx, &delivery)?.is_some()
             {
-                let coalesced_delivery_ids =
+                let retired_wakes =
                     coalescing::retire_older_completed_sibling_wakes(tx, &delivery, now)?;
                 let suppressed = finalize_claimed_without_prompt(
                     tx,
@@ -206,7 +213,7 @@ impl CompletionDeliveryStore {
                 return Ok(ClaimedDeliveryEnqueueOutcome::Suppressed {
                     delivery: suppressed,
                     reason: CompletionWakeSuppressionReason::Coalesced,
-                    coalesced_delivery_ids,
+                    retired_wakes,
                 });
             }
             let adopted = if is_fresh {

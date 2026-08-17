@@ -8,7 +8,9 @@ use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::runtime_event::{
     RuntimeInjectedSessionEvent, SubagentTurnCompletion,
 };
-use crate::domains::sessions::store::completion_deliveries::enqueue::ClaimedDeliveryEnqueueOutcome;
+use crate::domains::sessions::store::completion_deliveries::enqueue::{
+    ClaimedDeliveryEnqueueOutcome, RetiredCompletionWake,
+};
 
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 const LEASE_DURATION_SECONDS: i64 = 30;
@@ -169,7 +171,7 @@ impl CompletionDeliveryWorker {
             ClaimedDeliveryEnqueueOutcome::Suppressed {
                 delivery,
                 reason,
-                coalesced_delivery_ids,
+                retired_wakes,
             } => {
                 // The delivery is terminal without a parent prompt. The
                 // injected completion event is the only parent-transcript
@@ -177,10 +179,14 @@ impl CompletionDeliveryWorker {
                 // the enqueue-path injection: the suppression is committed and
                 // never re-runs.
                 if let Some(session_runtime) = self.session_runtime.upgrade() {
+                    for retired_wake in &retired_wakes {
+                        inject_retired_wake_removal(&session_runtime, &delivery, retired_wake)
+                            .await;
+                    }
                     inject_completion_event(&session_runtime, &delivery).await;
                 }
-                for coalesced_delivery_id in coalesced_delivery_ids {
-                    log_wake_withheld(&delivery, &coalesced_delivery_id, "coalesced");
+                for retired_wake in retired_wakes {
+                    log_wake_withheld(&delivery, &retired_wake.delivery_id, "coalesced");
                 }
                 log_wake_withheld(&delivery, &delivery.delivery_id, reason.as_str());
                 return Ok(());
@@ -217,6 +223,42 @@ impl CompletionDeliveryWorker {
 
 fn dead_letter_threshold_reached(attempt_count: i64) -> bool {
     attempt_count >= MAX_DELIVERY_ATTEMPTS
+}
+
+async fn inject_retired_wake_removal(
+    session_runtime: &SessionRuntime,
+    delivery: &CompletionDeliveryRecord,
+    retired_wake: &RetiredCompletionWake,
+) {
+    match session_runtime
+        .emit_runtime_event(
+            &delivery.parent_session_id,
+            RuntimeInjectedSessionEvent::pending_prompt_removed(
+                retired_wake.parent_prompt_seq,
+                retired_wake.prompt_id.clone(),
+            ),
+        )
+        .await
+    {
+        Ok(envelope) => tracing::info!(
+            target: "anyharness.subagent.delivery_suppressed",
+            delivery_id = %retired_wake.delivery_id,
+            parent_session_id = %delivery.parent_session_id,
+            parent_prompt_seq = retired_wake.parent_prompt_seq,
+            parent_event_seq = envelope.seq,
+            reason = "coalesced",
+            "subagent: retired completion wake removed from parent queue projection"
+        ),
+        Err(error) => tracing::warn!(
+            target: "anyharness.subagent.delivery_suppression_event_failed",
+            delivery_id = %retired_wake.delivery_id,
+            parent_session_id = %delivery.parent_session_id,
+            parent_prompt_seq = retired_wake.parent_prompt_seq,
+            result_class = "pending_prompt_removal_injection_failed",
+            error = %error,
+            "retired completion wake removal was not injected into the parent transcript"
+        ),
+    }
 }
 
 /// Publish the completion metadata the parent transcript indexes for wake
