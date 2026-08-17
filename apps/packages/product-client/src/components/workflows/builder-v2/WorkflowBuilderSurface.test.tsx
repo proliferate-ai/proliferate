@@ -86,7 +86,7 @@ afterEach(() => {
 });
 
 describe("WorkflowBuilderSurface", () => {
-  it("clears the page shell drag layer and sends Back to the owning route", () => {
+  it("starts the builder header at the top and sends Back to the owning route", () => {
     const onBack = vi.fn();
     const { container } = render(
       <WorkflowBuilderSurface
@@ -97,10 +97,7 @@ describe("WorkflowBuilderSurface", () => {
       />,
     );
 
-    const clearance = container.querySelector<HTMLElement>(
-      "[data-workflow-builder-drag-clearance]",
-    );
-    expect(clearance?.style.height).toBe("46px");
+    expect(container.querySelector("[data-workflow-builder-drag-clearance]")).toBeNull();
     expect(screen.getByLabelText("Workflow title")).toHaveProperty("value", "untitled_workflow");
     expect(screen.getByText("0 steps · 1 node")).toBeTruthy();
 
@@ -209,6 +206,28 @@ describe("WorkflowBuilderSurface", () => {
       .toHaveProperty("disabled", true);
   });
 
+  it("deletes a focused node with Return and restores it with Command+Z", () => {
+    render(
+      <WorkflowBuilderSurface
+        definitionId={null}
+        template={RESEARCH_AND_REVIEW}
+        authCacheScope="user-1"
+      />,
+    );
+
+    const researchNode = screen.getByRole("button", { name: /Research/ });
+    fireEvent.focus(researchNode);
+    expect(screen.getByLabelText("Step name")).toHaveProperty("value", "Research");
+
+    fireEvent.keyDown(researchNode, { key: "Enter" });
+    expect(screen.queryByRole("button", { name: /Research/ })).toBeNull();
+    expect(screen.getByText("1 step · 2 nodes")).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: "z", metaKey: true });
+    expect(screen.getByRole("button", { name: /Research/ })).toBeTruthy();
+    expect(screen.getByText("2 steps · 3 nodes")).toBeTruthy();
+  });
+
   it("selects a just-added step so its fields are ready to edit", () => {
     render(
       <WorkflowBuilderSurface
@@ -223,7 +242,7 @@ describe("WorkflowBuilderSurface", () => {
     // The palette's second entry mints a gated step, not an agent, and the
     // just-added step opens in the inspector.
     expect(screen.getByLabelText("Step name")).toHaveProperty("value", "");
-    expect(screen.getByLabelText("Requires approval").getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByLabelText("Requires human approval").getAttribute("aria-checked")).toBe("true");
     expect(screen.getByRole("button", { name: "Move step 3 down" }))
       .toHaveProperty("disabled", true);
   });
@@ -308,11 +327,12 @@ describe("WorkflowBuilderSurface", () => {
       target: { value: JSON.stringify(["claude", "opus"]) },
     });
 
-    fireEvent.click(screen.getByLabelText("Requires approval"));
+    fireEvent.click(screen.getByLabelText("Requires human approval"));
 
     // A gated step still runs an agent session, so the model configuration
     // survives the toggle: the fields stay rendered, editable, and populated.
-    expect(screen.getByText("The run pauses here until someone approves the step.")).toBeTruthy();
+    expect(screen.queryByText("The run pauses here until someone approves the step.")).toBeNull();
+    expect(screen.queryByText(/stops for a person to review or decide/)).toBeNull();
     expect(screen.getByLabelText("Model")).toHaveProperty(
       "value",
       JSON.stringify(["claude", "opus"]),
@@ -328,7 +348,7 @@ describe("WorkflowBuilderSurface", () => {
     });
 
     // Toggling back off keeps it too — the toggle only moves `type`.
-    fireEvent.click(screen.getByLabelText("Requires approval"));
+    fireEvent.click(screen.getByLabelText("Requires human approval"));
     expect(screen.getByLabelText("Model")).toHaveProperty(
       "value",
       JSON.stringify(["claude", "opus"]),
@@ -352,7 +372,8 @@ describe("WorkflowBuilderSurface", () => {
       target: { value: "Read @doc:plan.md first." },
     });
 
-    expect(screen.getByText("@doc:plan.md").getAttribute("data-malformed")).toBe("true");
+    expect(screen.getByLabelText("Prompt")).toHaveProperty("value", "Read @doc:plan.md first.");
+    expect(screen.queryByText("Prompt preview")).toBeNull();
     expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", true);
     const alerts = screen.getAllByRole("alert").map((node) => node.textContent ?? "");
     expect(alerts.some((text) => text.includes("malformed reference “@doc:plan.md”"))).toBe(true);

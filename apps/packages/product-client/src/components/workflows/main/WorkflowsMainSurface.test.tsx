@@ -18,6 +18,23 @@ class TestIntersectionObserver {
 
 vi.stubGlobal("IntersectionObserver", TestIntersectionObserver);
 
+// `WorkflowMainExecutionsGroup` virtualizes its rows (`@tanstack/react-virtual`),
+// which measures the scrollport via `offsetHeight` — always 0 in jsdom (no
+// layout engine), so the real virtualizer renders zero rows here regardless of
+// list length. Stub it to render every row, the same fake `FileTreeOverlay`'s
+// own virtualized-list test uses for the identical reason.
+vi.mock("@tanstack/react-virtual", () => ({
+  useVirtualizer: ({ count }: { count: number }) => ({
+    getTotalSize: () => count * 52,
+    getVirtualItems: () => Array.from({ length: count }, (_, index) => ({
+      index,
+      key: index,
+      start: index * 52,
+    })),
+    measureElement: vi.fn(),
+  }),
+}));
+
 const mocks = vi.hoisted(() => ({
   listQuery: {
     data: undefined as { workflows: WorkflowDefinitionListRowV2[] } | undefined,
@@ -35,6 +52,14 @@ const mocks = vi.hoisted(() => ({
   deletingWorkflowDefinitionV2: false,
   selectWorkspaceFromSurface: vi.fn(),
   triggerDialog: vi.fn(),
+  executions: {
+    runs: [] as import("@anyharness/sdk").WorkflowRunV2[],
+    loaded: true,
+  },
+}));
+
+vi.mock("#product/hooks/workflows/facade/use-workflow-executions", () => ({
+  useWorkflowExecutions: () => mocks.executions,
 }));
 
 vi.mock("#product/hooks/access/cloud/workflows/use-workflow-definitions-v2-access", () => ({
@@ -79,6 +104,8 @@ beforeEach(() => {
   mocks.deleteWorkflowDefinitionV2.mockResolvedValue(undefined);
   mocks.selectWorkspaceFromSurface.mockClear();
   mocks.triggerDialog.mockClear();
+  mocks.executions.runs = [];
+  mocks.executions.loaded = true;
 });
 
 afterEach(() => {
@@ -158,11 +185,11 @@ describe("WorkflowsMainSurface", () => {
       <WorkflowsMainSurface authCacheScope="user-1" onEdit={onEdit} onNew={vi.fn()} />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit Issue triage" }));
+    fireEvent.click(screen.getByText("Issue triage"));
     expect(onEdit).toHaveBeenCalledWith("wf-1");
   });
 
-  it("shows both starter templates and a start-blank path in the empty state", () => {
+  it("opens the attached blank/template launcher from the create row", () => {
     mocks.listQuery.data = { workflows: [] };
     const onNew = vi.fn();
 
@@ -170,30 +197,28 @@ describe("WorkflowsMainSurface", () => {
       <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={onNew} />,
     );
 
-    for (const template of WORKFLOW_STARTER_TEMPLATES_V2) {
-      expect(screen.getByText(template.title)).toBeTruthy();
-    }
-    expect(screen.getAllByRole("button", { name: "Use template" })).toHaveLength(
-      WORKFLOW_STARTER_TEMPLATES_V2.length,
-    );
+    expect(screen.queryByRole("dialog", { name: "Create a new workflow" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Create a new workflow/ }));
+    expect(screen.getByRole("dialog", { name: "Create a new workflow" })).toBeTruthy();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Use template" })[0]);
+    fireEvent.click(screen.getByText(WORKFLOW_STARTER_TEMPLATES_V2[0].title));
     expect(onNew).toHaveBeenCalledWith(WORKFLOW_STARTER_TEMPLATES_V2[0]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Start blank" }));
+    fireEvent.keyDown(window, { key: "n", metaKey: true });
+    fireEvent.click(screen.getByRole("button", { name: /Blank workflow/ }));
     expect(onNew).toHaveBeenCalledWith(null);
   });
 
   it("deletes through the access action once the confirm dialog is confirmed", async () => {
-    mocks.listQuery.data = { workflows: [listRow({ id: "wf-1", revision: 4 })] };
+    mocks.listQuery.data = {
+      workflows: [listRow({ id: "wf-1", revision: 4, schemaVersion: 1 })],
+    };
 
     render(
       <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
     );
 
-    // Radix's dropdown trigger opens on pointerdown, not a synthetic click.
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Issue triage actions" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete..." }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete Issue triage" }));
 
     expect(screen.getByText("Delete this workflow?")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
@@ -205,14 +230,13 @@ describe("WorkflowsMainSurface", () => {
   });
 
   it("does not delete when the confirm dialog is cancelled", async () => {
-    mocks.listQuery.data = { workflows: [listRow()] };
+    mocks.listQuery.data = { workflows: [listRow({ schemaVersion: 1 })] };
 
     render(
       <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
     );
 
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Issue triage actions" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete..." }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete Issue triage" }));
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(screen.queryByText("Delete this workflow?")).toBeNull();
@@ -243,9 +267,8 @@ describe("WorkflowsMainSurface legacy group", () => {
       <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
     );
 
-    expect(screen.getByRole("heading", { name: "Legacy" })).toBeTruthy();
+    expect(screen.getByText("Legacy")).toBeTruthy();
     expect(screen.getByText("Legacy workflow")).toBeTruthy();
-    expect(screen.getByText("Saved on the old editor.")).toBeTruthy();
     expect(screen.getByText("v1")).toBeTruthy();
   });
 
@@ -264,9 +287,8 @@ describe("WorkflowsMainSurface legacy group", () => {
     expect(screen.getAllByRole("button", { name: /Legacy workflow/ })).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Delete Legacy workflow" })).toBeTruthy();
 
-    // The v2 row keeps its full action set alongside.
+    // The v2 row keeps its Run affordance (editing is the row itself).
     expect(screen.getByRole("button", { name: "Run Issue triage" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Edit Issue triage" })).toBeTruthy();
   });
 
   it("deletes a legacy definition through the shared definitions mutation", async () => {
@@ -293,10 +315,10 @@ describe("WorkflowsMainSurface legacy group", () => {
       <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
     );
 
-    expect(screen.queryByRole("heading", { name: "Legacy" })).toBeNull();
+    expect(screen.queryByText("Legacy")).toBeNull();
   });
 
-  it("keeps the legacy group and softens the empty headline when only gen-1 rows exist", () => {
+  it("keeps the legacy group and the create section when only gen-1 rows exist", () => {
     mocks.listQuery.data = {
       workflows: [listRow({ id: "wf-legacy", title: "Legacy workflow", schemaVersion: 1 })],
     };
@@ -305,10 +327,101 @@ describe("WorkflowsMainSurface legacy group", () => {
       <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
     );
 
-    expect(screen.getByText("Nothing rebuilt yet")).toBeTruthy();
-    expect(screen.queryByText("No workflows yet")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Legacy" })).toBeTruthy();
+    expect(screen.getByText("Legacy")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Delete Legacy workflow" })).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "Use template" }).length).toBeGreaterThan(0);
+    // The create section stays reachable above the legacy group.
+    expect(screen.getByText("Create a new workflow")).toBeTruthy();
+  });
+});
+
+function executionRun(
+  overrides: Partial<import("@anyharness/sdk").WorkflowRunV2> = {},
+): import("@anyharness/sdk").WorkflowRunV2 {
+  return {
+    id: "run-1",
+    invocationId: "inv-1",
+    definitionJson: "{}",
+    argumentsJson: "{}",
+    workspaceId: "ws-1",
+    status: "completed",
+    currentNodeRowId: null,
+    failureCode: null,
+    interruptionCode: null,
+    createdAt: "2020-03-05T00:00:00Z",
+    updatedAt: "2020-03-05T00:01:40Z",
+    completedAt: "2020-03-05T00:01:40Z",
+    ...overrides,
+  };
+}
+
+describe("WorkflowsMainSurface executions group", () => {
+  it("lists a run under Executions with its state and wall clock, and opens its workspace", () => {
+    mocks.listQuery.data = { workflows: [listRow()] };
+    mocks.executions.runs = [executionRun()];
+
+    render(
+      <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
+    );
+
+    expect(screen.getByText("Executions")).toBeTruthy();
+    // definitionJson carries no title today, so the row wears the fallback.
+    expect(screen.getByText("Workflow run")).toBeTruthy();
+    expect(screen.getByText("Succeeded · 1m 40s")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Workflow run"));
+    expect(mocks.selectWorkspaceFromSurface).toHaveBeenCalledWith("ws-1", "workflows-main-surface");
+  });
+
+  it("renders no Executions group while the roster is empty or unloaded", () => {
+    mocks.listQuery.data = { workflows: [listRow()] };
+    mocks.executions.runs = [];
+
+    render(
+      <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
+    );
+
+    expect(screen.queryByText("Executions")).toBeNull();
+  });
+});
+
+describe("WorkflowsMainSurface filter", () => {
+  it("filters every group by what the rows visibly say", () => {
+    mocks.listQuery.data = {
+      workflows: [
+        listRow({ id: "wf-1", title: "Issue triage" }),
+        listRow({ id: "wf-2", title: "Release notes" }),
+      ],
+    };
+    mocks.executions.runs = [executionRun()];
+
+    render(
+      <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Filter workflows"), {
+      target: { value: "release" },
+    });
+
+    expect(screen.getByText("Release notes")).toBeTruthy();
+    expect(screen.queryByText("Issue triage")).toBeNull();
+    // "release" matches no run title, so the whole group drops out.
+    expect(screen.queryByText("Executions")).toBeNull();
+  });
+
+  it("empties the saved group when nothing matches the filter", () => {
+    mocks.listQuery.data = { workflows: [listRow()] };
+
+    render(
+      <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Filter workflows"), {
+      target: { value: "zzz" },
+    });
+
+    expect(screen.queryByText("Issue triage")).toBeNull();
+    // The caption stays, wearing its zero count, the way the design's index reads.
+    expect(screen.getByText("Saved Workflows")).toBeTruthy();
+    expect(screen.getByText("0")).toBeTruthy();
   });
 });

@@ -5,10 +5,11 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type KeyboardEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
 } from "react";
 import { useRepoRootsQuery } from "@anyharness/sdk-react";
+import type { WorkflowNodeV2 } from "@proliferate/cloud-sdk";
 import type { WorkflowStarterTemplateV2 } from "#product/config/workflows/starter-templates";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
 import { WORKFLOW_MAIN_COPY } from "#product/copy/workflows/workflow-main-copy";
@@ -60,6 +61,11 @@ type BuilderSelection =
   | { kind: "node"; id: string }
   | { kind: "doc"; index: number }
   | { kind: "input" };
+
+interface DeletedNodeSnapshot {
+  node: WorkflowNodeV2;
+  index: number;
+}
 
 /**
  * A stale selection (removed step or document) closes the inspector. The
@@ -127,15 +133,6 @@ export function WorkflowBuilderSurface({
     useWorkflowDefinitionV2MutationsAccess(authCacheScope);
 
   const { draft, issues, actions } = builder;
-  const inputNames = useMemo(
-    () => new Set(draft.inputs.map((input) => input.name)),
-    [draft.inputs],
-  );
-  const docSlugs = useMemo(
-    () => new Set(draft.docTemplates.map((doc) => doc.slug)),
-    [draft.docTemplates],
-  );
-
   const [selection, setSelection] = useState<BuilderSelection | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -143,6 +140,7 @@ export function WorkflowBuilderSurface({
   const [inspectorWidth, setInspectorWidth] = useState(BUILDER_INSPECTOR_DEFAULT_WIDTH);
   const [paneRowWidth, setPaneRowWidth] = useState(0);
   const [confirmedTitle, setConfirmedTitle] = useState(draft.title);
+  const deletedNodesRef = useRef<DeletedNodeSnapshot[]>([]);
   const paneRowRef = useRef<HTMLDivElement>(null);
   const railDragMaxRef = useRef(BUILDER_RAIL_MAX_WIDTH);
   const inspectorDragMaxRef = useRef(BUILDER_INSPECTOR_MAX_WIDTH);
@@ -249,7 +247,7 @@ export function WorkflowBuilderSurface({
   const titleDirty = draft.title !== confirmedTitle;
 
   const confirmTitle = () => setConfirmedTitle(draft.title);
-  const onTitleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+  const onTitleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       event.preventDefault();
       confirmTitle();
@@ -258,6 +256,58 @@ export function WorkflowBuilderSurface({
       event.currentTarget.blur();
     }
   };
+
+  const removeNode = useCallback((node: WorkflowNodeV2) => {
+    const index = draft.nodes.findIndex((candidate) => candidate.id === node.id);
+    if (index < 0) {
+      return;
+    }
+    deletedNodesRef.current.push({ node, index });
+    actions.removeNode(node.id);
+    setSelection(null);
+  }, [actions, draft.nodes]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      const target = event.target;
+      const element = target instanceof HTMLElement ? target : null;
+      const tag = element?.tagName.toLowerCase();
+      const typing = tag === "input"
+        || tag === "textarea"
+        || tag === "select"
+        || element?.isContentEditable === true;
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
+        if (typing || builder.saving) {
+          return;
+        }
+        const snapshot = deletedNodesRef.current.pop();
+        if (!snapshot) {
+          return;
+        }
+        event.preventDefault();
+        actions.restoreNode(snapshot.node, snapshot.index);
+        setSelection({ kind: "node", id: snapshot.node.id });
+        return;
+      }
+
+      if (typing || event.metaKey || event.ctrlKey || builder.saving) {
+        return;
+      }
+      if (event.key !== "Enter" && event.key !== "Backspace" && event.key !== "Delete") {
+        return;
+      }
+      const focusedNode = element?.closest<HTMLElement>("[data-workflow-node-id]");
+      if (!selectedNode || focusedNode?.dataset.workflowNodeId !== selectedNode.id) {
+        return;
+      }
+      event.preventDefault();
+      removeNode(selectedNode);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [actions, builder.saving, removeNode, selectedNode]);
 
   if (builder.status !== "ready") {
     return (
@@ -323,18 +373,10 @@ export function WorkflowBuilderSurface({
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background" data-telemetry-block>
-      {/* MainSidebarPageShell owns the first 46px as native window chrome. A
-          directly nested page header must clear that drag layer or its
-          controls receive no pointer events. */}
-      <div
-        className="shrink-0"
-        style={{ height: 46 }}
-        data-tauri-drag-region="true"
-        data-workflow-builder-drag-clearance
-      />
       <header
-        className="flex shrink-0 items-center border-b border-border bg-background"
+        className="relative z-popover flex shrink-0 items-center border-b border-border bg-background"
         style={{ gap: 12, height: 46, padding: "0 12px" }}
+        data-tauri-drag-region="true"
       >
         <button
           type="button"
@@ -551,11 +593,9 @@ export function WorkflowBuilderSurface({
                 nodeCount={draft.nodes.length}
                 harnesses={harnesses}
                 issues={issues.filter((issue) => issue.nodeId === selectedNode.id)}
-                inputNames={inputNames}
-                docSlugs={docSlugs}
                 disabled={builder.saving}
                 onChange={(patch) => actions.updateNode(selectedNode.id, patch)}
-                onRemove={() => actions.removeNode(selectedNode.id)}
+                onRemove={() => removeNode(selectedNode)}
                 onMoveUp={() => actions.moveNodeUp(selectedNode.id)}
                 onMoveDown={() => actions.moveNodeDown(selectedNode.id)}
               />

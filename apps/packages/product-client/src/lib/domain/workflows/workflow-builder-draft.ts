@@ -44,6 +44,7 @@ export interface WorkflowBuilderActions {
   setDefaultRepoConfigId: (repoConfigId: string) => void;
   addNode: (type?: WorkflowNodeV2["type"]) => void;
   removeNode: (nodeId: string) => void;
+  restoreNode: (node: WorkflowNodeV2, index: number) => void;
   updateNode: (nodeId: string, patch: Partial<Omit<WorkflowNodeV2, "id">>) => void;
   moveNodeUp: (nodeId: string) => void;
   moveNodeDown: (nodeId: string) => void;
@@ -188,6 +189,20 @@ export function workflowBuilderActions(
       ...draft,
       nodes: draft.nodes.filter((node) => node.id !== nodeId),
     })),
+    restoreNode: (node, index) => editDraft((draft) => {
+      if (draft.nodes.some((candidate) => candidate.id === node.id)) {
+        return draft;
+      }
+      const insertionIndex = Math.max(0, Math.min(index, draft.nodes.length));
+      return {
+        ...draft,
+        nodes: [
+          ...draft.nodes.slice(0, insertionIndex),
+          node,
+          ...draft.nodes.slice(insertionIndex),
+        ],
+      };
+    }),
     updateNode: (nodeId, patch) => editDraft((draft) => ({
       ...draft,
       nodes: draft.nodes.map((node) => node.id === nodeId ? { ...node, ...patch } : node),

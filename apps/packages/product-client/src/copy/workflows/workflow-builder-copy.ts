@@ -78,8 +78,7 @@ export const WORKFLOW_BUILDER_COPY = {
   moveStepDownLabel: (position: number) => `Move step ${position} down`,
   stepTitleLabel: "Step name",
   stepTitlePlaceholder: "Draft the research questions",
-  requiresApprovalLabel: "Requires approval",
-  humanStepNote: "The run pauses here until someone approves the step.",
+  requiresApprovalLabel: "Requires human approval",
   modelSectionHeading: "Model",
   deleteNodeLabel: "Delete node",
   harnessDefaultOption: "Run default",
@@ -89,15 +88,6 @@ export const WORKFLOW_BUILDER_COPY = {
 
   promptLabel: "Prompt",
   promptPlaceholder: "Investigate @input:goal and record what you find in @doc:findings.",
-  promptHelp:
-    "Write @input:name to read a run value and @doc:slug to read or write a document. Both must be declared below.",
-  promptPreviewLabel: "Prompt preview",
-  resolvedReferenceHint: (raw: string) => `${raw} is declared`,
-  unresolvedReferenceHint: (raw: string) => `${raw} is not declared yet`,
-  /** `reason` is `describeMalformedReference`'s fragment, so the grammar is stated once. */
-  malformedReferenceHint: (raw: string, reason: string) =>
-    `${raw} is not a valid reference: ${reason}`,
-
   inputsHeading: "Inputs",
   inputsDescription: "Values supplied when a run starts. Prompts read them as @input:name.",
   inputsEmpty: "This workflow takes no inputs.",

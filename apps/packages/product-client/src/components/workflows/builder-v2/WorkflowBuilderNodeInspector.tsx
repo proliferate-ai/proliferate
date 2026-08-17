@@ -47,11 +47,10 @@ export const INSPECTOR_DESTRUCTIVE_BUTTON_STYLE: CSSProperties = {
 
 /** The design's kind vocabulary for the inspector header. */
 const KIND = {
-  agent: { label: "Agent", accent: "var(--color-info)", hint: "Agent works the goal autonomously" },
+  agent: { label: "Agent", accent: "var(--color-info)" },
   human_in_loop: {
     label: "Human in the loop",
     accent: "var(--color-compute-target-amber)",
-    hint: "Human in the loop — stops for a person to review or decide",
   },
 } as const;
 
@@ -63,8 +62,6 @@ export interface WorkflowBuilderNodeInspectorProps {
   harnesses: readonly WorkflowBuilderHarnessOption[];
   /** Validator issues already narrowed to this node. */
   issues: readonly WorkflowBuilderIssue[];
-  inputNames: ReadonlySet<string>;
-  docSlugs: ReadonlySet<string>;
   disabled: boolean;
   onChange: (patch: Partial<Omit<WorkflowNodeV2, "id">>) => void;
   onRemove: () => void;
@@ -86,8 +83,6 @@ export function WorkflowBuilderNodeInspector({
   nodeCount,
   harnesses,
   issues,
-  inputNames,
-  docSlugs,
   disabled,
   onChange,
   onRemove,
@@ -138,9 +133,6 @@ export function WorkflowBuilderNodeInspector({
           style={INSPECTOR_FIELD_STYLE}
           onChange={(event) => onChange({ title: event.currentTarget.value })}
         />
-        <span className="text-ui-sm text-faint" style={{ textWrap: "pretty" }}>
-          {kind.hint}
-        </span>
       </div>
 
       <div className="flex items-center justify-between" style={{ gap: 8 }}>
@@ -163,12 +155,6 @@ export function WorkflowBuilderNodeInspector({
           })}
         />
       </div>
-      {node.type === "human_in_loop" ? (
-        <p className="text-ui-sm m-0 text-faint" style={{ textWrap: "pretty" }}>
-          {WORKFLOW_BUILDER_COPY.humanStepNote}
-        </p>
-      ) : null}
-
       <div className="flex flex-col" style={{ gap: 7 }}>
         <span className={INSPECTOR_EYEBROW_CLASS} style={INSPECTOR_EYEBROW_STYLE}>
           {WORKFLOW_BUILDER_COPY.modelSectionHeading}
@@ -225,8 +211,6 @@ export function WorkflowBuilderNodeInspector({
         fieldId={`${fieldPrefix}-prompt`}
         value={node.prompt}
         disabled={disabled}
-        inputNames={inputNames}
-        docSlugs={docSlugs}
         invalid={promptInvalid}
         onChange={(prompt) => onChange({ prompt })}
       />

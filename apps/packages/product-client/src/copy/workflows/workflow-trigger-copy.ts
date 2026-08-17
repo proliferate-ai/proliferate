@@ -5,7 +5,8 @@
  * authored text, not presentation logic.
  */
 export const WORKFLOW_TRIGGER_COPY = {
-  description: "Fill in this workflow's inputs and choose where the run works.",
+  manualDescription: "Manual trigger · this run is recorded like any scheduled one",
+  inputsLabel: "Inputs",
   inputsEmpty: "This workflow takes no inputs.",
   optionalHint: "Optional",
   repositoryLabel: "Repository",
@@ -15,10 +16,15 @@ export const WORKFLOW_TRIGGER_COPY = {
   repositoriesLoadFailed:
     "Repositories could not be loaded. Close this dialog and try again.",
   placementLabel: "Placement",
-  placementWorktree: "New worktree",
-  placementRepoRoot: "Repo root",
-  placementHelp:
-    "A new worktree keeps this run isolated. Repo root runs in the existing checkout.",
+  whereItRunsLabel: "Where it runs",
+  placementWorktree: "Repository worktree",
+  placementWorktreeHelp:
+    "Default — a new branch and worktree cut from the repository's default branch",
+  placementRepoRoot: "Repository root",
+  placementRepoRootHelp: "Use the repository's existing checkout",
+  locationSummaryPrefix: "Runs in",
+  changeLocationLabel: "Change",
   cancelLabel: "Cancel",
-  confirmLabel: "Start run",
+  confirmLabel: "Run",
+  runningLabel: "Running",
 } as const;

@@ -94,6 +94,7 @@ export function WorkflowBuilderChainCanvas({
               summaryPresent={false}
               modelLine={null}
               hasInPort={false}
+              nodeId={null}
               onSelect={onSelectInput}
             />
           );
@@ -119,6 +120,7 @@ export function WorkflowBuilderChainCanvas({
             summaryPresent={promptLine !== null}
             modelLine={nodeModelLine(node, harnesses)}
             hasInPort
+            nodeId={node.id}
             onSelect={() => onSelectNode(placed.key)}
           />
         );
@@ -144,6 +146,7 @@ function BuilderCanvasCard({
   summaryPresent,
   modelLine,
   hasInPort,
+  nodeId,
   onSelect,
 }: {
   x: number;
@@ -158,6 +161,7 @@ function BuilderCanvasCard({
   summaryPresent: boolean;
   modelLine: string | null;
   hasInPort: boolean;
+  nodeId: string | null;
   onSelect: () => void;
 }) {
   const cardStyle: CSSProperties = {
@@ -182,7 +186,14 @@ function BuilderCanvasCard({
     cursor: "pointer",
   };
   return (
-    <button type="button" aria-pressed={selected} style={cardStyle} onClick={onSelect}>
+    <button
+      type="button"
+      aria-pressed={selected}
+      data-workflow-node-id={nodeId ?? undefined}
+      style={cardStyle}
+      onFocus={onSelect}
+      onClick={onSelect}
+    >
       {hasInPort ? (
         <span
           aria-hidden
