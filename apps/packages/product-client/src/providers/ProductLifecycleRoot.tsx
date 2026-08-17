@@ -87,6 +87,18 @@ const AuthenticatedBackgroundLifecycles = lazy(() =>
   })),
 )
 
+// The workspace-switch shortcuts (Cmd+1..9, Cmd+Opt+Arrow) depend on
+// useWorkspaceNavigationWorkflow's selectWorkspaceFromSurface, which pulls in
+// workspace selection, the agent catalog, and session-creation machinery.
+// Same treatment as the owners above: authenticated-only + lazy, so the login
+// first-load chunk never parses that graph (login runtime JS budget). The
+// shortcuts were already no-ops signed out (no workspace to select).
+const AuthenticatedWorkspaceSwitchShortcuts = lazy(() =>
+  import("#product/providers/AuthenticatedWorkspaceSwitchShortcuts").then((m) => ({
+    default: m.AuthenticatedWorkspaceSwitchShortcuts,
+  })),
+)
+
 const APP_RUNTIME_RENDER_MILESTONES = new Set([1, 2, 3, 5, 10, 25, 50, 100, 250])
 
 let appRuntimeRenderCount = 0
@@ -271,6 +283,11 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
       {authStatus === "authenticated" && (
         <Suspense fallback={null}>
           <AuthenticatedBackgroundLifecycles />
+        </Suspense>
+      )}
+      {authStatus === "authenticated" && (
+        <Suspense fallback={null}>
+          <AuthenticatedWorkspaceSwitchShortcuts />
         </Suspense>
       )}
       {children}

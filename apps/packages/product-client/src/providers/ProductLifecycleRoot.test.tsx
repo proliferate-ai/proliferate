@@ -83,6 +83,10 @@ vi.mock("#product/providers/AuthenticatedBackgroundLifecycles", () => ({
   ),
 }));
 
+vi.mock("#product/providers/AuthenticatedWorkspaceSwitchShortcuts", () => ({
+  AuthenticatedWorkspaceSwitchShortcuts: () => null,
+}));
+
 // Counted rather than stubbed away: where this hook runs relative to the auth
 // gate is the behaviour under test, not an implementation detail.
 const retentionSweepCount = vi.hoisted(() => ({ value: 0 }));
