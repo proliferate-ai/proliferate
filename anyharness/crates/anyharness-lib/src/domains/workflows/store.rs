@@ -604,14 +604,14 @@ impl WorkflowStore {
                 }
             }
 
-            // Fan-in ledger (ruling F1), stamped in this commit, keyed off the
-            // turn session (else representative); keyless Cancel stamps all legs.
-            if let Some((leg_node, leg_status)) = node_sessions::finished_leg_of(transition) {
-                let session = match transition {
-                    Transition::Cancel { .. } => None,
-                    _ => turn_session(event)
-                        .or_else(|| state.node(leg_node).and_then(|node| node.session_id.clone())),
-                };
+            // Fan-in ledger (ruling F1), stamped in this commit. Run-terminal
+            // Cancel stamps every still-running leg in the run; the rest stamp
+            // one leg keyed off the turn session (else representative).
+            if let Transition::Cancel { .. } = transition {
+                node_sessions::cancel_all_run_legs_tx(tx, run_id, &timestamp)?;
+            } else if let Some((leg_node, leg_status)) = node_sessions::finished_leg_of(transition) {
+                let session = turn_session(event)
+                    .or_else(|| state.node(leg_node).and_then(|node| node.session_id.clone()));
                 node_sessions::mark_leg_terminal_tx(
                     tx,
                     leg_node,

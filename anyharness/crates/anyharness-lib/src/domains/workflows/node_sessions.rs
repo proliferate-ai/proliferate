@@ -74,6 +74,31 @@ pub(super) fn mark_leg_terminal_tx(
     Ok(())
 }
 
+/// A cancel is run-terminal: every leg still running anywhere in the run —
+/// current chain node or adhoc row — is stamped cancelled in the same commit.
+/// Cancel disposes every Running row's session (chain and adhoc alike), so
+/// stamping only the current node would leave a disposed adhoc session's leg
+/// 'running' forever (delta-review finding on this rung). Already-terminal
+/// legs keep their status and completion time.
+pub(super) fn cancel_all_run_legs_tx(
+    tx: &Connection,
+    run_id: &str,
+    timestamp: &str,
+) -> rusqlite::Result<()> {
+    tx.execute(
+        "UPDATE workflow_run_node_sessions SET status = ?2, completed_at = ?3
+         WHERE status = ?4
+           AND node_row_id IN (SELECT id FROM workflow_run_nodes WHERE run_id = ?1)",
+        params![
+            run_id,
+            WorkflowLegStatus::Cancelled.as_str(),
+            timestamp,
+            WorkflowLegStatus::Running.as_str()
+        ],
+    )?;
+    Ok(())
+}
+
 /// The undo-window stamp for a PARALLEL node only (ruling F3): the stamp lands
 /// in the completing commit, not per report. A one-leg node keeps the per-report
 /// stamp (`store::note_first_turn_finished`), so this is a no-op there (first ==
@@ -121,9 +146,8 @@ pub(super) fn finished_leg_of(transition: &Transition) -> Option<(&str, Workflow
                 _ => WorkflowLegStatus::ForcedUnload,
             },
         )),
-        // A cancel is terminal for every leg at once; the store passes no
-        // session key for it, so the stamp covers the whole node's rows.
-        Transition::Cancel { node_row_id, .. } => Some((node_row_id, WorkflowLegStatus::Cancelled)),
+        // Cancel is absent here on purpose: it is run-terminal, not
+        // node-terminal, and the store stamps it via `cancel_all_run_legs_tx`.
         _ => None,
     }
 }

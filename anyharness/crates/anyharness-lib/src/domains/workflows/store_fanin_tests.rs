@@ -181,3 +181,48 @@ fn cancel_marks_the_leg_cancelled_in_the_same_commit() {
     assert_eq!(legs[0].status, WorkflowLegStatus::Cancelled);
     assert!(legs[0].completed_at.is_some());
 }
+
+#[test]
+fn cancel_marks_every_running_leg_in_the_run_cancelled() {
+    let store = test_store();
+    let created = store.create_run_with_first_node(params("run-1")).expect("create");
+    let chain_id = created.first_node_row_id.clone();
+    store.stamp_session(&chain_id, "sess-chain", None, None).expect("stamp chain");
+    let state = store.load_run_state("run-1").expect("load").expect("run");
+
+    let with_adhoc = apply(
+        &store,
+        "run-1",
+        &state,
+        &WorkflowEvent::Command(WorkflowCommand::AddAdhocNode {
+            anchor_node_row_id: chain_id.clone(),
+            prompt: "also check the error budget".into(),
+            model: None,
+        }),
+    );
+    let adhoc_id = with_adhoc
+        .nodes
+        .iter()
+        .map(|node| node.id.clone())
+        .find(|id| *id != chain_id)
+        .expect("adhoc row minted");
+    store.stamp_session(&adhoc_id, "sess-adhoc", None, None).expect("stamp adhoc");
+    let state = store.load_run_state("run-1").expect("load").expect("run");
+
+    let cancelled = apply(
+        &store,
+        "run-1",
+        &state,
+        &WorkflowEvent::Command(WorkflowCommand::Cancel),
+    );
+
+    // Delta-review finding: stamping only the current chain node left a
+    // disposed adhoc session's leg 'running' forever. Cancel is run-terminal,
+    // so every still-running leg — chain or adhoc — lands cancelled.
+    for node_id in [&chain_id, &adhoc_id] {
+        let legs = cancelled.legs_of(node_id);
+        assert_eq!(legs.len(), 1, "node {node_id}");
+        assert_eq!(legs[0].status, WorkflowLegStatus::Cancelled, "node {node_id}");
+        assert!(legs[0].completed_at.is_some(), "node {node_id}");
+    }
+}
