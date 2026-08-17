@@ -196,7 +196,6 @@ export interface DesktopNativeUiBridge {
 
   setRunningAgentCount(count: number): Promise<void>;
   setWorkspaceActivity(payload: WorkspaceActivityPayload): Promise<void>;
-  setWindowTheme(theme: "dark" | "light"): Promise<void>;
   setZoom(scale: number): Promise<void>;
 
   /**

@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
   showNativeContextMenu: vi.fn(),
   listenForShortcutMenuEvents: vi.fn(),
   setRunningAgentCount: vi.fn(),
-  setWindowTheme: vi.fn(),
   setWebviewZoom: vi.fn(),
   setWorkspaceActivityIndicator: vi.fn(),
   checkForUpdate: vi.fn(),
@@ -71,7 +70,6 @@ vi.mock("@/lib/access/tauri/menu", () => ({
 }));
 vi.mock("@/lib/access/tauri/window", () => ({
   setRunningAgentCount: mocks.setRunningAgentCount,
-  setWindowTheme: mocks.setWindowTheme,
   setWebviewZoom: mocks.setWebviewZoom,
   applyMacWindowChrome: vi.fn(),
   isMainTauriWebviewAvailable: vi.fn(),
@@ -263,7 +261,6 @@ describe("nativeUi", () => {
   it("delegates state setters to the window/dock wrappers", async () => {
     mocks.setRunningAgentCount.mockResolvedValue(undefined);
     mocks.setWorkspaceActivityIndicator.mockResolvedValue(undefined);
-    mocks.setWindowTheme.mockResolvedValue(undefined);
     mocks.setWebviewZoom.mockResolvedValue(undefined);
 
     await desktopBridge.nativeUi.setRunningAgentCount(3);
@@ -277,9 +274,6 @@ describe("nativeUi", () => {
       state: "attention",
       attentionCount: 2,
     });
-
-    await desktopBridge.nativeUi.setWindowTheme("dark");
-    expect(mocks.setWindowTheme).toHaveBeenCalledWith("dark");
 
     await desktopBridge.nativeUi.setZoom(1.25);
     expect(mocks.setWebviewZoom).toHaveBeenCalledWith(1.25);

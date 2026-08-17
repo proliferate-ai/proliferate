@@ -82,7 +82,7 @@ The bridge groups are:
 | `runtime` | Discover or restart the local AnyHarness runtime and return its base URL/token connection. |
 | `files` | Pick a local directory, inspect basic path availability, recover absolute paths for the drag session just dropped onto the webview, list/open editor/finder/terminal/copy targets, reveal paths, and open terminals. |
 | `localCredentials` | Read and update local agent/provider credentials; never Proliferate login credentials. |
-| `nativeUi` | Render native context menus, receive native commands, set running-agent quit protection, update Dock attention, synchronize native window appearance, and control WebView zoom. |
+| `nativeUi` | Render native context menus, receive native commands, set running-agent quit protection, update Dock attention, and control WebView zoom. |
 | `updater` | Report updater support/version, check, download with progress, install, and relaunch while preserving the opaque native update handle. |
 | `worker` | Read the install id and ensure or stop the Desktop worker process. |
 | `ssh` | Persist SSH profiles and establish a tunnel that yields a normal AnyHarness connection. |
@@ -154,9 +154,10 @@ marker; CSS hiding is not a substitute for not mounting native behavior.
 
 Desktop-only product lifecycles include local runtime UI, local automation,
 worker enrollment tied to product auth, updater watching/presentation, native
-menu command handling, native window appearance synchronization, local-agent
-credential synchronization, SSH/tunnel UI, and native support/diagnostic
-collection.
+menu command handling, local-agent credential synchronization, SSH/tunnel UI,
+and native support/diagnostic collection. Host-owned window-lifetime behavior,
+including native appearance synchronization, is installed by the Desktop entry
+instead of crossing the product bridge.
 
 ### Application-entry contract
 

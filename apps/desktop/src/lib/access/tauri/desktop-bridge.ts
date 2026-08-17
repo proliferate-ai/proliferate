@@ -35,7 +35,6 @@ import {
   isMainTauriWebviewAvailable,
   revealCurrentWindow,
   setRunningAgentCount,
-  setWindowTheme,
   setWebviewZoom,
 } from "./window";
 import { fetchServerMeta, isTauriRuntimeAvailable } from "./connect-server";
@@ -179,7 +178,6 @@ export const desktopBridge: DesktopBridge = {
     },
     setRunningAgentCount,
     setWorkspaceActivity: setWorkspaceActivityIndicator,
-    setWindowTheme,
     setZoom: setWebviewZoom,
     applyMacosWindowChrome: applyMacWindowChrome,
     isMainWebviewAvailable: isMainTauriWebviewAvailable,

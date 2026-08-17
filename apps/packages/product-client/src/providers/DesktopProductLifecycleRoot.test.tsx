@@ -45,12 +45,8 @@ vi.mock("#product/hooks/app/lifecycle/use-workspace-activity-indicator", () => (
 vi.mock("#product/hooks/preferences/lifecycle/use-desktop-zoom-preference-lifecycle", () => ({
   useDesktopZoomPreferenceLifecycle: vi.fn(),
 }));
-vi.mock("#product/hooks/preferences/lifecycle/use-desktop-window-theme-lifecycle", () => ({
-  useDesktopWindowThemeLifecycle: vi.fn(),
-}));
 
 import { useWorkspaceActivityIndicator } from "#product/hooks/app/lifecycle/use-workspace-activity-indicator";
-import { useDesktopWindowThemeLifecycle } from "#product/hooks/preferences/lifecycle/use-desktop-window-theme-lifecycle";
 import { useDesktopZoomPreferenceLifecycle } from "#product/hooks/preferences/lifecycle/use-desktop-zoom-preference-lifecycle";
 import { DesktopProductLifecycleRoot } from "./DesktopProductLifecycleRoot";
 
@@ -78,7 +74,6 @@ function makeBridge(
       setRunningAgentCount,
       subscribeMenuCommands: () => () => {},
       setWorkspaceActivity: async () => {},
-      setWindowTheme: async () => {},
       setZoom: async () => {},
       ...nativeUiOverrides,
     },
@@ -228,18 +223,15 @@ describe("DesktopProductLifecycleRoot", () => {
 
   it("wires Desktop product lifecycles only through the mounted bridge", () => {
     const setWorkspaceActivity = vi.fn().mockResolvedValue(undefined);
-    const setWindowTheme = vi.fn().mockResolvedValue(undefined);
     const setZoom = vi.fn().mockResolvedValue(undefined);
     const bridge = makeBridge(vi.fn().mockResolvedValue(undefined), {
       setWorkspaceActivity,
-      setWindowTheme,
       setZoom,
     });
 
     renderRoot(makeHost(bridge));
 
     expect(useWorkspaceActivityIndicator).toHaveBeenCalledWith(setWorkspaceActivity);
-    expect(useDesktopWindowThemeLifecycle).toHaveBeenCalledWith(setWindowTheme);
     expect(useDesktopZoomPreferenceLifecycle).toHaveBeenCalledWith(setZoom);
     expect(lifecycleMocks.useUpdateRestartWatcher).toHaveBeenCalledWith(bridge.updater);
     expect(lifecycleMocks.useDesktopWorkerEnrollment).toHaveBeenCalledWith(
@@ -250,14 +242,12 @@ describe("DesktopProductLifecycleRoot", () => {
 
     cleanup();
     vi.mocked(useWorkspaceActivityIndicator).mockClear();
-    vi.mocked(useDesktopWindowThemeLifecycle).mockClear();
     vi.mocked(useDesktopZoomPreferenceLifecycle).mockClear();
     lifecycleMocks.useUpdateRestartWatcher.mockClear();
     lifecycleMocks.useDesktopWorkerEnrollment.mockClear();
     renderRoot(makeHost(null));
 
     expect(useWorkspaceActivityIndicator).not.toHaveBeenCalled();
-    expect(useDesktopWindowThemeLifecycle).not.toHaveBeenCalled();
     expect(useDesktopZoomPreferenceLifecycle).not.toHaveBeenCalled();
     expect(lifecycleMocks.useUpdateRestartWatcher).not.toHaveBeenCalled();
     expect(lifecycleMocks.useDesktopWorkerEnrollment).not.toHaveBeenCalled();
