@@ -116,7 +116,7 @@ function EditActionRow({
               event.stopPropagation();
               void fileActions.openPrimary();
             }}
-            className="pointer-events-auto h-auto min-w-0 max-w-full shrink justify-start truncate rounded-none bg-transparent p-0 text-left text-chat font-normal text-current underline decoration-current decoration-dotted decoration-[0.5px] underline-offset-2 hover:bg-transparent hover:text-current focus-visible:ring-1 focus-visible:ring-border"
+            className="pointer-events-auto h-auto min-w-0 max-w-full shrink justify-start truncate rounded-none bg-transparent p-0 text-left text-chat font-normal text-current underline decoration-current decoration-dotted decoration-[0.5px] underline-offset-2 hover:bg-transparent active:bg-transparent hover:text-current focus-visible:ring-1 focus-visible:ring-border"
           >
             {displayName}
           </Button>

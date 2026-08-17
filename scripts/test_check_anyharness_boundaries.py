@@ -1336,7 +1336,7 @@ class ShippedLedgerTest(unittest.TestCase):
             # pins its own value. AH-STORE-3 is this branch's record id for the
             # rule main's ledger names DOMAIN_SQL_OUTSIDE_STORE.
             ("AH-STORE-3",
-             "domains/workflows/policy.rs", 34,
+             "domains/workflows/policy.rs", 35,
              "bare SELECT head, FROM on the next line"),
             # A DROP TABLE line, inside a cfg(test) mod the engine cannot see
             # past — the checker still flags the line itself. Carried forward

@@ -1010,6 +1010,42 @@ site = "fn controlling_run_id::rusqlite::params"
 reason = "the gen-2 destruction-controller policy's controlling-run lookup runs its SELECT inline over a raw Db handle instead of through WorkflowStore; target = move the query into store.rs and pass facts in (journaled ADR wart, cleanup PR TBD)"
 
 [[exception]]
+rule = "AH-STORE-3"
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/policy.rs"
+site = "fn seed_run_with_node::INSERT OR IGNORE INTO"
+reason = "the run-cancel PR's first direct test coverage for this policy seeds a run/node pair through raw INSERTs inside the file's own cfg(test) mod tests, engine-invisible like the access_gate.rs DROP TABLE row above"
+
+[[exception]]
+rule = "AH-STORE-3"
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/policy.rs"
+site = "fn seed_run_with_node::INSERT OR IGNORE INTO#2"
+reason = "the run-cancel PR's first direct test coverage for this policy seeds a run/node pair through raw INSERTs inside the file's own cfg(test) mod tests, engine-invisible like the access_gate.rs DROP TABLE row above"
+
+[[exception]]
+rule = "AH-STORE-3"
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/policy.rs"
+site = "fn seed_run_with_node::INSERT INTO"
+reason = "the run-cancel PR's first direct test coverage for this policy seeds a run/node pair through raw INSERTs inside the file's own cfg(test) mod tests, engine-invisible like the access_gate.rs DROP TABLE row above"
+
+[[exception]]
+rule = "AH-STORE-3"
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/policy.rs"
+site = "fn seed_run_with_node::INSERT INTO#2"
+reason = "the run-cancel PR's first direct test coverage for this policy seeds a run/node pair through raw INSERTs inside the file's own cfg(test) mod tests, engine-invisible like the access_gate.rs DROP TABLE row above"
+
+[[exception]]
+rule = "AH-STORE-3"
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/policy.rs"
+site = "fn seed_run_with_node::rusqlite::params"
+reason = "the run-cancel PR's first direct test coverage for this policy seeds a run/node pair through raw INSERTs inside the file's own cfg(test) mod tests, engine-invisible like the access_gate.rs DROP TABLE row above"
+
+[[exception]]
+rule = "AH-STORE-3"
+path = "anyharness/crates/anyharness-lib/src/domains/workflows/policy.rs"
+site = "fn seed_run_with_node::rusqlite::params#2"
+reason = "the run-cancel PR's first direct test coverage for this policy seeds a run/node pair through raw INSERTs inside the file's own cfg(test) mod tests, engine-invisible like the access_gate.rs DROP TABLE row above"
+
+[[exception]]
 rule = "AH-CONTRACT-1"
 path = "anyharness/crates/anyharness-lib/src/domains/workflows/session_extension.rs"
 site = "anyharness_contract::v1::InteractionKind"

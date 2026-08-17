@@ -23,8 +23,8 @@ import { fileViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-t
 
 describe("right panel domain", () => {
   it("uses the same built-in tools for local and cloud workspaces", () => {
-    expect(availableRightPanelTools(false)).toEqual(["scratch", "git", "agents", "workflow"]);
-    expect(availableRightPanelTools(true)).toEqual(["scratch", "git", "agents", "workflow"]);
+    expect(availableRightPanelTools(false)).toEqual(["workflow", "scratch", "git", "agents"]);
+    expect(availableRightPanelTools(true)).toEqual(["workflow", "scratch", "git", "agents"]);
   });
 
   it("parses the agents tool entry key", () => {
@@ -39,10 +39,10 @@ describe("right panel domain", () => {
 
     expect(state.activeEntryKey).toBe("tool:scratch");
     expect(state.headerOrder).toEqual([
+      "tool:workflow",
       "tool:scratch",
       "tool:git",
       "tool:agents",
-      "tool:workflow",
     ]);
   });
 
@@ -77,10 +77,10 @@ describe("right panel domain", () => {
 
     expect(state.activeEntryKey).toBe("tool:scratch");
     expect(state.headerOrder).toEqual([
+      "tool:workflow",
       "tool:scratch",
       "tool:git",
       "tool:agents",
-      "tool:workflow",
     ]);
   });
 
@@ -94,7 +94,7 @@ describe("right panel domain", () => {
     );
 
     expect(state.activeEntryKey).toBe("tool:git");
-    expect(state.headerOrder).toEqual(["tool:scratch", "tool:git", "tool:agents", "tool:workflow"]);
+    expect(state.headerOrder).toEqual(["tool:workflow", "tool:scratch", "tool:git", "tool:agents"]);
   });
 
   it("keeps a terminal active when no live terminal list is available", () => {
@@ -110,9 +110,9 @@ describe("right panel domain", () => {
     expect(state.headerOrder).toEqual([
       "terminal:t1",
       "tool:git",
+      "tool:workflow",
       "tool:scratch",
       "tool:agents",
-      "tool:workflow",
     ]);
   });
 
@@ -131,9 +131,9 @@ describe("right panel domain", () => {
     expect(state.headerOrder).toEqual([
       "tool:git",
       "terminal:t2",
+      "tool:workflow",
       "tool:scratch",
       "tool:agents",
-      "tool:workflow",
       "terminal:t1",
     ]);
     expect(state.activeEntryKey).toBe("tool:scratch");
@@ -153,9 +153,9 @@ describe("right panel domain", () => {
 
     expect(state.headerOrder).toEqual([
       "tool:git",
+      "tool:workflow",
       "tool:scratch",
       "tool:agents",
-      "tool:workflow",
       "terminal:run",
     ]);
   });
@@ -175,9 +175,9 @@ describe("right panel domain", () => {
     expect(state.headerOrder).toEqual([
       "terminal:t2",
       "tool:git",
+      "tool:workflow",
       "tool:scratch",
       "tool:agents",
-      "tool:workflow",
       "terminal:t1",
     ]);
     expect(state.activeEntryKey).toBe("terminal:t2");
@@ -197,9 +197,9 @@ describe("right panel domain", () => {
       "tool:git",
       "terminal:t1",
       "terminal:t3",
+      "tool:workflow",
       "tool:scratch",
       "tool:agents",
-      "tool:workflow",
     ]);
     expect(state.activeEntryKey).toBe("terminal:t1");
   });
@@ -219,10 +219,10 @@ describe("right panel domain", () => {
       "terminal:t3",
       "terminal:t1",
       "terminal:t2",
+      "tool:workflow",
       "tool:scratch",
       "tool:git",
       "tool:agents",
-      "tool:workflow",
     ]);
     expect(state.activeEntryKey).toBe("terminal:t1");
   });
@@ -242,9 +242,9 @@ describe("right panel domain", () => {
       "terminal:t1",
       "terminal:t2",
       "tool:git",
+      "tool:workflow",
       "tool:scratch",
       "tool:agents",
-      "tool:workflow",
     ]);
   });
 
@@ -262,8 +262,8 @@ describe("right panel domain", () => {
     expect(state.headerOrder).toEqual([
       "tool:scratch",
       "tool:git",
-      "tool:agents",
       "tool:workflow",
+      "tool:agents",
     ]);
     expect(state.activeEntryKey).toBe("tool:git");
   });
@@ -284,10 +284,10 @@ describe("right panel domain", () => {
 
     expect(state.headerOrder).toEqual([
       targetKey,
+      "tool:workflow",
       "tool:scratch",
       "tool:git",
       "tool:agents",
-      "tool:workflow",
     ]);
     expect(state.activeEntryKey).toBe(targetKey);
   });

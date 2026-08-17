@@ -97,7 +97,7 @@ function CodingWorkspaceActionRow({
       variant="ghost"
       size="sm"
       data-chat-transcript-ignore
-      className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
+      className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent active:bg-transparent hover:text-foreground focus-visible:ring-0`}
       onClick={onOpen}
     >
       <span className="min-w-0 truncate">Created coding workspace</span>
@@ -122,7 +122,7 @@ function PromptActionRow({
         variant="ghost"
         size="sm"
         data-chat-transcript-ignore
-        className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
+        className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent active:bg-transparent hover:text-foreground focus-visible:ring-0`}
         aria-expanded={expanded}
         onClick={() => setExpanded((next) => !next)}
       >
@@ -180,7 +180,7 @@ function CodingSessionActionRow({
       variant="ghost"
       size="sm"
       data-chat-transcript-ignore
-      className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
+      className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent active:bg-transparent hover:text-foreground focus-visible:ring-0`}
       onClick={onOpen}
     >
       <span className="min-w-0 truncate">Created coding session</span>

@@ -12,7 +12,10 @@ use crate::{
     cli::Commands,
     commands::{install_agents::InstallAgentsArgs, serve::ServeArgs},
 };
-use anyharness_lib::observability::{AGENT_STDERR_TRACING_TARGET, RUNTIME_INCIDENT_TRACING_TARGET};
+use anyharness_lib::observability::{
+    AGENT_STDERR_TRACING_TARGET, PRODUCT_MCP_AUTH_REJECTED_TRACING_TARGET,
+    RUNTIME_INCIDENT_TRACING_TARGET,
+};
 use proliferate_diagnostics_client::ResolvedRecordName;
 use proliferate_diagnostics_protocol::v1::types::{DetailedKindV1, StandardStreamV1};
 
@@ -453,7 +456,7 @@ fn install_command_log_path_lands_under_runtime_home_logs() {
 #[test]
 fn anyharness_targets_resolve_to_record_names_by_table_then_pass_through() {
     let mappings = anyharness_target_mappings();
-    let cases: [(&str, ResolvedRecordName<'_>); 7] = [
+    let cases: [(&str, ResolvedRecordName<'_>); 8] = [
         (
             AGENT_STDERR_TRACING_TARGET,
             ResolvedRecordName::Mapped {
@@ -466,6 +469,14 @@ fn anyharness_targets_resolve_to_record_names_by_table_then_pass_through() {
             RUNTIME_INCIDENT_TRACING_TARGET,
             ResolvedRecordName::Mapped {
                 name: "anyharness.runtime.incident",
+                kind: DetailedKindV1::SpanEvent,
+                stream: None,
+            },
+        ),
+        (
+            PRODUCT_MCP_AUTH_REJECTED_TRACING_TARGET,
+            ResolvedRecordName::Mapped {
+                name: "anyharness.product_mcp.auth.rejected",
                 kind: DetailedKindV1::SpanEvent,
                 stream: None,
             },

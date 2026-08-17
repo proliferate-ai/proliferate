@@ -14,6 +14,14 @@ pub const AGENT_STDERR_TRACING_TARGET: &str = "anyharness.agent_stderr";
 /// changing ordinary runtime error grouping.
 pub const RUNTIME_INCIDENT_TRACING_TARGET: &str = "anyharness.runtime_incident";
 
+/// Every product MCP capability-token rejection, with the session, workspace,
+/// endpoint slug, and rejection reason as fields — and never the token itself.
+///
+/// Keep this target stable: expired-token incidents surface at the agent as a
+/// generic client failure, so this event is the one server-side trace that a
+/// session's product tools died of auth rather than of the tool call.
+pub const PRODUCT_MCP_AUTH_REJECTED_TRACING_TARGET: &str = "anyharness.product_mcp_auth_rejected";
+
 /// The gen-2 workflow engine's named events (the Workflows ADR observability
 /// table). Each target maps to one named diagnostics event in telemetry
 /// setup; keep both sides stable so dashboards survive refactors.

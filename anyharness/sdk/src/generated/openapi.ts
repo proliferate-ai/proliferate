@@ -1204,6 +1204,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workflow-runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["cancel_workflow_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workflow-runs/{run_id}/nodes/{node_row_id}/approve": {
         parameters: {
             query?: never;
@@ -5307,7 +5323,7 @@ export interface components {
         /** @enum {string} */
         WorkflowNodeKind: "defined" | "replacement" | "adhoc";
         /** @enum {string} */
-        WorkflowNodeStatus: "pending" | "running" | "needs_attention" | "awaiting_human" | "completed" | "failed";
+        WorkflowNodeStatus: "pending" | "running" | "needs_attention" | "awaiting_human" | "completed" | "failed" | "cancelled";
         /** @enum {string} */
         WorkflowNodeType: "agent" | "human_in_loop";
         WorkflowRunAddAdhocNodeRequest: {
@@ -5340,7 +5356,7 @@ export interface components {
             workflowDefinitionId: string;
         };
         /** @enum {string} */
-        WorkflowRunStatus: "running" | "awaiting_human" | "interrupted" | "completed" | "failed";
+        WorkflowRunStatus: "running" | "awaiting_human" | "interrupted" | "completed" | "failed" | "cancelled";
         WorkflowRunsListResponse: {
             runs: components["schemas"]["RunView"][];
         };
@@ -9079,6 +9095,42 @@ export interface operations {
                 };
             };
             /** @description WORKFLOW_RUN_NOT_FOUND or WORKFLOW_NODE_NOT_FOUND (anchor) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description WORKFLOW_TRANSITION_ILLEGAL */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cancel_workflow_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Run cancelled; the fresh projection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunProjection"];
+                };
+            };
+            /** @description WORKFLOW_RUN_NOT_FOUND */
             404: {
                 headers: {
                     [name: string]: unknown;

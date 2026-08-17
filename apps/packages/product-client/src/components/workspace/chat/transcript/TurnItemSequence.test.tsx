@@ -110,17 +110,17 @@ describe("CompletedHistorySequence", () => {
     const commandDisclosure = within(ledger!).getAllByRole("button", { expanded: false })[0]!;
     await user.click(commandDisclosure);
     // The nested panel is ToolActionDetailsPanel now, which is where the three
-    // inline copies of this shell folded — hence rounded-md, the radius the
-    // shared panel's other consumers already used.
+    // inline copies of this shell folded — hence the shared panel's
+    // code-block-card styling.
     const nestedDetailPanel = Array.from(ledger!.querySelectorAll<HTMLElement>("div"))
       .find((node) =>
-        node.className.includes("overflow-hidden")
-        && node.className.includes("rounded-md")
-        && node.className.includes("border-border/60")
+        node.className.includes("overflow-clip")
+        && node.className.includes("rounded-lg")
+        && node.className.includes("bg-[var(--color-code-block-background")
       );
     expect(nestedDetailPanel).not.toBeUndefined();
     expect(nestedDetailPanel?.className).toMatch(/(?:^|\s)border(?:\s|$)/);
-    expect(nestedDetailPanel?.className).toContain("rounded-md");
+    expect(nestedDetailPanel?.className).toContain("rounded-lg");
   });
 });
 

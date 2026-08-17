@@ -26,9 +26,9 @@ use crate::domains::workspaces::options::{
     CreateWorkspaceFromOptionsInput, CreateWorkspaceFromOptionsResult, WorkspaceCreationOptions,
     WorkspaceOptionsError,
 };
+use crate::integrations::mcp::capability_token::McpCapabilityTokenValidation;
 use crate::integrations::mcp::product_server::{
     dispatch_product_mcp_request, ProductMcpAuthHeader, ProductMcpRequestContext, ProductMcpServer,
-    ProductMcpTokenValidation,
 };
 
 #[path = "tests/tool_contract.rs"]
@@ -304,7 +304,7 @@ async fn authenticated_dispatch(
             &request_context,
         )
         .expect("validate Workspace capability token");
-    if validation != ProductMcpTokenValidation::Valid {
+    if validation != McpCapabilityTokenValidation::Valid {
         return Err(AuthenticatedDispatchError::InvalidCapability);
     }
     Ok(dispatch_product_mcp_request(server, request_context, body)

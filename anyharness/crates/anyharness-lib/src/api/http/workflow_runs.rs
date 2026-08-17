@@ -83,6 +83,10 @@ pub fn routes() -> Router<AppState> {
             "/workflow-runs/{run_id}/adhoc-nodes",
             post(workflow_run_commands::add_workflow_adhoc_node),
         )
+        .route(
+            "/workflow-runs/{run_id}/cancel",
+            post(workflow_run_commands::cancel_workflow_run),
+        )
 }
 
 /// The PUT body: the frozen invocation snapshot the courier reconstitutes

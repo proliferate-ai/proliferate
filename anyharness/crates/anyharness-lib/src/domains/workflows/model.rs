@@ -14,6 +14,7 @@ pub enum WorkflowRunStatus {
     Interrupted,
     Completed,
     Failed,
+    Cancelled,
 }
 
 impl WorkflowRunStatus {
@@ -24,6 +25,7 @@ impl WorkflowRunStatus {
             Self::Interrupted => "interrupted",
             Self::Completed => "completed",
             Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
         }
     }
 
@@ -34,12 +36,13 @@ impl WorkflowRunStatus {
             "interrupted" => Some(Self::Interrupted),
             "completed" => Some(Self::Completed),
             "failed" => Some(Self::Failed),
+            "cancelled" => Some(Self::Cancelled),
             _ => None,
         }
     }
 
     pub fn is_terminal(&self) -> bool {
-        matches!(self, Self::Completed | Self::Failed)
+        matches!(self, Self::Completed | Self::Failed | Self::Cancelled)
     }
 }
 
@@ -52,6 +55,7 @@ pub enum WorkflowNodeStatus {
     AwaitingHuman,
     Completed,
     Failed,
+    Cancelled,
 }
 
 impl WorkflowNodeStatus {
@@ -63,6 +67,7 @@ impl WorkflowNodeStatus {
             Self::AwaitingHuman => "awaiting_human",
             Self::Completed => "completed",
             Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
         }
     }
 
@@ -74,6 +79,7 @@ impl WorkflowNodeStatus {
             "awaiting_human" => Some(Self::AwaitingHuman),
             "completed" => Some(Self::Completed),
             "failed" => Some(Self::Failed),
+            "cancelled" => Some(Self::Cancelled),
             _ => None,
         }
     }
