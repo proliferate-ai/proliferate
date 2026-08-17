@@ -53,6 +53,53 @@ async function settle(page: Page, ms = 350): Promise<void> {
   await page.waitForTimeout(ms);
 }
 
+// Frame-aligned metrics read. `settle`'s wall clock elapses even on a starved
+// CI renderer that painted ZERO frames, so a probe taken right after it can
+// sample the transient state that exists between a DOM growth mutation and the
+// pre-paint ResizeObserver snap the engine applies before the next paint — a
+// state no painted frame ever shows (this is the source of the load-dependent
+// bottomDistance 132 CI caught). FR-1's follow invariant is defined per painted
+// frame, so growth-then-measure assertions must read a frame that actually
+// rendered. This captures the metrics snapshot INSIDE the evaluate, phased to
+// land after a frame's ResizeObserver snap AND paint (see the per-line note on
+// the read hop below). The read must be INSIDE the same evaluate: a separate
+// `metrics()` call after a bare settle runs on a later task and can land on a
+// fresh frame whose pre-paint RO snap has not yet run, reopening the exact gap
+// this closes (verified: the separate-read form still samples 132; this form
+// does not). Bounded so a genuinely frozen renderer fails rather than hangs.
+async function metricsAfterFrame(page: Page, timeoutMs = 4000): Promise<Metrics> {
+  return page.evaluate(
+    (timeout) =>
+      new Promise<Metrics>((resolve) => {
+        const read = () =>
+          (
+            window.__scrollPhysics as unknown as { getMetrics: () => Metrics }
+          ).getMetrics();
+        const bail = setTimeout(() => resolve(read()), timeout);
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            // Read AFTER the frame's ResizeObserver delivery + paint, not just
+            // after the frame boundary: rAF callbacks run BEFORE RO delivery in
+            // the rendering steps, and the product's stick-to-bottom snap writes
+            // scrollTop during RO delivery. Reading inside the rAF callback
+            // therefore samples the pre-snap leading edge of the frame — the
+            // exact transient (bottomDistance 132) that no frame actually paints
+            // — so this hops one setTimeout(0) macrotask, which lands after the
+            // frame's RO snap and paint have completed, reflecting the snapped,
+            // painted state. (Verified: reading inside the rAF callback still
+            // sampled 132; the post-paint hop does not, with zero frame-budget
+            // timeouts.)
+            setTimeout(() => {
+              clearTimeout(bail);
+              resolve(read());
+            }, 0);
+          }),
+        );
+      }),
+    timeoutMs,
+  );
+}
+
 async function waitForViewport(page: Page): Promise<void> {
   await page.waitForFunction(() => window.__scrollPhysics.hasViewport());
 }
@@ -146,16 +193,33 @@ async function wheelToBottom(page: Page): Promise<void> {
 }
 
 test.describe("transcript scroll physics", () => {
-  // FIXME AT RUNG 3 ONLY (chat-scroll/r3-single-writer). CI proved that the r3
-  // single-writer pin decision cannot hold pinned-follow cadence on slow CI
-  // runners: pinned-follow lands at bottomDistance 132 (> 120) on both
-  // chromium and webkit. The rung-4 same-frame pipeline (PR #1945,
-  // chat-scroll/r4-frame-pipeline) performs a SYNCHRONOUS snap inside the
-  // ResizeObserver notify path, and CI proves that fix makes this exact test
-  // pass on both engines at r4. The threshold is NOT loosened; this scenario is
-  // un-fixme'd by r4's diff (it must be active on r4/r5). Un-fixme point: PR
-  // #1945.
-  test.fixme("pinned-follow: bottom distance stays ~0 across streaming growth", async ({ page }) => {
+  // Rung 4 (PRO-187): the one owned per-frame snap pass writes scrollTop exactly
+  // once per frame, so no snap/measure feedback can provoke the browser's
+  // "ResizeObserver loop completed with undelivered notifications" error. Every
+  // spec fails if any page error or that console error surfaces during the run.
+  let pageErrors: string[] = [];
+  test.beforeEach(({ page }) => {
+    pageErrors = [];
+    page.on("pageerror", (error) => {
+      pageErrors.push(String(error));
+    });
+    page.on("console", (message) => {
+      const text = message.text();
+      if (message.type() === "error" && /ResizeObserver loop/i.test(text)) {
+        pageErrors.push(text);
+      }
+    });
+  });
+  test.afterEach(() => {
+    expect(pageErrors, `unexpected page/ResizeObserver-loop errors:\n${pageErrors.join("\n")}`)
+      .toEqual([]);
+  });
+
+  // Rung 4 un-fixmes pinned-follow: PR #1938 (r3) marks it test.fixme because the
+  // single-writer pin decision alone cannot hold the follow cadence on slow CI
+  // runners (bottomDistance 132 > 120 on both engines). The synchronous
+  // ResizeObserver-notify snap this rung adds fixes it, proven green on CI here.
+  test("pinned-follow: bottom distance stays ~0 across streaming growth", async ({ page }) => {
     await ready(page);
     await drive(page, "reset");
     await drive(page, "seedFinalizedConversation", 6);
@@ -181,7 +245,10 @@ test.describe("transcript scroll physics", () => {
     for (let batch = 0; batch < 25; batch += 1) {
       await drive(page, "streamChunk");
       await settle(page, 60);
-      const m = await metrics(page);
+      // Read a frame that actually painted: `settle`'s wall clock can elapse on
+      // a starved CI renderer between the growth mutation and the pre-paint RO
+      // snap, sampling a mid-growth bottomDistance no rendered frame shows.
+      const m = await metricsAfterFrame(page);
       // Pinned follow: the viewport stays glued near the growing bottom, the
       // distance stays bounded and never runs away. (The pin FLAG can flicker
       // for a frame on WebKit as a growth scroll is classified, so the physical
@@ -247,16 +314,12 @@ test.describe("transcript scroll physics", () => {
     await drive(page, "finalizeStreamingTurn");
   });
 
-  // FIXME AT RUNG 3 ONLY (chat-scroll/r3-single-writer). CI proved that the r3
-  // single-writer pin decision cannot hold the post-repin follow cadence on
-  // slow CI runners: on webkit this scenario lands bottomDistance 332 (> 202,
-  // i.e. > PIN_FOLLOW_MAX_DISTANCE) after the repin-and-stream arm. The rung-4
-  // same-frame pipeline (PR #1945, chat-scroll/r4-frame-pipeline) synchronously
-  // snaps inside the ResizeObserver notify path, and CI proves that fix makes
-  // webkit repin PASS at r4. The threshold is NOT loosened; this scenario is
-  // un-fixme'd by r4's diff (it must be active on r4/r5). Un-fixme point: PR
-  // #1945.
-  test.fixme("repin band edge: returning into the bottom band re-pins; staying above does not", async ({
+  // Rung 4 un-fixmes repin-band-edge: PR #1938 (r3) marks it test.fixme because
+  // the single-writer pin decision alone cannot hold the post-repin follow
+  // cadence on slow CI runners (webkit bottomDistance 332 > 202 after the
+  // repin-and-stream arm). The synchronous ResizeObserver-notify snap this rung
+  // adds fixes it, proven green on CI here.
+  test("repin band edge: returning into the bottom band re-pins; staying above does not", async ({
     page,
   }) => {
     await ready(page);
@@ -325,9 +388,13 @@ test.describe("transcript scroll physics", () => {
     }
     await settle(page, 1000);
     // Re-pinned, so streaming growth is followed again (pin holds, distance
-    // stays bounded near the bottom) once settled.
+    // stays bounded near the bottom) once settled. Read a painted frame so a
+    // starved renderer cannot leave the probe sampling the mid-growth transient
+    // between the last mutation and its pre-paint RO snap.
     await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
-    expect((await metrics(page)).bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
+    expect((await metricsAfterFrame(page)).bottomDistance).toBeLessThanOrEqual(
+      PIN_FOLLOW_MAX_DISTANCE_PX,
+    );
     await drive(page, "finalizeStreamingTurn");
   });
 
@@ -513,8 +580,23 @@ test.describe("transcript scroll physics", () => {
     },
   );
 
-  test("prepend anchoring: older-history prepend keeps the reading row fixed", async ({ page }) => {
+  test("prepend anchoring: older-history prepend keeps the reading row fixed", async ({
+    page,
+  }, testInfo) => {
     await ready(page);
+    // Slow the main thread so the freshly-mounted older rows' estimate-to-measured
+    // height corrections land over several spread-out frames, exactly as they do
+    // on a loaded CI runner. Unthrottled this scenario settles inside a frame or
+    // two and passes even with a compensation window that ends a frame early; the
+    // throttle is what turns that early-end into the ~39px under-absorption CI
+    // caught (chromium 550 vs > 589.2). CPU throttling is a Chromium/CDP-only
+    // capability; WebKit runs unthrottled and still exercises the same anchor
+    // path. This is the negative control: revert the deadline-gated compensation
+    // in use-transcript-frame-pipeline-lifecycle.ts and this arm fails on chromium.
+    if (testInfo.project.name === "chromium") {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 6 });
+    }
     await drive(page, "reset");
     await drive(page, "seedFinalizedConversation", 12);
     // Exactly one prepend's worth of reservoir, so the anchor event is single
@@ -534,7 +616,11 @@ test.describe("transcript scroll physics", () => {
       "getLastPrependEvidence",
     );
     expect(evidence, "a prepend should have been triggered by scrolling to the top").not.toBeNull();
-    const after = await metrics(page);
+    // Read a painted frame: the prepend's estimate-to-measured corrections land
+    // over several frames, and `settle`'s wall clock can elapse on a starved
+    // (here CPU-throttled) renderer mid-correction, sampling a scrollTop no
+    // painted frame shows.
+    const after = await metricsAfterFrame(page);
 
     // Anchor invariant: scrollTop absorbs essentially all of the height added
     // above, so the reading row stays put. The anchoring signature is
