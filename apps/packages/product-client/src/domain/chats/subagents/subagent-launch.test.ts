@@ -329,7 +329,7 @@ describe("findSubagentLaunchItem", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById[item.itemId] = item;
 
-    expect(findSubagentLaunchItem(transcript, "codex-thread-1")).toBeNull();
+    expect(findSubagentLaunchItem(transcript, "child-thread-1")).toBeNull();
   });
 
   it("ignores non-tool-call items", () => {

@@ -138,7 +138,7 @@ describe("BackgroundSubagentView", () => {
     expect(screen.queryByText("Initial prompt")).toBeNull();
   });
 
-  it("renders the feed's raw tail content (Codex-style fallback used for every harness)", () => {
+  it("renders the feed's raw tail content (raw-tail fallback used for every harness)", () => {
     feedStreamState = { content: "Working on the task…\n", connected: true, error: null };
     render(
       <BackgroundSubagentView
