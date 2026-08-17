@@ -22,11 +22,11 @@ export function hotReopenWorkspaceLookupIds(
   resolvedWorkspaceId: string,
   logicalWorkspace: LogicalWorkspace | null,
 ): string[] {
-  return uniqueStrings([
+  return [...new Set([
     resolvedWorkspaceId,
-    logicalWorkspace?.id ?? null,
+    logicalWorkspace?.id,
     ...(logicalWorkspace ? logicalWorkspaceRelatedIds(logicalWorkspace) : []),
-  ]);
+  ].filter(Boolean))] as string[];
 }
 
 export function isHotReopenEligibleSessionSlot(
@@ -49,6 +49,7 @@ export function resolveHotReopenCandidate(input: {
   isPendingSessionId: (sessionId: string) => boolean;
   hiddenSessionIds?: ReadonlySet<string>;
 }): HotReopenCandidate | null {
+  const hiddenSessionIds = input.hiddenSessionIds;
   // Last-viewed bookkeeping stores materialized session ids (client ids are
   // transient and never persisted), but a session created in this app run
   // keeps its slot keyed by the client session id. Resolve through the slot's
@@ -76,8 +77,12 @@ export function resolveHotReopenCandidate(input: {
     // alias, so check every id the session is known by.
     if (
       source !== "initial_active"
-      && [sessionId, slot?.sessionId, slot?.materializedSessionId]
-        .some((id) => id && input.hiddenSessionIds?.has(id))
+      && slot
+      && hiddenSessionIds
+      && (
+        hiddenSessionIds.has(slot.sessionId)
+        || (slot.materializedSessionId && hiddenSessionIds.has(slot.materializedSessionId))
+      )
     ) {
       return null;
     }
@@ -123,14 +128,4 @@ function isClearlyEmptyFreshSlot(slot: HotReopenSessionSlotSnapshot): boolean {
     && slot.events.length === 0
     && slot.transcript.turnOrder.length === 0
     && !slot.optimisticPrompt;
-}
-
-function uniqueStrings(values: Array<string | null | undefined>): string[] {
-  const result: string[] = [];
-  for (const value of values) {
-    if (value && !result.includes(value)) {
-      result.push(value);
-    }
-  }
-  return result;
 }
