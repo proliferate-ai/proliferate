@@ -7,6 +7,8 @@ import {
 import type { TerminalRecord } from "@anyharness/sdk";
 import { useTerminalsQuery, useWorkflowRunsQuery } from "@anyharness/sdk-react";
 import { isWorkflowsV2Enabled } from "#product/lib/domain/capabilities/workflows-v2";
+import { useBackgroundWorkFinishSignal } from "#product/hooks/activity/derived/use-background-work-finish-signal";
+import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
 import { useWorkflowAutoAdvanceWatch } from "#product/hooks/workflows/lifecycle/use-workflow-auto-advance-toast";
 import { useRightPanelHeaderEntries } from "#product/hooks/workspaces/derived/use-right-panel-header-entries";
 import {
@@ -99,6 +101,12 @@ export function useRightPanelController({
   // controller (mounted for as long as the workspace shell) rather than off the
   // pane behind the tool switch.
   useWorkflowAutoAdvanceWatch({ workspaceId, enabled: shouldRenderContent });
+  // Finish-signal ladder rung 1 (`PanelHeaderEntry` dirty dot): read
+  // independent of which tool is actually active — the header strip renders
+  // regardless, and `BackgroundWorkPane` itself only mounts while its own
+  // tool is selected, so the dot's own read must not depend on that.
+  const activeSessionId = useActiveSessionId();
+  const backgroundWorkFinishSignal = useBackgroundWorkFinishSignal(activeSessionId);
   const {
     activeTool,
     activeTerminalId,
@@ -193,6 +201,10 @@ export function useRightPanelController({
     activeTerminalId,
     activeViewerTarget,
     entries: headerEntries,
+    // Never rendered on the active entry — enforced at the render site
+    // (`RightPanelHeaderEntryList`), matching the manifest's "never set it
+    // on the active entry" rule for every other tab kind's `dirty`.
+    backgroundWorkDirty: backgroundWorkFinishSignal.dirty,
     unreadByTerminal,
     buffersByPath,
     tabModes,

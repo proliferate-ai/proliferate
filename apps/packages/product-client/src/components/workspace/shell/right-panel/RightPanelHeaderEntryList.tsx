@@ -60,6 +60,8 @@ const PANEL_TOOLS: Record<RightPanelTool, ToolConfig> = {
 interface RightPanelHeaderEntryListProps {
   entries: readonly RightPanelHeaderEntry[];
   activeEntryKey: RightPanelHeaderEntryKey;
+  /** Finish-signal ladder rung 1 — the Background work entry's unread dot. */
+  backgroundWorkDirty: boolean;
   unreadByTerminal: Record<string, boolean>;
   buffersByPath: Record<string, WorkspaceFileBuffer>;
   tabModes: Record<string, FileViewerMode>;
@@ -75,6 +77,7 @@ interface RightPanelHeaderEntryListProps {
 export function RightPanelHeaderEntryList({
   entries,
   activeEntryKey,
+  backgroundWorkDirty,
   unreadByTerminal,
   buffersByPath,
   tabModes,
@@ -103,6 +106,12 @@ export function RightPanelHeaderEntryList({
         if (entry.kind === "tool") {
           const panelTool = PANEL_TOOLS[entry.tool];
           const Icon = panelTool.icon;
+          // Finish-signal ladder rung 1: the Background work tool is the
+          // only one with an unread signal today. Guarded on `!isActive`
+          // here too (belt-and-suspenders alongside the store-level
+          // clear-on-select) — the manifest's rule for every `dirty` entry
+          // is "never render it on the active entry."
+          const dirty = entry.tool === "background" && backgroundWorkDirty && !isActive;
           return (
             <RightPanelHeaderEntryDropZone
               key={entry.key}
@@ -120,6 +129,7 @@ export function RightPanelHeaderEntryList({
                 label={panelTool.label}
                 icon={<Icon className="icon-control" />}
                 active={isActive}
+                dirty={dirty}
                 tabIndexFloor={tabIndexFloor}
                 controls={`tabpanel-workspace-right-panel-${entry.tool}`}
                 data-reorderable="true"

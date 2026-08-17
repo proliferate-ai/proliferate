@@ -72,6 +72,7 @@ describe("Agents right-panel shell", () => {
       <RightPanelHeaderEntryList
         entries={[{ key: "tool:agents", kind: "tool", tool: "agents" }]}
         activeEntryKey="tool:agents"
+        backgroundWorkDirty={false}
         unreadByTerminal={{}}
         buffersByPath={{}}
         tabModes={{}}
