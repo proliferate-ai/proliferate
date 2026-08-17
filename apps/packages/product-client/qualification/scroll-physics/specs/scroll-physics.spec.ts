@@ -678,4 +678,59 @@ test.describe("transcript scroll physics", () => {
       expect(after.scrollTop).toBeGreaterThan(before.scrollTop + 20);
     },
   );
+
+  // Rung 5 (PRO-187): composition-derived virtualizer estimates +
+  // per-row-key measured-height persistence + per-session per-bucket
+  // calibration. seedConversationWithToolLedger seeds a collapsed tool-ledger
+  // turn under many tall finalized filler turns, all buried OFF-SCREEN below
+  // the pinned-bottom viewport + overscan window. With the fixture now
+  // hydrating those finalized turns inert (turn_ended, matching production),
+  // each filler turn renders at its full tall height rather than the shorter
+  // mid-reveal height the old reveal-inflated fixture happened to show. Against
+  // honest tall heights the STATIC composition estimate undershoots a plain
+  // multi-block turn badly (measured ~430px vs a ~220px static guess), so the
+  // all-static initial total is far below the real swept total.
+  //
+  // Per-session per-bucket calibration closes that: as the first on-screen
+  // filler turns measure for real, their heights feed a running average keyed
+  // by composition bucket (transcript-row-height-calibration.ts), and every
+  // never-measured filler of the same shape borrows that average instead of the
+  // static default. sweepEveryRowIntoView then steps through the WHOLE
+  // transcript so every row mounts and is measured for real at least once,
+  // giving a ground-truth total. The gap between the calibrated estimated total
+  // and the all-real-measured total is the virtualizer's literal "correction
+  // budget": how far off the settled guess was.
+  //
+  // Negative control (proven deterministically in the colocated unit tests,
+  // use-transcript-virtual-measurement-model.test.ts): with calibration removed
+  // from estimateSize, a never-measured filler falls back to the static
+  // composition estimate (~220px), which undershoots the honest ~430px height
+  // by ~210px per row and blows this gap well past the 1400px bound below. The
+  // calibrated estimate is therefore load-bearing, not decorative.
+  test("estimate accuracy: an off-screen collapsed tool-ledger row's estimate tracks its real measured height", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedConversationWithToolLedger", 2, 40, 30);
+    await waitForViewport(page);
+    // Let the first on-screen measurement pass populate the per-bucket
+    // calibration so the off-screen filler estimates settle to this session's
+    // observed heights before the estimated total is read.
+    await settle(page);
+
+    const estimated = await metrics(page);
+    expect(estimated.found).toBe(true);
+    // A short viewport against many filler turns must actually overflow and
+    // bury the ledger row off-screen, else this test proves nothing.
+    expect(estimated.scrollHeight).toBeGreaterThan(estimated.clientHeight + 1000);
+
+    await drive(page, "sweepEveryRowIntoView", 40);
+    await settle(page, 300);
+    const real = await metrics(page);
+    expect(real.found).toBe(true);
+
+    const estimateError = Math.abs(estimated.scrollHeight - real.scrollHeight);
+    expect(estimateError).toBeLessThan(1400);
+  });
 });

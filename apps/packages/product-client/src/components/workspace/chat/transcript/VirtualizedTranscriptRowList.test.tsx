@@ -114,11 +114,15 @@ describe("VirtualizedTranscriptRowList", () => {
     expect(nextOptions?.estimateSize).toBe(firstOptions?.estimateSize);
   });
 
-  it("rotates measurement accessors only when ordered row composition changes", () => {
+  it("rotates getItemKey only on an ordered-key change, estimateSize also on a session change", () => {
     const props = makeProps();
     const rendered = render(<VirtualizedTranscriptRowList {...props} />);
     const firstOptions = observedVirtualizerOptions.at(-1);
 
+    // A new rows array with the SAME ordered keys is content-only churn: neither
+    // accessor may rotate (rotating getItemKey/estimateSize forces TanStack to
+    // rebuild every item position, the extra layout pass that stranded the snap,
+    // PRO-187 r5).
     rendered.rerender(
       <VirtualizedTranscriptRowList
         {...props}
@@ -129,6 +133,9 @@ describe("VirtualizedTranscriptRowList", () => {
     expect(contentUpdateOptions?.getItemKey).toBe(firstOptions?.getItemKey);
     expect(contentUpdateOptions?.estimateSize).toBe(firstOptions?.estimateSize);
 
+    // A session change with the SAME ordered keys re-scopes the measured-height
+    // cache lookups, so estimateSize (which reads the session-scoped cache)
+    // rotates; getItemKey keys purely on the ordered row keys, so it does NOT.
     rendered.rerender(
       <VirtualizedTranscriptRowList
         {...props}
@@ -136,9 +143,11 @@ describe("VirtualizedTranscriptRowList", () => {
       />,
     );
     const sessionUpdateOptions = observedVirtualizerOptions.at(-1);
-    expect(sessionUpdateOptions?.getItemKey).not.toBe(firstOptions?.getItemKey);
+    expect(sessionUpdateOptions?.getItemKey).toBe(firstOptions?.getItemKey);
     expect(sessionUpdateOptions?.estimateSize).not.toBe(firstOptions?.estimateSize);
 
+    // A change to the ordered set of row keys is a structural change TanStack
+    // must re-key on: both accessors rotate.
     rendered.rerender(
       <VirtualizedTranscriptRowList
         {...props}

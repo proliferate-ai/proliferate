@@ -92,6 +92,7 @@ export function VirtualizedTranscriptRowList({
     estimateSize,
     estimatedRowsHeight,
     getItemKey,
+    measureElement: recordingMeasureElement,
     rowCompositionKey,
   } = useTranscriptVirtualMeasurementModel({
     activeSessionId,
@@ -111,20 +112,16 @@ export function VirtualizedTranscriptRowList({
     getScrollElement: () => scrollRef.current,
     getItemKey,
     estimateSize,
+    measureElement: recordingMeasureElement,
     overscan: VIRTUALIZER_OVERSCAN,
     paddingStart: TRANSCRIPT_TOP_PADDING_PX,
     paddingEnd: structuralBottomInsetPx,
     initialOffset: () => estimatedInitialBottomOffset,
-    // Q12 (rung 4): EVALUATED false vs true. The owned single content
-    // ResizeObserver below routes every growth through the one frame pipeline,
-    // and the pipeline writes scrollTop exactly once per frame, so no
-    // ResizeObserver-loop error is provoked in either mode (the physics suite's
-    // no-pageerror assertion is clean with both). Turning TanStack's own
-    // observation OFF (false) does NOT move OUR snap — the pipeline still owns
-    // when that runs — it only desynchronizes TanStack's internal re-measure
-    // from our snap, which destabilized the pinned-follow / repin / prepend
-    // scenarios in the physics suite. Kept true: it preserves the proven
-    // measurement cadence at zero RO-loop cost. See the PR body for the matrix.
+    // Q12 (rung 4): kept true. EVALUATED false vs true; false desynchronizes
+    // TanStack's internal re-measure from our snap and destabilized the
+    // pinned-follow / repin / prepend physics scenarios. True preserves the
+    // proven measurement cadence; the owned content ResizeObserver still routes
+    // every growth through the one frame pipeline at zero RO-loop cost.
     useAnimationFrameWithResizeObserver: true,
   });
   const pendingAnchorRef = useTranscriptVirtualAnchorCapture({
@@ -310,6 +307,11 @@ export function VirtualizedTranscriptRowList({
     startAboveChangeCompensation,
   });
 
+  // Rung 5 (PRO-187): re-run the pinned snap on every commit whose ROWS changed
+  // (identity, not just count/estimate-total) so a streaming turn's DOM growth
+  // snaps in that commit's layout phase against the already-grown `scrollHeight`
+  // instead of trailing the content ResizeObserver by a frame. The `onChange`
+  // bridge above covers the complementary measured-swap total-size change.
   useLayoutEffect(() => {
     if (!pinnedRef.current) {
       return;
@@ -319,7 +321,7 @@ export function VirtualizedTranscriptRowList({
     isSessionBusy,
     lastPromptSubmittedAtMs,
     pinnedRef,
-    renderableRows.length,
+    renderableRows,
     scrollToBottom,
     totalContentHeight,
   ]);
