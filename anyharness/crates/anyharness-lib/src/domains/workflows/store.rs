@@ -604,14 +604,14 @@ impl WorkflowStore {
                 }
             }
 
-            // Fan-in ledger (ruling F1): a turn-finish transition (and its
-            // command-driven advance twins) stamps the finishing leg terminal in
-            // the same commit, keyed by (node_row_id, session_id). The session
-            // rides the turn event; a command advance falls back to the node's
-            // representative session (the one leg it just completed).
+            // Fan-in ledger (ruling F1), stamped in this commit, keyed off the
+            // turn session (else representative); keyless Cancel stamps all legs.
             if let Some((leg_node, leg_status)) = node_sessions::finished_leg_of(transition) {
-                let session = turn_session(event)
-                    .or_else(|| state.node(leg_node).and_then(|node| node.session_id.clone()));
+                let session = match transition {
+                    Transition::Cancel { .. } => None,
+                    _ => turn_session(event)
+                        .or_else(|| state.node(leg_node).and_then(|node| node.session_id.clone())),
+                };
                 node_sessions::mark_leg_terminal_tx(
                     tx,
                     leg_node,

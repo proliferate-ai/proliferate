@@ -121,6 +121,9 @@ pub(super) fn finished_leg_of(transition: &Transition) -> Option<(&str, Workflow
                 _ => WorkflowLegStatus::ForcedUnload,
             },
         )),
+        // A cancel is terminal for every leg at once; the store passes no
+        // session key for it, so the stamp covers the whole node's rows.
+        Transition::Cancel { node_row_id, .. } => Some((node_row_id, WorkflowLegStatus::Cancelled)),
         _ => None,
     }
 }

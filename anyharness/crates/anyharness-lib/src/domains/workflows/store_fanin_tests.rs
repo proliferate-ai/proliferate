@@ -13,7 +13,9 @@ use super::definition::{
 };
 use super::model::{WorkflowLegStatus, WorkflowNodeType, WorkflowRunStatus};
 use super::store::{NewRunParams, WorkflowStore};
-use super::transition::{next, Decision, RunState, TurnFinished, TurnStopReason, WorkflowEvent};
+use super::transition::{
+    next, Decision, RunState, TurnFinished, TurnStopReason, WorkflowCommand, WorkflowEvent,
+};
 
 fn test_store() -> WorkflowStore {
     let db = Db::open_in_memory().expect("in-memory db with full migrations");
@@ -155,4 +157,27 @@ fn relaunch_resets_the_leg_instead_of_colliding() {
     assert_eq!(legs.len(), 1);
     assert_eq!(legs[0].session_id.as_deref(), Some("sess-2"));
     assert_eq!(legs[0].status, WorkflowLegStatus::Running);
+}
+
+#[test]
+fn cancel_marks_the_leg_cancelled_in_the_same_commit() {
+    let store = test_store();
+    let created = store.create_run_with_first_node(params("run-1")).expect("create");
+    let node_id = created.first_node_row_id.clone();
+    store.stamp_session(&node_id, "sess-1", None, None).expect("stamp");
+    let state = store.load_run_state("run-1").expect("load").expect("run");
+
+    let cancelled = apply(
+        &store,
+        "run-1",
+        &state,
+        &WorkflowEvent::Command(WorkflowCommand::Cancel),
+    );
+
+    // Review finding on this rung: without a Cancel arm in finished_leg_of the
+    // row stayed 'running' forever on a terminal run.
+    let legs = cancelled.legs_of(&node_id);
+    assert_eq!(legs.len(), 1);
+    assert_eq!(legs[0].status, WorkflowLegStatus::Cancelled);
+    assert!(legs[0].completed_at.is_some());
 }
