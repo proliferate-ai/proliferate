@@ -103,7 +103,7 @@ describe("Agents right-panel shell", () => {
     );
 
     const tab = screen.getByRole("tab", { name: "Agents" });
-    expect(DEFAULT_RIGHT_PANEL_TOOL_ORDER).toEqual(["scratch", "git", "agents"]);
+    expect(DEFAULT_RIGHT_PANEL_TOOL_ORDER).toEqual(["scratch", "git", "agents", "background"]);
     expect(tab.getAttribute("aria-selected")).toBe("true");
     expect(tab.getAttribute("aria-controls"))
       .toBe("tabpanel-workspace-right-panel-agents");

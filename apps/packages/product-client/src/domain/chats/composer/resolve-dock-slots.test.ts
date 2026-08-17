@@ -37,7 +37,6 @@ describe("resolveComposerDockSlots", () => {
         delegatedWork: false,
         workspaceActivity: true,
         sessionGoal: false,
-        sessionActivity: false,
       },
     });
   });
@@ -58,28 +57,7 @@ describe("resolveComposerDockSlots", () => {
       delegatedWork: false,
       workspaceActivity: false,
       sessionGoal: true,
-      sessionActivity: false,
     });
-  });
-
-  it("attaches the activity chips bar even with no goal set", () => {
-    expect(resolveComposerDockSlots({
-      ...BASE_INPUT,
-      hasSessionActivity: true,
-    }).attachedSlot).toEqual({
-      delegatedWork: false,
-      workspaceActivity: false,
-      sessionGoal: false,
-      sessionActivity: true,
-    });
-  });
-
-  it("keeps activity chips behind the session suppression flag", () => {
-    expect(resolveComposerDockSlots({
-      ...BASE_INPUT,
-      suppressSessionSlots: true,
-      hasSessionActivity: true,
-    }).attachedSlot).toBeNull();
   });
 
   it("keeps delegated work and workspace activity attached together", () => {
@@ -91,7 +69,6 @@ describe("resolveComposerDockSlots", () => {
       delegatedWork: true,
       workspaceActivity: true,
       sessionGoal: false,
-      sessionActivity: false,
     });
   });
 });

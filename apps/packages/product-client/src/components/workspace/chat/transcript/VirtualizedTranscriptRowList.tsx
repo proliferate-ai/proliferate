@@ -43,6 +43,7 @@ export function VirtualizedTranscriptRowList({
   lastPromptSubmittedAtMs,
   onLoadOlderHistory,
   onScrollSample,
+  onIsPinnedToBottomChange,
   renderRow,
   getRowRenderRevision,
   columnClassName,
@@ -85,6 +86,12 @@ export function VirtualizedTranscriptRowList({
   // A user scroll inside the input event's call stack pre-empts any queued
   // programmatic snap (render-freeze gate parity): cancel the frame pipeline.
   useTranscriptScrollPauseRegistration(cancelFramePipeline);
+  // Reports the engine's OWN pin state upward — no parallel scroll listener,
+  // just surfacing state this hook already computes for the in-list
+  // scroll-to-bottom button.
+  useEffect(() => {
+    onIsPinnedToBottomChange?.(isPinnedToBottom);
+  }, [isPinnedToBottom, onIsPinnedToBottomChange]);
   const renderableRows = useMemo(
     () => buildRenderableRows(rows, isLoadingOlderHistory),
     [isLoadingOlderHistory, rows],

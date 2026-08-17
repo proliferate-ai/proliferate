@@ -49,7 +49,7 @@ describe("resolveWorkflowToolAvailability", () => {
 });
 
 describe("right-panel state reconciliation against the workflow run", () => {
-  const gatedOnTools = ["tool:workflow", "tool:scratch", "tool:git", "tool:agents"];
+  const gatedOnTools = ["tool:workflow", "tool:scratch", "tool:git", "tool:agents", "tool:background"];
 
   it("has the workflow tool in the gated-on header order", () => {
     expect(availableRightPanelTools(false)).toEqual([
@@ -57,6 +57,7 @@ describe("right-panel state reconciliation against the workflow run", () => {
       "scratch",
       "git",
       "agents",
+      "background",
     ]);
   });
 
@@ -91,7 +92,7 @@ describe("right-panel state reconciliation against the workflow run", () => {
   });
 
   it("leaves every other active tool alone when there is no run (negative control)", () => {
-    for (const activeEntryKey of ["tool:scratch", "tool:git", "tool:agents"] as const) {
+    for (const activeEntryKey of ["tool:scratch", "tool:git", "tool:agents", "tool:background"] as const) {
       const state = reconcileRightPanelWorkspaceState(
         { activeEntryKey, headerOrder: [] },
         { isCloudWorkspaceSelected: false, hasWorkflowRun: false },

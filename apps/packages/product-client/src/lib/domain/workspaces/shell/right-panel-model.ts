@@ -6,7 +6,7 @@ import {
   type ViewerTargetKey,
 } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
-export type RightPanelTool = "scratch" | "git" | "agents" | "workflow";
+export type RightPanelTool = "scratch" | "git" | "agents" | "background" | "workflow";
 export type RightPanelHeaderEntryKey =
   | `tool:${RightPanelTool}`
   | `terminal:${string}`
@@ -94,6 +94,7 @@ export const DEFAULT_RIGHT_PANEL_TOOL_ORDER: RightPanelTool[] = [
   "scratch",
   "git",
   "agents",
+  "background",
 ];
 export const DEFAULT_RIGHT_PANEL_HEADER_ORDER: RightPanelHeaderEntryKey[] =
   DEFAULT_RIGHT_PANEL_TOOL_ORDER.map((tool) => rightPanelToolHeaderKey(tool));

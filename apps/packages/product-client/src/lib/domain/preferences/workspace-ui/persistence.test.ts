@@ -154,7 +154,9 @@ describe("workspace UI state persistence", () => {
       // `availableRightPanelTools` leads with `workflow` ahead of the default
       // scratch/git/agents order when workflows v2 is enabled — normalization
       // appends missing tools in that order.
-      headerOrder: [fileKey, "tool:workflow", "tool:scratch", "tool:git", "tool:agents"],
+      headerOrder: [
+        fileKey, "tool:workflow", "tool:scratch", "tool:git", "tool:agents", "tool:background",
+      ],
     });
   });
 });

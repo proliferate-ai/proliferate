@@ -17,15 +17,12 @@ export interface ComposerDockAttachedSlot {
   workspaceActivity: boolean;
   /**
    * Session goal bar — ever-present ambient context while goal state is live.
+   * The compact activity chips that used to stack on this same bar row
+   * (loops/terminals/agents) retired into `BackgroundWorkPane`'s roster and
+   * the transcript-tail row (Design Handoff — HANDOFF-background-work.md,
+   * MODIFIED `SessionActivityBar`); the bar now mounts on goal state alone.
    */
   sessionGoal: boolean;
-  /**
-   * Compact activity chips (loops/terminals/agents) that stack on the same
-   * bar row as the goal (session-activity-architecture §Locked decisions
-   * #5). Independent from `sessionGoal` — activity can be live with no goal
-   * set, so the bar must still mount.
-   */
-  sessionActivity: boolean;
 }
 
 export interface ComposerDockSlotResolution {
@@ -42,7 +39,6 @@ export interface ResolveComposerDockSlotsInput {
   hasDelegatedWork: boolean;
   hasWorkspaceActivity: boolean;
   hasSessionGoal: boolean;
-  hasSessionActivity?: boolean;
 }
 
 export function resolveComposerDockSlots({
@@ -53,7 +49,6 @@ export function resolveComposerDockSlots({
   hasDelegatedWork,
   hasWorkspaceActivity,
   hasSessionGoal,
-  hasSessionActivity = false,
 }: ResolveComposerDockSlotsInput): ComposerDockSlotResolution {
   const outboundSlot = !suppressSessionSlots && recoveredPromptCount > 0
     ? { kind: "prompt_recoveries" as const }
@@ -66,17 +61,14 @@ export function resolveComposerDockSlots({
   const attachedDelegatedWork = !suppressSessionSlots && hasDelegatedWork;
   const attachedWorkspaceActivity = hasWorkspaceActivity;
   const attachedSessionGoal = !suppressSessionSlots && hasSessionGoal;
-  const attachedSessionActivity = !suppressSessionSlots && hasSessionActivity;
   const attachedSlot =
     attachedDelegatedWork
     || attachedWorkspaceActivity
     || attachedSessionGoal
-    || attachedSessionActivity
       ? {
         delegatedWork: attachedDelegatedWork,
         workspaceActivity: attachedWorkspaceActivity,
         sessionGoal: attachedSessionGoal,
-        sessionActivity: attachedSessionActivity,
       }
       : null;
 
