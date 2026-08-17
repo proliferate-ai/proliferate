@@ -3412,6 +3412,12 @@ export interface components {
         InvocationPlacement: {
             mode: components["schemas"]["PlacementMode"];
             repoConfigId: string;
+            /**
+             * @description The adopted workspace, required iff `mode` is `ExistingWorkspace`
+             *     (F-A1): the run executes in exactly this workspace, creates no
+             *     worktree, and teardown never touches it.
+             */
+            workspaceId?: string | null;
         };
         ItemCompletedEvent: {
             item: components["schemas"]["TranscriptItemPayload"];
@@ -4033,7 +4039,7 @@ export interface components {
             rawOutput?: unknown;
         };
         /** @enum {string} */
-        PlacementMode: "worktree" | "repo_root";
+        PlacementMode: "worktree" | "repo_root" | "existing_workspace";
         PlanDecisionRequest: {
             /** Format: int64 */
             expectedDecisionVersion: number;
@@ -9069,7 +9075,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description WORKFLOW_PLACEMENT_CONFLICT, zero rows inserted */
+            /** @description WORKFLOW_WORKSPACE_NOT_FOUND (existing_workspace placement names an unknown workspace) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description WORKFLOW_PLACEMENT_CONFLICT or WORKFLOW_WORKSPACE_NOT_ELIGIBLE, zero rows inserted. Note: sessions of concurrent runs under existing_workspace placement share one working tree with no write isolation; coordinating write-heavy workflows is the caller's decision */
             409: {
                 headers: {
                     [name: string]: unknown;
