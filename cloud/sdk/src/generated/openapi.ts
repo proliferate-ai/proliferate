@@ -3329,6 +3329,15 @@ export interface components {
          *     canonical document), NOT part of the state.json wire contract: the desktop
          *     echoes it through ``POST /state/ack`` after a successful runtime push and
          *     must strip it before pushing the document to the local runtime.
+         *
+         *     ``harness_settings`` is a second response-only rider: the surface's full
+         *     persisted harness-settings map (``agent_auth_harness_settings``), keyed by
+         *     harness_kind. The document's per-harness ``settings`` passenger only rides
+         *     when the harness has an enabled selection — the fail-closed law forbids a
+         *     settings-only ``harnesses`` entry — so the settings pane reads this rider
+         *     to show persisted toggle values for a native-auth harness. Like
+         *     ``fingerprint``, the desktop strips it before pushing the document to the
+         *     local runtime.
          */
         AgentAuthStateResponse: {
             /** Version */
@@ -3341,6 +3350,12 @@ export interface components {
             harnesses: components["schemas"]["AgentAuthStateHarness"][];
             /** Fingerprint */
             fingerprint?: string | null;
+            /** Harness Settings */
+            harness_settings?: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            } | null;
         };
         /**
          * AgentAuthStateSource

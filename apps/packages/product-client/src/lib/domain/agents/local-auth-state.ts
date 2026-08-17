@@ -47,7 +47,15 @@ export function stampIssuingServerOrigin(
   // `fingerprint` is a server-response rider for the delivery ack (echoed back
   // via POST /state/ack after the runtime confirms the push), never part of
   // the state.json contract the runtime persists — strip it before pushing.
-  const { fingerprint: _fingerprint, ...document } = state;
+  // `harness_settings` is likewise a response-only rider (the settings pane's
+  // read of persisted toggles for harnesses with no enabled selection); the
+  // runtime's copy of settings is the per-harness `settings` passenger inside
+  // `harnesses`, so the rider is stripped the same way.
+  const {
+    fingerprint: _fingerprint,
+    harness_settings: _harnessSettings,
+    ...document
+  } = state;
   return { ...document, issuing_server_origin: issuingServerOrigin };
 }
 
