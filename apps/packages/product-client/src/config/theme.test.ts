@@ -1,13 +1,27 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it } from "vitest";
-import { getTerminalTheme } from "#product/config/theme";
+import { getResolvedMode, getTerminalTheme } from "#product/config/theme";
 
 afterEach(() => {
+  delete document.documentElement.dataset.mode;
   document.documentElement.style.removeProperty("--color-text-caret");
   document.documentElement.style.removeProperty("--color-text-selection");
   document.documentElement.style.removeProperty("--color-foreground");
   document.documentElement.style.removeProperty("--color-input");
+});
+
+describe("getResolvedMode", () => {
+  it.each([
+    ["light", "light"],
+    ["dark", "dark"],
+    ["system", "dark"],
+    ["invalid", "dark"],
+  ] as const)("resolves %s to %s", (mode, resolved) => {
+    document.documentElement.dataset.mode = mode;
+
+    expect(getResolvedMode()).toBe(resolved);
+  });
 });
 
 describe("getTerminalTheme", () => {
