@@ -265,6 +265,7 @@ export const desktopBridge: DesktopBridge = {
   },
 
   worker: {
+    isSupported: isTauriRuntimeAvailable,
     getInstallId: getDesktopInstallId,
     ensure(input: WorkerConfiguration): Promise<WorkerStatus> {
       return ensureDesktopDispatchWorker(input);
