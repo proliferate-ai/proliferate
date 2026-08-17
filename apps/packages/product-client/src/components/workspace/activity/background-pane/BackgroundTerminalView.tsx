@@ -25,11 +25,14 @@ export interface BackgroundTerminalViewProps {
  * affordance of any kind — this mirrors the agent's own output, it does not
  * let the reader steer it.
  *
- * Bytes stream only while this view is mounted: `useFeedStream` is lazy
- * (connects on mount, tears the socket down on unmount) and the pane only
- * ever mounts this component while its own selection points at this
- * process, so there is no separate "enabled" flag to thread through the
- * frozen `process` / `feed` / `onBack` prop contract.
+ * Bytes stream only while a feed ref is actually handed in: `useFeedStream`
+ * is lazy (connects when `feed` is non-null, tears the socket down and
+ * resets to empty content otherwise). The right panel collapses via CSS
+ * (opacity/inert) rather than unmounting — this component stays mounted
+ * while the drawer is closed — so streaming cannot gate on mount alone;
+ * `BackgroundWorkPane` passes `feed={null}` while its own `isOpen` is false
+ * and hands the real `FeedRef` back on reopen, which is why this component's
+ * frozen `process` / `feed` / `onBack` prop contract needs no extra flag.
  */
 export function BackgroundTerminalView({ process, feed, onBack }: BackgroundTerminalViewProps) {
   const activeSessionId = useActiveSessionId();

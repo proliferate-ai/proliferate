@@ -56,13 +56,18 @@ vi.mock("#product/components/workspace/activity/LiveTerminalsRosterPanel", () =>
 vi.mock("#product/components/workspace/activity/background-pane/BackgroundTerminalView", () => ({
   BackgroundTerminalView: ({
     process,
+    feed,
     onBack,
   }: {
     process: ActivityProcessWire;
-    feed: unknown;
+    feed: { feedId: string } | null;
     onBack: () => void;
   }) => (
-    <div data-testid="background-terminal-view" data-process-id={process.id}>
+    <div
+      data-testid="background-terminal-view"
+      data-process-id={process.id}
+      data-feed-enabled={String(feed !== null)}
+    >
       <button type="button" onClick={onBack}>
         Back to background work
       </button>
@@ -317,5 +322,41 @@ describe("BackgroundWorkPane", () => {
     rerender(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-2" isOpen />);
 
     expect(screen.queryByTestId("background-terminal-view")).toBeNull();
+  });
+
+  it("disables the terminal feed while the right panel is collapsed (mounted, CSS-hidden), and re-enables it on reopen", () => {
+    sessionActivity = {
+      loops: [],
+      loopCapabilities: { supported: false, native: false },
+      processes: [
+        makeProcess({ id: "proc-live", feed: { feedId: "feed-1", kind: "terminal_bytes" } }),
+      ],
+      agents: [],
+    };
+    const { rerender } = render(
+      <BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />,
+    );
+
+    fireEvent.click(screen.getByTestId("open-process-proc-live"));
+    expect(
+      screen.getByTestId("background-terminal-view").getAttribute("data-feed-enabled"),
+    ).toBe("true");
+
+    // The right panel collapses via CSS (opacity/inert), staying mounted —
+    // `isOpen` flipping false is the pane's only signal for that. The
+    // terminal detail seam must keep rendering (no unmount) but stop
+    // streaming.
+    rerender(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen={false} />);
+
+    expect(screen.getByTestId("background-terminal-view")).toBeTruthy();
+    expect(
+      screen.getByTestId("background-terminal-view").getAttribute("data-feed-enabled"),
+    ).toBe("false");
+
+    rerender(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />);
+
+    expect(
+      screen.getByTestId("background-terminal-view").getAttribute("data-feed-enabled"),
+    ).toBe("true");
   });
 });

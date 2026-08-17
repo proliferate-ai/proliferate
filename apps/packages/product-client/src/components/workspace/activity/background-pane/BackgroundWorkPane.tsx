@@ -102,7 +102,17 @@ export function BackgroundWorkPane({ workspaceId, sessionId, isOpen }: Backgroun
     return (
       <BackgroundTerminalView
         process={selectedProcess}
-        feed={selectedProcess.feed}
+        // The right panel collapses via CSS (opacity/inert), not unmount
+        // (`WorkspaceShellRightRail`) — a collapsed-but-still-mounted detail
+        // view must stop streaming rather than keep the socket open
+        // invisibly. `useFeedStream` resets to empty content the instant
+        // `enabled` goes false (no partial-content retention to preserve),
+        // so gating at this seam — rather than adding a second prop to
+        // `BackgroundTerminalView`'s frozen (process, feed, onBack) contract
+        // — is both simplest and matches the acceptance line "feed re-tails
+        // on detail open": reopening hands the real feed back and the view
+        // re-tails from scratch.
+        feed={isOpen ? selectedProcess.feed : null}
         onBack={() => setSelectedProcessId(null)}
       />
     );
