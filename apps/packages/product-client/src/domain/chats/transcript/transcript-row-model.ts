@@ -741,36 +741,36 @@ function chunkTurnDisplayBlocks(
 ): TurnDisplayBlockChunk[] {
   const completedHistoryRootIds = new Set(presentation.completedHistoryRootIds);
   const chunks: TurnDisplayBlockChunk[] = [];
-  let completedHistoryBlocks: TurnDisplayBlock[] = [];
-
-  const flushCompletedHistory = () => {
-    if (completedHistoryBlocks.length === 0) {
-      return;
-    }
-    chunks.push({
-      blockKey: TURN_COMPLETED_HISTORY_BLOCK_KEY,
-      blocks: completedHistoryBlocks,
-    });
-    completedHistoryBlocks = [];
-  };
+  const completedHistoryBlocks: TurnDisplayBlock[] = [];
+  let completedHistoryIndex = -1;
 
   for (const block of presentation.displayBlocks) {
     if (
       presentation.completedHistorySummary
       && blockBelongsToCompletedHistory(block, completedHistoryRootIds)
     ) {
+      if (completedHistoryIndex < 0) {
+        completedHistoryIndex = chunks.length;
+      }
       completedHistoryBlocks.push(block);
       continue;
     }
 
-    flushCompletedHistory();
     chunks.push({
       blockKey: getTurnDisplayBlockKey(block),
       blocks: [block],
     });
   }
 
-  flushCompletedHistory();
+  // One completed turn owns one history scope, even when durable receipts
+  // divide its display blocks into several noncontiguous runs.
+  if (completedHistoryBlocks.length > 0) {
+    chunks.splice(completedHistoryIndex, 0, {
+      blockKey: TURN_COMPLETED_HISTORY_BLOCK_KEY,
+      blocks: completedHistoryBlocks,
+    });
+  }
+
   return chunks;
 }
 
