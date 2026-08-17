@@ -274,12 +274,17 @@ enqueue time, in the same transaction that would have inserted the wake:
   unconsumed. Its queue row is rewritten in place (same seq and queue
   position) to carry the newest delivery's canonical prompt, and the older
   delivery is retired, so the parent drains at most one wake per child and
-  always sees the newest completion output.
+  always sees the newest completion output. Durable child event sequence,
+  rather than worker claim order, decides which result is newest: if restart
+  or retry processes the older delivery second, that older delivery retires
+  without adding a stale wake.
 - `redundant_child_message` — the child's own `agent_session` message for the
   completed terminal turn already reached the parent (still queued since the
-  child turn started, or already executed as a parent transcript item), so the
-  message is the wake and a second turn would be redundant. This never applies
-  to failed or cancelled turns; those always materialize a wake turn.
+  child turn started, or correlated after execution through its durable queue
+  identity and original `queued_at`), so the message is the wake and a second
+  turn would be redundant. The same transaction also retires an older queued
+  completed wake that the message supersedes. This never applies to failed or
+  cancelled turns; those always materialize a wake turn.
 
 Neither applies to a delivery that ever reached the parent queue
 (recreate/retry reconciliation keeps its legacy exactly-once path). A retired

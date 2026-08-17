@@ -13,6 +13,21 @@ use crate::domains::sessions::store::pending_prompts::{
 
 mod coalescing;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CompletionWakeSuppressionReason {
+    Coalesced,
+    RedundantChildMessage,
+}
+
+impl CompletionWakeSuppressionReason {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Coalesced => "coalesced",
+            Self::RedundantChildMessage => "redundant_child_message",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ClaimedDeliveryEnqueueOutcome {
     Enqueued {
@@ -34,6 +49,8 @@ pub(crate) enum ClaimedDeliveryEnqueueOutcome {
     /// created in the parent transcript.
     Suppressed {
         delivery: CompletionDeliveryRecord,
+        reason: CompletionWakeSuppressionReason,
+        coalesced_delivery_ids: Vec<String>,
     },
     Stale,
 }
@@ -152,36 +169,51 @@ impl CompletionDeliveryStore {
             // (recreate/retry paths) keeps the legacy exactly-once
             // reconciliation.
             let is_fresh = delivery.parent_prompt_seq.is_none() && canonical.is_empty();
+            if is_fresh
+                && delivery.outcome
+                    == crate::domains::sessions::extensions::SessionTurnOutcome::Completed
+                && coalescing::wake_is_redundant_with_child_message(tx, &delivery)?
+            {
+                let coalesced_delivery_ids =
+                    coalescing::retire_older_completed_sibling_wakes(tx, &delivery, now)?;
+                let suppressed = finalize_claimed_without_prompt(
+                    tx,
+                    &delivery,
+                    lease_token,
+                    now,
+                    "wake suppression",
+                )?;
+                return Ok(ClaimedDeliveryEnqueueOutcome::Suppressed {
+                    delivery: suppressed,
+                    reason: CompletionWakeSuppressionReason::RedundantChildMessage,
+                    coalesced_delivery_ids,
+                });
+            }
+            if is_fresh
+                && delivery.outcome
+                    == crate::domains::sessions::extensions::SessionTurnOutcome::Completed
+                && coalescing::newer_completed_delivery_id(tx, &delivery)?.is_some()
+            {
+                let coalesced_delivery_ids =
+                    coalescing::retire_older_completed_sibling_wakes(tx, &delivery, now)?;
+                let suppressed = finalize_claimed_without_prompt(
+                    tx,
+                    &delivery,
+                    lease_token,
+                    now,
+                    "reverse-order coalescing",
+                )?;
+                return Ok(ClaimedDeliveryEnqueueOutcome::Suppressed {
+                    delivery: suppressed,
+                    reason: CompletionWakeSuppressionReason::Coalesced,
+                    coalesced_delivery_ids,
+                });
+            }
             let adopted = if is_fresh {
                 coalescing::adopt_superseded_sibling_wake(tx, &delivery, now)?
             } else {
                 None
             };
-            if is_fresh
-                && adopted.is_none()
-                && coalescing::wake_is_redundant_with_child_message(tx, &delivery)?
-            {
-                let changed = tx.execute(
-                    "UPDATE session_link_completion_deliveries
-                     SET state = 'delivered', delivered_at = COALESCE(delivered_at, ?3),
-                         updated_at = ?3, lease_token = NULL, lease_expires_at = NULL,
-                         last_error_code = NULL
-                     WHERE delivery_id = ?1 AND lease_token = ?2
-                       AND state != 'delivered'",
-                    params![delivery.delivery_id, lease_token, now],
-                )?;
-                if changed != 1 {
-                    return Err(completion_delivery_error(
-                        "claimed delivery lease changed during wake suppression",
-                    ));
-                }
-                let suppressed = find_delivery_in_tx(tx, delivery_id)?.ok_or_else(|| {
-                    completion_delivery_error("suppressed outbox row disappeared")
-                })?;
-                return Ok(ClaimedDeliveryEnqueueOutcome::Suppressed {
-                    delivery: suppressed,
-                });
-            }
             let (pending, inserted, superseded_delivery_id) = match adopted {
                 Some((record, superseded_delivery_id)) => {
                     (record, false, Some(superseded_delivery_id))
@@ -242,6 +274,31 @@ impl CompletionDeliveryStore {
             })
         })
     }
+}
+
+fn finalize_claimed_without_prompt(
+    tx: &rusqlite::Connection,
+    delivery: &CompletionDeliveryRecord,
+    lease_token: &str,
+    now: &str,
+    transition: &str,
+) -> rusqlite::Result<CompletionDeliveryRecord> {
+    let changed = tx.execute(
+        "UPDATE session_link_completion_deliveries
+         SET state = 'delivered', parent_prompt_seq = NULL, parent_turn_id = NULL,
+             delivered_at = COALESCE(delivered_at, ?3), updated_at = ?3,
+             lease_token = NULL, lease_expires_at = NULL, last_error_code = NULL
+         WHERE delivery_id = ?1 AND lease_token = ?2
+           AND state IN ('pending', 'enqueued')",
+        params![delivery.delivery_id, lease_token, now],
+    )?;
+    if changed != 1 {
+        let message = format!("claimed delivery lease changed during {transition}");
+        return Err(completion_delivery_error(&message));
+    }
+    update_completion_projection(tx, &delivery.delivery_id, None, None, true, now)?;
+    find_delivery_in_tx(tx, &delivery.delivery_id)?
+        .ok_or_else(|| completion_delivery_error("suppressed outbox row disappeared"))
 }
 
 /// A parent is terminal when its session row has been closed (`closed_at IS NOT

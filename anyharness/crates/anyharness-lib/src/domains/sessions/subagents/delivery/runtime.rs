@@ -5,7 +5,9 @@ use tokio::sync::mpsc;
 
 use super::{CompletionDeliveryRecord, CompletionDeliveryState, CompletionDeliveryStore};
 use crate::domains::sessions::runtime::SessionRuntime;
-use crate::domains::sessions::runtime_event::{RuntimeInjectedSessionEvent, SubagentTurnCompletion};
+use crate::domains::sessions::runtime_event::{
+    RuntimeInjectedSessionEvent, SubagentTurnCompletion,
+};
 use crate::domains::sessions::store::completion_deliveries::enqueue::ClaimedDeliveryEnqueueOutcome;
 
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
@@ -164,7 +166,11 @@ impl CompletionDeliveryWorker {
                 );
                 return Ok(());
             }
-            ClaimedDeliveryEnqueueOutcome::Suppressed { delivery } => {
+            ClaimedDeliveryEnqueueOutcome::Suppressed {
+                delivery,
+                reason,
+                coalesced_delivery_ids,
+            } => {
                 // The delivery is terminal without a parent prompt. The
                 // injected completion event is the only parent-transcript
                 // record, so it stays best effort with the same guarantees as
@@ -173,7 +179,10 @@ impl CompletionDeliveryWorker {
                 if let Some(session_runtime) = self.session_runtime.upgrade() {
                     inject_completion_event(&session_runtime, &delivery).await;
                 }
-                log_wake_withheld(&delivery, &delivery.delivery_id, "redundant_child_message");
+                for coalesced_delivery_id in coalesced_delivery_ids {
+                    log_wake_withheld(&delivery, &coalesced_delivery_id, "coalesced");
+                }
+                log_wake_withheld(&delivery, &delivery.delivery_id, reason.as_str());
                 return Ok(());
             }
             ClaimedDeliveryEnqueueOutcome::Stale => {
