@@ -63,10 +63,7 @@ fn active_catalog_surfaces_only_declared_unattended_modes() {
         catalog.unattended_mode_id("claude"),
         Some("bypassPermissions")
     );
-    assert_eq!(
-        catalog.unattended_mode_id("codex"),
-        Some("agent-full-access")
-    );
+    assert_eq!(catalog.unattended_mode_id("codex"), Some("agent-full-access"));
     assert_eq!(catalog.unattended_mode_id("cursor"), None);
     assert_eq!(catalog.unattended_mode_id("unknown"), None);
 }
