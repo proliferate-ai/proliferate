@@ -9,7 +9,6 @@ import { ConnectedUserInputCard } from "#product/components/workspace/chat/input
 import { ConnectedPromptRecoveryPanel } from "#product/components/workspace/chat/input/PromptRecoveryPanel";
 import { SessionActivityBar } from "#product/components/workspace/activity/SessionActivityBar";
 import { useSessionGoalBarModel } from "#product/hooks/activity/derived/use-session-goal";
-import { useSessionActivityChips } from "#product/hooks/activity/derived/use-session-activity-chips";
 import {
   useActivePendingInteractionState,
   useActivePendingPrompts,
@@ -35,7 +34,6 @@ export function useComposerDockSlots(options?: {
   const delegatedWorkComposer = useDelegatedWorkComposer();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const sessionGoalBarModel = useSessionGoalBarModel();
-  const sessionActivityChips = useSessionActivityChips();
   const dockSlotResolution = useMemo(() => resolveComposerDockSlots({
     suppressSessionSlots,
     pendingPromptCount: pendingPrompts.length,
@@ -44,13 +42,11 @@ export function useComposerDockSlots(options?: {
     hasDelegatedWork: !!delegatedWorkComposer,
     hasWorkspaceActivity: !!selectedWorkspaceId,
     hasSessionGoal: !!sessionGoalBarModel,
-    hasSessionActivity: sessionActivityChips.length > 0,
   }), [
     delegatedWorkComposer,
     pendingPrompts.length,
     promptRecoveries.length,
     primaryPendingInteraction?.kind,
-    sessionActivityChips.length,
     sessionGoalBarModel,
     suppressSessionSlots,
     selectedWorkspaceId,
@@ -85,12 +81,14 @@ export function useComposerDockSlots(options?: {
   ), [delegatedWorkComposer, dockSlotResolution.attachedSlot?.delegatedWork]);
   // The workspace-activity cap retired into the workspace-status card (the
   // trailing-cluster trigger in ChatInputControlRow) — ambient git/PR state
-  // no longer paints on the composer itself.
+  // no longer paints on the composer itself. The activity chips that used to
+  // keep this bar mounted with no goal set retired into `BackgroundWorkPane`
+  // and the transcript-tail row; the bar is goal-only now.
   const sessionActivitySlot = useMemo<ReactNode | null>(() => (
-    dockSlotResolution.attachedSlot?.sessionGoal || dockSlotResolution.attachedSlot?.sessionActivity
+    dockSlotResolution.attachedSlot?.sessionGoal
       ? <SessionActivityBar />
       : null
-  ), [dockSlotResolution.attachedSlot?.sessionGoal, dockSlotResolution.attachedSlot?.sessionActivity]);
+  ), [dockSlotResolution.attachedSlot?.sessionGoal]);
   const attachedSlot = useMemo<ReactNode | null>(() => (
     delegatedWorkSlot || sessionActivitySlot
       ? (

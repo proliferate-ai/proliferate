@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { ReactNode } from "react";
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { replaySessionHistory } from "#product/lib/domain/sessions/stream/stream-state";
 import { SessionTranscriptPane } from "#product/components/workspace/chat/surface/SessionTranscriptPane";
@@ -28,8 +28,17 @@ import { useSessionSelectionStore } from "#product/stores/sessions/session-selec
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 
 // Heavy leaf UI is not under test — the deferred content_stable hand-off is.
+// The mock echoes the two inset props it received as data attributes so the
+// carried R1 item 1 fix (dock-reactivity while the background-work row is
+// visible) can be asserted without needing the real virtualized transcript.
 vi.mock("#product/components/workspace/chat/transcript/MessageList", () => ({
-  MessageList: () => <div data-testid="message-list" />,
+  MessageList: (props: { bottomInsetPx: number; nonDisplacingBottomInsetPx: number }) => (
+    <div
+      data-testid="message-list"
+      data-bottom-inset-px={props.bottomInsetPx}
+      data-non-displacing-bottom-inset-px={props.nonDisplacingBottomInsetPx}
+    />
+  ),
 }));
 vi.mock("#product/components/workspace/chat/plans/ConnectedPlanHandoffDialog", () => ({
   ConnectedPlanHandoffDialog: () => null,
@@ -62,6 +71,21 @@ vi.mock("#product/hooks/chat/workflows/use-transcript-session-navigation-actions
 vi.mock("#product/hooks/workspaces/derived/use-workspace-creation-receipt", () => ({
   useWorkspaceCreationReceiptKey: () => null,
 }));
+const backgroundWorkMocks = vi.hoisted(() => ({
+  openBackgroundWorkPane: vi.fn(),
+  rowCounts: { runningCount: 0, finishedCount: 0 },
+}));
+// Requires ProductHostProvider (`useWorkspaceFileContext` -> `useWorkspaces`)
+// via real host wiring that is out of scope for this diagnostics-timing
+// suite; the mechanism itself is covered by
+// use-open-background-work-pane.test.tsx. Here we only need to assert the
+// transcript row's `onOpen` is wired to whatever this hook returns.
+vi.mock("#product/hooks/activity/workflows/use-open-background-work-pane", () => ({
+  useOpenBackgroundWorkPane: () => backgroundWorkMocks.openBackgroundWorkPane,
+}));
+vi.mock("#product/hooks/activity/derived/use-background-work-row", () => ({
+  useBackgroundWorkRowCounts: () => backgroundWorkMocks.rowCounts,
+}));
 
 const WORKSPACE_ID = "workspace-1";
 const SESSION_ID = "session-1";
@@ -79,6 +103,8 @@ beforeEach(() => {
   useSessionIntentStore.getState().clear();
   useSessionTranscriptStore.getState().clearEntries();
   useSessionSelectionStore.getState().deselectWorkspacePreservingSessions();
+  backgroundWorkMocks.rowCounts = { runningCount: 0, finishedCount: 0 };
+  backgroundWorkMocks.openBackgroundWorkPane.mockClear();
 });
 
 afterEach(() => {
@@ -169,5 +195,39 @@ describe("SessionTranscriptPane deferred workspace_open content_stable", () => {
     });
 
     expect(contentStable()).toBeDefined();
+  });
+});
+
+describe("SessionTranscriptPane background-work row (carried R1 items)", () => {
+  it("passes the live, unclamped bottomInsetPx/nonDisplacingBottomInsetPx through to MessageList even while the row is visible (carried item 1: dock-reactivity)", () => {
+    backgroundWorkMocks.rowCounts = { runningCount: 2, finishedCount: 0 };
+    beginDeferredColdOpen();
+    render(<SessionTranscriptPane bottomInsetPx={64} nonDisplacingBottomInsetPx={8} />);
+
+    const messageList = screen.getByTestId("message-list");
+    expect(messageList.getAttribute("data-bottom-inset-px")).toBe("64");
+    expect(messageList.getAttribute("data-non-displacing-bottom-inset-px")).toBe("8");
+    expect(screen.getByText("2 background tasks")).toBeTruthy();
+  });
+
+  it("still passes the same inset values through when there is no background work", () => {
+    backgroundWorkMocks.rowCounts = { runningCount: 0, finishedCount: 0 };
+    beginDeferredColdOpen();
+    render(<SessionTranscriptPane bottomInsetPx={64} nonDisplacingBottomInsetPx={8} />);
+
+    const messageList = screen.getByTestId("message-list");
+    expect(messageList.getAttribute("data-bottom-inset-px")).toBe("64");
+    expect(messageList.getAttribute("data-non-displacing-bottom-inset-px")).toBe("8");
+    expect(screen.queryByText(/background task/)).toBeNull();
+  });
+
+  it("wires the transcript row's onOpen to the background-work-pane open action (carried R1 seam, R2 wiring)", () => {
+    backgroundWorkMocks.rowCounts = { runningCount: 1, finishedCount: 0 };
+    beginDeferredColdOpen();
+    render(<SessionTranscriptPane bottomInsetPx={0} nonDisplacingBottomInsetPx={0} />);
+
+    fireEvent.click(screen.getByText("1 background task"));
+
+    expect(backgroundWorkMocks.openBackgroundWorkPane).toHaveBeenCalledTimes(1);
   });
 });

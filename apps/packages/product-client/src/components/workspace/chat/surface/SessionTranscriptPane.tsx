@@ -7,6 +7,7 @@ import { BackgroundWorkTranscriptRow } from "#product/components/workspace/activ
 import { ConnectedPlanHandoffDialog } from "#product/components/workspace/chat/plans/ConnectedPlanHandoffDialog";
 import { usePlanHandoffDialogState } from "#product/hooks/plans/ui/use-plan-handoff-dialog-state";
 import { useBackgroundWorkRowCounts } from "#product/hooks/activity/derived/use-background-work-row";
+import { useOpenBackgroundWorkPane } from "#product/hooks/activity/workflows/use-open-background-work-pane";
 import { useSessionHistoryHydration } from "#product/hooks/sessions/lifecycle/use-session-history-hydration";
 import { useTranscriptSessionNavigationActions } from "#product/hooks/chat/workflows/use-transcript-session-navigation-actions";
 import { useWorkspaceCreationReceiptKey } from "#product/hooks/workspaces/derived/use-workspace-creation-receipt";
@@ -45,38 +46,7 @@ export function SessionTranscriptPane({
   const backgroundWorkRowCounts = useBackgroundWorkRowCounts();
   const hasBackgroundWork = backgroundWorkRowCounts.runningCount > 0
     || backgroundWorkRowCounts.finishedCount > 0;
-  // The composer dock is an ABSOLUTELY positioned overlay anchored to the
-  // outer `ChatView` root (`shellClassName="... absolute inset-x-0 bottom-0"`
-  // in ChatView.tsx), not a normal-flow sibling — so the flex column
-  // MessageList and this row live in always spans the pane's FULL height,
-  // right underneath that overlay. `bottomInsetPx` (`stickyBottomInsetPx`
-  // from `useChatDockInset`) is sized to the composer's real rendered
-  // height; MessageList spends it as INTERNAL scroll padding so the last
-  // turn clears the composer once scrolled to bottom. A plain sibling row
-  // placed after MessageList does not benefit from that internal padding —
-  // it renders at the very bottom of the (full-height) flex column, which
-  // is exactly the composer's overlap zone, so it would paint invisibly
-  // behind the composer's backdrop.
-  //
-  // Fix: reserve the composer's full `bottomInsetPx` as an explicit,
-  // external flex sibling AFTER the row (not inside MessageList), and stop
-  // asking MessageList to reserve any of it internally (`bottomInsetPx={0}`
-  // below). The three flex children — MessageList, the row, the spacer —
-  // now partition the full pane height so MessageList's own box already
-  // ends exactly where the row should start, and the row's own box already
-  // ends exactly where the composer starts. Nothing is reserved twice: the
-  // spacer's height is the SAME `bottomInsetPx` MessageList used to consume
-  // internally, just relocated outside it, so the total clearance between
-  // the last turn and the composer is unchanged from before this row
-  // existed — the row just fills space that used to render blank.
-  //
-  // Known R1 trade-off: `nonDisplacingBottomInsetPx` (the composer-dock-card
-  // slack MessageList would otherwise keep) clamps to 0 while the row is
-  // visible, since `resolveTranscriptBottomInsets` clamps it to
-  // `bottomInsetPx`. A session showing BOTH a dock card (e.g. the workspace
-  // recovery panel) AND background work at once briefly loses that slack —
-  // narrow, disclosed, and out of R1's scope to chase further.
-  const messageListBottomInsetPx = hasBackgroundWork ? 0 : bottomInsetPx;
+  const openBackgroundWorkPane = useOpenBackgroundWorkPane();
   const { rehydrateSessionSlotFromHistory } = useSessionHistoryHydration();
   const [olderHistoryLoadingSessionId, setOlderHistoryLoadingSessionId] = useState<string | null>(null);
   const immediatePaneState = useActiveTranscriptPaneState();
@@ -255,54 +225,66 @@ export function SessionTranscriptPane({
 
   return (
     <DebugProfiler id="session-transcript-pane">
-      <MessageList
-        activeSessionId={activeSessionId}
-        selectedWorkspaceId={selectedWorkspaceId}
-        workspaceReceiptKey={workspaceReceiptKey}
-        optimisticPrompt={optimisticPrompt}
-        outboxEntries={outboxEntries}
-        transcript={transcript}
-        goalEvents={goalEvents}
-        sessionViewState={sessionViewState}
-        hasOlderHistory={hasOlderHistory}
-        isLoadingOlderHistory={isLoadingOlderHistory}
-        olderHistoryCursor={oldestLoadedEventSeq}
-        bottomInsetPx={messageListBottomInsetPx}
-        nonDisplacingBottomInsetPx={nonDisplacingBottomInsetPx}
-        onLoadOlderHistory={loadOlderHistory}
-        onHandOffPlanToNewSession={handoff.open}
-        onOpenSession={openTranscriptSession}
-        canOpenSession={canOpenTranscriptSession}
-      />
-      {hasBackgroundWork && (
-        <>
-          {/* Last row of the transcript column, in the turn stack's own
-              tight intra-turn rhythm (HANDOFF-background-work.md placement
-              note). A flex sibling of MessageList's own `flex-1 min-h-0`
-              scroll region, not a row threaded through the virtualized row
-              list — see the `messageListBottomInsetPx` comment above for
-              why. `shrink-0` keeps it at its natural (single-line) height
-              regardless of how much MessageList shrinks to make room. */}
+      {/* `relative` anchor for the background-work row below: R1 fed
+          MessageList a clamped `bottomInsetPx={0}` while this row was
+          visible so an external flex-sibling-plus-spacer partition could
+          place the row without double-reserving the composer's clearance —
+          that clamp severed the live composer-dock height from MessageList's
+          own re-pin effect (`VirtualizedTranscriptRowList`'s
+          `useLayoutEffect` re-pins on `totalContentHeight`, which is derived
+          from the SAME `bottomInsetPx` via the virtualizer's `paddingEnd`),
+          so a dock card growing while idle+pinned could clip the last turn
+          until the next unrelated resize (carried R1 item 1).
+          Fix: stop clamping — MessageList gets the real, live
+          `bottomInsetPx`/`nonDisplacingBottomInsetPx` exactly as it does on
+          every other session, restoring that reactivity for free (no
+          separate "force a re-pin" hook needed: the existing effect already
+          keys off this same prop's downstream value). The row is
+          `position: absolute`, anchored `bottom: bottomInsetPx` in a
+          `relative` wrapper around MessageList, so it paints inside the
+          scroll region's own reserved end-padding (the same gutter it used
+          to sit in as an external spacer) instead of needing a second,
+          separately-sized reserve. This does not achieve the handoff's
+          literal "last row of the transcript column" in-scroll placement
+          (an actual virtualized row) — that remains out of this rung's
+          scope; see the PR body. */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <MessageList
+          activeSessionId={activeSessionId}
+          selectedWorkspaceId={selectedWorkspaceId}
+          workspaceReceiptKey={workspaceReceiptKey}
+          optimisticPrompt={optimisticPrompt}
+          outboxEntries={outboxEntries}
+          transcript={transcript}
+          goalEvents={goalEvents}
+          sessionViewState={sessionViewState}
+          hasOlderHistory={hasOlderHistory}
+          isLoadingOlderHistory={isLoadingOlderHistory}
+          olderHistoryCursor={oldestLoadedEventSeq}
+          bottomInsetPx={bottomInsetPx}
+          nonDisplacingBottomInsetPx={nonDisplacingBottomInsetPx}
+          onLoadOlderHistory={loadOlderHistory}
+          onHandOffPlanToNewSession={handoff.open}
+          onOpenSession={openTranscriptSession}
+          canOpenSession={canOpenTranscriptSession}
+        />
+        {hasBackgroundWork && (
           <div
-            className={`shrink-0 ${CHAT_SURFACE_GUTTER_CLASSNAME} ${CHAT_COLUMN_CLASSNAME} pt-transcript-turn-tight pb-2`}
+            className={`absolute inset-x-0 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}
+            style={{ bottom: bottomInsetPx }}
           >
-            <BackgroundWorkTranscriptRow
-              runningCount={backgroundWorkRowCounts.runningCount}
-              finishedCount={backgroundWorkRowCounts.finishedCount}
-              // SEAM (delivery spec rung R2): the Background work pane
-              // doesn't exist yet, so there is nowhere for this to open to.
-              // R2 mounts `BackgroundWorkPane` in `RightPanelContent` and
-              // replaces this no-op with the real open action.
-              onOpen={() => {}}
-            />
+            <div
+              className={`${CHAT_COLUMN_CLASSNAME} pt-transcript-turn-tight pb-2`}
+            >
+              <BackgroundWorkTranscriptRow
+                runningCount={backgroundWorkRowCounts.runningCount}
+                finishedCount={backgroundWorkRowCounts.finishedCount}
+                onOpen={openBackgroundWorkPane}
+              />
+            </div>
           </div>
-          {/* The composer's full reserve, relocated here from MessageList's
-              own internal padding (see the comment above) so the row above
-              renders in the composer's true visual clearance rather than
-              behind its absolutely positioned backdrop. */}
-          <div aria-hidden="true" className="shrink-0" style={{ height: bottomInsetPx }} />
-        </>
-      )}
+        )}
+      </div>
       {handoff.plan && (
         <ConnectedPlanHandoffDialog
           plan={handoff.plan}

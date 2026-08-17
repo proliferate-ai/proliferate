@@ -314,6 +314,7 @@ describe("workspace UI state migration", () => {
           "tool:scratch",
           "tool:git",
           "tool:agents",
+          "tool:background",
           "tool:workflow",
           "terminal:t1",
           "terminal:t2",
@@ -358,6 +359,7 @@ describe("workspace UI state migration", () => {
         "tool:workflow",
         "tool:scratch",
         "tool:agents",
+        "tool:background",
       ],
     });
   });
@@ -399,6 +401,7 @@ describe("workspace UI state migration", () => {
         "tool:workflow",
         "tool:scratch",
         "tool:agents",
+        "tool:background",
       ],
     });
     expect(state.rightPanelDurableByWorkspace.w1).not.toHaveProperty("toolOrder");

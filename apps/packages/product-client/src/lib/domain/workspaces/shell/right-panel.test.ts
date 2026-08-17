@@ -23,8 +23,10 @@ import { fileViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-t
 
 describe("right panel domain", () => {
   it("uses the same built-in tools for local and cloud workspaces", () => {
-    expect(availableRightPanelTools(false)).toEqual(["workflow", "scratch", "git", "agents"]);
-    expect(availableRightPanelTools(true)).toEqual(["workflow", "scratch", "git", "agents"]);
+    expect(availableRightPanelTools(false))
+      .toEqual(["workflow", "scratch", "git", "agents", "background"]);
+    expect(availableRightPanelTools(true))
+      .toEqual(["workflow", "scratch", "git", "agents", "background"]);
   });
 
   it("parses the agents tool entry key", () => {
@@ -43,6 +45,7 @@ describe("right panel domain", () => {
       "tool:scratch",
       "tool:git",
       "tool:agents",
+      "tool:background",
     ]);
   });
 
@@ -81,6 +84,7 @@ describe("right panel domain", () => {
       "tool:scratch",
       "tool:git",
       "tool:agents",
+      "tool:background",
     ]);
   });
 
@@ -94,7 +98,9 @@ describe("right panel domain", () => {
     );
 
     expect(state.activeEntryKey).toBe("tool:git");
-    expect(state.headerOrder).toEqual(["tool:workflow", "tool:scratch", "tool:git", "tool:agents"]);
+    expect(state.headerOrder).toEqual(
+      ["tool:workflow", "tool:scratch", "tool:git", "tool:agents", "tool:background"],
+    );
   });
 
   it("keeps a terminal active when no live terminal list is available", () => {
@@ -113,6 +119,7 @@ describe("right panel domain", () => {
       "tool:workflow",
       "tool:scratch",
       "tool:agents",
+      "tool:background",
     ]);
   });
 
@@ -134,6 +141,7 @@ describe("right panel domain", () => {
       "tool:workflow",
       "tool:scratch",
       "tool:agents",
+      "tool:background",
       "terminal:t1",
     ]);
     expect(state.activeEntryKey).toBe("tool:scratch");
@@ -156,6 +164,7 @@ describe("right panel domain", () => {
       "tool:workflow",
       "tool:scratch",
       "tool:agents",
+      "tool:background",
       "terminal:run",
     ]);
   });
@@ -178,6 +187,7 @@ describe("right panel domain", () => {
       "tool:workflow",
       "tool:scratch",
       "tool:agents",
+      "tool:background",
       "terminal:t1",
     ]);
     expect(state.activeEntryKey).toBe("terminal:t2");
@@ -200,6 +210,7 @@ describe("right panel domain", () => {
       "tool:workflow",
       "tool:scratch",
       "tool:agents",
+      "tool:background",
     ]);
     expect(state.activeEntryKey).toBe("terminal:t1");
   });
@@ -223,6 +234,7 @@ describe("right panel domain", () => {
       "tool:scratch",
       "tool:git",
       "tool:agents",
+      "tool:background",
     ]);
     expect(state.activeEntryKey).toBe("terminal:t1");
   });
@@ -245,6 +257,7 @@ describe("right panel domain", () => {
       "tool:workflow",
       "tool:scratch",
       "tool:agents",
+      "tool:background",
     ]);
   });
 
@@ -264,6 +277,7 @@ describe("right panel domain", () => {
       "tool:git",
       "tool:workflow",
       "tool:agents",
+      "tool:background",
     ]);
     expect(state.activeEntryKey).toBe("tool:git");
   });
@@ -288,6 +302,7 @@ describe("right panel domain", () => {
       "tool:scratch",
       "tool:git",
       "tool:agents",
+      "tool:background",
     ]);
     expect(state.activeEntryKey).toBe(targetKey);
   });

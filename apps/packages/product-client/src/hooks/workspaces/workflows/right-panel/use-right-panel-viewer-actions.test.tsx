@@ -58,10 +58,10 @@ describe("useRightPanelViewerActions", () => {
     expect(update(state)).toEqual({
       activeEntryKey: "tool:git",
       // `availableRightPanelTools` leads with `workflow` ahead of the default
-      // scratch/git/agents order when workflows v2 is enabled (see that
-      // function's docstring) — normalization appends missing tools in that
-      // order, so `workflow` lands before `agents` here.
-      headerOrder: ["tool:scratch", "tool:git", "tool:workflow", "tool:agents"],
+      // scratch/git/agents/background order when workflows v2 is enabled (see
+      // that function's docstring) — normalization appends missing tools in
+      // that order, so `workflow` lands before `agents`/`background` here.
+      headerOrder: ["tool:scratch", "tool:git", "tool:workflow", "tool:agents", "tool:background"],
     });
   });
 });
