@@ -3,7 +3,7 @@
 // sibling pure domain modules.
 
 import type { WorkflowRunV2 } from "@anyharness/sdk";
-import { workflowRunIsActive } from "#product/domain/workflows/run-view-model";
+import { workflowRunIsActive } from "./run-view-model";
 
 /**
  * Total order over a run set: newest `createdAt` first, an exact tie broken
