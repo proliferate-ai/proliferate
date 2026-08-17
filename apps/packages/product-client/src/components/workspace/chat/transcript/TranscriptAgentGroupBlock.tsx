@@ -10,6 +10,7 @@ import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import { Button } from "#product/primitives/Button";
+import { ChevronRight } from "#product/primitives/icons/core";
 import { Robot } from "#product/primitives/icons/product";
 import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
@@ -20,6 +21,7 @@ import {
 } from "#product/components/workspace/chat/transcript/ScopedTranscriptBlocks";
 import {
   resolveSubagentExecutionState,
+  resolveSubagentIdForItem,
   resolveSubagentLaunchDisplay,
   isSubagentExecutionStateRunning,
   isSubagentLaunchStatusVisibleInTranscript,
@@ -39,12 +41,21 @@ export function TranscriptAgentGroupBlock({
   transcript,
   childrenByParentId,
   renderChild,
+  onOpenSubagent,
 }: {
   item: ToolCallItem;
   childIds: string[];
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
   renderChild: (childId: string) => ReactNode;
+  /**
+   * Opens this native subagent's `BackgroundWorkPane` detail
+   * (`BackgroundSubagentView`) — the spec's "native routing" intent,
+   * delivered here rather than at `SpawnIdentityReceipt` (that component is
+   * delegated-work-only; see the PR body's disclosed spec correction).
+   * Absent for embedded/read-only transcripts that have no pane to open.
+   */
+  onOpenSubagent?: (subagentId: string) => void;
 }) {
   const executionState = resolveSubagentExecutionState(item);
   const isRunning = isSubagentExecutionStateRunning(executionState);
@@ -122,14 +133,31 @@ export function TranscriptAgentGroupBlock({
         ? "Completed in background"
         : null);
   const headerExpandable = hasBodyContent;
+  // Native-routing affordance (Delivery Spec — Background Work Slice 1, rung
+  // R4 fix-forward): only a block whose `rawOutput` actually carries the
+  // background-work correlation gets the click-to-open-pane behavior — a
+  // block with no `subagentId` (no correlation available for this harness,
+  // or no pane consumer wired at this transcript's call site) falls back to
+  // today's byte-identical expand/collapse-on-click header.
+  const subagentId = resolveSubagentIdForItem(item);
+  const canOpenSubagent = Boolean(onOpenSubagent && subagentId);
+  const headerClickable = canOpenSubagent || headerExpandable;
 
   return (
     <div className="py-0.5">
       <div
-        {...(headerExpandable ? { "data-chat-transcript-ignore": true } : {})}
-        onClick={() => headerExpandable && setExpanded(!expanded)}
+        {...(headerClickable ? { "data-chat-transcript-ignore": true } : {})}
+        onClick={() => {
+          if (onOpenSubagent && subagentId) {
+            onOpenSubagent(subagentId);
+            return;
+          }
+          if (headerExpandable) {
+            setExpanded(!expanded);
+          }
+        }}
         className={`group/tool-action-row inline-flex items-center gap-1 rounded-md pl-0.5 pr-1.5 py-1 text-chat transition-colors ${
-          headerExpandable
+          headerClickable
             ? "cursor-pointer text-muted-foreground hover:bg-muted/40 hover:text-foreground"
             : "cursor-default text-muted-foreground"
         }`}
@@ -139,7 +167,7 @@ export function TranscriptAgentGroupBlock({
           className={`icon-compact shrink-0 transition-colors ${
             expanded
               ? "text-foreground/70"
-              : headerExpandable
+              : headerClickable
                 ? "text-faint group-hover/tool-action-row:text-muted-foreground"
                 : "text-muted-foreground"
           }`}
@@ -152,6 +180,25 @@ export function TranscriptAgentGroupBlock({
           <span className="ml-1 text-chat text-muted-foreground">
             · {collapsedSummary}
           </span>
+        )}
+        {canOpenSubagent && hasBodyContent && (
+          <Button
+            type="button"
+            variant="unstyled"
+            data-chat-transcript-ignore
+            aria-expanded={expanded}
+            aria-label={expanded ? "Collapse subagent details" : "Expand subagent details"}
+            onClick={(event) => {
+              event.stopPropagation();
+              setExpanded(!expanded);
+            }}
+            className="ml-1 flex shrink-0 items-center justify-center rounded p-0.5 text-faint hover:bg-muted/40 hover:text-foreground"
+          >
+            <ChevronRight
+              aria-hidden="true"
+              className={`icon-compact shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+            />
+          </Button>
         )}
       </div>
 

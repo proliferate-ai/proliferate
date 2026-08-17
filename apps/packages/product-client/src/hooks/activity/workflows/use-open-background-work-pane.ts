@@ -13,8 +13,19 @@ import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-st
  * (`hooks/workspaces/workflows/files/use-workspace-file-target-actions.ts`):
  * materialize the tool's header entry for the active workspace (appending it
  * to the header order if it isn't there yet), then open the panel.
+ *
+ * The returned callback optionally accepts a native subagent id (Delivery
+ * Spec — Background Work Slice 1, rung R4 fix-forward: a native subagent's
+ * transcript block — `TranscriptAgentGroupBlock` — must click-open its
+ * `BackgroundWorkPane` detail). When given, it deep-opens straight to that
+ * subagent's `BackgroundSubagentView` by writing a one-shot pending
+ * selection into the same right-panel-model store this hook already owns
+ * (`pendingBackgroundSubagentSelectionByWorkspace`, consumed and cleared by
+ * `BackgroundWorkPane` on its next render) — no new global, no parallel
+ * mechanism. Existing zero-arg call sites (`BackgroundWorkTranscriptRow`'s
+ * `onOpen`) are unaffected: the argument is optional.
  */
-export function useOpenBackgroundWorkPane(): () => void {
+export function useOpenBackgroundWorkPane(): (subagentId?: string) => void {
   const { workspaceUiKey, materializedWorkspaceId } = useWorkspaceFileContext();
   const setRightPanelMaterializedForWorkspace = useWorkspaceUiStore(
     (state) => state.setRightPanelMaterializedForWorkspace,
@@ -22,10 +33,17 @@ export function useOpenBackgroundWorkPane(): () => void {
   const setRightPanelOpenForWorkspace = useWorkspaceUiStore(
     (state) => state.setRightPanelOpenForWorkspace,
   );
+  const setPendingBackgroundSubagentSelectionForWorkspace = useWorkspaceUiStore(
+    (state) => state.setPendingBackgroundSubagentSelectionForWorkspace,
+  );
 
-  return useCallback(() => {
+  return useCallback((subagentId?: string) => {
     if (!materializedWorkspaceId || !workspaceUiKey) {
       return;
+    }
+
+    if (subagentId) {
+      setPendingBackgroundSubagentSelectionForWorkspace(materializedWorkspaceId, subagentId);
     }
 
     const backgroundEntryKey = rightPanelToolHeaderKey("background");
@@ -39,6 +57,7 @@ export function useOpenBackgroundWorkPane(): () => void {
     setRightPanelOpenForWorkspace(workspaceUiKey, true);
   }, [
     materializedWorkspaceId,
+    setPendingBackgroundSubagentSelectionForWorkspace,
     setRightPanelMaterializedForWorkspace,
     setRightPanelOpenForWorkspace,
     workspaceUiKey,

@@ -27,6 +27,18 @@ export interface WorkspaceUiState {
   shellTabOrderByWorkspace: Record<string, WorkspaceShellTabKey[]>;
   shellActivationEpochByWorkspace: Record<string, number>;
   pendingChatActivationByWorkspace: Record<string, PendingChatActivation | null>;
+  /**
+   * One-shot deep-link target: a native subagent id to select the instant
+   * `BackgroundWorkPane` next renders for this workspace (transcript click →
+   * `useOpenBackgroundWorkPane`'s extended return; Delivery Spec — Background
+   * Work Slice 1, rung R4 fix-forward). Session-only, never persisted —
+   * mirrors `pendingChatActivationByWorkspace`'s ephemeral-field placement,
+   * but without its epoch/nonce/guard-token machinery: there is only ever one
+   * writer (the transcript click) and one reader (the pane's own consume
+   * effect), so no race to arbitrate. Cleared by the pane the instant it is
+   * consumed.
+   */
+  pendingBackgroundSubagentSelectionByWorkspace: Record<string, string | null>;
   urgentHighlightedChatSessionByWorkspace: Record<string, string | null>;
   workspaceTypes: SidebarWorkspaceVariant[];
   lastViewedAt: Record<string, string>;
@@ -71,6 +83,13 @@ export interface WorkspaceUiState {
   setRightPanelOpenForWorkspace: (
     workspaceId: string,
     value: SetStateAction<boolean>,
+  ) => void;
+  setPendingBackgroundSubagentSelectionForWorkspace: (
+    workspaceId: string,
+    subagentId: string,
+  ) => void;
+  clearPendingBackgroundSubagentSelectionForWorkspace: (
+    workspaceId: string,
   ) => void;
   setActiveShellTabKeyForWorkspace: (
     workspaceId: string,

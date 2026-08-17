@@ -147,6 +147,21 @@ export function findSubagentLaunchItem(
   return null;
 }
 
+/**
+ * The reverse of `findSubagentLaunchItem`: given a native Agent/Task launch
+ * tool-call item, resolves the subagent id it correlates to (the activity
+ * roster's `ActivitySubagentWire.id`) — the same
+ * `ToolBackgroundWorkMetadata.agentId` correlation, read forward instead of
+ * scanned for. Null for harnesses without the correlation, exactly like
+ * `findSubagentLaunchItem`'s own fallback. Used to gate
+ * `TranscriptAgentGroupBlock`'s click-to-open-pane affordance (Delivery Spec
+ * — Background Work Slice 1, rung R4 fix-forward): only a block whose
+ * `rawOutput` actually carries this metadata gets the affordance.
+ */
+export function resolveSubagentIdForItem(item: ToolCallItem): string | null {
+  return getBackgroundWork(item)?.agentId ?? null;
+}
+
 export function parseAsyncSubagentLaunch(
   item: ToolCallItem,
 ): AsyncSubagentLaunch | null {

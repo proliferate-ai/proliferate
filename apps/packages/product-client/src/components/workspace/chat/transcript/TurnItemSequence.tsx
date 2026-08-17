@@ -53,6 +53,7 @@ export function TurnItemSequence({
   showCompletedArtifactFallback,
   workspaceId,
   onOpenArtifact,
+  onOpenSubagent,
   onHandOffPlanToNewSession,
   workspaceReceipt = null,
 }: {
@@ -72,6 +73,7 @@ export function TurnItemSequence({
   showCompletedArtifactFallback: boolean;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
+  onOpenSubagent?: (subagentId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
   /**
    * The workspace-creation receipt, when this row hosts it. Renders as the
@@ -188,6 +190,7 @@ export function TurnItemSequence({
                             onAssistantRevealStateChange={onAssistantRevealStateChange}
                             workspaceId={workspaceId}
                             onOpenArtifact={onOpenArtifact}
+                            onOpenSubagent={onOpenSubagent}
                             onHandOffPlanToNewSession={onHandOffPlanToNewSession}
                           />
                         )}
@@ -214,6 +217,7 @@ export function TurnItemSequence({
                   onAssistantRevealStateChange={onAssistantRevealStateChange}
                   workspaceId={workspaceId}
                   onOpenArtifact={onOpenArtifact}
+                  onOpenSubagent={onOpenSubagent}
                   onHandOffPlanToNewSession={onHandOffPlanToNewSession}
                 />
               )}
@@ -311,6 +315,7 @@ function TranscriptFragment({
   onAssistantRevealStateChange,
   workspaceId,
   onOpenArtifact,
+  onOpenSubagent,
   onHandOffPlanToNewSession,
 }: {
   itemId: string;
@@ -324,6 +329,7 @@ function TranscriptFragment({
   ) => void;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
+  onOpenSubagent?: (subagentId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
 }) {
   return (
@@ -337,6 +343,7 @@ function TranscriptFragment({
         onAssistantRevealStateChange={onAssistantRevealStateChange}
         workspaceId={workspaceId}
         onOpenArtifact={onOpenArtifact}
+        onOpenSubagent={onOpenSubagent}
         onHandOffPlanToNewSession={onHandOffPlanToNewSession}
       />
     </>

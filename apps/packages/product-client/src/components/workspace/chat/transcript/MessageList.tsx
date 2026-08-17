@@ -12,6 +12,7 @@ import { CHAT_SCROLL_BASE_BOTTOM_PADDING_PX } from "#product/config/chat-layout"
 import { useWorkspaceFileActions } from "#product/hooks/workspaces/facade/files/use-workspace-file-actions";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useOpenCoworkArtifact } from "#product/hooks/cowork/workflows/use-open-cowork-artifact";
+import { useOpenBackgroundWorkPane } from "#product/hooks/activity/workflows/use-open-background-work-pane";
 import type { PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
 import type { PromptOutboxEntry } from "#product/domain/sessions/intents/session-intent-model";
 import { usePromptOutboxActions } from "#product/hooks/chat/workflows/use-prompt-outbox-actions";
@@ -133,6 +134,12 @@ export function MessageList({
   }), [retryPrompt, dismissPrompt]);
   const { openFile, openGitReviewPane } = useWorkspaceFileActions();
   const { openArtifact } = useOpenCoworkArtifact();
+  // Native-routing affordance (Delivery Spec — Background Work Slice 1,
+  // rung R4 fix-forward): a native subagent's transcript block
+  // (`TranscriptAgentGroupBlock`) opens straight to its `BackgroundWorkPane`
+  // detail via the same hook `BackgroundWorkTranscriptRow`'s seam already
+  // uses — no parallel mechanism.
+  const openBackgroundWorkPane = useOpenBackgroundWorkPane();
   const transcriptViewState = useMemo<ChatTranscriptState>(() => ({
     activeSessionId,
     selectedWorkspaceId,
@@ -298,12 +305,14 @@ export function MessageList({
       onOpenFile={(filePath) => void openFile(filePath)}
       onOpenTurnChanges={() => openGitReviewPane({ mode: "last_turn" })}
       onOpenArtifact={openArtifact}
+      onOpenSubagent={openBackgroundWorkPane}
       onHandOffPlanToNewSession={onHandOffPlanToNewSession}
       workspaceReceipt={input.row.hostsWorkspaceReceipt ? <WorkspaceCreationReceipt /> : null}
     />
   ), [
     onHandOffPlanToNewSession,
     openArtifact,
+    openBackgroundWorkPane,
     openFile,
     openGitReviewPane,
   ]);

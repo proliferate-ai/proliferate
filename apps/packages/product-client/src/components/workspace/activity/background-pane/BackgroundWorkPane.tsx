@@ -8,6 +8,7 @@ import { BackgroundSubagentView } from "#product/components/workspace/activity/b
 import { useSessionActivity } from "#product/hooks/activity/derived/use-session-activity";
 import { useBackgroundWorkRowCounts } from "#product/hooks/activity/derived/use-background-work-row";
 import { isProcessRunning } from "#product/domain/activity/process";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 // Same 15s cadence as the shared `useActivityNowMs`, but reimplemented locally
 // rather than reusing it: that hook is documented to tick unconditionally
@@ -108,6 +109,33 @@ export function BackgroundWorkPane({ workspaceId, sessionId, isOpen }: Backgroun
       setSelectedSubagentId(null);
     }
   }, [selectedSubagentId, selectedSubagent]);
+
+  // Deep-open target: a native subagent's transcript block click
+  // (`TranscriptAgentGroupBlock`'s `onOpenSubagent`, threaded through
+  // `useOpenBackgroundWorkPane`'s extended return) writes a one-shot pending
+  // selection into the right-panel model rather than reaching into this pane
+  // directly (Delivery Spec — Background Work Slice 1, rung R4 fix-forward).
+  // Consume it the instant it appears and clear it immediately — a single
+  // writer (the transcript click), a single reader (here), so there is no
+  // race to arbitrate, unlike `pendingChatActivationByWorkspace`'s
+  // epoch/nonce machinery.
+  const pendingSubagentSelection = useWorkspaceUiStore(
+    (state) => state.pendingBackgroundSubagentSelectionByWorkspace[workspaceId] ?? null,
+  );
+  const clearPendingBackgroundSubagentSelectionForWorkspace = useWorkspaceUiStore(
+    (state) => state.clearPendingBackgroundSubagentSelectionForWorkspace,
+  );
+  useEffect(() => {
+    if (!pendingSubagentSelection) {
+      return;
+    }
+    setSelectedSubagentId(pendingSubagentSelection);
+    clearPendingBackgroundSubagentSelectionForWorkspace(workspaceId);
+  }, [
+    clearPendingBackgroundSubagentSelectionForWorkspace,
+    pendingSubagentSelection,
+    workspaceId,
+  ]);
 
   if (selectedProcess) {
     return (

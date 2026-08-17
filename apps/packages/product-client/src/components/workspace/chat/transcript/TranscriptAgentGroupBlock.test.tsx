@@ -203,6 +203,111 @@ describe.each(["in_progress", "completed"] as const)(
   },
 );
 
+describe("TranscriptAgentGroupBlock onOpenSubagent (native routing)", () => {
+  // Delivery Spec — Background Work Slice 1, rung R4 fix-forward: the
+  // native subagent's transcript block must click-open BackgroundWorkPane's
+  // subagent detail, correlated via the same `ToolBackgroundWorkMetadata`
+  // agentId `findSubagentLaunchItem` already reads in reverse.
+  function backgroundWorkItem(agentId: string): ToolCallItem {
+    return {
+      ...toolItem("native-task", "turn-1", 1, "subagent", "in_progress"),
+      title: "Inspect the repository",
+      nativeToolName: "Task",
+      rawInput: { run_in_background: true, prompt: "Inspect the transcript pipeline" },
+      rawOutput: {
+        isAsync: true,
+        agentId,
+        outputFile: "/tmp/task.output",
+        _anyharness: { backgroundWork: { trackerKind: "claude_async_agent", state: "pending" } },
+      },
+    };
+  }
+
+  it("calls onOpenSubagent with the correct subagent id when the header is clicked", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = backgroundWorkItem("agent-42");
+    transcript.itemsById[item.itemId] = item;
+    const onOpenSubagent = vi.fn();
+
+    const { getByText } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [],
+        transcript,
+        childrenByParentId: new Map(),
+        renderChild: () => null,
+        onOpenSubagent,
+      }),
+    );
+
+    fireEvent.click(getByText("Creating subagent"));
+
+    expect(onOpenSubagent).toHaveBeenCalledTimes(1);
+    expect(onOpenSubagent).toHaveBeenCalledWith("agent-42");
+  });
+
+  it("still allows expand/collapse via the chevron when onOpenSubagent is wired", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = backgroundWorkItem("agent-7");
+    const childItem: ToolCallItem = toolItem("child-tool", "turn-1", 2, "other", "completed");
+    transcript.itemsById[item.itemId] = item;
+    transcript.itemsById[childItem.itemId] = childItem;
+    const onOpenSubagent = vi.fn();
+
+    const { getByRole, queryByText } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [childItem.itemId],
+        transcript,
+        childrenByParentId: new Map([[item.itemId, [childItem.itemId]]]),
+        renderChild: () => null,
+        onOpenSubagent,
+      }),
+    );
+
+    // The header itself now opens the pane, not the disclosure — expanding
+    // must go through the dedicated chevron control instead.
+    expect(queryByText("Launch failed")).toBeNull();
+    fireEvent.click(getByRole("button", { name: "Expand subagent details" }));
+
+    expect(onOpenSubagent).not.toHaveBeenCalled();
+    expect(getByRole("button", { name: "Collapse subagent details" })).not.toBeNull();
+  });
+
+  it("does not get the pane-opening affordance when rawOutput has no background metadata", () => {
+    const transcript = createTranscriptState("session-1");
+    const item: ToolCallItem = {
+      ...toolItem("native-task-no-meta", "turn-1", 1, "subagent", "failed"),
+      title: "Inspect the repository",
+      nativeToolName: "Task",
+      rawInput: { prompt: "Inspect the transcript pipeline" },
+    };
+    transcript.itemsById[item.itemId] = item;
+    const onOpenSubagent = vi.fn();
+
+    const { getByText, queryByRole } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [],
+        transcript,
+        childrenByParentId: new Map(),
+        renderChild: () => null,
+        onOpenSubagent,
+      }),
+    );
+
+    // No chevron affordance: this block has no background-work correlation
+    // for onOpenSubagent to resolve an id from.
+    expect(queryByRole("button", { name: "Expand subagent details" })).toBeNull();
+
+    // Falls back to byte-identical expand-on-click behavior.
+    fireEvent.click(getByText("Subagent launch failed"));
+
+    expect(onOpenSubagent).not.toHaveBeenCalled();
+    expect(getByText("Launch failed")).not.toBeNull();
+  });
+});
+
 describe("native subagent transcript tree rendering", () => {
   it("renders Codex collaboration activity as a tool, not another spawn", () => {
     const { fixture, transcript, childrenByParentId } = fixtureTree("codex");

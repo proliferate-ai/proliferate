@@ -5,6 +5,7 @@ import type { ActivityProcessWire } from "#product/domain/activity/process";
 import type { ActivitySubagentWire } from "#product/domain/activity/subagent";
 import type { BackgroundWorkRowCounts } from "#product/domain/activity/background-work-row";
 import type { SessionActivityState } from "#product/hooks/activity/derived/use-session-activity";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { BackgroundWorkPane } from "./BackgroundWorkPane";
 
 let sessionActivity: SessionActivityState = {
@@ -155,6 +156,9 @@ afterEach(() => {
   };
   rowCounts = { runningCount: 0, finishedCount: 0 };
   cleanup();
+  useWorkspaceUiStore.setState({
+    pendingBackgroundSubagentSelectionByWorkspace: {},
+  });
 });
 
 describe("BackgroundWorkPane", () => {
@@ -302,6 +306,50 @@ describe("BackgroundWorkPane", () => {
     expect(
       screen.getByTestId("background-subagent-view").getAttribute("data-feed-enabled"),
     ).toBe("true");
+  });
+
+  it("consumes a pending subagent selection from the transcript click seam and clears it", () => {
+    sessionActivity = {
+      loops: [],
+      loopCapabilities: { supported: false, native: false },
+      processes: [],
+      agents: [makeAgent({ id: "agent-42" })],
+    };
+    // Delivery Spec — Background Work Slice 1, rung R4 fix-forward: a native
+    // subagent's transcript block click writes here via
+    // `useOpenBackgroundWorkPane`'s extended return, keyed by the same
+    // `workspaceId` this pane receives as a prop.
+    useWorkspaceUiStore.getState().setPendingBackgroundSubagentSelectionForWorkspace(
+      "ws-1",
+      "agent-42",
+    );
+
+    render(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />);
+
+    const view = screen.getByTestId("background-subagent-view");
+    expect(view.getAttribute("data-subagent-id")).toBe("agent-42");
+    // One-shot: consumed and cleared, not left to reopen on a later render.
+    expect(
+      useWorkspaceUiStore.getState().pendingBackgroundSubagentSelectionByWorkspace["ws-1"],
+    ).toBeNull();
+  });
+
+  it("ignores a pending subagent selection for a different workspace", () => {
+    sessionActivity = {
+      loops: [],
+      loopCapabilities: { supported: false, native: false },
+      processes: [],
+      agents: [makeAgent({ id: "agent-42" })],
+    };
+    useWorkspaceUiStore.getState().setPendingBackgroundSubagentSelectionForWorkspace(
+      "ws-other",
+      "agent-42",
+    );
+
+    render(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />);
+
+    expect(screen.queryByTestId("background-subagent-view")).toBeNull();
+    expect(screen.getByTestId("agents-roster-panel")).toBeTruthy();
   });
 
   it("opening a terminal process replaces the roster with the real BackgroundTerminalView, and back returns", () => {
