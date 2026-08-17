@@ -20,6 +20,7 @@ import { VirtualTranscriptViewport } from "./VirtualTranscriptViewport";
 import { PREPEND_BLANK_FALLBACK_GRACE_MS, useTranscriptVirtualizerBlankFallback } from "#product/hooks/chat/ui/use-transcript-virtualizer-blank-fallback";
 import { useTranscriptVirtualAnchorCapture } from "#product/hooks/chat/ui/use-transcript-virtual-anchor-capture";
 import { useTranscriptVirtualMeasurementModel } from "#product/hooks/chat/ui/use-transcript-virtual-measurement-model";
+import { useTranscriptReadingPosition } from "#product/hooks/chat/ui/use-transcript-reading-position";
 
 const VIRTUALIZER_OVERSCAN = 8;
 
@@ -92,6 +93,7 @@ export function VirtualizedTranscriptRowList({
     estimateSize,
     estimatedRowsHeight,
     getItemKey,
+    measureElement: recordingMeasureElement,
     rowCompositionKey,
   } = useTranscriptVirtualMeasurementModel({
     activeSessionId,
@@ -111,21 +113,23 @@ export function VirtualizedTranscriptRowList({
     getScrollElement: () => scrollRef.current,
     getItemKey,
     estimateSize,
+    measureElement: recordingMeasureElement,
     overscan: VIRTUALIZER_OVERSCAN,
     paddingStart: TRANSCRIPT_TOP_PADDING_PX,
     paddingEnd: structuralBottomInsetPx,
     initialOffset: () => estimatedInitialBottomOffset,
-    // Q12 (rung 4): EVALUATED false vs true. The owned single content
-    // ResizeObserver below routes every growth through the one frame pipeline,
-    // and the pipeline writes scrollTop exactly once per frame, so no
-    // ResizeObserver-loop error is provoked in either mode (the physics suite's
-    // no-pageerror assertion is clean with both). Turning TanStack's own
-    // observation OFF (false) does NOT move OUR snap — the pipeline still owns
-    // when that runs — it only desynchronizes TanStack's internal re-measure
-    // from our snap, which destabilized the pinned-follow / repin / prepend
-    // scenarios in the physics suite. Kept true: it preserves the proven
-    // measurement cadence at zero RO-loop cost. See the PR body for the matrix.
+    // Q12 (rung 4): kept true. EVALUATED false vs true; false desynchronizes
+    // TanStack's internal re-measure from our snap and destabilized the
+    // pinned-follow / repin / prepend physics scenarios. True preserves the
+    // proven measurement cadence; the owned content ResizeObserver still routes
+    // every growth through the one frame pipeline at zero RO-loop cost.
     useAnimationFrameWithResizeObserver: true,
+  });
+  const { captureReadingPosition, buildSessionRestorePlan } = useTranscriptReadingPosition({
+    sessionKey: `${selectedWorkspaceId ?? ""}:${activeSessionId}`,
+    isSessionBusy,
+    virtualizer,
+    renderableRows,
   });
   const pendingAnchorRef = useTranscriptVirtualAnchorCapture({
     getVirtualItems: () => virtualizer.getVirtualItems(),
@@ -233,8 +237,10 @@ export function VirtualizedTranscriptRowList({
 
   const handleViewportScroll = useCallback((viewport: HTMLDivElement) => {
     onViewportScroll(viewport);
+    captureReadingPosition(viewport); // FR-2: persist for a later finalized revisit.
     maybeLoadOlderHistory(viewport, "scroll");
   }, [
+    captureReadingPosition,
     maybeLoadOlderHistory,
     onViewportScroll,
   ]);
@@ -244,8 +250,8 @@ export function VirtualizedTranscriptRowList({
     pendingPrependAnchorRef.current = null;
     lastOlderHistoryCursorRequestRef.current = null;
     lastPrefetchDecisionLogRef.current = null;
-    resetForSession();
-  }, [activeSessionId, resetForSession, selectedWorkspaceId]);
+    resetForSession(buildSessionRestorePlan()); // FR-2: restore finalized / bottom-pin streaming.
+  }, [activeSessionId, buildSessionRestorePlan, resetForSession, selectedWorkspaceId]);
 
   useLayoutEffect(() => {
     const anchor = pendingPrependAnchorRef.current;
@@ -310,6 +316,11 @@ export function VirtualizedTranscriptRowList({
     startAboveChangeCompensation,
   });
 
+  // Rung 5 (PRO-187): re-run the pinned snap on every commit whose ROWS changed
+  // (identity, not just count/estimate-total) so a streaming turn's DOM growth
+  // snaps in that commit's layout phase against the already-grown `scrollHeight`
+  // instead of trailing the content ResizeObserver by a frame. The `onChange`
+  // bridge above covers the complementary measured-swap total-size change.
   useLayoutEffect(() => {
     if (!pinnedRef.current) {
       return;
@@ -319,24 +330,20 @@ export function VirtualizedTranscriptRowList({
     isSessionBusy,
     lastPromptSubmittedAtMs,
     pinnedRef,
-    renderableRows.length,
+    renderableRows,
     scrollToBottom,
     totalContentHeight,
   ]);
 
   // Q12 (rung 4): ONE content ResizeObserver drives the single per-frame snap
-  // pass. Row content grows between virtualizer measurements (tool-call output
-  // streaming, status flips, expanding panels, the assistant reveal's height
-  // growth — Q7); on any size change we request the one frame pass, which the
-  // pipeline coalesces with every other mutation source into exactly one snap
-  // (pinned) or compensation (unpinned) write per frame, so no independent loop
-  // can interleave. With useAnimationFrameWithResizeObserver:false the
-  // virtualizer already re-measures synchronously through its own element
-  // observation (no one-frame deferral), so measurement and this snap land in
-  // the same frame WITHOUT a second measure() call here — a manual measure()
-  // inside this callback would race the prepend anchor restore's scrollTop write
-  // and provoke ResizeObserver-loop churn. This replaces the previous bridge
-  // observer that wrote scrollTop directly.
+  // pass. Row content grows between virtualizer measurements (streaming, status
+  // flips, expanding panels, the reveal's growth — Q7); on any size change we
+  // request the one frame pass, which the pipeline coalesces into exactly one
+  // snap (pinned) or compensation (unpinned) write per frame. With
+  // useAnimationFrameWithResizeObserver:false the virtualizer re-measures
+  // synchronously, so measurement and this snap land in the same frame WITHOUT a
+  // second measure() here — a manual measure() would race the prepend anchor
+  // restore's scrollTop write and provoke ResizeObserver-loop churn.
   useEffect(() => {
     const content = contentRef.current;
     if (!content) {

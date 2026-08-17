@@ -179,6 +179,74 @@ function largeToolInvocation(sessionId: string, turnId: string): SessionEventEnv
   return [started, completed];
 }
 
+// A single small, completed bash tool call — used in bulk (see
+// `collapsedToolLedgerTurn`) to build one turn with a long run of
+// individually-tiny actions that the presentation layer folds into ONE
+// `collapsed_actions` display block (see isCollapsibleAction in
+// transcript-presentation.ts). This is the "long tool-ledger-like row" the
+// rung 5 estimate-bounce fixture targets: real height stays a compact,
+// mostly-count-independent disclosure, while the OLD flat 360px-per-row
+// estimate assumed every row was itself full-turn-sized.
+function smallToolCall(sessionId: string, turnId: string, index: number): SessionEventEnvelope[] {
+  const itemId = `${turnId}-tool-${index}`;
+  const started = envelope(sessionId, turnId, itemId, {
+    type: "item_started",
+    item: {
+      kind: "tool_invocation",
+      status: "in_progress",
+      sourceAgentKind: "claude",
+      title: "read_file",
+      toolCallId: itemId,
+      nativeToolName: "read_file",
+      rawInput: { path: `src/file-${index}.ts` },
+      contentParts: [
+        {
+          type: "tool_call",
+          toolCallId: itemId,
+          title: "read_file",
+          toolKind: "other",
+          nativeToolName: "read_file",
+        },
+      ],
+    },
+  });
+  const completed = envelope(sessionId, turnId, itemId, {
+    type: "item_completed",
+    item: {
+      kind: "tool_invocation",
+      status: "completed",
+      sourceAgentKind: "claude",
+      title: "read_file",
+      toolCallId: itemId,
+      nativeToolName: "read_file",
+      rawInput: { path: `src/file-${index}.ts` },
+      rawOutput: "ok",
+    },
+  });
+  return [started, completed];
+}
+
+// One turn whose item count clears SPLIT_TURN_MIN_ITEM_COUNT (24) and whose
+// tool calls collapse into a single `collapsed_actions` display block.
+function collapsedToolLedgerTurn(
+  sessionId: string,
+  turnId: string,
+  toolCallCount: number,
+): SessionEventEnvelope[] {
+  const envelopes: SessionEventEnvelope[] = [
+    userMessage(sessionId, turnId, "Read through the affected files."),
+  ];
+  for (let i = 0; i < toolCallCount; i += 1) {
+    envelopes.push(...smallToolCall(sessionId, turnId, i));
+  }
+  const assistantItemId = `${turnId}-assistant`;
+  envelopes.push(
+    assistantCompleted(sessionId, turnId, assistantItemId, "Done reading through the files."),
+  );
+  envelopes.push(turnEnded(sessionId, turnId));
+  return envelopes;
+}
+
 // A tall fenced code block inside assistant prose. This renders through the
 // real MarkdownCodeBlock, which owns its OWN inner `overflow-y-auto` region,
 // the nested-scroll surface the chaining scenario needs.
@@ -339,6 +407,25 @@ let traceFrames: number[] = [];
 let traceRafId = 0;
 let traceActive = false;
 
+// Per-frame virtualizer TOTAL content height (scrollHeight) trace recorder —
+// the rung 5 (PRO-187) estimate-bounce fixture's signal. An estimate error
+// shows up here as a transient spike/dip between the guessed size and the
+// real measured size, at rAF resolution (finer than a JS-side polling loop
+// can reliably observe, since the estimate -> real-measurement swap can land
+// within the same frame the row mounts).
+let heightTraceFrames: number[] = [];
+let heightTraceRafId = 0;
+let heightTraceActive = false;
+
+function heightTraceTick(): void {
+  if (!heightTraceActive) {
+    return;
+  }
+  const el = viewport();
+  heightTraceFrames.push(el ? el.scrollHeight : Number.NaN);
+  heightTraceRafId = requestAnimationFrame(heightTraceTick);
+}
+
 function traceTick(): void {
   if (!traceActive) {
     return;
@@ -353,6 +440,7 @@ export interface ScrollPhysicsDriver {
   readonly secondarySession: string;
   reset(sessionId?: string): void;
   seedFinalizedConversation(turns: number, sessionId?: string): void;
+  seedConversationWithToolLedger(leadingTurns: number, trailingTurns: number, toolCallCount?: number): void;
   setHasOlderHistory(hasOlder: boolean, reservoirTurns?: number): void;
   beginStreamingTurn(): void;
   streamChunk(text?: string): void;
@@ -360,11 +448,16 @@ export interface ScrollPhysicsDriver {
   finalizeStreamingTurn(): void;
   appendLargeToolOutput(): void;
   appendCodeBlockTurn(): void;
+  appendCollapsedToolLedgerTurn(toolCallCount?: number): string;
   appendFinalizedTurns(turns: number): void;
   prependOlderHistory(turns?: number): void;
   switchSession(sessionId: string, seedTurns: number): void;
+  switchSessionStreaming(sessionId: string, seedTurns: number): void;
   getMetrics(): ViewportMetrics;
+  getTopVisibleText(): string | null;
   scrollToBottomInstant(): void;
+  scrollToTopInstant(): void;
+  sweepEveryRowIntoView(stepDelayMs?: number): Promise<void>;
   gestureScrollToBottomDistance(distancePx: number): void;
   // True pin state, read from the floating "Scroll to bottom" control, which is
   // aria-hidden exactly when pinned to bottom. Returns null if the control is
@@ -375,6 +468,8 @@ export interface ScrollPhysicsDriver {
   clearScrollSamples(): void;
   startScrollTrace(): void;
   stopScrollTrace(): number[];
+  startContentHeightTrace(): void;
+  stopContentHeightTrace(): number[];
   hasViewport(): boolean;
 }
 
@@ -405,6 +500,45 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
     commit({
       ...snapshot,
       transcript: buildFinalizedConversation(id, turns),
+      activeSessionId: id,
+      sessionBusy: false,
+    });
+  },
+
+  // Rung 5 (PRO-187) estimate-accuracy fixture: seeds a conversation that
+  // already contains the collapsed tool-ledger turn in its FIRST commit
+  // (unlike appendCollapsedToolLedgerTurn, which appends to an existing
+  // transcript). The virtualizer's `initialOffset` is computed from the
+  // composition-estimate SUM over every row exactly once, at first mount
+  // (see VirtualizedTranscriptRowList.tsx) — seeding the ledger turn into the
+  // very first paint means the scrollTop the browser lands on immediately
+  // after mount (before any scrolling or real measurement) is a direct,
+  // single-read signal of estimate accuracy, not something that has to be
+  // inferred from a settle window.
+  seedConversationWithToolLedger(leadingTurns: number, trailingTurns: number, toolCallCount = 30): void {
+    const id = currentSessionId;
+    openStream = null;
+    let state = createTranscriptState(id);
+    const batch: SessionEventEnvelope[] = [];
+    for (let t = 0; t < leadingTurns; t += 1) {
+      const turnId = `${id}-lead-${t}`;
+      const assistantItemId = `${turnId}-assistant`;
+      batch.push(userMessage(id, turnId, `Prompt ${t}: please continue.`));
+      batch.push(assistantCompleted(id, turnId, assistantItemId, tallText(`Reply ${t}`)));
+      batch.push(turnEnded(id, turnId));
+    }
+    batch.push(...collapsedToolLedgerTurn(id, `${id}-ledger`, toolCallCount));
+    for (let t = 0; t < trailingTurns; t += 1) {
+      const turnId = `${id}-trail-${t}`;
+      const assistantItemId = `${turnId}-assistant`;
+      batch.push(userMessage(id, turnId, `Prompt trail ${t}: please continue.`));
+      batch.push(assistantCompleted(id, turnId, assistantItemId, tallText(`Trail ${t}`)));
+      batch.push(turnEnded(id, turnId));
+    }
+    state = reduceEventBatch(state, batch);
+    commit({
+      ...snapshot,
+      transcript: state,
       activeSessionId: id,
       sessionBusy: false,
     });
@@ -477,11 +611,27 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
     ]);
   },
 
+  // Rung 5 (PRO-187) estimate-bounce fixture: appends ONE turn whose tool
+  // calls fold into a single collapsed_actions row (a compact disclosure,
+  // NOT `toolCallCount` full-size rows) so the OLD flat 360px-per-row
+  // estimate over-guesses this row's height, while the composition estimate
+  // (transcript-row-height-estimate.ts) recognizes the collapsed-ledger
+  // shape and estimates close to its true compact size. Returns the turnId
+  // so a spec can target the row for scroll-into-view.
+  appendCollapsedToolLedgerTurn(toolCallCount = 30): string {
+    const sessionId = snapshot.activeSessionId;
+    const turnId = `${sessionId}-toolledger-${nextSeq()}`;
+    apply(collapsedToolLedgerTurn(sessionId, turnId, toolCallCount));
+    return turnId;
+  },
+
   // Appends `turns` finalized user+assistant turns AFTER whatever is already in
   // the transcript (unlike seedFinalizedConversation, which REPLACES it). Each
   // hydrates inert (turn_ended), so it renders its full tall height in the
   // commit it lands: a deterministic source of real, immediately-measured
-  // content growth with no dependence on the throttled assistant reveal.
+  // content growth with no dependence on the throttled assistant reveal (used
+  // by no-false-unpin), and it also pushes an already-appended row off the top
+  // of the viewport so scrolling back up mounts it mid-scroll.
   appendFinalizedTurns(turns: number): void {
     const sessionId = snapshot.activeSessionId;
     const batch: SessionEventEnvelope[] = [];
@@ -524,8 +674,46 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
     this.seedFinalizedConversation(seedTurns, sessionId);
   },
 
+  // FR-2 (rung 6): revisit a session that is actively STREAMING. Seeds the
+  // session content (same deterministic row keys as a finalized revisit) but
+  // marks it busy, so the revisit must bottom-pin regardless of any saved
+  // reading position — the streaming arm of the FR-2 contract.
+  switchSessionStreaming(sessionId: string, seedTurns: number): void {
+    this.seedFinalizedConversation(seedTurns, sessionId);
+    commit({ ...snapshot, sessionBusy: true });
+  },
+
   getMetrics(): ViewportMetrics {
     return metrics();
+  },
+
+  // Estimate-immune reading-position probe: the text of the transcript row
+  // under the viewport's top edge. FR-2 restores {rowKey, offsetWithinRow}, so
+  // the correct restore lands the SAME row under the top edge even when the
+  // off-screen rows above it are estimated to a different total (a raw scrollTop
+  // would differ; the row under the top edge is the observable invariant).
+  getTopVisibleText(): string | null {
+    const el = viewport();
+    if (!el) {
+      return null;
+    }
+    const rect = el.getBoundingClientRect();
+    const probe = document.elementFromPoint(rect.left + rect.width / 2, rect.top + 4);
+    if (!probe) {
+      return null;
+    }
+    const row = probe.closest("[data-index]") ?? probe;
+    // Strip the volatile relative timestamp ("Dec 31 · 4:00 pm") so this probe is
+    // a STABLE reading-position identity across the fixture's re-seeds: the
+    // seq-derived timestamps advance on a global counter, so the same turn
+    // renders a later time on a second seed, but its row key and prompt/reply
+    // text do not change. FR-2 restores by row key, so the row is identical; only
+    // this rendered timestamp would differ, which is not a reading-position move.
+    const text = (row.textContent ?? "").replace(
+      /[A-Z][a-z]{2} \d{1,2} · \d{1,2}:\d{2} ?[ap]m/gi,
+      "",
+    );
+    return text.trim().slice(0, 48);
   },
 
   // Engine-portable pin-to-bottom baseline: sets scrollTop directly, which
@@ -540,6 +728,45 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
       return;
     }
     el.scrollTop = el.scrollHeight;
+  },
+
+  // Forces every row between the current position and the top to mount and
+  // be measured for real (used by the rung 5 estimate-accuracy fixture to
+  // replace an off-screen row's ESTIMATE with its REAL measured height).
+  scrollToTopInstant(): void {
+    const el = viewport();
+    if (!el) {
+      return;
+    }
+    el.scrollTop = 0;
+  },
+
+  // Steps scrollTop from 0 to the bottom in viewport-sized increments,
+  // pausing at each step, so EVERY row mounts and gets measured for real at
+  // least once (a single scrollToTopInstant only forces the rows near the
+  // top into view/overscan; rows further down stay virtualized-out and
+  // still contribute their ESTIMATE, not a real measurement, to totalSize).
+  // Used by the rung 5 (PRO-187) estimate-accuracy fixture to establish a
+  // ground-truth "real" total content height to compare an all-estimated
+  // initial mount against.
+  async sweepEveryRowIntoView(stepDelayMs = 40): Promise<void> {
+    const el = viewport();
+    if (!el) {
+      return;
+    }
+    el.scrollTop = 0;
+    await new Promise((resolve) => setTimeout(resolve, stepDelayMs));
+    let guard = 0;
+    while (guard < 500) {
+      const maxTop = Math.max(0, el.scrollHeight - el.clientHeight);
+      if (el.scrollTop >= maxTop) {
+        break;
+      }
+      el.scrollTop = Math.min(maxTop, el.scrollTop + el.clientHeight);
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((resolve) => setTimeout(resolve, stepDelayMs));
+      guard += 1;
+    }
   },
 
   // Engine-portable downward user gesture that lands at a chosen distance
@@ -597,6 +824,21 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
       traceRafId = 0;
     }
     return traceFrames.slice();
+  },
+
+  startContentHeightTrace(): void {
+    heightTraceFrames = [];
+    heightTraceActive = true;
+    heightTraceRafId = requestAnimationFrame(heightTraceTick);
+  },
+
+  stopContentHeightTrace(): number[] {
+    heightTraceActive = false;
+    if (heightTraceRafId) {
+      cancelAnimationFrame(heightTraceRafId);
+      heightTraceRafId = 0;
+    }
+    return heightTraceFrames.slice();
   },
 
   hasViewport(): boolean {
