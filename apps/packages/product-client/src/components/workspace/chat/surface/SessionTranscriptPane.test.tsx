@@ -31,13 +31,33 @@ import { useSessionTranscriptStore } from "#product/stores/sessions/session-tran
 // The mock echoes the two inset props it received as data attributes so the
 // carried R1 item 1 fix (dock-reactivity while the background-work row is
 // visible) can be asserted without needing the real virtualized transcript.
+// It also exposes two plain buttons that invoke `onIsPinnedToBottomChange`,
+// standing in for the REAL stick-to-bottom engine's reported pin state (fix
+// round 3: the row hides while scrolled away) — this suite doesn't mount the
+// real virtualized row list, so it can't fire a genuine scroll event.
 vi.mock("#product/components/workspace/chat/transcript/MessageList", () => ({
-  MessageList: (props: { bottomInsetPx: number; nonDisplacingBottomInsetPx: number }) => (
-    <div
-      data-testid="message-list"
-      data-bottom-inset-px={props.bottomInsetPx}
-      data-non-displacing-bottom-inset-px={props.nonDisplacingBottomInsetPx}
-    />
+  MessageList: (props: {
+    bottomInsetPx: number;
+    nonDisplacingBottomInsetPx: number;
+    onIsPinnedToBottomChange?: (isPinnedToBottom: boolean) => void;
+  }) => (
+    <>
+      <div
+        data-testid="message-list"
+        data-bottom-inset-px={props.bottomInsetPx}
+        data-non-displacing-bottom-inset-px={props.nonDisplacingBottomInsetPx}
+      />
+      <button
+        type="button"
+        data-testid="simulate-scroll-away"
+        onClick={() => props.onIsPinnedToBottomChange?.(false)}
+      />
+      <button
+        type="button"
+        data-testid="simulate-scroll-to-bottom"
+        onClick={() => props.onIsPinnedToBottomChange?.(true)}
+      />
+    </>
   ),
 }));
 vi.mock("#product/components/workspace/chat/plans/ConnectedPlanHandoffDialog", () => ({
@@ -238,7 +258,7 @@ describe("SessionTranscriptPane background-work row (carried R1 items)", () => {
   // test spies it to a fixed, nonzero row height to exercise the real
   // measure -> augment -> anchor wiring (the actual pixel geometry is proven
   // end-to-end by the throwaway Playwright fixture, not by this unit test).
-  it("reserves the row's own measured height on top of the live bottomInsetPx, and anchors the row at the ORIGINAL structural share (not the raw bottomInsetPx)", () => {
+  it("reserves the row's own measured height on top of the live bottomInsetPx, and anchors the row at the raw bottomInsetPx regardless of nonDisplacing", () => {
     backgroundWorkMocks.rowCounts = { runningCount: 1, finishedCount: 0 };
     const rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
       height: 32,
@@ -256,15 +276,21 @@ describe("SessionTranscriptPane background-work row (carried R1 items)", () => {
       render(<SessionTranscriptPane bottomInsetPx={64} nonDisplacingBottomInsetPx={8} />);
 
       const messageList = screen.getByTestId("message-list");
-      // structural = 64 - 8 = 56; augmented total fed to MessageList = 64 + 32 (row height).
+      // Augmented total fed to MessageList = 64 + 32 (row height).
       expect(messageList.getAttribute("data-bottom-inset-px")).toBe("96");
       expect(messageList.getAttribute("data-non-displacing-bottom-inset-px")).toBe("8");
 
       const rowAnchor = screen.getByTestId("background-work-row-anchor");
-      // Anchored at the ORIGINAL structural share (56), not the raw
-      // bottomInsetPx (64) — the delta is exactly the composer's own
-      // nonDisplacing overlap zone (8), which the row must clear entirely.
-      expect(rowAnchor.style.bottom).toBe("56px");
+      // Anchored at the raw bottomInsetPx (64), NOT `bottomInsetPx -
+      // nonDisplacing` (56) — the last real row's distance from the
+      // viewport's bottom is `bottomInsetPx`, constant regardless of the
+      // nonDisplacing/structural split, because the composer's scrim overlay
+      // (`VirtualTranscriptViewport`'s `top-full` sibling div) extends the
+      // scrollable region by exactly `nonDisplacing` past the shrunk
+      // `structural` paddingEnd. Anchoring at the structural share alone
+      // (56) would reopen an 8px gap — confirmed via Playwright measurement
+      // (see the throwaway fixture in the PR description).
+      expect(rowAnchor.style.bottom).toBe("64px");
     } finally {
       rectSpy.mockRestore();
     }
@@ -278,5 +304,47 @@ describe("SessionTranscriptPane background-work row (carried R1 items)", () => {
     const messageList = screen.getByTestId("message-list");
     expect(messageList.getAttribute("data-bottom-inset-px")).toBe("64");
     expect(screen.queryByTestId("background-work-row-anchor")).toBeNull();
+  });
+
+  // Review round 3: a floating row that stays visible while the user has
+  // scrolled away from the bottom paints over arbitrary mid-transcript
+  // content — not acceptable, per review. The row must hide (and its extra
+  // reserved height must drop) the instant the transcript is no longer
+  // pinned to bottom, reusing the SAME `isPinnedToBottom` signal the stick-
+  // to-bottom engine already computes (reported here via the mocked
+  // MessageList's `onIsPinnedToBottomChange`, standing in for a real scroll).
+  it("hides the row and drops its reserved height the instant the transcript scrolls away from the bottom, then restores both on return to bottom", () => {
+    backgroundWorkMocks.rowCounts = { runningCount: 1, finishedCount: 0 };
+    const rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      height: 32,
+      width: 0,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    try {
+      beginDeferredColdOpen();
+      render(<SessionTranscriptPane bottomInsetPx={64} nonDisplacingBottomInsetPx={8} />);
+
+      // Pinned by default: row present, inset augmented by its measured height.
+      expect(screen.getByTestId("background-work-row-anchor")).toBeTruthy();
+      expect(screen.getByTestId("message-list").getAttribute("data-bottom-inset-px")).toBe("96");
+
+      // Scrolled away: row disappears, and NO ghost band survives in the inset.
+      fireEvent.click(screen.getByTestId("simulate-scroll-away"));
+      expect(screen.queryByTestId("background-work-row-anchor")).toBeNull();
+      expect(screen.getByTestId("message-list").getAttribute("data-bottom-inset-px")).toBe("64");
+
+      // Back to bottom: row and its reserved height both come back.
+      fireEvent.click(screen.getByTestId("simulate-scroll-to-bottom"));
+      expect(screen.getByTestId("background-work-row-anchor")).toBeTruthy();
+      expect(screen.getByTestId("message-list").getAttribute("data-bottom-inset-px")).toBe("96");
+    } finally {
+      rectSpy.mockRestore();
+    }
   });
 });

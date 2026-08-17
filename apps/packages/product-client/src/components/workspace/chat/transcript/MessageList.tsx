@@ -87,6 +87,8 @@ interface MessageListProps {
   bottomInsetPx?: number;
   nonDisplacingBottomInsetPx?: number;
   onLoadOlderHistory?: () => void;
+  /** The transcript row list's live stick-to-bottom pin state. */
+  onIsPinnedToBottomChange?: (isPinnedToBottom: boolean) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
   onOpenSession?: TranscriptOpenSessionHandler;
   canOpenSession?: (sessionId: string, role?: TranscriptOpenSessionRole) => boolean;
@@ -114,6 +116,7 @@ export function MessageList({
   bottomInsetPx = CHAT_SCROLL_BASE_BOTTOM_PADDING_PX,
   nonDisplacingBottomInsetPx = 0,
   onLoadOlderHistory,
+  onIsPinnedToBottomChange,
   onHandOffPlanToNewSession,
   onOpenSession,
   canOpenSession,
@@ -349,6 +352,7 @@ export function MessageList({
                     state={effectiveTranscriptViewState}
                     outboxActions={outboxActions}
                     onScrollSample={handleTranscriptScroll}
+                    onIsPinnedToBottomChange={onIsPinnedToBottomChange}
                     renderPendingPromptRow={renderPendingPromptRow}
                     renderTurnRow={renderTurnRow}
                     renderGoalEventRow={renderGoalEventRow}

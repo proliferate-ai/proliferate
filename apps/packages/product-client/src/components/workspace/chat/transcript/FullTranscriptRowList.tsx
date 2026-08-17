@@ -56,6 +56,7 @@ export function FullTranscriptRowList({
   lastPromptSubmittedAtMs,
   onLoadOlderHistory,
   onScrollSample,
+  onIsPinnedToBottomChange,
   renderRow,
   getRowRenderRevision,
   columnClassName = CHAT_COLUMN_CLASSNAME,
@@ -89,6 +90,12 @@ export function FullTranscriptRowList({
     autoFollowBottomInsetPx: effectiveNonDisplacingBottomInsetPx,
     lastPromptSubmittedAtMs,
   });
+  // Reports the engine's OWN pin state upward — no parallel scroll listener,
+  // just surfacing state this hook already computes for the in-list
+  // scroll-to-bottom button. Mirrors VirtualizedTranscriptRowList.
+  useEffect(() => {
+    onIsPinnedToBottomChange?.(isPinnedToBottom);
+  }, [isPinnedToBottom, onIsPinnedToBottomChange]);
 
   // Content-search jump-to-match. The full list mounts every row, so the
   // overlay can scroll the target mark into view directly; we only release the

@@ -58,6 +58,16 @@ export interface TranscriptRowListBaseProps {
   lastPromptSubmittedAtMs: number | null;
   onLoadOlderHistory: () => void;
   onScrollSample: (sample?: TranscriptScrollSample) => void;
+  /**
+   * Reports the stick-to-bottom engine's live pin state upward. Optional:
+   * most callers have no use for it (it already drives the in-list
+   * scroll-to-bottom button internally); the background-work transcript row
+   * is the first consumer that needs to know from OUTSIDE this subtree,
+   * since it must hide itself while the user has scrolled away from the
+   * bottom rather than float over whatever mid-transcript content is
+   * currently in view.
+   */
+  onIsPinnedToBottomChange?: (isPinnedToBottom: boolean) => void;
   renderRow: (row: TranscriptVirtualRow, rowIndex: number) => ReactNode;
   getRowRenderRevision?: (row: TranscriptVirtualRow) => unknown;
   columnClassName?: string;

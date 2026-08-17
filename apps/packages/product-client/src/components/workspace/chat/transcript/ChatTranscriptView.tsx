@@ -25,6 +25,7 @@ export function ChatTranscriptView({
   state,
   outboxActions = NOOP_OUTBOX_ACTIONS,
   onScrollSample = noop,
+  onIsPinnedToBottomChange,
   renderPendingPromptRow,
   renderTurnRow,
   renderPendingPromptTrailingStatus,
@@ -91,6 +92,7 @@ export function ChatTranscriptView({
         lastPromptSubmittedAtMs={model.lastPromptSubmittedAtMs}
         onLoadOlderHistory={model.onLoadOlderHistory}
         onScrollSample={onScrollSample}
+        onIsPinnedToBottomChange={onIsPinnedToBottomChange}
         renderRow={renderVirtualRow}
         getRowRenderRevision={getRowRenderRevision}
         columnClassName={model.columnClassName}

@@ -9,7 +9,6 @@ import { usePlanHandoffDialogState } from "#product/hooks/plans/ui/use-plan-hand
 import { useBackgroundWorkRowCounts } from "#product/hooks/activity/derived/use-background-work-row";
 import { useOpenBackgroundWorkPane } from "#product/hooks/activity/workflows/use-open-background-work-pane";
 import { useResizeObserverHeight } from "#product/hooks/ui/layout/use-resize-observer-height";
-import { resolveTranscriptBottomInsets } from "#product/hooks/chat/ui/transcript-row-list-model";
 import { useSessionHistoryHydration } from "#product/hooks/sessions/lifecycle/use-session-history-hydration";
 import { useTranscriptSessionNavigationActions } from "#product/hooks/chat/workflows/use-transcript-session-navigation-actions";
 import { useWorkspaceCreationReceiptKey } from "#product/hooks/workspaces/derived/use-workspace-creation-receipt";
@@ -57,11 +56,25 @@ export function SessionTranscriptPane({
   // the row's rendered height moves with the appearance-scaling multiplier.
   const { ref: backgroundWorkRowRef, height: backgroundWorkRowHeightPx } =
     useResizeObserverHeight<HTMLDivElement>();
-  const { structural: structuralBottomInsetPx } = resolveTranscriptBottomInsets(
-    bottomInsetPx,
-    nonDisplacingBottomInsetPx,
-  );
-  const messageListBottomInsetPx = hasBackgroundWork
+  // Review fix (bgwork R2 round 3): round 2 fixed the AT-BOTTOM overlap but
+  // left the row floating over arbitrary mid-transcript content once the
+  // user scrolled away — it is `position: absolute` in a static wrapper, so
+  // it never tracked scroll. The handoff's own semantics settle this: the row
+  // is a line at the END of the transcript, so scrolling away from the end
+  // should hide it, exactly like the floating "scroll to bottom" button it
+  // sits beside. Reuse that SAME signal (`useTranscriptStickToBottom`'s
+  // `isPinnedToBottom`, already threaded out through
+  // MessageList/ChatTranscriptView/the row lists as
+  // `onIsPinnedToBottomChange` — no parallel scroll listener) rather than
+  // inventing a second one. Starts `true`: the engine itself defaults pinned
+  // and re-pins on session entry, so a fresh mount is at the bottom until
+  // proven otherwise.
+  const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
+  const isBackgroundWorkRowVisible = hasBackgroundWork && isPinnedToBottom;
+  // Only reserve the row's height while it is actually shown — scrolled away,
+  // MessageList must fall back to the plain `bottomInsetPx` so no empty
+  // "ghost band" appears while the user is reading history.
+  const messageListBottomInsetPx = isBackgroundWorkRowVisible
     ? bottomInsetPx + backgroundWorkRowHeightPx
     : bottomInsetPx;
   const { rehydrateSessionSlotFromHistory } = useSessionHistoryHydration();
@@ -87,6 +100,16 @@ export function SessionTranscriptPane({
   const activeSessionId = transcriptDeferred
     ? null
     : immediatePaneState.activeSessionId;
+  // Insurance for the session-switch window: `SessionTranscriptPane` itself
+  // is not remounted per session (no `key`), so a stale `isPinnedToBottom`
+  // from the PREVIOUS session's scrolled-up state could otherwise hide the
+  // row for one frame in a brand-new, pinned-by-default session before the
+  // row list's own reset-for-session effect reports back. `MessageList`'s
+  // own reset already re-pins internally; this just keeps this pane's
+  // gating state from lagging it.
+  useEffect(() => {
+    setIsPinnedToBottom(true);
+  }, [activeSessionId]);
   const optimisticPrompt = transcriptDeferred
     ? null
     : immediatePaneState.optimisticPrompt;
@@ -271,13 +294,40 @@ export function SessionTranscriptPane({
           Fix round 2: feed MessageList `bottomInsetPx` PLUS the row's own
           live-measured height while it is visible — reserving one extra
           band the exact size of the row, immediately above where content
-          used to stop — and anchor the row at `bottom: structuralBottomInsetPx`
-          (the ORIGINAL, unaugmented structural share), so the row's box
-          exactly fills that new band: its bottom edge sits precisely where
-          content used to end (and where the composer's own nonDisplacing
-          overlap zone still begins, untouched), and its top edge is exactly
-          where content now ends post-augmentation. No overlap with either
-          real content or the composer's own scrim in either direction.
+          used to stop. Round 2 anchored the row at `bottom:
+          structuralBottomInsetPx` (`bottomInsetPx - nonDisplacing`),
+          reasoning the row must not share the composer's overlap allowance.
+          That reasoning about the ALLOWANCE was right but the ARITHMETIC was
+          wrong: `VirtualTranscriptViewport` renders the nonDisplacing scrim
+          as a sibling overlay (`top-full`, i.e. positioned at the content
+          div's OWN bottom edge) that EXTENDS the scrollable region by exactly
+          `nonDisplacing` past the shrunk `structural` paddingEnd — so the
+          last real row's distance from the viewport's bottom edge, once
+          pinned, is `structural + nonDisplacing`, i.e. the CONSTANT
+          `bottomInsetPx` regardless of the split (confirmed via fresh
+          Playwright measurement: anchoring at `structuralBottomInsetPx`
+          reopened a gap of exactly `nonDisplacingBottomInsetPx`, e.g. 24px
+          with a 24px composer scrim, while the round-2 fixture's own "dock
+          card" scenario never actually varied `nonDisplacingBottomInsetPx`
+          off zero, so it never exercised the split and never caught this).
+          Fix round 3 (renumbered; corrects round 2's anchor arithmetic
+          above): anchor at the plain `bottom: bottomInsetPx` — the row's box
+          then exactly fills the newly-reserved band regardless of how much
+          of `bottomInsetPx` is `nonDisplacing`: its bottom edge sits
+          precisely where content used to end (a fixed `bottomInsetPx` above
+          the viewport's bottom, composer scrim or not) and its top edge is
+          exactly where content now ends post-augmentation.
+          Fix round 4: round 2/3's anchor fix only addressed the AT-BOTTOM
+          case — scrolled away, the row (still `position: absolute` in this
+          static-height wrapper) floated over arbitrary mid-transcript
+          content, since it never tracked scroll. Now gated on
+          `isBackgroundWorkRowVisible` (`hasBackgroundWork &&
+          isPinnedToBottom`): both the row's render and the extra reserved
+          height drop out together the moment the user scrolls away, so no
+          ghost band survives either. `isPinnedToBottom` is the SAME state
+          the stick-to-bottom engine already computes for the in-list
+          scroll-to-bottom button — reported upward through
+          `onIsPinnedToBottomChange` rather than a second scroll listener.
           This still does not achieve the handoff's literal "last row of the
           transcript column" in-scroll placement (an actual virtualized row)
           — that remains out of this rung's scope; see the PR body. */}
@@ -297,16 +347,17 @@ export function SessionTranscriptPane({
           bottomInsetPx={messageListBottomInsetPx}
           nonDisplacingBottomInsetPx={nonDisplacingBottomInsetPx}
           onLoadOlderHistory={loadOlderHistory}
+          onIsPinnedToBottomChange={setIsPinnedToBottom}
           onHandOffPlanToNewSession={handoff.open}
           onOpenSession={openTranscriptSession}
           canOpenSession={canOpenTranscriptSession}
         />
-        {hasBackgroundWork && (
+        {isBackgroundWorkRowVisible && (
           <div
             ref={backgroundWorkRowRef}
             data-testid="background-work-row-anchor"
             className={`absolute inset-x-0 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}
-            style={{ bottom: structuralBottomInsetPx }}
+            style={{ bottom: bottomInsetPx }}
           >
             <div
               className={`${CHAT_COLUMN_CLASSNAME} pt-transcript-turn-tight pb-2`}
