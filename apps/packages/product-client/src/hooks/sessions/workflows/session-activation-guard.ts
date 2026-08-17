@@ -88,13 +88,7 @@ export function commitActiveSession(
   }
   state.setActiveSessionId(sessionId);
   if (entry.materializedSessionId) {
-    rememberLastViewedSession(
-      resolveWorkspaceUiKey(
-        useSessionSelectionStore.getState().selectedLogicalWorkspaceId,
-        guard.workspaceId,
-      ) ?? guard.workspaceId,
-      entry.materializedSessionId,
-    );
+    rememberActivatedSession(guard.workspaceId, entry.materializedSessionId);
   }
   return {
     result: "completed",
@@ -131,13 +125,7 @@ export function commitHotActiveSession(
     hotPaintGate,
   });
   if (entry.materializedSessionId) {
-    rememberLastViewedSession(
-      resolveWorkspaceUiKey(
-        useSessionSelectionStore.getState().selectedLogicalWorkspaceId,
-        guard.workspaceId,
-      ) ?? guard.workspaceId,
-      entry.materializedSessionId,
-    );
+    rememberActivatedSession(guard.workspaceId, entry.materializedSessionId);
   }
   return {
     result: "completed",
@@ -170,4 +158,15 @@ export function clearActiveSession(
     result: "cleared",
     activeSessionVersion: useSessionSelectionStore.getState().activeSessionVersion,
   };
+}
+
+function rememberActivatedSession(workspaceId: string, materializedSessionId: string): void {
+  const workspaceUiKey = resolveWorkspaceUiKey(
+    useSessionSelectionStore.getState().selectedLogicalWorkspaceId,
+    workspaceId,
+  ) ?? workspaceId;
+  rememberLastViewedSession(workspaceUiKey, materializedSessionId);
+  if (workspaceUiKey !== workspaceId) {
+    rememberLastViewedSession(workspaceId, materializedSessionId);
+  }
 }

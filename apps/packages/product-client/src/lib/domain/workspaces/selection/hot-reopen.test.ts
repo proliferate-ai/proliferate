@@ -196,6 +196,71 @@ describe("resolveHotReopenCandidate", () => {
     });
   });
 
+  it("resolves a remembered materialized id to its client-keyed slot", () => {
+    const candidate = resolveHotReopenCandidate({
+      resolvedWorkspaceId: "workspace-1",
+      logicalWorkspace: null,
+      initialActiveSessionId: null,
+      lastViewedSessionByWorkspace: {
+        "workspace-1": "session-real",
+      },
+      sessionSlots: {
+        "client-session:oldest": slot({
+          sessionId: "client-session:oldest",
+          materializedSessionId: "session-oldest",
+          workspaceId: "workspace-1",
+          hydrated: true,
+        }),
+        "client-session:last": slot({
+          sessionId: "client-session:last",
+          materializedSessionId: "session-real",
+          workspaceId: "workspace-1",
+          hydrated: true,
+        }),
+      },
+      isPendingSessionId: () => false,
+    });
+
+    expect(candidate).toEqual({
+      sessionId: "client-session:last",
+      workspaceId: "workspace-1",
+      source: "last_viewed",
+    });
+  });
+
+  it("skips a remembered materialized id whose slot is hidden under its client id", () => {
+    const candidate = resolveHotReopenCandidate({
+      resolvedWorkspaceId: "workspace-1",
+      logicalWorkspace: null,
+      initialActiveSessionId: null,
+      lastViewedSessionByWorkspace: {
+        "workspace-1": "session-real",
+      },
+      sessionSlots: {
+        "client-session:hidden": slot({
+          sessionId: "client-session:hidden",
+          materializedSessionId: "session-real",
+          workspaceId: "workspace-1",
+          hydrated: true,
+        }),
+        "client-session:open": slot({
+          sessionId: "client-session:open",
+          materializedSessionId: "session-open",
+          workspaceId: "workspace-1",
+          hydrated: true,
+        }),
+      },
+      isPendingSessionId: () => false,
+      hiddenSessionIds: new Set(["client-session:hidden"]),
+    });
+
+    expect(candidate).toEqual({
+      sessionId: "client-session:open",
+      workspaceId: "workspace-1",
+      source: "cached_slot",
+    });
+  });
+
   it("falls back to any eligible cached slot", () => {
     const candidate = resolveHotReopenCandidate({
       resolvedWorkspaceId: "workspace-1",
@@ -229,12 +294,14 @@ function logicalWorkspace(): LogicalWorkspace {
 
 function slot(input: {
   sessionId: string;
+  materializedSessionId?: string | null;
   workspaceId: string | null;
   hydrated: boolean;
   transcript?: TranscriptState;
 }): HotReopenSessionSlotSnapshot {
   return {
     sessionId: input.sessionId,
+    materializedSessionId: input.materializedSessionId ?? input.sessionId,
     workspaceId: input.workspaceId,
     transcriptHydrated: input.hydrated,
     events: [],

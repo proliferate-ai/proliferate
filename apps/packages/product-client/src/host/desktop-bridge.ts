@@ -261,6 +261,12 @@ export interface WorkerStatus {
  * child process.
  */
 export interface DesktopWorkerBridge {
+  // Whether the native transport this bridge's calls depend on (e.g. Tauri
+  // IPC) is actually present. False in environments that load the Desktop
+  // web build without the Tauri shell (browser dev, intent tests) — callers
+  // must skip enrollment entirely rather than invoke a native command that
+  // isn't there to answer.
+  isSupported(): boolean;
   getInstallId(): Promise<string>;
   ensure(input: WorkerConfiguration): Promise<WorkerStatus>;
   stop(): Promise<void>;

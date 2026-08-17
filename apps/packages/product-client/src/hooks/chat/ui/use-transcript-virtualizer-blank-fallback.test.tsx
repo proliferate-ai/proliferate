@@ -32,13 +32,16 @@ function Harness({
   firstVirtualItem,
   lastVirtualItem,
   onFallback,
+  prependSettleUntil = 0,
 }: {
   firstVirtualItem: { index: number; start: number; end: number } | null;
   lastVirtualItem: { index: number; start: number; end: number } | null;
   onFallback: (reason: string) => void;
+  prependSettleUntil?: number;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastBlankReportSignatureRef = useRef<string | null>(null);
+  const prependSettleUntilRef = useRef(prependSettleUntil);
   useTranscriptVirtualizerBlankFallback({
     activeSessionId: "session-1",
     bottomSpacerHeight: 0,
@@ -46,6 +49,7 @@ function Harness({
     lastVirtualItem,
     lastBlankReportSignatureRef,
     onFallback,
+    prependSettleUntilRef,
     renderableRowCount: 100,
     rowCount: 100,
     scrollRef,
@@ -111,6 +115,65 @@ describe("useTranscriptVirtualizerBlankFallback", () => {
     expect(onFallback).not.toHaveBeenCalled();
     expect(frames).toHaveLength(1);
 
+    act(flushFrame);
+    expect(onFallback).toHaveBeenCalledWith("blank_viewport");
+  });
+
+  it("suppresses the blank fallback while an older-history prepend is still settling", () => {
+    // Same DOM-confirmed blank condition that falls back in the test above, but
+    // with a live prepend-settle grace window: the anchored scrollTop legitimately
+    // sits ahead of the still estimate-coordinate mounted range while the freshly
+    // prepended rows measure in, so the remount (which would reset scrollTop to 0)
+    // must be held off until the window lapses.
+    const onFallback = vi.fn();
+    const rendered = render(
+      <Harness
+        firstVirtualItem={{ index: 0, start: 0, end: 100 }}
+        lastVirtualItem={{ index: 1, start: 100, end: 200 }}
+        onFallback={onFallback}
+        prependSettleUntil={performance.now() + 100_000}
+      />,
+    );
+    const viewport = rendered.getByTestId("viewport") as HTMLDivElement;
+    setViewportMetrics(viewport, 2_000);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function () {
+      const top = this === viewport ? 0 : 1_000;
+      const bottom = this === viewport ? 400 : 1_100;
+      return { top, bottom } as DOMRect;
+    });
+
+    // Far more frames than the two DOM-confirmations the un-graced path needs.
+    for (let i = 0; i < 6; i += 1) {
+      act(flushFrame);
+    }
+    expect(onFallback).not.toHaveBeenCalled();
+    // It keeps watching (re-arms each frame) rather than giving up.
+    expect(frames.length).toBeGreaterThan(0);
+  });
+
+  it("negative control: an already-lapsed prepend grace still falls back on a real blank", () => {
+    // Grace deadline in the past == no active prepend settle: the identical blank
+    // condition must remount exactly as it does with no grace at all, proving the
+    // suppression is scoped to the live settle window and not a blanket disable.
+    const onFallback = vi.fn();
+    const rendered = render(
+      <Harness
+        firstVirtualItem={{ index: 0, start: 0, end: 100 }}
+        lastVirtualItem={{ index: 1, start: 100, end: 200 }}
+        onFallback={onFallback}
+        prependSettleUntil={performance.now() - 1}
+      />,
+    );
+    const viewport = rendered.getByTestId("viewport") as HTMLDivElement;
+    setViewportMetrics(viewport, 2_000);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function () {
+      const top = this === viewport ? 0 : 1_000;
+      const bottom = this === viewport ? 400 : 1_100;
+      return { top, bottom } as DOMRect;
+    });
+
+    act(flushFrame);
+    act(flushFrame);
     act(flushFrame);
     expect(onFallback).toHaveBeenCalledWith("blank_viewport");
   });

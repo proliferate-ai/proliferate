@@ -202,12 +202,12 @@ reason = "terminal/feed stream registry (+open/close/error records woven into th
 # no net-new writers.
 
 [[transcript_scroll_writer]]
-path = "apps/packages/product-client/src/hooks/chat/ui/use-transcript-stick-to-bottom.ts"
-reason = "the stick-to-bottom engine — FR-1's sole sanctioned transcript-viewport scrollTop writer"
+path = "apps/packages/product-client/src/hooks/chat/ui/use-transcript-auto-follow-bottom.ts"
+reason = "rung 4 frame-pipeline refactor: the stick-to-bottom engine's own follow-bottom write, driven per-frame by the single pipeline scheduler"
 
 [[transcript_scroll_writer]]
-path = "apps/packages/product-client/src/hooks/chat/ui/use-above-change-compensation.ts"
-reason = "transcript engine sibling: above-change scroll compensation, part of the stick-to-bottom writer surface"
+path = "apps/packages/product-client/src/hooks/chat/ui/use-transcript-frame-pipeline-lifecycle.ts"
+reason = "rung 4 frame-pipeline refactor: session re-entry / submit re-pin / tab-resume anchor restore, now driven through TranscriptFramePipeline instead of N independent rAF loops"
 
 [[transcript_scroll_writer]]
 path = "apps/packages/product-client/src/components/workspace/chat/transcript/FullTranscriptRowList.tsx"
