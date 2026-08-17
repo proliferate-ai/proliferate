@@ -52,13 +52,6 @@ export interface GoalBarProps {
   onSetNewGoal?: () => void;
   /** Playground/dev: start the sticky result's expand popover already open. */
   defaultResultExpanded?: boolean;
-  /**
-   * Compact activity chips (`⟳ loops · ▸ terminals · ⑂ agents`) that stack on
-   * the same bar row (session-activity-architecture §Locked decisions #5).
-   * When there is no live goal state and the bar isn't composing, the chips
-   * alone still render the bar — activity can be live with no goal set.
-   */
-  chips?: ReactNode;
 }
 
 /**
@@ -86,7 +79,6 @@ export function GoalBar({
   onDismiss,
   onCancelCompose,
   onSetNewGoal,
-  chips,
 }: GoalBarProps) {
   const [editing, setEditing] = useState(defaultEditing);
   // Forces the result popover open on mount (playground/dev only); cleared
@@ -97,26 +89,22 @@ export function GoalBar({
   const state = deriveGoalBarState(goal);
 
   // Goal content only renders when the capability supports it AND there is
-  // live/composing goal state — activity chips can be live with no goal set
-  // at all, so the bar must not hide (or force the goal layout) in that case.
+  // live/composing goal state. With no chips slot left to keep the bar alive
+  // (retired with `ActivityChips` — HANDOFF-background-work.md), no goal
+  // means no bar: this is a replacement of the old behavior, not a variant.
   const goalVisible = capabilities.supported && (state.kind !== "hidden" || composing);
 
-  if (!goalVisible && !chips) {
+  if (!goalVisible) {
     return null;
   }
 
   // Editing/composing swaps the fixed single-row layout for a tall,
   // auto-growing textarea: the glyph aligns with the textarea's first line
   // instead of a fixed-height row.
-  const isEditingLayout = goalVisible && (composing || (state.kind === "live" && editing));
-  // Chips are suppressed while the multi-line editor is showing — its
-  // absolute-positioned commit/cancel icons already crowd that row.
-  const showChips = Boolean(chips) && !isEditingLayout;
+  const isEditingLayout = composing || (state.kind === "live" && editing);
 
   let content: ReactNode = null;
-  if (!goalVisible) {
-    // Chips-only bar: no goal capability, or no live/composing goal state.
-  } else if (composing && state.kind !== "live") {
+  if (composing && state.kind !== "live") {
     // The empty-state "set a goal" affordance AND the sticky result's
     // "Set new goal" popover action both land here — same blank editor
     // either way. (Composing never overrides an already-live goal — the
@@ -275,15 +263,10 @@ export function GoalBar({
       >
         {/* The result row renders its own glyph inside the expand trigger
             button so the whole row (glyph included) is clickable. */}
-        {goalVisible && state.kind !== "result" && (
+        {state.kind !== "result" && (
           <GoalBarGlyph state={state} raised={isEditingLayout} />
         )}
         {content}
-        {showChips && (
-          <span className={twMerge("flex shrink-0 items-center", goalVisible && "ml-1")}>
-            {chips}
-          </span>
-        )}
       </div>
     </div>
   );

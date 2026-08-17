@@ -1,5 +1,4 @@
 /* @vitest-environment jsdom */
-import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GoalCapabilities, GoalWire } from "#product/domain/activity/goal";
@@ -33,7 +32,6 @@ function baseProps() {
     onResume: NOOP,
     onClear: NOOP,
     onDismiss: NOOP,
-    chips: undefined as ReactNode,
   };
 }
 
@@ -56,21 +54,23 @@ function blockedGoal(overrides: Partial<GoalWire> = {}): GoalWire {
   };
 }
 
-describe("GoalBar chips", () => {
-  it("renders nothing when there is no goal, no capability, and no chips", () => {
+describe("GoalBar", () => {
+  it("renders nothing when there is no goal and no capability", () => {
     const { container } = render(<GoalBar {...baseProps()} />);
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders a chips-only bar when goal is unsupported/unset but chips are present", () => {
-    render(<GoalBar {...baseProps()} chips={<span>2 loops</span>} />);
-    expect(screen.getByText("2 loops")).toBeTruthy();
-    // No goal glyph/label content should render alongside the chips-only bar.
-    expect(screen.queryByLabelText("Goal objective")).toBeNull();
+  it("renders nothing when there is capability but no live/composing goal — the chips prop no longer keeps the bar alive", () => {
+    // `ActivityChips` and the `chips` prop are retired (HANDOFF-background-
+    // work.md — the docked chips go; the goal bar stays, but only when a goal
+    // is live). This is a REPLACEMENT of the old "chips-only bar" behavior,
+    // not a variant, so there is no prop left that can resurrect it.
+    const { container } = render(<GoalBar {...baseProps()} capabilities={SUPPORTED} />);
+    expect(container.firstChild).toBeNull();
   });
 
-  it("stacks chips on the same row as a live goal", () => {
-    const { container } = render(
+  it("renders the live goal row when a goal is supported and live", () => {
+    render(
       <GoalBar
         {...baseProps()}
         capabilities={SUPPORTED}
@@ -86,35 +86,18 @@ describe("GoalBar chips", () => {
           native: true,
           updatedAtMs: 1,
         }}
-        chips={<span>2 loops</span>}
       />,
     );
     expect(screen.getByText("Ship the feature")).toBeTruthy();
-    expect(screen.getByText("2 loops")).toBeTruthy();
-    expect(container.querySelector("[data-session-goal-bar] > div")?.className.split(" "))
-      .toContain("gap-1.5");
   });
 
-  it("suppresses chips while the empty-state composer editor is open", () => {
+  it("renders the empty-state composer editor while composing", () => {
     const { container } = render(
-      <GoalBar
-        {...baseProps()}
-        capabilities={SUPPORTED}
-        composing
-        chips={<span>2 loops</span>}
-      />,
+      <GoalBar {...baseProps()} capabilities={SUPPORTED} composing />,
     );
     expect(screen.getByLabelText("Goal objective")).toBeTruthy();
-    expect(screen.queryByText("2 loops")).toBeNull();
-    expect(container.querySelector("[data-session-goal-bar] > div")?.className.split(" "))
-      .toContain("gap-1.5");
     expect(container.querySelector("[data-session-goal-bar] > div > svg")?.getAttribute("class")?.split(" "))
       .toContain("mt-[0.175em]");
-  });
-
-  it("preserves the original hidden behavior when chips are absent", () => {
-    const { container } = render(<GoalBar {...baseProps()} capabilities={SUPPORTED} />);
-    expect(container.firstChild).toBeNull();
   });
 });
 
