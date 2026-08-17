@@ -11,6 +11,12 @@
  * lines. No behavior or assertion changed by the split — every test moved
  * verbatim into one of the two files above, and this module holds only the
  * value builders and component stand-ins both files need identically.
+ *
+ * The `.test.` mid-name segment is LOAD-BEARING, not stylistic: it must
+ * contain the literal substring `.test.` so `report_frontend_structure.py`'s
+ * `should_skip` exempts the raw `<button>` mocks in here, while NOT ending in
+ * `.test.tsx` so vitest's include glob does not collect it as an (empty)
+ * suite. Renaming it either way silently breaks one of those two gates.
  */
 import type { ActivityProcessWire } from "#product/domain/activity/process";
 import type { ActivitySubagentWire } from "#product/domain/activity/subagent";
