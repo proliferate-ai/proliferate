@@ -313,6 +313,13 @@ describe("playground scenarios", () => {
     expect(html).toContain("data-telemetry-mask");
   });
 
+  it("renders the ordinary empty follow-up composer through the editable surface", () => {
+    expect(Object.keys(SCENARIOS)).toContain("composer-follow-up-empty");
+    const html = renderComposerSurfaceMarkup("composer-follow-up-empty");
+    expect(html).toContain("data-chat-composer-editor");
+    expect(html).toContain("Ask for a follow-up");
+  });
+
   it("includes an attachment preview scenario for composer, transcript, and viewer iteration", () => {
     expect(Object.keys(SCENARIOS)).toContain("attachment-previews");
     expect(isValidElement(renderComposerSurfaceForScenario("attachment-previews"))).toBe(true);

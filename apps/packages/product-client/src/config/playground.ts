@@ -19,6 +19,7 @@ export type ScenarioKey =
   | "pending-prompts-editing"
   | "pending-prompts-with-approval"
   | "composer-long-input"
+  | "composer-follow-up-empty"
   | "composer-ultra"
   | "attachment-previews"
   | "workspace-activity-card"
@@ -140,6 +141,7 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "pending-prompts-editing": { label: "Queue (editing row)" },
   "pending-prompts-with-approval": { label: "Queue + approval" },
   "composer-long-input": { label: "Composer long input" },
+  "composer-follow-up-empty": { label: "Composer empty follow-up" },
   "composer-ultra": { label: "Composer ultra tier" },
   "attachment-previews": { label: "Attachment previews" },
   "workspace-activity-card": { label: "Workspace activity cap" },

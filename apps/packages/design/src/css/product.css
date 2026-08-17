@@ -381,18 +381,16 @@ body {
   box-shadow: var(--shadow-user-message);
 }
 
-/* Composer chrome: one opaque surface with no elevation. Dark is separated by
-   its fill alone; light adds the border-role hairline below so the same 28px
-   silhouette remains legible against the white content plane without changing
-   layout or restoring an elevation stack. */
+/* Composer chrome: one opaque surface with mode-responsive depth. Dark is
+   separated by its fill alone; light combines the border-role perimeter with
+   a shallow ink-tinted lift so the ordinary empty input reads as available
+   against the white transcript canvas. The token owns the complete recipe so
+   the cap seam and every Desktop/Web consumer share one production path. */
 .chat-composer-surface {
   background-color: var(--color-composer-background);
   -webkit-backdrop-filter: var(--color-composer-backdrop-filter);
   backdrop-filter: var(--color-composer-backdrop-filter);
-}
-
-:root[data-mode="light"] .chat-composer-surface {
-  box-shadow: 0 0 0 0.5px var(--color-border);
+  box-shadow: var(--shadow-composer);
 }
 
 /* The cap variant of that same surface: composer chrome attached
@@ -401,7 +399,7 @@ body {
    elevation shadow or stroke of its own; the 1px stroke that outlines the cap
    is painted outside the border-box by the consumer (ring-*), and its bottom is
    clipped here to keep that ring from double-painting the attached seam. The
-   underlying composer keeps its shared light hairline while dark remains
+   underlying composer keeps its shared light depth recipe while dark remains
    fill-only; the cap ring is activity-card chrome outside composer-input scope. */
 .chat-composer-surface--cap {
   background-color: var(--color-composer-background);
