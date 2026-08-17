@@ -12,7 +12,7 @@ mod node_sessions;
 use rusqlite::{params, Connection, OptionalExtension};
 use uuid::Uuid;
 
-use super::definition::InvocationSnapshot;
+use super::definition::{InvocationSnapshot, WorkflowDefinition};
 use super::model::{
     RenderedEnvelope, WorkflowNodeFailureCode, WorkflowNodeKind, WorkflowNodeStatus,
     WorkflowNodeType, WorkflowRunDocRecord, WorkflowRunNodeRecord, WorkflowRunRecord,
@@ -72,6 +72,13 @@ pub struct CreatedRun {
 pub enum ResolvedSideEffect {
     None,
     StartNode { node_row_id: String },
+    /// Fan-out (ruling F5): launch one session per authored leg prompt of a
+    /// parallel node. The actor loops the node's legs; a one-leg node never
+    /// produces this (it stays `StartNode`, byte-identical to today). Rung 6
+    /// extends this family with `DisposeSessionThenStartLeg` (per-leg redo) and
+    /// `DisposeSessionsThenStartLegs` (whole-node redo), which dispose then
+    /// re-enter this same launch path.
+    StartNodeLegs { node_row_id: String },
     DisposeSession { session_id: String },
     /// Ruling L's compound effect: a redo of a RUNNING node first disposes
     /// the session it took over from, then starts the minted replacement.
@@ -95,6 +102,45 @@ pub struct AppliedTransition {
 
 fn now() -> String {
     chrono::Utc::now().to_rfc3339()
+}
+
+/// The launch side effect for a node about to start: `StartNodeLegs` for a
+/// parallel node (its definition leg list has > 1 entry, ruling F5), else the
+/// unchanged singular `StartNode` — so a one-leg node produces exactly today's
+/// effect (the gate). Reads the frozen definition off the run; only defined
+/// chain rows fan out (adhoc/replacement rows carry a single prompt), and any
+/// parse miss falls back to the single-leg effect.
+pub fn start_side_effect(state: &RunState, node_row_id: &str) -> ResolvedSideEffect {
+    if node_leg_count(state, node_row_id) > 1 {
+        ResolvedSideEffect::StartNodeLegs {
+            node_row_id: node_row_id.to_string(),
+        }
+    } else {
+        ResolvedSideEffect::StartNode {
+            node_row_id: node_row_id.to_string(),
+        }
+    }
+}
+
+/// How many legs the node about to launch fans out to (1 for every one-leg
+/// node, i.e. every definition without a `legs` list).
+pub fn node_leg_count(state: &RunState, node_row_id: &str) -> usize {
+    let Some(node) = state.node(node_row_id) else {
+        return 1;
+    };
+    let Some(def_node_id) = node.definition_node_id.as_deref() else {
+        return 1;
+    };
+    let Ok(definition) = serde_json::from_str::<WorkflowDefinition>(&state.run.definition_json)
+    else {
+        return 1;
+    };
+    definition
+        .nodes
+        .iter()
+        .find(|candidate| candidate.id == def_node_id)
+        .map(|candidate| candidate.leg_prompts().len())
+        .unwrap_or(1)
 }
 
 /// The one-live-run law refused an insert (Ruling B, journaled as an ADR
@@ -333,9 +379,9 @@ impl WorkflowStore {
                             ..RunUpdate::default()
                         },
                     )?;
-                    side_effect = ResolvedSideEffect::StartNode {
-                        node_row_id: next_node_row_id.clone(),
-                    };
+                    // Fan-out (ruling F5): a parallel next node launches all its
+                    // legs; a one-leg node produces the unchanged StartNode.
+                    side_effect = start_side_effect(&state, next_node_row_id);
                 }
                 Transition::CompleteRun {
                     completed_node_row_id,
@@ -523,6 +569,12 @@ impl WorkflowStore {
                          WHERE id = ?1",
                         params![node_row_id, timestamp],
                     )?;
+                    // Ruling F6: resume re-fans-out ALL legs on a fresh
+                    // generation, so the node's ledger rows are truncated here
+                    // before the relaunch re-inserts leg 0..N. A one-leg node's
+                    // single row is deleted then re-inserted by the launch upsert
+                    // — end state unchanged.
+                    node_sessions::truncate_legs_tx(tx, node_row_id)?;
                     update_run(
                         tx,
                         run_id,
@@ -533,9 +585,7 @@ impl WorkflowStore {
                             ..RunUpdate::default()
                         },
                     )?;
-                    side_effect = ResolvedSideEffect::StartNode {
-                        node_row_id: node_row_id.clone(),
-                    };
+                    side_effect = start_side_effect(&state, node_row_id);
                 }
                 Transition::AddAdhoc { adhoc } => {
                     let new_id = insert_new_node(tx, run_id, adhoc, &timestamp)?;
@@ -699,6 +749,52 @@ impl WorkflowStore {
             agent_kind = agent_kind.unwrap_or("unknown"),
             chain_index = chain_index.unwrap_or(-1),
             "workflow node launched",
+        );
+        Ok(())
+    }
+
+    /// The fan-out stamp (ruling F5): in ONE transaction, stamp the node's
+    /// scalar/representative session (leg 0) and prompt_id and insert every
+    /// leg's ledger row keyed by `leg_index` — the durable prompt-to-leg
+    /// linkage. `legs` must be `(leg_index, session_id)` in leg order with a
+    /// row for leg 0; the representative is `legs[0]`. Emits one
+    /// `workflow.node.launched` for the representative, matching `stamp_session`.
+    pub fn stamp_fanout(
+        &self,
+        node_row_id: &str,
+        prompt_id: Option<&str>,
+        agent_kind: Option<&str>,
+        legs: &[(i64, String)],
+    ) -> anyhow::Result<()> {
+        let representative = legs
+            .iter()
+            .find(|(leg_index, _)| *leg_index == 0)
+            .map(|(_, session_id)| session_id.clone())
+            .ok_or_else(|| anyhow::anyhow!("fan-out stamp needs a leg 0 (representative)"))?;
+        let (run_id, chain_index) = self.db.with_tx_anyhow(|tx| {
+            tx.execute(
+                "UPDATE workflow_run_nodes SET session_id = ?2, prompt_id = ?3 WHERE id = ?1",
+                params![node_row_id, representative, prompt_id],
+            )?;
+            for (leg_index, session_id) in legs {
+                node_sessions::upsert_leg_at_tx(tx, node_row_id, *leg_index, session_id)?;
+            }
+            let (run_id, chain_index): (String, Option<i64>) = tx.query_row(
+                "SELECT run_id, chain_index FROM workflow_run_nodes WHERE id = ?1",
+                params![node_row_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )?;
+            Ok((run_id, chain_index))
+        })?;
+        tracing::info!(
+            target: WORKFLOW_NODE_LAUNCHED_TRACING_TARGET,
+            run_id = %run_id,
+            node_row_id = %node_row_id,
+            session_id = %representative,
+            agent_kind = agent_kind.unwrap_or("unknown"),
+            chain_index = chain_index.unwrap_or(-1),
+            legs = legs.len(),
+            "workflow parallel node launched",
         );
         Ok(())
     }

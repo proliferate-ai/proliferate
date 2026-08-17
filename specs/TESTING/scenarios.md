@@ -767,6 +767,34 @@ no auto-advance; approving the gate advances the run to `completed`; every
 command (PUT, GET, approve) returns the full projection
 `{run, nodes[], docs[]}`.
 
+### T3-WF-PARALLEL-1: heterogeneous parallel node fan-out with crash and resume
+Authored against the frozen Workflows gen-2 ADR contract, modeled exactly on
+T3-WF-1 (same "frozen, not-yet-executed" framing — the `/v1/workflow-runs/*`
+routes are a parallel lane not in this chain's base; see
+`tests/release/src/scenarios/t3-wf-parallel-1.ts`'s module docstring). Two
+wire shapes are rung-forward and flagged for reconciliation on restack: the
+definition node's `legs` list (this rung 5's grammar, ruling F5) and the
+run projection's additive per-node `sessions` rollup (rung 7, ruling F4).
+The definition is one `agent` node ("review") fanned out to three authored
+leg prompts — a correctness reviewer, a security reviewer, and a perf
+reviewer (the panel use case); leg 0's prompt equals the node prompt (the
+representative invariant). Model resolution reuses T3-CHAT-1's picker against
+the fixed harness `claude`.
+Steps: `PUT /v1/workflow-runs/{run_id}` with the frozen invocation (definition
+carrying `legs`) → the node mints one session per leg → two legs finish → the
+runtime is killed with one leg still live (an out-of-band supervisor step) →
+restart → resume.
+Assert: the PUT materializes a workspace and starts one session per leg (three
+distinct sessions); each leg's underlying session prompt carries only that
+leg's authored prompt inside the wrapped preamble — the prompt-to-leg mapping
+invariant (R4), never a sibling leg's prompt; after restart the boot fence
+parks the parallel node `needs_attention`; resume re-fans-out all three legs on
+a fresh generation (ruling F6) with three fresh sessions and no pre-crash
+orphan session; all legs finishing aggregates the node exactly once (ruling
+F1: all done, fail iff any failed) and the run reaches `completed`; every
+command (PUT, GET) returns the full projection `{run, nodes[], docs[]}` plus
+the parallel node's per-leg `sessions` rollup.
+
 ---
 
 ## Tier 4 — upgrade path

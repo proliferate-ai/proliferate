@@ -8,11 +8,13 @@
 use crate::persistence::Db;
 
 use super::definition::{
-    DefinitionNode, InvocationPlacement, InvocationSnapshot, PlacementMode, WorkflowDefinition,
-    DEFINITION_SCHEMA_VERSION,
+    DefinitionLeg, DefinitionNode, InvocationPlacement, InvocationSnapshot, PlacementMode,
+    WorkflowDefinition, DEFINITION_SCHEMA_VERSION,
 };
 use super::model::{WorkflowLegStatus, WorkflowNodeType, WorkflowRunStatus};
-use super::store::{NewRunParams, WorkflowStore};
+use super::store::{
+    node_leg_count, start_side_effect, NewRunParams, ResolvedSideEffect, WorkflowStore,
+};
 use super::transition::{
     next, Decision, RunState, TurnFinished, TurnStopReason, WorkflowCommand, WorkflowEvent,
 };
@@ -56,6 +58,7 @@ fn params(run_id: &str) -> NewRunParams {
             title: "Only".into(),
             prompt: "do the thing".into(),
             model: None,
+            legs: None,
         }],
         edges: vec![],
         inputs: vec![],
@@ -225,4 +228,158 @@ fn cancel_marks_every_running_leg_in_the_run_cancelled() {
         assert_eq!(legs[0].status, WorkflowLegStatus::Cancelled, "node {node_id}");
         assert!(legs[0].completed_at.is_some(), "node {node_id}");
     }
+}
+// --- Ruling F5/F6: fan-out at the store seam ---
+
+/// A single Agent node fanned out to `n` distinguishable leg prompts. Leg 0's
+/// prompt mirrors the node prompt (the representative invariant).
+fn parallel_params(run_id: &str, n: usize) -> NewRunParams {
+    let prompts: Vec<String> = (0..n).map(|i| format!("leg {i} work")).collect();
+    let definition = WorkflowDefinition {
+        schema_version: DEFINITION_SCHEMA_VERSION,
+        nodes: vec![DefinitionNode {
+            id: "panel".into(),
+            node_type: WorkflowNodeType::Agent,
+            title: "Panel".into(),
+            prompt: prompts[0].clone(),
+            model: None,
+            legs: Some(
+                prompts
+                    .iter()
+                    .map(|p| DefinitionLeg { prompt: p.clone() })
+                    .collect(),
+            ),
+        }],
+        edges: vec![],
+        inputs: vec![],
+        doc_templates: vec![],
+    };
+    let snapshot = InvocationSnapshot {
+        schema_version: DEFINITION_SCHEMA_VERSION,
+        workflow_definition_id: "wd-p".into(),
+        definition,
+        arguments: serde_json::Map::new(),
+        placement: InvocationPlacement {
+            repo_config_id: "rc-1".into(),
+            mode: PlacementMode::Worktree,
+            workspace_id: None,
+        },
+    };
+    let definition_json = serde_json::to_string(&snapshot.definition).expect("serialize");
+    NewRunParams {
+        run_id: run_id.into(),
+        invocation_id: format!("inv-{run_id}"),
+        workspace_id: "workspace-1".into(),
+        snapshot,
+        definition_json,
+    }
+}
+
+#[test]
+fn a_multi_leg_node_resolves_to_the_fan_out_start_effect() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(parallel_params("run-p", 3))
+        .expect("create");
+    let node_id = created.first_node_row_id.clone();
+    let state = &created.state;
+    assert_eq!(node_leg_count(state, &node_id), 3);
+    assert_eq!(
+        start_side_effect(state, &node_id),
+        ResolvedSideEffect::StartNodeLegs {
+            node_row_id: node_id.clone()
+        }
+    );
+}
+
+#[test]
+fn a_one_leg_node_keeps_the_singular_start_effect() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(params("run-1"))
+        .expect("create");
+    let node_id = created.first_node_row_id.clone();
+    assert_eq!(node_leg_count(&created.state, &node_id), 1);
+    assert_eq!(
+        start_side_effect(&created.state, &node_id),
+        ResolvedSideEffect::StartNode {
+            node_row_id: node_id
+        }
+    );
+}
+
+#[test]
+fn stamp_fanout_writes_one_ledger_row_per_leg() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(parallel_params("run-p", 3))
+        .expect("create");
+    let node_id = created.first_node_row_id.clone();
+    let legs = vec![
+        (0i64, "sess-0".to_string()),
+        (1, "sess-1".to_string()),
+        (2, "sess-2".to_string()),
+    ];
+    store
+        .stamp_fanout(&node_id, Some("wf2-panel"), Some("claude"), &legs)
+        .expect("stamp fanout");
+    let state = store.load_run_state("run-p").expect("load").expect("run");
+    let mut rows = state.legs_of(&node_id);
+    rows.sort_by_key(|leg| leg.leg_index);
+    assert_eq!(rows.len(), 3);
+    for (index, leg) in rows.iter().enumerate() {
+        assert_eq!(leg.leg_index, index as i64);
+        assert_eq!(leg.session_id.as_deref(), Some(format!("sess-{index}").as_str()));
+        assert_eq!(leg.status, WorkflowLegStatus::Running);
+    }
+    // Leg 0 is the representative stamped onto the node's scalar column.
+    assert_eq!(
+        state.node(&node_id).unwrap().session_id.as_deref(),
+        Some("sess-0")
+    );
+}
+
+#[test]
+fn resume_truncates_the_ledger_and_re_fans_out() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(parallel_params("run-p", 3))
+        .expect("create");
+    let node_id = created.first_node_row_id.clone();
+    let legs = vec![
+        (0i64, "sess-0".to_string()),
+        (1, "sess-1".to_string()),
+        (2, "sess-2".to_string()),
+    ];
+    store
+        .stamp_fanout(&node_id, Some("wf2-panel"), Some("claude"), &legs)
+        .expect("stamp fanout");
+
+    // Park the run (boot fence) then resume it.
+    let state = store.load_run_state("run-p").expect("load").expect("run");
+    let fenced = apply(
+        &store,
+        "run-p",
+        &state,
+        &WorkflowEvent::BootFence {
+            code: super::model::WorkflowInterruptionCode::RuntimeRestarted,
+        },
+    );
+    let resume_event = WorkflowEvent::Command(WorkflowCommand::Resume);
+    let transition = match next(&fenced, &resume_event) {
+        Decision::Transition(transition) => transition,
+        other => panic!("expected resume transition, got {other:?}"),
+    };
+    let applied = store
+        .apply_transition("run-p", &transition, &resume_event)
+        .expect("apply resume");
+    // Ruling F6: the ledger is truncated (a fresh generation) and the fan-out
+    // start effect is emitted; the actor re-inserts leg 0..N on relaunch.
+    assert!(applied.state.legs_of(&node_id).is_empty());
+    assert_eq!(
+        applied.side_effect,
+        ResolvedSideEffect::StartNodeLegs {
+            node_row_id: node_id
+        }
+    );
 }

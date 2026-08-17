@@ -1,14 +1,25 @@
 import type {
   WorkflowDefinitionRecordV2,
-  WorkflowDefinitionV2,
   WorkflowDocTemplateV2,
   WorkflowEdgeV2,
   WorkflowInputV2,
-  WorkflowNodeV2,
 } from "@proliferate/cloud-sdk";
 import type { WorkflowStarterTemplateV2 } from "#product/config/workflows/starter-templates";
-import { definitionHeadId, validateDefinitionV2 } from "#product/domain/workflows/definition-v2";
+import {
+  definitionHeadId,
+  validateDefinitionV2,
+  type WorkflowDefinitionV2WithLegs,
+  type WorkflowNodeLegV2,
+  type WorkflowNodeV2WithLegs,
+} from "#product/domain/workflows/definition-v2";
 import { normalizeDocSlugInput } from "#product/lib/domain/workflows/workflow-builder-validation";
+
+// `WorkflowNodeV2` alias kept local so the rest of this module (and its
+// re-exports) reads the widened, legs-aware shape everywhere a node type is
+// named. The bare SDK type has no `legs` field yet (see the comment on
+// `WorkflowNodeV2WithLegs`).
+type WorkflowNodeV2 = WorkflowNodeV2WithLegs;
+type WorkflowDefinitionV2 = WorkflowDefinitionV2WithLegs;
 
 /**
  * The gen-2 builder's draft shape and every pure operation on it: seeding,
@@ -60,6 +71,25 @@ export interface WorkflowBuilderActions {
   removeDocTemplate: (index: number) => void;
   updateDocTemplate: (index: number, patch: Partial<WorkflowDocTemplateV2>) => void;
   replaceDefinition: (definition: WorkflowDefinitionV2) => void;
+  /**
+   * Adds one parallel leg to a node (ruling F5). A node with no `legs` gains
+   * a 2-leg fan-out seeded from its current prompt (leg 0 mirrors it, leg 1
+   * starts blank); a node already fanned out gains one more leg, up to 8.
+   */
+  addLeg: (nodeId: string) => void;
+  /**
+   * Removes one leg. Removing down to a single leg collapses the node back
+   * to today's shape entirely: `legs` is omitted (never serialized at
+   * length 1), and the node's scalar `prompt` keeps the surviving leg's text.
+   */
+  removeLeg: (nodeId: string, legIndex: number) => void;
+  /**
+   * Edits one leg's prompt. Leg 0's editor IS the node's existing prompt
+   * field, so writing leg 0 also mirrors into `node.prompt` (ruling F5's
+   * `prompt === legs[0].prompt` invariant), keeping every existing consumer
+   * of the scalar prompt correct without them knowing legs exist.
+   */
+  updateLeg: (nodeId: string, legIndex: number, prompt: string) => void;
 }
 
 /** Applies one draft-to-draft edit; the hook supplies the state writer. */
@@ -154,6 +184,7 @@ export function serializeDraft(draft: WorkflowBuilderDraft): string {
       node.model?.agentKind ?? null,
       node.model?.modelId ?? null,
       node.model?.modeId ?? null,
+      node.legs ? node.legs.map((leg) => leg.prompt) : null,
     ]),
     edges: draft.edges.map((edge) => [edge.from, edge.to]),
     inputConnectedTo: draft.inputConnectedTo,
@@ -198,6 +229,53 @@ export function workflowBuilderActions(
     }), typeof patch.title === "string" || typeof patch.prompt === "string"
       ? { coalesceKey: `node:${nodeId}:${typeof patch.prompt === "string" ? "prompt" : "title"}` }
       : undefined),
+    addLeg: (nodeId) => editDraft((draft) => ({
+      ...draft,
+      nodes: draft.nodes.map((node) => {
+        if (node.id !== nodeId) {
+          return node;
+        }
+        const existingLegs = node.legs ?? [{ prompt: node.prompt }];
+        if (existingLegs.length >= 8) {
+          return node;
+        }
+        return { ...node, legs: [...existingLegs, { prompt: "" }] };
+      }),
+    })),
+    removeLeg: (nodeId, legIndex) => editDraft((draft) => ({
+      ...draft,
+      nodes: draft.nodes.map((node) => {
+        if (node.id !== nodeId || !node.legs) {
+          return node;
+        }
+        const nextLegs = node.legs.filter((_, index) => index !== legIndex);
+        if (nextLegs.length <= 1) {
+          // Collapse back to today's single-prompt shape: `legs` is omitted
+          // entirely (never serialized at length 1), keeping the surviving
+          // leg's text as the node's scalar prompt.
+          const { legs: _legs, ...rest } = node;
+          return { ...rest, prompt: nextLegs[0]?.prompt ?? node.prompt };
+        }
+        return { ...node, legs: nextLegs };
+      }),
+    })),
+    updateLeg: (nodeId, legIndex, prompt) => editDraft((draft) => ({
+      ...draft,
+      nodes: draft.nodes.map((node) => {
+        if (node.id !== nodeId || !node.legs) {
+          return node;
+        }
+        const nextLegs: WorkflowNodeLegV2[] = node.legs.map((leg, index) =>
+          index === legIndex ? { ...leg, prompt } : leg
+        );
+        // Leg 0's editor IS the node's prompt field: mirror it into the
+        // scalar `prompt` so ruling F5's invariant (`prompt === legs[0].prompt`)
+        // holds on every edit, not just at save time.
+        return legIndex === 0
+          ? { ...node, prompt, legs: nextLegs }
+          : { ...node, legs: nextLegs };
+      }),
+    })),
     moveNodeUp: (nodeId) => editDraft((draft) => ({
       ...draft,
       nodes: moveNode(draft.nodes, nodeId, -1),
@@ -310,6 +388,7 @@ function draftPartsFromDefinition(definition: WorkflowDefinitionV2): {
     nodes: nodes.map((node) => ({
       ...node,
       ...(node.model ? { model: { ...node.model } } : {}),
+      ...(node.legs ? { legs: node.legs.map((leg) => ({ ...leg })) } : {}),
     })),
     edges: definition.edges.map((edge) => ({ ...edge })),
     inputConnectedTo: validateDefinitionV2(definition).length === 0

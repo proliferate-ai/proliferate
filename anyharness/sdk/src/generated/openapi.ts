@@ -2945,8 +2945,23 @@ export interface components {
             name: string;
             required?: boolean;
         };
+        /**
+         * @description One parallel leg's authored prompt (ruling F5). Legs have no edges,
+         *     ordering, or inter-leg dependencies — the chain stays linear at node level.
+         */
+        DefinitionLeg: {
+            prompt: string;
+        };
         DefinitionNode: {
             id: string;
+            /**
+             * @description Parallel leg prompts (ruling F5). Absent means today's 1:1 node/session
+             *     behavior exactly (and serializes byte-identically). Present means a
+             *     parallel node: 2..=`MAX_NODE_LEGS` legs, each with its own authored
+             *     prompt, `legs[0].prompt` equal to `prompt` so leg 0 is the
+             *     representative session and `leg_index` addresses `legs[i]` uniformly.
+             */
+            legs?: components["schemas"]["DefinitionLeg"][] | null;
             model?: null | components["schemas"]["NodeModel"];
             prompt: string;
             title: string;

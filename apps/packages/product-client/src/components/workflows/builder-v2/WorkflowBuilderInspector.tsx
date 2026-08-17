@@ -89,6 +89,9 @@ export function WorkflowBuilderInspector({
           onRemove={() => actions.removeNode(selectedNode.id)}
           onMoveUp={() => actions.moveNodeUp(selectedNode.id)}
           onMoveDown={() => actions.moveNodeDown(selectedNode.id)}
+          onAddLeg={() => actions.addLeg(selectedNode.id)}
+          onRemoveLeg={(legIndex) => actions.removeLeg(selectedNode.id, legIndex)}
+          onUpdateLeg={(legIndex, prompt) => actions.updateLeg(selectedNode.id, legIndex, prompt)}
         />
       ) : null}
 

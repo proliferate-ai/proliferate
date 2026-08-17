@@ -64,6 +64,7 @@ fn snapshot() -> InvocationSnapshot {
                 title: "Plan".into(),
                 prompt: "Plan the work for @input:ticket, write @doc:plan-doc".into(),
                 model: None,
+                legs: None,
             },
             DefinitionNode {
                 id: "review".into(),
@@ -71,6 +72,7 @@ fn snapshot() -> InvocationSnapshot {
                 title: "Review".into(),
                 prompt: "Summarize @doc:plan-doc for review".into(),
                 model: None,
+                legs: None,
             },
             DefinitionNode {
                 id: "ship".into(),
@@ -78,6 +80,7 @@ fn snapshot() -> InvocationSnapshot {
                 title: "Ship".into(),
                 prompt: "Implement per @doc:plan-doc".into(),
                 model: None,
+                legs: None,
             },
         ],
         edges: vec![

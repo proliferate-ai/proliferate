@@ -101,6 +101,11 @@ export const WORKFLOW_BUILDER_COPY = {
   malformedReferenceHint: (raw: string, reason: string) =>
     `${raw} is not a valid reference: ${reason}`,
 
+  legPromptLabel: (legIndex: number) => `Leg ${legIndex} prompt`,
+  removeLegLabel: (legIndex: number) => `Remove leg ${legIndex}`,
+  addLegLabel: "Add leg",
+  addParallelLegsLabel: "Run in parallel",
+
   inputsHeading: "Inputs",
   inputsDescription: "Values supplied when a run starts. Prompts read them as @input:name.",
   inputsEmpty: "This workflow takes no inputs.",

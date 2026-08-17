@@ -25,6 +25,7 @@ use crate::domains::workflows::render::{
     node_session_title, render_envelope, run_context_dir_relative, RenderInputs,
 };
 use crate::domains::workflows::store::{emit_decision_events, ResolvedSideEffect, WorkflowStore};
+use super::launch::{launch_legs, launch_model};
 use crate::domains::workflows::transition::{
     next, Decision, IllegalTransition, RunState, TurnFinished, WorkflowCommand, WorkflowEvent,
 };
@@ -175,7 +176,10 @@ impl WorkflowActor {
                     self.dispose_session(&session_id).await;
                     effect = ResolvedSideEffect::StartNode { node_row_id };
                 }
-                ResolvedSideEffect::StartNode { node_row_id } => {
+                // Both share `launch_node`, which fans out (F5) or single-launches
+                // by leg count; a one-leg node behaves exactly as before.
+                ResolvedSideEffect::StartNode { node_row_id }
+                | ResolvedSideEffect::StartNodeLegs { node_row_id } => {
                     match self.launch_node(state, &node_row_id).await {
                         Ok(()) => break,
                         Err(error) => {
@@ -270,6 +274,17 @@ impl WorkflowActor {
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("node row {node_row_id} not in run state"))?;
         let definition: WorkflowDefinition = serde_json::from_str(&state.run.definition_json)?;
+
+        // Ruling F5: a parallel node fans out all N legs; one leg falls through.
+        if crate::domains::workflows::store::node_leg_count(state, node_row_id) > 1 {
+            let run = &state.run;
+            launch_legs(&self.deps, &self.run_id, &node, &definition,
+                &run.workspace_id, &run.arguments_json).await?;
+            if let Some(fresh) = self.deps.store.load_run_state(&self.run_id)? {
+                *state = fresh;
+            }
+            return Ok(());
+        }
 
         let envelope = match &node.rendered_envelope {
             Some(envelope) => envelope.clone(),
@@ -500,25 +515,5 @@ impl WorkflowActor {
                 "undo-advance session unlink failed",
             );
         }
-    }
-}
-
-/// Launch config precedence: the node row's own pick wins (adhoc, and
-/// adhoc-redo inheritance per Ruling K.1); a defined/replacement row resolves
-/// through the frozen definition by its `definition_node_id`; otherwise the
-/// boring app default.
-pub(super) fn launch_model(
-    node: &WorkflowRunNodeRecord,
-    definition: &WorkflowDefinition,
-) -> (String, Option<String>, Option<String>) {
-    let model = node.model.clone().or_else(|| {
-        node.definition_node_id
-            .as_deref()
-            .and_then(|id| definition.nodes.iter().find(|node| node.id == id))
-            .and_then(|node| node.model.clone())
-    });
-    match model {
-        Some(model) => (model.agent_kind, model.model_id, model.mode_id),
-        None => (DEFAULT_WORKFLOW_AGENT_KIND.to_string(), None, None),
     }
 }

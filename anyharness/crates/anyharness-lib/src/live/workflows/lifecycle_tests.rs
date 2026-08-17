@@ -39,6 +39,7 @@ pub(super) fn agent_node(id: &str, prompt: &str) -> DefinitionNode {
         title: format!("Node {id}"),
         prompt: prompt.into(),
         model: None,
+        legs: None,
     }
 }
 

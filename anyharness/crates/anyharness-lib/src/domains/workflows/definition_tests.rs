@@ -2,9 +2,9 @@
 //! invocation-snapshot revalidation, with a negative control per rule.
 
 use super::definition::{
-    parse_references, DefinitionEdge, DefinitionInput, DefinitionNode, DocTemplate,
+    parse_references, DefinitionEdge, DefinitionInput, DefinitionLeg, DefinitionNode, DocTemplate,
     InvocationPlacement, InvocationSnapshot, PlacementMode, PromptReference, WorkflowDefinition,
-    DEFINITION_SCHEMA_VERSION,
+    DEFINITION_SCHEMA_VERSION, MAX_NODE_LEGS,
 };
 use super::model::WorkflowNodeType;
 
@@ -15,6 +15,7 @@ fn node(id: &str, prompt: &str) -> DefinitionNode {
         title: format!("Node {id}"),
         prompt: prompt.into(),
         model: None,
+        legs: None,
     }
 }
 
@@ -426,4 +427,116 @@ fn snapshot_pins_the_workspace_id_to_the_existing_workspace_mode() {
             error.detail
         );
     }
+}
+
+// --- Ruling F5: parallel-node leg prompts ---
+
+/// A single Agent node carrying `prompts` as its leg list; `prompt` (leg 0)
+/// mirrors `prompts[0]` so the representative invariant holds by construction.
+fn legged(prompts: &[&str]) -> WorkflowDefinition {
+    WorkflowDefinition {
+        schema_version: DEFINITION_SCHEMA_VERSION,
+        nodes: vec![DefinitionNode {
+            id: "panel".into(),
+            node_type: WorkflowNodeType::Agent,
+            title: "Panel".into(),
+            prompt: prompts[0].into(),
+            model: None,
+            legs: Some(prompts.iter().map(|p| DefinitionLeg { prompt: (*p).into() }).collect()),
+        }],
+        edges: vec![],
+        inputs: vec![],
+        doc_templates: vec![],
+    }
+}
+
+#[test]
+fn a_valid_two_leg_node_passes_and_exposes_both_prompts() {
+    let definition = legged(&["correctness review", "security review"]);
+    assert_eq!(definition.validate().unwrap(), vec!["panel".to_string()]);
+    assert_eq!(
+        definition.nodes[0].leg_prompts(),
+        vec!["correctness review", "security review"]
+    );
+}
+
+#[test]
+fn legs_cap_at_max_node_legs() {
+    let prompts: Vec<String> = (0..MAX_NODE_LEGS).map(|i| format!("leg {i}")).collect();
+    let refs: Vec<&str> = prompts.iter().map(String::as_str).collect();
+    assert!(legged(&refs).validate().is_ok(), "8 legs is the cap and valid");
+
+    let too_many: Vec<String> = (0..MAX_NODE_LEGS + 1).map(|i| format!("leg {i}")).collect();
+    let refs: Vec<&str> = too_many.iter().map(String::as_str).collect();
+    assert!(legged(&refs).validate().is_err(), "9 legs exceeds the cap");
+}
+
+#[test]
+fn a_single_leg_list_is_rejected() {
+    // A one-leg node is expressed the old way (no `legs`); a length-1 list is
+    // a validation error, not today's behavior.
+    assert!(legged(&["only one"]).validate().is_err());
+}
+
+#[test]
+fn an_empty_leg_list_is_rejected() {
+    let mut definition = legged(&["a", "b"]);
+    definition.nodes[0].legs = Some(vec![]);
+    assert!(definition.validate().is_err());
+}
+
+#[test]
+fn a_blank_leg_prompt_is_rejected() {
+    let mut definition = legged(&["real prompt", "   "]);
+    let error = definition.validate().unwrap_err();
+    assert!(error.detail.contains("leg 1"), "{}", error.detail);
+    // And leg 0 blank when it equals a blank node prompt:
+    definition.nodes[0].prompt = "   ".into();
+    definition.nodes[0].legs = Some(vec![
+        DefinitionLeg { prompt: "   ".into() },
+        DefinitionLeg { prompt: "real".into() },
+    ]);
+    assert!(definition.validate().is_err());
+}
+
+#[test]
+fn node_prompt_must_equal_leg_zero() {
+    let mut definition = legged(&["representative", "sibling"]);
+    definition.nodes[0].prompt = "drifted from leg 0".into();
+    let error = definition.validate().unwrap_err();
+    assert!(error.detail.contains("legs[0]"), "{}", error.detail);
+}
+
+#[test]
+fn a_reference_error_inside_a_leg_names_the_leg() {
+    // Leg 1 references an undeclared input; the error must carry the leg index
+    // (the prompt-to-leg cardinal sin surfaces at authoring, per F5).
+    let mut definition = legged(&["fine", "look at @input:missing"]);
+    definition.inputs = vec![];
+    let error = definition.validate().unwrap_err();
+    assert!(error.detail.contains("leg 1"), "{}", error.detail);
+    assert!(error.detail.contains("missing"), "{}", error.detail);
+}
+
+#[test]
+fn a_valid_leg_reference_resolves_against_declared_inputs_and_docs() {
+    let mut definition = legged(&["plan @input:ticket", "review @doc:plan-doc"]);
+    definition.inputs = vec![DefinitionInput {
+        name: "ticket".into(),
+        description: None,
+        required: false,
+    }];
+    definition.doc_templates = vec![DocTemplate {
+        slug: "plan-doc".into(),
+        producing_node_id: "panel".into(),
+        body: String::new(),
+    }];
+    assert!(definition.validate().is_ok());
+}
+
+#[test]
+fn an_unknown_field_inside_a_leg_is_rejected() {
+    // deny_unknown_fields on DefinitionLeg: a stray key fails deserialization.
+    let json = r#"{"prompt":"do it","weight":3}"#;
+    assert!(serde_json::from_str::<DefinitionLeg>(json).is_err());
 }

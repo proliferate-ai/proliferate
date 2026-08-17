@@ -35,6 +35,32 @@ export type {
   PromptToken,
 } from "./definition-v2-references";
 
+/**
+ * One parallel leg of a node's fan-out (ruling F5, frozen wire shape, all
+ * three grammar planes): its own authored prompt, its own session at run
+ * time. Not part of the `@proliferate/cloud-sdk` `WorkflowNodeV2` type yet —
+ * see `WorkflowNodeV2WithLegs` below.
+ */
+export interface WorkflowNodeLegV2 {
+  prompt: string;
+}
+
+/**
+ * `WorkflowNodeV2` widened with the optional `legs` field. The SDK type
+ * (`cloud/sdk/src/types/workflows-v2.ts`) does not carry `legs` yet — that
+ * package is out of scope for this change (a parallel effort owns
+ * anyharness/sdk and cloud/sdk types) — so this local extension is the
+ * product-client-side stand-in until the SDK is regenerated/updated to match
+ * the frozen wire shape. Everywhere in this domain that needs to read or
+ * write `legs` should use this type (or `WorkflowDefinitionV2WithLegs`)
+ * instead of the bare SDK type.
+ */
+export type WorkflowNodeV2WithLegs = WorkflowNodeV2 & { legs?: WorkflowNodeLegV2[] };
+
+export type WorkflowDefinitionV2WithLegs = Omit<WorkflowDefinitionV2, "nodes"> & {
+  nodes: WorkflowNodeV2WithLegs[];
+};
+
 export type DefinitionV2IssueCode =
   | "not_linear"
   | "invalid_node_id"
@@ -46,7 +72,10 @@ export type DefinitionV2IssueCode =
   | "unknown_doc_ref"
   | "unknown_producing_node"
   | "empty_nodes"
-  | "dangling_edge";
+  | "dangling_edge"
+  | "invalid_leg_count"
+  | "blank_leg_prompt"
+  | "leg_prompt_mismatch";
 
 export interface DefinitionV2Issue {
   code: DefinitionV2IssueCode;
@@ -77,7 +106,7 @@ export interface DefinitionV2Issue {
  * Declared input names and doc slugs are grammar-checked by the control plane's
  * wire models, not here — this validator sees whatever the builder holds.
  */
-export function validateDefinitionV2(def: WorkflowDefinitionV2): DefinitionV2Issue[] {
+export function validateDefinitionV2(def: WorkflowDefinitionV2WithLegs): DefinitionV2Issue[] {
   const issues: DefinitionV2Issue[] = [];
   // `edges` is required on the wire (the runtime rejects a definition without
   // it); `inputs`/`docTemplates` may be omitted, and omitted means "none".
@@ -186,36 +215,84 @@ export function validateDefinitionV2(def: WorkflowDefinitionV2): DefinitionV2Iss
   const inputNames = new Set(inputs.map((input) => input.name));
   const docSlugs = new Set(docTemplates.map((doc) => doc.slug));
   for (const node of def.nodes) {
-    const refs = collectPromptReferences(node.prompt);
-    for (const malformed of refs.malformed) {
+    // Ruling F5: a node's `legs` (when present) are the authored prompts; the
+    // scalar `node.prompt` is required to equal `legs[0].prompt`, so scanning
+    // both would double-report the same references for leg 0. Scan legs
+    // instead of the scalar prompt whenever legs are present.
+    const prompts = node.legs && node.legs.length > 0
+      ? node.legs.map((leg) => leg.prompt)
+      : [node.prompt];
+    prompts.forEach((prompt, legIndex) => {
+      const refs = collectPromptReferences(prompt);
+      for (const malformed of refs.malformed) {
+        issues.push({
+          code: "malformed_reference",
+          message:
+            `Node “${node.id}” prompt has a malformed reference “${malformed.raw}”: ` +
+            `${describeMalformedReference(malformed)}.`,
+          nodeId: node.id,
+          ref: malformed.raw,
+          ...(node.legs ? { index: legIndex } : {}),
+        });
+      }
+      for (const name of refs.inputs) {
+        if (!inputNames.has(name)) {
+          issues.push({
+            code: "unknown_input_ref",
+            message: `Node “${node.id}” prompt references unknown input “@input:${name}”.`,
+            nodeId: node.id,
+            ref: name,
+            ...(node.legs ? { index: legIndex } : {}),
+          });
+        }
+      }
+      for (const slug of refs.docs) {
+        if (!docSlugs.has(slug)) {
+          issues.push({
+            code: "unknown_doc_ref",
+            message: `Node “${node.id}” prompt references unknown doc template “@doc:${slug}”.`,
+            nodeId: node.id,
+            ref: slug,
+            ...(node.legs ? { index: legIndex } : {}),
+          });
+        }
+      }
+    });
+  }
+
+  for (const node of def.nodes) {
+    if (node.legs === undefined) {
+      continue;
+    }
+    if (node.legs.length < 2 || node.legs.length > 8) {
       issues.push({
-        code: "malformed_reference",
+        code: "invalid_leg_count",
         message:
-          `Node “${node.id}” prompt has a malformed reference “${malformed.raw}”: ` +
-          `${describeMalformedReference(malformed)}.`,
+          `Node “${node.id}” has ${node.legs.length} legs; a parallel node must have between ` +
+          "2 and 8 legs (a single leg is expressed without `legs` at all).",
         nodeId: node.id,
-        ref: malformed.raw,
       });
+      continue;
     }
-    for (const name of refs.inputs) {
-      if (!inputNames.has(name)) {
+    node.legs.forEach((leg, index) => {
+      if (!leg.prompt.trim()) {
         issues.push({
-          code: "unknown_input_ref",
-          message: `Node “${node.id}” prompt references unknown input “@input:${name}”.`,
+          code: "blank_leg_prompt",
+          message: `Node “${node.id}” leg ${index + 1} prompt is required.`,
           nodeId: node.id,
-          ref: name,
+          index,
         });
       }
-    }
-    for (const slug of refs.docs) {
-      if (!docSlugs.has(slug)) {
-        issues.push({
-          code: "unknown_doc_ref",
-          message: `Node “${node.id}” prompt references unknown doc template “@doc:${slug}”.`,
-          nodeId: node.id,
-          ref: slug,
-        });
-      }
+    });
+    if (node.legs[0] && node.legs[0].prompt !== node.prompt) {
+      issues.push({
+        code: "leg_prompt_mismatch",
+        message:
+          `Node “${node.id}” prompt must equal its first leg's prompt ` +
+          "(leg 0 is the representative session).",
+        nodeId: node.id,
+        index: 0,
+      });
     }
   }
 
@@ -229,7 +306,7 @@ export function validateDefinitionV2(def: WorkflowDefinitionV2): DefinitionV2Iss
  * convention; this module follows `validateDefinitionV2`'s own
  * return-a-value, no-exceptions style rather than introduce one).
  */
-export function orderedNodes(def: WorkflowDefinitionV2): WorkflowNodeV2[] {
+export function orderedNodes(def: WorkflowDefinitionV2WithLegs): WorkflowNodeV2WithLegs[] {
   if (validateDefinitionV2(def).length > 0) {
     return [];
   }
@@ -262,7 +339,7 @@ export function definitionHeadId(def: WorkflowDefinitionV2): string | null {
  * covering all of them (branch, merge, cycle, or disconnected components).
  * A single node with zero edges is a valid (length-1) chain.
  */
-function computeLinearOrder(def: WorkflowDefinitionV2): string[] | null {
+function computeLinearOrder(def: WorkflowDefinitionV2WithLegs): string[] | null {
   const presentIds = new Set(def.nodes.map((node) => node.id));
   if (presentIds.size === 0) {
     return [];

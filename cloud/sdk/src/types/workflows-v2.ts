@@ -15,12 +15,23 @@ export interface WorkflowNodeModelV2 {
   modeId?: string | null;
 }
 
+/** One parallel leg's authored prompt (ruling F5). */
+export interface WorkflowNodeLegV2 {
+  prompt: string;
+}
+
 export interface WorkflowNodeV2 {
   id: string;
   type: WorkflowNodeTypeV2;
   title: string;
   prompt: string;
   model?: WorkflowNodeModelV2 | null;
+  /**
+   * Parallel legs (ruling F5). Present only with 2..8 entries; `prompt` always
+   * equals `legs[0].prompt` (leg 0 is the representative session). Absent =
+   * a single-leg node, today's behavior exactly.
+   */
+  legs?: WorkflowNodeLegV2[];
 }
 
 export interface WorkflowEdgeV2 {

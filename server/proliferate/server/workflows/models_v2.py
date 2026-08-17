@@ -67,12 +67,34 @@ class WorkflowNodeModelConfigV2(WorkflowDefinitionWireModel):
     ) = None
 
 
+class WorkflowNodeLegV2(WorkflowDefinitionWireModel):
+    """One parallel leg of a node's fan-out (ruling F5): its own authored
+    prompt, its own session at run time. No edges, no ordering, no inter-leg
+    dependencies — a leg is not a node."""
+
+    prompt: Annotated[str, StringConstraints(min_length=1, max_length=100_000)]
+
+    @field_validator("prompt")
+    @classmethod
+    def prompt_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Leg prompt is required.")
+        return value
+
+
 class WorkflowNodeV2(WorkflowDefinitionWireModel):
     id: Annotated[str, NODE_ID_CONSTRAINTS]
     type: Literal["agent", "human_in_loop"]
     title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
     prompt: Annotated[str, StringConstraints(min_length=1, max_length=100_000)]
     model: WorkflowNodeModelConfigV2 | None = None
+    # Ruling F5 (REVERSED from the drafted recommendation): a node fans out to
+    # N parallel legs, each carrying its own authored prompt. Absent = today's
+    # 1-session-per-node behavior, byte-identical. When present: 2..8 legs
+    # (a single-leg node is expressed the old way, without `legs` at all), and
+    # `prompt` MUST equal `legs[0].prompt` (leg 0 is the representative
+    # session, keeping every existing consumer of the scalar `prompt` correct).
+    legs: list[WorkflowNodeLegV2] | None = Field(default=None, min_length=2, max_length=8)
 
     @field_validator("prompt")
     @classmethod
@@ -80,6 +102,14 @@ class WorkflowNodeV2(WorkflowDefinitionWireModel):
         if not value.strip():
             raise ValueError("Prompt is required.")
         return value
+
+    @model_validator(mode="after")
+    def prompt_must_equal_first_leg_prompt(self) -> "WorkflowNodeV2":
+        if self.legs is not None and self.prompt != self.legs[0].prompt:
+            raise ValueError(
+                "Node prompt must equal legs[0].prompt (leg 0 is the representative session)."
+            )
+        return self
 
 
 class WorkflowEdgeV2(WorkflowDefinitionWireModel):
