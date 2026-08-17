@@ -515,6 +515,7 @@ fn mobility_round_trip_recreates_missing_canonical_row_beside_same_seq_id_collis
             delivery,
             pending,
             inserted: true,
+            ..
         } => (delivery, pending),
         outcome => panic!("expected inserted enqueue, got {outcome:?}"),
     };

@@ -11,16 +11,29 @@ use crate::domains::sessions::store::pending_prompts::{
     insert_pending_prompt_row, map_pending_prompt,
 };
 
+mod coalescing;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ClaimedDeliveryEnqueueOutcome {
     Enqueued {
         delivery: CompletionDeliveryRecord,
         pending: PendingPromptRecord,
         inserted: bool,
+        /// An older eligible completed wake for the same child whose queue row
+        /// was rewritten in place to carry this delivery; that delivery is
+        /// retired without its own wake turn.
+        superseded_delivery_id: Option<String>,
     },
     AlreadyVisible {
         delivery: CompletionDeliveryRecord,
         parent_turn_id: String,
+    },
+    /// Terminal without a parent prompt: the child's own message for this turn
+    /// already reached the parent. The completion stays durable and the worker
+    /// still injects the completion metadata event, but no wake turn is
+    /// created in the parent transcript.
+    Suppressed {
+        delivery: CompletionDeliveryRecord,
     },
     Stale,
 }
@@ -134,14 +147,54 @@ impl CompletionDeliveryStore {
                 .filter(|record| pending_prompt_matches_delivery(record, &delivery))
                 .collect::<Vec<_>>();
             canonical.sort_by_key(|record| record.seq);
-            let (pending, inserted) = match delivery
-                .parent_prompt_seq
-                .and_then(|expected| canonical.iter().find(|record| record.seq == expected))
-                .cloned()
-                .or_else(|| canonical.first().cloned())
+            // Coalescing and suppression apply only to a delivery that has
+            // never reached the parent queue. A previously enqueued delivery
+            // (recreate/retry paths) keeps the legacy exactly-once
+            // reconciliation.
+            let is_fresh = delivery.parent_prompt_seq.is_none() && canonical.is_empty();
+            let adopted = if is_fresh {
+                coalescing::adopt_superseded_sibling_wake(tx, &delivery, now)?
+            } else {
+                None
+            };
+            if is_fresh
+                && adopted.is_none()
+                && coalescing::wake_is_redundant_with_child_message(tx, &delivery)?
             {
-                Some(record) => (record, false),
-                None => (insert_canonical_prompt(tx, &delivery, now)?, true),
+                let changed = tx.execute(
+                    "UPDATE session_link_completion_deliveries
+                     SET state = 'delivered', delivered_at = COALESCE(delivered_at, ?3),
+                         updated_at = ?3, lease_token = NULL, lease_expires_at = NULL,
+                         last_error_code = NULL
+                     WHERE delivery_id = ?1 AND lease_token = ?2
+                       AND state != 'delivered'",
+                    params![delivery.delivery_id, lease_token, now],
+                )?;
+                if changed != 1 {
+                    return Err(completion_delivery_error(
+                        "claimed delivery lease changed during wake suppression",
+                    ));
+                }
+                let suppressed = find_delivery_in_tx(tx, delivery_id)?.ok_or_else(|| {
+                    completion_delivery_error("suppressed outbox row disappeared")
+                })?;
+                return Ok(ClaimedDeliveryEnqueueOutcome::Suppressed {
+                    delivery: suppressed,
+                });
+            }
+            let (pending, inserted, superseded_delivery_id) = match adopted {
+                Some((record, superseded_delivery_id)) => {
+                    (record, false, Some(superseded_delivery_id))
+                }
+                None => match delivery
+                    .parent_prompt_seq
+                    .and_then(|expected| canonical.iter().find(|record| record.seq == expected))
+                    .cloned()
+                    .or_else(|| canonical.first().cloned())
+                {
+                    Some(record) => (record, false, None),
+                    None => (insert_canonical_prompt(tx, &delivery, now)?, true, None),
+                },
             };
             let duplicate_seqs = canonical
                 .iter()
@@ -185,6 +238,7 @@ impl CompletionDeliveryStore {
                 delivery: enqueued,
                 pending,
                 inserted,
+                superseded_delivery_id,
             })
         })
     }
@@ -255,18 +309,22 @@ fn load_prompt_id_rows(
     rows
 }
 
-fn insert_canonical_prompt(
-    conn: &rusqlite::Connection,
-    delivery: &CompletionDeliveryRecord,
-    queued_at: &str,
-) -> rusqlite::Result<PendingPromptRecord> {
-    let payload = PromptPayload::text(delivery.notification_text.clone()).with_provenance(
+fn canonical_wake_payload(delivery: &CompletionDeliveryRecord) -> PromptPayload {
+    PromptPayload::text(delivery.notification_text.clone()).with_provenance(
         PromptProvenance::SubagentWake {
             session_link_id: delivery.session_link_id.clone(),
             completion_id: delivery.delivery_id.clone(),
             label: delivery.label.clone(),
         },
-    );
+    )
+}
+
+fn insert_canonical_prompt(
+    conn: &rusqlite::Connection,
+    delivery: &CompletionDeliveryRecord,
+    queued_at: &str,
+) -> rusqlite::Result<PendingPromptRecord> {
+    let payload = canonical_wake_payload(delivery);
     let blocks_json = payload.blocks_json().map_err(sql_conversion_error)?;
     let provenance_json = payload.provenance_json().map_err(sql_conversion_error)?;
     let changed = conn.execute(
@@ -358,6 +416,10 @@ fn update_completion_projection(
 #[cfg(test)]
 #[path = "enqueue/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "enqueue/coalescing_tests.rs"]
+mod coalescing_tests;
 
 #[cfg(test)]
 #[path = "enqueue/reconciliation_tests.rs"]

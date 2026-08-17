@@ -41,6 +41,17 @@ pub(super) fn pending_prompt_has_subagent_wake_provenance(record: &PendingPrompt
     )
 }
 
+/// The child session an ordinary queued agent message came from, when the row
+/// carries trusted internal `agent_session` provenance.
+pub(super) fn pending_prompt_agent_session_source(record: &PendingPromptRecord) -> Option<String> {
+    match pending_prompt_provenance(record)? {
+        PromptProvenance::AgentSession {
+            source_session_id, ..
+        } => Some(source_session_id),
+        _ => None,
+    }
+}
+
 pub(in crate::domains::sessions::store) fn pending_prompt_is_canonical_delivery(
     conn: &rusqlite::Connection,
     record: &PendingPromptRecord,

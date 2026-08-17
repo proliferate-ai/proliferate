@@ -79,9 +79,13 @@ pub(in crate::domains::sessions::store) fn persist_subagent_wake_turn_in_tx(
     {
         return Ok(DurableSubagentWakeTurnOutcome::Stale);
     }
+    // A coalescing rewrite may replace the queue row's payload after the actor
+    // copied it for staging (the row then resolves to the newer delivery). The
+    // stale copy is not admissible; the enqueued delivery's retry redelivers
+    // the rewritten wake.
     let Some(staged) = staged_wake_matches_delivery(&input.events, input.queue_seq, &delivery)
     else {
-        return Err(invalid_admission("staged completion wake is not canonical"));
+        return Ok(DurableSubagentWakeTurnOutcome::Stale);
     };
     let durable_next_seq: i64 = tx.query_row(
         "SELECT COALESCE(MAX(seq), 0) + 1 FROM session_events WHERE session_id = ?1",

@@ -14,10 +14,10 @@ use crate::domains::sessions::store::pending_prompts::PendingPromptWriteError;
 use crate::domains::sessions::store::SessionStore;
 use crate::persistence::Db;
 
-const CLAIMED_AT: &str = "2026-08-11T00:02:00Z";
-const RETRY_AT: &str = "2026-08-11T00:02:02Z";
+pub(super) const CLAIMED_AT: &str = "2026-08-11T00:02:00Z";
+pub(super) const RETRY_AT: &str = "2026-08-11T00:02:02Z";
 
-fn claim(store: &CompletionDeliveryStore, lease_token: &str) -> CompletionDeliveryRecord {
+pub(super) fn claim(store: &CompletionDeliveryStore, lease_token: &str) -> CompletionDeliveryRecord {
     store
         .claim_next_due(CLAIMED_AT, "2026-08-11T00:02:30Z", lease_token)
         .expect("claim")
@@ -93,7 +93,6 @@ pub(super) fn append_parent_prompt_triplet(
             .expect("append parent transcript event");
     }
 }
-
 #[test]
 fn atomic_enqueue_preserves_ordinary_collision_and_adds_one_canonical_row() {
     let db = Db::open_in_memory().expect("open db");
@@ -117,6 +116,7 @@ fn atomic_enqueue_preserves_ordinary_collision_and_adds_one_canonical_row() {
         delivery: enqueued,
         pending,
         inserted,
+        ..
     } = outcome
     else {
         panic!("expected enqueue");

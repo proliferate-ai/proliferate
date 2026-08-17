@@ -9,6 +9,7 @@ use crate::domains::sessions::links::model::{
 };
 use crate::domains::sessions::links::store::SessionLinkStore;
 use crate::domains::sessions::model::{SessionEventRecord, SessionMcpBindingPolicy, SessionRecord};
+use crate::domains::sessions::prompt::{provenance::PromptProvenance, PromptPayload};
 use crate::domains::sessions::store::completion_deliveries::DurableTerminalTurn;
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::sessions::subagents::delivery::CompletionDeliveryState;
@@ -209,6 +210,65 @@ async fn delivered_completion_injects_one_completion_event_into_the_parent_trans
         parent_completion_events(&state).len(),
         1,
         "a recovered delivery must not inject a second completion event"
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn suppressed_completion_injects_metadata_without_a_wake_prompt() {
+    let _lock = test_support::lock_env();
+    let _bearer = test_support::set_bearer_token_env(None);
+    let _data_key = test_support::set_data_key_env(None);
+    let state = subagent_with_captured_completion().await;
+    // The child's own report for the terminal turn is already queued for the
+    // parent, so the completion wake is redundant.
+    let message = SessionStore::new(state.db.clone())
+        .insert_pending_prompt_payload(
+            PARENT_ID,
+            &PromptPayload::text("final output".into()).with_provenance(
+                PromptProvenance::AgentSession {
+                    source_session_id: CHILD_ID.into(),
+                    session_link_id: None,
+                    label: Some("worker".into()),
+                },
+            ),
+            None,
+        )
+        .expect("queue child message");
+    let worker = worker(&state);
+
+    worker.process_available().await;
+    assert_eq!(
+        parent_completion_events(&state).len(),
+        1,
+        "suppression still injects the completion metadata event"
+    );
+    let deliveries = CompletionDeliveryStore::new(state.db.clone())
+        .list_all_for_test()
+        .expect("deliveries");
+    assert_eq!(deliveries.len(), 1);
+    assert_eq!(deliveries[0].state, CompletionDeliveryState::Delivered);
+    assert!(deliveries[0].parent_prompt_seq.is_none());
+    assert!(deliveries[0].parent_turn_id.is_none());
+    let queue = SessionStore::new(state.db.clone())
+        .list_pending_prompts(PARENT_ID)
+        .expect("queue");
+    assert_eq!(
+        queue.iter().map(|row| row.seq).collect::<Vec<_>>(),
+        vec![message.seq],
+        "only the child's own message remains queued"
+    );
+
+    // Recovery replay: the terminal delivered row is never re-claimed, so no
+    // second completion event or late wake prompt appears.
+    force_delivery_due(&state, &deliveries[0].delivery_id);
+    worker.process_available().await;
+    assert_eq!(parent_completion_events(&state).len(), 1);
+    assert_eq!(
+        SessionStore::new(state.db.clone())
+            .list_pending_prompts(PARENT_ID)
+            .expect("queue")
+            .len(),
+        1
     );
 }
 

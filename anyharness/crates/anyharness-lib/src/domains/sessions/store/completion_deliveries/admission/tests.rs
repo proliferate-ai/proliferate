@@ -9,14 +9,18 @@ use super::super::enqueue::ClaimedDeliveryEnqueueOutcome;
 use super::super::tests::{persist_delivery, seed_link};
 use super::super::{
     CompletionDeliveryRecord, CompletionDeliveryState, CompletionDeliveryStore,
-    DurableSubagentWakeTurn, DurableSubagentWakeTurnOutcome,
+    DurableSubagentWakeTurn, DurableSubagentWakeTurnOutcome, DurableTerminalTurn,
 };
+use crate::domains::sessions::extensions::SessionTurnOutcome;
 use crate::domains::sessions::model::{PendingPromptRecord, SessionEventRecord};
 use crate::domains::sessions::prompt::provenance::PromptProvenance;
 use crate::domains::sessions::store::SessionStore;
 use crate::persistence::Db;
 
 const NOW: &str = "2026-08-11T00:04:00Z";
+
+#[path = "tests/actionable_outcome_tests.rs"]
+mod actionable_outcome_tests;
 
 fn enqueued_fixture() -> (
     Db,
@@ -334,6 +338,106 @@ fn exact_visible_turn_repeatedly_cleans_stale_canonical_rows_without_new_events(
             corrected_parent_prompt_seq
         );
     }
+}
+
+// A coalescing rewrite can replace the queue row's payload after the parent
+// actor copied it for staging. The stale copy must not execute as a turn, and
+// the rewritten wake must remain admissible afterwards.
+#[test]
+fn stale_actor_copy_of_a_rewritten_wake_is_skipped_then_redelivered() {
+    let (db, session_store, delivery_store, first, first_pending) = enqueued_fixture();
+    let stale_copy = staged_input(&first, &first_pending, 1);
+
+    db.with_conn(|conn| {
+        conn.execute(
+            "UPDATE session_link_completion_deliveries
+             SET next_attempt_at = '2999-01-01T00:00:00Z' WHERE delivery_id = ?1",
+            [first.delivery_id.as_str()],
+        )?;
+        Ok(())
+    })
+    .expect("park first delivery retry");
+    session_store
+        .persist_terminal_turn_record(&DurableTerminalTurn {
+            terminal_id: "terminal-turn-2".into(),
+            session_id: "child-1".into(),
+            turn_id: "turn-2".into(),
+            outcome: SessionTurnOutcome::Completed,
+            assistant_text: Some("Newest answer".into()),
+            events: vec![SessionEventRecord {
+                id: 0,
+                session_id: "child-1".into(),
+                seq: 2,
+                timestamp: "2026-08-11T00:03:00Z".into(),
+                turn_id: Some("turn-2".into()),
+                item_id: None,
+                event_type: "turn_ended".into(),
+                payload_json: r#"{"type":"turn_ended","stopReason":"end_turn"}"#.into(),
+            }],
+            completed_at: "2026-08-11T00:03:00Z".into(),
+        })
+        .expect("persist second terminal turn");
+    delivery_store
+        .claim_next_due("2026-08-11T00:03:05Z", "2026-08-11T00:03:35Z", "worker-2")
+        .expect("claim second")
+        .expect("second claimed");
+    let (second, rewritten) = match delivery_store
+        .enqueue_claimed_canonical(
+            "terminal-turn-2",
+            "worker-2",
+            "2026-08-11T00:03:05Z",
+            "2026-08-11T00:03:07Z",
+        )
+        .expect("coalesce second wake")
+    {
+        ClaimedDeliveryEnqueueOutcome::Enqueued {
+            delivery,
+            pending,
+            superseded_delivery_id,
+            ..
+        } => {
+            assert_eq!(
+                superseded_delivery_id.as_deref(),
+                Some(first.delivery_id.as_str())
+            );
+            (delivery, pending)
+        }
+        _ => panic!("expected coalesced enqueue"),
+    };
+    assert_eq!(rewritten.seq, first_pending.seq);
+
+    assert_eq!(
+        session_store
+            .persist_subagent_wake_turn_record(&stale_copy)
+            .expect("stale copy skipped"),
+        DurableSubagentWakeTurnOutcome::Stale
+    );
+    assert!(session_store
+        .list_events(&second.parent_session_id)
+        .expect("events")
+        .is_empty());
+    assert_eq!(
+        session_store
+            .find_pending_prompt(&second.parent_session_id, rewritten.seq)
+            .expect("pending")
+            .expect("row"),
+        rewritten
+    );
+
+    assert_eq!(
+        session_store
+            .persist_subagent_wake_turn_record(&staged_input(&second, &rewritten, 1))
+            .expect("redeliver rewritten wake"),
+        DurableSubagentWakeTurnOutcome::Admitted
+    );
+    assert_eq!(
+        delivery_store
+            .find(&second.delivery_id)
+            .expect("second")
+            .expect("row")
+            .state,
+        CompletionDeliveryState::Delivered
+    );
 }
 
 #[test]
