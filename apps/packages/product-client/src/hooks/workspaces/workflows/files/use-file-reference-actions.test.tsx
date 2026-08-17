@@ -44,10 +44,12 @@ const viewerMocks = vi.hoisted(() => ({
 const hostMocks = vi.hoisted(() => ({
   desktopAvailable: true,
   writeText: vi.fn(async () => undefined),
+  getHomeDirectory: vi.fn(async () => "/Users/pablo"),
   openTarget: vi.fn(async () => undefined),
   isDirectory: vi.fn(async () => false),
   reveal: vi.fn(async () => undefined),
   files: null as unknown as {
+    getHomeDirectory: ReturnType<typeof vi.fn>;
     isDirectory: ReturnType<typeof vi.fn>;
     openTarget: ReturnType<typeof vi.fn>;
     reveal: ReturnType<typeof vi.fn>;
@@ -55,6 +57,7 @@ const hostMocks = vi.hoisted(() => ({
 }));
 
 hostMocks.files = {
+  getHomeDirectory: hostMocks.getHomeDirectory,
   isDirectory: hostMocks.isDirectory,
   openTarget: hostMocks.openTarget,
   reveal: hostMocks.reveal,
@@ -125,6 +128,7 @@ vi.mock("#product/hooks/workspaces/workflows/files/use-fuzzy-file-resolver", () 
 
 afterEach(() => {
   hostMocks.desktopAvailable = true;
+  hostMocks.getHomeDirectory.mockResolvedValue("/Users/pablo");
   hostMocks.isDirectory.mockResolvedValue(false);
   editorMocks.openInDefaultEditor.mockResolvedValue(true);
   statMocks.kind = "file";
@@ -323,6 +327,35 @@ describe("useFileReferenceActions", () => {
     expect(viewerMocks.openTarget).not.toHaveBeenCalled();
   });
 
+  it("expands a home-relative hidden file before opening it on Desktop", async () => {
+    statMocks.kind = null;
+    let resolveHomeDirectory!: (path: string) => void;
+    hostMocks.getHomeDirectory.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveHomeDirectory = resolve;
+    }));
+    const rawPath = "~/.proliferate-local/dev/profiles/wf2pablo/app/diagnostics-dev.env";
+    const absolutePath = "/Users/pablo/.proliferate-local/dev/profiles/wf2pablo/app/diagnostics-dev.env";
+    const { result } = renderHook(
+      () => useFileReferenceActions({ rawPath }),
+      { wrapper: workspaceWrapper("/repo") },
+    );
+
+    expect(result.current.canOpenPrimary).toBe(true);
+    await act(async () => {
+      const openPromise = result.current.openPrimary();
+      resolveHomeDirectory("/Users/pablo");
+      await expect(openPromise).resolves.toBe("open-external");
+    });
+    await waitFor(() => {
+      expect(result.current.reference.absolutePath).toBe(absolutePath);
+      expect(result.current.pathKind).toBe("file");
+    });
+
+    expect(hostMocks.getHomeDirectory).toHaveBeenCalledTimes(1);
+    expect(hostMocks.isDirectory).toHaveBeenCalledWith(absolutePath);
+    expect(editorMocks.openInDefaultEditor).toHaveBeenCalledWith(absolutePath);
+  });
+
   it("keeps an external file retryable when its Desktop target fails", async () => {
     statMocks.kind = null;
     editorMocks.openInDefaultEditor
@@ -389,6 +422,20 @@ describe("useFileReferenceActions", () => {
     expect(editorMocks.openInDefaultEditor).not.toHaveBeenCalled();
     expect(hostMocks.reveal).not.toHaveBeenCalled();
     expect(viewerMocks.openTarget).not.toHaveBeenCalled();
+  });
+
+  it("keeps a home-relative file unavailable on Web", async () => {
+    hostMocks.desktopAvailable = false;
+    statMocks.kind = null;
+    const { result } = renderHook(
+      () => useFileReferenceActions({ rawPath: "~/.config/proliferate/settings.json" }),
+      { wrapper: workspaceWrapper("/repo") },
+    );
+
+    expect(result.current.canOpenPrimary).toBe(false);
+    expect(result.current.primaryUnavailableReason).toContain("Desktop app");
+    await expect(result.current.openPrimary()).resolves.toBe("unavailable");
+    expect(hostMocks.getHomeDirectory).not.toHaveBeenCalled();
   });
 });
 

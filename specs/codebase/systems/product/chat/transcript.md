@@ -140,6 +140,11 @@ Rules:
 
 - Detection happens at render time from raw markdown; do not store parsed file
   references in transcript items.
+- A leading `~/` is an external Desktop file reference, not a workspace-relative
+  path. Resolve it through the Desktop host's home-directory bridge before
+  classifying or opening it; Web keeps the reference unavailable. Hidden path
+  segments such as `~/.config` follow the same rule as any other home-relative
+  path.
 - Once the assistant reveal frontier settles, the final unique Markdown file
   reference also renders as a compact end-resource card after prose. Its
   default subtitle identifies `Document · MD`; hover/focus changes that
