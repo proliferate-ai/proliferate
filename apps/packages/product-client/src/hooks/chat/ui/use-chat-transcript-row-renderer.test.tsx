@@ -6,6 +6,7 @@ import { createTranscriptState, type TranscriptState } from "@anyharness/sdk";
 import type { ReactNode } from "react";
 import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import type { ChatTranscriptTurnRowRenderInput } from "./chat-transcript-view-types";
+import type { SessionViewState } from "#product/domain/sessions/activity";
 import { MemoizedVirtualTranscriptRow } from "#product/components/workspace/chat/transcript/VirtualTranscriptRow";
 import { useChatTranscriptRowRenderer } from "./use-chat-transcript-row-renderer";
 
@@ -127,7 +128,53 @@ describe("useChatTranscriptRowRenderer", () => {
       row,
       rowIndex: 2,
       prompt,
+      sessionViewState: "working",
     }));
+  });
+
+  it("repaints a pending prompt when authoritative session state changes", () => {
+    const transcript = createTranscriptState("session-1");
+    const prompt = {
+      seq: -1,
+      promptId: "prompt-1",
+      text: "Run this",
+      contentParts: [],
+      queuedAt: "2026-08-17T21:59:00Z",
+      promptProvenance: null,
+    };
+    const row = {
+      kind: "pending_prompt" as const,
+      key: "pending-prompt:session-1",
+    };
+    const renderPendingPromptRow = vi.fn(() => null);
+    let sessionViewState: SessionViewState = "working";
+    const { result, rerender } = renderHook(() => useChatTranscriptRowRenderer({
+      activeSessionId: "session-1",
+      latestLiveExplorationBlock: null,
+      latestLiveStatus: null,
+      latestCompletedTurnId: null,
+      latestTurnId: null,
+      optimisticPromptTrailingStatus: null,
+      outboxActions: OUTBOX_ACTIONS,
+      outboxStartedAtByPromptId: OUTBOX_STARTED_AT_BY_PROMPT_ID,
+      renderPendingPromptRow,
+      renderTurnRow: () => null,
+      selectedWorkspaceId: "workspace-1",
+      sessionViewState,
+      transcript,
+      visibleOutboxEntries: [],
+      visibleOptimisticPrompt: prompt,
+    }));
+    const workingRevision = result.current.getRowRenderRevision(row);
+
+    sessionViewState = "idle";
+    rerender();
+
+    expect(result.current.getRowRenderRevision(row)).not.toBe(workingRevision);
+    result.current.renderRow(row, 0);
+    expect(renderPendingPromptRow).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sessionViewState: "idle" }),
+    );
   });
 
   it("keeps historical revisions stable across stream batches and targets live status", () => {

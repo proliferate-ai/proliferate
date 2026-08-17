@@ -1,7 +1,6 @@
 import type { AnyHarnessRequestOptions } from "@anyharness/sdk";
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import { useCallback } from "react";
-import { resolveStatusFromExecutionSummary } from "#product/domain/sessions/activity";
 import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import type { WorkspaceCollections } from "#product/lib/domain/workspaces/cloud/collections";
 import { workspaceFileTreeStateKey } from "#product/lib/domain/workspaces/cloud/collections";
@@ -55,6 +54,11 @@ interface WorkspaceFileAccessInput {
 }
 
 interface UseHotWorkspaceReconcileActionInput {
+  applySessionSummary: (
+    clientSessionId: string,
+    session: WorkspaceSession,
+    workspaceId: string,
+  ) => void;
   cancelDeferredFileTreePrefetch: () => void;
   loadWorkspaceSessions: (input: {
     workspaceConnection: AnyHarnessResolvedConnection;
@@ -81,6 +85,7 @@ interface UseHotWorkspaceReconcileActionInput {
 }
 
 export function useHotWorkspaceReconcileAction({
+  applySessionSummary,
   cancelDeferredFileTreePrefetch,
   loadWorkspaceSessions,
   prepareFileWorkspace,
@@ -183,26 +188,7 @@ export function useHotWorkspaceReconcileAction({
         return "session_missing";
       }
       const storeStartedAt = performance.now();
-      patchSessionRecord(sessionId, {
-        workspaceId,
-        agentKind: sessionMeta.agentKind ?? currentSlot.agentKind,
-        modelId: sessionMeta.modelId ?? currentSlot.modelId ?? null,
-        requestedModelId:
-          sessionMeta.requestedModelId
-          ?? sessionMeta.modelId
-          ?? currentSlot.requestedModelId
-          ?? null,
-        modeId: sessionMeta.modeId ?? currentSlot.modeId ?? null,
-        title: sessionMeta.title ?? currentSlot.title ?? null,
-        liveConfig: sessionMeta.liveConfig ?? currentSlot.liveConfig ?? null,
-        executionSummary: sessionMeta.executionSummary ?? currentSlot.executionSummary ?? null,
-        mcpBindingSummaries: sessionMeta.mcpBindingSummaries ?? currentSlot.mcpBindingSummaries ?? null,
-        status: resolveStatusFromExecutionSummary(
-          sessionMeta.executionSummary ?? currentSlot.executionSummary ?? null,
-          sessionMeta.status ?? currentSlot.status,
-        ),
-        lastPromptAt: sessionMeta.lastPromptAt ?? currentSlot.lastPromptAt ?? null,
-      });
+      applySessionSummary(sessionId, sessionMeta, workspaceId);
       recordMeasurementMetric({
         type: "store",
         category: "session.list",
@@ -253,10 +239,11 @@ export function useHotWorkspaceReconcileAction({
         && slotBeforeHydrate.streamConnectionState === "open"
         && ingestFreshness?.freshness === "current"
         && ingestFreshness.gapAfterSeq === null;
+      let transcriptHydrated = slotBeforeHydrate?.transcriptHydrated === true;
       const lastSeq = slotBeforeHydrate?.transcript.lastSeq ?? 0;
       const hydrateStartedAt = startLatencyTimer();
       if (!slotStreamLive) {
-        const tailHydrated = await rehydrateSessionSlotFromHistory(sessionId, {
+        let hydrationApplied = await rehydrateSessionSlotFromHistory(sessionId, {
           afterSeq: lastSeq,
           requestHeaders,
           measurementOperationId,
@@ -265,8 +252,8 @@ export function useHotWorkspaceReconcileAction({
         if (!isCurrent()) {
           return "stale";
         }
-        if (!tailHydrated) {
-          await rehydrateSessionSlotFromHistory(sessionId, {
+        if (!hydrationApplied) {
+          hydrationApplied = await rehydrateSessionSlotFromHistory(sessionId, {
             replace: true,
             requestHeaders,
             measurementOperationId,
@@ -276,8 +263,11 @@ export function useHotWorkspaceReconcileAction({
         if (!isCurrent()) {
           return "stale";
         }
+        transcriptHydrated ||= hydrationApplied;
       }
-      patchSessionRecord(sessionId, { transcriptHydrated: true });
+      if (transcriptHydrated) {
+        patchSessionRecord(sessionId, { transcriptHydrated: true });
+      }
       recordMeasurementWorkflowStep({
         operationId: measurementOperationId,
         step: "session.select.history_hydrate",
@@ -305,6 +295,7 @@ export function useHotWorkspaceReconcileAction({
       finishOrCancelMeasurementOperation(measurementOperationId, finishReason);
     }
   }, [
+    applySessionSummary,
     cancelDeferredFileTreePrefetch,
     loadWorkspaceSessions,
     prepareFileWorkspace,

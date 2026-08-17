@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { ReactNode } from "react";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { replaySessionHistory } from "#product/lib/domain/sessions/stream/stream-state";
 import { SessionTranscriptPane } from "#product/components/workspace/chat/surface/SessionTranscriptPane";
@@ -26,6 +26,10 @@ import { useSessionDirectoryStore } from "#product/stores/sessions/session-direc
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
+
+const hydrationMocks = vi.hoisted(() => ({
+  rehydrateSessionSlotFromHistory: vi.fn(),
+}));
 
 // Heavy leaf UI is not under test — the deferred content_stable hand-off is.
 // The mock echoes the two inset props it received as data attributes so
@@ -76,7 +80,7 @@ vi.mock("#product/hooks/ui/debug/use-debug-render-count", () => ({
 // completion explicitly via the flag, so a no-op rehydrate keeps host wiring out.
 vi.mock("#product/hooks/sessions/lifecycle/use-session-history-hydration", () => ({
   useSessionHistoryHydration: () => ({
-    rehydrateSessionSlotFromHistory: vi.fn().mockResolvedValue(true),
+    rehydrateSessionSlotFromHistory: hydrationMocks.rehydrateSessionSlotFromHistory,
   }),
 }));
 vi.mock("#product/hooks/plans/ui/use-plan-handoff-dialog-state", () => ({
@@ -117,6 +121,7 @@ beforeEach(() => {
   emitted = [];
   setRendererDiagnosticsSink({ emit: (input) => emitted.push(input) });
   nowValue = 0;
+  hydrationMocks.rehydrateSessionSlotFromHistory.mockReset().mockResolvedValue(false);
   vi.spyOn(performance, "now").mockImplementation(() => nowValue);
   resetRendererFlowsForTest();
   useSessionDirectoryStore.getState().clearEntries();
@@ -144,7 +149,7 @@ afterEach(() => {
  * path, DEFERS content_stable to this session; selectSession synchronously
  * seeds the empty-but-truthy scaffold via createEmptySessionRecord.
  */
-function beginDeferredColdOpen(): void {
+function beginDeferredColdOpen(options?: { includeTranscriptEntry?: boolean }): void {
   beginRendererFlow({
     kind: "workspace_open",
     correlationKey: WORKSPACE_ID,
@@ -157,9 +162,12 @@ function beginDeferredColdOpen(): void {
   deferWorkspaceOpenContentStable({ sessionId: SESSION_ID, correlationKey: WORKSPACE_ID });
   // Real scaffold: createEmptySessionRecord carries an empty-but-truthy
   // TranscriptState and transcriptHydrated=false.
-  putSessionRecord(
-    createEmptySessionRecord(SESSION_ID, "codex", { workspaceId: WORKSPACE_ID }),
-  );
+  const record = createEmptySessionRecord(SESSION_ID, "codex", { workspaceId: WORKSPACE_ID });
+  if (options?.includeTranscriptEntry === false) {
+    useSessionDirectoryStore.getState().putEntry(record);
+  } else {
+    putSessionRecord(record);
+  }
   useSessionSelectionStore.getState().activateWorkspace({
     logicalWorkspaceId: WORKSPACE_ID,
     workspaceId: WORKSPACE_ID,
@@ -176,12 +184,42 @@ function renderPane() {
 }
 
 describe("SessionTranscriptPane deferred workspace_open content_stable", () => {
+  it("keeps a failed self-hydration uncommitted and retryable", async () => {
+    beginDeferredColdOpen({ includeTranscriptEntry: false });
+    renderPane();
+
+    await waitFor(() => {
+      expect(hydrationMocks.rehydrateSessionSlotFromHistory).toHaveBeenCalledOnce();
+    });
+
+    expect(
+      useSessionDirectoryStore.getState().entriesById[SESSION_ID]?.transcriptHydrated,
+    ).toBe(false);
+    expect(contentStable()).toBeUndefined();
+  });
+
+  it("commits successful self-hydration", async () => {
+    hydrationMocks.rehydrateSessionSlotFromHistory.mockResolvedValueOnce(true);
+    beginDeferredColdOpen({ includeTranscriptEntry: false });
+    renderPane();
+
+    await waitFor(() => {
+      expect(
+        useSessionDirectoryStore.getState().entriesById[SESSION_ID]?.transcriptHydrated,
+      ).toBe(true);
+    });
+
+    expect(contentStable()).toBeDefined();
+  });
+
   it("does NOT finish on the empty scaffold, then finishes once hydration lands", () => {
     beginDeferredColdOpen();
     renderPane();
 
     // Scaffold present (empty-but-truthy transcript) but transcriptHydrated is
-    // still false: content_stable must not fire against the scaffold.
+    // still false: the bootstrap kickoff owns hydration, and content_stable
+    // must not fire against the scaffold.
+    expect(hydrationMocks.rehydrateSessionSlotFromHistory).not.toHaveBeenCalled();
     expect(contentStable()).toBeUndefined();
 
     // Hydration completes 1.5s later — exactly the case that used to be measured.

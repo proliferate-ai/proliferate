@@ -25,6 +25,7 @@ import {
 import { isReceiptPendingEntry } from "#product/lib/domain/workspaces/creation/creation-receipt";
 import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
 import type { PromptOutboxEntry } from "#product/domain/sessions/intents/session-intent-model";
+import type { SessionViewState } from "#product/domain/sessions/activity";
 
 const OUTBOX_ACCEPTED_RUNNING_ECHO_GRACE_MS = 15_000;
 
@@ -42,6 +43,7 @@ export function TranscriptPendingPromptRow({
   outboxEntry,
   optimisticTrailingStatus,
   outboxActions,
+  sessionViewState,
   workspaceReceipt = null,
 }: {
   activeSessionId: string;
@@ -52,6 +54,7 @@ export function TranscriptPendingPromptRow({
   outboxEntry: PromptOutboxEntry | null;
   optimisticTrailingStatus: ReactNode;
   outboxActions: OutboxActionHandlers;
+  sessionViewState: SessionViewState;
   /**
    * The workspace-creation receipt, when this row hosts it (no turn exists
    * yet to host it inline — see `hostsWorkspaceReceipt` on the row model).
@@ -82,7 +85,7 @@ export function TranscriptPendingPromptRow({
   }
 
   const workingStatus = outboxEntry
-    ? <OutboxPromptTrailingStatus entry={outboxEntry} />
+    ? <OutboxPromptTrailingStatus entry={outboxEntry} sessionViewState={sessionViewState} />
     : optimisticTrailingStatus;
   const trailingStatus = workspaceReceipt
     ? (
@@ -158,11 +161,17 @@ function PendingPromptBody({
   );
 }
 
-function OutboxPromptTrailingStatus({ entry }: { entry: PromptOutboxEntry | null }) {
+function OutboxPromptTrailingStatus({
+  entry,
+  sessionViewState,
+}: {
+  entry: PromptOutboxEntry | null;
+  sessionViewState: SessionViewState;
+}) {
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
-    if (entry?.deliveryState !== "accepted_running") {
+    if (entry?.deliveryState !== "accepted_running" || sessionViewState !== "working") {
       return;
     }
     const acceptedAtMs = resolveOutboxAcceptedRunningReferenceMs(entry);
@@ -181,13 +190,15 @@ function OutboxPromptTrailingStatus({ entry }: { entry: PromptOutboxEntry | null
     entry?.createdAt,
     entry?.deliveryState,
     entry?.dispatchedAt,
+    sessionViewState,
   ]);
 
-  return <>{resolveOutboxPromptTrailingStatus(entry, nowMs)}</>;
+  return <>{resolveOutboxPromptTrailingStatus(entry, sessionViewState, nowMs)}</>;
 }
 
 function resolveOutboxPromptTrailingStatus(
   entry: PromptOutboxEntry | null,
+  sessionViewState: SessionViewState,
   nowMs = Date.now(),
 ): ReactNode {
   if (!entry) {
@@ -208,10 +219,16 @@ function resolveOutboxPromptTrailingStatus(
     case "waiting_for_session":
       return resolvePendingPromptTrailingStatus(entry.createdAt, "working", true);
     case "accepted_running":
+      if (sessionViewState === "needs_input") {
+        return resolvePendingPromptTrailingStatus(entry.createdAt, sessionViewState, false);
+      }
+      if (sessionViewState !== "working") {
+        return <OutboxPromptPlainStatus label="Waiting for transcript…" />;
+      }
       if (hasAcceptedRunningOutboxEntryExceededEchoGrace(entry, nowMs)) {
         return <OutboxPromptPlainStatus label="Waiting for transcript…" />;
       }
-      return resolvePendingPromptTrailingStatus(entry.createdAt, "working", true);
+      return resolvePendingPromptTrailingStatus(entry.createdAt, sessionViewState, false);
     default:
       return null;
   }

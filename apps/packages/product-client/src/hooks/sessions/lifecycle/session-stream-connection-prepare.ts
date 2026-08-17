@@ -29,9 +29,10 @@ export async function prepareSessionStreamConnection(
     return false;
   }
 
+  let initialHistoryHydrationFailed = false;
   if (!initialSlot.transcriptHydrated && options?.hydrateBeforeStream !== false) {
     const hydrateStartedAt = performance.now();
-    await deps.rehydrateSessionSlotFromHistory(sessionId, {
+    const hydrated = await deps.rehydrateSessionSlotFromHistory(sessionId, {
       requestHeaders: options?.requestHeaders,
       measurementOperationId: options?.measurementOperationId,
       isCurrent: options?.isCurrent,
@@ -39,9 +40,12 @@ export async function prepareSessionStreamConnection(
     if (options?.isCurrent && !options.isCurrent()) {
       return false;
     }
-    useSessionDirectoryStore.getState().patchEntry(sessionId, {
-      transcriptHydrated: true,
-    });
+    initialHistoryHydrationFailed = !hydrated;
+    if (hydrated) {
+      useSessionDirectoryStore.getState().patchEntry(sessionId, {
+        transcriptHydrated: true,
+      });
+    }
     recordMeasurementWorkflowStep({
       operationId: options?.measurementOperationId,
       step: "session.stream.initial_history_hydrate",
@@ -61,17 +65,19 @@ export async function prepareSessionStreamConnection(
     return false;
   }
 
+  const streamAlreadyConnected = slot.streamConnectionState === "connecting"
+    || slot.streamConnectionState === "open";
   if (
-    !options?.forceReconnect
-    && (
-      slot.streamConnectionState === "connecting"
-      || slot.streamConnectionState === "open"
-    )
+    !initialHistoryHydrationFailed
+    && !options?.forceReconnect
+    && streamAlreadyConnected
   ) {
     return false;
   }
 
-  if (!options?.skipInitialRefresh) {
+  // A failed bulk replay must not suppress the lightweight summary authority:
+  // it may be the only source that can clear stale working state.
+  if (!options?.skipInitialRefresh || initialHistoryHydrationFailed) {
     const refreshStartedAt = performance.now();
     await deps.refreshSessionSlotMeta(sessionId, {
       resumeIfActive: options?.resumeIfActive ?? true,
@@ -91,6 +97,15 @@ export async function prepareSessionStreamConnection(
 
   const refreshedSlot = getSessionRecord(sessionId);
   if (options?.isCurrent && !options.isCurrent()) {
+    return false;
+  }
+  if (
+    !options?.forceReconnect
+    && (
+      refreshedSlot?.streamConnectionState === "connecting"
+      || refreshedSlot?.streamConnectionState === "open"
+    )
+  ) {
     return false;
   }
   if (shouldSkipColdIdleSessionStream(refreshedSlot, options?.allowColdIdleNoStream)) {

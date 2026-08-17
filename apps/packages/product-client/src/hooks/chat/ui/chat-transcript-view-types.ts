@@ -26,6 +26,7 @@ export interface ChatTranscriptPendingPromptRenderInput {
   outboxEntry: PromptOutboxEntry | null;
   optimisticTrailingStatus: ReactNode;
   outboxActions: ChatTranscriptOutboxActions;
+  sessionViewState: SessionViewState;
 }
 
 export interface ChatTranscriptTurnRowRenderInput {

@@ -26,11 +26,18 @@ const NOW = "2026-05-20T17:00:00.000Z";
 const TRANSCRIPT = createTranscriptState("session-1");
 
 function TranscriptPendingPromptRow(
-  props: Omit<ComponentProps<typeof TranscriptPendingPromptRowImpl>, "transcript" | "workspaceId">,
+  props: Omit<
+    ComponentProps<typeof TranscriptPendingPromptRowImpl>,
+    "sessionViewState" | "transcript" | "workspaceId"
+  > & {
+    sessionViewState?: ComponentProps<typeof TranscriptPendingPromptRowImpl>["sessionViewState"];
+  },
 ) {
+  const { sessionViewState = "working", ...rest } = props;
   return (
     <TranscriptPendingPromptRowImpl
-      {...props}
+      {...rest}
+      sessionViewState={sessionViewState}
       transcript={TRANSCRIPT}
       workspaceId="workspace-1"
     />
@@ -184,6 +191,35 @@ describe("TranscriptPendingPromptRow", () => {
     expect(container.querySelector("[class~='gap-transcript-turn']")).not.toBeNull();
     expect(container.innerHTML).not.toContain("gap-3.5");
     expect(container.innerHTML).not.toContain("thinking-text");
+  });
+
+  it("does not show Thinking after an accepted prompt reconciles idle", () => {
+    const acceptedAt = new Date().toISOString();
+    const entry = {
+      ...acceptedRunningOutboxEntry(),
+      acceptedAt,
+      dispatchedAt: acceptedAt,
+      updatedAt: acceptedAt,
+    };
+
+    const { container } = render(
+      <TranscriptPendingPromptRow
+        activeSessionId="session-1"
+        rowIndex={0}
+        prompt={createOptimisticPendingPrompt("Finished remotely", "prompt-1", acceptedAt)}
+        outboxEntry={entry}
+        optimisticTrailingStatus={null}
+        outboxActions={{
+          retryPrompt: vi.fn(),
+          dismissPrompt: vi.fn(),
+        }}
+        sessionViewState="idle"
+      />,
+    );
+
+    expect(screen.getByText("Waiting for transcript…")).toBeTruthy();
+    expect(screen.queryByText("Thinking")).toBeNull();
+    expect(container.querySelector("[data-working-status-frame]")).toBeNull();
   });
 
   it("keeps the pending frontier above the fixed assistant footer", () => {
