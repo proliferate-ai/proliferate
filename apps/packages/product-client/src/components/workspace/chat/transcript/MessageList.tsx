@@ -305,11 +305,12 @@ export function MessageList({
       onOpenFile={(filePath) => void openFile(filePath)}
       onOpenTurnChanges={() => openGitReviewPane({ mode: "last_turn" })}
       onOpenArtifact={openArtifact}
-      onOpenSubagent={openBackgroundWorkPane}
+      onOpenSubagent={(subagentId) => openBackgroundWorkPane(subagentId, activeSessionId)}
       onHandOffPlanToNewSession={onHandOffPlanToNewSession}
       workspaceReceipt={input.row.hostsWorkspaceReceipt ? <WorkspaceCreationReceipt /> : null}
     />
   ), [
+    activeSessionId,
     onHandOffPlanToNewSession,
     openArtifact,
     openBackgroundWorkPane,

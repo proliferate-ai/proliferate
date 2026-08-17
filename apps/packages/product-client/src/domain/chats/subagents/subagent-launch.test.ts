@@ -6,6 +6,7 @@ import {
   isSubagentLaunchStatusVisibleInTranscript,
   isSubagentWorkComplete,
   parseAsyncSubagentLaunch,
+  resolveSubagentIdForItem,
   resolveSubagentLaunchDisplay,
   resolveSubagentExecutionState,
 } from "./subagent-launch";
@@ -340,6 +341,65 @@ describe("findSubagentLaunchItem", () => {
     } as unknown as TranscriptState["itemsById"][string];
 
     expect(findSubagentLaunchItem(transcript, "ad5087d157aab3117")).toBeNull();
+  });
+});
+
+describe("resolveSubagentIdForItem", () => {
+  // Delivery Spec — Background Work Slice 1, rung R4 fix-forward review
+  // round 2: this is now load-bearing for navigation
+  // (`TranscriptAgentGroupBlock`'s click-to-open-pane affordance), so it
+  // gets direct unit coverage of the pure function rather than only
+  // integration-level coverage through the component.
+  it("returns the agentId on the happy path (valid claude_async_agent background-work metadata)", () => {
+    const item = toolCallItem({
+      status: "completed",
+      semanticKind: "subagent",
+      nativeToolName: "Agent",
+      rawInput: { run_in_background: true },
+      rawOutput: backgroundWork("pending"),
+    });
+
+    expect(resolveSubagentIdForItem(item)).toBe("ad5087d157aab3117");
+  });
+
+  it("returns null when rawOutput is a string, not a record", () => {
+    const item = toolCallItem({
+      rawOutput: "Async agent launched successfully." as unknown as ToolCallItem["rawOutput"],
+    });
+
+    expect(resolveSubagentIdForItem(item)).toBeNull();
+  });
+
+  it("returns null when rawOutput is an array, not a record", () => {
+    const item = toolCallItem({
+      rawOutput: ["agentId", "ad5087d157aab3117"] as unknown as ToolCallItem["rawOutput"],
+    });
+
+    expect(resolveSubagentIdForItem(item)).toBeNull();
+  });
+
+  it("returns null when _anyharness.backgroundWork is present but trackerKind is unrecognized", () => {
+    const item = toolCallItem({
+      rawOutput: {
+        agentId: "ad5087d157aab3117",
+        _anyharness: {
+          backgroundWork: {
+            trackerKind: "codex_thread",
+            state: "pending",
+          },
+        },
+      },
+    });
+
+    expect(resolveSubagentIdForItem(item)).toBeNull();
+  });
+
+  it("returns null when rawOutput has no _anyharness.backgroundWork at all", () => {
+    const item = toolCallItem({
+      rawOutput: { agentId: "ad5087d157aab3117" },
+    });
+
+    expect(resolveSubagentIdForItem(item)).toBeNull();
   });
 });
 

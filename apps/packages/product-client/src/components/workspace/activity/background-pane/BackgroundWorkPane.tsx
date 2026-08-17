@@ -116,9 +116,17 @@ export function BackgroundWorkPane({ workspaceId, sessionId, isOpen }: Backgroun
   // selection into the right-panel model rather than reaching into this pane
   // directly (Delivery Spec — Background Work Slice 1, rung R4 fix-forward).
   // Consume it the instant it appears and clear it immediately — a single
-  // writer (the transcript click), a single reader (here), so there is no
-  // race to arbitrate, unlike `pendingChatActivationByWorkspace`'s
-  // epoch/nonce machinery.
+  // writer (the transcript click), a single reader (here).
+  //
+  // Session-scoped on read (review round 2): the entry is keyed by
+  // workspace only, but carries the `sessionId` that was active at write
+  // time. A click can land here for a session other than this pane's own
+  // (e.g. the active session flips between the write and this effect
+  // running, or the click originated from an embedded transcript for a
+  // different session in the same workspace) — mismatched entries are
+  // discarded rather than applied, whether this is a fresh mount or an
+  // already-mounted re-render, so a stale cross-session id never leaks into
+  // this session's roster lookup.
   const pendingSubagentSelection = useWorkspaceUiStore(
     (state) => state.pendingBackgroundSubagentSelectionByWorkspace[workspaceId] ?? null,
   );
@@ -129,11 +137,14 @@ export function BackgroundWorkPane({ workspaceId, sessionId, isOpen }: Backgroun
     if (!pendingSubagentSelection) {
       return;
     }
-    setSelectedSubagentId(pendingSubagentSelection);
+    if (pendingSubagentSelection.sessionId === sessionId) {
+      setSelectedSubagentId(pendingSubagentSelection.subagentId);
+    }
     clearPendingBackgroundSubagentSelectionForWorkspace(workspaceId);
   }, [
     clearPendingBackgroundSubagentSelectionForWorkspace,
     pendingSubagentSelection,
+    sessionId,
     workspaceId,
   ]);
 

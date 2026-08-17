@@ -102,6 +102,20 @@ const fixtures = {
 
 afterEach(cleanup);
 
+// Review round 3 (keyboard access): the header's `role="button"` /
+// `tabIndex` / `onKeyDown` live on the outer clickable `<div>`, but
+// `getByText` resolves to the innermost element carrying that exact text
+// (the header-verb `<span>`). Keyboard events target whatever element
+// actually has focus — the header div itself, per its `tabIndex={0}` — so
+// keydown assertions must dispatch on that ancestor, not the inner span.
+function headerButtonFor(textNode: HTMLElement): HTMLElement {
+  const header = textNode.closest('[role="button"]');
+  if (!header) {
+    throw new Error("expected an ancestor with role=\"button\"");
+  }
+  return header as HTMLElement;
+}
+
 describe("TranscriptAgentGroupBlock muted status lines", () => {
   // Design Handoff — MODIFIED `SubagentLaunchLedger`; Delivery Spec —
   // Background Work Slice 1, rung R4, acceptance line 52: "the two muted
@@ -166,6 +180,35 @@ describe("TranscriptAgentGroupBlock muted status lines", () => {
     );
 
     fireEvent.click(getByText("Subagent launch failed"));
+
+    expect(getByText("Launch failed")).not.toBeNull();
+  });
+
+  it("expands via Enter on the header when there is no onOpenSubagent (expand-fallback keyboard access)", () => {
+    const transcript = createTranscriptState("session-1");
+    const item: ToolCallItem = {
+      ...toolItem("native-task-failed-kbd", "turn-1", 1, "subagent", "failed"),
+      title: "Inspect the repository",
+      nativeToolName: "Task",
+      rawInput: { prompt: "Inspect the transcript pipeline" },
+    };
+    transcript.itemsById[item.itemId] = item;
+
+    const { getByText } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [],
+        transcript,
+        childrenByParentId: new Map(),
+        renderChild: () => null,
+      }),
+    );
+
+    const header = headerButtonFor(getByText("Subagent launch failed"));
+    expect(header.getAttribute("role")).toBe("button");
+    expect(header.getAttribute("tabindex")).toBe("0");
+
+    fireEvent.keyDown(header, { key: " " });
 
     expect(getByText("Launch failed")).not.toBeNull();
   });
@@ -272,6 +315,101 @@ describe("TranscriptAgentGroupBlock onOpenSubagent (native routing)", () => {
 
     expect(onOpenSubagent).not.toHaveBeenCalled();
     expect(getByRole("button", { name: "Collapse subagent details" })).not.toBeNull();
+  });
+
+  it("calls onOpenSubagent with the correct subagent id when Enter is pressed on the header", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = backgroundWorkItem("agent-42");
+    transcript.itemsById[item.itemId] = item;
+    const onOpenSubagent = vi.fn();
+
+    const { getByText } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [],
+        transcript,
+        childrenByParentId: new Map(),
+        renderChild: () => null,
+        onOpenSubagent,
+      }),
+    );
+
+    // Keyboard activation targets the header `[role="button"]` itself, not
+    // the inner text span — that's the element that actually receives focus
+    // (and thus the keydown) when a user tabs to it.
+    fireEvent.keyDown(headerButtonFor(getByText("Creating subagent")), { key: "Enter" });
+
+    expect(onOpenSubagent).toHaveBeenCalledTimes(1);
+    expect(onOpenSubagent).toHaveBeenCalledWith("agent-42");
+  });
+
+  it("calls onOpenSubagent with the correct subagent id when Space is pressed on the header", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = backgroundWorkItem("agent-42");
+    transcript.itemsById[item.itemId] = item;
+    const onOpenSubagent = vi.fn();
+
+    const { getByText } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [],
+        transcript,
+        childrenByParentId: new Map(),
+        renderChild: () => null,
+        onOpenSubagent,
+      }),
+    );
+
+    fireEvent.keyDown(headerButtonFor(getByText("Creating subagent")), { key: " " });
+
+    expect(onOpenSubagent).toHaveBeenCalledTimes(1);
+    expect(onOpenSubagent).toHaveBeenCalledWith("agent-42");
+  });
+
+  it("exposes the header as a keyboard-focusable button when it opens a subagent", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = backgroundWorkItem("agent-42");
+    transcript.itemsById[item.itemId] = item;
+
+    const { getByText } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [],
+        transcript,
+        childrenByParentId: new Map(),
+        renderChild: () => null,
+        onOpenSubagent: vi.fn(),
+      }),
+    );
+
+    const header = getByText("Creating subagent").closest('[role="button"]');
+    expect(header).not.toBeNull();
+    expect(header?.getAttribute("tabindex")).toBe("0");
+    expect(header?.getAttribute("aria-label")).toBe("Open subagent detail");
+  });
+
+  it("does not re-trigger the header's action when Enter is pressed on the nested chevron button", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = backgroundWorkItem("agent-7");
+    const childItem: ToolCallItem = toolItem("child-tool", "turn-1", 2, "other", "completed");
+    transcript.itemsById[item.itemId] = item;
+    transcript.itemsById[childItem.itemId] = childItem;
+    const onOpenSubagent = vi.fn();
+
+    const { getByRole } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [childItem.itemId],
+        transcript,
+        childrenByParentId: new Map([[item.itemId, [childItem.itemId]]]),
+        renderChild: () => null,
+        onOpenSubagent,
+      }),
+    );
+
+    fireEvent.keyDown(getByRole("button", { name: "Expand subagent details" }), { key: "Enter" });
+
+    expect(onOpenSubagent).not.toHaveBeenCalled();
   });
 
   it("does not get the pane-opening affordance when rawOutput has no background metadata", () => {

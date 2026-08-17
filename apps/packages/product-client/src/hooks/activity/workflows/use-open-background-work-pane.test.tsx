@@ -68,7 +68,7 @@ describe("useOpenBackgroundWorkPane", () => {
       .toMatchObject({ open: true });
   });
 
-  it("writes a pending subagent selection for the active workspace when given a subagent id", () => {
+  it("writes a session-scoped pending subagent selection for the active workspace when given a subagent id and session id", () => {
     useSessionSelectionStore.getState().activateWorkspace({
       logicalWorkspaceId: "logical-1",
       workspaceId: "workspace-1",
@@ -77,12 +77,12 @@ describe("useOpenBackgroundWorkPane", () => {
     const { result } = renderHook(() => useOpenBackgroundWorkPane());
 
     act(() => {
-      result.current("agent-42");
+      result.current("agent-42", "session-1");
     });
 
     expect(
       useWorkspaceUiStore.getState().pendingBackgroundSubagentSelectionByWorkspace["workspace-1"],
-    ).toBe("agent-42");
+    ).toEqual({ subagentId: "agent-42", sessionId: "session-1" });
     // Still opens the pane exactly as the zero-arg call does.
     expect(
       useWorkspaceUiStore.getState().rightPanelMaterializedByWorkspace["workspace-1"],
@@ -99,6 +99,23 @@ describe("useOpenBackgroundWorkPane", () => {
 
     act(() => {
       result.current();
+    });
+
+    expect(
+      useWorkspaceUiStore.getState().pendingBackgroundSubagentSelectionByWorkspace["workspace-1"],
+    ).toBeUndefined();
+  });
+
+  it("does not write a pending subagent selection when the subagent id is given without a session id", () => {
+    useSessionSelectionStore.getState().activateWorkspace({
+      logicalWorkspaceId: "logical-1",
+      workspaceId: "workspace-1",
+    });
+
+    const { result } = renderHook(() => useOpenBackgroundWorkPane());
+
+    act(() => {
+      result.current("agent-42");
     });
 
     expect(

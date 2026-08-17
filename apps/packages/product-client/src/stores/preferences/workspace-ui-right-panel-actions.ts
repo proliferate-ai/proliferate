@@ -111,11 +111,11 @@ export function createWorkspaceUiRightPanelActions(
       });
     },
 
-    setPendingBackgroundSubagentSelectionForWorkspace: (workspaceId, subagentId) => {
+    setPendingBackgroundSubagentSelectionForWorkspace: (workspaceId, selection) => {
       set((state) => ({
         pendingBackgroundSubagentSelectionByWorkspace: {
           ...state.pendingBackgroundSubagentSelectionByWorkspace,
-          [workspaceId]: subagentId,
+          [workspaceId]: selection,
         },
       }));
     },

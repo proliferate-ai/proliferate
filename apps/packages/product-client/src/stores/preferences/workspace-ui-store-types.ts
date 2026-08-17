@@ -11,6 +11,16 @@ import type {
   ChatVisibilityCandidate,
 } from "#product/lib/domain/workspaces/tabs/visibility";
 
+/**
+ * See `pendingBackgroundSubagentSelectionByWorkspace` — `sessionId` is the
+ * session active at write time, checked against the consuming pane's own
+ * `sessionId` so a cross-session entry is discarded rather than applied.
+ */
+export interface PendingBackgroundSubagentSelection {
+  subagentId: string;
+  sessionId: string;
+}
+
 export interface WorkspaceUiState {
   _hydrated: boolean;
   pinnedWorkspaceIds: string[];
@@ -33,12 +43,18 @@ export interface WorkspaceUiState {
    * `useOpenBackgroundWorkPane`'s extended return; Delivery Spec — Background
    * Work Slice 1, rung R4 fix-forward). Session-only, never persisted —
    * mirrors `pendingChatActivationByWorkspace`'s ephemeral-field placement,
-   * but without its epoch/nonce/guard-token machinery: there is only ever one
-   * writer (the transcript click) and one reader (the pane's own consume
-   * effect), so no race to arbitrate. Cleared by the pane the instant it is
-   * consumed.
+   * but without its epoch/nonce/guard-token machinery. Keyed by workspace
+   * only (one right-panel model per workspace), but carries the `sessionId`
+   * active at write time (review round 2) — the pane checks it against its
+   * own `sessionId` on consume and discards a mismatch rather than applying
+   * it, so a stale selection from an abandoned or different session in the
+   * same workspace never leaks into the wrong session's roster lookup.
+   * Cleared by the pane the instant it is read, matched or not.
    */
-  pendingBackgroundSubagentSelectionByWorkspace: Record<string, string | null>;
+  pendingBackgroundSubagentSelectionByWorkspace: Record<
+    string,
+    PendingBackgroundSubagentSelection | null
+  >;
   urgentHighlightedChatSessionByWorkspace: Record<string, string | null>;
   workspaceTypes: SidebarWorkspaceVariant[];
   lastViewedAt: Record<string, string>;
@@ -86,7 +102,7 @@ export interface WorkspaceUiState {
   ) => void;
   setPendingBackgroundSubagentSelectionForWorkspace: (
     workspaceId: string,
-    subagentId: string,
+    selection: PendingBackgroundSubagentSelection,
   ) => void;
   clearPendingBackgroundSubagentSelectionForWorkspace: (
     workspaceId: string,
