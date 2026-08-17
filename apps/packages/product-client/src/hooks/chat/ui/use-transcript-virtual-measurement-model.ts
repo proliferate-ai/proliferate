@@ -1,8 +1,21 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
+import { measureElement as defaultMeasureElement } from "@tanstack/react-virtual";
+import type { Virtualizer } from "@tanstack/react-virtual";
 import {
   estimateRenderableRowHeight,
+  getRowCompositionToken,
   type TranscriptRenderableRow,
 } from "#product/hooks/chat/ui/transcript-row-list-model";
+import { getRowEstimateBucketKey } from "#product/hooks/chat/ui/transcript-row-height-estimate";
+import {
+  getMeasuredRowHeight,
+  recordMeasuredRowHeight,
+} from "#product/hooks/chat/ui/transcript-row-height-cache";
+import {
+  getCalibratedBucketHeight,
+  getCalibrationGeneration,
+  recordBucketMeasurement,
+} from "#product/hooks/chat/ui/transcript-row-height-calibration";
 
 type VirtualMeasurementEntry = readonly [key: string, estimatedSize: number];
 
@@ -15,20 +28,58 @@ export function useTranscriptVirtualMeasurementModel({
   renderableRows: readonly TranscriptRenderableRow[];
   selectedWorkspaceId: string | null;
 }) {
-  // TanStack keys its measurement memo on getItemKey identity. Serialize only
-  // the ordered key/estimate inputs, then retain the parsed model and accessors
-  // across content-only row snapshots. They rotate only when row composition
-  // or session scope changes, which is exactly when measurements must rebuild.
+  // Same identity used by useTranscriptStickToBottom's `sessionKey` — scopes
+  // the rung 5 measured-height cache to remounts of the SAME session (see
+  // transcript-row-height-cache.ts). Never persisted beyond this runtime.
+  const sessionKey = `${selectedWorkspaceId ?? ""}:${activeSessionId}`;
+  // Read fresh each render (TanStack notifies -> re-render on every measurement):
+  // bumps only when a bucket first calibrates, so folding it into estimateSize's
+  // identity re-derives the still-estimated off-screen rows exactly once per
+  // newly-calibrated bucket, then holds identity stable.
+  const calibrationGeneration = getCalibrationGeneration(sessionKey);
+  // Live row snapshot read at call time by the referentially-stable accessors
+  // below. estimateSize/measureElement need the current row (for its
+  // composition token) without themselves rotating on every content-only
+  // snapshot — rotating them would violate the accessor-stability contract the
+  // measurement memo relies on (see measurementSignature note below) and churn
+  // TanStack's estimate pass each render. A ref keeps the read fresh; identity
+  // stays pinned to composition/session scope.
+  const renderableRowsRef = useRef(renderableRows);
+  renderableRowsRef.current = renderableRows;
+  // TanStack memoizes its measurement derivation on getItemKey / estimateSize
+  // IDENTITY: whenever either accessor is a new function reference, it rebuilds
+  // every item's position from scratch. That rebuild is an extra layout pass —
+  // and if it lands the frame AFTER the single per-frame snap while pinned to a
+  // growing stream, the snap is left one measurement-generation behind and the
+  // viewport trails the bottom (the rung-3 follow lag rung 4 fixed).
+  //
+  // So the accessors must rotate ONLY when the ordered set of row KEYS changes
+  // (a structural change TanStack genuinely must re-key on), never when a row's
+  // composition ESTIMATE changes. A streaming turn changes its display-block
+  // shape — and therefore its composition estimate — on every chunk while its
+  // key stays fixed; rotating the accessors on that churn is what defeated the
+  // snap. The estimate itself still updates (read fresh from the row ref at call
+  // time below), and correctness never rests on the guess: the on-screen
+  // streaming row is measured, and the persisted-measurement cache is
+  // invalidated by getRowCompositionToken, not by accessor identity.
+  const keySignature = useMemo(
+    () => JSON.stringify(renderableRows.map((row) => row.key)),
+    [renderableRows],
+  );
+  const orderedKeys = useMemo(
+    () => JSON.parse(keySignature) as string[],
+    [keySignature],
+  );
+  // rowCompositionKey still embeds the composition estimates: it is consumed by
+  // the anchor-capture cleanup, which snapshots the reader's position before a
+  // composition change shifts layout, so it must rotate on composition — not
+  // only on the ordered keys.
   const measurementSignature = useMemo(
     () => JSON.stringify(renderableRows.map((row) => [
       row.key,
       estimateRenderableRowHeight(row),
     ] satisfies VirtualMeasurementEntry)),
     [renderableRows],
-  );
-  const measurementEntries = useMemo(
-    () => JSON.parse(measurementSignature) as VirtualMeasurementEntry[],
-    [measurementSignature],
   );
   const rowCompositionKey = useMemo(
     () => JSON.stringify([
@@ -39,23 +90,81 @@ export function useTranscriptVirtualMeasurementModel({
     [activeSessionId, measurementSignature, selectedWorkspaceId],
   );
   const getItemKey = useCallback(
-    (index: number) => measurementEntries[index]?.[0] ?? index,
-    [measurementEntries, rowCompositionKey],
+    (index: number) => orderedKeys[index] ?? index,
+    [orderedKeys],
   );
+  // estimateSize consults, in order: (a) a persisted real measurement for
+  // this row key in this session (rung 5 remount-scoped cache), (b) the
+  // composition estimate, both read FRESH from the live row ref so a streaming
+  // turn's shifting estimate applies without rotating this accessor's identity.
+  // Never a bare flat fallback except for an out-of-range index (the
+  // composition estimator's own `undefined` case).
   const estimateSize = useCallback(
-    (index: number) => measurementEntries[index]?.[1]
-      ?? estimateRenderableRowHeight(undefined),
-    [measurementEntries, rowCompositionKey],
+    (index: number) => {
+      const key = orderedKeys[index];
+      if (key === undefined) {
+        return estimateRenderableRowHeight(undefined);
+      }
+      const row = renderableRowsRef.current[index];
+      const persisted = getMeasuredRowHeight(
+        sessionKey,
+        key,
+        getRowCompositionToken(row),
+      );
+      if (persisted != null) {
+        return persisted;
+      }
+      // No real measurement for THIS row yet: borrow this session's running
+      // average for the row's composition bucket if one exists, so a
+      // never-measured row is estimated from real heights observed for rows of
+      // the same shape this session, falling back to the static composition
+      // estimate only until a bucket has any measurements.
+      const calibrated = getCalibratedBucketHeight(
+        sessionKey,
+        getRowEstimateBucketKey(row),
+      );
+      return calibrated ?? estimateRenderableRowHeight(row);
+    },
+    // calibrationGeneration rotates identity only when a bucket first calibrates
+    // (bounded per session), forcing TanStack to re-derive off-screen rows that
+    // would otherwise keep their cached pre-calibration estimate.
+    [orderedKeys, sessionKey, calibrationGeneration],
   );
   const estimatedRowsHeight = useMemo(
-    () => measurementEntries.reduce((sum, entry) => sum + entry[1], 0),
-    [measurementEntries],
+    () => renderableRows.reduce((sum, row) => sum + estimateRenderableRowHeight(row), 0),
+    [renderableRows],
+  );
+  // Wraps TanStack's own default measurer so every REAL measurement (initial
+  // mount, or a later ResizeObserver-driven remeasure) writes through to the
+  // rung 5 persistence cache before being returned. `data-index` is set by
+  // every measured row (see VirtualTranscriptViewport.tsx); an element
+  // missing it (shouldn't happen) just skips the write-through.
+  const measureElement = useCallback(
+    (
+      element: Element,
+      entry: ResizeObserverEntry | undefined,
+      instance: Virtualizer<HTMLDivElement, Element>,
+    ) => {
+      const measured = defaultMeasureElement(element, entry, instance);
+      const indexAttr = element.getAttribute("data-index");
+      const index = indexAttr === null ? Number.NaN : Number(indexAttr);
+      const row = renderableRows[index];
+      if (row) {
+        recordMeasuredRowHeight(sessionKey, row.key, measured, getRowCompositionToken(row));
+        // Fold the real measurement into this session's per-bucket running
+        // average so never-measured rows of the same composition borrow it.
+        recordBucketMeasurement(sessionKey, getRowEstimateBucketKey(row), measured);
+      }
+      return measured;
+    },
+    [renderableRows, sessionKey],
   );
 
   return {
     estimateSize,
     estimatedRowsHeight,
     getItemKey,
+    measureElement,
     rowCompositionKey,
   };
 }

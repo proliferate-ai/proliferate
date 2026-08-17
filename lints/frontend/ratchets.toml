@@ -195,8 +195,8 @@ reason = "terminal/feed stream registry (+open/close/error records woven into th
 
 [[frontend_structure]]
 path = "apps/packages/product-client/src/components/workspace/chat/transcript/VirtualizedTranscriptRowList.tsx"
-max_lines = 403
-reason = "Background Work R2: reports the stick-to-bottom engine's own isPinnedToBottom state upward via a new onIsPinnedToBottomChange callback prop, so the background-work transcript row can hide itself when the user scrolls away from bottom instead of floating over mid-transcript content; split deferred"
+max_lines = 405
+reason = "Background Work R2: reports the stick-to-bottom engine's own isPinnedToBottom state upward via a new onIsPinnedToBottomChange callback prop, so the background-work transcript row can hide itself when the user scrolls away from bottom instead of floating over mid-transcript content; split deferred. Bumped 403->405 by the current-main merge: the chat-scroll refold's single-writer / frame-pipeline landing (PRO-187) plus r2's pin-state wiring net two more lines in this host."
 
 # FE-CHATSCROLL-1 sanctioned scroll-position writers, read by
 # scripts/check_transcript_scroll_writer.py. File-level allowlist: any non-test
@@ -253,3 +253,7 @@ reason = "pre-existing non-transcript scroller: model-picker keyboard-nav scroll
 [[transcript_scroll_writer]]
 path = "apps/packages/product-client/src/lib/domain/content-search/chat-row-match-jump.ts"
 reason = "pre-existing non-transcript scroller: content-search row-match jump scrollIntoView; held so no net-new writer is added"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/hooks/chat/ui/transcript-reading-position-store.ts"
+reason = "rung 6 FR-2 restore: single frame writer that re-resolves the estimate-immune reading-position anchor each glued frame and writes the exact scrollTop, avoiding the coarse index-sum estimate's skew"

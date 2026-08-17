@@ -1,6 +1,7 @@
 import type { ReactNode, RefObject } from "react";
 import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import type { ChatTranscriptScrollHandle } from "#product/hooks/chat/ui/chat-transcript-view-types";
+import { estimateRenderableRowHeight } from "#product/hooks/chat/ui/transcript-row-height-estimate";
 
 /** Classification of a viewport scroll event and whether input intent proved user ownership. */
 export interface TranscriptScrollSample {
@@ -31,11 +32,6 @@ export const SCROLLABLE_OVERFLOW_EPSILON_PX = 1;
 export const TRANSCRIPT_USER_SCROLL_SETTLE_MS = 150;
 export const HISTORY_PREFETCH_TOP_THRESHOLD_PX = 480;
 export const HISTORY_LOADING_ROW_KEY = "history-loader";
-const ESTIMATED_TURN_HEIGHT_PX = 360;
-const ESTIMATED_HISTORY_LOADING_ROW_HEIGHT_PX = 32;
-// Goal lifecycle rows are quiet single-line system rows, not turn content —
-// a much smaller virtualization estimate than the generic turn fallback.
-const ESTIMATED_GOAL_EVENT_ROW_HEIGHT_PX = 28;
 
 export interface TranscriptRowListBaseProps {
   rows: readonly TranscriptVirtualRow[];
@@ -189,14 +185,9 @@ export function estimateRenderableRowsHeight(
   );
 }
 
-export function estimateRenderableRowHeight(
-  row: TranscriptRenderableRow | undefined,
-): number {
-  if (row?.kind === "history_loader") {
-    return ESTIMATED_HISTORY_LOADING_ROW_HEIGHT_PX;
-  }
-  if (row?.kind === "transcript" && row.row.kind === "goal_event") {
-    return ESTIMATED_GOAL_EVENT_ROW_HEIGHT_PX;
-  }
-  return ESTIMATED_TURN_HEIGHT_PX;
-}
+// The composition-derived estimate mapping and per-row invalidation token
+// live in their own module (transcript-row-height-estimate.ts) — it imports
+// `TranscriptRenderableRow` from here, so re-exporting keeps this file's
+// public surface (and every existing import site) unchanged.
+export { estimateRenderableRowHeight };
+export { getRowCompositionToken } from "#product/hooks/chat/ui/transcript-row-height-estimate";
