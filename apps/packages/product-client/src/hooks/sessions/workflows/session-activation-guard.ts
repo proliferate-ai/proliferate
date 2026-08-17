@@ -165,7 +165,8 @@ function rememberActivatedSession(workspaceId: string, materializedSessionId: st
     useSessionSelectionStore.getState().selectedLogicalWorkspaceId,
     workspaceId,
   ) ?? workspaceId;
-  for (const workspaceKey of new Set([workspaceUiKey, workspaceId])) {
-    rememberLastViewedSession(workspaceKey, materializedSessionId);
+  rememberLastViewedSession(workspaceUiKey, materializedSessionId);
+  if (workspaceUiKey !== workspaceId) {
+    rememberLastViewedSession(workspaceId, materializedSessionId);
   }
 }
