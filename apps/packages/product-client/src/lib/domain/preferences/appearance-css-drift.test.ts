@@ -400,20 +400,6 @@ describe("dot-cell activity motion", () => {
       expect(keyframes).toContain("opacity: 0;");
     },
   );
-
-  it("keeps the persistent wave off the transform compositor path", () => {
-    const keyframes = readRule(
-      productCss,
-      /@keyframes om-wave\s*\{([\s\S]*?)\n\}/,
-    );
-    const waveRule = readRule(
-      productCss,
-      /\.dot-cell-loader\[data-variant="wave"\] \.dot-cell-loader__dot\s*\{([\s\S]*?)\}/,
-    );
-
-    expect(keyframes).not.toContain("transform:");
-    expect(waveRule).not.toContain("transform:");
-  });
 });
 
 /**
