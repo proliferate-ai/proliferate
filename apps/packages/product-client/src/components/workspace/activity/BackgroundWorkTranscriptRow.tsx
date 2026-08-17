@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ProliferateIcon } from "#product/primitives/icons/proliferate-icons";
 import { CircleCheck } from "#product/primitives/icons/status";
+import { Button } from "#product/primitives/Button";
 import { twMerge } from "#product/primitives/utils/tw-merge";
 
 export interface BackgroundWorkTranscriptRowProps {
@@ -56,7 +57,9 @@ export function BackgroundWorkTranscriptRow({
   );
 
   return (
-    <button
+    <Button
+      variant="unstyled"
+      size="unstyled"
       type="button"
       onClick={onOpen}
       className="group flex w-fit items-center gap-2 rounded-md text-chat"
@@ -69,6 +72,6 @@ export function BackgroundWorkTranscriptRow({
         )}
       </span>
       <span className={toneClassName}>{label}</span>
-    </button>
+    </Button>
   );
 }

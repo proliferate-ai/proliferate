@@ -39,20 +39,24 @@ describe("deriveBackgroundWorkRowCounts", () => {
     expect(deriveBackgroundWorkRowCounts([])).toEqual({ runningCount: 0, finishedCount: 0 });
   });
 
-  // NEGATIVE CONTROL: counts come from the roster chip descriptors only.
-  // There is no tool-call/transcript status input to this function at all —
-  // it cannot see a BashCommandCall's status flip, so a tool call reporting
-  // "success" or "failed" has zero effect unless the roster itself (the
-  // `processes`/`agents` arrays behind these chips) actually changes.
-  it("is a pure function of roster chip descriptors, with no tool-call status input", () => {
-    const rosterChips: ActivityChipDescriptor[] = [
+  // NEGATIVE CONTROL: counts come from the roster's count/liveCount/kind
+  // only. `ActivityChipDescriptor` carries no tool-call/transcript status
+  // field at all — the function cannot see a BashCommandCall's status flip
+  // unless it actually changes the roster (count/liveCount). This mutates an
+  // UNRELATED descriptive field (`label`, the only other field the type
+  // carries) between two otherwise-identical snapshots and asserts the
+  // counts don't move — a real invariance check against a real (if partial)
+  // mutation, not a re-derivation from the same object.
+  it("ignores descriptor fields other than kind/count/liveCount (label changes do not move the counts)", () => {
+    const before = deriveBackgroundWorkRowCounts([
       chip({ kind: "terminals", count: 2, liveCount: 1, label: "2 terminals" }),
-    ];
-    const before = deriveBackgroundWorkRowCounts(rosterChips);
-    // Simulate "a tool call's status flipped" by re-deriving from the exact
-    // same roster snapshot — the function has no other input it could read
-    // that status from, so the result must be identical.
-    const after = deriveBackgroundWorkRowCounts(rosterChips);
+    ]);
+    const after = deriveBackgroundWorkRowCounts([
+      // Same kind/count/liveCount; only the incidental label text differs —
+      // stand-in for state (like a tool call's status text) that rides
+      // alongside the roster but isn't part of it.
+      chip({ kind: "terminals", count: 2, liveCount: 1, label: "2 terminals (1 running)" }),
+    ]);
     expect(after).toEqual(before);
   });
 });
