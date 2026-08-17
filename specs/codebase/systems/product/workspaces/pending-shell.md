@@ -559,10 +559,11 @@ projection path.
   unsupported values become stale, and an applicable unconfirmed latest value
   fails silently. If creation returns no live-config snapshot, authority is not
   yet available: captured intents remain queued and dispatch after binding.
-  Pending-shell inputs retain their raw harness IDs so settlement can resolve a
-  semantic control by raw identity when the producer did not carry that
-  semantic mapping. A newer intent outside the snapshot remains a normal
-  ordered live change.
+  Pending-shell inputs retain their raw harness IDs. Authenticated creation
+  resolves the semantic launch key from the agent catalog before applying
+  defaults, and settlement can still resolve by raw identity against
+  authoritative live config. A newer intent outside the snapshot remains a
+  normal ordered live change.
 - If the projected session has no materialized runtime yet, display labels must
   still use the same label mapping as the final session.
 - Do not mix raw ids and presentation labels. For example, a reasoning setting

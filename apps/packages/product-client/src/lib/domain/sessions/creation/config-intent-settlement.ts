@@ -3,6 +3,9 @@ import type {
   SessionLiveConfigSnapshot,
 } from "@anyharness/sdk";
 import type {
+  DesktopAgentLaunchControl,
+} from "#product/lib/domain/agents/cloud-launch-catalog";
+import type {
   SessionIntent,
 } from "#product/domain/sessions/intents/session-intent-model";
 
@@ -59,6 +62,28 @@ export function snapshotPreMaterializationConfigIntents(
       value: intent.value,
       order,
     }];
+  });
+}
+
+export function resolvePreMaterializationConfigIntentControlKeys(input: {
+  snapshot: PreMaterializationConfigIntentSnapshot;
+  launchControls: readonly Pick<DesktopAgentLaunchControl, "key" | "apply">[];
+}): PreMaterializationConfigIntentSnapshot {
+  const controlKeyByRawConfigId = new Map<string, string>();
+  for (const control of input.launchControls) {
+    const rawConfigId = control.apply.liveConfigId?.trim();
+    if (rawConfigId) {
+      controlKeyByRawConfigId.set(rawConfigId, control.key);
+    }
+  }
+  return input.snapshot.map((entry) => {
+    const rawConfigId = entry.rawConfigId?.trim();
+    const controlKey = rawConfigId
+      ? controlKeyByRawConfigId.get(rawConfigId)
+      : undefined;
+    return controlKey && controlKey !== entry.controlKey
+      ? { ...entry, controlKey }
+      : entry;
   });
 }
 

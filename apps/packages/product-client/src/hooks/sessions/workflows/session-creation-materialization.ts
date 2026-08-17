@@ -40,6 +40,7 @@ import {
 import {
   configValuesFromIntentSnapshot,
   planCreationConfigIntentSettlement,
+  resolvePreMaterializationConfigIntentControlKeys,
   snapshotPreMaterializationConfigIntents,
 } from "#product/lib/domain/sessions/creation/config-intent-settlement";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
@@ -284,9 +285,14 @@ async function runSessionCreationMaterialization({
   const modelRegistries = buildDesktopLaunchModelRegistries(
     cloudLaunchCatalog?.agents ?? [],
   );
-  const configIntentSnapshot = snapshotPreMaterializationConfigIntents(
-    sessionIntentsForSession(useSessionIntentStore.getState(), pendingSessionId),
-  );
+  const configIntentSnapshot = resolvePreMaterializationConfigIntentControlKeys({
+    snapshot: snapshotPreMaterializationConfigIntents(
+      sessionIntentsForSession(useSessionIntentStore.getState(), pendingSessionId),
+    ),
+    launchControls: cloudLaunchCatalog?.agents.find(
+      (agent) => agent.kind === options.agentKind,
+    )?.launchControls ?? [],
+  });
   const liveDefaultsForLaunch = mergeLiveDefaultLaunchControls({
     defaults: frozenDefaultLiveSessionControlValuesByAgentKind,
     agentKind: options.agentKind,
