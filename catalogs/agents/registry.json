@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "registryVersion": "2026-08-16.2",
+  "registryVersion": "2026-08-17.1",
   "generatedAt": "2026-07-17T03:08:00Z",
   "agents": [
     {
@@ -26,7 +26,7 @@
       "agentProcess": {
         "install": {
           "kind": "managed_npm_package",
-          "package": "git+https://github.com/proliferate-ai/claude-agent-acp.git#81a4d52e6bfe8f636d6818c6c48c29be28dca35d",
+          "package": "git+https://github.com/proliferate-ai/claude-agent-acp.git#65f6205329daea4a521ee0f0c042722b0feb306a",
           "packageSubdir": null,
           "sourceBuildBinaryName": null,
           "executableRelpath": "node_modules/.bin/claude-agent-acp"

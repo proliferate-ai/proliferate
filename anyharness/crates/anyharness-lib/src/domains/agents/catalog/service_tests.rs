@@ -73,10 +73,10 @@ fn pins_surface_catalog_harness_versions() {
     let catalog = draft_catalog();
 
     let claude = catalog.pins("claude").expect("claude pins");
-    assert_eq!(claude.agent_process.version, "0.66.0-proliferate.1");
+    assert_eq!(claude.agent_process.version, "0.66.0-proliferate.2");
     assert_eq!(
         claude.native.as_ref().map(|pin| pin.version.as_str()),
-        Some("2.1.233")
+        Some("2.1.234")
     );
 
     // Cursor has no native pin; unknown kinds have no pins at all.
@@ -140,10 +140,12 @@ fn models_intersect_availability_with_active_contexts() {
             "opus[1m]",
             "sonnet",
             "haiku",
-            "claude-opus-4-8",
-            "claude-fable-5"
+            "claude-fable-5",
+            "claude-opus-4-8"
         ]
     );
+    // claude-fable-5 is api-only: the 2.1.234 oauth probe's trial launch of it
+    // was refused, so oauth availability excludes it.
     assert_eq!(
         model_ids(catalog.models("claude", &contexts(&["anthropic-oauth"]))),
         vec![
@@ -151,7 +153,6 @@ fn models_intersect_availability_with_active_contexts() {
             "sonnet",
             "haiku",
             "claude-opus-4-8",
-            "claude-fable-5",
             "opus"
         ]
     );
@@ -186,10 +187,11 @@ fn baseline_counts_as_a_context_when_active() {
 fn visible_models_are_the_default_visible_subset_of_available() {
     let catalog = draft_catalog();
 
-    // claude-fable-5 and claude-opus-4-8 are oauth/api-only (the us.anthropic.*
-    // Bedrock variants are unavailable here), so they are NOT gateway duplicates
-    // and stay visible on native/api — an OAuth login serves them and this is
-    // the only form it can use.
+    // claude-opus-4-8 is oauth/api-only (the us.anthropic.* Bedrock variants
+    // are unavailable here), so it is NOT a gateway duplicate and stays
+    // visible on native/api — an OAuth login serves it and this is the only
+    // form it can use. claude-fable-5 dropped out of oauth availability when
+    // the 2.1.234 oauth probe's trial launch of it was refused.
     let available = model_ids(catalog.models("claude", &contexts(&["anthropic-oauth"])));
     assert!(available.contains(&"claude-opus-4-8"));
     assert_eq!(
@@ -199,7 +201,6 @@ fn visible_models_are_the_default_visible_subset_of_available() {
             "sonnet",
             "haiku",
             "claude-opus-4-8",
-            "claude-fable-5",
             "opus"
         ]
     );

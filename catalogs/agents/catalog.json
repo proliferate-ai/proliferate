@@ -1,10 +1,10 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2026-08-16.3",
+  "catalogVersion": "2026-08-17.1",
   "probedAgainst": {
-    "registryVersion": "2026-08-16.2"
+    "registryVersion": "2026-08-17.1"
   },
-  "generatedAt": "2026-08-16T20:20:05.445Z",
+  "generatedAt": "2026-08-17T20:49:16.584Z",
   "defaultAgentKind": "claude",
   "agents": [
     {
@@ -12,33 +12,33 @@
       "displayName": "Claude",
       "harness": {
         "agentProcess": {
-          "version": "0.66.0-proliferate.1",
+          "version": "0.66.0-proliferate.2",
           "source": {
             "kind": "git",
             "repo": "https://github.com/proliferate-ai/claude-agent-acp.git",
-            "gitRef": "81a4d52e6bfe8f636d6818c6c48c29be28dca35d",
+            "gitRef": "65f6205329daea4a521ee0f0c042722b0feb306a",
             "executableRelpath": "node_modules/.bin/claude-agent-acp"
           }
         },
         "native": {
-          "version": "2.1.233",
+          "version": "2.1.234",
           "source": {
             "kind": "binary",
             "targets": {
               "macos_arm64": {
-                "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.233/darwin-arm64/claude",
-                "sha256": "bc466b6cde63edafc773f471a1fb98787fabb31f52240c8616ce7e1f587b212d",
-                "downloadSizeBytes": 306981408
+                "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.234/darwin-arm64/claude",
+                "sha256": "08d8700313697cbe730a25420c908a299ce52d56f0eb2cf4fac94cab5109bc57",
+                "downloadSizeBytes": 310740672
               },
               "macos_x64": {
-                "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.233/darwin-x64/claude",
-                "sha256": "8b3ae18df411098ce55705c4bb151e9c97e34df55fe379c7b6b3122a69f0ea74",
-                "downloadSizeBytes": 315654448
+                "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.234/darwin-x64/claude",
+                "sha256": "1a7b2e8948609f1f732a6498cd17b805b5c5187d74a99adc61ebaa5a29efc34c",
+                "downloadSizeBytes": 319452208
               },
               "linux_x64": {
-                "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.233/linux-x64/claude",
-                "sha256": "55d281096f57d411ebbdd94dbf5e9ff3accb7c05713e37348c2c11d4b83bf9d9",
-                "downloadSizeBytes": 324598064
+                "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.234/linux-x64/claude",
+                "sha256": "3473601ea695d5bf769c5b202844d4cb4fbf723ae995450fcb6973204775c84a",
+                "downloadSizeBytes": 328358192
               }
             }
           }
@@ -141,8 +141,8 @@
         "models": [
           {
             "id": "default",
-            "displayName": "Default 4.8",
-            "description": "Use the default model (currently Opus 4.8)",
+            "displayName": "Default",
+            "description": "Use the default model (currently Opus 5)",
             "availability": {
               "anyOf": [
                 "anthropic-api",
@@ -322,13 +322,11 @@
             }
           },
           {
-            "id": "claude-opus-4-8",
-            "displayName": "Opus 4.8",
-            "description": "Newer version available · select Opus for Opus 5",
+            "id": "claude-fable-5",
+            "displayName": "Fable 5",
             "availability": {
               "anyOf": [
-                "anthropic-api",
-                "anthropic-oauth"
+                "anthropic-api"
               ]
             },
             "defaultVisible": true,
@@ -354,28 +352,20 @@
                   "max"
                 ],
                 "observedValue": "default"
-              },
-              "fast": {
-                "values": [
-                  "on",
-                  "off"
-                ],
-                "observedValue": "off"
               }
             },
             "status": "active",
             "provenance": {
               "observedIn": [
-                "claude.anthropic-api",
-                "claude.anthropic-oauth"
+                "claude.anthropic-api"
               ],
               "observedInAllContexts": false,
-              "viaTrialOnly": false
+              "viaTrialOnly": true
             }
           },
           {
-            "id": "claude-fable-5",
-            "displayName": "Fable 5",
+            "id": "claude-opus-4-8",
+            "displayName": "Opus 4.8",
             "availability": {
               "anyOf": [
                 "anthropic-api",
@@ -426,8 +416,8 @@
           },
           {
             "id": "opus",
-            "displayName": "Claude-Opus-4-8",
-            "description": "Custom Opus model",
+            "displayName": "Opus",
+            "description": "Opus 5 · Best for everyday, complex tasks",
             "availability": {
               "anyOf": [
                 "anthropic-oauth"
@@ -468,8 +458,7 @@
             "status": "active",
             "provenance": {
               "observedIn": [
-                "claude.anthropic-oauth",
-                "claude.bedrock"
+                "claude.anthropic-oauth"
               ],
               "observedInAllContexts": false,
               "viaTrialOnly": false
@@ -644,14 +633,46 @@
             }
           },
           {
-            "id": "global.anthropic.claude-fable-5",
-            "displayName": "Fable 5",
+            "id": "us.anthropic.claude-opus-4-1-20250805-v1:0",
+            "displayName": "Opus 4.1",
+            "description": "Opus 4.1 · Legacy",
             "availability": {
               "anyOf": [
                 "bedrock"
               ]
             },
-            "defaultVisible": false,
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "us.anthropic.claude-opus-5",
+            "displayName": "Opus 5",
+            "description": "Opus 5 · Best for everyday, complex tasks",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
             "controls": {
               "mode": {
                 "values": [
@@ -682,18 +703,315 @@
                 "claude.bedrock"
               ],
               "observedInAllContexts": false,
-              "viaTrialOnly": true
+              "viaTrialOnly": false
             }
           },
           {
-            "id": "us.anthropic.claude-opus-4-8",
-            "displayName": "Us.anthropic.claude-Opus-4-8",
+            "id": "us.anthropic.claude-opus-5[1m]",
+            "displayName": "Opus 5 (1M context)",
+            "description": "Opus 5 for long sessions",
             "availability": {
               "anyOf": [
                 "bedrock"
               ]
             },
             "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-8",
+            "displayName": "Opus 4.8",
+            "description": "Opus 4.8 · Previous Opus version",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-8[1m]",
+            "displayName": "Opus 4.8 (1M context)",
+            "description": "Opus 4.8 for long sessions",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-7",
+            "displayName": "Opus 4.7",
+            "description": "Opus 4.7 · Legacy",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-7[1m]",
+            "displayName": "Opus 4.7 (1M context)",
+            "description": "Opus 4.7 for long sessions",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-6-v1",
+            "displayName": "Opus 4.6",
+            "description": "Opus 4.6 · Legacy",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-6-v1[1m]",
+            "displayName": "Opus 4.6 (1M context)",
+            "description": "Opus 4.6 for long sessions",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "global.anthropic.claude-fable-5",
+            "displayName": "Fable 5",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": false,
             "controls": {
               "mode": {
                 "values": [
@@ -879,9 +1197,9 @@
           "gateway": "claude-sonnet-4-5"
         },
         "observedDefaults": {
-          "anthropic-api": "claude-opus-4-8",
-          "anthropic-oauth": "claude-opus-4-8",
-          "bedrock": "opus"
+          "anthropic-api": "default",
+          "anthropic-oauth": "default",
+          "bedrock": "default"
         },
         "gatewayPolicy": {
           "roles": {
@@ -914,10 +1232,10 @@
         }
       ],
       "provenance": {
-        "probedAt": "2026-08-16T11:54:41.057030+00:00",
+        "probedAt": "2026-08-17T20:42:09.068225+00:00",
         "attestation": {
           "name": "@proliferate/claude-agent-acp",
-          "version": "0.66.0-proliferate.1",
+          "version": "0.66.0-proliferate.2",
           "title": "Claude Agent"
         },
         "runs": [
