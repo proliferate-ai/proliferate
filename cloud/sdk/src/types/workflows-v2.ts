@@ -60,11 +60,13 @@ export interface WorkflowDefinitionV2 {
 
 export type WorkflowArgumentsV2 = Record<string, string | number | boolean>;
 
-export type WorkflowPlacementModeV2 = "worktree" | "repo_root";
+export type WorkflowPlacementModeV2 = "worktree" | "repo_root" | "existing_workspace";
 
 export interface WorkflowPlacementV2 {
   repoConfigId: string;
   mode: WorkflowPlacementModeV2;
+  /** Required iff mode is "existing_workspace": the adopted workspace (F-A1). */
+  workspaceId?: string;
 }
 
 /** Body of PUT /v1/workflow-invocations/{id} under schema_version 2. */

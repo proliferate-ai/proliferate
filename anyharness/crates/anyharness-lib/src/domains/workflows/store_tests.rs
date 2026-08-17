@@ -120,14 +120,14 @@ fn snapshot() -> InvocationSnapshot {
         placement: InvocationPlacement {
             repo_config_id: "rc-1".into(),
             mode: PlacementMode::Worktree,
+            workspace_id: None,
         },
     }
 }
 
 fn params(run_id: &str) -> NewRunParams {
     let snapshot = snapshot();
-    let definition_json =
-        serde_json::to_string(&snapshot.definition).expect("serialize definition");
+    let definition_json = serde_json::to_string(&snapshot.definition).expect("serialize");
     NewRunParams {
         run_id: run_id.into(),
         invocation_id: format!("inv-{run_id}"),

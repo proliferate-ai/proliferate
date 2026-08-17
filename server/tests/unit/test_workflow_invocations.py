@@ -382,7 +382,11 @@ def test_invocation_openapi_pins_exact_request_and_response_shapes() -> None:
     placement_v2 = components["WorkflowInvocationPlacementV2"]
     assert placement_v2["additionalProperties"] is False
     assert set(placement_v2["required"]) == {"repoConfigId", "mode"}
-    assert set(placement_v2["properties"]["mode"]["enum"]) == {"worktree", "repo_root"}
+    assert set(placement_v2["properties"]["mode"]["enum"]) == {
+        "worktree",
+        "repo_root",
+        "existing_workspace",
+    }
 
     response_v2 = components["WorkflowInvocationResponseV2"]
     assert response_v2["additionalProperties"] is False
