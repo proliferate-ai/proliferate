@@ -1,17 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import type { WorkflowRunNodeV2, WorkflowRunProjectionV2 } from "@anyharness/sdk";
+import type { WorkflowRunNodeV2, WorkflowRunProjectionV2, WorkflowRunV2 } from "@anyharness/sdk";
 import {
   useWorkflowRunMutations,
   useWorkflowRunQuery,
   useWorkflowRunsQuery,
 } from "@anyharness/sdk-react";
 import { WORKFLOW_RUN_VIEW_COPY } from "#product/copy/workflows/workflow-run-view-copy";
-import { selectNewestWorkflowRun } from "#product/domain/workflows/run-selection";
+import { selectVisibleWorkflowRuns } from "#product/domain/workflows/run-selection";
 import { detectWorkflowAutoAdvance } from "#product/domain/workflows/run-view-model";
 import { useWorkflowNodeSessionRoster } from "#product/hooks/workflows/lifecycle/use-workflow-node-session-roster";
 import { useWorkflowRunCommand } from "#product/hooks/workflows/workflows/use-workflow-run-command";
 import { isWorkflowsV2Enabled } from "#product/lib/domain/capabilities/workflows-v2";
 import { showToast } from "#product/primitives/utils/show-toast";
+
+/**
+ * How many concurrent runs the watcher keeps a toast slot open for.
+ *
+ * Placement is normally exclusive (starting a run occupies the workspace), so
+ * `selectVisibleWorkflowRuns` ordinarily returns one run; only
+ * `existing_workspace` placement can adopt a workspace already carrying a
+ * live run, and even then a handful is already an unusual workspace. A fixed
+ * cap keeps this hook calling the same number of sub-hooks on every render
+ * (the rules of hooks forbid a variable-length loop of hook calls) without
+ * reaching for a component tree just to watch toasts. A workspace with more
+ * concurrent runs than this simply gets no auto-advance toast for the
+ * overflow ones — a missed announcement, never a crash.
+ */
+const MAX_WATCHED_CONCURRENT_RUNS = 4;
 
 /**
  * The announcement key for one auto-advance: the started row plus the instant
@@ -54,10 +69,39 @@ export function useWorkflowAutoAdvanceWatch({
     enabled: watching,
     watchActiveRuns: true,
   });
-  const run = useMemo(
-    () => selectNewestWorkflowRun(runsQuery.data?.runs),
+  const visibleRuns = useMemo(
+    () => selectVisibleWorkflowRuns(runsQuery.data?.runs),
     [runsQuery.data],
   );
+
+  // A fixed number of slots, not `visibleRuns.map(...)`: the count of hook
+  // calls below has to be the same on every render, whatever `visibleRuns`
+  // holds this time. Each slot only actually watches while the roster has a
+  // run for its index.
+  for (let slot = 0; slot < MAX_WATCHED_CONCURRENT_RUNS; slot += 1) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- fixed-length loop, see MAX_WATCHED_CONCURRENT_RUNS above.
+    useWorkflowAutoAdvanceRunWatch({
+      run: visibleRuns[slot] ?? null,
+      watching,
+      workspaceId,
+    });
+  }
+}
+
+/**
+ * One run's slot in `useWorkflowAutoAdvanceWatch`: polls that run's
+ * projection and raises its own undo toast on an auto-advance, independent of
+ * every other slot's run.
+ */
+function useWorkflowAutoAdvanceRunWatch({
+  run,
+  watching,
+  workspaceId,
+}: {
+  run: WorkflowRunV2 | null;
+  watching: boolean;
+  workspaceId: string | null;
+}): void {
   const runId = run?.id ?? "";
   const runQuery = useWorkflowRunQuery(runId, { enabled: watching && runId.length > 0 });
   const mutations = useWorkflowRunMutations(runId);

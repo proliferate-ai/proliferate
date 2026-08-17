@@ -38,6 +38,14 @@ export const WORKFLOW_RUN_VIEW_COPY = {
   errorDescription:
     "The runtime did not return this workflow run. It may still be starting up.",
 
+  /**
+   * The rail's own name, shown only when more than one run is visible at once
+   * (placement `existing_workspace` can adopt a workspace into a second live
+   * run). With a single run the rail's identity is already the pane's own
+   * identity, so this text is withheld rather than shown redundantly.
+   */
+  runRailLabel: (run: { id: string }): string => `Run ${run.id}`,
+
   /** Accessible name of the pannable graph surface. */
   graphCanvasLabel: "Run graph",
   /** The docked inspector under the canvas, for the selected node. */

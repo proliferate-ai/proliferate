@@ -10,7 +10,7 @@ import {
   useWorkflowRunQuery,
   useWorkflowRunsQuery,
 } from "@anyharness/sdk-react";
-import { selectNewestWorkflowRun } from "#product/domain/workflows/run-selection";
+import { selectVisibleWorkflowRuns } from "#product/domain/workflows/run-selection";
 import {
   buildWorkflowGraph,
   type WorkflowGraphSlotVM,
@@ -54,16 +54,57 @@ const NO_DOCS: WorkflowRunDocV2[] = [];
 const NO_NODES: ReadonlyMap<string, WorkflowRunNodeV2> = new Map();
 const NO_NEEDS_INPUT: ReadonlySet<string> = new Set();
 
-export function useWorkflowPane({ workspaceId }: { workspaceId: string }): WorkflowPaneModel {
-  // The roster decides which run this pane shows and whether the workflow tool
-  // is offered at all, so it has to notice a run triggered from anywhere else:
-  // watched, not read once.
+/**
+ * Which visible runs the workspace's workflow tool has, and whether the tool
+ * is offered at all. One instance is watched per workspace (never per run),
+ * and each element of `visibleRuns` is what the component layer maps into one
+ * `useWorkflowPane` call — this hook owns no per-run state itself.
+ */
+export interface WorkflowRunRoster {
+  status: "loading" | "empty" | "error" | "ready";
+  visibleRuns: readonly WorkflowRunV2[];
+}
+
+/**
+ * The workspace's roster of runs worth a rail: watched, not read once, so a
+ * run started or finished from anywhere else — the workflows page, another
+ * session — reaches every surface that renders off this roster (the pane
+ * container and the auto-advance watcher both mount one of these).
+ *
+ * Deliberately reuses `resolveWorkflowPaneStatus`: "does this workspace have
+ * a run to show" is the same loading/error/empty/ready shape whether the
+ * question is asked about the whole roster or about one run's projection.
+ */
+export function useWorkflowRunRoster(workspaceId: string): WorkflowRunRoster {
   const runsQuery = useWorkflowRunsQuery(workspaceId, { watchActiveRuns: true });
-  const run = useMemo(
-    () => selectNewestWorkflowRun(runsQuery.data?.runs),
+  const visibleRuns = useMemo(
+    () => selectVisibleWorkflowRuns(runsQuery.data?.runs),
     [runsQuery.data],
   );
-  const runId = run?.id ?? "";
+  return {
+    status: resolveWorkflowPaneStatus({
+      runsLoaded: runsQuery.data !== undefined,
+      runsFailed: runsQuery.isError,
+      hasRun: visibleRuns.length > 0,
+      projectionLoaded: true,
+      projectionFailed: false,
+    }),
+    visibleRuns,
+  };
+}
+
+/**
+ * The per-run projection and controls behind one rail. The caller (the
+ * roster, or its own watcher) already knows which run this is — this hook
+ * only ever asks the runtime about the one row it was handed, never about
+ * "the workspace's run" in the singular, so mounting it once per element of
+ * `WorkflowRunRoster.visibleRuns` is what lets N runs render as N independent
+ * rails instead of collapsing onto one.
+ */
+export function useWorkflowPane(
+  { workspaceId, run }: { workspaceId: string; run: WorkflowRunV2 },
+): WorkflowPaneModel {
+  const runId = run.id;
   const runQuery = useWorkflowRunQuery(runId, { enabled: runId.length > 0 });
   const mutations = useWorkflowRunMutations(runId);
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
@@ -153,9 +194,12 @@ export function useWorkflowPane({ workspaceId }: { workspaceId: string }): Workf
   // above the tool switch (`useWorkflowAutoAdvanceWatch`).
   return {
     status: resolveWorkflowPaneStatus({
-      runsLoaded: runsQuery.data !== undefined,
-      runsFailed: runsQuery.isError,
-      hasRun: run !== null,
+      // The caller only ever hands this hook a run that the roster already
+      // resolved to exist, so "no run" is not a state this hook can be in —
+      // that question is `useWorkflowRunRoster`'s alone.
+      runsLoaded: true,
+      runsFailed: false,
+      hasRun: true,
       projectionLoaded: projection !== undefined,
       projectionFailed: runQuery.isError,
     }),

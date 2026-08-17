@@ -12,6 +12,7 @@ import type { SidebarSessionActivityState } from "#product/domain/sessions/activ
 import {
   resolveWorkflowPaneStatus,
   useWorkflowPane,
+  useWorkflowRunRoster,
 } from "#product/hooks/workflows/facade/use-workflow-pane";
 import { isWorkflowTransitionRace } from "#product/hooks/workflows/workflows/use-workflow-run-command";
 
@@ -132,8 +133,11 @@ function transitionIllegal(): AnyHarnessError {
   });
 }
 
-function render() {
-  return renderHook(() => useWorkflowPane({ workspaceId: WORKSPACE_ID }));
+function render(overrides: Partial<WorkflowRunV2> = {}) {
+  return renderHook(
+    (props: { run: WorkflowRunV2 }) => useWorkflowPane({ workspaceId: WORKSPACE_ID, run: props.run }),
+    { initialProps: { run: run(overrides) } },
+  );
 }
 
 beforeEach(() => {
@@ -202,42 +206,25 @@ describe("resolveWorkflowPaneStatus", () => {
 });
 
 describe("useWorkflowPane", () => {
-  it("binds the run detail query to the workspace's newest run", () => {
-    mocks.runsQuery.data = {
-      runs: [
-        run({ id: "older", createdAt: "2026-08-13T00:00:00Z" }),
-        run({ id: "newest", createdAt: "2026-08-14T00:00:00Z" }),
-      ],
-    };
+  it("binds the run detail query to the run it was given", () => {
     mocks.runQuery.data = projection([node({ id: "a" })], { id: "newest" });
 
-    const { result } = render();
+    const { result } = render({ id: "newest" });
 
     expect(mocks.runQueryCalls.at(-1)).toBe("newest");
     expect(result.current.run?.id).toBe("newest");
     expect(result.current.status).toBe("ready");
   });
 
-  it("reads the run header off the polled projection, not the unpolled list", () => {
+  it("reads the run header off the polled projection, not the run it was given", () => {
     // Only the detail query polls, so a run that parks while the pane is open
     // shows up here and nowhere else.
-    mocks.runsQuery.data = { runs: [run({ status: "running" })] };
     mocks.runQuery.data = projection([node({ id: "a" })], { status: "interrupted" });
 
-    const { result } = render();
+    const { result } = render({ status: "running" });
 
     expect(result.current.run?.status).toBe("interrupted");
     expect(result.current.interrupted).toBe(true);
-  });
-
-  it("reports the empty state when the workspace has no runs at all", () => {
-    mocks.runsQuery.data = { runs: [] };
-
-    const { result } = render();
-
-    expect(result.current.status).toBe("empty");
-    expect(result.current.run).toBeNull();
-    expect(result.current.slots).toEqual([]);
   });
 
   it("projects the run into slots, docs, node index and the interrupted flag", () => {
@@ -257,9 +244,8 @@ describe("useWorkflowPane", () => {
         updatedAt: "2026-08-14T00:00:00Z",
       }],
     };
-    mocks.runsQuery.data = { runs: [run({ status: "interrupted" })] };
 
-    const { result } = render();
+    const { result } = render({ status: "interrupted" });
 
     expect(result.current.slots.map((slot) => slot.chainIndex)).toEqual([0, 1]);
     expect(result.current.docs.map((doc) => doc.slug)).toEqual(["plan"]);
@@ -383,15 +369,6 @@ describe("useWorkflowPane", () => {
     expect(mocks.showToast).not.toHaveBeenCalled();
   });
 
-  it("watches the runs roster so a run triggered elsewhere reaches the pane", () => {
-    render();
-
-    expect(mocks.useWorkflowRunsQuery).toHaveBeenCalledWith(
-      WORKSPACE_ID,
-      { watchActiveRuns: true },
-    );
-  });
-
   it("raises no auto-advance toast itself: the watcher above the tool switch owns it", async () => {
     mocks.runQuery.data = projection(
       [
@@ -410,7 +387,7 @@ describe("useWorkflowPane", () => {
       { currentNodeRowId: "b" },
     );
     await act(async () => {
-      rerender();
+      rerender({ run: run() });
     });
 
     expect(mocks.showToast).not.toHaveBeenCalled();
@@ -422,5 +399,61 @@ describe("useWorkflowPane", () => {
     const { result } = render();
 
     expect(result.current.busy).toBe(true);
+  });
+});
+
+describe("useWorkflowRunRoster", () => {
+  it("watches the runs roster so a run triggered elsewhere reaches the pane", () => {
+    mocks.runsQuery.data = { runs: [run()] };
+
+    renderHook(() => useWorkflowRunRoster(WORKSPACE_ID));
+
+    expect(mocks.useWorkflowRunsQuery).toHaveBeenCalledWith(
+      WORKSPACE_ID,
+      { watchActiveRuns: true },
+    );
+  });
+
+  it("is loading until the runs list arrives", () => {
+    mocks.runsQuery.data = undefined;
+
+    const { result } = renderHook(() => useWorkflowRunRoster(WORKSPACE_ID));
+
+    expect(result.current.status).toBe("loading");
+    expect(result.current.visibleRuns).toEqual([]);
+  });
+
+  it("is empty when the workspace has no runs at all", () => {
+    mocks.runsQuery.data = { runs: [] };
+
+    const { result } = renderHook(() => useWorkflowRunRoster(WORKSPACE_ID));
+
+    expect(result.current.status).toBe("empty");
+    expect(result.current.visibleRuns).toEqual([]);
+  });
+
+  it("is ready with exactly one visible run for an ordinary single-run workspace", () => {
+    mocks.runsQuery.data = { runs: [run({ id: "solo", status: "running" })] };
+
+    const { result } = renderHook(() => useWorkflowRunRoster(WORKSPACE_ID));
+
+    expect(result.current.status).toBe("ready");
+    expect(result.current.visibleRuns.map((candidate) => candidate.id)).toEqual(["solo"]);
+  });
+
+  it("surfaces two live runs — the concurrent-run case the rail exists for", () => {
+    mocks.runsQuery.data = {
+      runs: [
+        run({ id: "older", status: "running", createdAt: "2026-08-14T00:00:00Z" }),
+        run({ id: "newer", status: "awaiting_human", createdAt: "2026-08-14T09:00:00Z" }),
+      ],
+    };
+
+    const { result } = renderHook(() => useWorkflowRunRoster(WORKSPACE_ID));
+
+    // Negative control: two live runs must produce two rails, never a single
+    // collapsed one — the whole point of the concurrent-run surface.
+    expect(result.current.visibleRuns.map((candidate) => candidate.id))
+      .toEqual(["newer", "older"]);
   });
 });
