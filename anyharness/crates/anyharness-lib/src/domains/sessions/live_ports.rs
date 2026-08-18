@@ -24,9 +24,10 @@ use crate::domains::sessions::store::pending_prompts::PendingPromptWriteError;
 use crate::domains::sessions::store::persisted_payloads::sanitize_session_event_for_sqlite;
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::model::{
-    AttachmentSource, BackgroundWorkDurable, EventPersist, QueueDurable, SessionStateDurable,
-    TerminalTurnOutcome, TerminalTurnPersistenceInput,
+    BackgroundWorkDurable, EventPersist, QueueDurable, SessionStateDurable, TerminalTurnOutcome,
+    TerminalTurnPersistenceInput,
 };
+use crate::live::sessions::model_attachments::AttachmentSource;
 use crate::live::sessions::queue_durable::{
     PendingPromptDeleteOutcome, PendingPromptUpdateOutcome,
 };
@@ -360,6 +361,24 @@ impl SessionStateDurable for SessionStore {
 
     fn repair_unclosed_turns(&self, session_id: &str) -> anyhow::Result<u32> {
         SessionStore::repair_unclosed_turns(self, session_id)
+    }
+
+    fn insert_opencode_message_id(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        item_id: &str,
+        vendor_message_id: &str,
+        now: &str,
+    ) -> anyhow::Result<()> {
+        SessionStore::insert_opencode_message_id(
+            self,
+            session_id,
+            turn_id,
+            item_id,
+            vendor_message_id,
+            now,
+        )
     }
 }
 

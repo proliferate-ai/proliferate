@@ -27,6 +27,10 @@ impl SessionEventSink {
         );
 
         let item_id = uuid::Uuid::new_v4().to_string();
+        // Bind the vendor OpenCode `messageId` echo to this
+        // prompt turn's user-message identity. Cleared at `turn_ended`; never
+        // set for engine-initiated turns.
+        self.current_user_item_id = Some(item_id.clone());
         let item = TranscriptItemPayload {
             kind: TranscriptItemKind::UserMessage,
             status: TranscriptItemStatus::Completed,
@@ -91,6 +95,7 @@ impl SessionEventSink {
         // engine-initiated (goal continuation/evaluation) and must open its
         // own turn instead of being glued onto this one.
         self.current_turn_id = None;
+        self.current_user_item_id = None;
         self.engine_initiated_turn = false;
     }
 

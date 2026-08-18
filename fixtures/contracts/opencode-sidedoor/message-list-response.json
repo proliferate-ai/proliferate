@@ -1,0 +1,16 @@
+[
+  {
+    "info": {
+      "id": "msg_01hqrstuvwxyzabcdefghij0",
+      "role": "user"
+    },
+    "parts": []
+  },
+  {
+    "info": {
+      "id": "msg_01hqrstuvwxyzabcdefghij1",
+      "role": "assistant"
+    },
+    "parts": []
+  }
+]

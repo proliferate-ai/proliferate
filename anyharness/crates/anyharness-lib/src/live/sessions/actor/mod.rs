@@ -1,4 +1,5 @@
 mod background_work;
+mod capabilities;
 pub(in crate::live::sessions) mod command;
 mod config;
 mod fork;

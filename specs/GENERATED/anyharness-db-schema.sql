@@ -215,6 +215,16 @@ CREATE TABLE mobility_archive_installs (
     PRIMARY KEY (workspace_id, operation_id)
 );
 
+-- table: opencode_message_ids
+CREATE TABLE opencode_message_ids (
+    session_id TEXT NOT NULL,
+    turn_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    vendor_message_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, turn_id, item_id)
+);
+
 -- table: plan_handoffs
 CREATE TABLE plan_handoffs (
     id TEXT PRIMARY KEY,

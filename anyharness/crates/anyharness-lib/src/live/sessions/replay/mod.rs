@@ -401,6 +401,14 @@ async fn handle_non_replay_command(
             )));
             None
         }
+        SessionCommand::SidedoorTargetedFork { respond_to, .. } => {
+            let _ = respond_to.send(Err(
+                crate::live::sessions::SidedoorForkCommandError::NotReady(
+                    "replay sessions cannot be forked".to_string(),
+                ),
+            ));
+            None
+        }
         SessionCommand::CloseNativeSession { respond_to, .. } => {
             let _ = respond_to.send(Err(anyhow::anyhow!(
                 "replay sessions have no native child sessions"

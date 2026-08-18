@@ -356,7 +356,12 @@ Fork invariants:
 - raw ACP notifications are not copied into fork children
 - generic ACP fork support (`action_capabilities.fork`) means tip fork only;
   targeted fork requires the separate `action_capabilities.targeted_fork`
-  capability, absent on every adapter until the per-harness bridges land
+  capability. The OpenCode side-door bridge derives `targeted_fork` from the
+  runtime-owned qualification registry (an exact vendor version pin) AND a
+  loopback-only, fail-closed side-door readiness check; it stays off unless the
+  registry qualifies the resolved vendor version and the side-door proves
+  loopback-authenticated and off-host-unreachable. Every other adapter remains
+  absent until its own per-harness bridge lands
 
 ### Fork boundary and the durable operation record
 

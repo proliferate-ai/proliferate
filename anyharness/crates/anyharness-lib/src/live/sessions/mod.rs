@@ -4,6 +4,7 @@ mod driver;
 pub mod handle;
 mod manager;
 pub mod model;
+pub mod model_attachments;
 pub mod probe;
 pub mod product_context;
 pub mod queue_durable;
@@ -19,7 +20,8 @@ pub use handle::{
     AgentExtMethodError, ConditionalCancelOutcome, ForkSessionCommandError,
     ForkSessionCommandResult, LiveSessionCommandError, LiveSessionExecutionSnapshot,
     LiveSessionHandle, PromptAcceptError, PromptAcceptance, QueueMutationError, Resolution,
-    ResolveInteractionCommandError, SetConfigOptionCommandError,
+    ResolveInteractionCommandError, SetConfigOptionCommandError, SidedoorForkCommandError,
+    SidedoorForkCommandResult,
 };
 pub use manager::LiveSessionManager;
 pub(crate) use manager::RevealMcpElicitationUrlError;

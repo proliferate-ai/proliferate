@@ -257,3 +257,40 @@ pub(in crate::live::sessions::actor) fn push_persisted_control(
         current_value.clone(),
     ));
 }
+
+/// Shared startup-stage logging for `emit_live_config_update`/
+/// `restore_persisted_live_config_if_needed` call sites: a failed call logs
+/// both a short warning and the `[workspace-latency]` failure record; success
+/// logs the matching completion record. `stage` names the metric
+/// (`session.actor.<stage>.{failed,completed}`).
+pub(in crate::live::sessions::actor) fn log_config_stage_result<E: std::fmt::Display>(
+    session_id: &str,
+    workspace_id: &str,
+    result: &Result<(), E>,
+    elapsed: std::time::Duration,
+    short_failure_message: &str,
+    stage: &str,
+) {
+    match result {
+        Err(error) => {
+            tracing::warn!(session_id = %session_id, error = %error, "{}", short_failure_message);
+            tracing::warn!(
+                session_id = %session_id,
+                workspace_id = %workspace_id,
+                error = %error,
+                elapsed_ms = elapsed.as_millis(),
+                "[workspace-latency] session.actor.{}.failed",
+                stage
+            );
+        }
+        Ok(()) => {
+            tracing::info!(
+                session_id = %session_id,
+                workspace_id = %workspace_id,
+                elapsed_ms = elapsed.as_millis(),
+                "[workspace-latency] session.actor.{}.completed",
+                stage
+            );
+        }
+    }
+}

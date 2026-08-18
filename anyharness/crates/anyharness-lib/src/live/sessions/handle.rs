@@ -10,7 +10,7 @@ use tokio::sync::{broadcast, mpsc, oneshot, Notify, RwLock};
 pub use crate::live::sessions::actor::command::{
     ConditionalCancelOutcome, ForkSessionCommandError, ForkSessionCommandResult, PromptAcceptError,
     PromptAcceptance, QueueMutationError, Resolution, ResolveInteractionCommandError,
-    SetConfigOptionCommandError,
+    SetConfigOptionCommandError, SidedoorForkCommandError, SidedoorForkCommandResult,
 };
 
 use crate::domains::sessions::prompt::PromptPayload;
@@ -18,7 +18,7 @@ use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionError, RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
 use crate::live::sessions::actor::command::SessionCommand;
-
+mod sidedoor;
 #[derive(Debug)]
 pub enum LiveSessionCommandError<E> {
     ActorUnavailable,
