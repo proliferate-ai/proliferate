@@ -63,12 +63,19 @@ export function ActionDisclosureRow({
   expanded,
   failed,
   onToggle,
+  trailing,
 }: {
   label: string;
   icon: ReactNode;
   expanded: boolean;
   failed: boolean;
   onToggle: () => void;
+  /**
+   * A muted trailing status suffix (e.g. `running · 4m 12s`), shown when a
+   * background command's roster data is available (bgwork r8). Absent for
+   * every other row.
+   */
+  trailing?: string;
 }) {
   return (
     <Button
@@ -84,6 +91,9 @@ export function ActionDisclosureRow({
     >
       <ActionRowIcon>{icon}</ActionRowIcon>
       <span className="min-w-0 truncate">{label}</span>
+      {trailing && (
+        <span className="ml-auto shrink-0 text-faint">{trailing}</span>
+      )}
     </Button>
   );
 }

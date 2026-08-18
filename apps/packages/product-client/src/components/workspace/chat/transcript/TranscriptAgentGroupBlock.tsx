@@ -45,6 +45,7 @@ export function TranscriptAgentGroupBlock({
   renderChild,
   workspaceId = null,
   onOpenSubagent,
+  onOpenBackgroundTerminal,
 }: {
   item: ToolCallItem;
   childIds: string[];
@@ -61,6 +62,14 @@ export function TranscriptAgentGroupBlock({
    * Absent for embedded/read-only transcripts that have no pane to open.
    */
   onOpenSubagent?: (subagentId: string) => void;
+  /**
+   * bgwork r8 round 3: a background command run inside this native
+   * subagent's own nested transcript (rendered by `renderScopedWork` below)
+   * needs the same click-in as the top-level transcript — threaded straight
+   * through to `ScopedTranscriptBlocks`, the same path `onOpenSubagent`
+   * already establishes one level up in `TranscriptToolCallGroupBlock`.
+   */
+  onOpenBackgroundTerminal?: (processId: string) => void;
 }) {
   const executionState = resolveSubagentExecutionState(item);
   const isRunning = isSubagentExecutionStateRunning(executionState);
@@ -123,6 +132,7 @@ export function TranscriptAgentGroupBlock({
       transcript={transcript}
       autoFollowCollapsedActionBlockId={null}
       renderItem={renderChild}
+      onOpenBackgroundTerminal={onOpenBackgroundTerminal}
     />
   );
   const headerVerb = executionState === "failed"

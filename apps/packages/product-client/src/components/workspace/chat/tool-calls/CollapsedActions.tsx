@@ -22,6 +22,8 @@ interface CollapsedActionsProps {
   autoFollow?: boolean;
   /** Keep the trailing exploration phase visually live between tool events. */
   liveContinuation?: boolean;
+  /** bgwork r8 round 2: routed to a background command's ledger row. */
+  onOpenBackgroundTerminal?: (processId: string) => void;
 }
 
 export function CollapsedActions({
@@ -29,6 +31,7 @@ export function CollapsedActions({
   transcript,
   autoFollow = false,
   liveContinuation = false,
+  onOpenBackgroundTerminal,
 }: CollapsedActionsProps) {
   const hasActiveAction = itemIds.some((itemId) => {
     const item = transcript.itemsById[itemId];
@@ -115,6 +118,7 @@ export function CollapsedActions({
               transcript={transcript}
               isLive={isLiveLedger}
               containsEdits={containsEdits}
+              onOpenBackgroundTerminal={onOpenBackgroundTerminal}
             />
           ) : null}
         </div>
@@ -128,7 +132,11 @@ function CollapsedActionsLedger({
   transcript,
   isLive,
   containsEdits,
-}: Pick<CollapsedActionsProps, "itemIds" | "transcript"> & { isLive: boolean; containsEdits: boolean }) {
+  onOpenBackgroundTerminal,
+}: Pick<CollapsedActionsProps, "itemIds" | "transcript" | "onOpenBackgroundTerminal"> & {
+  isLive: boolean;
+  containsEdits: boolean;
+}) {
   const handleLedgerWheel = useChainedVerticalWheel();
   return (
     <div>
@@ -147,7 +155,13 @@ function CollapsedActionsLedger({
           {itemIds.map((itemId) => {
             const item = transcript.itemsById[itemId];
             if (item?.kind !== "tool_call") return null;
-            return <CollapsedActionRows key={itemId} item={item} />;
+            return (
+              <CollapsedActionRows
+                key={itemId}
+                item={item}
+                onOpenBackgroundTerminal={onOpenBackgroundTerminal}
+              />
+            );
           })}
         </div>
       </div>

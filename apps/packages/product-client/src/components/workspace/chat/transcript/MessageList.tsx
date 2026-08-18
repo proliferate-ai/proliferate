@@ -333,6 +333,8 @@ export function MessageList({
       onOpenTurnChanges={() => openGitReviewPane({ mode: "last_turn" })}
       onOpenArtifact={openArtifact}
       onOpenSubagent={(subagentId) => openBackgroundWorkPane(subagentId, activeSessionId)}
+      onOpenBackgroundTerminal={(processId) =>
+        openBackgroundTerminalDetail(processId, activeSessionId)}
       onHandOffPlanToNewSession={onHandOffPlanToNewSession}
       workspaceReceipt={input.row.hostsWorkspaceReceipt ? <WorkspaceCreationReceipt /> : null}
     />
@@ -340,6 +342,7 @@ export function MessageList({
     activeSessionId,
     onHandOffPlanToNewSession,
     openArtifact,
+    openBackgroundTerminalDetail,
     openBackgroundWorkPane,
     openFile,
     openGitReviewPane,

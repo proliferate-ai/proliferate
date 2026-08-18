@@ -54,6 +54,7 @@ export function TranscriptItemBlock({
   onAssistantRevealStateChange,
   workspaceId,
   onOpenArtifact,
+  onOpenBackgroundTerminal,
   onHandOffPlanToNewSession,
 }: {
   item: TranscriptItem;
@@ -66,6 +67,7 @@ export function TranscriptItemBlock({
   ) => void;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
+  onOpenBackgroundTerminal?: (processId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
 }) {
   const sessionId = useTranscriptSessionId();
@@ -149,6 +151,7 @@ export function TranscriptItemBlock({
           animateActivityEntry={animateActivityEntry}
           workspaceId={workspaceId}
           onOpenArtifact={onOpenArtifact}
+          onOpenBackgroundTerminal={onOpenBackgroundTerminal}
         />
       );
     }
@@ -185,11 +188,13 @@ function ToolCallTranscriptItem({
   animateActivityEntry,
   workspaceId,
   onOpenArtifact,
+  onOpenBackgroundTerminal,
 }: {
   item: ToolCallItem;
   animateActivityEntry: boolean;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
+  onOpenBackgroundTerminal?: (processId: string) => void;
 }) {
   // Only tool calls participate in proposed-plan suppression. Keeping this
   // context subscription out of the generic item component prevents a rare
@@ -234,6 +239,7 @@ function ToolCallTranscriptItem({
             item={item}
             workspaceId={workspaceId}
             onOpenArtifact={onOpenArtifact}
+            onOpenBackgroundTerminal={onOpenBackgroundTerminal}
           />
         </TranscriptActivityBlock>
       </div>

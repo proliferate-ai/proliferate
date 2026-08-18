@@ -5,6 +5,7 @@ import {
   processElapsedLabel,
   processStatusLabel,
   processStatusTone,
+  processTrailingStatusLabel,
   sortProcessesForDisplay,
   type ActivityProcessWire,
 } from "./process";
@@ -97,6 +98,47 @@ describe("processElapsedLabel", () => {
       endedAt: "2026-07-02T10:00:30.000Z",
     });
     expect(processElapsedLabel(p, Date.parse("2026-07-02T11:00:00.000Z"))).toBe("now");
+  });
+});
+
+describe("processTrailingStatusLabel", () => {
+  it("matches the design mock's running form: 'running · 4m 12s'", () => {
+    const p = process({ startedAt: "2026-07-02T10:00:00.000Z" });
+    const now = Date.parse("2026-07-02T10:04:12.000Z");
+    expect(processTrailingStatusLabel(p, now)).toBe("running · 4m 12s");
+  });
+
+  it("matches the design mock's exited form: 'exited 0 · 2m 45s'", () => {
+    const p = process({
+      status: { status: "exited", exitCode: 0 },
+      startedAt: "2026-07-02T10:00:00.000Z",
+      endedAt: "2026-07-02T10:02:45.000Z",
+    });
+    expect(processTrailingStatusLabel(p, Date.parse("2026-07-02T11:00:00.000Z"))).toBe(
+      "exited 0 · 2m 45s",
+    );
+  });
+
+  it("drops the exit code when the harness reports none", () => {
+    const p = process({
+      status: { status: "exited", exitCode: null },
+      startedAt: "2026-07-02T10:00:00.000Z",
+      endedAt: "2026-07-02T10:00:30.000Z",
+    });
+    expect(processTrailingStatusLabel(p, Date.parse("2026-07-02T11:00:00.000Z"))).toBe(
+      "exited · 30s",
+    );
+  });
+
+  it("uses whole-minute form with no trailing seconds", () => {
+    const p = process({
+      status: { status: "exited", exitCode: 1 },
+      startedAt: "2026-07-02T10:00:00.000Z",
+      endedAt: "2026-07-02T10:05:00.000Z",
+    });
+    expect(processTrailingStatusLabel(p, Date.parse("2026-07-02T11:00:00.000Z"))).toBe(
+      "exited 1 · 5m",
+    );
   });
 });
 

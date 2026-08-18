@@ -15,12 +15,15 @@ export function ScopedTranscriptBlocks({
   autoFollowCollapsedActionBlockId,
   animateActivityEntry = false,
   renderItem,
+  onOpenBackgroundTerminal,
 }: {
   displayBlocks: readonly TurnDisplayBlock[];
   transcript: TranscriptState;
   autoFollowCollapsedActionBlockId?: string | null;
   animateActivityEntry?: boolean;
   renderItem: (itemId: string) => ReactNode;
+  /** bgwork r8 round 2: routed to a background command's collapsed-ledger row. */
+  onOpenBackgroundTerminal?: (processId: string) => void;
 }) {
   return (
     <>
@@ -32,6 +35,7 @@ export function ScopedTranscriptBlocks({
           autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
           animateActivityEntry={animateActivityEntry}
           renderItem={renderItem}
+          onOpenBackgroundTerminal={onOpenBackgroundTerminal}
         />
       ))}
     </>
@@ -44,12 +48,15 @@ export function TurnDisplayBlockNode({
   autoFollowCollapsedActionBlockId,
   animateActivityEntry = false,
   renderItem,
+  onOpenBackgroundTerminal,
 }: {
   block: TurnDisplayBlock;
   transcript: TranscriptState;
   autoFollowCollapsedActionBlockId?: string | null;
   animateActivityEntry?: boolean;
   renderItem: (itemId: string) => ReactNode;
+  /** bgwork r8 round 2: routed to a background command's collapsed-ledger row. */
+  onOpenBackgroundTerminal?: (processId: string) => void;
 }) {
   if (block.kind === "collapsed_actions") {
     const ownsLiveContinuation = block.blockId === autoFollowCollapsedActionBlockId;
@@ -63,6 +70,7 @@ export function TurnDisplayBlockNode({
           transcript={transcript}
           autoFollow={ownsLiveContinuation}
           liveContinuation={ownsLiveContinuation}
+          onOpenBackgroundTerminal={onOpenBackgroundTerminal}
         />
       </TranscriptActivityBlock>
     );
@@ -80,6 +88,7 @@ export function TurnDisplayBlockNode({
           transcript={transcript}
           autoFollow={ownsLiveContinuation}
           liveContinuation={ownsLiveContinuation}
+          onOpenBackgroundTerminal={onOpenBackgroundTerminal}
         />
       </TranscriptActivityBlock>
     );
@@ -97,6 +106,7 @@ export function TurnDisplayBlockNode({
           transcript={transcript}
           autoFollow={ownsLiveContinuation}
           liveContinuation={ownsLiveContinuation}
+          onOpenBackgroundTerminal={onOpenBackgroundTerminal}
         />
       </TranscriptActivityBlock>
     );
