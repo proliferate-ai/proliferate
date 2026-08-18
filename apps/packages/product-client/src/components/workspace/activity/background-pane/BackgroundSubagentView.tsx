@@ -6,6 +6,7 @@ import { AgentIdentityGlyph } from "#product/components/patterns/AgentIdentityGl
 import { AutoHideScrollArea } from "#product/primitives/patterns/AutoHideScrollArea";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
+import { MessageList } from "#product/components/workspace/chat/transcript/MessageList";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-call-layout";
 import {
@@ -22,6 +23,10 @@ import { getProviderDisplayName } from "#product/lib/domain/agents/provider-disp
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useTranscriptPaneStateForSession } from "#product/hooks/chat/derived/use-active-session-transcript-state";
 import { useFeedStream } from "#product/hooks/activity/derived/use-feed-stream";
+import { useClaudeSessionLogTranscript } from "#product/hooks/activity/derived/use-claude-session-log-transcript";
+
+/** The one harness whose `tail_file` feed this view can translate into a transcript today (see `domain/activity/claude-session-log.ts`). */
+const TRANSCRIPT_SHAPED_PROVIDER_KIND = "claude";
 
 export interface BackgroundSubagentViewProps {
   subagent: ActivitySubagentWire;
@@ -33,29 +38,30 @@ export interface BackgroundSubagentViewProps {
 /**
  * Read-only detail view for one harness-native subagent (Design Handoff —
  * NEW `BackgroundSubagentView`; Delivery Spec — Background Work Slice 1,
- * rung R4). Header on `AgentsPaneDetail`'s grammar: back + generated
+ * rung R4/R4b). Header on `AgentsPaneDetail`'s grammar: back + generated
  * identity glyph + title + `Status · provider` + a "read only" `Badge`.
  * Body: the launch tool call's initial prompt (when one correlates — see
  * `findSubagentLaunchItem`), then the child's own output. Footer replaces
  * `AgentsPaneComposer` with a fixed read-only line — no composer, no input,
  * ever.
  *
- * BLOCKER (reported per `implement-pr-slice` discipline, same class as R3's
- * `BashCommandCall` stop): the handoff's "Feed fidelity" note calls
- * transcript-shaped `MessageList` rendering "honest for Claude today"
- * because "the child transcript arrives as a JSONL tail over `tail_file`."
- * That is not what the runtime actually sends. `open_tail_file`
+ * Feed fidelity (rung R4b, resolving R4's reported blocker): a claude
+ * subagent's `tail_file` feed carries Claude's own native CLI session-log
+ * JSONL, not an ACP `SessionEventEnvelope` stream — `open_tail_file`
  * (`anyharness-lib/src/domains/activity/feeds.rs`) always emits raw
- * `FeedFrame::Bytes` regardless of `FeedKind`, and the WS handler
- * (`api/ws/feeds.rs`) does no JSONL→ACP translation — a Claude subagent's
- * `tail_file` feed carries Claude's own native CLI session-log JSONL
- * (`parentUuid`/`isSidechain`/`uuid` fields), not the `SessionEventEnvelope`
- * shape `@anyharness/sdk`'s reducer (and therefore `MessageList`, which
- * requires a `TranscriptState`) needs. No translator for this exists
- * anywhere in the repo. This view therefore renders the feed as plain text
- * for every harness — the same raw-tail treatment the handoff already rules
- * for Codex (pending the `acp_child_demux` binding) — rather than inventing
- * a client-side JSONL-to-ACP translator that is out of this slice's scope.
+ * `FeedFrame::Bytes`, and no runtime/fork change backs this PR. So the
+ * translation happens entirely client-side:
+ * `domain/activity/claude-session-log.ts` maps the accumulated buffer
+ * into a `TranscriptState` (reusing `@anyharness/sdk`'s own reducer), and
+ * this view renders it with the literal component the handoff names —
+ * `MessageList` with `sessionViewState="idle"` — fed directly via its
+ * `transcript` prop with a synthetic `activeSessionId`/`sessionId`; no
+ * session-store entry is needed because `MessageList` (via
+ * `ChatTranscriptView`) only *reads* the `transcript` prop it is given and
+ * uses the session id as an opaque context/routing key, never to look
+ * itself up in a store. Codex (and any harness whose mapped subset comes up
+ * empty — degrades honestly rather than rendering a confident but empty
+ * transcript) keeps the raw-tail `<pre>` treatment this view has always had.
  */
 export function BackgroundSubagentView({
   subagent,
@@ -82,6 +88,14 @@ export function BackgroundSubagentView({
     enabled: subagent.feed !== null,
   });
   const bodyText = content || (subagent.feed ? (error ?? (connected ? "" : "Connecting…")) : "");
+
+  // Transcript-shaped rendering (rung R4b): only claude's tail_file bytes have
+  // a translator (domain/activity/claude-session-log.ts). Every other harness,
+  // and a claude buffer whose mapped subset comes up empty (no complete lines
+  // yet, or nothing but skipped/malformed ones), keeps the raw-tail fallback.
+  const isClaudeSubagent = providerKind === TRANSCRIPT_SHAPED_PROVIDER_KIND;
+  const claudeTranscript = useClaudeSessionLogTranscript(content, subagent.id);
+  const showTranscriptView = isClaudeSubagent && claudeTranscript.transcript.turnOrder.length > 0;
 
   return (
     <section
@@ -140,14 +154,25 @@ export function BackgroundSubagentView({
             </ToolActionDetailsPanel>
           </div>
         )}
-        <AutoHideScrollArea className="min-h-0 w-full flex-1" viewportClassName="p-3">
-          <pre
-            className="m-0 whitespace-pre-wrap font-mono text-readable-code text-foreground"
-            data-telemetry-mask
-          >
-            {bodyText}
-          </pre>
-        </AutoHideScrollArea>
+        {showTranscriptView ? (
+          <MessageList
+            activeSessionId={subagent.id}
+            selectedWorkspaceId={workspaceId}
+            optimisticPrompt={null}
+            transcript={claudeTranscript.transcript}
+            sessionViewState="idle"
+            contentSearchEnabled={false}
+          />
+        ) : (
+          <AutoHideScrollArea className="min-h-0 w-full flex-1" viewportClassName="p-3">
+            <pre
+              className="m-0 whitespace-pre-wrap font-mono text-readable-code text-foreground"
+              data-telemetry-mask
+            >
+              {bodyText}
+            </pre>
+          </AutoHideScrollArea>
+        )}
       </div>
 
       <footer className="border-t border-border px-3 py-2 text-ui-sm text-muted-foreground">
