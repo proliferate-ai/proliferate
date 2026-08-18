@@ -174,6 +174,14 @@ file and why.
   the limits in force, and `removed_by_tier` degradation accounting. Absence
   is always explained, never silent.
 
+### Window timestamp spelling
+
+`begin_preparation` reads the raw UTC clock exactly once per preparation and truncates that read toward the start of the current millisecond. It never rounds, so the emitted instant is never later than the instant observed. That single truncated read owns all three window values: `captured_at`, `source_time_to`, and `source_time_from`, which is exactly 900 seconds earlier.
+
+Every one of those values is spelled as UTC with a fixed three-digit millisecond fraction and a trailing `Z`, for example `2026-08-12T12:00:00.000Z`. The spelling is fixed-width regardless of the sub-second precision the platform clock happens to offer, so a whole-second read is `.000Z` rather than a bare `Z` and a nanosecond-precision read is truncated to three digits rather than carrying six or nine. `captured_at` and `source_time_to` are byte-for-byte identical, which is what the aggregate validator compares.
+
+The permit does not normalize. `SupportExportPermit::issue` refuses any window that is not already exact, and `is_exact_support_window` stays strict: UTC offset zero, byte equality against a fixed-millisecond re-spelling, and exactly 900 seconds between the endpoints. The producer is the only place canonical spelling is created, so a drifting producer fails loudly at issuance instead of being silently repaired downstream.
+
 Degradation removes candidate groups from tier 8 upward until the exact
 uncompressed bytes fit the cap, oldest first within a tier, and a lifecycle
 started/terminal pair is admitted or removed atomically. The fixed tiers:
