@@ -55,6 +55,14 @@ impl CompletionDeliveryWorker {
     }
 
     async fn process_available(&self) {
+        if let Err(error) = self.repair_pending_wake_removals().await {
+            tracing::warn!(
+                target: "anyharness.subagent.delivery_suppression_event_failed",
+                result_class = "pending_prompt_removal_repair_failed",
+                error_class = error_chain_class(&error),
+                "retired completion wake removal repair deferred"
+            );
+        }
         if let Err(error) = self.repair_retired_subagent_turns().await {
             tracing::warn!(
                 result_class = "subagent_turn_repair_failed",
@@ -173,15 +181,20 @@ impl CompletionDeliveryWorker {
                 reason,
                 retired_wakes,
             } => {
-                // The delivery is terminal without a parent prompt. The
-                // injected completion event is the only parent-transcript
-                // record, so it stays best effort with the same guarantees as
-                // the enqueue-path injection: the suppression is committed and
-                // never re-runs.
+                // Removal intents survive this terminal delivery transition
+                // and retry until their queue-projection events are durable.
+                // Completion metadata keeps its existing best-effort contract.
                 if let Some(session_runtime) = self.session_runtime.upgrade() {
                     for retired_wake in &retired_wakes {
-                        inject_retired_wake_removal(&session_runtime, &delivery, retired_wake)
-                            .await;
+                        if let Err(error) = persist_retired_wake_removal(
+                            &session_runtime,
+                            &self.delivery_store,
+                            retired_wake,
+                        )
+                        .await
+                        {
+                            log_retired_wake_removal_failure(retired_wake, &error);
+                        }
                     }
                     inject_completion_event(&session_runtime, &delivery).await;
                 }
@@ -219,46 +232,88 @@ impl CompletionDeliveryWorker {
             .await;
         Ok(())
     }
+
+    async fn repair_pending_wake_removals(&self) -> anyhow::Result<u32> {
+        let intents = self
+            .delivery_store
+            .list_pending_wake_removals(MAX_DELIVERIES_PER_PASS)?;
+        if intents.is_empty() {
+            return Ok(0);
+        }
+        let Some(session_runtime) = self.session_runtime.upgrade() else {
+            anyhow::bail!("session_runtime_unavailable");
+        };
+        let mut repaired = 0;
+        let mut first_error = None;
+        for intent in intents {
+            match persist_retired_wake_removal(&session_runtime, &self.delivery_store, &intent)
+                .await
+            {
+                Ok(()) => repaired += 1,
+                Err(error) => {
+                    log_retired_wake_removal_failure(&intent, &error);
+                    first_error.get_or_insert(error);
+                }
+            }
+        }
+        match first_error {
+            Some(error) => Err(error),
+            None => Ok(repaired),
+        }
+    }
 }
 
 fn dead_letter_threshold_reached(attempt_count: i64) -> bool {
     attempt_count >= MAX_DELIVERY_ATTEMPTS
 }
 
-async fn inject_retired_wake_removal(
+async fn persist_retired_wake_removal(
     session_runtime: &SessionRuntime,
-    delivery: &CompletionDeliveryRecord,
-    retired_wake: &RetiredCompletionWake,
-) {
-    match session_runtime
-        .emit_runtime_event(
-            &delivery.parent_session_id,
-            RuntimeInjectedSessionEvent::pending_prompt_removed(
-                retired_wake.parent_prompt_seq,
-                retired_wake.prompt_id.clone(),
-            ),
+    delivery_store: &CompletionDeliveryStore,
+    intent: &RetiredCompletionWake,
+) -> anyhow::Result<()> {
+    let parent_event_seq = if delivery_store.has_wake_removal_event(intent)? {
+        None
+    } else {
+        Some(
+            session_runtime
+                .emit_runtime_event(
+                    &intent.parent_session_id,
+                    RuntimeInjectedSessionEvent::pending_prompt_removed(
+                        intent.parent_prompt_seq,
+                        intent.prompt_id.clone(),
+                    ),
+                )
+                .await?
+                .seq,
         )
-        .await
-    {
-        Ok(envelope) => tracing::info!(
-            target: "anyharness.subagent.delivery_suppressed",
-            delivery_id = %retired_wake.delivery_id,
-            parent_session_id = %delivery.parent_session_id,
-            parent_prompt_seq = retired_wake.parent_prompt_seq,
-            parent_event_seq = envelope.seq,
-            reason = "coalesced",
-            "subagent: retired completion wake removed from parent queue projection"
-        ),
-        Err(error) => tracing::warn!(
-            target: "anyharness.subagent.delivery_suppression_event_failed",
-            delivery_id = %retired_wake.delivery_id,
-            parent_session_id = %delivery.parent_session_id,
-            parent_prompt_seq = retired_wake.parent_prompt_seq,
-            result_class = "pending_prompt_removal_injection_failed",
-            error = %error,
-            "retired completion wake removal was not injected into the parent transcript"
-        ),
+    };
+    let persisted_at = chrono::Utc::now().to_rfc3339();
+    if !delivery_store.acknowledge_wake_removal(intent, &persisted_at)? {
+        anyhow::bail!("retired completion wake removal intent changed before acknowledgement");
     }
+    tracing::info!(
+        target: "anyharness.subagent.delivery_suppressed",
+        delivery_id = %intent.delivery_id,
+        parent_session_id = %intent.parent_session_id,
+        parent_prompt_seq = intent.parent_prompt_seq,
+        parent_event_seq = ?parent_event_seq,
+        reason = "coalesced",
+        "subagent: retired completion wake removed from parent queue projection"
+    );
+    Ok(())
+}
+
+fn log_retired_wake_removal_failure(intent: &RetiredCompletionWake, error: &anyhow::Error) {
+    tracing::warn!(
+        target: "anyharness.subagent.delivery_suppression_event_failed",
+        delivery_id = %intent.delivery_id,
+        parent_session_id = %intent.parent_session_id,
+        parent_prompt_seq = intent.parent_prompt_seq,
+        result_class = "pending_prompt_removal_injection_failed",
+        error = %error,
+        "retired completion wake removal remains pending for retry"
+    );
 }
 
 /// Publish the completion metadata the parent transcript indexes for wake

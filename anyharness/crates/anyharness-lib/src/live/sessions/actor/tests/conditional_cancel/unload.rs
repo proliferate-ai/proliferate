@@ -44,7 +44,7 @@ impl crate::live::sessions::model::EventPersist for FailingTerminalPersist {
         self.store.has_turn_started_event(session_id)
     }
 
-    fn has_pending_prompt_added_event(
+    fn has_prompt_added_event(
         &self,
         session_id: &str,
         pending_prompt_seq: i64,

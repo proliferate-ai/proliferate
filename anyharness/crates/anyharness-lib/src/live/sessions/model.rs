@@ -140,7 +140,6 @@ pub struct SessionLaunch {
 }
 
 /// Durable event-ledger persistence as the live actor needs it.
-///
 /// Signatures mirror `SessionStore` 1:1 so the domain impl is pure delegation.
 pub trait EventPersist: Send + Sync {
     fn append_event(&self, event: &SessionEventRecord) -> anyhow::Result<()>;
@@ -160,11 +159,7 @@ pub trait EventPersist: Send + Sync {
     fn next_event_seq(&self, session_id: &str) -> anyhow::Result<i64>;
     fn last_event_seq(&self, session_id: &str) -> anyhow::Result<i64>;
     fn has_turn_started_event(&self, session_id: &str) -> anyhow::Result<bool>;
-    fn has_pending_prompt_added_event(
-        &self,
-        session_id: &str,
-        pending_prompt_seq: i64,
-    ) -> anyhow::Result<bool>;
+    fn has_prompt_added_event(&self, session_id: &str, prompt_seq: i64) -> anyhow::Result<bool>;
     fn append_raw_notification(
         &self,
         session_id: &str,

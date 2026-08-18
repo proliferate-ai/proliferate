@@ -31,6 +31,7 @@ impl CompletionWakeSuppressionReason {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RetiredCompletionWake {
     pub(crate) delivery_id: String,
+    pub(crate) parent_session_id: String,
     pub(crate) parent_prompt_seq: i64,
     pub(crate) prompt_id: Option<String>,
 }

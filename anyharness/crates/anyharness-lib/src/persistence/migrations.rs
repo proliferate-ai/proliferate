@@ -240,6 +240,10 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0071_session_adapter_markers",
         include_str!("sql/0071_session_adapter_markers.sql"),
     ),
+    (
+        "0072_completion_wake_removal_intents",
+        include_str!("sql/0072_completion_wake_removal_intents.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

@@ -78,7 +78,7 @@ impl SessionActor {
         match self
             .caps
             .events
-            .has_pending_prompt_added_event(&self.session_id, seq)
+            .has_prompt_added_event(&self.session_id, seq)
         {
             Ok(true) => return Ok(()),
             Ok(false) => {}

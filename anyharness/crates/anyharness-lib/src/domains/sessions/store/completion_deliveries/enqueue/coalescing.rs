@@ -87,8 +87,10 @@ pub(super) fn retire_older_completed_sibling_wakes(
             ));
         }
         retire_enqueued_completed_delivery(tx, &sibling, now)?;
+        record_retired_wake_removal_intent(tx, &sibling, &pending)?;
         retired_wakes.push(RetiredCompletionWake {
             delivery_id: sibling.delivery_id,
+            parent_session_id: pending.session_id,
             parent_prompt_seq: pending.seq,
             prompt_id: pending.prompt_id,
         });
@@ -183,6 +185,26 @@ fn retire_enqueued_completed_delivery(
         ));
     }
     update_completion_projection(tx, &delivery.delivery_id, None, None, true, now)
+}
+
+fn record_retired_wake_removal_intent(
+    tx: &rusqlite::Connection,
+    delivery: &CompletionDeliveryRecord,
+    pending: &PendingPromptRecord,
+) -> rusqlite::Result<()> {
+    let recorded = tx.execute(
+        "UPDATE session_link_completion_deliveries
+         SET retired_prompt_seq = ?2, retired_prompt_id = ?3,
+             removal_event_persisted_at = NULL
+         WHERE delivery_id = ?1 AND state = 'delivered'",
+        params![delivery.delivery_id, pending.seq, pending.prompt_id],
+    )?;
+    if recorded != 1 {
+        return Err(completion_delivery_error(
+            "retired completion wake removal intent was not recorded",
+        ));
+    }
+    Ok(())
 }
 
 /// Whether the child's own `send_message` for this terminal turn already

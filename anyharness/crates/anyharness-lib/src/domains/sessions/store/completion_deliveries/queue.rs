@@ -1,8 +1,91 @@
 use rusqlite::{params, OptionalExtension};
 
+use super::enqueue::RetiredCompletionWake;
 use super::{map_delivery, CompletionDeliveryRecord, CompletionDeliveryStore};
 
 impl CompletionDeliveryStore {
+    pub(crate) fn list_pending_wake_removals(
+        &self,
+        limit: usize,
+    ) -> anyhow::Result<Vec<RetiredCompletionWake>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT delivery_id, parent_session_id, retired_prompt_seq, retired_prompt_id
+                 FROM session_link_completion_deliveries
+                 WHERE state = 'delivered'
+                   AND retired_prompt_seq IS NOT NULL
+                   AND removal_event_persisted_at IS NULL
+                 ORDER BY updated_at ASC, delivery_id ASC
+                 LIMIT ?1",
+            )?;
+            let rows = stmt
+                .query_map([limit as i64], |row| {
+                    Ok(RetiredCompletionWake {
+                        delivery_id: row.get(0)?,
+                        parent_session_id: row.get(1)?,
+                        parent_prompt_seq: row.get(2)?,
+                        prompt_id: row.get(3)?,
+                    })
+                })?
+                .collect();
+            rows
+        })
+    }
+
+    pub(crate) fn has_wake_removal_event(
+        &self,
+        intent: &RetiredCompletionWake,
+    ) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT payload_json FROM session_events
+                 WHERE session_id = ?1 AND event_type = 'pending_prompt_removed'",
+            )?;
+            let payloads = stmt.query_map([intent.parent_session_id.as_str()], |row| {
+                row.get::<_, String>(0)
+            })?;
+            for payload in payloads {
+                let Ok(value) = serde_json::from_str::<serde_json::Value>(&payload?) else {
+                    continue;
+                };
+                let prompt_id_matches = match intent.prompt_id.as_deref() {
+                    Some(prompt_id) => value["promptId"].as_str() == Some(prompt_id),
+                    None => value["promptId"].is_null(),
+                };
+                if value["seq"].as_i64() == Some(intent.parent_prompt_seq)
+                    && value["reason"].as_str() == Some("deleted")
+                    && prompt_id_matches
+                {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        })
+    }
+
+    pub(crate) fn acknowledge_wake_removal(
+        &self,
+        intent: &RetiredCompletionWake,
+        persisted_at: &str,
+    ) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            let changed = conn.execute(
+                "UPDATE session_link_completion_deliveries
+                 SET removal_event_persisted_at = ?4, updated_at = ?4
+                 WHERE delivery_id = ?1 AND parent_session_id = ?2
+                   AND retired_prompt_seq = ?3
+                   AND removal_event_persisted_at IS NULL",
+                params![
+                    intent.delivery_id,
+                    intent.parent_session_id,
+                    intent.parent_prompt_seq,
+                    persisted_at,
+                ],
+            )?;
+            Ok(changed == 1)
+        })
+    }
+
     pub fn list_for_parent_sessions(
         &self,
         parent_session_ids: &[String],

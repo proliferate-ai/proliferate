@@ -64,7 +64,7 @@ impl EventPersist for SessionStore {
         SessionStore::has_turn_started_event(self, session_id)
     }
 
-    fn has_pending_prompt_added_event(
+    fn has_prompt_added_event(
         &self,
         session_id: &str,
         pending_prompt_seq: i64,
