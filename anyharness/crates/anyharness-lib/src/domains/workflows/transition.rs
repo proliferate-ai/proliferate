@@ -89,7 +89,13 @@ pub enum WorkflowEvent {
     Command(WorkflowCommand),
     TurnFinished(TurnFinished),
     BootFence { code: WorkflowInterruptionCode },
-    NodeLaunchFailed { node_row_id: String },
+    NodeLaunchFailed {
+        node_row_id: String,
+        /// Present when the launch that failed was a single-leg relaunch
+        /// (rung 6): scopes the ledger stamp to that leg so siblings keep
+        /// their receipts instead of taking the whole-cohort keyless stamp.
+        leg_index: Option<i64>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -376,7 +382,7 @@ pub fn next(state: &RunState, event: &WorkflowEvent) -> Decision {
         WorkflowEvent::TurnFinished(turn) => on_turn_finished(state, turn),
         WorkflowEvent::Command(command) => on_command(state, command),
         WorkflowEvent::BootFence { code } => on_boot_fence(state, *code),
-        WorkflowEvent::NodeLaunchFailed { node_row_id } => {
+        WorkflowEvent::NodeLaunchFailed { node_row_id, .. } => {
             on_node_launch_failed(state, node_row_id)
         }
     }

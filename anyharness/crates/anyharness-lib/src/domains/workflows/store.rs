@@ -457,6 +457,27 @@ impl WorkflowStore {
                             ..RunUpdate::default()
                         },
                     )?;
+                    // A single-leg relaunch failure fails the node (F1) while
+                    // sibling legs may still hold live sessions; dispose them
+                    // so the failed run leaves no orphan agents behind.
+                    if let WorkflowEvent::NodeLaunchFailed {
+                        leg_index: Some(leg_index),
+                        ..
+                    } = event
+                    {
+                        let session_ids: Vec<String> = state
+                            .legs_of(node_row_id)
+                            .iter()
+                            .filter(|leg| {
+                                leg.leg_index != *leg_index
+                                    && leg.status == WorkflowLegStatus::Running
+                            })
+                            .filter_map(|leg| leg.session_id.clone())
+                            .collect();
+                        if !session_ids.is_empty() {
+                            side_effect = ResolvedSideEffect::DisposeSessions { session_ids };
+                        }
+                    }
                 }
                 Transition::InterruptNode { node_row_id, code } => {
                     set_node_status(tx, node_row_id, WorkflowNodeStatus::NeedsAttention)?;
@@ -752,20 +773,35 @@ impl WorkflowStore {
             if let Transition::Cancel { .. } = transition {
                 node_sessions::cancel_all_run_legs_tx(tx, run_id, &timestamp)?;
             } else if let Some((leg_node, leg_status)) = node_sessions::finished_leg_of(transition) {
-                // A launch failure has no turn session and strands every
-                // freshly stamped leg, so its stamp goes keyless (whole node).
-                let session = match event {
-                    WorkflowEvent::NodeLaunchFailed { .. } => None,
-                    _ => turn_session(event)
-                        .or_else(|| state.node(leg_node).and_then(|node| node.session_id.clone())),
-                };
-                node_sessions::mark_leg_terminal_tx(
-                    tx,
-                    leg_node,
-                    session.as_deref(),
-                    leg_status,
-                    &timestamp,
-                )?;
+                if let WorkflowEvent::NodeLaunchFailed {
+                    leg_index: Some(leg_index),
+                    ..
+                } = event
+                {
+                    // A single-leg relaunch failure stays leg-scoped: only the
+                    // addressed row takes the failure; running siblings are
+                    // cancelled (and disposed below), Done receipts intact.
+                    node_sessions::fail_leg_and_cancel_running_siblings_tx(
+                        tx, leg_node, *leg_index, leg_status, &timestamp,
+                    )?;
+                } else {
+                    // A whole-node launch failure has no turn session and
+                    // strands every freshly stamped cohort leg, so its stamp
+                    // goes keyless (whole node).
+                    let session = match event {
+                        WorkflowEvent::NodeLaunchFailed { .. } => None,
+                        _ => turn_session(event).or_else(|| {
+                            state.node(leg_node).and_then(|node| node.session_id.clone())
+                        }),
+                    };
+                    node_sessions::mark_leg_terminal_tx(
+                        tx,
+                        leg_node,
+                        session.as_deref(),
+                        leg_status,
+                        &timestamp,
+                    )?;
+                }
             }
 
             let state = Self::load_run_state_tx(tx, run_id)?

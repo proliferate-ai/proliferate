@@ -409,6 +409,7 @@ fn a_failed_fan_out_launch_terminalizes_every_leg_it_stamped() {
         &state,
         &WorkflowEvent::NodeLaunchFailed {
             node_row_id: node_id.clone(),
+            leg_index: None,
         },
     );
 
@@ -585,4 +586,106 @@ fn a_whole_node_redo_of_a_running_parallel_node_disposes_every_live_leg() {
             node_row_id: replacement_id,
         }
     );
+}
+
+#[test]
+fn a_failed_per_leg_relaunch_terminalizes_only_the_addressed_leg() {
+    // Delta-review finding on this rung: a StartLeg relaunch that fails to
+    // start must NOT take the whole-cohort keyless stamp — Done siblings keep
+    // their receipts.
+    let (store, node_id) = failed_three_leg_run("run-leg-launch-fail");
+    let state = store.load_run_state("run-leg-launch-fail").expect("load").expect("run");
+    let redo = WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
+        node_row_id: node_id.clone(),
+        prompt: None,
+        leg_index: Some(2),
+    });
+    let redone = apply(&store, "run-leg-launch-fail", &state, &redo);
+
+    let event = WorkflowEvent::NodeLaunchFailed {
+        node_row_id: node_id.clone(),
+        leg_index: Some(2),
+    };
+    let transition = match next(&redone, &event) {
+        Decision::Transition(transition) => transition,
+        other => panic!("expected a transition, got {other:?}"),
+    };
+    let applied = store
+        .apply_transition("run-leg-launch-fail", &transition, &event)
+        .expect("apply leg launch failure");
+
+    // No sibling was running, so nothing needs disposing.
+    assert_eq!(applied.side_effect, ResolvedSideEffect::None);
+    let mut rows = applied.state.legs_of(&node_id);
+    rows.sort_by_key(|leg| leg.leg_index);
+    // Done siblings keep their receipts — status AND completion time.
+    assert_eq!(rows[0].status, WorkflowLegStatus::Done);
+    assert!(rows[0].completed_at.is_some());
+    assert_eq!(rows[1].status, WorkflowLegStatus::Done);
+    assert!(rows[1].completed_at.is_some());
+    // Only the addressed leg takes the launch failure.
+    assert_eq!(
+        rows[2].status,
+        WorkflowLegStatus::Failed(WorkflowNodeFailureCode::NodeLaunchFailed)
+    );
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::Failed);
+}
+
+#[test]
+fn a_failed_per_leg_relaunch_cancels_and_disposes_running_siblings() {
+    // The running-sibling half of the same finding: the node fails (F1), but
+    // live sibling agents are disposed and their rows stamped cancelled —
+    // never keyless-stamped 'failed', never left running under a failed run.
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(parallel_params("run-leg-fail-live", 3))
+        .expect("create");
+    let node_id = created.first_node_row_id.clone();
+    let legs = vec![
+        (0i64, "sess-0".to_string()),
+        (1, "sess-1".to_string()),
+        (2, "sess-2".to_string()),
+    ];
+    store
+        .stamp_fanout(&node_id, Some("wf2-panel"), Some("claude"), &legs)
+        .expect("stamp fanout");
+    let state = store.load_run_state("run-leg-fail-live").expect("load").expect("run");
+
+    // Per-leg redo of running leg 1 (its own session disposed by that redo).
+    let redo = WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
+        node_row_id: node_id.clone(),
+        prompt: None,
+        leg_index: Some(1),
+    });
+    let redone = apply(&store, "run-leg-fail-live", &state, &redo);
+
+    let event = WorkflowEvent::NodeLaunchFailed {
+        node_row_id: node_id.clone(),
+        leg_index: Some(1),
+    };
+    let transition = match next(&redone, &event) {
+        Decision::Transition(transition) => transition,
+        other => panic!("expected a transition, got {other:?}"),
+    };
+    let applied = store
+        .apply_transition("run-leg-fail-live", &transition, &event)
+        .expect("apply leg launch failure");
+
+    // Both live siblings are disposed; the addressed leg's session was already
+    // disposed by the redo itself and must not be double-disposed here.
+    assert_eq!(
+        applied.side_effect,
+        ResolvedSideEffect::DisposeSessions {
+            session_ids: vec!["sess-0".into(), "sess-2".into()],
+        }
+    );
+    let mut rows = applied.state.legs_of(&node_id);
+    rows.sort_by_key(|leg| leg.leg_index);
+    assert_eq!(rows[0].status, WorkflowLegStatus::Cancelled);
+    assert_eq!(
+        rows[1].status,
+        WorkflowLegStatus::Failed(WorkflowNodeFailureCode::NodeLaunchFailed)
+    );
+    assert_eq!(rows[2].status, WorkflowLegStatus::Cancelled);
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::Failed);
 }

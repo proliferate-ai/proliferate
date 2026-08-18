@@ -197,7 +197,7 @@ impl WorkflowActor {
                 | ResolvedSideEffect::StartNodeLegs { node_row_id } => {
                     match self.launch_node(state, &node_row_id).await {
                         Ok(()) => break,
-                        Err(error) => match self.feed_launch_failure(state, &node_row_id, error) {
+                        Err(error) => match self.feed_launch_failure(state, &node_row_id, None, error) {
                             Some(next_effect) => effect = next_effect,
                             None => break,
                         },
@@ -213,7 +213,9 @@ impl WorkflowActor {
                         }
                         break;
                     }
-                    Err(error) => match self.feed_launch_failure(state, &node_row_id, error) {
+                    // A single-leg relaunch failure keeps its leg scope so the
+                    // ledger stamp cannot clobber sibling receipts.
+                    Err(error) => match self.feed_launch_failure(state, &node_row_id, Some(leg_index), error) {
                         Some(next_effect) => effect = next_effect,
                         None => break,
                     },
@@ -230,6 +232,7 @@ impl WorkflowActor {
         &self,
         state: &mut RunState,
         node_row_id: &str,
+        leg_index: Option<i64>,
         error: anyhow::Error,
     ) -> Option<ResolvedSideEffect> {
         tracing::warn!(
@@ -240,6 +243,7 @@ impl WorkflowActor {
         );
         let event = WorkflowEvent::NodeLaunchFailed {
             node_row_id: node_row_id.to_string(),
+            leg_index,
         };
         let transition = match next(state, &event) {
             Decision::Transition(transition) => transition,

@@ -1052,6 +1052,7 @@ fn node_launch_failure_fails_the_node_and_run() {
         &state,
         &WorkflowEvent::NodeLaunchFailed {
             node_row_id: "n2".into(),
+            leg_index: None,
         },
     ));
     assert_eq!(
@@ -1071,6 +1072,7 @@ fn stale_launch_failure_holds() {
             &state,
             &WorkflowEvent::NodeLaunchFailed {
                 node_row_id: "n1".into(),
+                leg_index: None,
             }
         ),
         Decision::Hold

@@ -589,6 +589,7 @@ fn adhoc_redo_replaces_only_the_adhoc_row() {
     // The adhoc launch fails: only its row fails, the run is untouched.
     let launch_failed = WorkflowEvent::NodeLaunchFailed {
         node_row_id: adhoc_id.clone(),
+        leg_index: None,
     };
     let applied = decide_and_apply(&store, "run-1", &applied.state, &launch_failed);
     assert_healthy(&applied.state);
