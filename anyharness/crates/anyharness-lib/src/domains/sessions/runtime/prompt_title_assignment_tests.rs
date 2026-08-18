@@ -244,4 +244,24 @@ async fn verified_dispatch_failure_reverts_only_the_title_it_stored() {
         stored_title(&state, session_id).as_deref(),
         Some("Renamed by the user")
     );
+
+    // Ownership is the write, not the value: an assignment made after the
+    // write survives the revert even when it carries the very same text.
+    let same_text_session = "b5234567-89ab-4def-8123-456789abcdef";
+    create_untitled_record(&state.session_runtime, same_text_session);
+    let assigned = PromptTitleAssignment::from_authored_texts(["Second attempt"])
+        .apply_before_dispatch(runtime, same_text_session);
+    state
+        .session_service
+        .update_session_title(same_text_session, "Second attempt")
+        .expect("reassign the same text");
+    assigned.revert_if_undelivered(
+        runtime,
+        same_text_session,
+        &LiveSessionCommandError::ActorUnavailable,
+    );
+    assert_eq!(
+        stored_title(&state, same_text_session).as_deref(),
+        Some("Second attempt")
+    );
 }

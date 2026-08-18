@@ -27,14 +27,22 @@ impl SessionStore {
         })
     }
 
-    /// Clears a title only while it still matches `title`, so a prompt title
-    /// stored before dispatch can be undone when that dispatch fails without
-    /// touching a title assigned in the meantime.
-    pub fn clear_title_if_matches(&self, id: &str, title: &str, now: &str) -> anyhow::Result<bool> {
+    /// Clears one title write, matched on both the title it stored and the
+    /// `updated_at` it stored it at, so a prompt title written before dispatch
+    /// can be undone when that dispatch fails. Any assignment since - even one
+    /// of identical text - carries a different timestamp and survives.
+    pub fn clear_title_write(
+        &self,
+        id: &str,
+        title: &str,
+        applied_at: &str,
+        now: &str,
+    ) -> anyhow::Result<bool> {
         self.db.with_conn(|conn| {
             let changed = conn.execute(
-                "UPDATE sessions SET title = NULL, updated_at = ?2 WHERE id = ?3 AND title = ?1",
-                params![title, now, id],
+                "UPDATE sessions SET title = NULL, updated_at = ?3
+                 WHERE id = ?4 AND title = ?1 AND updated_at = ?2",
+                params![title, applied_at, now, id],
             )?;
             Ok(changed > 0)
         })

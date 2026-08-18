@@ -123,7 +123,7 @@ fn update_title_if_absent_never_replaces_an_assigned_title() {
 }
 
 #[test]
-fn clear_title_if_matches_only_clears_the_title_it_was_given() {
+fn clear_title_write_only_clears_the_write_it_identifies() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);
 
@@ -135,19 +135,34 @@ fn clear_title_if_matches_only_clears_the_title_it_was_given() {
     assert!(store
         .update_title_if_absent("session-1", "Prompt title", "2026-03-25T01:00:00Z")
         .expect("set title on untitled session"));
+    // A later assignment of the very same text is a different write, so the
+    // failed dispatch's rollback must not take it.
+    store
+        .update_title("session-1", "Prompt title", "2026-03-25T02:00:00Z")
+        .expect("reassign the same text");
     assert!(!store
-        .clear_title_if_matches("session-1", "Some other title", "2026-03-25T02:00:00Z")
-        .expect("leave a title assigned since the write"));
+        .clear_title_write(
+            "session-1",
+            "Prompt title",
+            "2026-03-25T01:00:00Z",
+            "2026-03-25T03:00:00Z",
+        )
+        .expect("leave the later assignment in place"));
     assert!(store
-        .clear_title_if_matches("session-1", "Prompt title", "2026-03-25T03:00:00Z")
-        .expect("clear the matching title"));
+        .clear_title_write(
+            "session-1",
+            "Prompt title",
+            "2026-03-25T02:00:00Z",
+            "2026-03-25T04:00:00Z",
+        )
+        .expect("clear the identified write"));
 
     let stored = store
         .find_by_id("session-1")
         .expect("find session")
         .expect("session record");
     assert_eq!(stored.title, None);
-    assert_eq!(stored.updated_at, "2026-03-25T03:00:00Z");
+    assert_eq!(stored.updated_at, "2026-03-25T04:00:00Z");
 }
 
 #[test]

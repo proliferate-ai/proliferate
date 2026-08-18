@@ -715,9 +715,10 @@ Code path:
   opted-in prompt stores its title before the prompt is dispatched, so no
   harness title reported for that same turn can take the row. The write is
   best effort and never fails an accepted prompt; a dispatch that verifiably
-  never reached the actor clears the title again, matched so a title assigned
-  in the meantime survives, while a dropped acknowledgement keeps it because
-  the turn may be running.
+  never reached the actor clears that write again, matched on both its text
+  and the `updated_at` it wrote, so any assignment made since - including one
+  of identical text - survives, while a dropped acknowledgement keeps the
+  title because the turn may be running.
 
 ## Extension Points
 

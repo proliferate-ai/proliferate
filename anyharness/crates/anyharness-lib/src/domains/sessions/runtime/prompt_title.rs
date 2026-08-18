@@ -32,19 +32,20 @@ impl PromptTitleAssignment {
             runtime
                 .session_service
                 .update_session_title_if_absent(session_id, &title)
-                .unwrap_or(false)
-                .then_some(title),
+                .unwrap_or(None)
+                .map(|applied_at| (title, applied_at)),
         )
     }
 }
 
-/// The title this dispatch stored, held so the write can be reflected in the
-/// returned snapshot and undone when the dispatch turns out to have failed.
-pub(super) struct AssignedPromptTitle(Option<String>);
+/// The title write this dispatch made - its text and the timestamp it was
+/// stored at - held so the write can be reflected in the returned snapshot and
+/// undone when the dispatch turns out to have failed.
+pub(super) struct AssignedPromptTitle(Option<(String, String)>);
 
 impl AssignedPromptTitle {
     pub(super) fn merge_into(&self, mut session: SessionRecord) -> SessionRecord {
-        if let Some(title) = self.0.as_ref() {
+        if let Some((title, _)) = self.0.as_ref() {
             session.title = Some(title.clone());
         }
         session
@@ -52,14 +53,15 @@ impl AssignedPromptTitle {
 
     /// Undoes the write when the prompt verifiably never reached the actor. A
     /// dropped acknowledgement is ambiguous - the turn may be running - so the
-    /// title stays, and a title reassigned since is left alone by the match.
+    /// title stays, and any assignment made since this write survives because
+    /// the clear matches the write's own timestamp, not just its text.
     pub(super) fn revert_if_undelivered(
         &self,
         runtime: &SessionRuntime,
         session_id: &str,
         error: &LiveSessionCommandError<PromptAcceptError>,
     ) {
-        let Some(title) = self.0.as_deref() else {
+        let Some((title, applied_at)) = self.0.as_ref() else {
             return;
         };
         if matches!(error, LiveSessionCommandError::ResponseDropped) {
@@ -67,7 +69,7 @@ impl AssignedPromptTitle {
         }
         let _ = runtime
             .session_service
-            .clear_session_title_if_matches(session_id, title);
+            .clear_session_title_write(session_id, title, applied_at);
     }
 }
 
