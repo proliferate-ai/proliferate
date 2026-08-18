@@ -34,6 +34,8 @@ export interface WorkflowCanvasProps {
   ariaLabel: string;
   /** Optional readout pinned to the bottom-left corner (validity, counts). */
   statusSlot?: ReactNode;
+  /** Ends a feature-owned gesture when the pointer/keyboard leaves it unfinished. */
+  onCancelInteraction?: () => void;
   className?: string;
 }
 
@@ -58,6 +60,7 @@ export function WorkflowCanvas({
   children,
   ariaLabel,
   statusSlot,
+  onCancelInteraction,
   className = "",
 }: WorkflowCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -147,6 +150,7 @@ export function WorkflowCanvas({
     if (dragRef.current?.pointerId === event.pointerId) {
       dragRef.current = null;
     }
+    onCancelInteraction?.();
   };
 
   const onWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
@@ -178,6 +182,12 @@ export function WorkflowCanvas({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerEnd}
       onPointerCancel={onPointerEnd}
+      onLostPointerCapture={() => onCancelInteraction?.()}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          onCancelInteraction?.();
+        }
+      }}
       onWheel={onWheel}
     >
       <div

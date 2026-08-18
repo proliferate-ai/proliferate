@@ -32,6 +32,7 @@ export interface WorkflowBuilderChainCanvasProps {
   onConnectInput(to: string): void;
   onRemoveEdge(from: string, to: string): void;
   onDisconnectInput(): void;
+  disabled?: boolean;
   className?: string;
 }
 
@@ -51,6 +52,7 @@ export function WorkflowBuilderChainCanvas({
   onConnectInput,
   onRemoveEdge,
   onDisconnectInput,
+  disabled = false,
   className,
 }: WorkflowBuilderChainCanvasProps) {
   const visualEdges = useMemo(() => [
@@ -67,11 +69,15 @@ export function WorkflowBuilderChainCanvas({
   const nodesById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
   const [dragFrom, setDragFrom] = useState<string | null>(null);
 
-  const finishConnection = (event: PointerEvent<HTMLButtonElement>, to: string) => {
-    event.stopPropagation();
+  const finishConnection = (to: string) => {
+    if (disabled) return;
     if (dragFrom === WORKFLOW_INPUT_SENTINEL) onConnectInput(to);
     else if (dragFrom) onConnectNodes(dragFrom, to);
     setDragFrom(null);
+  };
+
+  const startConnection = (from: string) => {
+    if (!disabled) setDragFrom(from);
   };
 
   return (
@@ -81,13 +87,15 @@ export function WorkflowBuilderChainCanvas({
       edges={layout.edges}
       ariaLabel={WORKFLOW_BUILDER_COPY.chainCanvasLabel}
       statusSlot={statusSlot}
+      onCancelInteraction={() => setDragFrom(null)}
       className={className}
     >
       {layout.edges.map((edge) => (
         <IconButton
           key={`remove:${edge.fromKey}->${edge.toKey}`}
           size="sm"
-          className="absolute opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+          disabled={disabled}
+          className="absolute z-raised opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100"
           style={{ left: edge.midpoint.x - 10, top: edge.midpoint.y - 10 }}
           aria-label={`Remove connection from ${edge.fromKey} to ${edge.toKey}`}
           title="Remove connection"
@@ -116,14 +124,22 @@ export function WorkflowBuilderChainCanvas({
               <Port
                 label={`Connect into ${node?.title || placed.key}`}
                 position="input"
-                active={dragFrom !== null}
-                onPointerUp={(event) => finishConnection(event, placed.key)}
+                active={false}
+                available={dragFrom !== null}
+                disabled={disabled}
+                onPointerUp={(event) => {
+                  event.stopPropagation();
+                  finishConnection(placed.key);
+                }}
+                onClick={() => finishConnection(placed.key)}
+                onLostPointerCapture={() => setDragFrom(null)}
               />
             ) : null}
             <Button
               type="button"
               variant="unstyled"
               size="unstyled"
+              disabled={disabled}
               aria-pressed={selected}
               onClick={input ? onSelectInput : () => onSelectNode(placed.key)}
               className={`${cardClassName(selected)} h-full w-full`}
@@ -162,10 +178,14 @@ export function WorkflowBuilderChainCanvas({
               label={`Connect from ${input ? "Input" : node?.title || placed.key}`}
               position="output"
               active={dragFrom === placed.key}
+              available={false}
+              disabled={disabled}
               onPointerDown={(event) => {
                 event.stopPropagation();
-                setDragFrom(placed.key);
+                startConnection(placed.key);
               }}
+              onClick={() => startConnection(placed.key)}
+              onLostPointerCapture={() => setDragFrom(null)}
             />
           </div>
         );
@@ -178,14 +198,22 @@ function Port({
   label,
   position,
   active,
+  available,
+  disabled,
   onPointerDown,
   onPointerUp,
+  onClick,
+  onLostPointerCapture,
 }: {
   label: string;
   position: "input" | "output";
   active: boolean;
+  available: boolean;
+  disabled: boolean;
   onPointerDown?: (event: PointerEvent<HTMLButtonElement>) => void;
   onPointerUp?: (event: PointerEvent<HTMLButtonElement>) => void;
+  onClick?: () => void;
+  onLostPointerCapture?: () => void;
 }) {
   return (
     <Button
@@ -193,9 +221,16 @@ function Port({
       variant="unstyled"
       size="unstyled"
       aria-label={label}
-      className={`${position === "input" ? "-top-2" : "-bottom-2"} absolute left-1/2 z-raised h-4 w-4 -translate-x-1/2 rounded-full border border-border-heavy bg-surface-elevated opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 ${active ? "opacity-100 ring-2 ring-info/30" : ""}`}
+      aria-pressed={position === "output" ? active : undefined}
+      aria-description={position === "output"
+        ? "Activate to start a connection, then activate a step input."
+        : "Activate after choosing an output to finish the connection."}
+      disabled={disabled}
+      className={`${position === "input" ? "-top-2" : "-bottom-2"} absolute left-1/2 z-raised h-4 w-4 -translate-x-1/2 rounded-full border border-border-heavy bg-surface-elevated opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 ${active ? "opacity-100 ring-2 ring-info/30" : ""} ${available ? "opacity-100" : ""}`}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
+      onClick={onClick}
+      onLostPointerCapture={onLostPointerCapture}
     />
   );
 }

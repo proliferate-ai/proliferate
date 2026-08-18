@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { RepoRoot } from "@anyharness/sdk";
 import type { WorkflowDefinitionRecordV2 } from "@proliferate/cloud-sdk";
 import { WORKFLOW_STARTER_TEMPLATES_V2 } from "#product/config/workflows/starter-templates";
@@ -138,6 +139,107 @@ describe("WorkflowBuilderSurface", () => {
     expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", false);
   });
 
+  it("authors connections with keyboard-only port activation and announces the armed source", async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkflowBuilderSurface
+        definitionId={null}
+        template={RESEARCH_AND_REVIEW}
+        authCacheScope="user-1"
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Agent" }));
+    const source = screen.getByLabelText("Connect from Review the findings");
+    const target = screen.getByLabelText("Connect into step-3");
+
+    source.focus();
+    await user.keyboard("{Enter}");
+    expect(source.getAttribute("aria-pressed")).toBe("true");
+    expect(source.getAttribute("aria-description")).toContain("start a connection");
+    target.focus();
+    await user.keyboard(" ");
+
+    expect(screen.getByLabelText("Remove connection from review to step-3")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", false);
+
+    // Self-edge, duplicate, and structural-Input target negative controls.
+    source.focus();
+    await user.keyboard("{Enter}");
+    screen.getByLabelText("Connect into Review the findings").focus();
+    await user.keyboard("{Enter}");
+    expect(screen.queryByLabelText("Remove connection from review to review")).toBeNull();
+    expect(screen.queryByLabelText("Connect into Input")).toBeNull();
+    source.focus();
+    await user.keyboard("{Enter}");
+    target.focus();
+    await user.keyboard("{Enter}");
+    expect(screen.getAllByLabelText("Remove connection from review to step-3")).toHaveLength(1);
+  });
+
+  it("clears abandoned pointer connections on background release, cancellation, lost capture, and Escape", () => {
+    render(
+      <WorkflowBuilderSurface
+        definitionId={null}
+        template={RESEARCH_AND_REVIEW}
+        authCacheScope="user-1"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Agent" }));
+    const canvas = screen.getByRole("group", { name: "Workflow chain" });
+    const source = screen.getByLabelText("Connect from Review the findings");
+    const target = screen.getByLabelText("Connect into step-3");
+
+    const abandon = (cancel: () => void) => {
+      fireEvent.pointerDown(source, { pointerId: 7 });
+      expect(source.getAttribute("aria-pressed")).toBe("true");
+      cancel();
+      expect(source.getAttribute("aria-pressed")).toBe("false");
+      fireEvent.pointerUp(target, { pointerId: 7 });
+      expect(screen.queryByLabelText("Remove connection from review to step-3")).toBeNull();
+    };
+
+    abandon(() => fireEvent.pointerUp(canvas, { pointerId: 7 }));
+    abandon(() => fireEvent.pointerCancel(source, { pointerId: 7 }));
+    abandon(() => fireEvent.lostPointerCapture(source, { pointerId: 7 }));
+    abandon(() => fireEvent.keyDown(source, { key: "Escape" }));
+
+    // Negative control: the production pointer-down -> pointer-up gesture
+    // still authors exactly one edge.
+    fireEvent.pointerDown(source, { pointerId: 8 });
+    fireEvent.pointerUp(target, { pointerId: 8 });
+    expect(screen.getByLabelText("Remove connection from review to step-3")).toBeTruthy();
+  });
+
+  it("disables canvas mutation and routing-sensitive shortcuts while create is pending", async () => {
+    const pending = controlledPromise<WorkflowDefinitionRecordV2>();
+    mocks.create.mockReturnValue(pending.promise);
+    const onSaved = vi.fn();
+    render(
+      <WorkflowBuilderSurface
+        definitionId={null}
+        template={RESEARCH_AND_REVIEW}
+        authCacheScope="user-1"
+        onSaved={onSaved}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save Workflow" }));
+    await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(1));
+
+    const canvas = screen.getByRole("group", { name: "Workflow chain" });
+    const edgeControl = screen.getByLabelText("Remove connection from research to review");
+    expect(edgeControl).toHaveProperty("disabled", true);
+    expect(screen.getByLabelText("Connect from Review the findings")).toHaveProperty("disabled", true);
+    fireEvent.keyDown(canvas, { key: "Delete" });
+    fireEvent.keyDown(canvas, { key: "z", metaKey: true });
+    fireEvent.click(edgeControl);
+    expect(screen.getByRole("button", { name: /^02Human in the loopReview the findings/ })).toBeTruthy();
+    expect(screen.getByLabelText("Remove connection from research to review")).toBeTruthy();
+    expect(onSaved).not.toHaveBeenCalled();
+
+    pending.resolve(createdRecord());
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith("wf-new"));
+  });
+
   it("keeps invalid JSON for correction without mutating the last valid graph", () => {
     render(
       <WorkflowBuilderSurface
@@ -172,6 +274,42 @@ describe("WorkflowBuilderSurface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Revert" }));
     expect(screen.queryByText("JSON syntax is invalid.")).toBeNull();
     expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", false);
+  });
+
+  it("coalesces adjacent valid JSON edits and starts a new history item after 600 ms", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-17T12:00:00Z"));
+    render(
+      <WorkflowBuilderSurface
+        definitionId={null}
+        template={null}
+        authCacheScope="user-1"
+      />,
+    );
+    fireEvent.click(screen.getByRole("radio", { name: "JSON" }));
+    const editor = screen.getByLabelText("Workflow definition JSON") as HTMLTextAreaElement;
+    const first = JSON.parse(editor.value);
+    first.nodes[0].prompt = "A";
+    fireEvent.change(editor, { target: { value: JSON.stringify(first) } });
+    first.nodes[0].prompt = "AB";
+    fireEvent.change(editor, { target: { value: JSON.stringify(first) } });
+    vi.advanceTimersByTime(601);
+    first.nodes[0].prompt = "ABC";
+    fireEvent.change(editor, { target: { value: JSON.stringify(first) } });
+
+    fireEvent.click(screen.getByRole("radio", { name: "Graph" }));
+    const canvas = screen.getByRole("group", { name: "Workflow chain" });
+    fireEvent.keyDown(canvas, { key: "z", metaKey: true });
+    fireEvent.click(screen.getByRole("radio", { name: "JSON" }));
+    expect(JSON.parse((screen.getByLabelText("Workflow definition JSON") as HTMLTextAreaElement).value)
+      .nodes[0].prompt).toBe("AB");
+
+    fireEvent.click(screen.getByRole("radio", { name: "Graph" }));
+    fireEvent.keyDown(canvas, { key: "z", metaKey: true });
+    fireEvent.click(screen.getByRole("radio", { name: "JSON" }));
+    expect(JSON.parse((screen.getByLabelText("Workflow definition JSON") as HTMLTextAreaElement).value)
+      .nodes[0].prompt).toBe("");
+    vi.useRealTimers();
   });
 
   it("uses Delete for selected nodes, keeps Enter inert, and leaves incident edges detached", () => {
@@ -538,4 +676,12 @@ function createdRecord(): WorkflowDefinitionRecordV2 {
     updatedAt: "2026-08-14T12:00:00Z",
     deletedAt: null,
   };
+}
+
+function controlledPromise<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
 }

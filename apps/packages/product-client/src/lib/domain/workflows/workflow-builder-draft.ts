@@ -261,7 +261,7 @@ export function workflowBuilderActions(
     replaceDefinition: (definition) => editDraft((draft) => ({
       ...draft,
       ...draftPartsFromDefinition(definition),
-    })),
+    }), { coalesceKey: "json-definition" }),
   };
 }
 

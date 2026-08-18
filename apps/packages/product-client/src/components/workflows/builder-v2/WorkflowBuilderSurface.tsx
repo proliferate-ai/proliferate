@@ -174,6 +174,7 @@ export function WorkflowBuilderSurface({
       className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background"
       data-telemetry-block
       onKeyDown={(event) => handleBuilderKeyDown(event, {
+        disabled: builder.saving,
         active,
         removeNode: actions.removeNode,
         removeDoc: actions.removeDocTemplate,
@@ -265,6 +266,7 @@ export function WorkflowBuilderSurface({
                   </span>
                 </div>
               )}
+              disabled={builder.saving}
               onSelectNode={(id) => setSelection({ kind: "node", id })}
               onSelectInput={() => setSelection({ kind: "input" })}
               onConnectNodes={actions.connectNodes}
@@ -348,6 +350,7 @@ export function WorkflowBuilderSurface({
 function handleBuilderKeyDown(
   event: KeyboardEvent<HTMLDivElement>,
   actions: {
+    disabled: boolean;
     active: BuilderSelection;
     removeNode: (id: string) => void;
     removeDoc: (index: number) => void;
@@ -355,6 +358,7 @@ function handleBuilderKeyDown(
     redo: () => void;
   },
 ) {
+  if (actions.disabled) return;
   const target = event.target;
   if (target instanceof Element && target.closest("input, textarea, select, [contenteditable=true]")) {
     return;
@@ -374,25 +378,19 @@ function handleBuilderKeyDown(
 }
 
 function saveLabel(saving: boolean, saved: boolean): string {
-  if (saving) {
-    return WORKFLOW_BUILDER_COPY.savingLabel;
-  }
+  if (saving) return WORKFLOW_BUILDER_COPY.savingLabel;
   return saved ? WORKFLOW_BUILDER_COPY.savedLabel : WORKFLOW_BUILDER_COPY.saveLabel;
 }
 
 function resourceStateTitle(status: "loading" | "missing" | "unsupported"): string {
-  if (status === "loading") {
-    return WORKFLOW_BUILDER_COPY.loadingTitle;
-  }
+  if (status === "loading") return WORKFLOW_BUILDER_COPY.loadingTitle;
   return status === "unsupported"
     ? WORKFLOW_BUILDER_COPY.unsupportedTitle
     : WORKFLOW_BUILDER_COPY.missingTitle;
 }
 
 function resourceStateDescription(status: "loading" | "missing" | "unsupported"): string {
-  if (status === "loading") {
-    return WORKFLOW_BUILDER_COPY.loadingDescription;
-  }
+  if (status === "loading") return WORKFLOW_BUILDER_COPY.loadingDescription;
   return status === "unsupported"
     ? WORKFLOW_BUILDER_COPY.unsupportedDescription
     : WORKFLOW_BUILDER_COPY.missingDescription;

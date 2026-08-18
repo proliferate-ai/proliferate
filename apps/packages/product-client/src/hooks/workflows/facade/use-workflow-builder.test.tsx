@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { WorkflowDefinitionRecordV2 } from "@proliferate/cloud-sdk";
+import type { WorkflowDefinitionRecordV2, WorkflowDefinitionV2 } from "@proliferate/cloud-sdk";
 import { WORKFLOW_STARTER_TEMPLATES_V2 } from "#product/config/workflows/starter-templates";
 import { useWorkflowBuilder } from "#product/hooks/workflows/facade/use-workflow-builder";
 import { nextNodeId } from "#product/lib/domain/workflows/workflow-builder-draft";
@@ -171,6 +171,42 @@ describe("useWorkflowBuilder authored graph", () => {
 });
 
 describe("useWorkflowBuilder save mapping", () => {
+  it("freezes every draft mutation while a controlled save persists its exact snapshot", async () => {
+    const pending = controlledPromise<WorkflowDefinitionRecordV2>();
+    mocks.create.mockReturnValue(pending.promise);
+    const { result } = renderBuilder({ template: BUG_INVESTIGATION });
+    const sentDefinition = structuredClone(result.current.definition);
+    const originalDraft = structuredClone(result.current.draft);
+
+    let savePromise!: Promise<WorkflowDefinitionRecordV2 | null>;
+    act(() => {
+      savePromise = result.current.save();
+    });
+    expect(result.current.saving).toBe(true);
+
+    act(() => {
+      result.current.actions.removeNode("review");
+      result.current.actions.removeEdge("research", "review");
+      result.current.actions.connectNodes("review", "research");
+      result.current.actions.disconnectInput();
+      result.current.undo();
+      result.current.redo();
+    });
+
+    expect(result.current.draft).toEqual(originalDraft);
+    expect(mocks.create.mock.calls[0][0].definition).toEqual(sentDefinition);
+
+    await act(async () => {
+      pending.resolve(savedRecord());
+      await savePromise;
+    });
+
+    // Negative control: an unchanged pending draft acknowledges the exact
+    // snapshot and becomes clean only after that request resolves.
+    expect(result.current.saved).toBe(true);
+    expect(result.current.dirty).toBe(false);
+  });
+
   it("retains but refuses a stored model selection missing from the live catalog", () => {
     mocks.detailQuery.data = {
       ...savedRecord(),
@@ -480,7 +516,48 @@ describe("useWorkflowBuilder draft edits", () => {
     }
     expect(undos).toBe(60);
   });
+
+  it("coalesces valid JSON typing within 600 ms without evicting structural history", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-17T12:00:00Z"));
+    const { result } = renderBuilder();
+    act(() => result.current.actions.setDefaultRepoConfigId("repo-2"));
+
+    act(() => {
+      for (let index = 1; index <= 65; index += 1) {
+        result.current.actions.replaceDefinition(definitionWithPrompt("x".repeat(index)));
+      }
+    });
+    expect(result.current.definition.nodes[0].prompt).toHaveLength(65);
+
+    act(() => result.current.undo());
+    expect(result.current.definition.nodes[0].prompt).toBe("");
+    expect(result.current.draft.defaultRepoConfigId).toBe("repo-2");
+    act(() => result.current.undo());
+    expect(result.current.draft.defaultRepoConfigId).toBe("");
+    vi.useRealTimers();
+  });
 });
+
+function definitionWithPrompt(prompt: string): WorkflowDefinitionV2 {
+  return {
+    schemaVersion: 2,
+    nodes: [{ id: "step-1", type: "agent", title: "", prompt }],
+    edges: [],
+    inputs: [],
+    docTemplates: [],
+  };
+}
+
+function controlledPromise<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
 
 /**
  * `availableRepoRootIds` defaults to the ids the fixtures use, so a test only

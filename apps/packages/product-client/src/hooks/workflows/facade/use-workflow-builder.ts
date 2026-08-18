@@ -155,6 +155,7 @@ export function useWorkflowBuilder({
     // Any edit clears the "Saved" flash and the last write's error: both
     // describe the draft as it was, not as it now is.
     setState((previous) => {
+      if (inFlight.current) return previous;
       const draft = edit(previous.draft);
       if (serializeDraft(draft) === serializeDraft(previous.draft)) return previous;
       const now = Date.now();
@@ -177,6 +178,7 @@ export function useWorkflowBuilder({
 
   const actions = useMemo(() => workflowBuilderActions(editDraft), [editDraft]);
   const undo = useCallback(() => setState((previous) => {
+    if (inFlight.current) return previous;
     const draft = previous.past[previous.past.length - 1];
     if (!draft) return previous;
     return {
@@ -190,6 +192,7 @@ export function useWorkflowBuilder({
     };
   }), []);
   const redo = useCallback(() => setState((previous) => {
+    if (inFlight.current) return previous;
     const [draft, ...future] = previous.future;
     if (!draft) return previous;
     return {
@@ -246,6 +249,7 @@ export function useWorkflowBuilder({
     // omitting the field on an update would instead preserve whatever was
     // stored.
     const defaultRepoConfigId = state.draft.defaultRepoConfigId.trim() || null;
+    const savedSnapshot = serializeDraft(state.draft);
     try {
       const saved = record
         ? await updateWorkflowDefinitionV2({
@@ -267,7 +271,7 @@ export function useWorkflowBuilder({
       setSavedRecord(saved);
       setState((previous) => ({
         ...previous,
-        baseline: serializeDraft(previous.draft),
+        baseline: savedSnapshot,
         status: "saved",
         error: null,
       }));
