@@ -175,7 +175,7 @@ impl SessionService {
                             &model.controls,
                             &agent.session.controls,
                         ),
-                        fast_mode: model.controls.contains_key("fast_mode"),
+                        fast_mode: model.supports_fast_mode(),
                         modes: model
                             .controls
                             .get("mode")

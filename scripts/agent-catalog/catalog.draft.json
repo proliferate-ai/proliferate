@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2026-08-17.1",
+  "catalogVersion": "2026-08-18.1",
   "probedAgainst": {
     "registryVersion": "2026-08-17.1"
   },
@@ -135,7 +135,10 @@
             "values": [
               "on",
               "off"
-            ]
+            ],
+            "mapping": {
+              "liveConfigId": "fast"
+            }
           }
         ],
         "models": [
@@ -1393,7 +1396,10 @@
             "values": [
               "off",
               "on"
-            ]
+            ],
+            "mapping": {
+              "liveConfigId": "fast-mode"
+            }
           }
         ],
         "models": [

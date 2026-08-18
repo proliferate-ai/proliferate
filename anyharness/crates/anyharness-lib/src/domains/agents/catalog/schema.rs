@@ -318,6 +318,17 @@ pub struct AgentCatalogModel {
     pub provenance: Option<AgentCatalogModelProvenance>,
 }
 
+impl AgentCatalogModel {
+    /// Whether this model carries a fast-mode control. Harnesses name it
+    /// differently — claude's option is `fast`, codex's is `fast-mode`
+    /// (`fast_mode` before the rung-1 fork) — and all mean the same capability.
+    pub fn supports_fast_mode(&self) -> bool {
+        ["fast_mode", "fast", "fast-mode"]
+            .iter()
+            .any(|key| self.controls.contains_key(*key))
+    }
+}
+
 /// Observed-set availability: exactly the auth contexts (incl. `"baseline"`)
 /// whose probe runs contained this model. No monotonicity inference.
 #[derive(Debug, Clone, Serialize, Deserialize)]
