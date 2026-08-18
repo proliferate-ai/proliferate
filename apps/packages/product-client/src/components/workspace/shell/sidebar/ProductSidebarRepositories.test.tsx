@@ -111,6 +111,41 @@ describe("ProductSidebarWorkspaceRow trailing slot", () => {
     expect(screen.getByTestId("running-status").parentElement?.className).toContain("opacity-0");
   });
 
+  it("swaps the trailing cells for the revealed actions instead of covering the label", () => {
+    render(
+      <ProductSidebarWorkspaceRow
+        label="A workspace with a very long name that fills the whole row"
+        trailingStatus={<span data-testid="running-status">Running</span>}
+        hoverAction={<button type="button">Pin workspace</button>}
+      />,
+    );
+
+    const actions = document.querySelector("[data-sidebar-row-actions]");
+    const cells = document.querySelector("[data-sidebar-trailing-cells]");
+    // Same flow row as the cells, not an overlay printed on top of them.
+    expect(actions?.parentElement).toBe(cells?.parentElement);
+    expect(actions?.className).not.toContain("absolute");
+    // Each side owns the width only in the state it is visible in, so the
+    // label re-truncates against whichever is showing.
+    expect(actions?.className).toContain("w-0");
+    expect(actions?.className).toContain("group-hover:w-auto");
+    expect(cells?.className).toContain("group-hover:w-0");
+    expect(cells?.className).toContain("overflow-hidden");
+  });
+
+  it("leaves the trailing cells at full width when the row has no hover actions", () => {
+    render(
+      <ProductSidebarWorkspaceRow
+        label="Quiet workspace"
+        trailingStatus={<span data-testid="running-status">Running</span>}
+      />,
+    );
+
+    const cells = document.querySelector("[data-sidebar-trailing-cells]");
+    expect(cells?.className).not.toContain("group-hover:w-0");
+    expect(document.querySelector("[data-sidebar-row-actions]")).toBeNull();
+  });
+
   it("uses the ordinary trailing slot when there is no symbol to cover", () => {
     render(
       <ProductSidebarWorkspaceRow
