@@ -10,7 +10,6 @@ import {
   DropdownMenuTrigger,
 } from "#product/primitives/DropdownMenu";
 import { Plus } from "#product/primitives/icons/core";
-import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
 
 /**
  * The main page's one "New workflow" affordance: a blank chain, or one of the
@@ -33,11 +32,13 @@ export function WorkflowMainNewMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[240px]">
+        {/*
+          * No shortcut badge beside this item: ⌘N is already bound app-wide to
+          * `workspace.new-default` (open new chat), so a badge here would name
+          * a keystroke that does something else.
+          */}
         <DropdownMenuItem onSelect={() => onNew(null)}>
-          <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
-            {WORKFLOW_MAIN_COPY.newBlankLabel}
-            <ShortcutBadge label="⌘N" />
-          </span>
+          {WORKFLOW_MAIN_COPY.newBlankLabel}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <div className="px-2.5 py-1 text-ui-sm text-muted-foreground">

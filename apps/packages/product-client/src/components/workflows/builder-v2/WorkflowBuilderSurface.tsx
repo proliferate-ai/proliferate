@@ -3,15 +3,16 @@ import { useRepoRootsQuery } from "@anyharness/sdk-react";
 import type { WorkflowStarterTemplateV2 } from "#product/config/workflows/starter-templates";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
 import { useCloudLaunchModelRegistries } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
-import { useWorkflowBuilder, type WorkflowBuilderDraft } from "#product/hooks/workflows/facade/use-workflow-builder";
+import { useWorkflowBuilder } from "#product/hooks/workflows/facade/use-workflow-builder";
 import { useWorkflowNodeLayout } from "#product/hooks/workflows/workflows/use-workflow-node-layout";
 import { workflowBuilderHarnessOptions } from "#product/lib/domain/workflows/workflow-builder-authoring";
+import {
+  resolveWorkflowBuilderSelection,
+  type WorkflowBuilderSelection,
+} from "#product/lib/domain/workflows/workflow-builder-selection";
 import { workflowRepoRootOptions } from "#product/lib/domain/workflows/workflow-repo-root-options";
 import { WorkflowBuilderChainCanvas } from "#product/components/workflows/builder-v2/WorkflowBuilderChainCanvas";
-import { WorkflowBuilderDetailsCard } from "#product/components/workflows/builder-v2/WorkflowBuilderDetailsCard";
-import { WorkflowBuilderDocInspector } from "#product/components/workflows/builder-v2/WorkflowBuilderDocInspector";
-import { WorkflowBuilderInputsPanel } from "#product/components/workflows/builder-v2/WorkflowBuilderInputsPanel";
-import { WorkflowBuilderNodeCard } from "#product/components/workflows/builder-v2/WorkflowBuilderNodeCard";
+import { WorkflowBuilderInspector } from "#product/components/workflows/builder-v2/WorkflowBuilderInspector";
 import { WorkflowBuilderRail } from "#product/components/workflows/builder-v2/WorkflowBuilderRail";
 import { WorkflowJsonEditor } from "#product/components/workflows/builder-v2/WorkflowJsonEditor";
 import { WorkflowResourceState } from "#product/components/workflows/WorkflowResourceState";
@@ -31,38 +32,6 @@ export interface WorkflowBuilderSurfaceProps {
   authCacheScope: string;
   onSaved?: (definitionId: string) => void;
   onBack?: () => void;
-}
-
-/**
- * What the inspector edits: one chain step, one context doc, or — through the
- * structural input card that heads the chain — the workflow itself
- * (description, default repository, declared inputs).
- */
-type BuilderSelection =
-  | { kind: "node"; id: string }
-  | { kind: "doc"; index: number }
-  | { kind: "input" };
-
-/**
- * A stale selection (removed step, removed doc) falls back to the first step,
- * then to the input card — the inspector always edits something real.
- */
-function resolveSelection(
-  selection: BuilderSelection | null,
-  draft: WorkflowBuilderDraft,
-): BuilderSelection {
-  if (selection?.kind === "node" && draft.nodes.some((node) => node.id === selection.id)) {
-    return selection;
-  }
-  if (selection?.kind === "doc" && selection.index < draft.docTemplates.length) {
-    return selection;
-  }
-  if (selection?.kind === "input") {
-    return selection;
-  }
-  return draft.nodes.length > 0
-    ? { kind: "node", id: draft.nodes[0].id }
-    : { kind: "input" };
 }
 
 /** Three-pane authoring surface with explicit graph edges and schema-backed validation. */
@@ -100,16 +69,8 @@ export function WorkflowBuilderSurface({
   });
 
   const { draft, issues, actions } = builder;
-  const inputNames = useMemo(
-    () => new Set(draft.inputs.map((input) => input.name)),
-    [draft.inputs],
-  );
-  const docSlugs = useMemo(
-    () => new Set(draft.docTemplates.map((doc) => doc.slug)),
-    [draft.docTemplates],
-  );
 
-  const [selection, setSelection] = useState<BuilderSelection | null>(null);
+  const [selection, setSelection] = useState<WorkflowBuilderSelection | null>(null);
   const [authoringMode, setAuthoringMode] = useState<"graph" | "json">("graph");
   const [jsonValid, setJsonValid] = useState(true);
   const previousNodeCountRef = useRef(draft.nodes.length);
@@ -119,11 +80,7 @@ export function WorkflowBuilderSurface({
     }
     previousNodeCountRef.current = draft.nodes.length;
   }, [draft.nodes]);
-  const active = resolveSelection(selection, draft);
-  const selectedNode = active.kind === "node"
-    ? draft.nodes.find((node) => node.id === active.id) ?? null
-    : null;
-  const selectedDoc = active.kind === "doc" ? draft.docTemplates[active.index] : null;
+  const active = resolveWorkflowBuilderSelection(selection, draft);
   const issueNodeIds = useMemo(
     () => new Set(issues.flatMap((issue) => (issue.nodeId ? [issue.nodeId] : []))),
     [issues],
@@ -260,7 +217,7 @@ export function WorkflowBuilderSurface({
               edges={draft.edges}
               inputConnectedTo={draft.inputConnectedTo}
               harnesses={harnesses}
-              selectedNodeId={selectedNode?.id ?? null}
+              selectedNodeId={active.kind === "node" ? active.id : null}
               inputSelected={active.kind === "input"}
               issueNodeIds={issueNodeIds}
               nodePlacements={layout.placements}
@@ -299,61 +256,17 @@ export function WorkflowBuilderSurface({
           </div>
         </div>
 
-        <aside className="flex w-80 shrink-0 flex-col gap-3 overflow-y-auto border-l border-border/70 p-3">
-          {active.kind === "input" ? (
-            <>
-              <WorkflowBuilderDetailsCard
-                description={draft.description}
-                defaultRepoConfigId={draft.defaultRepoConfigId}
-                repositories={repositories}
-                repositoriesLoading={repoRootsQuery.isLoading}
-                repoDefaultUnavailable={builder.repoDefaultUnavailable}
-                disabled={builder.saving}
-                onDescriptionChange={actions.setDescription}
-                onDefaultRepoConfigIdChange={actions.setDefaultRepoConfigId}
-              />
-              <WorkflowBuilderInputsPanel
-                inputs={draft.inputs}
-                issues={issues}
-                disabled={builder.saving}
-                onAdd={actions.addInput}
-                onRemove={actions.removeInput}
-                onChange={actions.updateInput}
-              />
-            </>
-          ) : null}
-
-          {selectedNode ? (
-            <WorkflowBuilderNodeCard
-              key={selectedNode.id}
-              node={selectedNode}
-              position={draft.nodes.findIndex((node) => node.id === selectedNode.id) + 1}
-              nodeCount={draft.nodes.length}
-              harnesses={harnesses}
-              issues={issues.filter((issue) => issue.nodeId === selectedNode.id)}
-              inputNames={inputNames}
-              docSlugs={docSlugs}
-              disabled={builder.saving}
-              onChange={(patch) => actions.updateNode(selectedNode.id, patch)}
-              onRemove={() => actions.removeNode(selectedNode.id)}
-              onMoveUp={() => actions.moveNodeUp(selectedNode.id)}
-              onMoveDown={() => actions.moveNodeDown(selectedNode.id)}
-            />
-          ) : null}
-
-          {selectedDoc && active.kind === "doc" ? (
-            <WorkflowBuilderDocInspector
-              key={active.index}
-              doc={selectedDoc}
-              index={active.index}
-              nodes={draft.nodes}
-              issues={issues}
-              disabled={builder.saving}
-              onRemove={() => actions.removeDocTemplate(active.index)}
-              onChange={(patch) => actions.updateDocTemplate(active.index, patch)}
-            />
-          ) : null}
-        </aside>
+        <WorkflowBuilderInspector
+          selection={active}
+          draft={draft}
+          issues={issues}
+          actions={actions}
+          harnesses={harnesses}
+          repositories={repositories}
+          repositoriesLoading={repoRootsQuery.isLoading}
+          repoDefaultUnavailable={builder.repoDefaultUnavailable}
+          disabled={builder.saving}
+        />
       </div>
     </div>
   );
@@ -363,7 +276,7 @@ function handleBuilderKeyDown(
   event: KeyboardEvent<HTMLDivElement>,
   actions: {
     disabled: boolean;
-    active: BuilderSelection;
+    active: WorkflowBuilderSelection;
     removeNode: (id: string) => void;
     removeDoc: (index: number) => void;
     undo: () => void;

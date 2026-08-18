@@ -163,15 +163,16 @@ describe("WorkflowsMainSurface", () => {
     expect(mocks.listQuery.refetch).toHaveBeenCalledTimes(1);
   });
 
-  it("routes the header menu's blank shortcut and every starter template", async () => {
+  it("routes the header menu's blank item and every starter template", async () => {
     mocks.listQuery.data = { workflows: [listRow()] };
     const onNew = vi.fn();
     const user = userEvent.setup();
     render(<WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={onNew} />);
 
     await user.click(screen.getByRole("button", { name: "New workflow options" }));
-    expect(await screen.findByText("⌘N")).toBeTruthy();
-    await user.click(screen.getByRole("menuitem", { name: /Blank workflow/ }));
+    // Exact: the tier-2 definition-lifecycle spec resolves this item by its
+    // exact accessible name, so trailing content added here breaks that too.
+    await user.click(await screen.findByRole("menuitem", { name: "Blank workflow", exact: true }));
     expect(onNew).toHaveBeenCalledWith(null);
 
     for (const template of WORKFLOW_STARTER_TEMPLATES_V2) {

@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
-import { assertWrappedPreamble, researchAndReviewDefinition, t3Wf1 } from "./t3-wf-1.js";
+import { assertWrappedPreamble, bugInvestigationDefinition, t3Wf1 } from "./t3-wf-1.js";
 import { buildPlannedCells } from "../runner/plan.js";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
@@ -61,8 +61,8 @@ test("assertWrappedPreamble rejects a wrapper that altered the underlying node p
   assert.throws(() => assertWrappedPreamble(mangled, raw), /must still carry the node's raw prompt text/);
 });
 
-test("researchAndReviewDefinition: two nodes, agent then human_in_loop gate, model on research only", () => {
-  const definition = researchAndReviewDefinition({ agentKind: "claude", modelId: "haiku" });
+test("bugInvestigationDefinition: two nodes, agent then human_in_loop gate, model on research only", () => {
+  const definition = bugInvestigationDefinition({ agentKind: "claude", modelId: "haiku" });
   assert.equal(definition.schemaVersion, 2);
   assert.equal(definition.nodes.length, 2);
 
@@ -88,7 +88,7 @@ test("researchAndReviewDefinition: two nodes, agent then human_in_loop gate, mod
   assert.equal(definition.docTemplates?.[0]?.producingNodeId, "research");
 });
 
-test("researchAndReviewDefinition stays in sync with the shipped RESEARCH_AND_REVIEW starter template", () => {
+test("bugInvestigationDefinition stays in sync with the shipped BUG_INVESTIGATION starter template", () => {
   // tests/release has no dependency on @proliferate/product-client (see its
   // package.json), so this scenario's definition is a deliberate structural
   // copy rather than an import (same reasoning as the frozen SDK contract
@@ -105,12 +105,12 @@ test("researchAndReviewDefinition stays in sync with the shipped RESEARCH_AND_RE
   // its multi-line JS spelling.
   const rawSource = readFileSync(STARTER_TEMPLATES_PATH, "utf8");
   const source = rawSource.replace(/"\s*\+\s*"/g, "");
-  const definition = researchAndReviewDefinition({ agentKind: "claude", modelId: "haiku" });
+  const definition = bugInvestigationDefinition({ agentKind: "claude", modelId: "haiku" });
   for (const node of definition.nodes) {
     assert.ok(
       source.includes(node.prompt),
-      `starter-templates.ts RESEARCH_AND_REVIEW must still contain node "${node.id}"'s prompt verbatim ` +
-        "(researchAndReviewDefinition has drifted from the shipped starter template)",
+      `starter-templates.ts BUG_INVESTIGATION must still contain node "${node.id}"'s prompt verbatim ` +
+        "(bugInvestigationDefinition has drifted from the shipped starter template)",
     );
   }
   for (const docTemplate of definition.docTemplates ?? []) {
@@ -120,9 +120,9 @@ test("researchAndReviewDefinition stays in sync with the shipped RESEARCH_AND_RE
     const bodyAsSourceLiteral = docTemplate.body.replace(/\n/g, "\\n");
     assert.ok(
       source.includes(bodyAsSourceLiteral),
-      `starter-templates.ts RESEARCH_AND_REVIEW must still contain the "${docTemplate.slug}" doc template body ` +
-        "verbatim (researchAndReviewDefinition has drifted from the shipped starter template)",
+      `starter-templates.ts BUG_INVESTIGATION must still contain the "${docTemplate.slug}" doc template body ` +
+        "verbatim (bugInvestigationDefinition has drifted from the shipped starter template)",
     );
   }
-  assert.ok(source.includes('slug: "research-and-review"'), "the shipped starter template slug must still exist");
+  assert.ok(source.includes('slug: "bug-investigation"'), "the shipped starter template slug must still exist");
 });
