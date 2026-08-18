@@ -75,5 +75,6 @@ mod events;
 mod links;
 mod notifications;
 mod pending_prompts;
+mod runtime_event_idempotency;
 mod sessions;
 mod support_windows;

@@ -13900,6 +13900,19 @@
               "null"
             ]
           },
+          "retiredPromptId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retiredPromptSeq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
           "sessionLinkId": {
             "type": "string"
           },

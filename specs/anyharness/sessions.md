@@ -287,10 +287,12 @@ enqueue time, in the same transaction that would have inserted the wake:
   turn would be redundant. The same transaction also retires an older queued
   completed wake that the message supersedes. The same transaction retains a
   durable removal intent with that exact queue identity. The worker persists
-  `pending_prompt_removed`, acknowledges the intent only after strict event
-  persistence, and retries unacknowledged intents after failure or restart so
-  live and replayed queue projections converge. This never applies to failed
-  or cancelled turns; those always materialize a wake turn.
+  exactly one `pending_prompt_removed` through a durable event key,
+  acknowledges the intent only after strict event persistence, and retries
+  leased unacknowledged intents after failure, restart, or mobility handoff.
+  Failed attempts are deferred so a poisoned parent cannot starve later
+  removals. This makes live and replayed queue projections converge. This never
+  applies to failed or cancelled turns; those always materialize a wake turn.
 
 Every automatic durable-queue drain first ensures that the row's
 `pending_prompt_added` event is persisted. Detached activation and startup

@@ -178,7 +178,12 @@ impl SessionStore {
             let mut delivery_stmt = conn.prepare(&format!(
                 "SELECT * FROM session_link_completion_deliveries
                  WHERE parent_session_id IN ({placeholders})
-                   AND state IN ('pending', 'enqueued')
+                   AND (
+                       state IN ('pending', 'enqueued')
+                       OR (state = 'delivered'
+                           AND retired_prompt_seq IS NOT NULL
+                           AND removal_event_persisted_at IS NULL)
+                   )
                  ORDER BY created_at ASC, delivery_id ASC"
             ))?;
             let session_link_completion_deliveries = delivery_stmt

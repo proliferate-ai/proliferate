@@ -3693,6 +3693,9 @@ export interface components {
             parentPromptSeq?: number | null;
             parentSessionId: string;
             parentTurnId?: string | null;
+            retiredPromptId?: string | null;
+            /** Format: int64 */
+            retiredPromptSeq?: number | null;
             sessionLinkId: string;
             state: string;
             subagentPublicId?: string | null;

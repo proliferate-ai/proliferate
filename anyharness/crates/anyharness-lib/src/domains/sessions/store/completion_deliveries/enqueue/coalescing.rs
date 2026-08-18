@@ -87,7 +87,7 @@ pub(super) fn retire_older_completed_sibling_wakes(
             ));
         }
         retire_enqueued_completed_delivery(tx, &sibling, now)?;
-        record_retired_wake_removal_intent(tx, &sibling, &pending)?;
+        record_retired_wake_removal_intent(tx, &sibling, &pending, now)?;
         retired_wakes.push(RetiredCompletionWake {
             delivery_id: sibling.delivery_id,
             parent_session_id: pending.session_id,
@@ -191,13 +191,14 @@ fn record_retired_wake_removal_intent(
     tx: &rusqlite::Connection,
     delivery: &CompletionDeliveryRecord,
     pending: &PendingPromptRecord,
+    now: &str,
 ) -> rusqlite::Result<()> {
     let recorded = tx.execute(
         "UPDATE session_link_completion_deliveries
          SET retired_prompt_seq = ?2, retired_prompt_id = ?3,
-             removal_event_persisted_at = NULL
+             removal_event_persisted_at = NULL, next_attempt_at = ?4
          WHERE delivery_id = ?1 AND state = 'delivered'",
-        params![delivery.delivery_id, pending.seq, pending.prompt_id],
+        params![delivery.delivery_id, pending.seq, pending.prompt_id, now],
     )?;
     if recorded != 1 {
         return Err(completion_delivery_error(

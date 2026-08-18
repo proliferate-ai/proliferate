@@ -284,6 +284,8 @@ fn from_contract_completion_delivery(
         },
         parent_prompt_seq: record.parent_prompt_seq,
         parent_turn_id: record.parent_turn_id,
+        retired_prompt_seq: record.retired_prompt_seq,
+        retired_prompt_id: record.retired_prompt_id,
         attempt_count: record.attempt_count,
         next_attempt_at: record.next_attempt_at,
         lease_token: None,

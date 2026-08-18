@@ -113,6 +113,8 @@ fn completion_delivery_size_bytes(
         + str_size(record.state.as_str())
         + record.child_last_event_seq.max(0) as u64
         + record.parent_prompt_seq.unwrap_or_default().max(0) as u64
+        + record.retired_prompt_seq.unwrap_or_default().max(0) as u64
+        + option_string_size(&record.retired_prompt_id)
         + record.attempt_count.max(0) as u64
         + string_size(&record.next_attempt_at)
         + option_string_size(&record.last_error_code)

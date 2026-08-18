@@ -126,11 +126,20 @@ impl SessionStore {
             let persisted_event = sanitize_session_event_for_sqlite(&envelope.event);
             let payload_json = serde_json::to_string(&persisted_event)
                 .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
+            let removal_key = completion_wake_removal_key(session_id, &persisted_event)?;
             conn.execute(
                 "INSERT INTO session_events (
-                    session_id, seq, timestamp, event_type, turn_id, item_id, payload_json
-                 ) VALUES (?1, ?2, ?3, ?4, NULL, NULL, ?5)",
-                params![session_id, seq, timestamp, event_type, payload_json],
+                    session_id, seq, timestamp, event_type, turn_id, item_id, payload_json,
+                    completion_wake_removal_key
+                 ) VALUES (?1, ?2, ?3, ?4, NULL, NULL, ?5, ?6)",
+                params![
+                    session_id,
+                    seq,
+                    timestamp,
+                    event_type,
+                    payload_json,
+                    removal_key
+                ],
             )?;
             if touch_session_activity {
                 conn.execute(
@@ -518,9 +527,15 @@ pub(super) fn insert_event_row(
     record: &SessionEventRecord,
 ) -> rusqlite::Result<()> {
     let payload_json = sanitize_session_event_payload_json(&record.payload_json)?;
+    let removal_key = match serde_json::from_str(&payload_json) {
+        Ok(event) => completion_wake_removal_key(&record.session_id, &event)?,
+        Err(_) => None,
+    };
     conn.execute(
-        "INSERT INTO session_events (session_id, seq, timestamp, event_type, turn_id, item_id, payload_json)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO session_events (
+            session_id, seq, timestamp, event_type, turn_id, item_id, payload_json,
+            completion_wake_removal_key
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             record.session_id,
             record.seq,
@@ -529,9 +544,34 @@ pub(super) fn insert_event_row(
             record.turn_id,
             record.item_id,
             payload_json,
+            removal_key,
         ],
     )?;
     Ok(())
+}
+
+pub(super) fn completion_wake_removal_key(
+    session_id: &str,
+    event: &anyharness_contract::v1::SessionEvent,
+) -> rusqlite::Result<Option<String>> {
+    let anyharness_contract::v1::SessionEvent::PendingPromptRemoved(payload) = event else {
+        return Ok(None);
+    };
+    if payload.reason != anyharness_contract::v1::PendingPromptRemovalReason::Deleted {
+        return Ok(None);
+    }
+    completion_wake_removal_key_for_identity(session_id, payload.seq, payload.prompt_id.as_deref())
+        .map(Some)
+}
+
+pub(super) fn completion_wake_removal_key_for_identity(
+    session_id: &str,
+    prompt_seq: i64,
+    prompt_id: Option<&str>,
+) -> rusqlite::Result<String> {
+    serde_json::to_string(&(session_id, prompt_seq, prompt_id))
+        .map(|identity| format!("completion_wake_removal:{identity}"))
+        .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))
 }
 
 fn sanitize_session_event_payload_json(payload_json: &str) -> rusqlite::Result<String> {

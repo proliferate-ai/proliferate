@@ -126,7 +126,14 @@ async fn mixed_message_suppression_retries_retired_wake_removal_after_restart() 
 
     state
         .db
-        .with_conn(|conn| conn.execute_batch("DROP TRIGGER reject_retired_wake_removal;"))
+        .with_conn(|conn| {
+            conn.execute_batch(
+                "DROP TRIGGER reject_retired_wake_removal;
+                 UPDATE session_link_completion_deliveries
+                 SET next_attempt_at = '1970-01-01T00:00:00Z'
+                 WHERE removal_event_persisted_at IS NULL;",
+            )
+        })
         .expect("restore removal event persistence");
     let restarted_worker = worker(&state);
     assert_eq!(
