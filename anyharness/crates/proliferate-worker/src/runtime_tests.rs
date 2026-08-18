@@ -20,8 +20,9 @@
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use tracing::field::{Field, Visit};
 use tracing::Level;
@@ -176,8 +177,6 @@ fn capture(timeline: &Timeline) -> tracing::subscriber::DefaultGuard {
 
 // ── An instrumented listener that proves an ABSENT request ─────────────────
 
-const SHUTDOWN_PATH: &str = "/__test_shutdown";
-
 /// `(method, exact path, status, body)`.
 type Route = (&'static str, String, u16, String);
 
@@ -189,6 +188,7 @@ type Route = (&'static str, String, u16, String);
 struct InstrumentedServer {
     address: SocketAddr,
     hits: Arc<Mutex<Vec<String>>>,
+    stop: Arc<AtomicBool>,
     handle: Option<std::thread::JoinHandle<()>>,
 }
 
@@ -196,29 +196,44 @@ struct InstrumentedServer {
 impl InstrumentedServer {
     fn spawn(label: &'static str, routes: Vec<Route>, timeline: Timeline) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind instrumented server");
+        listener
+            .set_nonblocking(true)
+            .expect("non-blocking instrumented listener");
         let address = listener.local_addr().expect("instrumented server address");
         let hits: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
         let thread_hits = Arc::clone(&hits);
+        let stop = Arc::new(AtomicBool::new(false));
+        let thread_stop = Arc::clone(&stop);
         let handle = std::thread::spawn(move || {
-            for incoming in listener.incoming() {
-                let mut stream = match incoming {
-                    Ok(stream) => stream,
+            // A polled accept loop, never a blocking one: the only way a test
+            // can prove "no request arrived" is if stopping the server never
+            // depends on a request arriving.
+            loop {
+                if thread_stop.load(Ordering::SeqCst) {
+                    break;
+                }
+                let mut stream = match listener.accept() {
+                    Ok((stream, _)) => stream,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(Duration::from_millis(2));
+                        continue;
+                    }
                     Err(_) => break,
                 };
+                stream
+                    .set_nonblocking(false)
+                    .expect("blocking accepted stream");
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .expect("accepted stream read timeout");
                 let mut buffer = vec![0u8; 262_144];
                 let read = match stream.read(&mut buffer) {
+                    Ok(0) => continue,
                     Ok(read) => read,
                     Err(_) => continue,
                 };
                 let raw = String::from_utf8_lossy(&buffer[..read]).to_string();
                 let (method, path) = request_line(&raw);
-                if path == SHUTDOWN_PATH {
-                    let _ = write!(
-                        stream,
-                        "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-                    );
-                    break;
-                }
                 let line = format!("{method} {path}");
                 thread_hits.lock().unwrap().push(line.clone());
                 timeline
@@ -242,16 +257,15 @@ impl InstrumentedServer {
         Self {
             address,
             hits,
+            stop,
             handle: Some(handle),
         }
     }
 
+    /// Stop the accept loop and drain the thread, so a test's request tally is
+    /// final rather than racing a late connection.
     fn shutdown(mut self) -> Vec<String> {
-        let mut stream = std::net::TcpStream::connect(self.address).expect("connect for shutdown");
-        let _ = write!(
-            stream,
-            "GET {SHUTDOWN_PATH} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"
-        );
+        self.stop.store(true, Ordering::SeqCst);
         if let Some(handle) = self.handle.take() {
             handle.join().expect("instrumented server thread");
         }
