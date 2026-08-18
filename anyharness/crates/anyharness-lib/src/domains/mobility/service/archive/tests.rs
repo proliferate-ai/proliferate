@@ -117,6 +117,14 @@ fn completion_delivery_validation_accepts_only_producible_retired_wake_intents()
         delivery.retired_prompt_id = Some(delivery.prompt_id());
     });
 
+    let mut non_retired = archive();
+    let delivery = &mut non_retired.session_link_completion_deliveries[0];
+    delivery.delivery_id.clear();
+    delivery.state = CompletionDeliveryState::Pending;
+    delivery.retired_prompt_seq = None;
+    delivery.retired_prompt_id = None;
+    assert!(validate_archive_deliveries(&non_retired).is_err());
+
     let mut collision = archive();
     let retired_prompt_id = collision.session_link_completion_deliveries[0].prompt_id();
     collision.sessions[0]

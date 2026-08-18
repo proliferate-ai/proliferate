@@ -137,6 +137,11 @@ pub(super) fn validate_completion_deliveries(
     let mut completion_ids = HashSet::new();
     let mut child_turns = HashSet::new();
     for delivery in &archive.session_link_completion_deliveries {
+        if delivery.delivery_id.is_empty() {
+            return Err(MobilityError::Invalid(
+                "archive completion delivery has an empty delivery id".to_string(),
+            ));
+        }
         if !session_ids.contains(delivery.parent_session_id.as_str()) {
             return Err(MobilityError::Invalid(format!(
                 "archive completion delivery {} references missing parent session {}",
@@ -209,8 +214,7 @@ fn validate_retired_wake_intent(
     };
 
     let canonical_prompt_id = delivery.prompt_id();
-    let producer_invariant_matches = !delivery.delivery_id.is_empty()
-        && delivery.state == CompletionDeliveryState::Delivered
+    let producer_invariant_matches = delivery.state == CompletionDeliveryState::Delivered
         && delivery.outcome == SessionTurnOutcome::Completed
         && delivery.parent_prompt_seq.is_none()
         && delivery.parent_turn_id.is_none()
