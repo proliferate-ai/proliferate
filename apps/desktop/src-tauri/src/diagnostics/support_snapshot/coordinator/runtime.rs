@@ -4,8 +4,6 @@ use std::pin::Pin;
 use chrono::{DateTime, Timelike, Utc};
 use tokio::time::Instant;
 
-use crate::diagnostics_collector::child_status::NativeChildStatusCapture;
-
 use super::capture::CaptureError;
 
 pub(super) trait CoordinatorRuntime: Send + Sync {
@@ -20,13 +18,6 @@ pub(super) trait CoordinatorRuntime: Send + Sync {
 
     fn capture_error_override(&self) -> Pin<Box<dyn Future<Output = Option<CaptureError>> + Send>> {
         Box::pin(async { None })
-    }
-
-    /// A deterministic downstream child-status response, applied only after the
-    /// real support export invocation has been issued, passed the real permit,
-    /// and been consumed. Production always returns `None`.
-    fn child_status_override(&self) -> Option<NativeChildStatusCapture> {
-        None
     }
 
     fn before_finish_publication(&self) -> Pin<Box<dyn Future<Output = ()> + Send>> {

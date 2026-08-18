@@ -20,7 +20,9 @@ use crate::diagnostics_collector::support_export::{
 use super::super::artifact_store::{SupportArtifactReference, SupportArtifactStore};
 use super::super::schema::enums::SupportSessionOmissionReasonV1;
 use super::super::schema::model::manifest::SupportSessionCollectionManifestV1;
+use super::super::schema::model::health::SupportChildProducerStatusV1;
 use super::super::schema::model::snapshot::SupportSnapshotV3;
+use super::super::schema::validate::validate_timestamp;
 use super::capture::CaptureError;
 use super::control::PreparationInterruption;
 use super::fake_runtime::FakeRuntime;
@@ -154,12 +156,6 @@ async fn exercise_clock_case(case: &ClockCase) {
         .expect("store ready");
     let runtime = Arc::new(FakeRuntime::new());
     runtime.set_utc(parse(case.raw));
-    // The real child-status sampler stamps `+00:00` offset text, which the
-    // support schema's canonical `Z` validator rejects. That is an independent
-    // defect outside REL-09B's write scope, so this proof substitutes a
-    // deterministic downstream child-status response after the real export
-    // invocation has passed the real permit and been consumed.
-    runtime.pin_child_status(case.captured_at);
     let coordinator = test_coordinator(Some(Arc::clone(&store)), Arc::clone(&runtime));
     coordinator.state.lock().await.readiness = ReadinessState::Ready;
     probe::reset();
@@ -278,6 +274,24 @@ async fn exercise_clock_case(case: &ClockCase) {
         ] {
             assert_ne!(value, auto_si.as_str(), "{}", case.name);
         }
+    }
+
+    // 5. The real child-status sampler is on the proven path: no test seam
+    // substitutes its response, so its own stamp must be canonical
+    // fixed-millisecond UTC `Z` text the schema validator accepts.
+    for (component, status) in [
+        ("anyharness", &snapshot.producer_health.anyharness),
+        ("desktop worker", &snapshot.producer_health.desktop_worker),
+    ] {
+        let captured_at = match status {
+            SupportChildProducerStatusV1::Available { captured_at, .. }
+            | SupportChildProducerStatusV1::Omitted { captured_at, .. } => captured_at,
+        };
+        assert_fixed_milliseconds(captured_at, case.name);
+        validate_timestamp(captured_at).unwrap_or_else(|error| {
+            let name = case.name;
+            panic!("{name}: {component} captured_at {captured_at} rejected: {error:?}")
+        });
     }
 
     let terminal = sole_terminal(&coordinator);

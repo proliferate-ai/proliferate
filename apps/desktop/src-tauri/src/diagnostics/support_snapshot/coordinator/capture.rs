@@ -149,10 +149,7 @@ pub(super) async fn capture_native_support_evidence(
     if let Some(error) = capture_interruption(&control, runtime.as_ref(), deadline) {
         return Err(error);
     }
-    // The export invocation above has already passed the real permit and been
-    // consumed by the time every capture task has joined, so a deterministic
-    // downstream child-status response may be substituted here for tests only.
-    let children = runtime.child_status_override().unwrap_or(real_children);
+    let children = real_children;
     let (collector, collector_records) =
         collector_evidence(source_time_to, native_health.clone(), export);
     let producer_health = producer_health(native_health, &children);

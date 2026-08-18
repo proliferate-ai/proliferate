@@ -9,11 +9,6 @@ use chrono::{DateTime, Utc};
 use tokio::sync::watch;
 use tokio::time::{Duration, Instant};
 
-use crate::diagnostics_collector::child_status::{
-    CapturedChildProducerStatus, CapturedWorkerProducerStatus, ChildStatusOmission,
-    NativeChildStatusCapture, PortableChildProducerStatus,
-};
-
 use super::capture::CaptureError;
 use super::runtime::CoordinatorRuntime;
 
@@ -21,7 +16,6 @@ pub(super) struct FakeRuntime {
     clock: Arc<FakeClock>,
     next_id: Mutex<u64>,
     capture_error: Mutex<Option<CaptureError>>,
-    child_status: Mutex<Option<NativeChildStatusCapture>>,
     capture_result: Arc<AsyncGate>,
     finish_publication: Arc<AsyncGate>,
     finish_result: BlockingGate,
@@ -72,7 +66,6 @@ impl FakeRuntime {
             }),
             next_id: Mutex::new(0),
             capture_error: Mutex::new(None),
-            child_status: Mutex::new(None),
             capture_result: Arc::new(AsyncGate::default()),
             finish_publication: Arc::new(AsyncGate::default()),
             finish_result: BlockingGate::default(),
@@ -104,21 +97,6 @@ impl FakeRuntime {
     /// Pins the downstream child-status response to deterministic bounded
     /// values whose `captured_at` is canonical UTC `Z` text. It is applied only
     /// after the real permit was issued and consumed.
-    pub(super) fn pin_child_status(&self, captured_at: &str) {
-        let omitted = CapturedChildProducerStatus {
-            captured_at: captured_at.to_owned(),
-            status: PortableChildProducerStatus::Omitted(
-                ChildStatusOmission::ProducerStatusUnavailable,
-            ),
-        };
-        *self.child_status.lock().expect("fake child status") = Some(NativeChildStatusCapture {
-            anyharness: omitted.clone(),
-            desktop_worker: CapturedWorkerProducerStatus {
-                target_id: None,
-                producer: omitted,
-            },
-        });
-    }
 
     /// Injects a typed capture/issuance result for terminal-mapper and race
     /// tests only. It is never used by the successful begin/finish/stage proof.
@@ -252,12 +230,6 @@ impl CoordinatorRuntime for FakeRuntime {
         })
     }
 
-    fn child_status_override(&self) -> Option<NativeChildStatusCapture> {
-        self.child_status
-            .lock()
-            .expect("fake child status")
-            .clone()
-    }
 
     fn before_finish_publication(&self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         let gate = Arc::clone(&self.finish_publication);
