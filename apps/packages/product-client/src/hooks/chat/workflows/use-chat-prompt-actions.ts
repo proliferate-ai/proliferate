@@ -19,10 +19,8 @@ import { useActiveSessionSurfaceSnapshot } from "#product/hooks/chat/derived/use
 import { useChatAvailabilityState } from "#product/hooks/chat/derived/use-chat-availability-state";
 import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
 import { resolveAvailableLaunchSelection } from "#product/lib/domain/chat/models/launch-selection-defaults";
-import {
-  EMPTY_CHAT_DRAFT,
-  serializeChatDraftToOutgoingPrompt,
-} from "#product/lib/domain/chat/composer/file-mention-draft-model";
+import { EMPTY_CHAT_DRAFT } from "#product/lib/domain/chat/composer/file-mention-draft-model";
+import { serializeChatDraftToOutgoingPrompt } from "#product/lib/domain/chat/composer/outgoing-prompt";
 import {
   createEmptySessionRecord,
   putSessionRecord,

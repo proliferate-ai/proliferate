@@ -10,7 +10,6 @@ import {
   createFileMentionNode,
   createTextDraft,
   isChatDraftEmpty,
-  serializeChatDraftToOutgoingPrompt,
   serializeChatDraftToPrompt,
   type ChatComposerDraft,
 } from "#product/lib/domain/chat/composer/file-mention-draft-model";
@@ -174,17 +173,5 @@ describe("chat file mentions", () => {
   it("treats whitespace-only drafts as empty and mentions as content", () => {
     expect(isChatDraftEmpty(createTextDraft(" \n\t"))).toBe(true);
     expect(isChatDraftEmpty({ nodes: [mention("a")] })).toBe(false);
-  });
-
-  it("resolves context-doc tokens only in the outgoing prompt", () => {
-    const draft = createTextDraft(
-      "Read [01-plan.md](@doc:run-01j8/01-plan.md) and [setup.md](docs/setup.md)",
-    );
-    // The draft's own markdown keeps the token so the editor round-trips it
-    // back into a chip; only the outgoing form resolves it to the on-disk path.
-    expect(serializeChatDraftToPrompt(draft))
-      .toBe("Read [01-plan.md](@doc:run-01j8/01-plan.md) and [setup.md](docs/setup.md)");
-    expect(serializeChatDraftToOutgoingPrompt(draft))
-      .toBe("Read [01-plan.md](.proliferate/context/01-plan.md) and [setup.md](docs/setup.md)");
   });
 });
