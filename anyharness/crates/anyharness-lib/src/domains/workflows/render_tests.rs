@@ -8,7 +8,8 @@ use super::definition::{
     resolve_references, PromptReference, ResolveError, ResolveMode,
 };
 use super::model::{WorkflowNodeType, WorkflowRunDocRecord};
-use super::render::{render_envelope, RenderEnvelopeError, RenderInputs};
+use super::render::{node_session_title, render_envelope, RenderEnvelopeError, RenderInputs};
+use crate::domains::sessions::model::SESSION_TITLE_MAX_CHARS;
 
 const T0: &str = "2026-08-14T00:00:00+00:00";
 
@@ -248,4 +249,36 @@ fn strict_resolve_errors_on_wrong_case_sigils() {
         }
         other => panic!("expected Malformed, got {other:?}"),
     }
+}
+
+/// The chain mark a node session wears is the card's mark: one-based, two
+/// digits. The doc-filename law numbers the same chain from zero, and the two
+/// are allowed to differ — pinned here so a future "consistency" edit has to
+/// argue with a test.
+#[test]
+fn node_session_title_wears_the_one_based_card_mark() {
+    assert_eq!(
+        node_session_title(Some(0), "Draft research questions"),
+        "01 Draft research questions"
+    );
+    assert_eq!(node_session_title(Some(9), "Implement"), "10 Implement");
+    assert_eq!(node_session_title(Some(1), "  Answer  "), "02 Answer");
+}
+
+/// A row with no chain position keeps its bare title: a node session stays
+/// nameable even when the position that would number it is missing.
+#[test]
+fn node_session_title_without_a_chain_position_keeps_the_bare_title() {
+    assert_eq!(node_session_title(None, "Side errand"), "Side errand");
+    assert_eq!(node_session_title(Some(-1), "Side errand"), "Side errand");
+}
+
+/// Node titles have no length limit of their own, session titles do: the law
+/// clips rather than handing the store a title it would refuse.
+#[test]
+fn node_session_title_clips_to_the_session_title_cap() {
+    let title = node_session_title(Some(0), &"x".repeat(400));
+    assert_eq!(title.chars().count(), SESSION_TITLE_MAX_CHARS);
+    assert!(title.starts_with("01 x"));
+    assert!(title.ends_with('\u{2026}'));
 }

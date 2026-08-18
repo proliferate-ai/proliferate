@@ -184,11 +184,6 @@ max_lines = 1190
 reason = "workflows gen-2 transition suite: one test per ADR table row plus staleness and illegal-command proofs ; +76: PR4 adds ForcedUnload-parking and Ruling L redo-from-running proofs ; +55: fix/wf2-run-cancel adds the cancel transition suite ; +32: fix round 1 adds the running-adhoc disposal proof and parameterizes the terminal-command wall over Completed/Failed/Cancelled"
 
 [[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/live/workflows/actor.rs"
-max_lines = 603
-reason = "fix/wf2-run-cancel's Cancel command threads through the actor's transition-apply loop alongside the gen-2 ADR's existing side-effect dispatch; grows the file past the repo-wide 600 cap for the first time (603 on main after #1996's revert landed under #1906's 606-line branch context)"
-
-[[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/sessions/model.rs"
 max_lines = 606
 reason = "live-session shared model: actor messages, hooks, capabilities, event persist; split per guides/domains.md on next growth ; +7: pr11b adds the interaction-requested/resolved hook fields to SessionHooks"

@@ -22,10 +22,45 @@ use std::path::Path;
 
 use super::definition::{resolve_references, PromptReference, ResolveError, ResolveMode};
 use super::model::{RenderedEnvelope, WorkflowNodeType, WorkflowRunDocRecord};
+use crate::domains::sessions::model::SESSION_TITLE_MAX_CHARS;
 use crate::domains::sessions::prompt::render::SYSTEM_INSTRUCTION_WRAPPER;
 
 /// Workspace-relative home of a run's context docs.
 pub const CONTEXT_DIR_RELATIVE: &str = ".proliferate/context";
+
+/// The node-session title law: `NN Title`, NN = the node's chain position,
+/// one-based and two digits. Deliberately the mark the run graph's card
+/// already wears (the client's `nodeIndexLabel`), so a session tab in the
+/// workspace reads straight against the card the user is looking at — that
+/// join is the whole point, and a second numbering for one chain would undo
+/// it.
+///
+/// It is NOT the doc-filename law (`store::doc_filename`), which numbers the
+/// same chain from zero: filenames sort artifacts on disk, this names a step
+/// to a person, and the two have never had to agree.
+///
+/// A row with no chain position (contractually impossible for a defined node,
+/// and an adhoc row inherits its anchor's) keeps the bare title rather than
+/// inventing a number. Clipped to the sessions cap so the title is always
+/// writable — a node title has no length limit of its own.
+pub fn node_session_title(chain_index: Option<i64>, node_title: &str) -> String {
+    let trimmed = node_title.trim();
+    let composed = match chain_index {
+        Some(index) if index >= 0 => format!("{:02} {trimmed}", index + 1),
+        _ => trimmed.to_string(),
+    };
+    if composed.chars().count() <= SESSION_TITLE_MAX_CHARS {
+        return composed;
+    }
+    let mut clipped: String = composed
+        .chars()
+        .take(SESSION_TITLE_MAX_CHARS - 1)
+        .collect::<String>()
+        .trim_end()
+        .to_string();
+    clipped.push('…');
+    clipped
+}
 
 #[derive(Debug, Clone)]
 pub struct RenderInputs<'a> {

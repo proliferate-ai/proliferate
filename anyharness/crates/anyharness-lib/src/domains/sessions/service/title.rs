@@ -1,5 +1,5 @@
 use super::{SessionService, UpdateSessionTitleError};
-use crate::domains::sessions::model::SessionRecord;
+use crate::domains::sessions::model::{SessionRecord, SESSION_TITLE_MAX_CHARS};
 
 impl SessionService {
     pub fn update_session_title(
@@ -11,8 +11,10 @@ impl SessionService {
         if trimmed.is_empty() {
             return Err(UpdateSessionTitleError::EmptyTitle);
         }
-        if trimmed.chars().count() > 160 {
-            return Err(UpdateSessionTitleError::TitleTooLong(160));
+        if trimmed.chars().count() > SESSION_TITLE_MAX_CHARS {
+            return Err(UpdateSessionTitleError::TitleTooLong(
+                SESSION_TITLE_MAX_CHARS,
+            ));
         }
 
         let existing = self
