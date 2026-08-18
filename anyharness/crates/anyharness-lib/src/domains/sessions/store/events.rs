@@ -550,7 +550,14 @@ fn completion_wake_removal_key_from_payload(
         Some(serde_json::Value::Null) | None => None,
         Some(_) => return Ok(None),
     };
-    completion_wake_removal_key_for_identity(session_id, prompt_seq, prompt_id).map(Some)
+    let Some(prompt_id) = prompt_id.filter(|prompt_id| {
+        prompt_id
+            .strip_prefix(crate::domains::sessions::prompt::SUBAGENT_COMPLETION_PROMPT_ID_PREFIX)
+            .is_some_and(|delivery_id| !delivery_id.is_empty())
+    }) else {
+        return Ok(None);
+    };
+    completion_wake_removal_key_for_identity(session_id, prompt_seq, Some(prompt_id)).map(Some)
 }
 
 pub(super) fn completion_wake_removal_key_for_identity(

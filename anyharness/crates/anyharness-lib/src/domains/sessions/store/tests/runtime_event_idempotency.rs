@@ -1,5 +1,6 @@
 use super::*;
 use crate::domains::sessions::model::SessionEventRecord;
+use crate::domains::sessions::prompt::SUBAGENT_COMPLETION_PROMPT_ID_PREFIX;
 use anyharness_contract::v1::{
     PendingPromptRemovalReason, PendingPromptRemovedPayload, SessionEvent,
 };
@@ -10,8 +11,14 @@ fn deleted_prompt_removal_identity_is_durably_unique() {
     seed_workspace(&db);
     let store = SessionStore::new(db.clone());
     store.insert(&session_record()).expect("insert session");
-    let payload =
-        r#"{"type":"pending_prompt_removed","seq":17,"promptId":"wake-17","reason":"deleted"}"#;
+    let prompt_id = format!("{SUBAGENT_COMPLETION_PROMPT_ID_PREFIX}delivery-17");
+    let payload = serde_json::json!({
+        "type": "pending_prompt_removed",
+        "seq": 17,
+        "promptId": prompt_id,
+        "reason": "deleted",
+    })
+    .to_string();
 
     let event = |seq| SessionEventRecord {
         id: 0,
@@ -21,7 +28,7 @@ fn deleted_prompt_removal_identity_is_durably_unique() {
         event_type: "pending_prompt_removed".into(),
         turn_id: None,
         item_id: None,
-        payload_json: payload.into(),
+        payload_json: payload.clone(),
     };
     store
         .append_event(&event(1))
@@ -32,7 +39,7 @@ fn deleted_prompt_removal_identity_is_durably_unique() {
             "session-1",
             SessionEvent::PendingPromptRemoved(PendingPromptRemovedPayload {
                 seq: 17,
-                prompt_id: Some("wake-17".into()),
+                prompt_id: Some(prompt_id),
                 reason: PendingPromptRemovalReason::Deleted,
             }),
             false,

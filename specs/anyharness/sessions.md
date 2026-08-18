@@ -290,6 +290,9 @@ enqueue time, in the same transaction that would have inserted the wake:
   exactly one `pending_prompt_removed` through a durable event key,
   acknowledges the intent only after strict event persistence, and retries
   leased unacknowledged intents after failure, restart, or mobility handoff.
+  That key is reserved for canonical completion-wake prompt ids; ordinary
+  prompt deletions remain unkeyed so reused identities in legacy histories stay
+  importable.
   Failed attempts are deferred so a poisoned parent cannot starve later
   removals. This makes live and replayed queue projections converge. This never
   applies to failed or cancelled turns; those always materialize a wake turn.
