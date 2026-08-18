@@ -22,15 +22,57 @@ const EVIDENCE_STATES = new Set([
 ]);
 const HEADING = /^##\s+(.+?)\s*#*\s*$/gm;
 const HTML_COMMENT = /<!--[\s\S]*?-->/g;
-const REPOSITORY_PATH = /(?:^|[\s`(])(?:\.github\/|apps\/|anyharness\/|cloud\/|fixtures\/|guides\/|install\/|lints\/|scripts\/|server\/|specs\/|AGENTS\.md\b|ARCHITECTURE\.md\b|CLAUDE\.md\b|CONTRIBUTING\.md\b|README\.md\b)/m;
-const NO_DOCS_REASON = /\b(?:none|not[ -]applicable)\s*(?:—|--|-|:)\s*\S.{2,}/i;
+const FENCE = /^\s{0,3}(`{3,}|~{3,})/;
+const NO_IMPACT_REASON = /\b(?:none|not[ -]applicable)\s*(?:—|--|-|:)\s*\S.{2,}/i;
+const NO_IMPACT_STATE = /^\s*(?:[-*+]\s*)?(?:none|not[ -]applicable)\b/i;
+const PLACEHOLDER_SENTINEL = /^\s*(?:[-*+>]\s*)?(?:\[[ xX]\]\s*)?(?:\[?(?:todo|tbd|placeholder)\]?|fill[\s_-]*this[\s_-]*in|n\/a)\b/i;
 
 function normalizedHeading(value) {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+function blankExceptNewlines(value) {
+  return value.replace(/[^\r\n]/g, " ");
+}
+
+function visibleMarkdown(value) {
+  const withoutComments = value.replace(HTML_COMMENT, blankExceptNewlines);
+  let result = "";
+  let offset = 0;
+  let fenceCharacter = "";
+  let fenceLength = 0;
+
+  while (offset < withoutComments.length) {
+    const newline = withoutComments.indexOf("\n", offset);
+    const end = newline === -1 ? withoutComments.length : newline + 1;
+    const line = withoutComments.slice(offset, end);
+    const marker = line.match(FENCE)?.[1] || "";
+
+    if (!fenceCharacter && marker) {
+      fenceCharacter = marker[0];
+      fenceLength = marker.length;
+      result += blankExceptNewlines(line);
+    } else if (
+      fenceCharacter &&
+      marker[0] === fenceCharacter &&
+      marker.length >= fenceLength
+    ) {
+      fenceCharacter = "";
+      fenceLength = 0;
+      result += blankExceptNewlines(line);
+    } else if (fenceCharacter) {
+      result += blankExceptNewlines(line);
+    } else {
+      result += line;
+    }
+    offset = end;
+  }
+
+  return result;
+}
+
 function bodySections(body) {
-  const headings = [...body.matchAll(HEADING)];
+  const headings = [...visibleMarkdown(body).matchAll(HEADING)];
   const sections = new Map();
   for (let index = 0; index < headings.length; index += 1) {
     const match = headings[index];
@@ -45,11 +87,62 @@ function bodySections(body) {
 }
 
 function substantiveSection(value) {
-  const visible = value.replace(HTML_COMMENT, "").trim();
+  const visible = visibleMarkdown(value).trim();
   if (!visible || /^[-*\s]+$/.test(visible)) {
     return false;
   }
-  return !/^(?:todo|tbd|placeholder|fill this in|n\/a)[.!\s-]*$/i.test(visible);
+  return !visible.split(/\r?\n/).some((line) => PLACEHOLDER_SENTINEL.test(line));
+}
+
+function isSafeRepositoryPath(rawValue) {
+  let value = rawValue
+    .trim()
+    .replace(/^[`'"(<\[]+/, "")
+    .replace(/[`'">)\],;:!?]+$/, "")
+    .replace(/\.$/, "");
+  value = value.split("#", 1)[0];
+
+  if (
+    !value ||
+    value.startsWith("/") ||
+    value.startsWith("./") ||
+    value.startsWith("../") ||
+    value.includes("\\") ||
+    value.includes("://") ||
+    value.includes("?") ||
+    value.includes("%")
+  ) {
+    return false;
+  }
+
+  const path = value.endsWith("/") ? value.slice(0, -1) : value;
+  const segments = path.split("/");
+  if (
+    segments.some(
+      (segment) =>
+        !segment ||
+        segment === "." ||
+        segment === ".." ||
+        !/^[A-Za-z0-9._@+-]+$/.test(segment),
+    )
+  ) {
+    return false;
+  }
+
+  return path.includes("/") || /\.[A-Za-z0-9][A-Za-z0-9_-]*$/.test(path);
+}
+
+function hasSafeRepositoryPath(value) {
+  const visible = visibleMarkdown(value);
+  const linkTargets = [...visible.matchAll(/\]\(([^)\s]+)\)/g)].map(
+    (match) => match[1],
+  );
+  const inlineCode = [...visible.matchAll(/`([^`\r\n]+)`/g)].map(
+    (match) => match[1],
+  );
+  return [...linkTargets, ...inlineCode, ...visible.split(/\s+/)].some(
+    isSafeRepositoryPath,
+  );
 }
 
 export function validatePullRequestBody({ body, headSha }) {
@@ -82,15 +175,25 @@ export function validatePullRequestBody({ body, headSha }) {
   }
 
   const docsImpact = sections.get(normalizedHeading("Documentation impact"))?.[0] || "";
-  const visibleDocsImpact = docsImpact.replace(HTML_COMMENT, "").trim();
+  const visibleDocsImpact = visibleMarkdown(docsImpact).trim();
   if (
     substantiveSection(docsImpact) &&
-    !REPOSITORY_PATH.test(visibleDocsImpact) &&
-    !NO_DOCS_REASON.test(visibleDocsImpact)
+    !hasSafeRepositoryPath(visibleDocsImpact) &&
+    !NO_IMPACT_REASON.test(visibleDocsImpact)
   ) {
     errors.push(
       "Documentation impact must name a repository path or use none/not-applicable plus a reason.",
     );
+  }
+
+  const observability = sections.get(normalizedHeading("Observability"))?.[0] || "";
+  const visibleObservability = visibleMarkdown(observability).trim();
+  if (
+    substantiveSection(observability) &&
+    NO_IMPACT_STATE.test(visibleObservability) &&
+    !NO_IMPACT_REASON.test(visibleObservability)
+  ) {
+    errors.push("Observability must use none/not-applicable plus a reason.");
   }
 
   const receipt = sections.get(normalizedHeading("Delivery receipt"))?.[0] || "";

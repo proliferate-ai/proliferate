@@ -203,7 +203,9 @@ enforced_by = "scripts/check_docs.py"
 mode = "lint"
 scope = "local document links derived from the Source router and Cross-plane systems tables in AGENTS.md"
 
-rule = """A canonical AGENTS.md route may not resolve to a document marked
+rule = """The Source router and Cross-plane systems tables in AGENTS.md must
+both exist and contain a local owner route. Every canonical route must resolve
+to at least one landing owner and may not resolve to a document marked
 superseded. A routed target document must explicitly identify itself as target
 and expose its current gaps or implementation status."""
 alternative = """Route to the current owner, or retain the target label and add

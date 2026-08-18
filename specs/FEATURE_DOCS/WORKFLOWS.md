@@ -272,10 +272,10 @@ data. Context documents open through the ordinary workspace file editor at
 
 Rows retain bounded failure and interruption codes; raw provider responses,
 prompts, arguments, document bodies, credentials, and transcript content do
-not belong in telemetry. Named `anyharness.workflow.*` events cover acceptance,
-workspace materialization, node start/completion, transition illegality,
-invariant violation, interruption, and completion. Renderer diagnostics carry
-only operational ids and bounded stage classifications.
+not belong in telemetry. Stable targets in the `anyharness.workflow_*` family
+cover acceptance, workspace materialization, node start/completion, transition
+illegality, invariant violation, interruption, and completion. Renderer
+diagnostics carry only operational ids and bounded stage classifications.
 
 The invariant sweep checks the row laws after transitions in debug builds and
 whenever an actor is reconstructed in every build. Material invariants include
@@ -299,8 +299,9 @@ long-lived running node without its linked session.
 - `live/workflows/lifecycle_tests.rs` drives the real manager, actor, session
   extension, scripted agent, restart fence, compensation, stale notifications,
   retry, undo, cancellation, and resume paths.
-- HTTP tests under `api/workflow_runs_tests.rs` and
-  `api/workflow_runs_contract_tests.rs` cover placement, replay, commands,
+- HTTP tests under `api/workflow_runs_route_tests.rs`,
+  `api/workflow_runs_placement_route_tests.rs`, and
+  `api/workflow_run_command_route_tests.rs` cover placement, replay, commands,
   typed failures, and generated contract shape.
 - ProductClient unit/component tests cover validation, courier id reuse and
   order, builder save gates, transition controls, docs paths, resume, and the

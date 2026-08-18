@@ -11,7 +11,7 @@
 
 ## Observability
 
-<!-- State the observability delta per specs/OBSERVABILITY.md, or "none". -->
+<!-- State the observability delta per specs/OBSERVABILITY.md, or "none" plus a reason. -->
 
 -
 

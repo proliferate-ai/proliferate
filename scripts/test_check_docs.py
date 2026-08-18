@@ -189,6 +189,31 @@ class DocumentationIntegrityTest(unittest.TestCase):
                 [readme],
             )
 
+    def test_directory_router_target_without_readme_resolves_peer_owners(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            owner = root / "specs/feature"
+            owner.mkdir(parents=True)
+            first = owner / "access.md"
+            second = owner / "lifecycle.md"
+            first.write_text("# Access\n", encoding="utf-8")
+            second.write_text("# Lifecycle\n", encoding="utf-8")
+
+            self.assertEqual(
+                check_docs.resolve_router_target(root, "specs/feature/"),
+                [first, second],
+            )
+
+    def test_directory_router_target_without_any_owner_resolves_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / "specs/empty").mkdir(parents=True)
+
+            self.assertEqual(
+                check_docs.resolve_router_target(root, "specs/empty/"),
+                [],
+            )
+
     def test_current_target_and_superseded_authority_classification(self) -> None:
         self.assertEqual(check_docs.document_authority("# Current\n"), "current")
         self.assertEqual(
@@ -213,6 +238,9 @@ class DocumentationIntegrityTest(unittest.TestCase):
             owner = root / "specs/owner.md"
             owner.parent.mkdir(parents=True)
             owner.write_text(owner_text, encoding="utf-8")
+            (root / "specs/system.md").write_text(
+                "# Current system owner\n", encoding="utf-8"
+            )
             (root / "AGENTS.md").write_text(
                 """# Repository
 
@@ -226,6 +254,7 @@ class DocumentationIntegrityTest(unittest.TestCase):
 
 | System | Touching | Read |
 | --- | --- | --- |
+| System | concern | [Owner](specs/system.md) |
 """,
                 encoding="utf-8",
             )
@@ -254,6 +283,76 @@ class DocumentationIntegrityTest(unittest.TestCase):
 
         self.assertEqual([error.rule_id for error in errors], ["PROD-DOCS-10"])
         self.assertIn("does not expose current gaps", errors[0].format())
+
+    def router_shape_findings(self, agents_text: str) -> list[check_docs.Finding]:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            specs = root / "specs"
+            specs.mkdir()
+            (specs / "empty").mkdir()
+            (specs / "owner.md").write_text("# Owner\n", encoding="utf-8")
+            (specs / "system.md").write_text("# System\n", encoding="utf-8")
+            (root / "AGENTS.md").write_text(agents_text, encoding="utf-8")
+            with patch.object(check_docs, "ROOT", root):
+                return check_docs.check_canonical_routes()
+
+    def test_missing_named_router_section_fails_closed(self) -> None:
+        errors = self.router_shape_findings(
+            """# Repository
+
+## Source router
+
+| Source area | Start here |
+| --- | --- |
+| `src/**` | [Owner](specs/owner.md) |
+"""
+        )
+
+        self.assertEqual([error.rule_id for error in errors], ["PROD-DOCS-10"])
+        self.assertIn("Cross-plane systems", errors[0].detail)
+        self.assertIn("missing or has no local owner route", errors[0].detail)
+
+    def test_empty_named_router_table_fails_closed(self) -> None:
+        errors = self.router_shape_findings(
+            """# Repository
+
+## Source router
+
+| Source area | Start here |
+| --- | --- |
+
+## Cross-plane systems
+
+| System | Touching | Read |
+| --- | --- | --- |
+| System | concern | [Owner](specs/system.md) |
+"""
+        )
+
+        self.assertEqual([error.rule_id for error in errors], ["PROD-DOCS-10"])
+        self.assertIn("Source router", errors[0].detail)
+        self.assertIn("missing or has no local owner route", errors[0].detail)
+
+    def test_empty_directory_router_target_fails_closed(self) -> None:
+        errors = self.router_shape_findings(
+            """# Repository
+
+## Source router
+
+| Source area | Start here |
+| --- | --- |
+| `src/**` | [Owner](specs/empty/) |
+
+## Cross-plane systems
+
+| System | Touching | Read |
+| --- | --- | --- |
+| System | concern | [Owner](specs/system.md) |
+"""
+        )
+
+        self.assertEqual([error.rule_id for error in errors], ["PROD-DOCS-10"])
+        self.assertIn("resolves to no landing owner", errors[0].detail)
 
     def entry_page_findings(
         self, overrides: dict[str, str] | None = None

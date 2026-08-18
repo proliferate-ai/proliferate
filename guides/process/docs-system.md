@@ -47,8 +47,10 @@ Two rules above everything:
   - `TESTING.md` / `OBSERVABILITY.md` — the per-PR standards.
     Consider both in every PR; the PR template asks for a Testing and an
     Observability section (state the tier(s) or why none is feasible; state the
-    observability delta or "none"). Review-mode — no body-parsing CI ceremony.
-    Depth lives in `specs/TESTING/`.
+    observability delta or "none" plus a reason). Ready-PR CI checks objective
+    heading, content, evidence-state, and receipt shape; humans judge whether
+    the testing and observability evidence is adequate. Depth lives in
+    `specs/TESTING/`.
   - `GENERATED/` — reproducible checked-in references (DB schema etc.). The README
     names the regenerate command and the owning test. Never hand-edited — if a
     human touches it, it's a lie waiting to happen.

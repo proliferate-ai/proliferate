@@ -19,6 +19,7 @@ const headSha = "0123456789abcdef0123456789abcdef01234567";
 function readyBody({
   evidenceState = "run",
   docsImpact = "- `guides/process/pull-requests.md`",
+  observability = "- none — documentation-only behavior has no runtime telemetry delta.",
   currentHead = headSha,
 } = {}) {
   return `## Summary
@@ -33,7 +34,7 @@ Evidence state: ${evidenceState}
 
 ## Observability
 
-- none — documentation-only behavior has no runtime telemetry delta.
+${observability}
 
 ## Security / Privacy
 
@@ -198,6 +199,20 @@ test("accepts a no-documentation-impact reason", () => {
   assert.deepEqual(validatePullRequestBody({ body, headSha }), []);
 });
 
+test("accepts safe repository-relative documentation paths generically", () => {
+  for (const docsImpact of [
+    "- `SECURITY.md`",
+    "- `THIRD_PARTY_NOTICES.md`",
+    "- `adrs/0016-example.md`",
+    "- `delivery-spec-workflows-gen2-pr7.md`",
+  ]) {
+    assert.deepEqual(
+      validatePullRequestBody({ body: readyBody({ docsImpact }), headSha }),
+      [],
+    );
+  }
+});
+
 test("accepts every enumerated evidence state", () => {
   for (const evidenceState of [
     "pending",
@@ -225,14 +240,33 @@ test("rejects missing and duplicate required headings", () => {
   assert.match(duplicateErrors.join("\n"), /duplicate "## Summary"/);
 });
 
-test("rejects template placeholders in required sections", () => {
-  const body = readyBody().replace(
-    /## Summary[\s\S]*?## Testing \/ Verification/,
-    "## Summary\n\n<!-- Fill this in. -->\n\n-\n\n## Testing / Verification",
-  );
-  const errors = validatePullRequestBody({ body, headSha });
+test("rejects common placeholder sentinels in required sections", () => {
+  for (const placeholder of [
+    "TODO: fill this in after review.",
+    "- TBD — replace with the result.",
+    "fill-this-in: describe the change.",
+  ]) {
+    const body = readyBody().replace(
+      /## Summary[\s\S]*?## Testing \/ Verification/,
+      `## Summary\n\n${placeholder}\n\n## Testing / Verification`,
+    );
+    const errors = validatePullRequestBody({ body, headSha });
+    assert.match(errors.join("\n"), /Summary.*placeholder content/);
+  }
+});
 
-  assert.match(errors.join("\n"), /Summary.*placeholder content/);
+test("ignores H2 headings inside fenced code and HTML comments", () => {
+  const fenced = readyBody().replace(
+    "- Tighten the repository documentation contract.",
+    "- Tighten the repository documentation contract.\n\n```md\n## Summary\n\n- Example only.\n```",
+  );
+  assert.deepEqual(validatePullRequestBody({ body: fenced, headSha }), []);
+
+  const commented = readyBody().replace(
+    "- Tighten the repository documentation contract.",
+    "- Tighten the repository documentation contract.\n\n<!--\n## Summary\n\n- Template example.\n-->",
+  );
+  assert.deepEqual(validatePullRequestBody({ body: commented, headSha }), []);
 });
 
 test("rejects a documentation impact with neither a path nor reason", () => {
@@ -242,6 +276,38 @@ test("rejects a documentation impact with neither a path nor reason", () => {
   });
 
   assert.match(errors.join("\n"), /must name a repository path/);
+});
+
+test("rejects unsafe documentation paths", () => {
+  for (const docsImpact of [
+    "- `../../etc/passwd`",
+    "- `/etc/passwd`",
+    "- `https://example.com/SECURITY.md`",
+  ]) {
+    const errors = validatePullRequestBody({
+      body: readyBody({ docsImpact }),
+      headSha,
+    });
+    assert.match(errors.join("\n"), /must name a repository path/);
+  }
+});
+
+test("requires a reason for a no-impact Observability state", () => {
+  const errors = validatePullRequestBody({
+    body: readyBody({ observability: "- none" }),
+    headSha,
+  });
+
+  assert.match(errors.join("\n"), /Observability.*plus a reason/);
+  assert.deepEqual(
+    validatePullRequestBody({
+      body: readyBody({
+        observability: "- none — documentation-only change.",
+      }),
+      headSha,
+    }),
+    [],
+  );
 });
 
 test("rejects an unrecognized evidence state", () => {
@@ -266,6 +332,13 @@ test("rejects a missing or stale exact-head receipt", () => {
   assert.match(
     validatePullRequestBody({ body: staleHead, headSha }).join("\n"),
     /does not match the PR head/,
+  );
+});
+
+test("rejects a missing event head", () => {
+  assert.match(
+    validatePullRequestBody({ body: readyBody(), headSha: "" }).join("\n"),
+    /Current PR head SHA is required/,
   );
 });
 

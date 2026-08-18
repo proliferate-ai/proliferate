@@ -54,47 +54,19 @@ through an existing layer, not a new field.
 
 ### The deployment layer (target composition)
 
-Current v3 law and fail-closed compatibility are defined by
+The current wire shape, status derivation, compatibility behavior, consumers,
+and local proof are owned by
 [`deployment-capabilities.md`](../../codebase/platforms/product/deployment-capabilities.md).
-The remainder of this section describes the target composition with Sandbox
-access and must not be read as evidence that the current gaps are closed.
+This access target depends on one composition fact only:
+`managedCloud.status` is the deployment gate. A caller enters the subject and
+Sandbox layers only when that status is `ready`; the other states expose no
+managed-Cloud entry point and raise no access error.
 
-`GET /meta` returns a versioned capability contract
-(`SELF_HOST_CAPABILITY_CONTRACT_VERSION = 3`,
-[constants/deployment.py](../../../server/proliferate/constants/deployment.py)).
-The block relevant here:
-
-```ts
-type CapabilityStatus = "disabled" | "operator_configuration_required" | "ready";
-
-githubRepositoryAccess: { status: CapabilityStatus;
-                          provider: "github_app" | null;
-                          displayName: string | null };
-managedCloud:           { status: CapabilityStatus;
-                          repositoryAuthority: "github_app" | null };
-cloudWorkspaces: boolean;   // v1 compatibility projection only
-```
-
-Derivation is pure over operator config (`build_server_capabilities`, no
-I/O, unit-tested against a `Settings` instance): GitHub App config complete
-→ repository access `ready`, partial → `operator_configuration_required`,
-absent → `disabled`; managed cloud is `ready` only when E2B provisioning is
-configured *and* repository access is `ready`, because workspace mutations
-enforce GitHub App authority server-side. `cloudWorkspaces` is `true` iff
-`managedCloud.status == "ready"` — old clients fail closed for free.
-
-Two laws carried over from the absorbed contract:
-
-- **No action that cannot repair the state.** `operator_configuration_
-  required` means only the operator can fix it; clients must not offer the
-  user a reauthorization that would change nothing.
-- **Statuses expose aggregates, never field-level secret presence.** The
-  contract says "the App config is partial", never which secret is missing.
-
-This layer never raises. Clients gate UI on the status — a `disabled`
-deployment simply has no cloud surfaces — so a request that would need the
-capability is never sent. Unknown future capability fields are ignorable by
-contract.
+The target delta is not a new `/meta` contract. It is for every client to
+consume that one derived gate through the shared access model rather than
+maintaining another capability parser or inventing a fourth denial shape. The
+remaining parser and classifier consolidation is recorded in
+[Current gaps](#current-gaps).
 
 ### The subject layer
 
@@ -304,9 +276,9 @@ cloud/sdk/src/client/
 
 ## Proof
 
-- Capability derivation: unit tests over `build_server_capabilities`
-  against `Settings` instances
-  ([test_meta_endpoint.py](../../../server/tests/unit/test_meta_endpoint.py)).
+- The current deployment-capability wire, derivation, compatibility, and local
+  proof are owned by
+  [`deployment-capabilities.md`](../../codebase/platforms/product/deployment-capabilities.md).
 - Gateway auth and proxying:
   [test_cloud_sandbox_gateway_proxy.py](../../../server/tests/unit/test_cloud_sandbox_gateway_proxy.py),
   [test_cloud_sandbox_gateway_service.py](../../../server/tests/unit/test_cloud_sandbox_gateway_service.py).

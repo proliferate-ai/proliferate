@@ -114,10 +114,11 @@ checks only prove that the configured TCP ports accept connections.
 
 ## Constrained Hosts, Frontend Work, And Documentation
 
-Frontend or documentation work does not require a new Rust build when it can
-run against a known-good prebuilt AnyHarness binary. Choose an explicit binary
-owned by the current checkout, a trusted shared build, or a teammate-provided
-artifact; do not copy a machine-specific path into repository instructions.
+Frontend or documentation work does not require a new AnyHarness/runtime Rust
+build when it can run against a known-good prebuilt AnyHarness binary. Choose
+an explicit binary owned by the current checkout, a trusted shared build, or a
+teammate-provided artifact; do not copy a machine-specific path into repository
+instructions.
 
 ```bash
 PROLIFERATE_SHARED_RUNTIME=/absolute/path/to/known-good/anyharness
@@ -132,8 +133,24 @@ SKIP_RUST=1 \
 Prerequisites are a previously built runtime compatible with the checked-out
 AnyHarness API, native Postgres and Redis reachable at the configured
 endpoints, server dependencies installed, and the frontend artifacts required
-by `make run`. `SKIP_RUST=1` affects build targets; the explicit runtime path is
-what makes `run` use the shared binary.
+by `make run`. `SKIP_RUST=1` skips the Makefile's AnyHarness/workspace Cargo
+builds; the explicit runtime path is what makes `run` use the shared binary.
+It does not make the Desktop launch Rust-free: `make run` invokes `tauri dev`,
+which may compile the native shell, especially on its first run in a worktree.
+
+On a constrained machine, treat that Desktop/Tauri launch as a Rust build.
+Before `make run`, check the machine-wide build slot:
+
+```bash
+pgrep -x cargo
+pgrep -x rustc
+```
+
+If either command prints a process, wait; do not start another Tauri/Cargo
+build. Narrow documentation checks are Rust-free. So are frontend package or
+web-only commands that do not invoke `make run`, Tauri, or an SDK-regeneration
+target; for example, `pnpm shared:build` rebuilds ProductClient and design
+packages without Cargo when their generated inputs are already fresh.
 
 Artifact freshness is part of the contract:
 
@@ -149,9 +166,10 @@ Artifact freshness is part of the contract:
 - Documentation-only work needs no profile or runtime at all; use the
   documentation proof below.
 
-This path avoids Docker and Rust work only where the change surface permits
-it. It does not qualify a release artifact or replace the owning package's
-tests.
+This path avoids Docker and the AnyHarness/runtime Rust build. It avoids all
+Rust work only for the docs and narrow package/web-only commands described
+above; a Desktop/Tauri launch still requires the Rust-slot preflight. It does
+not qualify a release artifact or replace the owning package's tests.
 
 ## Windows And WSL2
 

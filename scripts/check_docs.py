@@ -368,10 +368,30 @@ def check_canonical_routes() -> list[Finding]:
         return [Finding("PROD-DOCS-10", "AGENTS.md", "canonical router is missing")]
 
     findings: list[Finding] = []
-    for section_name, line_number, raw_target in router_targets(
-        agents.read_text(encoding="utf-8")
-    ):
-        for target in resolve_router_target(ROOT, raw_target):
+    targets = router_targets(agents.read_text(encoding="utf-8"))
+    for section_name in ROUTER_SECTIONS:
+        if not any(target[0] == section_name for target in targets):
+            findings.append(
+                Finding(
+                    "PROD-DOCS-10",
+                    "AGENTS.md",
+                    f'{section_name!r} section/table is missing or has no local owner route',
+                )
+            )
+
+    for section_name, line_number, raw_target in targets:
+        resolved_targets = resolve_router_target(ROOT, raw_target)
+        if not resolved_targets:
+            findings.append(
+                Finding(
+                    "PROD-DOCS-10",
+                    f"AGENTS.md:{line_number}",
+                    f"canonical route {raw_target!r} resolves to no landing owner",
+                )
+            )
+            continue
+
+        for target in resolved_targets:
             text = target.read_text(encoding="utf-8")
             authority = document_authority(text)
             location = f"AGENTS.md:{line_number} -> {target.relative_to(ROOT)}"
