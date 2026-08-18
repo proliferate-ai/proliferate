@@ -291,6 +291,11 @@ function mergeOlderBefore(older: TranscriptState, current: TranscriptState): Tra
 
 // --- external store ---------------------------------------------------------
 
+// Default structural (displacing) dock inset the fixture boots with: the
+// reserved composer height. Rung 7 (Q6) scenarios drive it to model a composer
+// growth/collapse or a status bar appearing/disappearing.
+export const DEFAULT_STRUCTURAL_INSET_PX = 120;
+
 export interface HostSnapshot {
   transcript: TranscriptState;
   activeSessionId: string;
@@ -300,6 +305,11 @@ export interface HostSnapshot {
   // component's per-cursor de-dup admits the next request.
   olderHistoryCursor: number | null;
   sessionBusy: boolean;
+  // Rung 7 (Q6): the dock inset model split the fixture feeds the transcript.
+  // structural = displacing (composer/status bar, reserved as paddingEnd + the
+  // fake dock's own height); nonDisplacing = manual-only overlay range.
+  structuralInsetPx: number;
+  nonDisplacingInsetPx: number;
 }
 
 export interface ScrollSample {
@@ -317,6 +327,8 @@ let snapshot: HostSnapshot = {
   hasOlderHistory: false,
   olderHistoryCursor: null,
   sessionBusy: false,
+  structuralInsetPx: DEFAULT_STRUCTURAL_INSET_PX,
+  nonDisplacingInsetPx: 0,
 };
 
 const listeners = new Set<() => void>();
@@ -453,6 +465,13 @@ export interface ScrollPhysicsDriver {
   prependOlderHistory(turns?: number): void;
   switchSession(sessionId: string, seedTurns: number): void;
   switchSessionStreaming(sessionId: string, seedTurns: number): void;
+  // Rung 7 (Q6): drive the DISPLACING (structural) dock inset, modelling a
+  // composer growth/collapse or a status bar appearing/disappearing. Also
+  // resizes the fake dock so the transcript's client height changes exactly as
+  // it does in the real app when the composer changes height.
+  setComposerInset(structuralInsetPx: number): void;
+  // Rung 7 (Q6): drive the manual-only overlay (non-displacing) inset.
+  setOverlayInset(nonDisplacingInsetPx: number): void;
   getMetrics(): ViewportMetrics;
   getTopVisibleText(): string | null;
   scrollToBottomInstant(): void;
@@ -490,6 +509,8 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
       hasOlderHistory: false,
       olderHistoryCursor: null,
       sessionBusy: false,
+      structuralInsetPx: DEFAULT_STRUCTURAL_INSET_PX,
+      nonDisplacingInsetPx: 0,
     });
   },
 
@@ -681,6 +702,14 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
   switchSessionStreaming(sessionId: string, seedTurns: number): void {
     this.seedFinalizedConversation(seedTurns, sessionId);
     commit({ ...snapshot, sessionBusy: true });
+  },
+
+  setComposerInset(structuralInsetPx: number): void {
+    commit({ ...snapshot, structuralInsetPx: Math.max(0, structuralInsetPx) });
+  },
+
+  setOverlayInset(nonDisplacingInsetPx: number): void {
+    commit({ ...snapshot, nonDisplacingInsetPx: Math.max(0, nonDisplacingInsetPx) });
   },
 
   getMetrics(): ViewportMetrics {

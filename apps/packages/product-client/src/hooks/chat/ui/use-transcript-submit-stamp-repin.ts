@@ -21,6 +21,13 @@ export interface UseTranscriptSubmitStampRepinOptions {
   setPinned: (pinned: boolean) => void;
   scrollToBottom: () => void;
   beginGlue: () => void;
+  /**
+   * Announce the submit re-pin to the consumed-inset machine (rung 7 / Q6). By
+   * ruling this is a no-op on the consumed range — a submit does NOT consume the
+   * overlay — but making the transition explicit keeps the "submit does not
+   * consume" rule enforced in one place and regression-testable.
+   */
+  onSubmitRepin: () => void;
 }
 
 /**
@@ -55,6 +62,7 @@ export function useTranscriptSubmitStampRepin({
   setPinned,
   scrollToBottom,
   beginGlue,
+  onSubmitRepin,
 }: UseTranscriptSubmitStampRepinOptions): void {
   const lastPromptSubmittedAtRef = useRef(lastPromptSubmittedAtMs);
   const sessionKeyRef = useRef(sessionKey);
@@ -72,9 +80,10 @@ export function useTranscriptSubmitStampRepin({
       lastPromptSubmittedAtMs != null
       && (previous == null || lastPromptSubmittedAtMs > previous)
     ) {
+      onSubmitRepin();
       setPinned(true);
       scrollToBottom();
       beginGlue();
     }
-  }, [beginGlue, lastPromptSubmittedAtMs, scrollToBottom, sessionKey, setPinned]);
+  }, [beginGlue, lastPromptSubmittedAtMs, onSubmitRepin, scrollToBottom, sessionKey, setPinned]);
 }
