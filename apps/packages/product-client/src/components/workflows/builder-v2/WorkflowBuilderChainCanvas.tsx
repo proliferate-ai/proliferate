@@ -1,4 +1,12 @@
-import { useMemo, useState, type PointerEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import type { WorkflowEdgeV2, WorkflowNodeV2 } from "@proliferate/cloud-sdk";
 import {
   layoutWorkflowBuilderGraph,
@@ -68,16 +76,57 @@ export function WorkflowBuilderChainCanvas({
   );
   const nodesById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
   const [dragFrom, setDragFrom] = useState<string | null>(null);
+  const pointerEndCleanupRef = useRef<(() => void) | null>(null);
+
+  const clearPointerEndListener = useCallback(() => {
+    pointerEndCleanupRef.current?.();
+    pointerEndCleanupRef.current = null;
+  }, []);
+
+  const cancelConnection = useCallback(() => {
+    clearPointerEndListener();
+    setDragFrom(null);
+  }, [clearPointerEndListener]);
+
+  useEffect(() => clearPointerEndListener, [clearPointerEndListener]);
 
   const finishConnection = (to: string) => {
-    if (disabled) return;
+    if (disabled) {
+      cancelConnection();
+      return;
+    }
     if (dragFrom === WORKFLOW_INPUT_SENTINEL) onConnectInput(to);
     else if (dragFrom) onConnectNodes(dragFrom, to);
-    setDragFrom(null);
+    cancelConnection();
   };
 
   const startConnection = (from: string) => {
-    if (!disabled) setDragFrom(from);
+    if (!disabled) {
+      clearPointerEndListener();
+      setDragFrom(from);
+    }
+  };
+
+  const startPointerConnection = (
+    from: string,
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => {
+    if (disabled) return;
+    clearPointerEndListener();
+    const ownerWindow = event.currentTarget.ownerDocument.defaultView;
+    if (ownerWindow) {
+      const pointerId = event.pointerId;
+      const onPointerEnd = (ownerEvent: globalThis.PointerEvent) => {
+        if (ownerEvent.pointerId === pointerId) cancelConnection();
+      };
+      ownerWindow.addEventListener("pointerup", onPointerEnd);
+      ownerWindow.addEventListener("pointercancel", onPointerEnd);
+      pointerEndCleanupRef.current = () => {
+        ownerWindow.removeEventListener("pointerup", onPointerEnd);
+        ownerWindow.removeEventListener("pointercancel", onPointerEnd);
+      };
+    }
+    setDragFrom(from);
   };
 
   return (
@@ -87,7 +136,7 @@ export function WorkflowBuilderChainCanvas({
       edges={layout.edges}
       ariaLabel={WORKFLOW_BUILDER_COPY.chainCanvasLabel}
       statusSlot={statusSlot}
-      onCancelInteraction={() => setDragFrom(null)}
+      onCancelInteraction={cancelConnection}
       className={className}
     >
       {layout.edges.map((edge) => (
@@ -132,7 +181,7 @@ export function WorkflowBuilderChainCanvas({
                   finishConnection(placed.key);
                 }}
                 onClick={() => finishConnection(placed.key)}
-                onLostPointerCapture={() => setDragFrom(null)}
+                onLostPointerCapture={cancelConnection}
               />
             ) : null}
             <Button
@@ -182,10 +231,10 @@ export function WorkflowBuilderChainCanvas({
               disabled={disabled}
               onPointerDown={(event) => {
                 event.stopPropagation();
-                startConnection(placed.key);
+                startPointerConnection(placed.key, event);
               }}
               onClick={() => startConnection(placed.key)}
-              onLostPointerCapture={() => setDragFrom(null)}
+              onLostPointerCapture={cancelConnection}
             />
           </div>
         );
@@ -210,8 +259,8 @@ function Port({
   active: boolean;
   available: boolean;
   disabled: boolean;
-  onPointerDown?: (event: PointerEvent<HTMLButtonElement>) => void;
-  onPointerUp?: (event: PointerEvent<HTMLButtonElement>) => void;
+  onPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onPointerUp?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   onClick?: () => void;
   onLostPointerCapture?: () => void;
 }) {
