@@ -67,9 +67,12 @@ It changes only when a plane is added or a seam moves.
   explicit contract (runtime HTTP/SSE API, mailbox messages). Why: sessions
   must run identically in a cloud sandbox, on a personal target, and under the
   desktop app — a policy dependency in the runtime would fork those worlds.
-- **Client ↔ server.** Clients speak the generated SDK contracts only. Why:
-  three clients share one behavior surface; contract drift is caught at
-  generation time instead of at runtime.
+- **Client ↔ server.** Clients use generated SDK contracts by default so
+  three clients share one behavior surface and generation catches drift.
+  Explicitly owned typed raw seams remain for boot, health, upload, telemetry,
+  and deployment-capability access where SDK generation cannot own the
+  lifecycle; the relevant frontend or capability owner document defines each
+  exception.
 - **Desktop ↔ sidecar.** The desktop shell spawns the same AnyHarness binary
   the cloud runs, and talks to it over the same API it would use remotely. Why:
   one runtime code path — desktop is a deployment mode, not a fork.
@@ -81,7 +84,11 @@ It changes only when a plane is added or a seam moves.
   rather than provider SDKs in the runtime. Why: managed credentials, metering
   for billing, and provider swaps must not require touching the runtime.
 
-## Read order for grokking the repo
+## Educational read order for grokking the repo
+
+This sequence builds a mental model; it does not route changes. Start every
+task at [`AGENTS.md`](AGENTS.md) and follow all source-area and cross-plane
+owners selected there.
 
 1. [`specs/server/README.md`](specs/server/README.md) — the control plane and
    the grid ownership model.

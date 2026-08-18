@@ -11,18 +11,21 @@ SDLC loop — that only works if the written system is true.
 
 Two rules above everything:
 
-1. **If it's not current, it's not in this repo.** Future work lives in PRs, issues,
-   and `adrs/`; history lives in git. Anything in the tree is operating truth,
-   updated in the same PR that changes behavior.
+1. **Make authority and status explicit.** Current owner documents describe
+   intended current behavior and are updated with implementation. A document
+   labeled `Status: target` may describe an accepted destination only for an
+   explicitly assigned migration and must enumerate current gaps. Frozen
+   delivery specs govern one exact PR delta; chat is never authority. The full
+   precedence model lives in [`specs/README.md`](../../specs/README.md).
 2. **One router.** Every "touching X → read Y" fact lives in `AGENTS.md` and nowhere
    else. Two routers always diverge, and then nobody can tell which one is true.
 
 ## The map
 
-- **`AGENTS.md`** — the routing table of contents. An agent (or person) lands here
-  cold and knows in 30 seconds which ONE doc to read next. It routes, it never
-  explains — the moment it explains something, that sentence belongs in the target
-  doc. Carries the source router (path globs → doc) and the repository-wide rules.
+- **`AGENTS.md`** — the sole source-path and cross-plane task router plus the
+  repository-wide invariants. An agent (or person) lands here cold, finds every
+  applicable owner, and then reads the detailed contracts there. Area-specific
+  explanation belongs in the target document.
 
 - **`ARCHITECTURE.md`** — how every component fits together and why the seams sit
   where they sit. Deliberately starved (~150 lines): the plane map, ownership
@@ -41,7 +44,7 @@ Two rules above everything:
   - `PRODUCT_SENSE.md` — sparse cross-product judgment primitives: the taste calls
     a competent model would get wrong, each with a good/bad example. Enforced by
     review — legitimately, not as debt.
-  - `TESTING.md` / `OBSERVABILITY.md` — the per-PR standards, ≤150 lines each.
+  - `TESTING.md` / `OBSERVABILITY.md` — the per-PR standards.
     Consider both in every PR; the PR template asks for a Testing and an
     Observability section (state the tier(s) or why none is feasible; state the
     observability delta or "none"). Review-mode — no body-parsing CI ceremony.
@@ -55,14 +58,14 @@ Two rules above everything:
     system spans planes and no code location could host the knowledge. If a
     comment, lint, or test could carry it, it does not get a doc.
 
-- **`adrs/`** — architectural decision records. The specing doc IS the record:
-  every non-trivial feature is specced as an ADR up front (orientation / current
-  context / design options / implementation slices / validation), immutable once
-  approved, and it stays forever as the permanent why. `grep 'Description:' adrs/`
-  is the index — no index file to rot. Multi-PR orchestration lives in the ADR's
-  own Implementation section; there is no separate programs directory. Outside the
-  normal read path: you come here for the why behind a decision, or to execute one.
-  Format contract: [`adrs.md`](adrs.md).
+- **`adrs/`** — architectural decision records. The working ADR may evolve while
+  alignment and its implementation ladder are incomplete; delivery must identify
+  the exact revision in force. After final approval and landing it is immutable
+  permanent decision history. `grep 'Description:' adrs/` is the index — no index
+  file to rot. Multi-PR sequencing lives in the ADR's Implementation section;
+  there is no separate programs directory. Outside the normal read path: you come
+  here for the why behind a decision, or to execute one. Format contract:
+  [`adrs.md`](adrs.md).
 
 - **`guides/`** — the daily stuff that isn't writing code: `local/` (machine
   setup), `debugging/` (incidents, support reports), `deploying/` (THE release

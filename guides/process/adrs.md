@@ -4,15 +4,19 @@ These documents are used for alignment within the team as well as with our
 agents for big changes or features. They are reviewed adversarially by team
 members and then implemented.
 
-The ADR itself is used during implementation — it is the living working
-document while the ladder ships, amended as slices land — and is committed
-into `adrs/` in the **final PR** of the ladder. So `adrs/` only ever contains
-shipped decisions: one file per decision, named `adrs/YYYY-MM-DD-<slug>.md`
-(the decision date), opening with one-line `Description:` and `Date:` headers
+The ADR itself is used during alignment and implementation. It is mutable while
+approval and its delivery ladder are incomplete; every delivery slice must name
+the exact ADR Git/content revision it follows and any explicit errata or
+rulings. The ADR is committed into `adrs/` in the **final PR** of the ladder and
+becomes immutable after final approval and landing. So `adrs/` contains shipped
+decisions: one file per decision, named `adrs/YYYY-MM-DD-<slug>.md` (the
+decision date), opening with one-line `Description:` and `Date:` headers
 (`grep 'Description:' adrs/` is the index; the date sorts it). ADRs are
-EXPLICITLY NOT sources of truth (the code is), but rather sources of
+EXPLICITLY NOT evidence of current behavior (the code is), but sources of
 decisions: approved, built against, then kept forever as the permanent why,
-including the rejected options.
+including the rejected options. The repository-facing custody and erratum
+schema is defined by the delivery contract linked from
+[`guides/process/README.md`](README.md).
 
 ## High level meta process
 

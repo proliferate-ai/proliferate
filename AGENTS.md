@@ -9,8 +9,11 @@ and personal targets; the runtime executes sessions; agent LLM traffic flows
 through the gateway. [`ARCHITECTURE.md`](ARCHITECTURE.md) explains how the
 pieces fit together and why the seams sit where they sit.
 
-This file routes; it never explains. Land here cold, find the ONE doc to read
-next, go. Every "touching X → read Y" fact lives here and nowhere else.
+This file is the sole source-path and cross-plane task router, and it owns the
+repository-wide invariants below. Land here cold, find the most specific owner
+documents for the work, then go. Every "touching X → read Y" fact lives here
+and nowhere else. [`specs/README.md`](specs/README.md) defines the authority and
+lifecycle of the documents it routes to.
 
 ## Orientation
 
@@ -24,30 +27,12 @@ next, go. Every "touching X → read Y" fact lives here and nowhere else.
 
 ## Build and develop
 
-Runtime baseline: Rust stable, Node 22+, pnpm, Python 3.12, and `uv`.
-
-```bash
-cargo build
-cargo run --bin anyharness -- serve
-
-(cd anyharness/sdk && pnpm install && pnpm run generate && pnpm run build)
-(cd server && uv run pytest -q)
-```
-
-Use an isolated profile for full-stack local work, especially across
-worktrees:
-
-```bash
-make setup PROFILE=<name>
-make build
-make run PROFILE=<name>
-make dev-list
-```
-
-Profile state lives under `~/.proliferate-local/dev/profiles/<name>/`; runtime
-state lives under `~/.proliferate-local/runtimes/<name>/`. Read
-[`guides/local/README.md`](guides/local/README.md) before running a feature
-worktree or changing local launch behavior.
+Runtime baseline: Rust stable, Node 22+, pnpm, Python 3.12, and `uv`. Give each
+full-stack worktree its own named profile. Before building, starting services,
+or changing local launch behavior, follow
+[`guides/local/README.md`](guides/local/README.md); it owns the standard and
+constrained-host recipes, service choices, artifact-freshness rules, and
+failure interpretation.
 
 ## Source router
 
@@ -88,11 +73,16 @@ source area you are in.
 | Models | `catalogs/**`, `scripts/agent-catalog/**`, model gateway, probes, LiteLLM | [`specs/FEATURE_DOCS/MODELS.md`](specs/FEATURE_DOCS/MODELS.md) |
 | Workflows | workflow definitions, invocations, runs, workspace placement | [`specs/FEATURE_DOCS/WORKFLOWS.md`](specs/FEATURE_DOCS/WORKFLOWS.md) |
 | Desktop host | web bundle ↔ native shell ↔ sidecar seam | [`specs/FEATURE_DOCS/DESKTOP_HOST.md`](specs/FEATURE_DOCS/DESKTOP_HOST.md) |
+| Security, auth, privacy, or destructive operations | credentials, secrets, authorization, private identifiers, telemetry/log redaction, destructive commands | Start with the most specific feature/owner document, then [`guides/operating/operator-security-posture.md`](guides/operating/operator-security-posture.md) for the cross-cutting operating posture |
 
 ## Repository-wide rules
 
-- If it's not current, it's not in this repo: future work lives in PRs, issues,
-  and `adrs/`; update docs in the same PR that changes behavior.
+- Code, tests, schemas, and configuration establish observed current behavior;
+  current owner documents describe intended current behavior. Explicitly
+  labeled target contracts govern only assigned migrations and must enumerate
+  current gaps. Frozen delivery specs govern one exact PR delta; ADRs become
+  immutable decision history after final approval and landing; chat is never
+  authority. See [`specs/README.md`](specs/README.md).
 - Consider [`specs/TESTING.md`](specs/TESTING.md) and
   [`specs/OBSERVABILITY.md`](specs/OBSERVABILITY.md) in every PR; the PR
   template asks for both sections.
@@ -111,6 +101,9 @@ source area you are in.
   the requested behavior.
 - Do not use destructive Git commands such as `git reset --hard` or
   `git checkout --` unless the user explicitly requests them.
+- Never paste, replay, or preserve an exposed secret. Stop handling the value,
+  notify the responsible human/security owner, rotate or revoke it through an
+  authorized channel, and remove retained copies only within explicit scope.
 - Record unrelated defects as follow-ups instead of expanding the current PR.
 - Describe our design in our own vocabulary. When another product's UI informs
   a treatment, state what the treatment IS — sizes, colors, roles, states —
@@ -121,7 +114,10 @@ source area you are in.
   or an editor target) stay. `python3 scripts/check_design_attribution.py`
   enforces the distinction.
 
-Run `python3 scripts/check_docs.py` after changing repository documentation.
+Run `/opt/homebrew/bin/python3.12 scripts/check_docs.py` after changing
+repository documentation.
 
-Prepare and mark pull requests ready according to
+Hand work between delivery nodes according to
+[`guides/process/delivery-contract.md`](guides/process/delivery-contract.md),
+then prepare and mark pull requests ready according to
 [`guides/process/pull-requests.md`](guides/process/pull-requests.md).
