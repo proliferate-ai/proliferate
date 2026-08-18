@@ -20,15 +20,17 @@ use super::state::{
     PreparationTerminal, ReadinessState,
 };
 use super::terminal::{
-    finish_error_code, interruption_error_code, terminal_for_finish_error,
-    terminal_for_interruption,
+    finish_error_code, interruption_error_code, note_export_permit_noncanonical_window,
+    terminal_for_finish_error, terminal_for_interruption,
 };
+use super::runtime::truncate_to_milliseconds;
 use super::watchdog::spawn_preparation_watchdog;
 use super::SupportSnapshotCoordinator;
 
 const PREPARATION_TIMEOUT: Duration = Duration::from_secs(25);
 const FINISH_TIMEOUT: Duration = Duration::from_secs(10);
-const CAPTURE_WINDOW_MINUTES: i64 = 15;
+/// Exactly 900 seconds: the only duration the strict collector permit accepts.
+const SUPPORT_WINDOW_SECONDS: i64 = 900;
 
 impl SupportSnapshotCoordinator {
     pub(crate) async fn begin_preparation(
@@ -36,11 +38,14 @@ impl SupportSnapshotCoordinator {
         input: BeginSupportSnapshotInput,
     ) -> Result<SupportSnapshotPreparationOutput, String> {
         validate_begin(&input)?;
+        // One raw UTC read owns the capture instant and both window endpoints,
+        // truncated (never rounded) and never reparsed as a second clock.
         let captured = self.runtime.utc_now();
         validate_begin_times(&input, &captured)?;
-        let captured_at = captured.to_rfc3339_opts(SecondsFormat::AutoSi, true);
-        let source_time_from = (captured - chrono::Duration::minutes(CAPTURE_WINDOW_MINUTES))
-            .to_rfc3339_opts(SecondsFormat::AutoSi, true);
+        let captured = truncate_to_milliseconds(captured);
+        let captured_at = captured.to_rfc3339_opts(SecondsFormat::Millis, true);
+        let window_start = captured - chrono::Duration::seconds(SUPPORT_WINDOW_SECONDS);
+        let source_time_from = window_start.to_rfc3339_opts(SecondsFormat::Millis, true);
         let source_time_to = captured_at.clone();
         let deadline = self.runtime.instant_now() + PREPARATION_TIMEOUT;
         let preparation_id = self.runtime.new_id();
@@ -180,7 +185,18 @@ impl SupportSnapshotCoordinator {
                     },
                 })
             }
-            _ => {
+            capture => {
+                // First-wins: keep permit detail off an interrupted terminal.
+                if control.interruption() == PreparationInterruption::Running
+                    && capture
+                        .as_ref()
+                        .err()
+                        .is_some_and(|error| error.is_noncanonical_window())
+                {
+                    if let Some(open) = state.preparation.as_ref() {
+                        note_export_permit_noncanonical_window(&open.operation);
+                    }
+                }
                 let closing = state
                     .transfer_preparation_to_closing(
                         &preparation_id,

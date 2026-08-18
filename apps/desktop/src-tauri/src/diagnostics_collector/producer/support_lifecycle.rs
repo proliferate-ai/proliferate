@@ -96,11 +96,37 @@ impl SupportSnapshotSubmissionFailedClassificationV1 {
     }
 }
 
+/// The fixed operational enum arguments that attribute exactly one permit
+/// failure stage and reason. They are terminal-only, carry no timestamp,
+/// identifier, path, report content, or raw input, and are the complete set.
+const FAILURE_STAGE_ARGUMENT: &str = "failure_stage";
+const FAILURE_REASON_ARGUMENT: &str = "failure_reason";
+const EXPORT_PERMIT_STAGE: &str = "export_permit";
+const NONCANONICAL_WINDOW_REASON: &str = "noncanonical_window";
+
 pub(crate) struct SupportPreparationOperation(LifecycleOperation);
 
 impl SupportPreparationOperation {
     pub(crate) fn operation_id(&self) -> &str {
         self.0.operation_id()
+    }
+
+    /// Records that the strict export permit refused a noncanonical or nonexact
+    /// support window. Only the coordinator's still-running window rejection
+    /// calls this, and it may be called at most once per operation.
+    pub(crate) fn note_export_permit_noncanonical_window(&mut self) {
+        self.0.append_arguments([
+            TypedArgumentV1 {
+                name: FAILURE_STAGE_ARGUMENT.to_string(),
+                privacy: PrivacyClassificationV1::Operational,
+                value: ArgumentValueV1::Enum(EXPORT_PERMIT_STAGE.to_string()),
+            },
+            TypedArgumentV1 {
+                name: FAILURE_REASON_ARGUMENT.to_string(),
+                privacy: PrivacyClassificationV1::Operational,
+                value: ArgumentValueV1::Enum(NONCANONICAL_WINDOW_REASON.to_string()),
+            },
+        ]);
     }
 
     pub(crate) fn succeeded(self) {

@@ -85,6 +85,8 @@ retention, or a product result. Server log routing, Sentry, PostHog,
 and anonymous telemetry are unchanged. The approved boundary and slice registry live in
 [`../adrs/2026-08-10-rust-observability.md`](../adrs/2026-08-10-rust-observability.md).
 
+Support snapshot preparation keeps that one-started-one-terminal shape and never adds an event to describe a failure. When the export permit refuses a preparation because the window is not canonical, and only while the preparation is still running rather than already interrupted, the existing `desktop.support_snapshot.prepare` operation appends exactly two bounded arguments to its terminal record: `failure_stage=export_permit` and `failure_reason=noncanonical_window`. Both are `Operational` enum values from a closed set. Interruption is first-wins, so a cancelled, deadlined, or abandoned preparation carries neither argument even if the permit would also have refused it, and every other failure cause carries neither argument. No timestamp, identifier, path, or window content ever rides these arguments, and the started record never carries them.
+
 ## Instrumenting a new feature
 
 Choose by what actually happened, not by convenience — do not `raise` to flag

@@ -1,3 +1,79 @@
+/// Test-only observation of the real issuance seam. It exists so a coordinator
+/// proof can assert that the real permit accepted and consumed the exact
+/// request window bytes, and so the post-construction request-invariant branch
+/// can be forced through the same production validation function. It cannot
+/// exist in a release build and exposes no raw request constructor.
+#[cfg(test)]
+pub(crate) mod probe {
+    use std::cell::Cell;
+    use std::sync::{Mutex, OnceLock};
+
+    use proliferate_diagnostics_protocol::v1::types::ExportRequestV1;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub(crate) enum IssuanceStage {
+        Issued,
+        Consumed,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub(crate) struct ObservedIssuance {
+        pub(crate) stage: IssuanceStage,
+        pub(crate) source_time_from: String,
+        pub(crate) source_time_to: String,
+    }
+
+    thread_local! {
+        static REQUEST_FAULT: Cell<bool> = const { Cell::new(false) };
+    }
+
+    fn observations() -> &'static Mutex<Vec<ObservedIssuance>> {
+        static OBSERVATIONS: OnceLock<Mutex<Vec<ObservedIssuance>>> = OnceLock::new();
+        OBSERVATIONS.get_or_init(|| Mutex::new(Vec::new()))
+    }
+
+    pub(crate) fn record(stage: IssuanceStage, source_time_from: &str, source_time_to: &str) {
+        if let Ok(mut observations) = observations().lock() {
+            observations.push(ObservedIssuance {
+                stage,
+                source_time_from: source_time_from.to_owned(),
+                source_time_to: source_time_to.to_owned(),
+            });
+        }
+    }
+
+    pub(crate) fn reset() {
+        if let Ok(mut observations) = observations().lock() {
+            observations.clear();
+        }
+    }
+
+    pub(crate) fn observed() -> Vec<ObservedIssuance> {
+        observations()
+            .lock()
+            .map(|observations| observations.clone())
+            .unwrap_or_default()
+    }
+
+    /// Arms a same-thread fault that corrupts the internally constructed
+    /// request after `exact_request` returns, so the production
+    /// `validate_support_request` call decides the outcome.
+    pub(crate) fn arm_request_fault() {
+        REQUEST_FAULT.with(|armed| armed.set(true));
+    }
+
+    pub(crate) fn disarm_request_fault() {
+        REQUEST_FAULT.with(|armed| armed.set(false));
+    }
+
+    pub(crate) fn apply_request_fault(mut request: ExportRequestV1) -> ExportRequestV1 {
+        if REQUEST_FAULT.with(|armed| armed.get()) {
+            request.record_limit -= 1;
+        }
+        request
+    }
+}
+
 use proliferate_diagnostics_protocol::v1::limits::{CURRENT_SCHEMA_VERSION, MAX_EXPORT_RECORDS};
 use proliferate_diagnostics_protocol::v1::types::{
     CollectorAcceptedRecordV1, ComponentV1, ExportManifestV1, ExportPurposeV1, ExportStreamFrameV1,
@@ -127,36 +203,172 @@ fn permit_is_exact_request_preparation_and_deadline_bound() {
     ));
 }
 
+fn issue_cause(
+    preparation_id: &str,
+    from: &str,
+    to: &str,
+    expires_at: Instant,
+) -> SupportExportIssuanceError {
+    SupportExportPermit::issue(
+        preparation_id,
+        from.to_string(),
+        to.to_string(),
+        expires_at,
+    )
+    .err()
+    .expect("issuance is refused")
+}
+
+fn live() -> Instant {
+    Instant::now() + Duration::from_secs(25)
+}
+
+fn expired() -> Instant {
+    Instant::now() - Duration::from_secs(1)
+}
+
 #[test]
-fn issuer_rejects_noncanonical_preparation_and_nonexact_window() {
-    assert!(SupportExportPermit::issue(
+fn issuer_names_the_exact_noncanonical_window_cause_for_every_negative_window() {
+    let cases = [
+        ("missing milliseconds", "2026-08-10T13:45:00Z", "2026-08-10T14:00:00Z"),
+        (
+            "six fractional digits",
+            "2026-08-10T13:45:00.000000Z",
+            "2026-08-10T14:00:00.000000Z",
+        ),
+        (
+            "nine fractional digits",
+            "2026-08-10T13:45:00.000000000Z",
+            "2026-08-10T14:00:00.000000000Z",
+        ),
+        (
+            "non-UTC offset",
+            "2026-08-10T06:45:00.000-07:00",
+            "2026-08-10T07:00:00.000-07:00",
+        ),
+        ("malformed from", "not-a-timestamp", TO),
+        ("malformed to", FROM, "2026-08-10T14:00:00"),
+        ("inverted", TO, FROM),
+        ("short by one millisecond", "2026-08-10T13:45:00.001Z", TO),
+        ("long by one millisecond", "2026-08-10T13:44:59.999Z", TO),
+        ("short by one second", "2026-08-10T13:45:01.000Z", TO),
+        ("long by one second", "2026-08-10T13:44:59.000Z", TO),
+        ("zero duration", FROM, FROM),
+    ];
+    for (name, from, to) in cases {
+        assert_eq!(
+            issue_cause(&uuid::Uuid::new_v4().to_string(), from, to, live()),
+            SupportExportIssuanceError::NoncanonicalWindow,
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn issuer_names_the_exact_identifier_deadline_and_invariant_causes() {
+    for identifier in [
         "not-a-uuid",
+        "",
+        "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA",
+        "  6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+    ] {
+        assert_eq!(
+            issue_cause(identifier, FROM, TO, live()),
+            SupportExportIssuanceError::InvalidPreparationId,
+            "{identifier}"
+        );
+    }
+    assert_eq!(
+        issue_cause(&uuid::Uuid::new_v4().to_string(), FROM, TO, expired()),
+        SupportExportIssuanceError::ExpiredDeadline
+    );
+
+    // The private test-only fault corrupts the internally constructed request
+    // after `exact_request` returns, so the production validation function
+    // decides the outcome. No raw request constructor is exposed.
+    probe::arm_request_fault();
+    let cause = issue_cause(&uuid::Uuid::new_v4().to_string(), FROM, TO, live());
+    probe::disarm_request_fault();
+    assert_eq!(cause, SupportExportIssuanceError::RequestInvariant);
+    assert!(SupportExportPermit::issue(
+        &uuid::Uuid::new_v4().to_string(),
         FROM.to_string(),
         TO.to_string(),
-        Instant::now() + Duration::from_secs(25),
+        live(),
     )
-    .is_err());
-    assert!(SupportExportPermit::issue(
-        &uuid::Uuid::new_v4().to_string(),
-        "2026-08-10T13:44:59.000Z".to_string(),
-        TO.to_string(),
-        Instant::now() + Duration::from_secs(25),
-    )
-    .is_err());
-    assert!(SupportExportPermit::issue(
-        &uuid::Uuid::new_v4().to_string(),
-        "2026-08-10T06:45:00.000-07:00".to_string(),
-        "2026-08-10T07:00:00.000-07:00".to_string(),
-        Instant::now() + Duration::from_secs(25),
-    )
-    .is_err());
-    assert!(SupportExportPermit::issue(
-        &uuid::Uuid::new_v4().to_string(),
-        "2026-08-10T13:45:00Z".to_string(),
-        "2026-08-10T14:00:00Z".to_string(),
-        Instant::now() + Duration::from_secs(25),
-    )
-    .is_err());
+    .is_ok());
+}
+
+#[test]
+fn mixed_invalid_inputs_pin_the_frozen_evaluation_order() {
+    // Identifier beats deadline, window, and invariant.
+    probe::arm_request_fault();
+    assert_eq!(
+        issue_cause("not-a-uuid", "not-a-timestamp", "also-not", expired()),
+        SupportExportIssuanceError::InvalidPreparationId
+    );
+    // Deadline beats window and invariant.
+    assert_eq!(
+        issue_cause(
+            &uuid::Uuid::new_v4().to_string(),
+            "not-a-timestamp",
+            "also-not",
+            expired()
+        ),
+        SupportExportIssuanceError::ExpiredDeadline
+    );
+    // Window beats invariant.
+    assert_eq!(
+        issue_cause(
+            &uuid::Uuid::new_v4().to_string(),
+            "not-a-timestamp",
+            "also-not",
+            live()
+        ),
+        SupportExportIssuanceError::NoncanonicalWindow
+    );
+    // Only the invariant remains.
+    let cause = issue_cause(&uuid::Uuid::new_v4().to_string(), FROM, TO, live());
+    probe::disarm_request_fault();
+    assert_eq!(cause, SupportExportIssuanceError::RequestInvariant);
+}
+
+#[test]
+fn the_coordinator_entrypoint_carries_the_same_typed_cause() {
+    assert_eq!(
+        issue_support_export_for_coordinator(
+            "not-a-uuid",
+            FROM.to_string(),
+            TO.to_string(),
+            live(),
+        )
+        .err(),
+        Some(SupportExportIssuanceError::InvalidPreparationId)
+    );
+    assert_eq!(
+        issue_support_export_for_coordinator(
+            &uuid::Uuid::new_v4().to_string(),
+            "2026-08-10T13:45:00Z".to_string(),
+            "2026-08-10T14:00:00Z".to_string(),
+            live(),
+        )
+        .err(),
+        Some(SupportExportIssuanceError::NoncanonicalWindow)
+    );
+}
+
+#[test]
+fn the_strict_window_validator_still_accepts_only_fixed_millisecond_utc() {
+    assert!(is_exact_support_window(FROM, TO));
+    assert!(is_exact_support_window(
+        "2026-08-10T13:45:00.123Z",
+        "2026-08-10T14:00:00.123Z"
+    ));
+    assert!(!is_exact_support_window("2026-08-10T13:45:00Z", "2026-08-10T14:00:00Z"));
+    assert!(!is_exact_support_window(
+        "2026-08-10T13:45:00.123456Z",
+        "2026-08-10T14:00:00.123456Z"
+    ));
 }
 
 #[test]

@@ -35,6 +35,8 @@ mod submission_matrix_tests;
 mod terminal;
 #[cfg(test)]
 mod test_support;
+#[cfg(test)]
+mod timestamp_tests;
 mod watchdog;
 
 use std::sync::Arc;

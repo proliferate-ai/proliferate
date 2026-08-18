@@ -480,6 +480,12 @@ workflow.
 - Preserve the report evidence, stop assuming retries will repair the payload,
   and fix client validation/classification.
 
+### Preparation fails before any bundle exists
+
+- Read the `desktop.support_snapshot.prepare` terminal record for the run. If it carries `failure_stage=export_permit` and `failure_reason=noncanonical_window`, the export permit refused the window the producer built, so nothing was ever captured, staged, or uploaded and there is no row or object to inspect.
+- Those two arguments only ever appear together, only on the terminal record, and only when the preparation was still running. A terminal without them means either the preparation succeeded or it failed for some other cause, including a cancel, a deadline, or an abandonment that raced ahead of the permit.
+- The window the producer emits is one truncated raw UTC clock read spelled with a fixed three-digit millisecond fraction and a trailing `Z`, with `captured_at` byte-identical to `source_time_to` and `source_time_from` exactly 900 seconds earlier. A noncanonical-window terminal means that invariant broke at the producer. Do not look for a fix in the SDK or the permit: neither normalizes, by design.
+
 ### Completed; no Slack
 
 - Capture succeeded.

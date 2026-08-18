@@ -6,7 +6,7 @@
 //! 100 ms deadline. Unsupported targets return fixed omissions without
 //! inspecting process state or fabricating a producer snapshot.
 
-use chrono::Utc;
+use chrono::{SecondsFormat, Utc};
 use proliferate_diagnostics_client::ProducerStatusSnapshot;
 
 use crate::{commands::cloud_worker::SharedCloudWorkerState, sidecar::SharedSidecar};
@@ -145,7 +145,9 @@ pub(crate) async fn capture_native_child_statuses(
 
 fn captured(status: PortableChildProducerStatus) -> CapturedChildProducerStatus {
     CapturedChildProducerStatus {
-        captured_at: Utc::now().to_rfc3339(),
+        // Canonical fixed-millisecond UTC `Z` text: the support schema
+        // validator rejects a `+00:00` offset spelling.
+        captured_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
         status,
     }
 }

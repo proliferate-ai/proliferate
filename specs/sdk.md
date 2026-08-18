@@ -115,6 +115,7 @@ not move product workflows into either SDK.
   API for non-contract client helpers, reducer state, or streaming helpers.
 - Low-level streaming helpers and transcript reducers stay in
   `@anyharness/sdk`.
+- Support-window timestamp handling in `@anyharness/sdk` accepts only canonical-equivalent UTC spellings and sends canonical `Z` text on the wire, retaining 3, 6, or 9 digit fractions as given. It is not a compensation layer for a caller that emits a non-canonical window: a producer that needs fixed-millisecond output fixes that at the producer, and this normalization stays as it is.
 - Generic React providers, query hooks, mutation hooks, and query keys stay in
   `@anyharness/sdk-react`.
 

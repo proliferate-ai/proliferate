@@ -28,6 +28,21 @@ use validation::SupportExportAccumulator;
 const SUPPORT_EXPORT_BYTES: u64 = 16_777_216;
 const SUPPORT_WINDOW_SECONDS: i64 = 15 * 60;
 
+/// The closed set of reasons the coordinator-only issuance seam can refuse to
+/// mint a support export permit. Crate-private on purpose: no Tauri command,
+/// renderer bridge, SDK type, collector protocol message, or server payload may
+/// carry it. Variants are evaluated in declaration order: a non-canonical
+/// `preparation_id`, a deadline not strictly later than now, a window that is
+/// not exact fixed-millisecond UTC `Z` text exactly 900 seconds wide, then the
+/// internally constructed request failing an exact support-request invariant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SupportExportIssuanceError {
+    InvalidPreparationId,
+    ExpiredDeadline,
+    NoncanonicalWindow,
+    RequestInvariant,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SupportExportError {
     InvalidRequest,
@@ -84,7 +99,7 @@ pub(crate) fn issue_support_export_for_coordinator(
     source_time_from: String,
     source_time_to: String,
     expires_at: Instant,
-) -> Result<SupportExportInvocation, SupportExportError> {
+) -> Result<SupportExportInvocation, SupportExportIssuanceError> {
     let (request, permit) =
         SupportExportPermit::issue(preparation_id, source_time_from, source_time_to, expires_at)?;
     Ok(SupportExportInvocation { request, permit })
@@ -96,16 +111,29 @@ impl SupportExportPermit {
         source_time_from: String,
         source_time_to: String,
         expires_at: Instant,
-    ) -> Result<(SupportExportRequest, Self), SupportExportError> {
-        require_canonical_uuid(preparation_id).map_err(|_| SupportExportError::InvalidRequest)?;
-        if expires_at <= Instant::now()
-            || !is_exact_support_window(&source_time_from, &source_time_to)
-        {
-            return Err(SupportExportError::InvalidRequest);
+    ) -> Result<(SupportExportRequest, Self), SupportExportIssuanceError> {
+        require_canonical_uuid(preparation_id)
+            .map_err(|_| SupportExportIssuanceError::InvalidPreparationId)?;
+        if expires_at <= Instant::now() {
+            return Err(SupportExportIssuanceError::ExpiredDeadline);
+        }
+        if !is_exact_support_window(&source_time_from, &source_time_to) {
+            return Err(SupportExportIssuanceError::NoncanonicalWindow);
         }
         let authorization_id = uuid::Uuid::new_v4().to_string();
         let collector = exact_request(authorization_id.clone(), source_time_from, source_time_to);
-        validate_support_request(&collector, &authorization_id)?;
+        // Test-only corruption of the already-constructed request, so the
+        // production validation call below still decides the outcome.
+        #[cfg(test)]
+        let collector = probe::apply_request_fault(collector);
+        validate_support_request(&collector, &authorization_id)
+            .map_err(|_| SupportExportIssuanceError::RequestInvariant)?;
+        #[cfg(test)]
+        probe::record(
+            probe::IssuanceStage::Issued,
+            collector.filters.source_time_from.as_deref().unwrap_or(""),
+            collector.filters.source_time_to.as_deref().unwrap_or(""),
+        );
         let request = SupportExportRequest {
             collector: collector.clone(),
             preparation_id: preparation_id.to_owned(),
@@ -137,6 +165,22 @@ impl SupportExportPermit {
             .map_err(|_| SupportExportError::InvalidAuthority)?;
         validate_support_request(&request.collector, &self.authorization_id)
             .map_err(|_| SupportExportError::InvalidAuthority)?;
+        #[cfg(test)]
+        probe::record(
+            probe::IssuanceStage::Consumed,
+            request
+                .collector
+                .filters
+                .source_time_from
+                .as_deref()
+                .unwrap_or(""),
+            request
+                .collector
+                .filters
+                .source_time_to
+                .as_deref()
+                .unwrap_or(""),
+        );
         Ok(ConsumedSupportExportPermit {
             _authorization_id: self.authorization_id,
             _preparation_id: self.preparation_id,
@@ -539,6 +583,9 @@ fn require_canonical_uuid(value: &str) -> Result<(), ()> {
 }
 
 mod validation;
+
+#[cfg(test)]
+pub(crate) use tests::probe;
 
 #[cfg(test)]
 #[path = "support_export_tests.rs"]

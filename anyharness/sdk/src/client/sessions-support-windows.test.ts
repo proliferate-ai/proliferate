@@ -6,6 +6,12 @@ import { supportWindowResponseBytes } from "./support-window-response-bytes.js";
 
 const timestampFrom = "2026-08-12T12:00:00.123456789Z";
 const timestampTo = "2026-08-12T12:15:00.123456789Z";
+// Case name, the exact text the desktop producer emits, then the canonical wire text the SDK must send.
+const nativeWindows = [
+  ["whole second", "2026-08-12T11:45:00.000Z", "2026-08-12T12:00:00.000Z", "2026-08-12T11:45:00Z", "2026-08-12T12:00:00Z"],
+  ["millisecond", "2026-08-12T11:45:00.123Z", "2026-08-12T12:00:00.123Z", "2026-08-12T11:45:00.123Z", "2026-08-12T12:00:00.123Z"],
+  ["lowercase z and explicit offset", "2026-08-12T11:45:00.1z", "2026-08-12T12:00:00.100000+00:00", "2026-08-12T11:45:00.100Z", "2026-08-12T12:00:00.100Z"],
+] as const;
 
 describe("SessionsClient support windows", () => {
   it("serializes an exact session query and preserves nested request data", async () => {
@@ -74,23 +80,6 @@ describe("SessionsClient support windows", () => {
     );
   });
 
-  it("accepts UTC suffix variants and sends canonical Z timestamps", async () => {
-    const { client, getBoundedJson } = clientReturning(evidenceWindow([], 1, 16_384));
-
-    await client.listEventsSupportWindow("session-1", {
-      timestampFrom: "2026-08-12T12:00:00.1z",
-      timestampTo: "2026-08-12T12:15:00.100000+00:00",
-      limit: 1,
-      maxResponseBytes: 16_384,
-      request: {},
-    });
-
-    expect(getBoundedJson.mock.calls[0]?.[0]).toContain(
-      "timestamp_from=2026-08-12T12%3A00%3A00.100Z"
-        + "&timestamp_to=2026-08-12T12%3A15%3A00.100Z",
-    );
-  });
-
   it("uses the exact event endpoint, bounds, and seq presentation metadata", async () => {
     const response = evidenceWindow([eventResponse()], 2, 65_536);
     const { client, getBoundedJson } = clientReturning(response);
@@ -133,14 +122,27 @@ describe("SessionsClient support windows", () => {
     expect(result).toEqual(response);
   });
 
+  const spelling = "sends a native %s window as canonical wire text";
+  it.each(nativeWindows)(spelling, async (_name, from, to, wireFrom, wireTo) => {
+    for (const [prefix, response, send] of nativeWindowSenders(from, to)) {
+      const { client, getBoundedJson } = clientReturning(response);
+      await send(client);
+      expect(getBoundedJson).toHaveBeenCalledOnce();
+      const path = getBoundedJson.mock.calls[0]?.[0] as string;
+      const query = new URLSearchParams(path.slice(path.indexOf("?") + 1));
+      const sent = [query.get(`${prefix}_from`) ?? "", query.get(`${prefix}_to`) ?? ""];
+      expect(sent).toEqual([wireFrom, wireTo]);
+      expect(sent.map((value) => Date.parse(value))).toEqual([Date.parse(from), Date.parse(to)]);
+      expect(Date.parse(sent[1] ?? "") - Date.parse(sent[0] ?? "")).toBe(900_000);
+    }
+  });
+
   it.each([
     ["non-UTC offset", { timestampFrom: "2026-08-12T12:00:00+01:00" }],
     ["unknown UTC offset", { timestampFrom: "2026-08-12T12:00:00-00:00" }],
     ["invalid day", { timestampFrom: "2026-02-30T12:00:00Z" }],
     ["inverted", { timestampFrom: timestampTo, timestampTo: timestampFrom }],
-    ["over fifteen minutes", {
-      timestampFrom: "2026-08-12T11:59:59.123456789Z",
-    }],
+    ["over fifteen minutes", { timestampFrom: "2026-08-12T11:59:59.123456789Z" }],
     ["zero limit", { limit: 0 }],
     ["event limit overflow", { limit: 201 }],
     ["response below minimum", { maxResponseBytes: 16_383 }],
@@ -497,6 +499,17 @@ describe("SessionsClient support windows", () => {
     },
   );
 });
+
+/** One send per support endpoint that carries a fifteen-minute window. */
+function nativeWindowSenders(from: string, to: string) {
+  const evidence = { timestampFrom: from, timestampTo: to, limit: 1, maxResponseBytes: 16_384, request: {} };
+  const recent = { mode: "recent", updatedAtFrom: from, updatedAtTo: to, limit: 3, maxResponseBytes: 1_048_576, request: {} } as const;
+  return [
+    ["updated_at", sessionWindow([], 3), (c: SessionsClient) => c.listSupportWindow("workspace-1", recent)],
+    ["timestamp", evidenceWindow([], 1, 16_384), (c: SessionsClient) => c.listEventsSupportWindow("session-1", evidence)],
+    ["timestamp", evidenceWindow([], 1, 16_384), (c: SessionsClient) => c.listRawNotificationsSupportWindow("session-1", evidence)],
+  ] as const;
+}
 
 function clientReturning(response: unknown, bodyBytes = 1_024): {
   client: SessionsClient;

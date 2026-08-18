@@ -22,7 +22,8 @@ use crate::diagnostics_collector::supervisor::{
     DesktopDiagnosticsSupervisorStateV1 as NativeSupervisorState, DiagnosticsCollectorSupervisor,
 };
 use crate::diagnostics_collector::support_export::{
-    issue_support_export_for_coordinator, SupportExportError, ValidatedSupportExport,
+    issue_support_export_for_coordinator, SupportExportError, SupportExportIssuanceError,
+    ValidatedSupportExport,
 };
 use crate::sidecar::SharedSidecar;
 
@@ -85,7 +86,7 @@ pub(super) async fn capture_native_support_evidence(
         source_time_to.to_owned(),
         deadline,
     )
-    .map_err(|_| CaptureError::Invalid)?;
+    .map_err(CaptureError::Issuance)?;
     let export_supervisor = Arc::clone(&supervisor);
     let export_cancellation = control.subscribe();
     let export_work = control.begin_work();
@@ -133,7 +134,7 @@ pub(super) async fn capture_native_support_evidence(
         _ = &mut interruption_signal => Err(interruption_error(&control)),
         result = &mut remaining => Ok(result),
     };
-    let (export, native_health, children, files) = match joined {
+    let (export, native_health, real_children, files) = match joined {
         Ok(result) => result?,
         Err(error) => {
             export_abort.abort();
@@ -148,6 +149,7 @@ pub(super) async fn capture_native_support_evidence(
     if let Some(error) = capture_interruption(&control, runtime.as_ref(), deadline) {
         return Err(error);
     }
+    let children = real_children;
     let (collector, collector_records) =
         collector_evidence(source_time_to, native_health.clone(), export);
     let producer_health = producer_health(native_health, &children);
@@ -209,6 +211,16 @@ pub(super) enum CaptureError {
     Cancelled,
     Deadline,
     Invalid,
+    /// The typed permit-issuance cause, carried without erasure so the
+    /// coordinator can attribute exactly one of them at terminal time.
+    Issuance(SupportExportIssuanceError),
+}
+
+impl CaptureError {
+    /// True only for the one cause eligible for bounded terminal detail.
+    pub(super) fn is_noncanonical_window(self) -> bool {
+        self == Self::Issuance(SupportExportIssuanceError::NoncanonicalWindow)
+    }
 }
 
 fn capture_interruption(

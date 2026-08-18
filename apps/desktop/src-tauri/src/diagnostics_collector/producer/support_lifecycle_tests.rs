@@ -197,6 +197,88 @@ fn submission_start_and_terminal_pin_parent_item_and_sole_attempt_argument() {
 }
 
 #[test]
+fn noncanonical_window_detail_rides_only_the_terminal_as_operational_enums() {
+    let producer = producer();
+    let job_id = uuid::Uuid::new_v4().to_string();
+    let mut operation = producer
+        .begin_support_snapshot_preparation(&job_id)
+        .expect("admitted preparation");
+    let operation_id = operation.operation_id().to_string();
+    operation.note_export_permit_noncanonical_window();
+    operation.failed(SupportSnapshotPreparationFailureClassificationV1::PreparationRejected);
+
+    let state = producer.inner.state.lock().expect("producer state");
+    assert_eq!(state.queued.len(), 2, "one start and one terminal");
+    let start = &state.queued[0].record;
+    let terminal = &state.queued[1].record;
+    assert_eq!(start.operation_id, operation_id);
+    assert_eq!(terminal.operation_id, operation_id);
+    assert_eq!(
+        start.lifecycle.as_ref().map(|lifecycle| lifecycle.phase),
+        Some(LifecyclePhaseV1::Started)
+    );
+    assert!(
+        start.arguments.is_empty(),
+        "the started record never carries permit detail"
+    );
+    assert_eq!(
+        terminal.error_classification.as_deref(),
+        Some("preparation_rejected")
+    );
+    assert_eq!(
+        terminal
+            .lifecycle
+            .as_ref()
+            .and_then(|lifecycle| lifecycle.outcome),
+        Some(TerminalOutcomeV1::Rejected)
+    );
+    assert_eq!(terminal.arguments.len(), 2);
+    assert_eq!(terminal.arguments[0].name, "failure_stage");
+    assert_eq!(
+        terminal.arguments[0].privacy,
+        PrivacyClassificationV1::Operational
+    );
+    assert_eq!(
+        terminal.arguments[0].value,
+        ArgumentValueV1::Enum("export_permit".to_string())
+    );
+    assert_eq!(terminal.arguments[1].name, "failure_reason");
+    assert_eq!(
+        terminal.arguments[1].privacy,
+        PrivacyClassificationV1::Operational
+    );
+    assert_eq!(
+        terminal.arguments[1].value,
+        ArgumentValueV1::Enum("noncanonical_window".to_string())
+    );
+    // The lifecycle name and classification catalog are unchanged.
+    assert_eq!(terminal.name, "desktop.support_snapshot.prepare");
+    assert_eq!(terminal.item_id.as_deref(), Some(job_id.as_str()));
+}
+
+#[test]
+fn preparation_terminals_without_the_note_carry_no_permit_detail() {
+    for classification in [
+        SupportSnapshotPreparationFailureClassificationV1::PreparationTimeout,
+        SupportSnapshotPreparationFailureClassificationV1::PreparationRejected,
+        SupportSnapshotPreparationFailureClassificationV1::ScrubFailed,
+        SupportSnapshotPreparationFailureClassificationV1::ManifestInvalid,
+        SupportSnapshotPreparationFailureClassificationV1::StageFailed,
+        SupportSnapshotPreparationFailureClassificationV1::ArtifactVerificationFailed,
+    ] {
+        let producer = producer();
+        producer
+            .begin_support_snapshot_preparation(&uuid::Uuid::new_v4().to_string())
+            .expect("admitted preparation")
+            .failed(classification);
+        let state = producer.inner.state.lock().expect("producer state");
+        for item in &state.queued {
+            assert!(item.record.arguments.is_empty(), "{classification:?}");
+        }
+    }
+}
+
+#[test]
 fn preparation_classifications_have_fixed_outcome_pairs() {
     let producer = producer();
     let cases = [

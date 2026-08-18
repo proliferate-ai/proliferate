@@ -44,6 +44,22 @@ pub(super) fn failed(
     }
 }
 
+/// Attaches the two bounded operational enum arguments that only a still
+/// running, truly noncanonical export window may carry. They ride the existing
+/// single terminal record of `desktop.support_snapshot.prepare`; the started
+/// record is already emitted and stays argument-free.
+pub(super) fn note_export_permit_noncanonical_window(
+    operation: &Arc<Mutex<Option<SupportPreparationOperation>>>,
+) {
+    let mut guard = match operation.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    if let Some(operation) = guard.as_mut() {
+        operation.note_export_permit_noncanonical_window();
+    }
+}
+
 pub(super) fn interruption_error_code(interruption: PreparationInterruption) -> &'static str {
     match interruption {
         PreparationInterruption::Deadline => "support_snapshot_preparation_timeout",
