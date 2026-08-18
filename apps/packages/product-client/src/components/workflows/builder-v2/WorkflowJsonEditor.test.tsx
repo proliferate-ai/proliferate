@@ -71,6 +71,27 @@ describe("WorkflowJsonEditor", () => {
     expect(onValidityChange).toHaveBeenLastCalledWith(true);
   });
 
+  it("reverts to a graph that has its own issue, and names that issue", () => {
+    // The graph a revert lands on is whatever the author has built so far, and
+    // that is routinely not yet valid. The pane must report the graph's own
+    // issue rather than "Valid" or the author's discarded text.
+    const unresolved = definition("Diagnose", "Write @doc:findings.");
+    const onValidityChange = vi.fn();
+    render(editor(unresolved, true, onValidityChange));
+    const textarea = screen.getByLabelText("Workflow definition JSON") as HTMLTextAreaElement;
+
+    fireEvent.change(textarea, { target: { value: '{"schemaVersion": 2' } });
+    expect(screen.getByText("JSON syntax is invalid.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Revert" }));
+    expect(screen.getByText(
+      "Node “step-1” prompt references unknown doc template “@doc:findings”.",
+    )).toBeTruthy();
+    // Still savable-from-the-graph's point of view: the JSON gate only refuses
+    // text the author typed, and there is none left.
+    expect(onValidityChange).toHaveBeenLastCalledWith(true);
+  });
+
   it("keeps text the author typed that cannot be parsed", () => {
     const onValidityChange = vi.fn();
     const view = render(editor(definition("Diagnose", "Investigate."), true, onValidityChange));

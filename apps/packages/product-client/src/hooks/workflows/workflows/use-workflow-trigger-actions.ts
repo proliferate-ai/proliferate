@@ -20,6 +20,10 @@ import {
 } from "#product/lib/workflows/trigger/trigger-courier";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
+/** Bounded read-back of the launched workspace; see `readBackLaunchedWorkspace`. */
+const WORKSPACE_READ_BACK_ATTEMPTS = 3;
+const WORKSPACE_READ_BACK_DELAY_MS = 150;
+
 /**
  * Stable lowercase class for a non-courier launch error, from its name only,
  * normalized into the renderer diagnostic classification charset (a value
@@ -31,6 +35,34 @@ function classifyUnknownLaunchError(caught: unknown): string {
   }
   const normalized = caught.name.toLowerCase().replace(/[^a-z0-9._:-]/g, "_");
   return /^[a-z0-9]/.test(normalized) ? normalized : "unknown";
+}
+
+/**
+ * The workspace a launch just materialized, read from the runtime.
+ *
+ * This read is the only thing that makes the new workspace selectable: the
+ * collections cache was last filled before it existed, and refreshing that
+ * cache cannot help the navigation about to happen — selection already holds
+ * the snapshot it was rendered with. So one refused read would turn a
+ * successful launch into "Workspace not found", and the read is retried
+ * briefly rather than attempted once. `null` only after every attempt failed.
+ */
+async function readBackLaunchedWorkspace(
+  runtimeUrl: string,
+  workspaceId: string,
+): Promise<Workspace | null> {
+  for (let attempt = 0; attempt < WORKSPACE_READ_BACK_ATTEMPTS; attempt += 1) {
+    const workspace = await getWorkspace({ runtimeUrl }, workspaceId).catch(() => null);
+    if (workspace) {
+      return workspace;
+    }
+    if (attempt < WORKSPACE_READ_BACK_ATTEMPTS - 1) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, WORKSPACE_READ_BACK_DELAY_MS * (attempt + 1));
+      });
+    }
+  }
+  return null;
 }
 
 export interface WorkflowTriggerLaunch {
@@ -116,11 +148,8 @@ export function useWorkflowTriggerActions({
       });
       // The run PUT is what creates this workspace, so nothing else in the
       // client knows it exists: read it back for selection's `knownWorkspace`
-      // hint (without it every launch fails "Workspace not found") and refresh
-      // the collections cache so the sidebar lists it. A failed read-back must
-      // not sink the launch — navigation retries from the id.
-      const workspace = await getWorkspace({ runtimeUrl }, result.workspaceId)
-        .catch(() => null);
+      // hint and refresh the collections cache so the sidebar lists it.
+      const workspace = await readBackLaunchedWorkspace(runtimeUrl, result.workspaceId);
       void invalidateWorkspaceCollectionsForRuntime(runtimeUrl);
       onLaunched?.({ runId: result.runId, workspaceId: result.workspaceId, workspace });
       return result;

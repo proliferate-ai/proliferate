@@ -208,7 +208,10 @@ describe("useWorkflowTriggerActions placed workspace", () => {
     });
   });
 
-  it("still navigates when the workspace read-back fails", async () => {
+  it("retries a refused read-back rather than launching without the record", async () => {
+    // Refreshing the collections cache cannot rescue this: the navigation
+    // about to happen reads the snapshot selection already rendered with. The
+    // record is the only hint, so one refusal must not be the end of it.
     planes.getWorkspace.mockRejectedValueOnce(new Error("offline"));
     const onLaunched = vi.fn();
     const { result } = renderTriggerActions(createQueryClient(), onLaunched);
@@ -217,6 +220,24 @@ describe("useWorkflowTriggerActions placed workspace", () => {
       await result.current.triggerRun(INPUT);
     });
 
+    expect(planes.getWorkspace).toHaveBeenCalledTimes(2);
+    expect(onLaunched).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "workspace-1", workspace: PLACED_WORKSPACE }),
+    );
+  });
+
+  it("still navigates when every read-back attempt fails", async () => {
+    planes.getWorkspace.mockRejectedValue(new Error("offline"));
+    const onLaunched = vi.fn();
+    const { result } = renderTriggerActions(createQueryClient(), onLaunched);
+
+    await act(async () => {
+      await result.current.triggerRun(INPUT);
+    });
+
+    // Bounded: the run exists and the projection is written, so the launch is
+    // reported either way — the surface's own error toast owns what follows.
+    expect(planes.getWorkspace).toHaveBeenCalledTimes(3);
     expect(onLaunched).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: "workspace-1", workspace: null }),
     );

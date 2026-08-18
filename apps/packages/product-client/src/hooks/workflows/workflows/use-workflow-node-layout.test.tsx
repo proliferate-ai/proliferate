@@ -71,6 +71,29 @@ describe("useWorkflowNodeLayout", () => {
     expect(JSON.parse(items.get(LAYOUT_KEY)!)["wf-new"]).toEqual({ "step-1": { x: 12, y: 34 } });
   });
 
+  it("writes the last move out when the author leaves inside the settle window", async () => {
+    const { result, rerender, unmount } = renderHook(
+      ({ id }: { id: string | null }) => useWorkflowNodeLayout(id),
+      { initialProps: { id: "wf-1" as string | null } },
+    );
+
+    act(() => result.current.moveNode("step-1", { x: 90, y: 12 }));
+    // Switching away cancels the trailing timer; the move it owed still has to
+    // reach storage, or leaving is how an author loses their last placement.
+    rerender({ id: "wf-2" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(JSON.parse(items.get(LAYOUT_KEY)!)["wf-1"]).toEqual({ "step-1": { x: 90, y: 12 } });
+
+    act(() => result.current.moveNode("step-9", { x: 5, y: 6 }));
+    unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(JSON.parse(items.get(LAYOUT_KEY)!)["wf-2"]).toEqual({ "step-9": { x: 5, y: 6 } });
+  });
+
   it("starts clean on a different workflow rather than carrying the last one's", async () => {
     items.set(LAYOUT_KEY, JSON.stringify({ "wf-2": { "step-1": { x: 7, y: 7 } } }));
     const { result, rerender } = renderHook(

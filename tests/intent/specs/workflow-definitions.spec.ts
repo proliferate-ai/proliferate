@@ -166,7 +166,13 @@ test("creates, reloads, reopens, edits, and deletes a durable gen-2 definition",
   await expect(page.getByText("The definition contains an unknown field.", { exact: true })).toBeVisible();
   await expect(saveButton).toBeDisabled();
   await page.getByRole("button", { name: "Revert", exact: true }).click();
-  await expect(page.getByText("Valid WorkflowDefinitionV2", { exact: true })).toBeVisible();
+  // Revert drops the author's text for the graph's own document — which is not
+  // itself valid yet (@doc:findings is still undeclared, the negative control
+  // below), so the pane stops naming the unknown field and goes back to
+  // showing exactly what the graph holds.
+  await expect(page.getByText("The definition contains an unknown field.", { exact: true }))
+    .toHaveCount(0);
+  await expect(jsonEditor).toHaveValue(validJson);
   await page.getByRole("radio", { name: "Graph", exact: true }).click();
   await expect(page.getByRole("group", { name: "Workflow chain", exact: true })
     .getByRole("button")

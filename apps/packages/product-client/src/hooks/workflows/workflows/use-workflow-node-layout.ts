@@ -67,15 +67,32 @@ export function useWorkflowNodeLayout(definitionId: string | null): WorkflowNode
     };
   }, [definitionId, dependencies]);
 
+  // What the trailing write owes storage, held outside the timer so a teardown
+  // inside the delay window can still pay it.
+  const unwrittenRef = useRef<{ id: string; placements: WorkflowNodeLayout } | null>(null);
+
   useEffect(() => {
     if (definitionId === null || !trackedRef.current.moved) {
       return;
     }
+    unwrittenRef.current = { id: definitionId, placements };
     const timer = setTimeout(() => {
+      unwrittenRef.current = null;
       void writeWorkflowNodeLayout(definitionId, placements, dependencies);
     }, PERSIST_DELAY_MS);
     return () => clearTimeout(timer);
   }, [definitionId, dependencies, placements]);
+
+  // Leaving this workflow — switching to another, or unmounting the builder —
+  // cancels the timer above. Flush what it owed first, or the last move an
+  // author made before leaving is the one move that never lands.
+  useEffect(() => () => {
+    const unwritten = unwrittenRef.current;
+    if (unwritten) {
+      unwrittenRef.current = null;
+      void writeWorkflowNodeLayout(unwritten.id, unwritten.placements, dependencies);
+    }
+  }, [definitionId, dependencies]);
 
   const moveNode = useCallback((nodeKey: string, placement: WorkflowGraphNodePlacement) => {
     trackedRef.current = { ...trackedRef.current, moved: true };
