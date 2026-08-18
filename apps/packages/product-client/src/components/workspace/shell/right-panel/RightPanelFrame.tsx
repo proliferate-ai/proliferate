@@ -30,6 +30,8 @@ interface RightPanelFrameProps {
   activeTerminalId: string | null;
   activeViewerTarget: ViewerTarget | null;
   entries: readonly RightPanelHeaderEntry[];
+  /** Finish-signal ladder rung 1 — the Background work entry's unread dot. */
+  backgroundWorkDirty: boolean;
   unreadByTerminal: Record<string, boolean>;
   buffersByPath: Record<string, WorkspaceFileBuffer>;
   tabModes: Record<string, FileViewerMode>;
@@ -67,6 +69,7 @@ export function RightPanelFrame({
   activeTerminalId,
   activeViewerTarget,
   entries,
+  backgroundWorkDirty,
   unreadByTerminal,
   buffersByPath,
   tabModes,
@@ -102,6 +105,7 @@ export function RightPanelFrame({
       <RightPanelHeaderTabs
         entries={entries}
         activeEntryKey={activeEntryKey}
+        backgroundWorkDirty={backgroundWorkDirty}
         unreadByTerminal={unreadByTerminal}
         buffersByPath={buffersByPath}
         tabModes={tabModes}

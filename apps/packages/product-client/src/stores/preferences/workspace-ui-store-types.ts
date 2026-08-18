@@ -1,4 +1,5 @@
 import type { SetStateAction } from "react";
+import type { ActivitySubagentWire } from "#product/domain/activity/subagent";
 import type { PersistedWorkspaceUiState } from "#product/lib/domain/preferences/workspace-ui/model";
 import type { PersistedWorkspaceGitStatusSnapshot } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 import type { RightPanelDurableState, RightPanelMaterializedState, RightPanelWorkspaceState } from "#product/lib/domain/workspaces/shell/right-panel-model";
@@ -55,6 +56,31 @@ export interface WorkspaceUiState {
     string,
     PendingBackgroundSubagentSelection | null
   >;
+  /**
+   * Finish-signal ladder rung 1 (`PanelHeaderEntry` dirty dot) — the epoch-ms
+   * timestamp the Background work pane was last actually open for this
+   * session. Session-scoped, never persisted (D6 rules out workspace-level
+   * persistence for this slice): a reload starts every session back at
+   * "never viewed", which only matters for work that already finished
+   * before the reload — live roster state itself survives via the session
+   * GET seed + SSE fold, unaffected by this being ephemeral.
+   */
+  backgroundWorkLastViewedAtBySession: Record<string, number>;
+  /**
+   * Finish-signal ladder rungs 1-2 — the only record of a native subagent's
+   * finish that will ever exist. Subagents leave the roster the instant
+   * they finish, so `useBackgroundWorkFinishSignalTracking` caches the last
+   * snapshot it observed (running, or already flipped if the wire ever
+   * shows that before removal) plus `detectedAtMs`: the epoch-ms moment it
+   * noticed the disappearance, deliberately NOT the subagent's real finish
+   * time (which is unknowable client-side — R5 review round 2). Session-
+   * scoped, never persisted — same ephemeral placement as
+   * `pendingBackgroundSubagentSelectionByWorkspace` above.
+   */
+  backgroundWorkLastFinishedSubagentBySession: Record<
+    string,
+    { subagent: ActivitySubagentWire; detectedAtMs: number } | null
+  >;
   urgentHighlightedChatSessionByWorkspace: Record<string, string | null>;
   workspaceTypes: SidebarWorkspaceVariant[];
   lastViewedAt: Record<string, string>;
@@ -106,6 +132,12 @@ export interface WorkspaceUiState {
   ) => void;
   clearPendingBackgroundSubagentSelectionForWorkspace: (
     workspaceId: string,
+  ) => void;
+  markBackgroundWorkViewedForSession: (sessionId: string, atMs?: number) => void;
+  recordBackgroundWorkFinishedSubagentForSession: (
+    sessionId: string,
+    subagent: ActivitySubagentWire,
+    detectedAtMs: number,
   ) => void;
   setActiveShellTabKeyForWorkspace: (
     workspaceId: string,

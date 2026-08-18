@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
 import { SegmentedControl, type SegmentedControlItem } from "#product/primitives/SegmentedControl";
 import { RosterPanel } from "#product/primitives/patterns/RosterPanel";
+import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
+import { Button } from "#product/primitives/Button";
+import { CircleCheck } from "#product/primitives/icons/status";
 import { AgentsRosterPanel } from "#product/components/workspace/activity/AgentsRosterPanel";
 import { LiveTerminalsRosterPanel } from "#product/components/workspace/activity/LiveTerminalsRosterPanel";
 import { BackgroundTerminalView } from "#product/components/workspace/activity/background-pane/BackgroundTerminalView";
 import { BackgroundSubagentView } from "#product/components/workspace/activity/background-pane/BackgroundSubagentView";
 import { useSessionActivity } from "#product/hooks/activity/derived/use-session-activity";
 import { useBackgroundWorkRowCounts } from "#product/hooks/activity/derived/use-background-work-row";
-import { isProcessRunning } from "#product/domain/activity/process";
+import { useBackgroundWorkFinishSignal } from "#product/hooks/activity/derived/use-background-work-finish-signal";
+import { deriveBackgroundWorkDirty } from "#product/domain/activity/background-work-finish-signal";
+import { isProcessRunning, processStatusLabel } from "#product/domain/activity/process";
+import { subagentDisplayTitle, subagentStatusLabel } from "#product/domain/activity/subagent";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 // Same 15s cadence as the shared `useActivityNowMs`, but reimplemented locally
@@ -49,6 +55,17 @@ export function BackgroundWorkPane({ workspaceId, sessionId, isOpen }: Backgroun
   const [scope, setScope] = useState<BackgroundWorkScope>("running");
   const [selectedSubagentId, setSelectedSubagentId] = useState<string | null>(null);
   const [selectedProcessId, setSelectedProcessId] = useState<string | null>(null);
+  // The finish-signal ladder rung 2 (`NoticeBanner`) baseline — see the note
+  // where this is consumed below for why it must be a snapshot rather than a
+  // live store read. Reset alongside everything else in the per-session
+  // effect just below rather than relying solely on a lazy `useState`
+  // initializer: the real call site remounts this component on session
+  // switch (`RightPanelContent` — `key={activeSessionId}`), but this
+  // component's own reset should not silently depend on every caller doing
+  // that.
+  const [lastViewedAtMsBeforeThisMount, setLastViewedAtMsBeforeThisMount] = useState<number | null>(
+    () => useWorkspaceUiStore.getState().backgroundWorkLastViewedAtBySession[sessionId] ?? null,
+  );
   // Session-scoped by design (handoff — "Out of scope: workspace-level
   // persistence"): switching the active session resets the scope and closes
   // any open detail seam rather than carrying another session's selection.
@@ -56,6 +73,9 @@ export function BackgroundWorkPane({ workspaceId, sessionId, isOpen }: Backgroun
     setScope("running");
     setSelectedSubagentId(null);
     setSelectedProcessId(null);
+    setLastViewedAtMsBeforeThisMount(
+      useWorkspaceUiStore.getState().backgroundWorkLastViewedAtBySession[sessionId] ?? null,
+    );
   }, [sessionId]);
 
   // The roster subscription (`useSessionActivity`) that used to live on
@@ -148,6 +168,47 @@ export function BackgroundWorkPane({ workspaceId, sessionId, isOpen }: Backgroun
     workspaceId,
   ]);
 
+  // Finish-signal ladder rung 2 (`NoticeBanner`, Design Handoff —
+  // "When one finishes: Pane notice"): visible only while this pane is both
+  // mounted AND actually open (not CSS-collapsed via `WorkspaceShellRightRail`),
+  // and only above the roster — the process/subagent detail views below are
+  // a full swap of this component's return, so opening either one already
+  // removes the banner with no extra state ("clears when the user opens
+  // the named detail").
+  //
+  // The "frozen at mount" baseline is deliberate: the mark-viewed effect
+  // right below keeps nudging the LIVE `lastViewedAtMs` forward for as
+  // long as the pane stays mounted (so the tab dot never re-lights for a
+  // finish this pane already showed live) — comparing the banner's own
+  // visibility against that same live value would make it flip false on
+  // the very next render after appearing. Comparing against a value
+  // snapshotted once per session (see `lastViewedAtMsBeforeThisMount`
+  // above), avoids that self-erasing race.
+  //
+  // Minimal dismissal semantics (handoff is silent on the exact rule):
+  // the banner is hidden for as long as either detail view is open (a full
+  // swap of this return), and reappears if the user presses Back to the
+  // roster within the SAME session (same baseline) — nothing tracks "the
+  // user already saw this one" beyond that. It fully, permanently clears
+  // only on tab-away (unmount) or a session switch (fresh baseline).
+  const finishSignalState = useBackgroundWorkFinishSignal(sessionId);
+  const markBackgroundWorkViewedForSession = useWorkspaceUiStore(
+    (state) => state.markBackgroundWorkViewedForSession,
+  );
+  // "Clears on select" (handoff, verbatim) — mounting this pane IS
+  // selecting the Background work tab, independent of whether the whole
+  // right rail happens to be CSS-collapsed at that instant, so this runs
+  // unconditionally rather than gating on `isOpen`.
+  useEffect(() => {
+    markBackgroundWorkViewedForSession(sessionId, finishSignalState.signal?.atMs);
+  }, [sessionId, finishSignalState.signal?.atMs, markBackgroundWorkViewedForSession]);
+
+  const showBackgroundWorkNotice = isOpen && deriveBackgroundWorkDirty({
+    latestFinishAtMs: finishSignalState.signal?.atMs ?? null,
+    lastViewedAtMs: lastViewedAtMsBeforeThisMount,
+  });
+  const noticeSignal = showBackgroundWorkNotice ? finishSignalState.signal : null;
+
   if (selectedProcess) {
     return (
       <BackgroundTerminalView
@@ -207,6 +268,41 @@ export function BackgroundWorkPane({ workspaceId, sessionId, isOpen }: Backgroun
           onChange={setScope}
         />
       </header>
+      {noticeSignal ? (
+        <div className="shrink-0 px-3 pt-2" data-background-work-notice="">
+          {noticeSignal.kind === "process" ? (
+            <NoticeBanner
+              tone="neutral"
+              icon={<CircleCheck className="text-success" />}
+              action={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedProcessId(noticeSignal.process.id)}
+                >
+                  View
+                </Button>
+              }
+            >
+              {noticeSignal.process.command} — {processStatusLabel(noticeSignal.process)}
+            </NoticeBanner>
+          ) : (
+            // No View action here — see the "subagent-View-action"
+            // contradiction in the R5 PR body. `BackgroundWorkPane.test.tsx`
+            // pins the roster-bounce-back behavior for any selected subagent
+            // id the live roster can't resolve, and a finished native
+            // subagent has, by definition, already left that live roster
+            // (locked design, `chips.ts`) — there is no live detail seam
+            // left to open. The banner still names what finished.
+            <NoticeBanner
+              tone="neutral"
+              icon={<CircleCheck className="text-success" />}
+            >
+              {subagentDisplayTitle(noticeSignal.subagent)} — {subagentStatusLabel(noticeSignal.subagent)}
+            </NoticeBanner>
+          )}
+        </div>
+      ) : null}
       <div className="min-h-0 flex-1 overflow-y-auto px-1 py-2">
         <div className="flex flex-col gap-3">
           {scope === "running" ? (

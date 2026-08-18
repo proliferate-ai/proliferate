@@ -19,6 +19,8 @@ type WorkspaceUiRightPanelActions = Pick<
   | "setRightPanelOpenForWorkspace"
   | "setPendingBackgroundSubagentSelectionForWorkspace"
   | "clearPendingBackgroundSubagentSelectionForWorkspace"
+  | "markBackgroundWorkViewedForSession"
+  | "recordBackgroundWorkFinishedSubagentForSession"
 >;
 
 function rightPanelStateUpdate(
@@ -127,6 +129,39 @@ export function createWorkspaceUiRightPanelActions(
           [workspaceId]: null,
         },
       }));
+    },
+
+    // Finish-signal ladder rung 1 — "clears on select": `BackgroundWorkPane`
+    // calls this the instant it is actually open (not merely mounted), and
+    // again on every new finish observed while it stays open, so the dot
+    // never re-lights for work the pane already showed live.
+    markBackgroundWorkViewedForSession: (sessionId, atMs) => {
+      set((state) => ({
+        backgroundWorkLastViewedAtBySession: {
+          ...state.backgroundWorkLastViewedAtBySession,
+          [sessionId]: atMs ?? Date.now(),
+        },
+      }));
+    },
+
+    // Finish-signal ladder rungs 1-2 — the durable record `chips.ts`'s
+    // "subagents leave the roster on finish" comment forward-references:
+    // the only place a finished-and-vanished subagent's last snapshot
+    // survives. Monotonic per session — a later observation never regresses
+    // an already-recorded finish.
+    recordBackgroundWorkFinishedSubagentForSession: (sessionId, subagent, detectedAtMs) => {
+      set((state) => {
+        const current = state.backgroundWorkLastFinishedSubagentBySession[sessionId];
+        if (current && current.detectedAtMs >= detectedAtMs) {
+          return state;
+        }
+        return {
+          backgroundWorkLastFinishedSubagentBySession: {
+            ...state.backgroundWorkLastFinishedSubagentBySession,
+            [sessionId]: { subagent, detectedAtMs },
+          },
+        };
+      });
     },
   };
 }

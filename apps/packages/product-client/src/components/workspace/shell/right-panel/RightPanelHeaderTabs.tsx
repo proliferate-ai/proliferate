@@ -18,6 +18,8 @@ import { useShortcutRevealVisible } from "#product/providers/ShortcutRevealProvi
 interface RightPanelHeaderTabsProps {
   entries: readonly RightPanelHeaderEntry[];
   activeEntryKey: RightPanelHeaderEntryKey;
+  /** Finish-signal ladder rung 1 — the Background work entry's unread dot. */
+  backgroundWorkDirty: boolean;
   unreadByTerminal: Record<string, boolean>;
   buffersByPath: Record<string, WorkspaceFileBuffer>;
   tabModes: Record<string, FileViewerMode>;
@@ -39,6 +41,7 @@ interface RightPanelHeaderTabsProps {
 export function RightPanelHeaderTabs({
   entries,
   activeEntryKey,
+  backgroundWorkDirty,
   unreadByTerminal,
   buffersByPath,
   tabModes,
@@ -92,6 +95,7 @@ export function RightPanelHeaderTabs({
                 <RightPanelHeaderEntryList
                   entries={entries}
                   activeEntryKey={activeEntryKey}
+                  backgroundWorkDirty={backgroundWorkDirty}
                   unreadByTerminal={unreadByTerminal}
                   buffersByPath={buffersByPath}
                   tabModes={tabModes}

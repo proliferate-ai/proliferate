@@ -7,6 +7,7 @@ import { BackgroundWorkTranscriptRow } from "#product/components/workspace/activ
 import { ConnectedPlanHandoffDialog } from "#product/components/workspace/chat/plans/ConnectedPlanHandoffDialog";
 import { usePlanHandoffDialogState } from "#product/hooks/plans/ui/use-plan-handoff-dialog-state";
 import { useBackgroundWorkRowCounts } from "#product/hooks/activity/derived/use-background-work-row";
+import { useBackgroundWorkFinishSignalTracking } from "#product/hooks/activity/lifecycle/use-background-work-finish-signal-tracking";
 import { useOpenBackgroundWorkPane } from "#product/hooks/activity/workflows/use-open-background-work-pane";
 import { useResizeObserverHeight } from "#product/hooks/ui/layout/use-resize-observer-height";
 import { useSessionHistoryHydration } from "#product/hooks/sessions/lifecycle/use-session-history-hydration";
@@ -88,6 +89,14 @@ export function SessionTranscriptPane({
   const [olderHistoryLoadingSessionId, setOlderHistoryLoadingSessionId] = useState<string | null>(null);
   const immediatePaneState = useActiveTranscriptPaneState();
   const workspaceReceiptKey = useWorkspaceCreationReceiptKey();
+  // Finish-signal ladder (rung R5): the only place that observes a native
+  // subagent disappearing from the roster, which is the only way to ever
+  // learn it finished (session-activity-architecture — subagents leave the
+  // roster the instant they finish; processes never leave it, so they need
+  // no equivalent tracking here). Keyed on the IMMEDIATE session id, not the
+  // deferred one below — a finish must never be missed just because the
+  // heavier transcript render is still catching up to a session switch.
+  useBackgroundWorkFinishSignalTracking(immediatePaneState.activeSessionId);
   // STARVATION GUARD: only the session IDENTITY is deferred — never the
   // transcript content. Deferring the whole pane state meant every stream
   // batch restarted the in-flight deferred render; once per-batch renders got
