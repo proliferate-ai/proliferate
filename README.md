@@ -75,32 +75,38 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
       </picture><br />
       <strong>Cursor</strong>
     </td>
+    <td align="center" width="120">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="./assets/readme/grok-dark.svg" />
+        <img src="./assets/readme/grok.svg" width="40" height="40" alt="Grok" />
+      </picture><br />
+      <strong>Grok</strong>
+    </td>
   </tr>
 </table>
 
 ## Features
 
-- 🤖 **[Native harnesses](https://proliferate.com/docs/concepts/agents-and-harnesses)** - Claude Code, Codex, OpenCode, Cursor, and more
-- 🌳 **[Worktree workspaces](https://proliferate.com/docs/concepts/workspaces)** - an isolated branch and working directory for every task
-- 🔍 **[Git & diff review](https://proliferate.com/docs/concepts/review)** - inspect and edit agent changes without leaving the app
-- 🛡️ **[Plan & code review agents](https://proliferate.com/docs/concepts/review)** - reviewer agents check plans, diffs, risks, and branch readiness before you do
-- 🪆 **[Subagents](https://proliferate.com/docs/concepts/subagents)** - agents delegate investigation, implementation, and review to other agents
-- 🧩 **[Plugins](https://proliferate.com/docs/concepts/plugins)** - MCPs, skills, Computer Use, Browser Use, and custom tools, configured once and shared by every agent
-- ⏰ **[Automations](https://proliferate.com/docs/concepts/automations)** - run any agent on any schedule
-- 🖼️ **[Artifacts](https://proliferate.com/docs/concepts/artifacts)** - docs, UI, demos, and components rendered inline as agents produce them
+- 🤖 **[Native harnesses](https://proliferate.com/docs/product/agents)** - Claude Code, Codex, OpenCode, Cursor, Grok, and more
+- 🌳 **[Worktree workspaces](https://proliferate.com/docs/product/workspaces)** - an isolated branch and working directory for every task
+- 🔍 **[Git & diff review](https://proliferate.com/docs/product/workspaces/review-and-publish)** - inspect and edit agent changes without leaving the app
+- 🛡️ **[Plan & code review agents](https://proliferate.com/docs/product/workspaces/review-and-publish)** - reviewer agents check plans, diffs, risks, and branch readiness before you do
+- 🪆 **[Parallel agents & subagents](https://proliferate.com/docs/product/workspaces/parallel-agents)** - run agents side by side, or let them delegate scoped work to other agents
+- 🧩 **[Integrations](https://proliferate.com/docs/product/integrations)** - MCPs, skills, Computer Use, Browser Use, and custom tools, configured once and shared by every agent
+- ⏰ **[Workflows](https://proliferate.com/docs/product/workflows)** - recurring and event-driven agent runs: nightly review passes, triage on alerts, dependency bumps
+- 🖼️ **[Artifacts](https://proliferate.com/docs/product/learn/cowork-and-artifacts)** - docs, UI, demos, and components rendered inline as agents produce them
 
 ## Open Source
 
-Proliferate is AGPL-3.0. The desktop and web apps are open today.
-Self-hosting the full cloud control plane is in beta — see
-[Self-hosting](#self-hosting) below.
+Proliferate is AGPL-3.0 — the whole stack: desktop client, web app, and cloud
+control plane. See [Self-hosting](#self-hosting) below.
 
 ## Getting Started
 
 ### Quick Start
 
 Download Proliferate from [proliferate.com](https://proliferate.com) or follow
-the [installation guide](https://proliferate.com/docs/installation).
+the [quickstart](https://proliferate.com/docs/product/quickstart).
 
 <details>
 <summary>Run from source</summary>
@@ -148,13 +154,13 @@ generated Tauri config, and app labels.
 </details>
 
 <details id="self-hosting">
-<summary>Self-host Proliferate Cloud (beta)</summary>
+<summary>Self-host Proliferate Cloud</summary>
 
 ### Self-hosting
 
-Self-hosting the full Proliferate Cloud control plane is in **beta**. The
-deployment path works today via Docker Compose, with polished end-to-end docs
-on the way.
+The full Proliferate Cloud control plane is self-hostable. Start with the
+[deployment docs](https://proliferate.com/docs/deployment) — Docker, AWS, GCP,
+Azure, Kubernetes, and air-gapped operation.
 
 - **Docker Compose:** [self-hosted-deploy.md](./guides/deploying/self-hosted-deploy.md) —
   Caddy + Postgres + API, with bootstrap and update scripts
@@ -163,18 +169,15 @@ on the way.
 - **Configuration:** [`server/deploy/.env.production.example`](./server/deploy/.env.production.example)
   documents every required and optional setting
 
-Point the desktop app at your control plane by setting `apiBaseUrl` in
-`~/.proliferate/config.json`. Expect rough edges — [open an issue](https://github.com/proliferate-ai/proliferate/issues/new/choose) or ask in
+Point the desktop app at your control plane by following
+[configure desktop](https://proliferate.com/docs/deployment/configure-desktop).
+[Open an issue](https://github.com/proliferate-ai/proliferate/issues/new/choose) or ask in
 [Discord](https://discord.gg/2RVNNzEZnj) if you hit problems, and see
 [SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
 
 </details>
 
-## Proliferate Cloud (Beta)
-
-> Proliferate Cloud is in beta and rolling out in waves - request access at
-> [proliferate.com](https://proliferate.com). Everything local above is open
-> today.
+## Proliferate Cloud
 
 - ☁️ **Cloud sandboxes** - isolated cloud environments that keep working after you close your laptop
 - 🔁 **Workspace mobility** - move a running workspace between your machine and the cloud, mid-task, with changes and history intact
@@ -186,10 +189,10 @@ Point the desktop app at your control plane by setting `apiBaseUrl` in
 - 🔐 **Credential gateway** - your keys and subscriptions never touch the sandbox; sandboxes only get short-lived tokens
 - 🏢 **Organizations** - team seats, shared settings, cloud limits, and governance controls
 - 📱 **Mobile** - coming soon: dispatch work, approve actions, and follow runs from your phone
-- 🏗️ **Self-hosted Proliferate Cloud** - beta: run the full cloud control plane yourself ([docs](#self-hosting))
+- 🏗️ **Self-hosted Proliferate Cloud** - run the full cloud control plane yourself ([docs](#self-hosting))
 
-Proliferate Cloud is open source (AGPL-3.0) and self-hostable today in beta; the
-self-host experience will be polished as Cloud moves toward GA.
+Proliferate Cloud is open source (AGPL-3.0) and self-hostable — see
+[Self-hosting](#self-hosting).
 
 ## Community
 
