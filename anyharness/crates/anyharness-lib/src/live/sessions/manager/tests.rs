@@ -21,8 +21,8 @@ use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::{
     LaunchEnv, SessionHooks, SessionLaunch, SessionStartupStrategy, SystemPromptAppends,
 };
+use crate::live::sessions::runtime_events::into_session_event;
 use crate::persistence::Db;
-
 mod startup_ownership;
 
 fn resolved_agent(kind: AgentKind) -> ResolvedAgent {
@@ -522,7 +522,7 @@ async fn runtime_event_injection_waits_for_stale_finalizer_then_uses_replacement
             panic!("expected replacement runtime event command");
         };
         let envelope = replacement_store
-            .append_event_with_next_seq("session-1", event.into_session_event(), false)
+            .append_event_with_next_seq("session-1", into_session_event(event), false)
             .expect("replacement persists runtime event");
         let _ = respond_to.send(Ok(envelope));
     });

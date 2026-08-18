@@ -6,6 +6,7 @@ use crate::live::sessions::driver::inbound::InboundDoor;
 use crate::live::sessions::model::{
     PermissionAdvice, PermissionAdvisor, PermissionQuestionView, SessionObserverContext,
 };
+use crate::live::sessions::runtime_events::into_session_event;
 
 struct RecordingParkAdvisor {
     calls: Arc<AtomicUsize>,
@@ -406,14 +407,13 @@ async fn finalize_exit_fences_inbound_writers_before_sequence_handoff() {
     let pin = store
         .append_event_with_next_seq(
             "session-1",
-            RuntimeInjectedSessionEvent::WorkspacePinIntent {
+            into_session_event(RuntimeInjectedSessionEvent::WorkspacePinIntent {
                 request_id: "pin-request-1".to_string(),
                 runtime_id: "runtime-1".to_string(),
                 source_session_id: "session-1".to_string(),
                 workspace_id: "workspace-1".to_string(),
                 pinned: true,
-            }
-            .into_session_event(),
+            }),
             false,
         )
         .expect("append offline pin intent");
