@@ -9,8 +9,8 @@
 
 use rusqlite::{params, Connection, Row};
 
-use super::model::{WorkflowInterruptionCode, WorkflowLegStatus, WorkflowRunNodeSessionRecord};
-use super::transition::Transition;
+use super::super::model::{WorkflowInterruptionCode, WorkflowLegStatus, WorkflowRunNodeSessionRecord};
+use super::super::transition::Transition;
 
 /// The fan-in ledger slice for one run's nodes, ordered by (node, leg).
 pub(super) fn load_legs_tx(

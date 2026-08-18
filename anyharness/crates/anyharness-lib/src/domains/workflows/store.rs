@@ -5,6 +5,10 @@
 //! side effect the returned `ResolvedSideEffect` names (persist-before-act).
 //! Reads for the API come from these rows, never from live actors.
 
+// Fan-in ledger CRUD lives in a store child so its SQL stays inside the
+// store seam (AH-STORE-3).
+mod node_sessions;
+
 use rusqlite::{params, Connection, OptionalExtension};
 use uuid::Uuid;
 
@@ -14,7 +18,6 @@ use super::model::{
     WorkflowNodeType, WorkflowRunDocRecord, WorkflowRunNodeRecord, WorkflowRunRecord,
     WorkflowRunStatus,
 };
-use super::node_sessions;
 use super::projection::{project, RunProjection};
 use super::store_rows::{map_doc, map_node, map_run};
 use super::transition::{

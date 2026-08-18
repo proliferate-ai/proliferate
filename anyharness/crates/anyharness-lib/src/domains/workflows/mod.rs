@@ -12,7 +12,6 @@ pub mod fanin;
 pub mod invariants;
 pub mod materialize;
 pub mod model;
-pub mod node_sessions;
 pub mod policy;
 pub mod projection;
 pub mod render;
