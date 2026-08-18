@@ -92,6 +92,14 @@ impl WorkspaceStore {
     /// The unexpired checkpoint captured at a `(session_id, turn_id)` boundary,
     /// if any — the fork path's lookup. Newest first, so a re-captured boundary
     /// resolves to the live one.
+    ///
+    /// Boundary-key discipline (ADR H owner ruling): the key is the PAIR
+    /// `(session_id, turn_id)` — turn ids are not unique across a fork lineage,
+    /// so `session_id` is the required scoping. `prompt_id` is dispatch
+    /// provenance only and is never a join key here. The match is EXACT equality:
+    /// a boundary that is not turn-opening has NO checkpoint by construction, and
+    /// callers must surface that absence as a no-checkpoint state — never fall
+    /// back to a nearest-turn match.
     pub fn find_unexpired_checkpoint_by_boundary(
         &self,
         session_id: &str,

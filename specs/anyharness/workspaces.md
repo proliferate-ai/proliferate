@@ -415,6 +415,16 @@ its existing archive-refs deletion. Fork rows reference the boundary checkpoint
 via `fork_operations.checkpoint_id`, looked up (never captured) at the fork's
 `(parent_session_id, anchor_turn_id)` boundary.
 
+The lookup key is the pair `(session_id, turn_id)` — turn ids are not unique
+across a fork lineage, so `session_id` is the required scoping — and `prompt_id`
+is dispatch provenance only, never a join key. A NULL `fork_operations.checkpoint_id`
+means no checkpoint sat at that boundary and MUST be disclosed by consumers as a
+no-checkpoint state, never treated silently (no such consumers exist in this rung;
+the rule binds the later revert/modal PRs). In the primary turn-start mode the
+fork path is lookup-only, so the Q-H1 abort-vs-degrade capture-failure choice is
+moot there; the `TURN_START_CAPTURE_FAILURE_POLICY` policy point stays live for
+the `fork_boundary` fallback cadence, which is the path that can capture and fail.
+
 ## Important Invariants
 
 - Local and worktree workspaces are different durable kinds.

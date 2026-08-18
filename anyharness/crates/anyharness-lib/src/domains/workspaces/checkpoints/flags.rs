@@ -28,5 +28,8 @@ pub enum CaptureFailurePolicy {
 }
 
 /// The selected turn-start capture-failure policy. Working lean is abort
-/// cleanly (Q-H1); flip this one constant when the ruling settles.
+/// cleanly (Q-H1); flip this one constant when the ruling settles. In the
+/// primary turn-start mode the fork path is lookup-only (it never captures), so
+/// Q-H1's abort-vs-degrade choice is moot there; this const stays live for the
+/// fork_boundary fallback cadence, which is the path that can capture and fail.
 pub const TURN_START_CAPTURE_FAILURE_POLICY: CaptureFailurePolicy = CaptureFailurePolicy::Abort;

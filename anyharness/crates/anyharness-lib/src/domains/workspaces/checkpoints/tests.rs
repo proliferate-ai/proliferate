@@ -652,9 +652,20 @@ async fn the_boundary_lookup_finds_the_checkpoint_or_nothing() {
         Some("cp-boundary".to_string()),
         "the boundary lookup finds the checkpoint"
     );
+    // Exact-equality discipline: a boundary with no checkpoint answers None —
+    // never a nearest-turn match. A non-turn-opening boundary has no checkpoint
+    // by construction, and the lookup must not degrade to the closest turn.
     assert_eq!(
         service.find_checkpoint_id_for_boundary("sess", "turn-missing"),
         None,
-        "no checkpoint at the boundary returns None"
+        "a boundary with no checkpoint answers None — never a nearest-turn match"
+    );
+    // Session scoping: turn ids are not unique across a fork lineage, so the SAME
+    // turn key under a DIFFERENT session_id must NOT resolve the checkpoint —
+    // `session_id` is the disambiguator, not `turn_id` alone.
+    assert_eq!(
+        service.find_checkpoint_id_for_boundary("other-sess", "turn-cp-boundary"),
+        None,
+        "the same turn key under a different session_id resolves to nothing"
     );
 }

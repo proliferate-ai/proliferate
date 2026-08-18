@@ -11,6 +11,20 @@
 -- FIRST, then the three refs are deleted — so an unexpired row never has its
 -- refs reaped out from under it.
 --
+-- BOUNDARY-KEY DISCIPLINE (ADR H owner ruling, BINDING):
+--   * The checkpoint LOOKUP KEY is the pair `(session_id, turn_id)`. A turn id is
+--     NOT unique across a fork lineage (a child inherits the parent's turn ids),
+--     so `session_id` is the scoping that disambiguates them; a lookup MUST carry
+--     both halves, never `turn_id` alone.
+--   * `prompt_id` is dispatch provenance ONLY. It belongs to the pending-prompts
+--     vocabulary, not the boundary address, and must NEVER be used as a join /
+--     lookup key.
+--   * A `turn_start` checkpoint represents the boundary IMMEDIATELY BEFORE that
+--     turn's first committed user message (the pre-turn workspace state).
+--   * `fork_boundary` origin exists ONLY for the Q-H4 metrics-driven fallback
+--     cadence (not the primary turn-start path). `safety` rows carry NULL
+--     boundary columns (session_id / turn_id / prompt_id).
+--
 -- Columns: origin is the capture cadence that produced the row. session_id /
 -- turn_id / prompt_id are the turn-start boundary keys (turn_id is backfilled
 -- once the actor reports Started). fork_operation_id / revert_operation_id link a
