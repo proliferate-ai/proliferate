@@ -168,11 +168,6 @@ export function ProductSidebarWorkspaceRow({
       className={`${hasSubtitle ? "h-[40px]" : "h-[30px]"} pl-2 pr-1 py-1 text-sidebar-row focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
-      {hoverAction ? (
-        <div className="absolute right-0 top-0 z-10 mr-0.5 flex h-full items-center justify-center pr-0.5 opacity-0 transition-opacity duration-hover group-hover:opacity-100 group-focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
-          {hoverAction}
-        </div>
-      ) : null}
       <div className="flex h-full w-full items-center">
         <div className="flex w-4 shrink-0 items-center justify-center">
           {status ?? (prStatus ? (
@@ -224,8 +219,12 @@ export function ProductSidebarWorkspaceRow({
             {hasTrailingCells ? (
               <div
                 data-sidebar-trailing-cells
-                className={`relative flex items-center justify-end gap-1.5 transition-opacity duration-hover ${hoverAction
-                  ? "group-hover:opacity-0 group-focus-within:opacity-0"
+                // Collapsing to zero width — not just fading — is what hands
+                // the revealed actions the room they need: the two cells and
+                // the actions swap places in the same flow instead of the
+                // actions floating over an already-truncated label.
+                className={`relative flex items-center justify-end gap-1.5 overflow-hidden transition-opacity duration-hover ${hoverAction
+                  ? "group-hover:w-0 group-hover:opacity-0 group-focus-within:w-0 group-focus-within:opacity-0"
                   : ""
                 }`}
               >
@@ -260,6 +259,21 @@ export function ProductSidebarWorkspaceRow({
                     }`}
                   />
                 ) : null}
+              </div>
+            ) : null}
+            {hoverAction ? (
+              // Zero-width at rest so the label keeps the whole row, widening
+              // to its natural size the moment the row is hovered/focused or
+              // an action's menu is open — the label re-truncates against it
+              // rather than being printed under it (the overlay this replaced
+              // was 48px of buttons floating over a 20px cell). The buttons
+              // stay untouchable while collapsed via the row-action
+              // primitive's own reveal contract.
+              <div
+                data-sidebar-row-actions
+                className="flex w-0 shrink-0 items-center justify-end opacity-0 transition-opacity duration-hover group-hover:w-auto group-hover:opacity-100 group-focus-within:w-auto group-focus-within:opacity-100 has-[[data-state=open]]:w-auto has-[[data-state=open]]:opacity-100"
+              >
+                {hoverAction}
               </div>
             ) : null}
           </div>
