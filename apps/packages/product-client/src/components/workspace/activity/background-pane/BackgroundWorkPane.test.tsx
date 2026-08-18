@@ -22,15 +22,55 @@ vi.mock("#product/hooks/activity/derived/use-background-work-row", () => ({
   useBackgroundWorkRowCounts: () => rowCounts,
 }));
 
-// `LiveTerminalsRosterPanel` and `AgentsRosterPanel` own live feed wiring
-// (`useFeedStream`, `useSessionDirectoryStore`) that is out of scope for
-// this pane's own unit tests — R1/R2 review already exercises them
-// directly. Stubbed here so BackgroundWorkPane's own logic (scope
-// switching, counts, the subagent seam) is what's under test.
+// `LiveTerminalsRosterPanel`, `AgentsRosterPanel` and `BackgroundTerminalView`
+// own live feed wiring (`useFeedStream`, `useSessionDirectoryStore`) that is
+// out of scope for this pane's own unit tests — those components have their
+// own dedicated tests. Stubbed here so BackgroundWorkPane's own logic (scope
+// switching, counts, the terminal + subagent seams) is what's under test.
 vi.mock("#product/components/workspace/activity/LiveTerminalsRosterPanel", () => ({
-  LiveTerminalsRosterPanel: ({ processes }: { processes: ActivityProcessWire[] }) => (
+  LiveTerminalsRosterPanel: ({
+    processes,
+    onOpen,
+  }: {
+    processes: ActivityProcessWire[];
+    onOpen?: (id: string) => void;
+  }) => (
     <div data-testid="live-terminals-roster-panel">
-      {processes.map((process) => process.id).join(",")}
+      <span data-testid="live-terminals-roster-panel-ids">
+        {processes.map((process) => process.id).join(",")}
+      </span>
+      {processes.map((process) => (
+        <div
+          key={process.id}
+          role="button"
+          tabIndex={0}
+          data-testid={`open-process-${process.id}`}
+          onClick={() => onOpen?.(process.id)}
+        >
+          open {process.id}
+        </div>
+      ))}
+    </div>
+  ),
+}));
+vi.mock("#product/components/workspace/activity/background-pane/BackgroundTerminalView", () => ({
+  BackgroundTerminalView: ({
+    process,
+    feed,
+    onBack,
+  }: {
+    process: ActivityProcessWire;
+    feed: { feedId: string } | null;
+    onBack: () => void;
+  }) => (
+    <div
+      data-testid="background-terminal-view"
+      data-process-id={process.id}
+      data-feed-enabled={String(feed !== null)}
+    >
+      <button type="button" onClick={onBack}>
+        Back to background work
+      </button>
     </div>
   ),
 }));
@@ -116,7 +156,7 @@ describe("BackgroundWorkPane", () => {
       agents: [makeAgent({ id: "agent-running" })],
     };
     render(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />);
-    expect(screen.getByTestId("live-terminals-roster-panel").textContent).toBe("proc-running");
+    expect(screen.getByTestId("live-terminals-roster-panel-ids").textContent).toBe("proc-running");
     expect(screen.getByTestId("agents-roster-panel").textContent).toContain("agent-running");
   });
 
@@ -135,7 +175,7 @@ describe("BackgroundWorkPane", () => {
 
     fireEvent.click(screen.getByRole("radio", { name: "Closed (1)" }));
 
-    expect(screen.getByTestId("live-terminals-roster-panel").textContent).toBe("proc-exited");
+    expect(screen.getByTestId("live-terminals-roster-panel-ids").textContent).toBe("proc-exited");
     expect(screen.queryByTestId("agents-roster-panel")).toBeNull();
     expect(
       screen.getByText(
@@ -168,7 +208,7 @@ describe("BackgroundWorkPane", () => {
     expect(container.querySelectorAll("select").length).toBe(0);
   });
 
-  it("opening a subagent replaces the roster with the R3/R4 detail seam, and back returns", () => {
+  it("opening a subagent replaces the roster with the R4 placeholder seam, and back returns", () => {
     sessionActivity = {
       loops: [],
       loopCapabilities: { supported: false, native: false },
@@ -188,6 +228,45 @@ describe("BackgroundWorkPane", () => {
 
     expect(document.querySelector("[data-background-work-subagent-seam]")).toBeNull();
     expect(screen.getByTestId("agents-roster-panel")).toBeTruthy();
+  });
+
+  it("opening a terminal process replaces the roster with the real BackgroundTerminalView, and back returns", () => {
+    sessionActivity = {
+      loops: [],
+      loopCapabilities: { supported: false, native: false },
+      processes: [makeProcess({ id: "proc-77" })],
+      agents: [],
+    };
+    render(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />);
+
+    fireEvent.click(screen.getByTestId("open-process-proc-77"));
+
+    const view = screen.getByTestId("background-terminal-view");
+    expect(view.getAttribute("data-process-id")).toBe("proc-77");
+    expect(screen.queryByTestId("live-terminals-roster-panel")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to background work" }));
+
+    expect(screen.queryByTestId("background-terminal-view")).toBeNull();
+    expect(screen.getByTestId("live-terminals-roster-panel")).toBeTruthy();
+  });
+
+  it("opening a terminal process from the Closed scope also resolves the detail view", () => {
+    sessionActivity = {
+      loops: [],
+      loopCapabilities: { supported: false, native: false },
+      processes: [makeProcess({ id: "proc-exited", status: { status: "exited", exitCode: 0 } })],
+      agents: [],
+    };
+    rowCounts = { runningCount: 0, finishedCount: 1 };
+    render(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />);
+
+    fireEvent.click(screen.getByRole("radio", { name: "Closed (1)" }));
+    fireEvent.click(screen.getByTestId("open-process-proc-exited"));
+
+    expect(screen.getByTestId("background-terminal-view").getAttribute("data-process-id")).toBe(
+      "proc-exited",
+    );
   });
 
   it("resets to the Running scope when the session id changes", () => {
@@ -224,5 +303,60 @@ describe("BackgroundWorkPane", () => {
     rerender(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-2" isOpen />);
 
     expect(document.querySelector("[data-background-work-subagent-seam]")).toBeNull();
+  });
+
+  it("closes the terminal detail seam when the session id changes", () => {
+    sessionActivity = {
+      loops: [],
+      loopCapabilities: { supported: false, native: false },
+      processes: [makeProcess({ id: "proc-99" })],
+      agents: [],
+    };
+    const { rerender } = render(
+      <BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />,
+    );
+
+    fireEvent.click(screen.getByTestId("open-process-proc-99"));
+    expect(screen.getByTestId("background-terminal-view")).toBeTruthy();
+
+    rerender(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-2" isOpen />);
+
+    expect(screen.queryByTestId("background-terminal-view")).toBeNull();
+  });
+
+  it("disables the terminal feed while the right panel is collapsed (mounted, CSS-hidden), and re-enables it on reopen", () => {
+    sessionActivity = {
+      loops: [],
+      loopCapabilities: { supported: false, native: false },
+      processes: [
+        makeProcess({ id: "proc-live", feed: { feedId: "feed-1", kind: "terminal_bytes" } }),
+      ],
+      agents: [],
+    };
+    const { rerender } = render(
+      <BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />,
+    );
+
+    fireEvent.click(screen.getByTestId("open-process-proc-live"));
+    expect(
+      screen.getByTestId("background-terminal-view").getAttribute("data-feed-enabled"),
+    ).toBe("true");
+
+    // The right panel collapses via CSS (opacity/inert), staying mounted —
+    // `isOpen` flipping false is the pane's only signal for that. The
+    // terminal detail seam must keep rendering (no unmount) but stop
+    // streaming.
+    rerender(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen={false} />);
+
+    expect(screen.getByTestId("background-terminal-view")).toBeTruthy();
+    expect(
+      screen.getByTestId("background-terminal-view").getAttribute("data-feed-enabled"),
+    ).toBe("false");
+
+    rerender(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />);
+
+    expect(
+      screen.getByTestId("background-terminal-view").getAttribute("data-feed-enabled"),
+    ).toBe("true");
   });
 });

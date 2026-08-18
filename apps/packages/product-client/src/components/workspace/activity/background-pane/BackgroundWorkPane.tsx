@@ -5,6 +5,7 @@ import { SegmentedControl, type SegmentedControlItem } from "#product/primitives
 import { RosterPanel } from "#product/primitives/patterns/RosterPanel";
 import { AgentsRosterPanel } from "#product/components/workspace/activity/AgentsRosterPanel";
 import { LiveTerminalsRosterPanel } from "#product/components/workspace/activity/LiveTerminalsRosterPanel";
+import { BackgroundTerminalView } from "#product/components/workspace/activity/background-pane/BackgroundTerminalView";
 import { useSessionActivity } from "#product/hooks/activity/derived/use-session-activity";
 import { useBackgroundWorkRowCounts } from "#product/hooks/activity/derived/use-background-work-row";
 import { isProcessRunning } from "#product/domain/activity/process";
@@ -39,23 +40,25 @@ const CLOSED_SUBAGENTS_EMPTY_COPY =
  * Loops are descoped by founder ruling for this slice — `LoopsPanel` is not
  * re-hosted here and stays untouched at its current call site.
  *
- * Detail views (`BackgroundTerminalView`, `BackgroundSubagentView`) are rungs
- * R3/R4. `LiveTerminalsRosterPanel` keeps its own existing live-tail
- * expand-in-place click (untouched — R1 review already relied on it working).
- * `AgentsRosterPanel`'s `onOpen` stub becomes real here: selecting a
- * subagent row stores its id in pane-local state and swaps the roster body
- * for a minimal placeholder with a back button, clearly marked as the
- * R3/R4 seam `BackgroundSubagentView` fills in.
+ * `BackgroundTerminalView` (rung R3) is wired in below: selecting a terminal
+ * row stores its process id in pane-local state and swaps the roster body
+ * for the real read-only detail view. `BackgroundSubagentView` (rung R4) is
+ * still the placeholder seam below — `AgentsRosterPanel`'s `onOpen` stub
+ * becomes real here: selecting a subagent row stores its id in pane-local
+ * state and swaps the roster body for a minimal placeholder with a back
+ * button, clearly marked as the R4 seam `BackgroundSubagentView` fills in.
  */
 export function BackgroundWorkPane({ workspaceId, sessionId, isOpen }: BackgroundWorkPaneProps) {
   const [scope, setScope] = useState<BackgroundWorkScope>("running");
   const [selectedSubagentId, setSelectedSubagentId] = useState<string | null>(null);
+  const [selectedProcessId, setSelectedProcessId] = useState<string | null>(null);
   // Session-scoped by design (handoff — "Out of scope: workspace-level
   // persistence"): switching the active session resets the scope and closes
   // any open detail seam rather than carrying another session's selection.
   useEffect(() => {
     setScope("running");
     setSelectedSubagentId(null);
+    setSelectedProcessId(null);
   }, [sessionId]);
 
   // The roster subscription (`useSessionActivity`) that used to live on
@@ -81,6 +84,39 @@ export function BackgroundWorkPane({ workspaceId, sessionId, isOpen }: Backgroun
     { id: "running", label: `Running (${counts.runningCount})` },
     { id: "closed", label: `Closed (${closedCount})` },
   ];
+
+  const selectedProcess = selectedProcessId
+    ? activity.processes.find((process) => process.id === selectedProcessId) ?? null
+    : null;
+  // Processes never leave the roster on their own (unlike subagents, the
+  // Closed scope depends on this), so a selected id should always resolve.
+  // Clearing the stale selection is defensive, not an expected path — done
+  // in an effect rather than during render.
+  useEffect(() => {
+    if (selectedProcessId && !selectedProcess) {
+      setSelectedProcessId(null);
+    }
+  }, [selectedProcessId, selectedProcess]);
+
+  if (selectedProcess) {
+    return (
+      <BackgroundTerminalView
+        process={selectedProcess}
+        // The right panel collapses via CSS (opacity/inert), not unmount
+        // (`WorkspaceShellRightRail`) — a collapsed-but-still-mounted detail
+        // view must stop streaming rather than keep the socket open
+        // invisibly. `useFeedStream` resets to empty content the instant
+        // `enabled` goes false (no partial-content retention to preserve),
+        // so gating at this seam — rather than adding a second prop to
+        // `BackgroundTerminalView`'s frozen (process, feed, onBack) contract
+        // — is both simplest and matches the acceptance line "feed re-tails
+        // on detail open": reopening hands the real feed back and the view
+        // re-tails from scratch.
+        feed={isOpen ? selectedProcess.feed : null}
+        onBack={() => setSelectedProcessId(null)}
+      />
+    );
+  }
 
   if (selectedSubagentId) {
     return (
@@ -116,7 +152,11 @@ export function BackgroundWorkPane({ workspaceId, sessionId, isOpen }: Backgroun
         <div className="flex flex-col gap-3">
           {scope === "running" ? (
             <>
-              <LiveTerminalsRosterPanel processes={runningProcesses} nowMs={nowMs} />
+              <LiveTerminalsRosterPanel
+                processes={runningProcesses}
+                nowMs={nowMs}
+                onOpen={setSelectedProcessId}
+              />
               <AgentsRosterPanel
                 agents={activity.agents}
                 nowMs={nowMs}
@@ -125,7 +165,11 @@ export function BackgroundWorkPane({ workspaceId, sessionId, isOpen }: Backgroun
             </>
           ) : (
             <>
-              <LiveTerminalsRosterPanel processes={closedProcesses} nowMs={nowMs} />
+              <LiveTerminalsRosterPanel
+                processes={closedProcesses}
+                nowMs={nowMs}
+                onOpen={setSelectedProcessId}
+              />
               {/* Subagents never appear in Closed: they leave the roster the
                   instant they finish (session-activity-architecture rule
                   the Closed scope depends on). `RosterPanel`'s own `empty`
@@ -149,7 +193,7 @@ export function BackgroundWorkPane({ workspaceId, sessionId, isOpen }: Backgroun
 }
 
 /**
- * R3/R4 seam: a minimal, clearly-labeled placeholder standing in for
+ * R4 seam: a minimal, clearly-labeled placeholder standing in for
  * `BackgroundSubagentView` (rung R4). Keeps the selected subagent id in
  * pane-local state (owned by the parent) and offers only a back action —
  * no transcript, no composer, nothing to interact with yet.

@@ -1,86 +1,35 @@
-import { useCallback, useState } from "react";
 import {
   sortProcessesForDisplay,
   type ActivityProcessWire,
 } from "#product/domain/activity/process";
 import { TerminalRosterRow } from "#product/components/workspace/activity/TerminalRosterRow";
 import { RosterPanel } from "#product/primitives/patterns/RosterPanel";
-import { useActiveSessionId } from "#product/hooks/chat/derived/use-active-session-identity";
-import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
-import { useFeedStream } from "#product/hooks/activity/derived/use-feed-stream";
 
 export interface LiveTerminalsRosterPanelProps {
   processes: ActivityProcessWire[];
   nowMs: number;
+  /** Opens the pane's `BackgroundTerminalView` detail seam for this row (rung R3). */
+  onOpen?: (processId: string) => void;
 }
 
 /**
- * The ▸ chip's click-in panel, live-wired: read-only agent-spawned background
- * processes with a click-to-expand live tail sourced from each row's opaque
- * `FeedRef` over `WS /v1/feeds/{feedId}`. Bytes flow only while a row is
- * expanded (lazy FeedService semantics). Presentation of the row header stays
- * in the shared `TerminalRosterRow`; this desktop wrapper owns the SDK feed
- * wiring and expansion state.
+ * The Background work pane's Terminals roster group: a read-only summary of
+ * agent-spawned background processes. Row selection routes to
+ * `BackgroundWorkPane`'s `BackgroundTerminalView` detail seam (Design
+ * Handoff — MODIFIED `TerminalRosterRow`; Delivery Spec — Background Work
+ * Slice 1, rung R3) rather than expanding a live tail inline — the detail
+ * view owns the feed wiring now, so this panel stays a plain, stateless
+ * roster like `AgentsRosterPanel`.
  */
-export function LiveTerminalsRosterPanel({ processes, nowMs }: LiveTerminalsRosterPanelProps) {
-  const activeSessionId = useActiveSessionId();
-  const workspaceId = useSessionDirectoryStore((state) =>
-    activeSessionId ? state.entriesById[activeSessionId]?.workspaceId ?? null : null,
-  );
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const toggle = useCallback((processId: string) => {
-    setExpandedId((current) => (current === processId ? null : processId));
-  }, []);
-
+export function LiveTerminalsRosterPanel({ processes, nowMs, onOpen }: LiveTerminalsRosterPanelProps) {
   const sorted = sortProcessesForDisplay(processes);
   return (
     <RosterPanel title="Terminals" empty="No background terminals." data-terminals-roster-panel>
       {sorted.map((process) => (
         <li key={process.id}>
-          <LiveTerminalRow
-            process={process}
-            nowMs={nowMs}
-            workspaceId={workspaceId}
-            expanded={expandedId === process.id}
-            onToggle={toggle}
-          />
+          <TerminalRosterRow process={process} nowMs={nowMs} onOpen={onOpen} />
         </li>
       ))}
     </RosterPanel>
-  );
-}
-
-interface LiveTerminalRowProps {
-  process: ActivityProcessWire;
-  nowMs: number;
-  workspaceId: string | null;
-  expanded: boolean;
-  onToggle: (processId: string) => void;
-}
-
-function LiveTerminalRow({ process, nowMs, workspaceId, expanded, onToggle }: LiveTerminalRowProps) {
-  const feed = process.feed;
-  const { content, connected, error } = useFeedStream(feed, {
-    workspaceId,
-    enabled: expanded && feed !== null,
-  });
-
-  return (
-    <div>
-      <TerminalRosterRow
-        process={process}
-        nowMs={nowMs}
-        onOpen={feed ? onToggle : undefined}
-      />
-      {expanded && feed && (
-        <pre
-          className="mx-1.5 mb-1 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-muted/40 px-2 py-1.5 font-mono text-readable-code leading-snug text-muted-foreground"
-          data-terminal-feed
-          data-telemetry-mask
-        >
-          {content || (error ?? (connected ? "Waiting for output…" : "Connecting…"))}
-        </pre>
-      )}
-    </div>
   );
 }
