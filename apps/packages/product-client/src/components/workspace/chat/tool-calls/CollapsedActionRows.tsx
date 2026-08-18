@@ -18,6 +18,7 @@ import {
   formatSearchLabel,
 } from "#product/domain/chats/tools/collapsed-action-labels";
 import { useBackgroundCommandStatus } from "#product/hooks/activity/derived/use-background-command-status";
+import { useTranscriptSessionId } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import { CommandActionRow } from "#product/components/workspace/chat/tool-calls/CollapsedCommandActionRow";
 import { CollapsedActionIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionIcon";
 import { EditRows } from "#product/components/workspace/chat/tool-calls/CollapsedEditActionRows";
@@ -47,7 +48,7 @@ export function CollapsedActionRows({
   // text the item carries, regardless of how many display rows the harness's
   // parsed_cmd breakdown produces below.
   const { processId: backgroundProcessId, trailingStatus: backgroundTrailingStatus } =
-    useBackgroundCommandStatus(deriveCommandOutput(item));
+    useBackgroundCommandStatus(deriveCommandOutput(item), useTranscriptSessionId());
 
   if (parsedCommands.length > 0) {
     return (

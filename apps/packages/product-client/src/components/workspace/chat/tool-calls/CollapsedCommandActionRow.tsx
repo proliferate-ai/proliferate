@@ -9,6 +9,7 @@ import {
   formatCommandExecutionLabel,
 } from "#product/domain/chats/tools/collapsed-action-labels";
 import { useBackgroundCommandStatus } from "#product/hooks/activity/derived/use-background-command-status";
+import { useTranscriptSessionId } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import { ActionDisclosureRow } from "#product/components/workspace/chat/tool-calls/CollapsedActionRowPrimitives";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 
@@ -38,7 +39,11 @@ export function CommandActionRow({
   const output = deriveCommandOutput(item);
   const label = formatCommandExecutionLabel(command, item.status);
 
-  const { processId: backgroundProcessId, trailingStatus } = useBackgroundCommandStatus(output);
+  const sessionId = useTranscriptSessionId();
+  const { processId: backgroundProcessId, trailingStatus } = useBackgroundCommandStatus(
+    output,
+    sessionId,
+  );
 
   // A background command never expands in place — activating it opens the
   // Background work pane's terminal detail instead, same as the top-level

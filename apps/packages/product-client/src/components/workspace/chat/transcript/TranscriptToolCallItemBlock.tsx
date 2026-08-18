@@ -32,6 +32,7 @@ import { ToolKindIcon } from "#product/components/workspace/chat/transcript/Tran
 import { AgentIdentityGlyph } from "#product/components/patterns/AgentIdentityGlyph";
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 import { useBackgroundCommandStatus } from "#product/hooks/activity/derived/use-background-command-status";
+import { useTranscriptSessionId } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 
 export function TranscriptToolCallItemBlock({
   item,
@@ -67,7 +68,7 @@ export function TranscriptToolCallItemBlock({
   // any unrecognized shape) falls through to the ordinary inline-disclosure
   // BashCommandCall below, unchanged.
   const { processId: backgroundProcessId, trailingStatus: backgroundTrailingStatus } =
-    useBackgroundCommandStatus(normalizedResultText);
+    useBackgroundCommandStatus(normalizedResultText, useTranscriptSessionId());
 
   if (
     item.semanticKind === "cowork_artifact_create"

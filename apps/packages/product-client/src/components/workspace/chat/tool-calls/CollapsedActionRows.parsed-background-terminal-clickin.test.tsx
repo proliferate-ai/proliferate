@@ -107,11 +107,21 @@ function expandLedger() {
 describe("CollapsedActionRows — parsed/compound background command click-in (bgwork r8 round 3)", () => {
   beforeEach(() => {
     mocks.sessionProcesses = [];
+    // The collapsed-ledger disclosure (`AnimatedCollapsibleContent`) keeps its
+    // freshly mounted subtree `inert`/`aria-hidden` until one
+    // `requestAnimationFrame` after the toggle commits. jsdom never advances a
+    // real frame between a synchronous `fireEvent.click` and the next query, so
+    // drive the frame inline — the convention `CollapsedActions.test.tsx` uses.
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(0);
+      return 1;
+    });
   });
 
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it("takes the ParsedCommandRows branch for a harness-supplied parsed_cmd breakdown (confirms the reproduction)", () => {
@@ -155,7 +165,10 @@ describe("CollapsedActionRows — parsed/compound background command click-in (b
   });
 
   it("shows the roster's trailing status text on the parsed row when roster data is present", () => {
-    vi.useFakeTimers();
+    // Fake only the clock (roster elapsed time is `Date.now()`-derived) so the
+    // synchronous `requestAnimationFrame` spy from `beforeEach` survives —
+    // faking timers wholesale would replace it and re-strand the inert subtree.
+    vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-08-17T10:04:12.000Z"));
     mocks.sessionProcesses = [rosterProcess({ startedAt: "2026-08-17T10:00:00.000Z" })];
     const transcript = createTranscriptState("session-1");

@@ -17,7 +17,7 @@ import { createElement } from "react";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { createTranscriptState } from "@anyharness/sdk";
 import type { ToolCallItem } from "@anyharness/sdk";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   toolItem,
 } from "#product/domain/chats/transcript/transcript-presentation-test-fixtures";
@@ -25,7 +25,23 @@ import {
   TranscriptAgentGroupBlock,
 } from "#product/components/workspace/chat/transcript/TranscriptAgentGroupBlock";
 
-afterEach(cleanup);
+// The collapsed-action disclosure (`AnimatedCollapsibleContent`) reveals its
+// expanded subtree one `requestAnimationFrame` after the toggle commits, so
+// the freshly mounted rows stay `inert`/`aria-hidden` until that frame runs.
+// jsdom never advances a real frame between a synchronous `fireEvent.click`
+// and the following query, so drive the frame inline — the same convention
+// `CollapsedActions.test.tsx` uses.
+beforeEach(() => {
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+    callback(0);
+    return 1;
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 function backgroundCommandChildItem(resultText: string): ToolCallItem {
   return {
