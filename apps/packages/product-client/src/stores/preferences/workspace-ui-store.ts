@@ -5,6 +5,7 @@ import { createWorkspaceUiActivityActions } from "#product/stores/preferences/wo
 import { createWorkspaceUiChatTabActions } from "#product/stores/preferences/workspace-ui-chat-tab-actions";
 import { createWorkspaceUiDismissalActions } from "#product/stores/preferences/workspace-ui-dismissal-actions";
 import { createWorkspaceUiGitStatusActions } from "#product/stores/preferences/workspace-ui-git-status-actions";
+import { createWorkspaceUiPinIntentActions } from "#product/stores/preferences/workspace-ui-pin-intent-actions";
 import { createWorkspaceUiRightPanelActions } from "#product/stores/preferences/workspace-ui-right-panel-actions";
 import { createWorkspaceUiShellActions } from "#product/stores/preferences/workspace-ui-shell-actions";
 import { createWorkspaceUiSidebarActions } from "#product/stores/preferences/workspace-ui-sidebar-actions";
@@ -31,6 +32,7 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
   },
 
   ...createWorkspaceUiSidebarActions(set, get),
+  ...createWorkspaceUiPinIntentActions(set),
   ...createWorkspaceUiRightPanelActions(set),
   ...createWorkspaceUiShellActions(set, get),
   ...createWorkspaceUiActivityActions(set, get),

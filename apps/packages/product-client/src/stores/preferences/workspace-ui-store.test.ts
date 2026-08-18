@@ -4,7 +4,6 @@ import {
   WORKSPACE_UI_DEFAULTS,
 } from "#product/lib/domain/preferences/workspace-ui/model";
 import { createManualChatGroupId } from "#product/lib/domain/workspaces/tabs/manual-groups";
-import { applyWorkspacePinIntentBatch } from "#product/stores/preferences/workspace-ui-pin-intent-actions";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 afterEach(() => {
@@ -115,7 +114,7 @@ describe("workspace ui tab persistence", () => {
       pinnedWorkspaceIds: ["ws-existing-alias"],
     });
 
-    applyWorkspacePinIntentBatch(
+    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch(
       [
         {
           requestId: "request-new",
@@ -151,7 +150,7 @@ describe("workspace ui tab persistence", () => {
     });
 
     useWorkspaceUiStore.getState().unpinWorkspace(["ws-new"]);
-    applyWorkspacePinIntentBatch(
+    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch(
       [{
         requestId: "request-new",
         runtimeId: "runtime-1",
@@ -164,7 +163,7 @@ describe("workspace ui tab persistence", () => {
     );
     expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual([]);
 
-    applyWorkspacePinIntentBatch(
+    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch(
       [{
         requestId: "request-delayed",
         runtimeId: "runtime-1",
@@ -177,7 +176,7 @@ describe("workspace ui tab persistence", () => {
     );
     expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual(["ws-delayed"]);
 
-    applyWorkspacePinIntentBatch(
+    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch(
       [{
         requestId: "request-stale",
         runtimeId: "runtime-1",
@@ -197,7 +196,7 @@ describe("workspace ui tab persistence", () => {
       _hydrated: true,
     });
 
-    applyWorkspacePinIntentBatch(
+    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch(
       Array.from({ length: WORKSPACE_PIN_INTENT_RECEIPT_LIMIT + 2 }, (_, index) => ({
         requestId: `request-${index}`,
         runtimeId: "runtime-1",

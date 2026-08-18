@@ -10,7 +10,6 @@ import {
   type ResolvedWorkspacePinIntent,
   type WorkspacePinIntent,
 } from "#product/lib/domain/workspaces/sidebar/workspace-pin-intents";
-import { applyWorkspacePinIntentBatch } from "#product/stores/preferences/workspace-ui-pin-intent-actions";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 const MAX_PENDING_WORKSPACE_PIN_INTENTS = 128;
@@ -64,7 +63,7 @@ export function useWorkspacePinIntentReconciliationLifecycle(): void {
 
 function applyWorkspacePinIntents(intents: ResolvedWorkspacePinIntent[]): void {
   if (intents.length > 0) {
-    applyWorkspacePinIntentBatch(intents);
+    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch(intents);
   }
 }
 

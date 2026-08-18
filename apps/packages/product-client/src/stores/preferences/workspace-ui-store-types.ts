@@ -4,6 +4,7 @@ import type { PersistedWorkspaceUiState } from "#product/lib/domain/preferences/
 import type { PersistedWorkspaceGitStatusSnapshot } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 import type { RightPanelDurableState, RightPanelMaterializedState, RightPanelWorkspaceState } from "#product/lib/domain/workspaces/shell/right-panel-model";
 import type { SidebarWorkspaceVariant } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
+import type { ResolvedWorkspacePinIntent } from "#product/lib/domain/workspaces/sidebar/workspace-pin-intents";
 import type { ManualChatGroup } from "#product/lib/domain/workspaces/tabs/manual-groups";
 import type { PendingChatActivation } from "#product/lib/domain/workspaces/tabs/shell-activation";
 import type { WorkspaceShellIntentKey, WorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
@@ -100,6 +101,9 @@ export interface WorkspaceUiState {
   hydrate: (state: PersistedWorkspaceUiState) => void;
   pinWorkspace: (id: string) => void;
   unpinWorkspace: (ids: string[]) => void;
+  applyWorkspacePinIntentBatch: (
+    intents: readonly ResolvedWorkspacePinIntent[],
+  ) => void;
   hideRepoRoot: (repoRootId: string) => void;
   unhideRepoRoot: (repoRootId: string) => void;
   toggleRepoGroupCollapsed: (repoKey: string) => void;
