@@ -33,6 +33,12 @@ export const WORKFLOW_RUN_VIEW_COPY = {
   emptyTitle: "No workflow run here",
   emptyDescription:
     "Start a workflow from the workflows page and its run appears in this pane.",
+  /**
+   * The overflow line under the rail window (ruling F-A2): how many visible
+   * runs are not currently rendered; pressing it pages the window.
+   */
+  moreRuns: (count: number): string => (count === 1 ? "1 more run" : `${count} more runs`),
+
   /** The runs list or the run projection could not be read. */
   errorTitle: "This run is unavailable",
   errorDescription:

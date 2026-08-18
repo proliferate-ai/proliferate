@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { WorkflowRunV2 } from "@anyharness/sdk";
-import { selectNewestWorkflowRun, selectVisibleWorkflowRuns } from "./run-selection";
+import {
+  MAX_VISIBLE_RUN_RAILS,
+  selectNewestWorkflowRun,
+  selectVisibleWorkflowRuns,
+  selectWorkflowRunRailWindow,
+} from "./run-selection";
 
 function run(overrides: Partial<WorkflowRunV2> = {}): WorkflowRunV2 {
   return {
@@ -96,5 +101,45 @@ describe("selectVisibleWorkflowRuns", () => {
     const newer = run({ id: "newer", status: "cancelled", createdAt: "2026-08-14T09:00:00Z" });
 
     expect(selectVisibleWorkflowRuns([older, newer])).toEqual([newer]);
+  });
+});
+
+describe("selectWorkflowRunRailWindow", () => {
+  const live = (id: string, minute: number, status = "running") =>
+    run({ id, status: status as WorkflowRunV2["status"], createdAt: `2026-08-14T00:${String(minute).padStart(2, "0")}:00Z` });
+
+  it("renders every run without an overflow when the visible set fits the cap", () => {
+    const runs = [live("a", 3), live("b", 2), live("c", 1)];
+    const window = selectWorkflowRunRailWindow(runs, 0);
+    expect(window.railWindow.map((r) => r.id)).toEqual(["a", "b", "c"]);
+    expect(window.hiddenCount).toBe(0);
+    expect(window.pageCount).toBe(1);
+  });
+
+  it("caps the window at four and counts the rest as hidden (ruling F-A2)", () => {
+    const runs = [5, 4, 3, 2, 1].map((m) => live(`r${m}`, m));
+    const window = selectWorkflowRunRailWindow(runs, 0);
+    expect(window.railWindow).toHaveLength(MAX_VISIBLE_RUN_RAILS);
+    expect(window.hiddenCount).toBe(1);
+    expect(window.pageCount).toBe(2);
+  });
+
+  it("promotes runs waiting on a human onto page 0 ahead of newer running work", () => {
+    // The gated run is the OLDEST — without promotion it would be the hidden one.
+    const gated = live("gated", 1, "awaiting_human");
+    const runs = [live("r5", 5), live("r4", 4), live("r3", 3), live("r2", 2), gated];
+    const window = selectWorkflowRunRailWindow(runs, 0);
+    expect(window.railWindow[0].id).toBe("gated");
+    expect(window.railWindow.map((r) => r.id)).not.toContain("r2");
+  });
+
+  it("pages the window and clamps a page the shrinking set no longer has", () => {
+    const runs = [5, 4, 3, 2, 1].map((m) => live(`r${m}`, m));
+    const pageOne = selectWorkflowRunRailWindow(runs, 1);
+    expect(pageOne.railWindow.map((r) => r.id)).toEqual(["r1"]);
+    expect(pageOne.hiddenCount).toBe(4);
+    const clamped = selectWorkflowRunRailWindow(runs.slice(0, 2), 1);
+    expect(clamped.page).toBe(0);
+    expect(clamped.railWindow).toHaveLength(2);
   });
 });

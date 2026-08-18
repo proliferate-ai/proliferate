@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkflowRunDocV2, WorkflowRunV2 } from "@anyharness/sdk";
 import { WorkflowPane } from "#product/components/workflows/run-view/WorkflowPane";
@@ -132,6 +132,47 @@ describe("WorkflowPane", () => {
     expect(screen.getByText("newer-doc.md")).toBeTruthy();
     expect(screen.getByText(`Run ${older.id}`)).toBeTruthy();
     expect(screen.getByText(`Run ${newer.id}`)).toBeTruthy();
+  });
+
+  it("caps the rendered rails at four and pages the rest behind the overflow line (ruling F-A2)", () => {
+    const runs = [5, 4, 3, 2, 1].map((minute) =>
+      run({ id: `r${minute}`, createdAt: `2026-08-14T00:0${minute}:00Z` }));
+    mocks.roster = { status: "ready", visibleRuns: runs };
+    for (const item of runs) {
+      mocks.paneByRunId.set(item.id, paneModelFor(item, [slot(0)], []));
+    }
+
+    render(<WorkflowPane workspaceId={WORKSPACE_ID} />);
+
+    // Negative control: an uncapped map would render five graphs and no
+    // overflow line.
+    expect(screen.getAllByRole("group", { name: "Run graph" })).toHaveLength(4);
+    expect(screen.queryByText("Run r1")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "1 more run" }));
+    expect(screen.getByText("Run r1")).toBeTruthy();
+    expect(screen.getAllByRole("group", { name: "Run graph" })).toHaveLength(1);
+  });
+
+  it("promotes a run waiting on a human into the resting page instead of hiding it (ruling F-A2)", () => {
+    const gated = run({ id: "gated", status: "awaiting_human", createdAt: "2026-08-14T00:01:00Z" });
+    const runs = [
+      run({ id: "r5", createdAt: "2026-08-14T00:05:00Z" }),
+      run({ id: "r4", createdAt: "2026-08-14T00:04:00Z" }),
+      run({ id: "r3", createdAt: "2026-08-14T00:03:00Z" }),
+      run({ id: "r2", createdAt: "2026-08-14T00:02:00Z" }),
+      gated,
+    ];
+    mocks.roster = { status: "ready", visibleRuns: runs };
+    for (const item of runs) {
+      mocks.paneByRunId.set(item.id, paneModelFor(item, [slot(0)], []));
+    }
+
+    render(<WorkflowPane workspaceId={WORKSPACE_ID} />);
+
+    // The oldest run is the one waiting on a human: it renders on page 0 and
+    // the newest merely-running run is what waits behind the overflow line.
+    expect(screen.getByText("Run gated")).toBeTruthy();
+    expect(screen.queryByText("Run r2")).toBeNull();
   });
 
   it("shows the empty state when the roster has no visible run", () => {

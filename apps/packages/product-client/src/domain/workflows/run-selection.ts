@@ -72,3 +72,59 @@ export function selectVisibleWorkflowRuns(
   const newest = selectNewestWorkflowRun(runs);
   return newest ? [newest] : [];
 }
+
+/** How many run rails the pane renders at once (ruling F-A2). */
+export const MAX_VISIBLE_RUN_RAILS = 4;
+
+/**
+ * A run the cap must never hide silently (ruling F-A2): it is waiting on a
+ * human (a gate or an approval), parked, or failed. These are promoted ahead
+ * of merely-running work when the rail window is chosen, so hitting a gate
+ * SURFACES a run rather than leaving it behind the overflow line.
+ */
+export function workflowRunNeedsAttention(run: WorkflowRunV2): boolean {
+  return (
+    run.status === "awaiting_human" ||
+    run.status === "interrupted" ||
+    run.status === "failed"
+  );
+}
+
+/**
+ * The fixed-size window of runs the pane actually renders as rails, cut from
+ * the visible set (ruling F-A2: cap at four, no census exception, no
+ * virtualization). Priority inside the window: runs needing attention first,
+ * then the rest, each group newest-first — so page 0, the page the pane rests
+ * on, always carries every run a human is being waited on (up to the cap).
+ * The overflow line pages this window; `page` is clamped so a shrinking run
+ * set can never strand the pane on an empty page.
+ */
+export interface WorkflowRunRailWindow {
+  /** The ≤4 runs rendered as rails, in render order. */
+  railWindow: readonly WorkflowRunV2[];
+  /** Visible runs not in the window (behind the overflow line). */
+  hiddenCount: number;
+  /** Total pages the window can show; ≥1 whenever any run is visible. */
+  pageCount: number;
+  /** The clamped page this window was cut for. */
+  page: number;
+}
+
+export function selectWorkflowRunRailWindow(
+  visibleRuns: readonly WorkflowRunV2[],
+  requestedPage: number,
+): WorkflowRunRailWindow {
+  const attention = visibleRuns.filter(workflowRunNeedsAttention);
+  const rest = visibleRuns.filter((run) => !workflowRunNeedsAttention(run));
+  const prioritized = [...attention, ...rest];
+  const pageCount = Math.max(1, Math.ceil(prioritized.length / MAX_VISIBLE_RUN_RAILS));
+  const page = Math.min(Math.max(requestedPage, 0), pageCount - 1);
+  const start = page * MAX_VISIBLE_RUN_RAILS;
+  const railWindow = prioritized.slice(start, start + MAX_VISIBLE_RUN_RAILS);
+  return {
+    railWindow,
+    hiddenCount: prioritized.length - railWindow.length,
+    pageCount,
+    page,
+  };
+}

@@ -14,6 +14,7 @@ import { WorkflowDocsList } from "#product/components/workflows/run-view/Workflo
 import { WorkflowGraphNodeCard } from "#product/components/workflows/run-view/WorkflowGraphNodeCard";
 import { WorkflowGraphView } from "#product/components/workflows/run-view/WorkflowGraphView";
 import { WORKFLOW_RUN_VIEW_COPY } from "#product/copy/workflows/workflow-run-view-copy";
+import { selectWorkflowRunRailWindow } from "#product/domain/workflows/run-selection";
 import { workflowRunStatusTone } from "#product/domain/workflows/run-view-model";
 import {
   useWorkflowPane,
@@ -234,6 +235,12 @@ export function WorkflowPane({ workspaceId }: { workspaceId: string }) {
   // polls, so the header would otherwise lag behind a run parking or resuming
   // while the pane stays open.
   const [singleRunHeader, setSingleRunHeader] = useState<WorkflowRunV2 | null>(null);
+  // Ruling F-A2: at most four rails render at once; the rest sit behind the
+  // overflow line, which pages this fixed-size window. Runs waiting on a
+  // human are promoted onto page 0 by the selector, so the resting page never
+  // silently hides a gate, an approval, or a failure.
+  const [railPage, setRailPage] = useState(0);
+  const rails = selectWorkflowRunRailWindow(roster.visibleRuns, railPage);
 
   return (
     <section
@@ -283,7 +290,7 @@ export function WorkflowPane({ workspaceId }: { workspaceId: string }) {
           />
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-3">
-            {roster.visibleRuns.map((run) => (
+            {rails.railWindow.map((run) => (
               <WorkflowRunRail
                 key={run.id}
                 workspaceId={workspaceId}
@@ -293,6 +300,16 @@ export function WorkflowPane({ workspaceId }: { workspaceId: string }) {
                 onHeaderRunChange={singleRun ? setSingleRunHeader : undefined}
               />
             ))}
+            {rails.hiddenCount > 0 ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="self-start text-muted-foreground"
+                onClick={() => setRailPage((rails.page + 1) % rails.pageCount)}
+              >
+                {WORKFLOW_RUN_VIEW_COPY.moreRuns(rails.hiddenCount)}
+              </Button>
+            ) : null}
           </div>
         )}
       </div>
