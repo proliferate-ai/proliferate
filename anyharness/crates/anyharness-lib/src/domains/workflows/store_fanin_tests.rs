@@ -12,7 +12,8 @@ use super::definition::{
     WorkflowDefinition, DEFINITION_SCHEMA_VERSION,
 };
 use super::model::{
-    WorkflowLegStatus, WorkflowNodeStatus, WorkflowNodeType, WorkflowRunStatus,
+    WorkflowLegStatus, WorkflowNodeFailureCode, WorkflowNodeStatus, WorkflowNodeType,
+    WorkflowRunStatus,
 };
 use super::store::{
     node_leg_count, start_side_effect, NewRunParams, ResolvedSideEffect, WorkflowStore,
