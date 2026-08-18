@@ -40,10 +40,11 @@ vi.mock("#product/stores/preferences/user-preferences-store", () => ({
 describe("useHomeNextLaunchControls", () => {
   afterEach(cleanup);
 
-  // Regression: codex's effort control carries rawConfigId "reasoning_effort"
-  // while overrides are read back through the NORMALIZED control key. Storing
-  // the selection under the raw id made the home stepper snap back to the
-  // default for codex (claude worked only because its raw id IS "effort").
+  // Regression: the "codex" agent kind's effort control carries rawConfigId
+  // "reasoning_effort" while overrides are read back through the NORMALIZED
+  // control key. Storing the selection under the raw id made the home stepper
+  // snap back to the default (kinds whose raw id IS "effort" round-tripped
+  // only by coincidence).
   it("round-trips a codex effort selection through controlOverrides", () => {
     const selections: Record<string, string> = {};
     const { result, rerender } = renderHook(
