@@ -26,17 +26,39 @@
 //! runtime home's layout. There is no `authContextId`: the per-context keying is
 //! superseded by the composed observation.
 //!
-//! **Cloud-sandbox scoped.** The cloud ingest route refuses any worker whose
-//! `runtime_kind != "cloud_sandbox"`. A desktop worker therefore always gets a
-//! 403 here — logged and swallowed like any other push failure, never a special
-//! case in this module. The desktop's local-surface document never needed to
-//! sync in the first place (model-catalog.md: "the desktop's never does").
+//! **Server-decided eligibility (REL-10).** The server owns the upload policy
+//! and states its verdict on every successful authenticated heartbeat as
+//! `modelSnapshotUploadAllowed`. That bit is this module's single admission gate:
+//! a Desktop Worker, a Worker whose sandbox is gone or destroyed, and any Worker
+//! talking to a server too old to state a verdict all do **zero** snapshot work
+//! — no local runtime reads, no HTTP client construction, no upload, and no
+//! warning, because expected ineligibility is not an anomaly. The desktop's
+//! local-surface document never needed to sync in the first place
+//! (model-catalog.md: "the desktop's never does").
+//!
+//! The ingest route remains the final authorization boundary, so a sandbox
+//! destroyed between the heartbeat and the upload still yields one 403. That
+//! contradiction trips a process-lifetime fuse and emits one bounded warning
+//! rather than retrying on the heartbeat timer, which would only slow the request
+//! storm down instead of stopping it. A Worker restart is the recovery boundary.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use serde::Deserialize;
 use tracing::{info, warn};
+
+/// The tracing target every event in this module is emitted under. Tests
+/// classify snapshot-owner events by target rather than by message text, so
+/// renaming or adding a warning here can never slip past the "expected
+/// ineligibility is silent" proof.
+pub const SNAPSHOT_SYNC_TARGET: &str = module_path!();
+
+/// The one stable message the eligible-then-403 contradiction emits, exactly
+/// once per Worker process.
+pub const FORBIDDEN_AFTER_ALLOWED_MESSAGE: &str =
+    "model snapshot sync disabled after server denied advertised eligibility";
 
 use crate::{
     cloud_client::{CloudClient, IngestModelSnapshotRequest},
@@ -49,17 +71,52 @@ use crate::{
 /// server's soft-versioned write absorbs the repeat.
 pub struct ModelSnapshotSyncState {
     last_pushed: Mutex<HashMap<String, String>>,
+    /// Process-lifetime fuse for the eligible-then-403 contradiction (REL-10).
+    ///
+    /// The server said this Worker may upload and the upload was then refused.
+    /// That is a contract contradiction, not a transient failure, so retrying on
+    /// the heartbeat timer would only recreate a slower version of the request
+    /// storm this change exists to stop. Once set, no further snapshot work
+    /// happens in this process — not later harnesses in the same tick, and not
+    /// later ticks even if a subsequent heartbeat advertises `true` again.
+    ///
+    /// Deliberately NOT persisted, timed, or resettable: a Worker restart is the
+    /// one explicit recovery boundary, and `last_pushed` is lost with it, so the
+    /// document is still eligible for upload afterwards.
+    disabled_after_forbidden: AtomicBool,
 }
 
 impl ModelSnapshotSyncState {
     pub fn new() -> Self {
         Self {
             last_pushed: Mutex::new(HashMap::new()),
+            disabled_after_forbidden: AtomicBool::new(false),
         }
     }
 
     fn snapshot(&self) -> HashMap<String, String> {
         self.last_pushed.lock().unwrap().clone()
+    }
+
+    /// The last-uploaded `probedAt` per harness. Public so the runtime
+    /// choreography proof can compare the COMPLETE before/after snapshot state
+    /// rather than sampling one key.
+    pub fn pushed_watermarks(&self) -> HashMap<String, String> {
+        self.snapshot()
+    }
+
+    /// Whether the process-lifetime fuse has tripped. Public so the runtime
+    /// choreography proof can assert an untouched fuse without reaching into
+    /// this module's internals.
+    pub fn is_disabled_after_forbidden(&self) -> bool {
+        self.disabled_after_forbidden.load(Ordering::SeqCst)
+    }
+
+    /// Trip the fuse, reporting whether THIS call was the one that tripped it.
+    /// `swap` rather than `store` so exactly one caller can own the single
+    /// warning even if two harnesses race.
+    fn trip_disabled_after_forbidden(&self) -> bool {
+        !self.disabled_after_forbidden.swap(true, Ordering::SeqCst)
     }
 
     fn record_pushed(&self, harness_kind: &str, probed_at: &str) {
@@ -167,12 +224,30 @@ fn plan_push(
 /// logged and swallowed — the heartbeat loop must never crash on a sync
 /// failure, and a failed push simply retries next tick because `state` is
 /// only updated on success.
+///
+/// `upload_allowed` is the server's verdict off this tick's heartbeat and is the
+/// SINGLE executable admission gate (REL-10). When it is false — including when
+/// an old server omitted the field, which decodes to false — this returns before
+/// runtime bearer resolution, before any HTTP client or request is constructed,
+/// before the local `GET /v1/agents` and per-harness status reads, and before any
+/// cloud upload. Nothing about the snapshot state changes and nothing is logged:
+/// expected ineligibility is a normal outcome, not an anomaly, and the heartbeat
+/// acknowledgement already records the verdict.
 pub async fn maybe_sync(
+    upload_allowed: bool,
     config: &WorkerConfig,
     cloud: &CloudClient,
     worker_token: &str,
     state: &ModelSnapshotSyncState,
 ) {
+    if !upload_allowed {
+        return;
+    }
+    // The process-lifetime fuse is checked in the same gate so a tripped Worker
+    // does no snapshot work even when the server starts advertising `true` again.
+    if state.is_disabled_after_forbidden() {
+        return;
+    }
     let runtime_bearer = resolve_runtime_bearer_token(config);
     let runtime_base = config.runtime_base_url.trim_end_matches('/');
 
@@ -189,7 +264,7 @@ pub async fn maybe_sync(
     };
 
     for kind in kinds {
-        sync_one_harness(
+        if sync_one_harness(
             cloud,
             worker_token,
             runtime_base,
@@ -197,8 +272,23 @@ pub async fn maybe_sync(
             &kind,
             state,
         )
-        .await;
+        .await
+            == HarnessOutcome::StopSnapshotSync
+        {
+            // The fuse tripped on this harness: no later harness in this tick is
+            // attempted, and the gate above suppresses every later tick.
+            return;
+        }
     }
+}
+
+/// Whether the per-harness executor wants the tick's remaining harnesses to run.
+/// Only the eligible-then-403 contradiction stops them; every other failure stays
+/// isolated to its own harness exactly as before.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HarnessOutcome {
+    Continue,
+    StopSnapshotSync,
 }
 
 /// Sync one harness's observation. Isolated per harness so one harness's
@@ -211,7 +301,7 @@ async fn sync_one_harness(
     runtime_bearer: Option<&str>,
     harness_kind: &str,
     state: &ModelSnapshotSyncState,
-) {
+) -> HarnessOutcome {
     let status = match fetch_runtime_status(runtime_base, runtime_bearer, harness_kind).await {
         Ok(status) => status,
         Err(error) => {
@@ -219,13 +309,13 @@ async fn sync_one_harness(
                 ?error,
                 harness_kind, "model snapshot sync: failed to read runtime status"
             );
-            return;
+            return HarnessOutcome::Continue;
         }
     };
 
     let last_pushed = state.snapshot();
     let Some(push) = plan_push(harness_kind, &status, &last_pushed) else {
-        return;
+        return HarnessOutcome::Continue;
     };
     let request = IngestModelSnapshotRequest {
         snapshot_json: push.snapshot_json,
@@ -241,15 +331,40 @@ async fn sync_one_harness(
                 harness_kind = %push.harness_kind,
                 "model snapshot sync: uploaded changed observation"
             );
+            HarnessOutcome::Continue
+        }
+        // REL-10: a 403 here contradicts the eligibility the server advertised on
+        // this very tick's heartbeat. Matched on the status ALONE — the error and
+        // its captured response body are deliberately never formatted, logged, or
+        // attached, so nothing from the refused response can reach a log sink.
+        Err(WorkerError::Cloud { status, .. }) if status == reqwest::StatusCode::FORBIDDEN => {
+            // Trip before emitting, so a concurrent harness can never observe an
+            // untripped fuse after the warning exists, and `last_pushed` is left
+            // alone so a deliberate restart can retry the same document.
+            if state.trip_disabled_after_forbidden() {
+                // Exactly one WARN for the whole process, with only bounded
+                // branch fields. No body, URL, bearer, local path, snapshot
+                // content, or `?error` Debug rendering belongs on this branch.
+                warn!(
+                    reason = "unexpected_forbidden",
+                    http_status = 403,
+                    harness_kind = %push.harness_kind,
+                    "{FORBIDDEN_AFTER_ALLOWED_MESSAGE}"
+                );
+            }
+            HarnessOutcome::StopSnapshotSync
         }
         Err(error) => {
             // Not recorded: the next tick's plan sees the same stale
-            // last_pushed value and retries this exact push.
+            // last_pushed value and retries this exact push. Network failures and
+            // every non-403 status (400/404/5xx) keep exactly this behavior and
+            // never trip the process fuse.
             warn!(
                 ?error,
                 harness_kind = %push.harness_kind,
                 "model snapshot sync: cloud upload failed; retrying next tick"
             );
+            HarnessOutcome::Continue
         }
     }
 }

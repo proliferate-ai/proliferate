@@ -117,6 +117,18 @@ pub struct HeartbeatResponse {
     /// inputs) and for every non-flag-enabled target.
     #[serde(default)]
     pub supervisor_bridge: Option<SupervisorBridgeInputs>,
+    /// The server's verdict on whether THIS Worker may upload an agent-model
+    /// snapshot (REL-10). The server owns `runtime_kind`, sandbox existence and
+    /// destruction, and the owner the ingest route derives, so it — not the
+    /// Worker — decides eligibility; the Worker only consumes the bit as
+    /// admission to `model_snapshot_sync::maybe_sync`.
+    ///
+    /// `#[serde(default)]` is load-bearing compatibility, not tidiness: a server
+    /// that predates this field cannot promise the upload is legal, so its
+    /// omission must fail CLOSED to `false` and pause snapshot sync before any
+    /// local read or network call. Never treat absent as permission.
+    #[serde(default)]
+    pub model_snapshot_upload_allowed: bool,
 }
 
 /// A Worker's upload of one changed model-snapshot document (model-catalog.md
@@ -551,6 +563,91 @@ mod tests {
             response.desired_topology.as_deref(),
             Some("supervisor_owned")
         );
+    }
+
+    // ── REL-10: the shared Python-producer / Rust-consumer heartbeat contract ──
+    //
+    // These parse the SAME committed fixtures the server's
+    // `tests/unit/test_worker_heartbeat_contract.py` proves the real Pydantic
+    // model serializes to. A handwritten copy of either payload here would let
+    // the two languages drift silently, so the bytes come off disk.
+
+    /// `fixtures/contracts/worker-heartbeat/v1.json` — a complete new-server body.
+    const V1_FIXTURE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../fixtures/contracts/worker-heartbeat/v1.json"
+    ));
+    /// `fixtures/contracts/worker-heartbeat/v0-legacy.json` — the supported
+    /// pre-field body, identical to v1 except that the capability is omitted.
+    const V0_LEGACY_FIXTURE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../fixtures/contracts/worker-heartbeat/v0-legacy.json"
+    ));
+
+    #[test]
+    fn heartbeat_response_parses_the_shared_v1_fixture_as_allowed() {
+        let response = serde_json::from_str::<HeartbeatResponse>(V1_FIXTURE)
+            .expect("the committed v1 heartbeat fixture must parse");
+        assert!(
+            response.model_snapshot_upload_allowed,
+            "the shared v1 fixture advertises eligibility"
+        );
+        // The rest of the golden body still decodes, so this fixture really is
+        // the whole contract rather than a capability-only stub.
+        assert_eq!(
+            response.worker_id,
+            "2f5b3c14-8d1e-4a7b-9c60-1f2e3d4a5b6c"
+        );
+        let desired = response.desired_versions.expect("desiredVersions present");
+        assert_eq!(desired.worker.as_deref(), Some("0.4.13"));
+        assert_eq!(desired.anyharness.as_deref(), Some("0.66.0"));
+        assert_eq!(response.desired_topology, None);
+        assert!(response.supervisor_bridge.is_none());
+    }
+
+    #[test]
+    fn heartbeat_response_parses_the_shared_legacy_fixture_as_denied() {
+        // Old server + new Worker: the omission is decoded as `false`, which
+        // pauses snapshot sync before any local read or upload.
+        let response = serde_json::from_str::<HeartbeatResponse>(V0_LEGACY_FIXTURE)
+            .expect("the committed legacy heartbeat fixture must parse");
+        assert!(
+            !response.model_snapshot_upload_allowed,
+            "an omitted capability must fail closed to false"
+        );
+        // Everything the legacy server DOES send is still honoured, so failing
+        // closed on snapshots never disables version convergence.
+        let desired = response.desired_versions.expect("desiredVersions present");
+        assert_eq!(desired.worker.as_deref(), Some("0.4.13"));
+    }
+
+    #[test]
+    fn the_legacy_fixture_really_omits_the_capability_member() {
+        // Guards the proof above from a fixture edit that quietly adds
+        // `"modelSnapshotUploadAllowed": false`, which would make the
+        // default-false assertion pass for the wrong reason.
+        let value: serde_json::Value =
+            serde_json::from_str(V0_LEGACY_FIXTURE).expect("legacy fixture is json");
+        assert!(
+            value.get("modelSnapshotUploadAllowed").is_none(),
+            "the legacy fixture must OMIT the member, not send false"
+        );
+        let v1: serde_json::Value =
+            serde_json::from_str(V1_FIXTURE).expect("v1 fixture is json");
+        assert_eq!(v1["modelSnapshotUploadAllowed"], serde_json::json!(true));
+    }
+
+    #[test]
+    fn heartbeat_response_parses_an_explicit_false_capability() {
+        let payload = br#"{
+            "workerId": "worker",
+            "serverTime": "2026-08-18T00:00:00Z",
+            "heartbeatIntervalSeconds": 30,
+            "modelSnapshotUploadAllowed": false
+        }"#;
+        let response = serde_json::from_slice::<HeartbeatResponse>(payload)
+            .expect("heartbeat ack with an explicit false capability");
+        assert!(!response.model_snapshot_upload_allowed);
     }
 
     #[test]

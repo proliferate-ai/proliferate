@@ -7090,6 +7090,8 @@ export interface components {
             /** Desiredtopology */
             desiredTopology?: string | null;
             supervisorBridge?: components["schemas"]["WorkerSupervisorBridge"] | null;
+            /** Modelsnapshotuploadallowed */
+            modelSnapshotUploadAllowed: boolean;
         };
         /**
          * WorkerSupervisorBridge

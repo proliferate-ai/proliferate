@@ -423,16 +423,53 @@ one row per (user, harness) or (org, harness), a `patch_json` of optional
 
 ### Write path
 
-One writer: **Worker upload**. On the heartbeat-and-converge tick,
-[model_snapshot_sync.rs](../../anyharness/crates/proliferate-worker/src/model_snapshot_sync.rs)
-GETs the runtime's snapshot documents over the narrow local surface, diffs
-`probedAt` against an in-memory last-pushed cache (worth at most one
-redundant upload after a Worker restart, which the soft-versioned write
-absorbs idempotently), and POSTs changed documents to the ingest route with
-the Worker's own bearer; the server resolves the owner from the Worker's
-sandbox row. Non-fatal like every convergence action. The ingest route
-refuses non-cloud-sandbox Workers — desktop does not sync; its former
-60-second mirror-poll hook is deleted with no replacement.
+One writer: **Worker upload**, and **the server decides who may write before the
+Worker does anything at all.**
+
+Eligibility is heartbeat-gated. Every successful authenticated
+`POST /v1/cloud/worker/heartbeat` states a required boolean
+`modelSnapshotUploadAllowed`, decided by one pure Agent Models rule
+([`agent_models/domain/snapshot_upload.py`](../../server/proliferate/server/cloud/agent_models/domain/snapshot_upload.py))
+that returns an owner only for an active, owned cloud-sandbox Worker. The ingest
+route enforces the same rule against freshly loaded rows, so the advertised bit
+cannot drift from what an upload would be allowed to do. Desktop, a Worker with
+no sandbox id, a missing sandbox row, an unowned sandbox, and a destroyed sandbox
+are all `false`. A Worker talking to a server too old to state a verdict decodes
+the omission as `false` — an old server cannot promise the upload is legal, so
+compatibility fails closed. Authentication is a separate boundary: a missing,
+unknown, or revoked credential is `401 cloud_worker_unauthorized` with no body,
+never a 200 carrying `false`.
+
+That bit is the single admission gate in
+[model_snapshot_sync.rs](../../anyharness/crates/proliferate-worker/src/model_snapshot_sync.rs).
+When it is false, `maybe_sync` returns **before** runtime bearer resolution, HTTP
+client construction, the local `GET /v1/agents`, any per-harness status read, and
+any upload; nothing changes and nothing is logged, because expected ineligibility
+is a normal outcome rather than an anomaly. A Desktop Worker therefore performs
+zero model-snapshot local reads, zero uploads, and emits zero warnings — replacing
+the pre-REL-10 behavior in which it read every document and sent one forbidden
+request per changed harness on every heartbeat, forever.
+
+When it is true, the existing path runs unchanged: GET the runtime's snapshot
+documents over the narrow local surface, diff `probedAt` against an in-memory
+last-pushed cache (worth at most one redundant upload after a Worker restart,
+which the soft-versioned write absorbs idempotently), and POST changed documents
+to the ingest route with the Worker's own bearer; the server resolves the owner
+from the Worker's sandbox row. Non-fatal like every convergence action. Desktop's
+former 60-second mirror-poll hook is deleted with no replacement.
+
+### Failure modes on the write path
+
+| Outcome | Behavior |
+| --- | --- |
+| Verdict `false`, or omitted by an old server | Zero snapshot work, zero requests, zero state change, zero warnings. |
+| Upload succeeds | The per-harness `probedAt` watermark advances. |
+| Upload returns `403` after the ack said `true` | A contract contradiction, not a transient failure: a process-lifetime fuse trips, the remaining harnesses in that tick are skipped, no later tick does snapshot work even if the server says `true` again, `last_pushed` does **not** advance, and exactly one bounded `WARN` is emitted for the whole process — `model snapshot sync disabled after server denied advertised eligibility`, carrying only `reason="unexpected_forbidden"`, numeric `http_status=403`, and the harness kind. Never the response body, URL, bearer, local path, or snapshot content. A Worker restart is the one recovery boundary; the fuse is not persisted, timed, or resettable. |
+| Network failure, `400`, `404`, or `5xx` | Unchanged non-fatal retry on the next eligible heartbeat; the fuse never trips. |
+
+The `403` case is expected in one legitimate race: the sandbox is destroyed
+between the heartbeat and the upload. The ingest route stays the final
+authorization boundary precisely so that race is refused rather than trusted.
 
 ## Serving
 
