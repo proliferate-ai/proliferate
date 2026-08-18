@@ -184,11 +184,6 @@ max_lines = 404
 reason = "PRO-230's full launch-outcome/attemptId machinery merged with main's attachmentSnapshots plumbing threaded through every target-kind branch; split on next growth"
 
 [[frontend_structure]]
-path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-archive-actions.ts"
-max_lines = 471
-reason = "R7 lifecycle archive/unarchive orchestrator: verb posts, undo toasts, 409 scenario flow, optimistic-hide set with pending reconciliation; grew past 400 with the flicker-regression rider; PRO-257 adds the success-toast dwell"
-
-[[frontend_structure]]
 path = "apps/packages/product-client/src/lib/infra/terminals/terminal-stream-registry.ts"
 max_lines = 417
 reason = "terminal/feed stream registry (+open/close/error records woven into the existing callbacks; no seam short of splitting the registry itself)"
