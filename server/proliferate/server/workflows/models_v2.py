@@ -104,7 +104,7 @@ class WorkflowNodeV2(WorkflowDefinitionWireModel):
         return value
 
     @model_validator(mode="after")
-    def prompt_must_equal_first_leg_prompt(self) -> "WorkflowNodeV2":
+    def prompt_must_equal_first_leg_prompt(self) -> WorkflowNodeV2:
         if self.legs is not None and self.prompt != self.legs[0].prompt:
             raise ValueError(
                 "Node prompt must equal legs[0].prompt (leg 0 is the representative session)."
