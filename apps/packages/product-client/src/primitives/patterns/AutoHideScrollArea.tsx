@@ -35,6 +35,12 @@ interface AutoHideScrollAreaProps {
   stableScrollAnchor?: boolean;
   onViewportScroll?: (viewport: HTMLDivElement) => void;
   onUserScrollIntent?: (direction: -1 | 1) => void;
+  /**
+   * Raw `data-*` attributes forwarded onto the viewport div, for callers that
+   * need a stable DOM probe (e.g. `data-markdown-code-content`) that predates
+   * this shared primitive.
+   */
+  viewportDataAttributes?: Record<`data-${string}`, string>;
 }
 
 interface ScrollThumbState {
@@ -59,13 +65,14 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
       viewportClassName = "",
       contentClassName = "",
       allowHorizontal = false,
-      overscrollBehavior = "none",
+      overscrollBehavior: overscrollBehaviorProp,
       overscrollBehaviorX,
       overscrollBehaviorY,
       chainVerticalWheel = true,
       stableScrollAnchor = false,
       onViewportScroll,
       onUserScrollIntent,
+      viewportDataAttributes,
     },
     ref,
   ) {
@@ -266,6 +273,16 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
       event.preventDefault();
       event.stopPropagation();
     };
+    // The default flips with `chainVerticalWheel`: when chaining is on, the
+    // inner scroller must NOT block native scroll chaining at its own edge,
+    // because touch and momentum deltas never reach `handleViewportWheel` (it
+    // only sees the `wheel` event) and rely entirely on `overscroll-behavior`
+    // to keep moving into the transcript once this region is exhausted.
+    // Wheel deltas are chained explicitly below via `chainVerticalWheelScroll`,
+    // so this default does not double-apply the delta for that input type; it
+    // only restores the browser's own bubbling for touch/momentum (PRO-258).
+    const overscrollBehavior =
+      overscrollBehaviorProp ?? (chainVerticalWheel ? "auto" : "none");
     const viewportStyle = buildOverscrollStyle(
       overscrollBehavior,
       overscrollBehaviorX,
@@ -287,6 +304,7 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
               ? "overflow-auto"
               : "scrollbar-none overflow-y-auto overflow-x-hidden"
           } ${viewportClassName}`}
+          {...viewportDataAttributes}
         >
           <div ref={contentRef} className={contentClassName}>
             {children}

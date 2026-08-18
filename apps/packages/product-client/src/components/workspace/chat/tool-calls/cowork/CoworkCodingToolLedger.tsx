@@ -140,6 +140,7 @@ function PromptActionRow({
             <AutoHideScrollArea
               className="w-full"
               viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
+              chainVerticalWheel
             >
               <div className="px-3 py-2 text-chat leading-relaxed text-muted-foreground">
                 <MarkdownBody
@@ -214,6 +215,7 @@ export function CoworkCodingResultDetails({ content }: { content: string }) {
       <AutoHideScrollArea
         className="w-full"
         viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
+        chainVerticalWheel
       >
         <pre className="m-0 whitespace-pre-wrap px-3 py-2 font-mono text-readable-code text-foreground">
           {content}

@@ -28,6 +28,7 @@ export function SkillsToolResultRow({
         <AutoHideScrollArea
           className="w-full"
           viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
+          chainVerticalWheel
         >
           <SkillsToolResultDetails presentation={presentation} />
         </AutoHideScrollArea>
