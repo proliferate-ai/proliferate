@@ -86,6 +86,19 @@ fn cursor_floor_reserves_the_sql_integer_ceiling() {
 }
 
 #[test]
+fn archive_size_counts_large_integer_identities_by_encoded_width() {
+    let mut archive_data = archive();
+    archive_data.sessions[0].pending_prompt_seq_cursor = Some(MAX_PENDING_PROMPT_SEQ);
+    archive_data.session_link_completion_deliveries[0].child_last_event_seq =
+        MAX_PENDING_PROMPT_SEQ;
+    archive_data.session_link_completion_deliveries[0].retired_prompt_seq =
+        Some(MAX_PENDING_PROMPT_SEQ);
+
+    super::super::validate_archive_size(&archive_data)
+        .expect("large valid identities contribute only their encoded byte width");
+}
+
+#[test]
 fn completion_delivery_validation_accepts_only_producible_retired_wake_intents() {
     let archive_data = archive();
     validate_archive_deliveries(&archive_data).expect("producer-shaped retired intent");

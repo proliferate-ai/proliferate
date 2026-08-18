@@ -281,11 +281,11 @@ fn completion_delivery_size_bytes(
         + string_size(&record.notification_text)
         + str_size(record.outcome.as_str())
         + str_size(record.state.as_str())
-        + record.child_last_event_seq.max(0) as u64
-        + record.parent_prompt_seq.unwrap_or_default().max(0) as u64
-        + record.retired_prompt_seq.unwrap_or_default().max(0) as u64
+        + integer_size(record.child_last_event_seq)
+        + option_integer_size(record.parent_prompt_seq)
+        + option_integer_size(record.retired_prompt_seq)
         + option_string_size(&record.retired_prompt_id)
-        + record.attempt_count.max(0) as u64
+        + integer_size(record.attempt_count)
         + string_size(&record.next_attempt_at)
         + option_string_size(&record.last_error_code)
         + string_size(&record.created_at)
@@ -296,7 +296,7 @@ fn completion_delivery_size_bytes(
 
 fn session_bundle_size_bytes(bundle: &WorkspaceMobilitySessionBundleData) -> u64 {
     encoded_session_size_bytes(&bundle.session)
-        .saturating_add(bundle.pending_prompt_seq_cursor.unwrap_or_default().max(0) as u64)
+        .saturating_add(option_integer_size(bundle.pending_prompt_seq_cursor))
         .saturating_add(
             bundle
                 .live_config_snapshot
@@ -322,7 +322,7 @@ fn session_bundle_size_bytes(bundle: &WorkspaceMobilitySessionBundleData) -> u64
                 .iter()
                 .map(|record| {
                     string_size(&record.session_id)
-                        + record.seq as u64
+                        + integer_size(record.seq)
                         + option_string_size(&record.prompt_id)
                         + string_size(&record.text)
                         + option_string_size(&record.blocks_json)
@@ -358,7 +358,7 @@ fn session_bundle_size_bytes(bundle: &WorkspaceMobilitySessionBundleData) -> u64
                 .iter()
                 .map(|record| {
                     string_size(&record.session_id)
-                        + record.seq as u64
+                        + integer_size(record.seq)
                         + string_size(&record.timestamp)
                         + string_size(&record.event_type)
                         + option_string_size(&record.turn_id)
@@ -373,7 +373,7 @@ fn session_bundle_size_bytes(bundle: &WorkspaceMobilitySessionBundleData) -> u64
                 .iter()
                 .map(|record| {
                     string_size(&record.session_id)
-                        + record.seq as u64
+                        + integer_size(record.seq)
                         + string_size(&record.timestamp)
                         + string_size(&record.notification_kind)
                         + string_size(&record.payload_json)
@@ -400,7 +400,7 @@ fn encoded_session_size_bytes(session: &crate::domains::sessions::model::Session
         + option_string_size(&session.current_mode_id)
         + option_string_size(&session.title)
         + option_string_size(&session.thinking_level_id)
-        + session.thinking_budget_tokens.unwrap_or_default() as u64
+        + option_integer_size(session.thinking_budget_tokens)
         + string_size(&session.status)
         + string_size(&session.created_at)
         + string_size(&session.updated_at)
@@ -414,18 +414,18 @@ fn encoded_live_config_size_bytes(
     record: &crate::domains::sessions::model::SessionLiveConfigSnapshotRecord,
 ) -> u64 {
     string_size(&record.session_id)
-        + record.source_seq as u64
+        + integer_size(record.source_seq)
         + string_size(&record.raw_config_options_json)
         + string_size(&record.normalized_controls_json)
         + string_size(&record.updated_at)
 }
 
 fn encoded_file_size_bytes(file: &MobilityFileData) -> u64 {
-    string_size(&file.relative_path) + file.mode as u64 + base64_size(file.content.len())
+    string_size(&file.relative_path) + integer_size(file.mode) + base64_size(file.content.len())
 }
 
 fn encoded_agent_artifact_size_bytes(file: &AgentArtifactFileData) -> u64 {
-    string_size(&file.relative_path) + file.mode as u64 + base64_size(file.content.len())
+    string_size(&file.relative_path) + integer_size(file.mode) + base64_size(file.content.len())
 }
 
 fn base64_size(byte_len: usize) -> u64 {
@@ -442,6 +442,14 @@ fn str_size(value: &str) -> u64 {
 
 fn option_string_size(value: &Option<String>) -> u64 {
     value.as_ref().map(|value| value.len() as u64).unwrap_or(0)
+}
+
+fn integer_size(value: impl std::fmt::Display) -> u64 {
+    value.to_string().len() as u64
+}
+
+fn option_integer_size(value: Option<impl std::fmt::Display>) -> u64 {
+    value.map(integer_size).unwrap_or(0)
 }
 
 #[cfg(test)]
