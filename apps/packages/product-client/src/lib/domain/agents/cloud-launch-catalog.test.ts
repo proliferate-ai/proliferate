@@ -190,7 +190,7 @@ describe("claude's `fast` control", () => {
           ],
           models: [{
             id: "opus",
-            displayName: "Opus 4.8",
+            displayName: "Opus 5",
             availability: { anyOf: ["anthropic-oauth"] },
             defaultVisible: true,
             controls: { fast: { values: ["on", "off"], observedValue: "off" } },
@@ -203,7 +203,7 @@ describe("claude's `fast` control", () => {
   }
 
   // claude names the control `fast` where codex names it `fast_mode`. Both
-  // must project onto the one desktop `fast_mode` key, or Opus 4.8 loses its
+  // must project onto the one desktop `fast_mode` key, or Opus 5 loses its
   // Fast toggle and its saved launch default.
   it("projects onto the desktop fast_mode key", () => {
     const projected = projectCloudAgentCatalogToDesktopLaunchCatalog(claudeCatalog());

@@ -291,8 +291,7 @@ fn registry_gateway_capability_matches_render_assumption() {
 
 /// PRO-318: claude's fast-mode option is `fast`, not codex's `fast_mode`.
 /// The control must carry an apply mapping and every model that declares it
-/// must report the capability, or Opus 4.8 ships a Fast toggle nothing can
-/// apply.
+/// must report the capability, or Opus ships a Fast toggle nothing can apply.
 #[test]
 fn claude_fast_control_is_mapped_and_reported() {
     let catalog = crate::domains::agents::catalog::bundled::bundled_agent_catalog_document();
@@ -315,11 +314,23 @@ fn claude_fast_control_is_mapped_and_reported() {
         Some("fast"),
         "the fast control needs a live-apply path or no surface can set it"
     );
-    let opus = claude
-        .session
-        .models
-        .iter()
-        .find(|model| model.id == "opus")
-        .expect("opus model");
-    assert!(opus.supports_fast_mode(), "Opus 4.8 supports fast mode");
+    for (id, name, description_prefix) in [
+        ("opus", "Opus 5", Some("Opus 5")),
+        ("opus[1m]", "Opus 5 (1M context)", Some("Opus 5")),
+        ("claude-opus-4-8", "Opus 4.8", None),
+    ] {
+        let model = claude
+            .session
+            .models
+            .iter()
+            .find(|model| model.id == id)
+            .unwrap_or_else(|| panic!("missing {name} model"));
+        if let Some(prefix) = description_prefix {
+            assert!(model
+                .description
+                .as_deref()
+                .is_some_and(|value| value.starts_with(prefix)));
+        }
+        assert!(model.supports_fast_mode(), "{name} supports fast mode");
+    }
 }
