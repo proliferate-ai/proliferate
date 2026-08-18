@@ -6,6 +6,12 @@ import { supportWindowResponseBytes } from "./support-window-response-bytes.js";
 
 const timestampFrom = "2026-08-12T12:00:00.123456789Z";
 const timestampTo = "2026-08-12T12:15:00.123456789Z";
+// The exact fixed-millisecond text the desktop producer now emits for a raw
+// clock read that lands on a whole second, and for one that carries millis.
+const nativeWholeSecondFrom = "2026-08-12T11:45:00.000Z";
+const nativeWholeSecondTo = "2026-08-12T12:00:00.000Z";
+const nativeMillisecondFrom = "2026-08-12T11:45:00.123Z";
+const nativeMillisecondTo = "2026-08-12T12:00:00.123Z";
 
 describe("SessionsClient support windows", () => {
   it("serializes an exact session query and preserves nested request data", async () => {
@@ -131,6 +137,76 @@ describe("SessionsClient support windows", () => {
     );
     expect(getBoundedJson.mock.calls[0]?.[1]).toBe(2_097_152);
     expect(result).toEqual(response);
+  });
+
+  it("spells native whole-second endpoints as canonical Z on every support window", async () => {
+    const session = clientReturning(sessionWindow([], 3));
+    await session.client.listSupportWindow("workspace-1", {
+      mode: "recent",
+      updatedAtFrom: nativeWholeSecondFrom,
+      updatedAtTo: nativeWholeSecondTo,
+      limit: 3,
+      maxResponseBytes: 1_048_576,
+      request: {},
+    });
+    const sessionQuery = queryOf(session.getBoundedJson);
+    expect(sessionQuery.get("updated_at_from")).toBe("2026-08-12T11:45:00Z");
+    expect(sessionQuery.get("updated_at_to")).toBe("2026-08-12T12:00:00Z");
+    expectSameInstantWindow(
+      sessionQuery.get("updated_at_from"),
+      sessionQuery.get("updated_at_to"),
+      nativeWholeSecondFrom,
+      nativeWholeSecondTo,
+    );
+
+    for (const list of evidenceCallers()) {
+      const evidence = clientReturning(evidenceWindow([], 1, 16_384));
+      await list(evidence.client, nativeWholeSecondFrom, nativeWholeSecondTo);
+      const query = queryOf(evidence.getBoundedJson);
+      expect(query.get("timestamp_from")).toBe("2026-08-12T11:45:00Z");
+      expect(query.get("timestamp_to")).toBe("2026-08-12T12:00:00Z");
+      expectSameInstantWindow(
+        query.get("timestamp_from"),
+        query.get("timestamp_to"),
+        nativeWholeSecondFrom,
+        nativeWholeSecondTo,
+      );
+    }
+  });
+
+  it("retains native millisecond endpoints byte-for-byte on every support window", async () => {
+    const session = clientReturning(sessionWindow([], 3));
+    await session.client.listSupportWindow("workspace-1", {
+      mode: "recent",
+      updatedAtFrom: nativeMillisecondFrom,
+      updatedAtTo: nativeMillisecondTo,
+      limit: 3,
+      maxResponseBytes: 1_048_576,
+      request: {},
+    });
+    const sessionQuery = queryOf(session.getBoundedJson);
+    expect(sessionQuery.get("updated_at_from")).toBe(nativeMillisecondFrom);
+    expect(sessionQuery.get("updated_at_to")).toBe(nativeMillisecondTo);
+    expectSameInstantWindow(
+      sessionQuery.get("updated_at_from"),
+      sessionQuery.get("updated_at_to"),
+      nativeMillisecondFrom,
+      nativeMillisecondTo,
+    );
+
+    for (const list of evidenceCallers()) {
+      const evidence = clientReturning(evidenceWindow([], 1, 16_384));
+      await list(evidence.client, nativeMillisecondFrom, nativeMillisecondTo);
+      const query = queryOf(evidence.getBoundedJson);
+      expect(query.get("timestamp_from")).toBe(nativeMillisecondFrom);
+      expect(query.get("timestamp_to")).toBe(nativeMillisecondTo);
+      expectSameInstantWindow(
+        query.get("timestamp_from"),
+        query.get("timestamp_to"),
+        nativeMillisecondFrom,
+        nativeMillisecondTo,
+      );
+    }
   });
 
   it.each([
@@ -497,6 +573,49 @@ describe("SessionsClient support windows", () => {
     },
   );
 });
+
+function queryOf(getBoundedJson: ReturnType<typeof vi.fn>): URLSearchParams {
+  expect(getBoundedJson).toHaveBeenCalledOnce();
+  const path = getBoundedJson.mock.calls[0]?.[0] as string;
+  const query = path.slice(path.indexOf("?") + 1);
+  return new URLSearchParams(query);
+}
+
+function expectSameInstantWindow(
+  sentFrom: string | null,
+  sentTo: string | null,
+  nativeFrom: string,
+  nativeTo: string,
+): void {
+  const from = Date.parse(sentFrom ?? "");
+  const to = Date.parse(sentTo ?? "");
+  expect(from).toBe(Date.parse(nativeFrom));
+  expect(to).toBe(Date.parse(nativeTo));
+  expect(to - from).toBe(900_000);
+}
+
+function evidenceCallers(): Array<
+  (client: SessionsClient, from: string, to: string) => Promise<unknown>
+> {
+  return [
+    (client, from, to) =>
+      client.listEventsSupportWindow("session-1", {
+        timestampFrom: from,
+        timestampTo: to,
+        limit: 1,
+        maxResponseBytes: 16_384,
+        request: {},
+      }),
+    (client, from, to) =>
+      client.listRawNotificationsSupportWindow("session-1", {
+        timestampFrom: from,
+        timestampTo: to,
+        limit: 1,
+        maxResponseBytes: 16_384,
+        request: {},
+      }),
+  ];
+}
 
 function clientReturning(response: unknown, bodyBytes = 1_024): {
   client: SessionsClient;

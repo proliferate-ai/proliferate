@@ -9,13 +9,19 @@ use chrono::{DateTime, Utc};
 use tokio::sync::watch;
 use tokio::time::{Duration, Instant};
 
+use crate::diagnostics_collector::child_status::{
+    CapturedChildProducerStatus, CapturedWorkerProducerStatus, ChildStatusOmission,
+    NativeChildStatusCapture, PortableChildProducerStatus,
+};
+
 use super::capture::CaptureError;
 use super::runtime::CoordinatorRuntime;
 
 pub(super) struct FakeRuntime {
     clock: Arc<FakeClock>,
     next_id: Mutex<u64>,
-    invalid_capture: AtomicBool,
+    capture_error: Mutex<Option<CaptureError>>,
+    child_status: Mutex<Option<NativeChildStatusCapture>>,
     capture_result: Arc<AsyncGate>,
     finish_publication: Arc<AsyncGate>,
     finish_result: BlockingGate,
@@ -65,7 +71,8 @@ impl FakeRuntime {
                 advanced: watch::channel(0).0,
             }),
             next_id: Mutex::new(0),
-            invalid_capture: AtomicBool::new(false),
+            capture_error: Mutex::new(None),
+            child_status: Mutex::new(None),
             capture_result: Arc::new(AsyncGate::default()),
             finish_publication: Arc::new(AsyncGate::default()),
             finish_result: BlockingGate::default(),
@@ -75,6 +82,13 @@ impl FakeRuntime {
             pause_watchdog_deadlines: Arc::new(AtomicBool::new(false)),
             watchdog_release: Arc::new(TestEvent::default()),
         }
+    }
+
+    /// Pins the raw UTC clock the producer reads once per preparation. Used to
+    /// drive whole-second, millisecond, microsecond, nanosecond, and
+    /// minute/date-boundary cases through the real begin path.
+    pub(super) fn set_utc(&self, value: DateTime<Utc>) {
+        *self.clock.utc.lock().expect("fake utc") = value;
     }
 
     pub(super) fn advance(&self, duration: Duration) {
@@ -87,9 +101,38 @@ impl FakeRuntime {
             .send_modify(|version| *version = version.wrapping_add(1));
     }
 
-    pub(super) fn pause_invalid_capture_result(&self) {
-        self.invalid_capture.store(true, Ordering::Release);
+    /// Pins the downstream child-status response to deterministic bounded
+    /// values whose `captured_at` is canonical UTC `Z` text. It is applied only
+    /// after the real permit was issued and consumed.
+    pub(super) fn pin_child_status(&self, captured_at: &str) {
+        let omitted = CapturedChildProducerStatus {
+            captured_at: captured_at.to_owned(),
+            status: PortableChildProducerStatus::Omitted(
+                ChildStatusOmission::ProducerStatusUnavailable,
+            ),
+        };
+        *self.child_status.lock().expect("fake child status") = Some(NativeChildStatusCapture {
+            anyharness: omitted.clone(),
+            desktop_worker: CapturedWorkerProducerStatus {
+                target_id: None,
+                producer: omitted,
+            },
+        });
+    }
+
+    /// Injects a typed capture/issuance result for terminal-mapper and race
+    /// tests only. It is never used by the successful begin/finish/stage proof.
+    pub(super) fn fail_capture_with(&self, error: CaptureError) {
+        *self.capture_error.lock().expect("fake capture error") = Some(error);
+    }
+
+    pub(super) fn pause_capture_failure(&self, error: CaptureError) {
+        self.fail_capture_with(error);
         self.capture_result.enabled.store(true, Ordering::Release);
+    }
+
+    pub(super) fn pause_invalid_capture_result(&self) {
+        self.pause_capture_failure(CaptureError::Invalid);
     }
 
     pub(super) async fn wait_invalid_capture_result(&self) {
@@ -196,16 +239,24 @@ impl CoordinatorRuntime for FakeRuntime {
     }
 
     fn capture_error_override(&self) -> Pin<Box<dyn Future<Output = Option<CaptureError>> + Send>> {
-        let invalid = self.invalid_capture.load(Ordering::Acquire);
+        let error = *self.capture_error.lock().expect("fake capture error");
         let gate = Arc::clone(&self.capture_result);
         Box::pin(async move {
-            if invalid {
-                wait_at_gate(gate).await;
-                Some(CaptureError::Invalid)
-            } else {
-                None
+            match error {
+                Some(error) => {
+                    wait_at_gate(gate).await;
+                    Some(error)
+                }
+                None => None,
             }
         })
+    }
+
+    fn child_status_override(&self) -> Option<NativeChildStatusCapture> {
+        self.child_status
+            .lock()
+            .expect("fake child status")
+            .clone()
     }
 
     fn before_finish_publication(&self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
