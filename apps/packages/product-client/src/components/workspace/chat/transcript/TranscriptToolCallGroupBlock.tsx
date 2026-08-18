@@ -40,6 +40,7 @@ export function TranscriptToolCallGroupBlock({
         transcript={transcript}
         childrenByParentId={childrenByParentId}
         renderChild={renderChild}
+        workspaceId={workspaceId}
         onOpenSubagent={onOpenSubagent}
       />
     );
