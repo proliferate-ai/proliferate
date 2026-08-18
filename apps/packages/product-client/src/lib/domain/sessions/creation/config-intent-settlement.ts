@@ -97,6 +97,19 @@ export function configValuesFromIntentSnapshot(
   return values;
 }
 
+export function rawConfigValuesFromIntentSnapshot(
+  snapshot: PreMaterializationConfigIntentSnapshot,
+): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const entry of snapshot) {
+    const rawConfigId = entry.rawConfigId?.trim();
+    if (rawConfigId) {
+      values[rawConfigId] = entry.value;
+    }
+  }
+  return values;
+}
+
 export function planCreationConfigIntentSettlement(input: {
   snapshot: PreMaterializationConfigIntentSnapshot;
   liveConfig: SessionLiveConfigSnapshot | null;

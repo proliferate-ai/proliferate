@@ -40,6 +40,7 @@ import {
 import {
   configValuesFromIntentSnapshot,
   planCreationConfigIntentSettlement,
+  rawConfigValuesFromIntentSnapshot,
   resolvePreMaterializationConfigIntentControlKeys,
   snapshotPreMaterializationConfigIntents,
 } from "#product/lib/domain/sessions/creation/config-intent-settlement";
@@ -306,6 +307,7 @@ async function runSessionCreationMaterialization({
       agentKind: options.agentKind,
       modelRegistries,
       defaultLiveSessionControlValuesByAgentKind: liveDefaultsForLaunch,
+      rawLiveSessionControlValues: rawConfigValuesFromIntentSnapshot(configIntentSnapshot),
     }),
     onSuperseded: () => discardIfSuperseded(pendingSessionId, lifecycle),
   });

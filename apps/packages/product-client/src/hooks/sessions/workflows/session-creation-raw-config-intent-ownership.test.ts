@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { SessionConfigModelRegistry } from "#product/lib/domain/chat/launch/session-config";
 import {
   configValuesFromIntentSnapshot,
+  rawConfigValuesFromIntentSnapshot,
   resolvePreMaterializationConfigIntentControlKeys,
   type PreMaterializationConfigIntentSnapshot,
 } from "#product/lib/domain/sessions/creation/config-intent-settlement";
@@ -67,6 +68,50 @@ describe("raw-keyed creation config intent ownership", () => {
       controlKey: "effort",
       rawConfigId: "reasoning_effort",
     })]);
+    expect(requests).toEqual([{ configId: "reasoning_effort", value: "high" }]);
+    expect(result.liveConfig?.normalizedControls.effort?.currentValue).toBe("high");
+  });
+
+  it("uses authoritative live config when catalog metadata is unavailable", async () => {
+    const requests: Array<{ configId: string; value: string }> = [];
+    const authoritativeSession = session("low");
+    const initialSession = { ...authoritativeSession, liveConfig: null };
+    const client = {
+      sessions: {
+        setConfigOption: vi.fn(async (_sessionId: string, request: {
+          configId: string;
+          value: string;
+        }) => {
+          requests.push(request);
+          const updatedSession = session(request.value);
+          return {
+            applyState: "applied" as const,
+            session: updatedSession,
+            liveConfig: updatedSession.liveConfig,
+          };
+        }),
+        getLiveConfig: vi.fn(async () => ({ liveConfig: authoritativeSession.liveConfig })),
+      },
+    } as unknown as AnyHarnessClient;
+    const snapshot: PreMaterializationConfigIntentSnapshot = [{
+      intentId: "pending-shell-effort",
+      generation: 1,
+      controlKey: "reasoning_effort",
+      rawConfigId: "reasoning_effort",
+      value: "high",
+      order: 0,
+    }];
+
+    const result = await applySessionLaunchDefaults({
+      client,
+      session: initialSession,
+      agentKind: "codex",
+      modelRegistries: [],
+      defaultLiveSessionControlValuesByAgentKind: {},
+      rawLiveSessionControlValues: rawConfigValuesFromIntentSnapshot(snapshot),
+    });
+
+    expect(client.sessions.getLiveConfig).toHaveBeenCalledWith(initialSession.id);
     expect(requests).toEqual([{ configId: "reasoning_effort", value: "high" }]);
     expect(result.liveConfig?.normalizedControls.effort?.currentValue).toBe("high");
   });
