@@ -321,7 +321,7 @@ state.
 Expected but currently unavailable product state should normally resolve to a
 typed context that advertises fewer tools rather than failing protocol setup.
 A reviews MCP attached to a session with no current review role is one
-example. Workspace is stricter: it lists its exact 18 tools and applies current
+example. Workspace is stricter: it lists its exact 20 tools and applies current
 role and relationship authorization on every call. Use a hard context error
 for missing rows, cross-workspace tokens, corrupt state, or a product MCP
 attached to a fundamentally unsupported surface.
