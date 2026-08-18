@@ -415,7 +415,7 @@ function rgbToHex(channels: readonly [number, number, number]): string {
   return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }
 const COMPOSER_DARK_HEX = rgbToHex([0x2d, 0x2d, 0x2d]);
-// The sanctioned rail fill beneath light's border-role hairline, not page white.
+// The sanctioned rail fill beneath light's depth recipe, not page white.
 const COMPOSER_LIGHT_HEX = rgbToHex([0xf6, 0xf6, 0xf6]);
 
 describe("chat retune tokens", () => {
@@ -426,7 +426,6 @@ describe("chat retune tokens", () => {
     expect(themeDeclarations["--color-composer-background"]).toBe(COMPOSER_DARK_HEX);
     const darkRoot = readRule(generatedThemeCss, /:root\s*\{([\s\S]*?)\n\}/);
     expect(darkRoot).toContain(`--color-composer-background: ${COMPOSER_DARK_HEX};`);
-
     const lightRoot = readRule(generatedThemeCss, /:root\[data-mode="light"\]\s*\{([\s\S]*?)\n\}/);
     expect(lightRoot).toContain(`--color-composer-background: ${COMPOSER_LIGHT_HEX};`);
 
@@ -436,12 +435,13 @@ describe("chat retune tokens", () => {
     const composerSurfaceRule = readRule(productCss, /\.chat-composer-surface\s*\{([\s\S]*?)\}/);
     expect(composerSurfaceRule).toContain("background-color: var(--color-composer-background);");
     expect(composerSurfaceRule).toContain("var(--color-composer-backdrop-filter)");
-    expect(composerSurfaceRule).not.toContain("box-shadow");
-    const lightComposerSurfaceRule = readRule(
-      productCss,
-      /:root\[data-mode="light"\]\s+\.chat-composer-surface\s*\{([\s\S]*?)\}/,
+    expect(composerSurfaceRule).toContain("box-shadow: var(--shadow-composer);");
+    // The production rule resolves to light depth while dark remains fill-only.
+    expect(themeDeclarations["--shadow-composer"]).toBe("var(--elevation-composer)");
+    expect(darkRoot).toContain("--elevation-composer: none;");
+    expect(lightRoot).toContain(
+      "--elevation-composer: 0 0 0 1px var(--color-border-heavy), 0 2px 5px rgba(26, 28, 31, 0.10), 0 8px 20px rgba(26, 28, 31, 0.07);",
     );
-    expect(lightComposerSurfaceRule).toContain("box-shadow: 0 0 0 0.5px var(--color-border);");
   });
 
   it("declares the adopted transcript measure and turn-rhythm tokens", () => {

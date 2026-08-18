@@ -38,6 +38,7 @@ import {
 } from "#product/lib/domain/chat/__fixtures__/playground/environment-fixtures";
 import { PlaygroundAttachmentComposerSurface } from "#product/components/playground/PlaygroundAttachmentFixtures";
 import { renderComposerBlockedSurface } from "#product/components/playground/composer-slots/PlaygroundComposerBlockedFixtures";
+import { CHAT_COMPOSER_LABELS } from "#product/copy/chat/chat-copy";
 
 export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNode {
   const blockedSurface = renderComposerBlockedSurface(scenario);
@@ -47,6 +48,13 @@ export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNo
   switch (scenario) {
     case "composer-long-input":
       return <PlaygroundLongInputComposerSurface />;
+    case "composer-follow-up-empty":
+      return (
+        <PlaygroundComposerSurface
+          interactive
+          placeholder={CHAT_COMPOSER_LABELS.followUpPlaceholder}
+        />
+      );
     case "composer-ultra":
       return <PlaygroundComposerSurface ultra />;
     case "attachment-previews":
@@ -83,9 +91,11 @@ export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNo
 export function PlaygroundComposerSurface({
   ultra = false,
   interactive = false,
+  placeholder = "Type while the response renders",
 }: {
   ultra?: boolean;
   interactive?: boolean;
+  placeholder?: string;
 }) {
   const [draft, setDraft] = useState("");
   const [editorSnapshot, setEditorSnapshot] = useState<ChatComposerEditorSnapshot>();
@@ -106,7 +116,7 @@ export function PlaygroundComposerSurface({
               }}
               canSubmit={false}
               onSubmit={noop}
-              placeholder="Type while the response renders"
+              placeholder={placeholder}
               disabled={false}
             />
           ) : (

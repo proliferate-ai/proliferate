@@ -268,10 +268,11 @@ rather than adding opaque intermediate planes.
 The composer is opaque in both modes and uses no backdrop filter. That keeps
 transcript paint out of the input surface and avoids re-blurring the transcript
 while typing. It takes the existing `#f6f6f6` rail plane rather than a fourth
-opaque light plane, so the count above stays at three. Light adds one 0.5
-CSS-pixel `--color-border` shadow stroke around that fill so the full rounded
-edge remains legible against white; dark keeps its stronger fill step and no
-perimeter paint. The hairline is an edge, not elevation.
+opaque light plane, so the count above stays at three. Light combines a full
+CSS-pixel `--color-border-heavy` perimeter with a controlled ink-tinted lift;
+the edge keeps the full rounded silhouette unambiguous and the lift makes the
+ordinary empty composer read as an available input against white. Dark keeps
+its stronger fill step and no perimeter or shadow paint.
 
 ### Borders
 
@@ -403,10 +404,12 @@ Depth is carried by borders and surface steps first, shadow second. Light shadow
 color derives from the same `#1a1c1f` ink as the neutral ladder, so elevation
 does not reintroduce a blue slate cast.
 
-One component role refines the shared scale: the light user-message bubble uses
-a 5% ink 2px shadow, while dark keeps that shadow absent. The composer has no
-elevation role or elevation stack in either mode. Light paints only its 0.5px
-border-role hairline; dark remains fill-only.
+Two component roles refine the shared scale. The light user-message bubble uses
+a 5% ink 2px shadow. The light composer uses `--shadow-composer`: a full
+border-heavy perimeter followed by 5px and 20px ink-tinted layers. Both roles
+resolve to `none` in dark, where their opaque surface steps already provide
+separation. The composer recipe does not change layout and remains controlled
+enough to read as an in-page input rather than a popover.
 
 From the class side, the appearance gate bans every other elevation spelling —
 `shadow-sm/md/lg/xl/2xl/inner` (stock Tailwind emits a non-token shadow),

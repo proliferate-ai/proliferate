@@ -1241,6 +1241,18 @@ export const themeTokens = {
     light: "0.82em",
     provenance: "[SHIPPED]",
   },
+  /**
+   * The light composer needs both a clear perimeter and controlled lift to
+   * read as an available input against the white transcript canvas. Dark
+   * already has a strong surface step, so adding shadow there would change its
+   * established appearance. Keep the whole depth recipe in one mode-responsive
+   * role so component CSS never reconstructs it from literals.
+   */
+  "--shadow-composer": {
+    dark: "none",
+    light: "0 0 0 1px var(--color-border-heavy), 0 2px 5px rgba(26, 28, 31, 0.10), 0 8px 20px rgba(26, 28, 31, 0.07)",
+    provenance: "[RETUNE:light/composer-separation]",
+  },
   "--shadow-modal": {
     dark: "0 25px 50px -12px rgb(0 0 0 / 0.5)",
     light: "0 16px 40px rgba(26, 28, 31, 0.18)",

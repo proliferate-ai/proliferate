@@ -211,6 +211,7 @@ for (const [name, expected] of Object.entries({
   "--color-sidebar-ring": "var(--color-ring)",
   "--color-diff-main-surface": "var(--color-surface)",
   "--color-diff-code-surface": "var(--color-surface-editor)",
+  "--shadow-composer": "0 0 0 1px var(--color-border-heavy), 0 2px 5px rgba(26, 28, 31, 0.10), 0 8px 20px rgba(26, 28, 31, 0.07)",
   "--shadow-subtle": "0 1px 2px rgba(26, 28, 31, 0.06)",
   "--shadow-popover": "0 0 0 0.5px rgba(26, 28, 31, 0.05), 0 4px 12px rgba(26, 28, 31, 0.1)",
   "--shadow-modal": "0 16px 40px rgba(26, 28, 31, 0.18)",
