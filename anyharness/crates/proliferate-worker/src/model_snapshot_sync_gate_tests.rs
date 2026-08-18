@@ -56,6 +56,21 @@ async fn a_denied_tick_performs_zero_local_and_cloud_work() {
 
     maybe_sync(false, &config, &cloud, "worker-secret-token", &state).await;
 
+    // Both tallies, because they can fail independently: a connection that is
+    // accepted but never readable leaves no hit behind, so `hits` alone would
+    // let a contact with the runtime or the cloud slip through unnoticed.
+    runtime.drain();
+    cloud_server.drain();
+    assert_eq!(
+        runtime.accepted_count(),
+        0,
+        "a denied tick must not even open a connection to the local runtime"
+    );
+    assert_eq!(
+        cloud_server.accepted_count(),
+        0,
+        "a denied tick must not even open a connection to the cloud"
+    );
     assert!(
         runtime.shutdown().is_empty(),
         "a denied tick must not touch the local runtime at all"
@@ -156,6 +171,18 @@ async fn a_tripped_fuse_denies_a_later_allowed_tick() {
 
     maybe_sync(true, &config, &cloud, "worker-secret-token", &state).await;
 
+    runtime.drain();
+    cloud_server.drain();
+    assert_eq!(
+        runtime.accepted_count(),
+        0,
+        "a fused process opens no connection to the runtime"
+    );
+    assert_eq!(
+        cloud_server.accepted_count(),
+        0,
+        "a fused process opens no connection to the cloud"
+    );
     assert!(runtime.shutdown().is_empty());
     assert!(cloud_server.shutdown().is_empty());
 }
@@ -266,6 +293,21 @@ async fn an_eligible_403_stops_the_tick_after_one_upload_and_warns_once_safely()
     // Tick 2: the server still says `true`; the fused process still does nothing.
     maybe_sync(true, &config, &cloud, SENTINEL_BEARER, &state).await;
 
+    runtime.drain();
+    cloud_server.drain();
+    // Tick 2 is fused, so the tallies below cover the whole process. Accounting
+    // for every accepted connection keeps an unreadable contact from hiding in
+    // the gap between "connections opened" and "requests recorded".
+    assert_eq!(
+        runtime.accepted_count() as usize,
+        runtime.hits().len(),
+        "every runtime connection is accounted for as a request"
+    );
+    assert_eq!(
+        cloud_server.accepted_count() as usize,
+        cloud_server.hits().len(),
+        "every cloud connection is accounted for as a request"
+    );
     let runtime_hits = runtime.shutdown();
     let cloud_hits = cloud_server.shutdown();
     assert_eq!(

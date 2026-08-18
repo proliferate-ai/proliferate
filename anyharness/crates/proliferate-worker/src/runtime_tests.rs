@@ -205,6 +205,23 @@ async fn run_one_tick(capability: Option<bool>, trace: &Timeline) -> TickOutcome
     )
     .await;
 
+    // Every accepted connection must have produced a recorded request. Without
+    // this, a connection that was accepted but never readable would leave no hit
+    // behind, and the per-case "zero snapshot requests" assertions below —
+    // which read only hits — could pass while contact had in fact happened.
+    runtime.drain();
+    cloud_server.drain();
+    assert_eq!(
+        runtime.accepted_count() as usize,
+        runtime.hits().len(),
+        "every connection the runtime accepted is accounted for as a request"
+    );
+    assert_eq!(
+        cloud_server.accepted_count() as usize,
+        cloud_server.hits().len(),
+        "every connection the cloud accepted is accounted for as a request"
+    );
+
     TickOutcome {
         control,
         runtime_hits: runtime.shutdown(),

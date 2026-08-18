@@ -34,7 +34,6 @@ use tracing_subscriber::prelude::*;
 /// `"false"`, or a constant of the wrong type, cannot satisfy an assertion meant
 /// for a real boolean.
 #[derive(Debug, Clone, PartialEq)]
-#[allow(dead_code)]
 pub(crate) enum FieldValue {
     Bool(bool),
     I64(i64),
@@ -57,7 +56,6 @@ impl FieldValue {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub(crate) struct CapturedEvent {
     pub(crate) level: Level,
     pub(crate) target: String,
@@ -68,7 +66,6 @@ pub(crate) struct CapturedEvent {
     pub(crate) latch_at_capture: Option<bool>,
 }
 
-#[allow(dead_code)]
 impl CapturedEvent {
     pub(crate) fn message(&self) -> String {
         self.field("message")
@@ -103,10 +100,15 @@ impl CapturedEvent {
 
 /// One ordered timeline shared by the trace collector and the fake listeners.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub(crate) enum Step {
     Event(CapturedEvent),
-    Request { server: &'static str, line: String },
+    Request {
+        /// Which listener answered. Read through the derived `Debug` when an
+        /// assertion prints the timeline, which the dead-code lint cannot see.
+        #[allow(dead_code)]
+        server: &'static str,
+        line: String,
+    },
 }
 
 pub(crate) type Timeline = Arc<Mutex<Vec<Step>>>;
@@ -118,7 +120,6 @@ pub(crate) fn timeline() -> Timeline {
     Arc::new(Mutex::new(Vec::new()))
 }
 
-#[allow(dead_code)]
 pub(crate) fn steps(timeline: &Timeline) -> Vec<Step> {
     timeline.lock().unwrap().clone()
 }
@@ -134,12 +135,10 @@ pub(crate) fn events(timeline: &Timeline) -> Vec<CapturedEvent> {
 }
 
 /// The index in the shared timeline of the first step matching a predicate.
-#[allow(dead_code)]
 pub(crate) fn position(timeline: &Timeline, mut matches: impl FnMut(&Step) -> bool) -> Option<usize> {
     steps(timeline).iter().position(|step| matches(step))
 }
 
-#[allow(dead_code)]
 pub(crate) fn is_request_containing(needle: &str) -> impl Fn(&Step) -> bool + '_ {
     move |step| matches!(step, Step::Request { line, .. } if line.contains(needle))
 }
@@ -205,7 +204,6 @@ pub(crate) fn capture(timeline: &Timeline) -> tracing::subscriber::DefaultGuard 
 
 /// Like [`capture`], but each captured event also records what `probe` read at
 /// the instant of capture.
-#[allow(dead_code)]
 pub(crate) fn capture_with_latch_probe(
     timeline: &Timeline,
     probe: LatchProbe,
@@ -228,16 +226,14 @@ pub(crate) type Route = (&'static str, String, u16, String);
 /// A fake HTTP server that answers a routing table for as long as the test wants
 /// and records every request. It never pre-commits to a request count, which is
 /// what makes "zero requests arrived" an assertion rather than a hang.
-#[allow(dead_code)]
 pub(crate) struct InstrumentedServer {
     pub(crate) address: SocketAddr,
     hits: Arc<Mutex<Vec<String>>>,
     accepted: Arc<AtomicU64>,
     stop: Arc<AtomicBool>,
-    handle: Option<std::thread::JoinHandle<()>>,
+    handle: Mutex<Option<std::thread::JoinHandle<()>>>,
 }
 
-#[allow(dead_code)]
 impl InstrumentedServer {
     pub(crate) fn spawn(label: &'static str, routes: Vec<Route>, timeline: Timeline) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind instrumented server");
@@ -310,7 +306,7 @@ impl InstrumentedServer {
             hits,
             accepted,
             stop,
-            handle: Some(handle),
+            handle: Mutex::new(Some(handle)),
         }
     }
 
@@ -319,24 +315,27 @@ impl InstrumentedServer {
     }
 
     /// Connections accepted, whether or not a request could be read off them.
+    /// Read this after [`Self::drain`] so the tally is final. A zero-request
+    /// claim should assert on BOTH this and [`Self::hits`]: a connection that is
+    /// accepted but never readable produces no hit, so hits alone would let such
+    /// a contact pass unnoticed.
     pub(crate) fn accepted_count(&self) -> u64 {
         self.accepted.load(Ordering::SeqCst)
     }
 
-    pub(crate) fn count(&self, needle: &str) -> usize {
-        self.hits()
-            .iter()
-            .filter(|line| line.contains(needle))
-            .count()
+    /// Stop the accept loop and join the thread, leaving both tallies final and
+    /// still readable. Idempotent.
+    pub(crate) fn drain(&self) {
+        self.stop.store(true, Ordering::SeqCst);
+        if let Some(handle) = self.handle.lock().unwrap().take() {
+            handle.join().expect("instrumented server thread");
+        }
     }
 
     /// Stop the accept loop and drain the thread, so a test's request tally is
     /// final rather than racing a late connection.
-    pub(crate) fn shutdown(mut self) -> Vec<String> {
-        self.stop.store(true, Ordering::SeqCst);
-        if let Some(handle) = self.handle.take() {
-            handle.join().expect("instrumented server thread");
-        }
+    pub(crate) fn shutdown(self) -> Vec<String> {
+        self.drain();
         self.hits()
     }
 }
