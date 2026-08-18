@@ -116,6 +116,60 @@ function assistantCompleted(
   });
 }
 
+// Q13 (rung 10, PRO-187): a "thought" item mid-turn, the normalized item kind
+// every harness's reasoning/thinking events reduce into (see
+// harness-transient-block-matrix.ts). Its trailing status renders inside the
+// SAME reserved ASSISTANT_ACTION_SLOT_HEIGHT slot as the working gleam and
+// the tool-call label (TranscriptTurnChrome.tsx); it must never add its own
+// row height while streaming, or the reserved-slot invariant is broken.
+function thoughtStarted(
+  sessionId: string,
+  turnId: string,
+  itemId: string,
+  text: string,
+): SessionEventEnvelope {
+  return envelope(sessionId, turnId, itemId, {
+    type: "item_started",
+    item: {
+      kind: "reasoning",
+      status: "in_progress",
+      sourceAgentKind: "claude",
+      isTransient: true,
+      contentParts: [{ type: "reasoning", text, visibility: "private" }],
+    },
+  });
+}
+
+function thoughtDelta(
+  sessionId: string,
+  turnId: string,
+  itemId: string,
+  appendReasoning: string,
+): SessionEventEnvelope {
+  return envelope(sessionId, turnId, itemId, {
+    type: "item_delta",
+    delta: { appendReasoning },
+  });
+}
+
+function thoughtCompleted(
+  sessionId: string,
+  turnId: string,
+  itemId: string,
+  text: string,
+): SessionEventEnvelope {
+  return envelope(sessionId, turnId, itemId, {
+    type: "item_completed",
+    item: {
+      kind: "reasoning",
+      status: "completed",
+      sourceAgentKind: "claude",
+      isTransient: true,
+      contentParts: [{ type: "reasoning", text, visibility: "private" }],
+    },
+  });
+}
+
 // Closes a turn the way production hydration does: a real finalized turn always
 // carries a `turn_ended`, which is what stamps `completedAt` on the turn record.
 // The renderer reads `completedAt` to decide `wasLive` (use-assistant-reveal-
@@ -336,6 +390,8 @@ const scrollSamples: ScrollSample[] = [];
 
 // Streaming bookkeeping for the currently-open assistant item.
 let openStream: { sessionId: string; turnId: string; itemId: string; text: string } | null = null;
+// Q13 (rung 10): the currently-open thought item within an open stream, if any.
+let openThought: { sessionId: string; turnId: string; itemId: string; text: string } | null = null;
 
 // A reservoir of older turns to reveal on prepend, keyed per session.
 let olderReservoir = 0;
@@ -415,7 +471,32 @@ function metrics(): ViewportMetrics {
 
 // Per-frame scrollTop trace recorder: capture scrollTop on every rAF between
 // start and stop, so a spec can assert "no visible motion" (a flat trace).
+//
+// A raw backward scrollTop step conflates two different legitimate causes
+// with one real bug:
+//  1. A real backward displacement of the pinned reader's view (the bug Q13
+//     exists to catch).
+//  2. The single writer correctly following a content area that just got
+//     SMALLER (an estimate-to-measured height correction shrinking the
+//     calibrated content, mid-stream) — scrollTop drops, but scrollHeight
+//     drops by the same amount, so the reader sees nothing move.
+// There is also a THIRD, unrelated reason scrollTop can look flat while the
+// reader's distance-from-bottom rises for one frame: ordinary content
+// GROWTH lag. When a chunk lands, scrollHeight can grow one frame before the
+// single writer's snap follows it (scrollTop stays flat that frame, catches
+// up the next) — completely normal steady-state streaming behavior, already
+// bounded by PIN_FOLLOW_MAX_DISTANCE_PX elsewhere, and NOT a backward bounce
+// of the reader's actual view position at all, since scrollTop never
+// decreased.
+//
+// `scrollHeightFrames` is captured in the SAME rAF tick as `traceFrames`
+// (frame-aligned, not a second independent loop), so a spec can compute, per
+// step, how much of a scrollTop drop is actually explained by a matching
+// scrollHeight shrink (case 2) and flag only the unexplained remainder
+// (case 1). Because this only fires when scrollTop itself drops, ordinary
+// growth-lag (case 3, scrollTop flat or rising) never trips it.
 let traceFrames: number[] = [];
+let scrollHeightFrames: number[] = [];
 let traceRafId = 0;
 let traceActive = false;
 
@@ -444,6 +525,7 @@ function traceTick(): void {
   }
   const el = viewport();
   traceFrames.push(el ? el.scrollTop : Number.NaN);
+  scrollHeightFrames.push(el ? el.scrollHeight : Number.NaN);
   traceRafId = requestAnimationFrame(traceTick);
 }
 
@@ -457,6 +539,17 @@ export interface ScrollPhysicsDriver {
   beginStreamingTurn(): void;
   streamChunk(text?: string): void;
   streamChunks(count: number, textPerChunk?: string): void;
+  /**
+   * Q13 (rung 10): within the currently-open streaming turn, start a thought
+   * (a `reasoning` item, the normalized kind every harness's thinking events
+   * reduce into) and stream it a couple of deltas. Its trailing-status label
+   * renders inside the reserved slot; it must cost zero row height.
+   */
+  streamThoughtStart(): void;
+  /** Ends the open thought (Q13). Its label survives the stream closing (see transcript-trailing-status.ts) until the next visible item replaces it. */
+  streamThoughtStop(): void;
+  /** A single small completed tool call inside the open streaming turn (Q13 tool-only class). */
+  streamToolCall(): void;
   finalizeStreamingTurn(): void;
   appendLargeToolOutput(): void;
   appendCodeBlockTurn(): void;
@@ -497,6 +590,14 @@ export interface ScrollPhysicsDriver {
   clearScrollSamples(): void;
   startScrollTrace(): void;
   stopScrollTrace(): number[];
+  // Frame-aligned with startScrollTrace/stopScrollTrace: the same rAF ticks,
+  // reporting scrollHeight instead of scrollTop. Pair the two traces (same
+  // index = same frame) to compute, per step, how much of a scrollTop drop
+  // is explained by a matching scrollHeight shrink versus unexplained (a
+  // real backward bounce). Do not use scrollHeight alone as a "no backward
+  // motion" signal — it rises during ordinary content growth, which is not a
+  // bounce.
+  stopScrollHeightTrace(): number[];
   startContentHeightTrace(): void;
   stopContentHeightTrace(): number[];
   hasViewport(): boolean;
@@ -510,6 +611,7 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
     resetCounter += 1;
     currentSessionId = sessionId ?? `${PRIMARY_SESSION}-${resetCounter}`;
     openStream = null;
+    openThought = null;
     olderReservoir = 0;
     lastPrependEvidence = null;
     scrollSamples.length = 0;
@@ -528,6 +630,7 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
     const id = sessionId ?? currentSessionId;
     currentSessionId = id;
     openStream = null;
+    openThought = null;
     commit({
       ...snapshot,
       transcript: buildFinalizedConversation(id, turns),
@@ -549,6 +652,7 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
   seedConversationWithToolLedger(leadingTurns: number, trailingTurns: number, toolCallCount = 30): void {
     const id = currentSessionId;
     openStream = null;
+    openThought = null;
     let state = createTranscriptState(id);
     const batch: SessionEventEnvelope[] = [];
     for (let t = 0; t < leadingTurns; t += 1) {
@@ -611,6 +715,34 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
     }
   },
 
+  streamThoughtStart(): void {
+    if (!openStream) {
+      this.beginStreamingTurn();
+    }
+    const stream = openStream!;
+    const itemId = `${stream.turnId}-thought`;
+    openThought = { sessionId: stream.sessionId, turnId: stream.turnId, itemId, text: "Considering the approach" };
+    apply([thoughtStarted(stream.sessionId, stream.turnId, itemId, openThought.text)]);
+    apply([thoughtDelta(stream.sessionId, stream.turnId, itemId, " and weighing tradeoffs.")]);
+  },
+
+  streamThoughtStop(): void {
+    if (!openThought) {
+      return;
+    }
+    const thought = openThought;
+    apply([thoughtCompleted(thought.sessionId, thought.turnId, thought.itemId, `${thought.text} and weighing tradeoffs.`)]);
+    openThought = null;
+  },
+
+  streamToolCall(): void {
+    if (!openStream) {
+      this.beginStreamingTurn();
+    }
+    const stream = openStream!;
+    apply(smallToolCall(stream.sessionId, stream.turnId, nextSeq()));
+  },
+
   finalizeStreamingTurn(): void {
     if (!openStream) {
       return;
@@ -618,6 +750,7 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
     const stream = openStream;
     apply([assistantCompleted(stream.sessionId, stream.turnId, stream.itemId, stream.text)]);
     openStream = null;
+    openThought = null;
     commit({ ...snapshot, sessionBusy: false });
   },
 
@@ -902,6 +1035,7 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
 
   startScrollTrace(): void {
     traceFrames = [];
+    scrollHeightFrames = [];
     traceActive = true;
     traceRafId = requestAnimationFrame(traceTick);
   },
@@ -913,6 +1047,15 @@ export const scrollPhysicsDriver: ScrollPhysicsDriver = {
       traceRafId = 0;
     }
     return traceFrames.slice();
+  },
+
+  stopScrollHeightTrace(): number[] {
+    traceActive = false;
+    if (traceRafId) {
+      cancelAnimationFrame(traceRafId);
+      traceRafId = 0;
+    }
+    return scrollHeightFrames.slice();
   },
 
   startContentHeightTrace(): void {

@@ -91,4 +91,14 @@ export interface TranscriptStickToBottom {
    * call stack pre-empts any queued programmatic snap.
    */
   cancelFramePipeline: () => void;
+  /**
+   * Interaction-clock (performance.now) deadline of the active above-change
+   * compensation anchor (0 when none is live). Rung 10 / Founder Ruling 3
+   * (PRO-187): the transcript row list's blank-viewport-fallback suppression
+   * window derives from THIS real reserved-slot signal instead of an
+   * independent fixed timer, so suppression lasts exactly as long as (and no
+   * longer than) the engine is actually still absorbing a measurement
+   * correction. See use-transcript-virtualizer-blank-fallback.ts.
+   */
+  compensationDeadlineRef: RefObject<number>;
 }

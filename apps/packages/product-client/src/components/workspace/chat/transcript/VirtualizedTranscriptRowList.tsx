@@ -77,6 +77,7 @@ export function VirtualizedTranscriptRowList({
     notifyContentResize,
     startAboveChangeCompensation,
     cancelFramePipeline,
+    compensationDeadlineRef,
   } = useTranscriptStickToBottom({
     scrollRef,
     onScrollSample,
@@ -277,24 +278,22 @@ export function VirtualizedTranscriptRowList({
     }
 
     setPinned(false);
+    // A prepend shifts every row's index up, indistinguishable to
+    // useTranscriptCompletedTurnAnchor (runs after, below) from its OWN
+    // completed-turn-split case; unguarded, it re-arms compensation from its
+    // stale pre-prepend capture as cancelableByUpwardIntent=true, which
+    // wheelToTop's still-in-flight gesture then cancels, stranding scrollTop
+    // at 0 (the CI webkit bimodal prepend failure). Invalidate its capture.
+    pendingAnchorRef.current = null;
+    // Forward-clamped like every later frame-pass write (r5): never yield a
+    // negative delta. NOT cancelable — the reader asked for this by scrolling up.
     notifyProgrammaticScroll(() => {
-      viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
+      const rawScrollHeightDelta = viewport.scrollHeight - anchor.scrollHeight;
+      viewport.scrollTop = anchor.scrollTop + Math.max(rawScrollHeightDelta, 0);
     });
-    // The synchronous write above lands against the CURRENT scrollHeight, which
-    // still reflects the virtualizer's 360px estimate for the freshly-mounted
-    // older rows. On Chromium the transcript runs with `overflow-anchor: none`
-    // (the single-writer ruling), so the browser no longer silently corrects
-    // that shortfall as the real, taller row heights measure in a frame later —
-    // the reading row would drift down by the estimate-to-measured difference.
-    // Re-apply the same delta each frame while the prepended rows settle (a no-op
-    // once pinned or height-stable), so scrollTop absorbs the full added-above
-    // height and the reading row stays fixed on every engine. NOT cancelable by
-    // upward intent: the reader requested this prepend by scrolling to the top,
-    // so the reading row must hold even as that same upward gesture continues.
     startAboveChangeCompensation(anchor, false);
-    // Open the blank-fallback grace window: the anchored scrollTop sits ahead of the still-estimated mounted range until those rows measure taller.
-    prependSettleUntilRef.current = (typeof performance === "undefined" ? Date.now() : performance.now()) + PREPEND_BLANK_FALLBACK_GRACE_MS;
-  }, [notifyProgrammaticScroll, olderHistoryCursor, rows.length, setPinned, startAboveChangeCompensation]);
+    prependSettleUntilRef.current = (typeof performance === "undefined" ? Date.now() : performance.now()) + PREPEND_BLANK_FALLBACK_GRACE_MS; // Ruling 3(c): bounded ceiling only.
+  }, [notifyProgrammaticScroll, olderHistoryCursor, pendingAnchorRef, rows.length, setPinned, startAboveChangeCompensation]);
 
   useEffect(() => {
     const anchor = pendingPrependAnchorRef.current;
@@ -370,7 +369,7 @@ export function VirtualizedTranscriptRowList({
     activeSessionId, bottomSpacerHeight,
     firstVirtualItem, lastVirtualItem,
     lastBlankReportSignatureRef, rowCount: rows.length,
-    onFallback, prependSettleUntilRef, renderableRowCount: renderableRows.length,
+    onFallback, prependSettleUntilRef, compensationDeadlineRef, renderableRowCount: renderableRows.length,
     scrollRef, selectedWorkspaceId,
     topSpacerHeight, totalContentHeight,
     virtualItemCount: virtualItems.length,

@@ -95,7 +95,7 @@ describe("transcript-reading-position-store", () => {
         rows,
         { rowKey: "turn:1:block:content", offsetWithinRowPx: 60 },
       );
-      expect(target).toBe(200 + (340 - 40) + 60);
+      expect(target).toEqual({ top: 200 + (340 - 40) + 60, mounted: true });
     });
 
     it("coarse fallback: inverts a saved anchor via the absolute estimate when the row is not mounted", () => {
@@ -106,7 +106,7 @@ describe("transcript-reading-position-store", () => {
         rows,
         { rowKey: "turn:1:block:content", offsetWithinRowPx: 60 },
       );
-      expect(target).toBe(700);
+      expect(target).toEqual({ top: 700, mounted: false });
     });
 
     it("returns null when the saved row no longer exists (saved-row-gone)", () => {
@@ -139,7 +139,11 @@ describe("transcript-reading-position-store", () => {
       return {
         viewport,
         scrollRef: { current: viewport },
-        restoreResolverRef: { current: null as ((viewport: HTMLElement) => number | null) | null },
+        restoreResolverRef: {
+          current: null as
+            | ((viewport: HTMLElement) => { top: number; mounted: boolean } | null)
+            | null,
+        },
         restoreDeadlineRef: { current: 0 },
       };
     }
@@ -147,7 +151,10 @@ describe("transcript-reading-position-store", () => {
     it("places a resolvable restore, unpins, and arms the frame-writer anchor", () => {
       const refs = makeRefs();
       const setPinned = vi.fn();
-      const plan: TranscriptSessionRestorePlan = { kind: "restore", resolveTargetTop: () => 450 };
+      const plan: TranscriptSessionRestorePlan = {
+        kind: "restore",
+        resolveTargetTop: () => ({ top: 450, mounted: true }),
+      };
       const placed = beginSessionRestorePlacement(
         plan,
         1234,

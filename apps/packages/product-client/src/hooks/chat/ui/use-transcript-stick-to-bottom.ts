@@ -14,7 +14,11 @@ import { useTranscriptAutoFollowBottom } from "#product/hooks/chat/ui/use-transc
 import { useTranscriptSubmitStampRepin } from "#product/hooks/chat/ui/use-transcript-submit-stamp-repin";
 import { useTranscriptNewContentSignal } from "#product/hooks/chat/ui/use-transcript-new-content-signal";
 import { useTranscriptUserScrollIntent } from "#product/hooks/chat/ui/use-transcript-user-scroll-intent";
-import { beginSessionRestorePlacement, type TranscriptSessionRestorePlan } from "#product/hooks/chat/ui/transcript-reading-position-store";
+import {
+  beginSessionRestorePlacement,
+  type TranscriptRestoreResolution,
+  type TranscriptSessionRestorePlan,
+} from "#product/hooks/chat/ui/transcript-reading-position-store";
 import type {
   TranscriptStickToBottom,
   UseTranscriptStickToBottomOptions,
@@ -87,7 +91,7 @@ export function useTranscriptStickToBottom({
   // early on a slow runner and loses the last correction).
   const compensationDeadlineRef = useRef(0);
   // FR-2 restore (rung 6): frame writer re-resolves this each glued frame so the saved reading row holds as heights settle.
-  const restoreResolverRef = useRef<((viewport: HTMLElement) => number | null) | null>(null);
+  const restoreResolverRef = useRef<((viewport: HTMLElement) => TranscriptRestoreResolution | null) | null>(null);
   const restoreDeadlineRef = useRef(0);
   const userScrollIntentUntilRef = useRef(0);
 
@@ -183,6 +187,27 @@ export function useTranscriptStickToBottom({
       return;
     }
 
+    // A NON-cancelable compensation (history prepend) must never let scrollTop
+    // fall below where the reader stood pre-prepend. The frame pipeline only
+    // re-applies its write on a growth-driven pass, never on a scroll EVENT; a
+    // physical wheel gesture moves scrollTop natively between passes, and once
+    // content plateaus nothing schedules another pass to counter it (CI webkit
+    // "prepend anchoring ... scrollTop Received 0"). Clamp synchronously here
+    // to the anchor's pre-prepend floor, already proven safe.
+    const activeCompensationAnchor = compensationAnchorRef.current;
+    if (
+      activeCompensationAnchor != null
+      && !compensationCancelableRef.current
+      && interactionNow() < compensationDeadlineRef.current
+      && top < activeCompensationAnchor.scrollTop
+    ) {
+      notifyProgrammaticScroll(() => {
+        viewport.scrollTop = activeCompensationAnchor.scrollTop;
+      });
+      onScrollSample({ programmatic: true });
+      return;
+    }
+
     // No live marker: user scroll (intent-attributed below) or unattributed; the
     // user-scroll-wins pin logic runs unchanged either way.
     const distance = resolveVirtualBottomDistance({
@@ -227,7 +252,17 @@ export function useTranscriptStickToBottom({
         ? { programmatic: false, userInitiated: true }
         : { programmatic: false },
     );
-  }, [dispatchInsetEvent, onScrollSample, pinnedRef, repinThresholdPx, setPinned]);
+  }, [
+    compensationAnchorRef,
+    compensationCancelableRef,
+    compensationDeadlineRef,
+    dispatchInsetEvent,
+    notifyProgrammaticScroll,
+    onScrollSample,
+    pinnedRef,
+    repinThresholdPx,
+    setPinned,
+  ]);
 
   // Session re-entry / submit / tab-resume "glue": snap each frame while a
   // freshly mounted or resumed measurement backlog lands, terminating when the
@@ -317,6 +352,14 @@ export function useTranscriptStickToBottom({
   // pinned glue loop.
   useTranscriptUserScrollIntent({ scrollRef, notifyUserScrollIntent });
 
+  // Founder Ruling 3 (rung 10, PRO-187): a restore whose deadline lapses having
+  // never mounted the saved row gives up on the coarse estimate and bottom-pins
+  // instead — the conservative FR-2 default, same as a vanished saved row.
+  const notifyRestoreStranded = useCallback(() => {
+    setPinned(true);
+    scrollToBottom();
+  }, [scrollToBottom, setPinned]);
+
   // The frame pipeline's single writer, its tab/window-resume glue, and its
   // disposal. Registered after beginGlue so the resume path can trigger it.
   useTranscriptFramePipelineLifecycle({
@@ -331,6 +374,7 @@ export function useTranscriptStickToBottom({
     notifyProgrammaticScroll,
     clearAllMarkers,
     beginGlue,
+    onRestoreStranded: notifyRestoreStranded,
   });
 
   return {
@@ -347,5 +391,8 @@ export function useTranscriptStickToBottom({
     notifyContentResize,
     startAboveChangeCompensation,
     cancelFramePipeline,
+    // Ruling 3(c): the blank-fallback grace window subordinates to this real
+    // reserved-slot/compensation signal instead of an independent timer.
+    compensationDeadlineRef,
   };
 }
