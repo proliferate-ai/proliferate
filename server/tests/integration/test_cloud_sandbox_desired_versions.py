@@ -24,72 +24,24 @@ from proliferate.constants.organizations import (
     ORGANIZATION_ROLE_MEMBER,
     ORGANIZATION_STATUS_ACTIVE,
 )
-from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import instance_organizations as instance_organization_store
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime_workers import service
-from proliferate.server.cloud.runtime_workers.service import create_cloud_sandbox_enrollment
 from proliferate.lib.infra.encryption.fernet import encrypt_text
 from tests.e2e.cloud.helpers.auth import create_user_and_login
+from tests.helpers.worker_heartbeat import (
+    enroll_sandbox_worker as _enroll_sandbox_worker,
+    heartbeat as _heartbeat,
+    seed_owner as _seed_owner,
+    seed_sandbox as _seed_sandbox,
+)
 
 
 @pytest.fixture(autouse=True)
 def _worker_cloud_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "cloud_worker_base_url", "http://cloud.test")
-
-
-async def _seed_owner(db_session: AsyncSession, *, prefix: str) -> User:
-    user = User(
-        email=f"{prefix}-{uuid.uuid4().hex[:10]}@example.com",
-        hashed_password="unused-oauth-only",
-        is_active=True,
-        is_verified=True,
-    )
-    db_session.add(user)
-    await db_session.flush()
-    return user
-
-
-async def _seed_sandbox(db_session: AsyncSession, *, prefix: str) -> CloudSandbox:
-    owner = await _seed_owner(db_session, prefix=prefix)
-    sandbox = CloudSandbox(
-        owner_user_id=owner.id,
-        provider_sandbox_id=f"sandbox-{uuid.uuid4().hex[:8]}",
-        status=CloudSandboxStatus.ready,
-    )
-    db_session.add(sandbox)
-    await db_session.commit()
-    return sandbox
-
-
-async def _enroll_sandbox_worker(
-    client: AsyncClient,
-    db_session: AsyncSession,
-    *,
-    sandbox: CloudSandbox,
-) -> str:
-    """Enroll a cloud-sandbox worker (not a desktop worker) and return its bearer token."""
-    token = await create_cloud_sandbox_enrollment(
-        db_session,
-        cloud_sandbox_id=sandbox.id,
-        owner_user_id=sandbox.owner_user_id,
-    )
-    await db_session.commit()
-    enroll = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token})
-    assert enroll.status_code == 200, enroll.text
-    return enroll.json()["workerToken"]
-
-
-async def _heartbeat(client: AsyncClient, worker_token: str) -> dict:
-    response = await client.post(
-        "/v1/cloud/worker/heartbeat",
-        headers={"Authorization": f"Bearer {worker_token}"},
-        json={},
-    )
-    assert response.status_code == 200, response.text
-    return response.json()
 
 
 async def _make_instance_admin(db_session: AsyncSession, *, user_id: str, role: str) -> None:
@@ -548,75 +500,3 @@ class TestSupervisorBridgeDelivery:
 
         assert body["desiredTopology"] == "supervisor_owned"
         assert body.get("supervisorBridge") is None
-
-
-class TestHeartbeatModelSnapshotUploadEligibility:
-    """REL-10: the cloud-sandbox half of the advertised snapshot-upload verdict.
-
-    The verdict rides the same authenticated 200 as the version overlay but is
-    not desired state: it never alters ``desiredVersions`` or ``desiredTopology``.
-    """
-
-    @pytest.mark.asyncio
-    async def test_active_owned_cloud_sandbox_worker_is_allowed(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-    ) -> None:
-        sandbox = await _seed_sandbox(db_session, prefix="snapshot-eligible")
-        worker_token = await _enroll_sandbox_worker(client, db_session, sandbox=sandbox)
-
-        body = await _heartbeat(client, worker_token)
-
-        assert body["modelSnapshotUploadAllowed"] is True
-
-    @pytest.mark.asyncio
-    async def test_a_destroyed_sandbox_flips_the_verdict_to_false(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-    ) -> None:
-        """The same Worker, the same bearer: destruction alone revokes eligibility,
-        so the Worker stops uploading on the very next heartbeat."""
-        sandbox = await _seed_sandbox(db_session, prefix="snapshot-destroyed")
-        worker_token = await _enroll_sandbox_worker(client, db_session, sandbox=sandbox)
-
-        before = await _heartbeat(client, worker_token)
-        assert before["modelSnapshotUploadAllowed"] is True
-
-        sandbox.destroyed_at = datetime.now(UTC)
-        db_session.add(sandbox)
-        await db_session.commit()
-
-        after = await _heartbeat(client, worker_token)
-        assert after["modelSnapshotUploadAllowed"] is False
-
-    @pytest.mark.asyncio
-    async def test_the_verdict_does_not_disturb_version_convergence(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """Binary versions remain the only desired convergence state: a target
-        whose sandbox is destroyed still receives its exact version overlay."""
-        monkeypatch.setenv("WORKER_VERSION", "1.0.0")
-        monkeypatch.setenv("RUNTIME_VERSION", "1.0.0")
-        sandbox = await _seed_sandbox(db_session, prefix="snapshot-overlay")
-        sandbox.desired_anyharness_version = "4.4.4"
-        sandbox.desired_worker_version = "4.4.4"
-        db_session.add(sandbox)
-        await db_session.commit()
-        worker_token = await _enroll_sandbox_worker(client, db_session, sandbox=sandbox)
-
-        eligible = await _heartbeat(client, worker_token)
-        sandbox.destroyed_at = datetime.now(UTC)
-        db_session.add(sandbox)
-        await db_session.commit()
-        ineligible = await _heartbeat(client, worker_token)
-
-        assert eligible["modelSnapshotUploadAllowed"] is True
-        assert ineligible["modelSnapshotUploadAllowed"] is False
-        assert eligible["desiredVersions"] == ineligible["desiredVersions"]
-        assert ineligible["desiredVersions"]["anyharness"] == "4.4.4"
-        assert eligible["desiredTopology"] == ineligible["desiredTopology"]

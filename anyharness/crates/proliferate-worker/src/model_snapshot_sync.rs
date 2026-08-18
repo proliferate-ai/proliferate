@@ -425,3 +425,7 @@ async fn fetch_runtime_status(
 #[cfg(test)]
 #[path = "model_snapshot_sync_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "model_snapshot_sync_gate_tests.rs"]
+mod gate_tests;
