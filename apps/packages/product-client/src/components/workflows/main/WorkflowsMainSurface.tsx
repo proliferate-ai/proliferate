@@ -83,7 +83,9 @@ export function WorkflowsMainSurface({
 
   const handleLaunched = (launch: WorkflowTriggerLaunch) => {
     setRunningId(null);
-    selectWorkspaceFromSurface(launch.workspaceId, "workflows-main-surface");
+    selectWorkspaceFromSurface(launch.workspaceId, "workflows-main-surface", {
+      knownWorkspace: launch.workspace,
+    });
   };
 
   const handleDeleteConfirm = () => {

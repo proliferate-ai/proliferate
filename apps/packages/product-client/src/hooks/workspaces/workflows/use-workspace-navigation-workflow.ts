@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import type { Workspace } from "@anyharness/sdk";
 import { webWorkspaceDeepLink } from "@proliferate/cloud-sdk";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { navigateApp } from "#product/lib/workflows/app/app-navigate-handoff";
@@ -60,6 +61,10 @@ export function useWorkspaceNavigationWorkflow() {
   const selectWorkspaceFromSurface = useCallback(function selectWorkspaceFromSurface(
     workspaceId: string,
     source: string,
+    // A workspace a surface just had created for it (a workflow launch) is not
+    // in the collections cache yet; pass the record so selection resolves it
+    // directly instead of hard-failing "Workspace not found."
+    options?: { knownWorkspace?: Workspace | null },
   ) {
     const unclaimedCloudWorkspace = logicalWorkspaces.find((workspace) =>
       logicalWorkspaceMatchesId(workspace, workspaceId) &&
@@ -88,13 +93,16 @@ export function useWorkspaceNavigationWorkflow() {
       source,
       targetWorkspaceId: workspaceId,
     });
-    void selectWorkspace(workspaceId, { latencyFlowId }).catch((error) => {
+    void selectWorkspace(workspaceId, {
+      latencyFlowId,
+      knownWorkspace: options?.knownWorkspace ?? null,
+    }).catch((error) => {
       failLatencyFlow(latencyFlowId, "workspace_switch_failed");
       showErrorToast({
         headline: "Workspace not opened",
         consequence: "You are still in the workspace you were in.",
         cause: error instanceof Error ? error.message : String(error),
-        retry: () => selectWorkspaceFromSurface(workspaceId, source),
+        retry: () => selectWorkspaceFromSurface(workspaceId, source, options),
       });
     });
   }, [

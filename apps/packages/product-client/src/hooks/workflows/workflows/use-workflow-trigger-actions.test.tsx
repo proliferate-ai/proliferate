@@ -2,6 +2,7 @@
 
 import { AnyHarnessError } from "@anyharness/sdk";
 import type {
+  Workspace,
   WorkflowRunProjectionV2,
   WorkflowRunV2,
 } from "@anyharness/sdk";
@@ -24,13 +25,21 @@ import {
 } from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 import { prevalidateRendererDiagnostic } from "@/lib/infra/diagnostics/renderer-diagnostic-prevalidate";
 import type { TriggerCourierInput } from "#product/lib/workflows/trigger/trigger-courier";
-import { useWorkflowTriggerActions } from "./use-workflow-trigger-actions";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import {
+  useWorkflowTriggerActions,
+  type WorkflowTriggerLaunch,
+} from "./use-workflow-trigger-actions";
 
 const RUNTIME_URL = "http://runtime.test";
+
+/** The workspace `PUT /v1/workflow-runs/{id}` materializes for the run. */
+const PLACED_WORKSPACE = { id: "workspace-1" } as unknown as Workspace;
 
 const planes = vi.hoisted(() => ({
   putInvocation: vi.fn(),
   putRun: vi.fn(),
+  getWorkspace: vi.fn(),
 }));
 
 vi.mock("#product/hooks/access/cloud/workflows/use-workflow-trigger-access", () => ({
@@ -41,6 +50,10 @@ vi.mock("#product/hooks/access/cloud/workflows/use-workflow-trigger-access", () 
 
 vi.mock("#product/hooks/access/anyharness/workflows/use-workflow-run-put", () => ({
   useWorkflowRunPut: () => planes.putRun,
+}));
+
+vi.mock("#product/lib/access/anyharness/workspaces", () => ({
+  getWorkspace: planes.getWorkspace,
 }));
 
 const INPUT: TriggerCourierInput = {
@@ -58,6 +71,8 @@ beforeEach(() => {
     input: { invocationId: string },
   ) => invocation(input.invocationId));
   planes.putRun.mockImplementation(async (runId: string) => projection(runId));
+  planes.getWorkspace.mockImplementation(async () => PLACED_WORKSPACE);
+  useHarnessConnectionStore.getState().setRuntimeUrl(RUNTIME_URL);
 });
 
 afterEach(() => {
@@ -65,6 +80,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
   planes.putInvocation.mockReset();
   planes.putRun.mockReset();
+  planes.getWorkspace.mockReset();
+  useHarnessConnectionStore.getState().resetConnectionState();
 });
 
 describe("useWorkflowTriggerActions retry identity", () => {
@@ -171,6 +188,41 @@ describe("useWorkflowTriggerActions failure copy", () => {
   });
 });
 
+describe("useWorkflowTriggerActions placed workspace", () => {
+  it("hands the launch the workspace record the run PUT just materialized", async () => {
+    const onLaunched = vi.fn();
+    const { result } = renderTriggerActions(createQueryClient(), onLaunched);
+
+    await act(async () => {
+      await result.current.triggerRun(INPUT);
+    });
+
+    expect(planes.getWorkspace).toHaveBeenCalledWith({ runtimeUrl: RUNTIME_URL }, "workspace-1");
+    // Selection reads the collections cache, which was filled before this
+    // workspace existed; the record is what keeps the launch off the
+    // "Workspace not found." path.
+    expect(onLaunched).toHaveBeenCalledWith({
+      runId: "id-2",
+      workspaceId: "workspace-1",
+      workspace: PLACED_WORKSPACE,
+    });
+  });
+
+  it("still navigates when the workspace read-back fails", async () => {
+    planes.getWorkspace.mockRejectedValueOnce(new Error("offline"));
+    const onLaunched = vi.fn();
+    const { result } = renderTriggerActions(createQueryClient(), onLaunched);
+
+    await act(async () => {
+      await result.current.triggerRun(INPUT);
+    });
+
+    expect(onLaunched).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "workspace-1", workspace: null }),
+    );
+  });
+});
+
 describe("useWorkflowTriggerActions cache write-through", () => {
   it("puts the placed run in the run-detail cache and in every cached runs list", async () => {
     const queryClient = createQueryClient();
@@ -256,10 +308,14 @@ describe("useWorkflowTriggerActions diagnostics", () => {
   });
 });
 
-function renderTriggerActions(queryClient: QueryClient = createQueryClient()) {
-  return renderHook(() => useWorkflowTriggerActions({ authCacheScope: "user-1" }), {
-    wrapper: createWrapper(queryClient),
-  });
+function renderTriggerActions(
+  queryClient: QueryClient = createQueryClient(),
+  onLaunched?: (launch: WorkflowTriggerLaunch) => void,
+) {
+  return renderHook(
+    () => useWorkflowTriggerActions({ authCacheScope: "user-1", onLaunched }),
+    { wrapper: createWrapper(queryClient) },
+  );
 }
 
 function createQueryClient(): QueryClient {

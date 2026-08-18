@@ -8,6 +8,7 @@ import type {
   WorkflowDefinitionRecordV2,
 } from "@proliferate/cloud-sdk";
 import { WorkflowsMainSurface } from "#product/components/workflows/main/WorkflowsMainSurface";
+import type { WorkflowTriggerLaunch } from "#product/hooks/workflows/workflows/use-workflow-trigger-actions";
 import { WORKFLOW_STARTER_TEMPLATES_V2 } from "#product/config/workflows/starter-templates";
 
 /** `ProductPageShell`'s sticky title observes its viewport; jsdom has no observer. */
@@ -82,6 +83,7 @@ vi.mock("#product/components/workflows/trigger/WorkflowTriggerDialog", () => ({
   WorkflowTriggerDialog: (props: {
     definitionRecord: WorkflowDefinitionRecordV2;
     open: boolean;
+    onLaunched: (launch: WorkflowTriggerLaunch) => void;
   }) => {
     mocks.triggerDialog(props);
     return <div data-testid="trigger-dialog">{props.definitionRecord.title}</div>;
@@ -210,6 +212,28 @@ describe("WorkflowsMainSurface", () => {
     await waitFor(() => expect(screen.getByTestId("trigger-dialog")).toBeTruthy());
     expect(mocks.triggerDialog).toHaveBeenCalledWith(
       expect.objectContaining({ definitionRecord: definitionRecord(), open: true }),
+    );
+  });
+
+  it("opens the launched run's workspace with the record the launch carried", async () => {
+    mocks.listQuery.data = { workflows: [listRow()] };
+    mocks.definitionQuery.data = definitionRecord();
+
+    render(
+      <WorkflowsMainSurface authCacheScope="user-1" onEdit={vi.fn()} onNew={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Run Issue triage" }));
+    await waitFor(() => expect(screen.getByTestId("trigger-dialog")).toBeTruthy());
+
+    const launched = mocks.triggerDialog.mock.calls.at(-1)?.[0].onLaunched;
+    // The run PUT is what created this workspace, so the collections cache
+    // cannot know it: without the record selection fails "Workspace not found."
+    launched({ runId: "run-1", workspaceId: "ws-9", workspace: { id: "ws-9" } });
+
+    expect(mocks.selectWorkspaceFromSurface).toHaveBeenCalledWith(
+      "ws-9",
+      "workflows-main-surface",
+      { knownWorkspace: { id: "ws-9" } },
     );
   });
 
