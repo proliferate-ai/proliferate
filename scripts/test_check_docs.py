@@ -21,7 +21,7 @@ class RecordCoverageTest(unittest.TestCase):
     def test_checker_owns_exactly_the_prod_docs_records(self) -> None:
         self.assertEqual(
             check_docs.OWNED_RULE_IDS,
-            frozenset(f"PROD-DOCS-{index}" for index in range(1, 10)),
+            frozenset(f"PROD-DOCS-{index}" for index in range(1, 13)),
         )
 
     def test_every_owned_rule_renders_a_diagnostic_naming_its_record(self) -> None:
@@ -130,6 +130,208 @@ class DocumentationIntegrityTest(unittest.TestCase):
         self.assertIn("specs/developing/notes: PROD-DOCS-2", diagnostic)
         self.assertIn("unexpected Developing documentation root", diagnostic)
         self.assertIn("lints/product/docs.toml", diagnostic)
+
+    def test_python_version_guard_accepts_312_and_rejects_older_python(self) -> None:
+        self.assertIsNone(check_docs.python_version_diagnostic((3, 12, 0)))
+        diagnostic = check_docs.python_version_diagnostic((3, 11, 9))
+        self.assertEqual(
+            diagnostic,
+            "scripts/check_docs.py requires Python 3.12 or newer "
+            "(found 3.11.9); rerun with a Python 3.12 interpreter.",
+        )
+
+    def test_router_targets_are_derived_only_from_named_tables(self) -> None:
+        targets = check_docs.router_targets(
+            """
+# Repository
+
+[orientation](ignored.md)
+
+## Source router
+
+| Source area | Start here |
+| --- | --- |
+| `server/**` | [Server](specs/server/) |
+
+## Cross-plane systems
+
+| System | Touching | Read |
+| --- | --- | --- |
+| Billing | money | [Billing](specs/BILLING.md) |
+
+## Other
+
+| Link |
+| --- |
+| [ignored](other.md) |
+"""
+        )
+
+        self.assertEqual(
+            [(section, target) for section, _, target in targets],
+            [
+                ("Source router", "specs/server/"),
+                ("Cross-plane systems", "specs/BILLING.md"),
+            ],
+        )
+
+    def test_directory_router_target_resolves_to_readme(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            owner = root / "specs/server"
+            owner.mkdir(parents=True)
+            readme = owner / "README.md"
+            readme.write_text("# Server\n", encoding="utf-8")
+            (owner / "details.md").write_text("# Details\n", encoding="utf-8")
+
+            self.assertEqual(
+                check_docs.resolve_router_target(root, "specs/server/"),
+                [readme],
+            )
+
+    def test_current_target_and_superseded_authority_classification(self) -> None:
+        self.assertEqual(check_docs.document_authority("# Current\n"), "current")
+        self.assertEqual(
+            check_docs.document_authority("# Target\n\nStatus: target.\n"),
+            "target",
+        )
+        self.assertEqual(
+            check_docs.document_authority(
+                "# Old\n\n> **SUPERSEDED.** Read the replacement.\n"
+            ),
+            "superseded",
+        )
+        self.assertTrue(
+            check_docs.exposes_current_gaps(
+                "# Target\n\nStatus: target.\n\n## Current gaps\n\n- Missing.\n"
+            )
+        )
+
+    def canonical_route_findings(self, owner_text: str) -> list[check_docs.Finding]:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            owner = root / "specs/owner.md"
+            owner.parent.mkdir(parents=True)
+            owner.write_text(owner_text, encoding="utf-8")
+            (root / "AGENTS.md").write_text(
+                """# Repository
+
+## Source router
+
+| Source area | Start here |
+| --- | --- |
+| `src/**` | [Owner](specs/owner.md) |
+
+## Cross-plane systems
+
+| System | Touching | Read |
+| --- | --- | --- |
+""",
+                encoding="utf-8",
+            )
+            with patch.object(check_docs, "ROOT", root):
+                return check_docs.check_canonical_routes()
+
+    def test_canonical_current_and_declared_target_routes_pass(self) -> None:
+        self.assertEqual(self.canonical_route_findings("# Current owner\n"), [])
+        self.assertEqual(
+            self.canonical_route_findings(
+                "# Target owner\n\nStatus: target.\n\n## Current gaps\n\n- Gap.\n"
+            ),
+            [],
+        )
+
+    def test_canonical_superseded_route_fails(self) -> None:
+        errors = self.canonical_route_findings(
+            "# Retired\n\n> **SUPERSEDED.** Read another owner.\n"
+        )
+
+        self.assertEqual([error.rule_id for error in errors], ["PROD-DOCS-10"])
+        self.assertIn("superseded document", errors[0].format())
+
+    def test_canonical_target_without_current_gaps_fails(self) -> None:
+        errors = self.canonical_route_findings("# Future\n\nStatus: target.\n")
+
+        self.assertEqual([error.rule_id for error in errors], ["PROD-DOCS-10"])
+        self.assertIn("does not expose current gaps", errors[0].format())
+
+    def entry_page_findings(
+        self, overrides: dict[str, str] | None = None
+    ) -> list[check_docs.Finding]:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            contents = {
+                "README.md": "# Product\n\n[Route](AGENTS.md)\n",
+                "CONTRIBUTING.md": "# Contributing\n\n[Route](AGENTS.md)\n",
+                "specs/README.md": "# Specs\n\n[Route](../AGENTS.md)\n",
+                "ARCHITECTURE.md": "# Architecture\n\n[Route](AGENTS.md)\n",
+                "CLAUDE.md": "# Claude\n\n[Route](AGENTS.md)\n",
+            }
+            contents.update(overrides or {})
+            for relative, content in contents.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            (root / "AGENTS.md").write_text("# Router\n", encoding="utf-8")
+
+            with patch.object(check_docs, "ROOT", root), patch.object(
+                check_docs,
+                "tracked_paths",
+                return_value=[Path("CLAUDE.md")],
+            ):
+                return check_docs.check_entry_page_deference()
+
+    def test_entry_pages_defer_to_agents_without_competing_map(self) -> None:
+        self.assertEqual(self.entry_page_findings(), [])
+
+    def test_competing_entry_page_source_map_fails(self) -> None:
+        errors = self.entry_page_findings(
+            {
+                "README.md": """# Product
+
+[Route](AGENTS.md)
+
+## Source map
+
+| Source area | Start here |
+| --- | --- |
+| Server | specs/server |
+"""
+            }
+        )
+
+        self.assertEqual([error.rule_id for error in errors], ["PROD-DOCS-11"])
+        self.assertIn("competing source map", errors[0].format())
+
+    def test_broken_claude_loader_fails(self) -> None:
+        errors = self.entry_page_findings(
+            {"CLAUDE.md": "# Claude\n\nUse repository instructions.\n"}
+        )
+
+        self.assertEqual([error.rule_id for error in errors], ["PROD-DOCS-12"])
+        self.assertIn("does not link to AGENTS.md", errors[0].format())
+
+    def test_untracked_claude_loader_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            for relative, content in {
+                "README.md": "[Route](AGENTS.md)\n",
+                "CONTRIBUTING.md": "[Route](AGENTS.md)\n",
+                "specs/README.md": "[Route](../AGENTS.md)\n",
+                "ARCHITECTURE.md": "[Route](AGENTS.md)\n",
+                "CLAUDE.md": "[Route](AGENTS.md)\n",
+            }.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+
+            with patch.object(check_docs, "ROOT", root), patch.object(
+                check_docs, "tracked_paths", return_value=[]
+            ):
+                errors = check_docs.check_entry_page_deference()
+
+        self.assertEqual([error.rule_id for error in errors], ["PROD-DOCS-12"])
+        self.assertIn("harness loader is not tracked", errors[0].format())
 
     def markdown_errors(self, files: dict[str, str]) -> list[check_docs.Finding]:
         with tempfile.TemporaryDirectory() as directory:
