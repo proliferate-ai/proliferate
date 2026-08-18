@@ -16,6 +16,7 @@ import type {
   SupportedLiveControlKey,
 } from "#product/lib/domain/chat/session-controls/session-controls";
 import type { HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
+import { pickLiveDefaultLaunchControls } from "#product/lib/domain/sessions/creation/launch-controls";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
 const EMPTY_AGENTS: DesktopAgentLaunchAgent[] = [];
@@ -77,7 +78,9 @@ export function useHomeNextLaunchControls({
         ...preferences.defaultLiveSessionControlValuesByAgentKind,
         [modelSelection.kind]: {
           ...preferences.defaultLiveSessionControlValuesByAgentKind[modelSelection.kind],
-          ...controlOverrides,
+          // Overrides are keyed by raw config id; the descriptor reads the
+          // canonical control key (claude's `fast` is `fast_mode`).
+          ...pickLiveDefaultLaunchControls(controlOverrides),
         },
       },
     };

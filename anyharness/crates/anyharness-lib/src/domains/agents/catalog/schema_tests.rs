@@ -288,3 +288,38 @@ fn registry_gateway_capability_matches_render_assumption() {
         "cursor must never be gateway-capable (render.rs returns UnsupportedRoute)"
     );
 }
+
+/// PRO-318: claude's fast-mode option is `fast`, not codex's `fast_mode`.
+/// The control must carry an apply mapping and every model that declares it
+/// must report the capability, or Opus 4.8 ships a Fast toggle nothing can
+/// apply.
+#[test]
+fn claude_fast_control_is_mapped_and_reported() {
+    let catalog = crate::domains::agents::catalog::bundled::bundled_agent_catalog_document();
+    let claude = catalog
+        .agents
+        .iter()
+        .find(|agent| agent.kind == "claude")
+        .expect("claude agent");
+    let fast = claude
+        .session
+        .controls
+        .iter()
+        .find(|control| control.key == "fast")
+        .expect("claude declares a `fast` control");
+
+    assert_eq!(
+        fast.mapping
+            .as_ref()
+            .and_then(|mapping| mapping.live_config_id.as_deref()),
+        Some("fast"),
+        "the fast control needs a live-apply path or no surface can set it"
+    );
+    let opus = claude
+        .session
+        .models
+        .iter()
+        .find(|model| model.id == "opus")
+        .expect("opus model");
+    assert!(opus.supports_fast_mode(), "Opus 4.8 supports fast mode");
+}

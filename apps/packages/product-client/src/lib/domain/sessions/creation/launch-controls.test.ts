@@ -20,6 +20,12 @@ describe("pickLiveDefaultLaunchControls", () => {
     });
   });
 
+  // claude's harness names the option `fast`; the live default it feeds is
+  // still `fast_mode`, so the raw id has to normalize on the way in.
+  it("normalizes claude's raw `fast` id onto fast_mode", () => {
+    expect(pickLiveDefaultLaunchControls({ fast: "on" })).toEqual({ fast_mode: "on" });
+  });
+
   it("returns an empty object for missing values", () => {
     expect(pickLiveDefaultLaunchControls(undefined)).toEqual({});
   });

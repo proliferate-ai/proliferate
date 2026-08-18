@@ -264,7 +264,10 @@ const CONTROL_MAPPINGS = {
   claude: {
     mode: { createField: "modeId", liveConfigId: "mode" },
     effort: { liveConfigId: "effort" },
-    fast_mode: { liveConfigId: "fast_mode" },
+    // claude names this control `fast` (codex names its own `fast_mode`);
+    // the key must match the probed option id or the control ships unmapped
+    // and no desktop surface can apply it.
+    fast: { liveConfigId: "fast" },
   },
   codex: {
     mode: { createField: "modeId", liveConfigId: "mode" },

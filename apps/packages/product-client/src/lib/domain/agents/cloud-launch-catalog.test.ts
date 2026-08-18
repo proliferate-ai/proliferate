@@ -170,6 +170,63 @@ describe("projectCloudAgentCatalogToDesktopLaunchCatalog", () => {
   });
 });
 
+describe("claude's `fast` control", () => {
+  function claudeCatalog(): Parameters<typeof projectCloudAgentCatalogToDesktopLaunchCatalog>[0] {
+    return {
+      schemaVersion: 2,
+      catalogVersion: "2026-08-18.1",
+      generatedAt: "2026-08-18T00:00:00Z",
+      agents: [{
+        kind: "claude",
+        displayName: "Claude",
+        authContexts: [{ id: "anthropic-oauth" }],
+        session: {
+          controls: [
+            {
+              key: "model",
+              mapping: { createField: "modelId", switchVia: "configOption", liveConfigId: "model" },
+            },
+            { key: "fast", values: ["on", "off"], mapping: { liveConfigId: "fast" } },
+          ],
+          models: [{
+            id: "opus",
+            displayName: "Opus 4.8",
+            availability: { anyOf: ["anthropic-oauth"] },
+            defaultVisible: true,
+            controls: { fast: { values: ["on", "off"], observedValue: "off" } },
+            status: "active",
+          }],
+          defaults: { "anthropic-oauth": "opus" },
+        },
+      }],
+    };
+  }
+
+  // claude names the control `fast` where codex names it `fast_mode`. Both
+  // must project onto the one desktop `fast_mode` key, or Opus 4.8 loses its
+  // Fast toggle and its saved launch default.
+  it("projects onto the desktop fast_mode key", () => {
+    const projected = projectCloudAgentCatalogToDesktopLaunchCatalog(claudeCatalog());
+    const agent = projected.agents[0]!;
+
+    expect(agent.launchControls.find((control) => control.key === "fast_mode"))
+      .toMatchObject({ apply: { liveConfigId: "fast" }, values: [
+        { value: "on", label: "On" },
+        { value: "off", label: "Off" },
+      ] });
+    expect(agent.models[0]?.tuningControlValues).toEqual({ fast_mode: ["on", "off"] });
+    expect(agent.models[0]?.sessionDefaultControls).toEqual([{
+      key: "fast_mode",
+      label: "Fast Mode",
+      defaultValue: "off",
+      values: [
+        { value: "on", label: "On", description: null, isDefault: false },
+        { value: "off", label: "Off", description: null, isDefault: true },
+      ],
+    }]);
+  });
+});
+
 describe("mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents", () => {
   it("keeps local/runtime and cloud unattended defaults in parity", () => {
     const base = cloudCatalog();

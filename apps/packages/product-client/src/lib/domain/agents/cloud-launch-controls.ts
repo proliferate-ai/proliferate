@@ -12,7 +12,7 @@ const SESSION_DEFAULT_CONTROL_KEYS: ReadonlyArray<{
 }> = [
   { key: "reasoning", catalogKeys: ["reasoning"] },
   { key: "effort", catalogKeys: ["effort", "reasoning_effort"] },
-  { key: "fast_mode", catalogKeys: ["fast_mode"] },
+  { key: "fast_mode", catalogKeys: ["fast_mode", "fast"] },
 ];
 
 /**
@@ -93,6 +93,7 @@ const LAUNCH_CONTROL_KEYS: Readonly<Record<string, string>> = {
   reasoning_effort: "effort",
   effort: "effort",
   fast_mode: "fast_mode",
+  fast: "fast_mode",
 };
 
 export function projectCloudControl(
