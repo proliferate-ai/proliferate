@@ -209,7 +209,8 @@ fn validate_retired_wake_intent(
     };
 
     let canonical_prompt_id = delivery.prompt_id();
-    let producer_invariant_matches = delivery.state == CompletionDeliveryState::Delivered
+    let producer_invariant_matches = !delivery.delivery_id.is_empty()
+        && delivery.state == CompletionDeliveryState::Delivered
         && delivery.outcome == SessionTurnOutcome::Completed
         && delivery.parent_prompt_seq.is_none()
         && delivery.parent_turn_id.is_none()
