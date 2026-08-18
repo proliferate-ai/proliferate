@@ -360,6 +360,56 @@ though the ADR's design places it in the domain: `adapters/**` may not import
 `repair_kill_debris` cannot consume a domain-owned type. `archive/quiesce.rs`
 constructs and re-exports the adapter's type rather than defining a second one.
 
+## Checkpoints
+
+`domains/workspaces/checkpoints/` is a sibling of `archive/`: it captures a
+workspace's git state at the start of a turn and bounds how many captures a
+workspace keeps. It is gated entirely behind `ANYHARNESS_CHECKPOINT_CAPTURE`
+(default off); the feature is a cost-observation rung, and flag-off means zero
+capture work at the prompt dispatch seam — no store reads, no git.
+
+`checkpoints/refs.rs` is a second sole-writer carve-out, on the exact model of
+`archive/refs.rs`: it is the only reader/writer of
+`refs/proliferate/checkpoints/<workspace_id>/<checkpoint_id>/{head,worktree,index}`,
+shelling `git update-ref` / `show-ref --verify` / `for-each-ref` directly. The
+shelling helpers are duplicated locally rather than shared with `archive/refs.rs`
+(whose copies stay private) so the sole-writer boundary between the two
+namespaces is not eroded. `archive/refs.rs::list_for_repo` explicitly skips the
+`checkpoints/` prefix, so the archive sweep's orphaned-refs duty never parses a
+checkpoint ref as an archive one.
+
+The capture cadence is turn-start: a private hook on `SessionRuntime` runs at
+every prompt dispatch seam (`runtime/prompt.rs`) just before the actor command.
+A busy handle (the prompt will queue) skips capture, because a snapshot labelled
+as this boundary would be dishonest. Turns started by the actor draining its own
+queue get no checkpoint in this rung — the hook lives at the runtime seam, not in
+the actor's replay loop. On a capture failure the
+`TURN_START_CAPTURE_FAILURE_POLICY` policy point decides: the working-lean choice
+is `Abort` (the prompt is refused with `CHECKPOINT_CAPTURE_FAILED`, retryable),
+with `Degrade` (warn and proceed uncheckpointed) built as the alternative arm.
+
+A checkpoint is a row/refs split, the same discipline as archive: the
+`workspace_checkpoints` row is the metadata truth (origin, the session/turn/prompt
+boundary keys, the peeled tree OIDs, retention state) and the three refs are the
+bytes truth. Capture orders itself refs-before-row (bytes durable and verified
+before metadata); a crash in between leaves orphaned refs the retention duty
+reaps by row-absence. Deletion runs the other way — the row is marked
+`expired_at` FIRST, then the refs are deleted — so an unexpired row never loses
+its bytes.
+
+Retention runs as a fifth duty of the archive sweep, only while the flag is on
+(flag-off freezes existing checkpoints until purge). It keeps the newest
+`RETENTION_KEEP_N` (20) per workspace within `RETENTION_MAX_AGE` (14 days) — both
+observation-period implementation constants, not product promises — with three
+exemptions: a checkpoint an in-flight revert claims is never culled; the newest
+`safety` row is exempt from the N-cull (but not the age cap). The same pass runs
+an orphan reap that deletes any checkpoint ref whose row is absent or expired,
+converging both the crash-between-steps and crash-before-insert leftovers. Purge
+deletes the checkpoint rows then every checkpoint ref for the workspace, beside
+its existing archive-refs deletion. Fork rows reference the boundary checkpoint
+via `fork_operations.checkpoint_id`, looked up (never captured) at the fork's
+`(parent_session_id, anchor_turn_id)` boundary.
+
 ## Important Invariants
 
 - Local and worktree workspaces are different durable kinds.
@@ -390,7 +440,13 @@ constructs and re-exports the adapter's type rather than defining a second one.
 - There is no backstop retention pass. Automatic pruning was the retire
   lifecycle's sweeper, and both left together when `retired` was absorbed
   into `archived`; the runtime never deletes a checkout the user did not ask
-  it to delete.
+  it to delete. This protects USER-created checkouts (local and worktree
+  workspaces). It does NOT extend to checkpoints: a checkpoint is a
+  runtime-created capture artifact, not a checkout the user made, so checkpoint
+  retention (`checkpoints/retention.rs`) pruning its own capture refs is not a
+  violation of this rule — the rule is about never destroying the user's work,
+  and a checkpoint's bytes are a copy the runtime took, not the working tree
+  itself.
 - A workspace's recorded path stays reserved for its lifetime: creation
   refuses any path an archived row still claims, for every workspace kind,
   regardless of that row's cleanup state
