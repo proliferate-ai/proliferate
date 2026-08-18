@@ -162,13 +162,18 @@ Only the outbox relay below `background/**` reads a store directly.
 
 ## Why Each Rule Exists
 
+This section explains the architecture judgment. Exact matchers, legal
+alternatives, enforcement status, and exception sites have one owner:
+[`lints/server/`](../../lints/server/). Follow the cited stable family there
+instead of treating the prose below as a second checker specification.
+
 ### Store ownership (`SRV-STORE`)
 
 **Problem:** unrestricted foreign writes make responsibility and schema-change
 impact unknowable.
 
-**Rule:** writes cross domains only through the owner's public service. Reads
-cross only through an exact, reviewable consumer ledger.
+`SRV-STORE-*` encodes the mechanical store boundary. Architecturally, a domain
+owns its writes and every foreign consumer remains discoverable.
 
 **Result:** a store owner can query every consumer before changing its contract,
 and invariant enforcement has one write boundary.
@@ -178,10 +183,9 @@ and invariant enforcement has one write boundary.
 **Problem:** protocol-shaped errors scattered through services make response
 translation inconsistent and hard to test.
 
-**Rule:** services raise product errors; the global handler translates them to
-HTTP. `HTTPException` is legal only at authentication, org/resource-access, and
-explicitly declared non-JSON transport boundaries. Error codes are globally
-unique by convention; that uniqueness is not yet mechanically checked (gap 6).
+`SRV-ERR-*` encodes the mechanical transport boundary. Architecturally,
+services express product failure and the HTTP boundary owns translation. Error
+code uniqueness remains the explicitly listed review gap below.
 
 **Result:** the HTTP format changes once, while product failures remain typed
 and independently testable.
@@ -191,10 +195,9 @@ and independently testable.
 **Problem:** a shared folder that imports everything becomes a junk drawer and
 pulls single-domain policy out of its owner prematurely.
 
-**Rule:** Infra is universal and product-blind; Product is pure and restricted
-to product-domain `service.py`, `domain/**`, `models.py`, and
-`worker/service.py`; Capabilities are consumer-mapped. Reuse requires at least
-two real consumers.
+`SRV-LIB-*` records the enforceable import audience. Architecturally, broadly
+importable machinery knows less product policy, and a reusable capability has
+real, named consumers.
 
 **Result:** a library's import audience and allowed knowledge are obvious from
 its coordinate.
@@ -204,8 +207,9 @@ its coordinate.
 **Problem:** domain-owned loops and schedulers create multiple restart,
 observability, and failure models.
 
-**Rule:** scheduled work is a Beat-fired Celery task; durable follow-up work is
-an outbox-fired Celery task. Tasks are thin and process state is disposable.
+`SRV-BG-*` records the current rule and enforcement gap. Architecturally,
+scheduled and durable follow-up work converge on one disposable worker model
+rather than inventing restart semantics per domain.
 
 **Result:** work is restartable, observable, and scalable through one runtime.
 
@@ -214,12 +218,12 @@ an outbox-fired Celery task. Tasks are thin and process state is disposable.
 **Problem:** authorization scattered through services hides access decisions
 and makes authentication changes cross domain boundaries.
 
-**Rule:** endpoints compose four orthogonal boundaries: actor authentication in
-[auth/dependencies.py](../../server/proliferate/auth/dependencies.py),
-org standing through
-[permissions.py](../../server/proliferate/permissions.py), concrete
-resource access in the owning domain's `access.py`, and pure product policy in
-the owning domain's `domain/policy.py`. Services receive the resolved result.
+`SRV-SEAM-*` records the enforceable boundary. The four architectural
+questions remain actor authentication, organization standing, concrete
+resource access, and pure product policy; services receive the resolved
+result. The current owners are [auth/dependencies.py](../../server/proliferate/auth/dependencies.py),
+[permissions.py](../../server/proliferate/permissions.py), and each domain's
+`access.py` and `domain/policy.py`.
 
 **Result:** access is visible in route signatures, product policy is testable
 without FastAPI, and authentication mechanisms remain below product domains.

@@ -12,9 +12,10 @@ the label comes off when it is empty.
 The sandbox access platform owns two questions and nothing else: **can I**
 — the gating layers between a caller and a sandbox — and **how do I** — the
 primitives and choreography that turn a cloud workspace id into live
-runtime traffic. It absorbs the deployment-capability contract (formerly
-`deployment-capabilities.md`, implemented and deleted) at its current truth,
-contract v3.
+runtime traffic. The current deployment-capability v3 contract lives in
+[`deployment-capabilities.md`](../../codebase/platforms/product/deployment-capabilities.md).
+This target document owns only its desired composition with the remaining
+Sandbox access layers and the migration gaps below.
 
 Fences, one owner per concern:
 
@@ -33,9 +34,10 @@ Fences, one owner per concern:
   wire representation.
 - What is inside the box belongs to
   [content.md](content.md).
-- `/meta` mechanics live here: the capability contract is the deployment
-  gating layer, so its shape, derivation, and versioning are this
-  document's to rule.
+- `/meta` is the deployment gating layer. Its current shape, derivation,
+  consumers, versioning, and proof are owned by
+  [`deployment-capabilities.md`](../../codebase/platforms/product/deployment-capabilities.md);
+  this target keeps only the desired access-layer relationship and deltas.
 
 ## Can I: three layers, one representation each
 
@@ -50,7 +52,12 @@ through an existing layer, not a new field.
 | Subject | May this user spend right now? | HTTP 402, code `billing_credits_exhausted` \| `billing_start_blocked` | [billing/authorization.py](../../../server/proliferate/server/billing/authorization.py) |
 | Sandbox | Is the runtime reachable right now? | HTTP 409, code `cloud_sandbox_runtime_not_ready` | [cloud_sandboxes/service.py](../../../server/proliferate/server/cloud/cloud_sandboxes/service.py) |
 
-### The deployment layer
+### The deployment layer (target composition)
+
+Current v3 law and fail-closed compatibility are defined by
+[`deployment-capabilities.md`](../../codebase/platforms/product/deployment-capabilities.md).
+The remainder of this section describes the target composition with Sandbox
+access and must not be read as evidence that the current gaps are closed.
 
 `GET /meta` returns a versioned capability contract
 (`SELF_HOST_CAPABILITY_CONTRACT_VERSION = 3`,

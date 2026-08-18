@@ -32,6 +32,26 @@ correlation fields, and clears the Sentry user at request teardown. The
 logical cloud sandbox is `target_id`; the provider sandbox is `sandbox_id`;
 the two must remain distinct.
 
+### Current enforcement boundary
+
+The doctrine in this document is broader than current mechanical coverage:
+
+- Server Sentry events pass through the explicit scrubber in
+  `server/proliferate/integrations/sentry.py`, and support snapshots have their
+  separate bounded structural/pattern scrubber. These are real backstops for
+  their owned egress paths.
+- General server JSON logging remains caller-dependent. `JsonLogFormatter`
+  emits the formatted message, non-private extras, and exceptions without a
+  shared content scrubber/allowlist. A value scrubbed from Sentry can still
+  enter structured logs if a caller logs it. Callers must use stable
+  classifications and allowlisted bounded scalars; a shared log boundary is a
+  follow-up, not a present guarantee.
+- The cross-language diagnostics schema/catalog has golden/parity tests, but
+  semantic operation-owner coverage is still review-only. There is no current
+  checker proving that each required operation has exactly one instrumented
+  owner or rejecting repeated context plumbing. That checker remains a
+  follow-up; catalog agreement alone is not instrumentation coverage.
+
 ## Diagnostics contract
 
 `proliferate-diagnostics-protocol` and the matching ProductClient/server pure
