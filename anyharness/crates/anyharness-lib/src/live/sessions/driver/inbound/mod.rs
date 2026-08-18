@@ -3,7 +3,7 @@ use std::sync::Arc;
 use agent_client_protocol as acp;
 use serde::Serialize;
 use serde_json::value::RawValue;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, Mutex, OwnedMutexGuard};
 
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::PermissionAdvisor;
@@ -81,6 +81,14 @@ impl InboundDoor {
             _ => Err(acp::Error::method_not_found()),
         }
     }
+
+    async fn lock_for_inbound_mutation(&self) -> acp::Result<OwnedMutexGuard<SessionEventSink>> {
+        let sink = self.event_sink.clone().lock_owned().await;
+        if !sink.inbound_event_mutations_admitted() {
+            return Err(inbound_mutation_rejected());
+        }
+        Ok(sink)
+    }
 }
 
 pub(crate) fn raw_ext_response<T: Serialize>(value: T) -> acp::Result<acp::schema::ExtResponse> {
@@ -91,8 +99,8 @@ pub(crate) fn raw_ext_response<T: Serialize>(value: T) -> acp::Result<acp::schem
     Ok(acp::schema::ExtResponse::new(raw.into()))
 }
 
-pub(super) fn terminal_mutation_rejected() -> acp::Error {
-    acp::Error::internal_error().data("session terminal transaction unresolved")
+fn inbound_mutation_rejected() -> acp::Error {
+    acp::Error::internal_error().data("session is no longer accepting agent-initiated requests")
 }
 
 pub(crate) fn session_update_kind(update: &acp::schema::SessionUpdate) -> &'static str {

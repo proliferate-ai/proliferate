@@ -37,13 +37,17 @@ pub(in crate::live::sessions::actor) async fn finalize_established_actor_exit(
     session_id: &str,
     disposition: ActorExitDisposition,
 ) {
+    let sink_snapshot = {
+        // Closing inbound admission under the sink lock drains any request
+        // already admitted through ACP. Its broker and handle registration are
+        // therefore visible to the cleanup snapshot taken immediately after.
+        let mut sink = event_sink.lock().await;
+        sink.close_inbound_event_mutations();
+        sink.debug_snapshot()
+    };
     let execution_snapshot = handle.execution_snapshot().await;
     let pending_interactions = execution_snapshot.pending_interactions.clone();
     let busy = handle.is_busy();
-    let sink_snapshot = {
-        let sink = event_sink.lock().await;
-        sink.debug_snapshot()
-    };
     let now = chrono::Utc::now().to_rfc3339();
 
     tracing::info!(

@@ -107,6 +107,8 @@ pub enum AgentCapability {
     ListWorkspaces,
     ListWorkspaceOptions,
     CreateWorkspace,
+    PinWorkspace,
+    UnpinWorkspace,
     ListAgents,
     GetAgent,
     ListSubagents,
@@ -124,11 +126,13 @@ pub enum AgentCapability {
 }
 
 impl AgentCapability {
-    pub const ALL: [Self; 18] = [
+    pub const ALL: [Self; 20] = [
         Self::Whoami,
         Self::ListWorkspaces,
         Self::ListWorkspaceOptions,
         Self::CreateWorkspace,
+        Self::PinWorkspace,
+        Self::UnpinWorkspace,
         Self::ListAgents,
         Self::GetAgent,
         Self::ListSubagents,
@@ -352,6 +356,30 @@ pub struct CreateWorkspaceInput {
 pub struct CreateWorkspaceResult {
     pub workspace: WorkspaceView,
     pub creation_mode: WorkspaceCreationMode,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct WorkspacePinIntent {
+    pub request_id: String,
+    pub runtime_id: String,
+    pub source_session_id: String,
+    pub workspace_id: String,
+    pub pinned: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspacePinRequestStatus {
+    Requested,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspacePinRequestResult {
+    pub request_id: String,
+    pub workspace: WorkspaceView,
+    pub pinned: bool,
+    pub status: WorkspacePinRequestStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

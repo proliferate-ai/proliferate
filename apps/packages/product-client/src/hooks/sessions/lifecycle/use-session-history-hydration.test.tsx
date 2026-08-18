@@ -20,6 +20,7 @@ import { useSessionTranscriptStore } from "#product/stores/sessions/session-tran
 const mocks = vi.hoisted(() => ({
   fetchSessionHistory: vi.fn(),
   reconcileHydratedSubagents: vi.fn(),
+  reconcileWorkspacePinIntents: vi.fn(),
 }));
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
@@ -35,6 +36,10 @@ vi.mock("#product/lib/access/anyharness/session-runtime", async (importOriginal)
 
 vi.mock("#product/hooks/sessions/lifecycle/use-session-history-subagent-authority", () => ({
   useSessionHistorySubagentAuthority: () => mocks.reconcileHydratedSubagents,
+}));
+
+vi.mock("#product/hooks/sessions/lifecycle/workspace-pin-intent-dispatch", () => ({
+  dispatchWorkspacePinIntentEnvelopes: mocks.reconcileWorkspacePinIntents,
 }));
 
 beforeEach(() => {

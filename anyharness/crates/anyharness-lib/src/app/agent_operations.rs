@@ -36,6 +36,7 @@ pub(super) fn wire_agent_operations(deps: AgentOperationsWiringDeps) -> Arc<Agen
             deps.session_runtime.clone(),
             deps.session_service.clone(),
         )
+        .with_workspace_pin_events(deps.session_runtime.clone())
         .with_subagent_roster(deps.subagent_service)
         .with_ordinary_operations(
             deps.session_runtime.clone(),

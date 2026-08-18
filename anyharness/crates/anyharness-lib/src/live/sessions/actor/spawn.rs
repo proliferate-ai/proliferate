@@ -1,13 +1,14 @@
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyharness_contract::v1::SessionExecutionPhase;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{mpsc, oneshot};
 
 use crate::live::sessions::actor::command::SessionCommand;
 use crate::live::sessions::actor::state::{SessionActor, SessionActorConfig};
-use crate::live::sessions::handle::{LiveSessionExecutionSnapshot, LiveSessionHandle};
+use crate::live::sessions::handle::LiveSessionHandle;
+
+const ACTOR_READINESS_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub struct ActorReadyResult {
     pub native_session_id: String,
@@ -16,6 +17,8 @@ pub struct ActorReadyResult {
 pub struct PendingSessionActor {
     pub handle: Arc<LiveSessionHandle>,
     ready_rx: std::sync::mpsc::Receiver<anyhow::Result<String>>,
+    startup_cancel_tx: Option<oneshot::Sender<()>>,
+    readiness_timeout: Duration,
     session_id: String,
     workspace_id: String,
     startup_strategy: String,
@@ -23,26 +26,28 @@ pub struct PendingSessionActor {
 }
 
 impl PendingSessionActor {
-    pub fn wait_ready(self) -> anyhow::Result<ActorReadyResult> {
-        let native_session_id = self
-            .ready_rx
-            .recv_timeout(std::time::Duration::from_secs(60))
-            .map_err(|e| match e {
-                std::sync::mpsc::RecvTimeoutError::Timeout => {
-                    // Agent-process exits during the handshake fail fast in
-                    // SessionActor::start, so this is reached only for an
-                    // agent that is alive but unresponsive (e.g. a genuine
-                    // auth wait). TODO: thread the AgentStderrTail up here so
-                    // the residual timeout cases are equally diagnosable.
-                    anyhow::anyhow!(
-                        "ACP session startup timed out after 60s. \
-                         The agent may be waiting for authentication or is unresponsive."
-                    )
+    pub fn wait_ready(mut self) -> anyhow::Result<ActorReadyResult> {
+        let native_session_id = match self.ready_rx.recv_timeout(self.readiness_timeout) {
+            Ok(result) => result?,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                // The timeout is an ownership transition, not just a caller
+                // error: cancel the exact actor generation before its handle
+                // can be retired or an offline writer can take the sequence.
+                if let Some(cancel_tx) = self.startup_cancel_tx.take() {
+                    let _ = cancel_tx.send(());
                 }
-                std::sync::mpsc::RecvTimeoutError::Disconnected => {
-                    anyhow::anyhow!("actor thread died before ACP init completed")
-                }
-            })??;
+                return Err(anyhow::anyhow!(
+                    "ACP session startup timed out after {}s. \
+                     The agent may be waiting for authentication or is unresponsive.",
+                    self.readiness_timeout.as_secs()
+                ));
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                return Err(anyhow::anyhow!(
+                    "actor thread died before ACP init completed"
+                ));
+            }
+        };
         self.handle
             .native_session_id
             .write()
@@ -61,6 +66,25 @@ impl PendingSessionActor {
         );
 
         Ok(ActorReadyResult { native_session_id })
+    }
+
+    #[cfg(test)]
+    pub(in crate::live::sessions) fn new_for_test(
+        handle: Arc<LiveSessionHandle>,
+        ready_rx: std::sync::mpsc::Receiver<anyhow::Result<String>>,
+        startup_cancel_tx: oneshot::Sender<()>,
+        readiness_timeout: Duration,
+    ) -> Self {
+        Self {
+            session_id: handle.session_id.clone(),
+            workspace_id: "workspace-test".to_string(),
+            startup_strategy: "test".to_string(),
+            started: Instant::now(),
+            handle,
+            ready_rx,
+            startup_cancel_tx: Some(startup_cancel_tx),
+            readiness_timeout,
+        }
     }
 }
 
@@ -83,22 +107,19 @@ pub fn spawn_session_actor_pending(
     );
     let (command_tx, command_rx) = mpsc::channel::<SessionCommand>(32);
     let event_tx = config.event_tx.clone();
-    let busy = Arc::new(AtomicBool::new(false));
-    let execution = Arc::new(RwLock::new(LiveSessionExecutionSnapshot::new(
-        SessionExecutionPhase::Starting,
-    )));
-
-    let handle = Arc::new(LiveSessionHandle {
-        session_id: session_id.clone(),
+    let handle = Arc::new(LiveSessionHandle::new(
+        session_id.clone(),
         command_tx,
-        event_tx: event_tx.clone(),
-        busy: busy.clone(),
-        execution,
-        native_session_id: Arc::new(std::sync::RwLock::new(None)),
-    });
+        event_tx.clone(),
+        None,
+        SessionExecutionPhase::Starting,
+    ));
     let actor_handle = handle.clone();
+    let event_sequence_releaser = handle.event_sequence_releaser();
+    let actor_finished_releaser = handle.actor_finished_releaser();
 
     let (ready_tx, ready_rx) = std::sync::mpsc::channel::<anyhow::Result<String>>();
+    let (startup_cancel_tx, startup_cancel_rx) = oneshot::channel();
 
     let on_exit = config.hooks.on_exit.take();
 
@@ -108,20 +129,33 @@ pub fn spawn_session_actor_pending(
             &session_id[..8.min(session_id.len())]
         ))
         .spawn(move || {
+            let event_sequence_releaser = event_sequence_releaser;
+            let actor_finished_releaser = actor_finished_releaser;
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
                 .expect("build per-session tokio runtime");
             let local = tokio::task::LocalSet::new();
             let errored = local.block_on(&rt, async move {
-                let run_result = async {
+                let actor_lifecycle = async {
                     let (actor, notification_rx, background_work_rx) =
                         SessionActor::start(config, ready_tx, actor_handle).await?;
                     actor
                         .run(command_rx, notification_rx, background_work_rx)
                         .await
-                }
-                .await;
+                };
+                let startup_cancelled = async move {
+                    if startup_cancel_rx.await.is_err() {
+                        std::future::pending::<()>().await;
+                    }
+                };
+                let run_result = tokio::select! {
+                    biased;
+                    _ = startup_cancelled => {
+                        Err(anyhow::anyhow!("actor startup cancelled after readiness timeout"))
+                    }
+                    result = actor_lifecycle => result,
+                };
                 match run_result {
                     Ok(()) => false,
                     Err(e) => {
@@ -130,14 +164,22 @@ pub fn spawn_session_actor_pending(
                     }
                 }
             });
+            // Local ACP tasks can retain InboundDoor clones. Destroy them
+            // synchronously before the fallback RAII sequence handoff used by
+            // startup and run errors.
+            drop(local);
+            drop(event_sequence_releaser);
             if let Some(cb) = on_exit {
                 cb(errored);
             }
+            drop(actor_finished_releaser);
         })?;
 
     Ok(PendingSessionActor {
         handle,
         ready_rx,
+        startup_cancel_tx: Some(startup_cancel_tx),
+        readiness_timeout: ACTOR_READINESS_TIMEOUT,
         session_id,
         workspace_id,
         startup_strategy,

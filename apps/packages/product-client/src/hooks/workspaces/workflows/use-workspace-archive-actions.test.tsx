@@ -165,6 +165,43 @@ describe("useWorkspaceArchiveActions — archive success (T1)", () => {
     );
   });
 
+  it("ignores a stale archive completion after the authenticated owner remounts", async () => {
+    let resolveFirst!: (value: { record: object; notices: [] }) => void;
+    let resolveSecond!: (value: { record: object; notices: [] }) => void;
+    mocks.archiveWorkspace
+      .mockReturnValueOnce(new Promise((resolve) => {
+        resolveFirst = resolve;
+      }))
+      .mockReturnValueOnce(new Promise((resolve) => {
+        resolveSecond = resolve;
+      }));
+    const firstOwner = renderActions();
+
+    act(() => {
+      firstOwner.result.current.archive("w1", "first-owner", false);
+    });
+    expect(firstOwner.result.current.optimisticallyArchivedIds.has("w1")).toBe(true);
+    firstOwner.unmount();
+
+    const secondOwner = renderActions();
+    act(() => {
+      secondOwner.result.current.archive("w1", "second-owner", false);
+    });
+    expect(secondOwner.result.current.optimisticallyArchivedIds.has("w1")).toBe(true);
+
+    act(() => resolveFirst({ record: {}, notices: [] }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(secondOwner.result.current.optimisticallyArchivedIds.has("w1")).toBe(true);
+
+    act(() => resolveSecond({ record: {}, notices: [] }));
+    await waitFor(() => {
+      expect(secondOwner.result.current.optimisticallyArchivedIds.has("w1")).toBe(false);
+    });
+  });
+
   it("carries a warning description when the response has a dirty_submodule notice", async () => {
     mocks.archiveWorkspace.mockResolvedValue({
       record: {},

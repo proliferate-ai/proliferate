@@ -555,6 +555,16 @@ impl InteractionRendezvous {
     }
 
     #[cfg(test)]
+    pub(crate) async fn pending_count_for_test(&self, session_id: &str) -> usize {
+        self.pending
+            .lock()
+            .await
+            .keys()
+            .filter(|key| key.session_id == session_id)
+            .count()
+    }
+
+    #[cfg(test)]
     pub(crate) async fn insert_pending_for_test(
         &self,
         session_id: &str,

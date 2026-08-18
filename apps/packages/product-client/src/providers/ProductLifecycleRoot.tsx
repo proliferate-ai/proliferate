@@ -19,7 +19,6 @@ import { useRepoPreferencesLifecycle } from "#product/hooks/preferences/lifecycl
 import { useUserPreferencesLifecycle } from "#product/hooks/preferences/lifecycle/use-user-preferences-lifecycle"
 import { useWorkspaceUiLifecycle } from "#product/hooks/preferences/lifecycle/use-workspace-ui-lifecycle"
 import { useProductStoragePersistenceLifecycle } from "#product/hooks/persistence/lifecycle/use-product-storage-persistence-lifecycle"
-import { useSessionIntentDispatcher } from "#product/hooks/sessions/lifecycle/use-session-intent-dispatcher"
 import { useSessionSelectionLifecycle } from "#product/hooks/sessions/lifecycle/use-session-selection-lifecycle"
 import { useShortcutDispatcher } from "#product/hooks/shortcuts/lifecycle/use-shortcut-dispatcher"
 import { useCrashRecoverySupportAction } from "#product/hooks/support/workflows/use-crash-recovery-support-action"
@@ -75,9 +74,10 @@ const AuthenticatedLaunchLifecycles = lazy(() =>
   })),
 )
 
-// Local automation execution both no-ops signed-out, so the owner is
-// authenticated-only + lazy for the same reason: the login shell never
-// fetches or parses the local-automation module (login runtime JS budget).
+// Session dispatch, runtime-to-client reconciliation, and local automation
+// all require an authenticated product session, so their owners are
+// authenticated-only + lazy: the login shell never fetches or parses those
+// runtime graphs (login runtime JS budget).
 // Deferred home-launch resumption is owned by AuthenticatedLaunchLifecycles
 // above (it shares that component's launch-registry lifetime), so it is not
 // duplicated here.
@@ -209,9 +209,6 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
   recordBootDiagnosticOnce("app_runtime.render.before.use_workspace_git_status_persistence")
   useWorkspaceGitStatusPersistence()
   recordBootDiagnosticOnce("app_runtime.render.after.use_workspace_git_status_persistence")
-  recordBootDiagnosticOnce("app_runtime.render.before.use_session_intent_dispatcher")
-  useSessionIntentDispatcher()
-  recordBootDiagnosticOnce("app_runtime.render.after.use_session_intent_dispatcher")
   recordBootDiagnosticOnce("app_runtime.render.before.use_session_selection_lifecycle")
   useSessionSelectionLifecycle()
   recordBootDiagnosticOnce("app_runtime.render.after.use_session_selection_lifecycle")

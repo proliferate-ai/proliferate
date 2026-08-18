@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -45,7 +44,7 @@ use anyharness_contract::v1::{
     PendingInteractionSummary, PermissionInteractionOption, PermissionInteractionOptionKind,
     SessionEventEnvelope, SessionExecutionPhase, SessionLiveConfigSnapshot, StopReason,
 };
-use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
+use tokio::sync::{broadcast, mpsc, Mutex};
 
 mod conditional_cancel;
 mod config;
@@ -109,7 +108,7 @@ async fn actor_exit_test_context(
     } else {
         SessionExecutionPhase::Running
     };
-    let mut execution = LiveSessionExecutionSnapshot::new(phase);
+    let mut execution = LiveSessionExecutionSnapshot::new(phase.clone());
     let interaction_broker = Arc::new(InteractionRendezvous::new());
     if let Some(pending_interaction) = pending_interaction {
         let request_id = pending_interaction.request_id.clone();
@@ -127,14 +126,14 @@ async fn actor_exit_test_context(
             .await;
     }
 
-    let handle = Arc::new(LiveSessionHandle {
-        session_id: "session-1".to_string(),
+    let handle = Arc::new(LiveSessionHandle::new(
+        "session-1",
         command_tx,
-        event_tx: event_tx.clone(),
-        busy: Arc::new(AtomicBool::new(false)),
-        execution: Arc::new(RwLock::new(execution)),
-        native_session_id: Arc::new(std::sync::RwLock::new(Some("native-1".to_string()))),
-    });
+        event_tx.clone(),
+        Some("native-1".to_string()),
+        phase,
+    ));
+    *handle.execution.write().await = execution;
 
     let event_sink = Arc::new(Mutex::new(SessionEventSink::new(
         "session-1".to_string(),

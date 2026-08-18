@@ -10,7 +10,7 @@ import type {
  * hidden-repo workspace does not resurface in the Pinned section.
  */
 export function collectPinnedSidebarItems(
-  groups: SidebarGroupState[],
+  groups: readonly SidebarGroupState[],
   pinnedWorkspaceIds: readonly string[],
 ): SidebarWorkspaceItemState[] {
   const pinRankById = new Map(pinnedWorkspaceIds.map((id, index) => [id, index]));

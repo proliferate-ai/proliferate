@@ -33,6 +33,8 @@ use crate::integrations::mcp::product_server::{
 
 #[path = "tests/tool_contract.rs"]
 mod tool_contract;
+#[path = "tests/workspace_pins.rs"]
+mod workspace_pins;
 
 struct Sessions(Vec<SessionRecord>);
 
@@ -225,6 +227,7 @@ fn server() -> (
     WorkspaceProductMcpServer,
     Arc<WorkspaceMcpAuth>,
     Arc<Messages>,
+    Arc<workspace_pins::WorkspacePinEvents>,
 ) {
     let sessions = Arc::new(Sessions(vec![
         session("P", "workspace-a"),
@@ -246,6 +249,7 @@ fn server() -> (
         closed_at: None,
     }]));
     let messages = Arc::new(Messages(Mutex::new(Vec::new())));
+    let workspace_pin_events = Arc::new(workspace_pins::WorkspacePinEvents(Mutex::new(Vec::new())));
     let workspaces = ["workspace-a", "workspace-b"]
         .into_iter()
         .map(|id| {
@@ -274,13 +278,14 @@ fn server() -> (
             admission.clone(),
             gate.clone(),
         )
+        .with_workspace_pin_events(workspace_pin_events.clone())
         .with_messaging(messages.clone(), workspaces, admission, gate),
     );
     let auth = Arc::new(WorkspaceMcpAuth::new(
         std::env::temp_dir().join(format!("workspace-mcp-contract-{}", uuid::Uuid::new_v4())),
     ));
     let server = WorkspaceProductMcpServer::new(operations, auth.clone());
-    (server, auth, messages)
+    (server, auth, messages, workspace_pin_events)
 }
 
 fn context(workspace_id: &str, session_id: &str) -> ProductMcpRequestContext {
@@ -314,7 +319,7 @@ async fn authenticated_dispatch(
 
 #[tokio::test]
 async fn workspace_mcp_initialize_list_and_read_calls_use_authenticated_context() {
-    let (server, auth, _) = server();
+    let (server, auth, _, _) = server();
     let token = auth
         .mint_capability_token("workspace-a", "P")
         .expect("mint Workspace capability token");
@@ -390,7 +395,7 @@ async fn workspace_mcp_initialize_list_and_read_calls_use_authenticated_context(
 
 #[tokio::test]
 async fn workspace_mcp_denials_are_typed_and_do_not_leak_foreign_subagent_metadata() {
-    let (server, auth, _) = server();
+    let (server, auth, _, _) = server();
     let q_token = auth
         .mint_capability_token("workspace-b", "Q")
         .expect("mint Q Workspace capability token");
@@ -481,7 +486,7 @@ async fn workspace_mcp_denials_are_typed_and_do_not_leak_foreign_subagent_metada
 
 #[tokio::test]
 async fn workspace_capability_scope_rejects_mismatched_workspace_or_session_before_dispatch() {
-    let (server, auth, _) = server();
+    let (server, auth, _, _) = server();
     let token = auth
         .mint_capability_token("workspace-a", "P")
         .expect("mint Workspace capability token");
@@ -497,7 +502,7 @@ async fn workspace_capability_scope_rejects_mismatched_workspace_or_session_befo
 
 #[tokio::test]
 async fn send_message_and_pr5_lifecycle_tools_dispatch_through_the_real_server() {
-    let (server, auth, messages) = server();
+    let (server, auth, messages, _) = server();
     let token = auth
         .mint_capability_token("workspace-a", "P")
         .expect("mint Workspace capability token");

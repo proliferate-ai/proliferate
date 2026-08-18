@@ -552,7 +552,8 @@ async fn subagent_callers_cannot_create_workspaces_but_ordinary_callers_pass_the
     // ADR Ruling 3: an unpromoted (open) subagent cannot call any spawn-style
     // tool, including create_workspace — it is denied at the capability gate.
     assert!(matches!(
-        open.create_workspace(&caller(&open, "C"), input.clone()).await,
+        open.create_workspace(&caller(&open, "C"), input.clone())
+            .await,
         Err(AgentOperationsError::CapabilityDenied {
             capability: AgentCapability::CreateWorkspace,
             denial: CapabilityDenial::ParentOnly,

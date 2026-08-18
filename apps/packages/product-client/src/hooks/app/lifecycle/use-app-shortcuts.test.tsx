@@ -24,11 +24,15 @@ const navigationMocks = vi.hoisted(() => ({
 const harnessState = vi.hoisted(() => ({
   selectedWorkspaceId: null as string | null,
   selectedLogicalWorkspaceId: null as string | null,
-  sidebarShortcutTargets: [] as string[],
+  digitShortcutTargets: [] as string[],
+  traversalShortcutTargets: [] as string[],
 }));
 
 vi.mock("#product/hooks/workspaces/derived/use-sidebar-shortcut-targets", () => ({
-  useSidebarShortcutTargets: () => harnessState.sidebarShortcutTargets,
+  useSidebarShortcutTargets: () => ({
+    digitTargetIds: harnessState.digitShortcutTargets,
+    traversalTargetIds: harnessState.traversalShortcutTargets,
+  }),
 }));
 
 vi.mock("#product/hooks/workspaces/workflows/use-workspace-navigation-workflow", () => ({
@@ -64,7 +68,8 @@ describe("useAppShortcuts", () => {
   beforeEach(() => {
     harnessState.selectedWorkspaceId = null;
     harnessState.selectedLogicalWorkspaceId = null;
-    harnessState.sidebarShortcutTargets = [];
+    harnessState.digitShortcutTargets = [];
+    harnessState.traversalShortcutTargets = [];
     clearShortcutHandlerRegistryForTests();
     useUserPreferencesStore.setState({
       ...USER_PREFERENCE_DEFAULTS,
@@ -87,7 +92,8 @@ describe("useAppShortcuts", () => {
     it("previews the cursor on a step and commits the selection once after the settle", () => {
       harnessState.selectedWorkspaceId = "workspace-1";
       harnessState.selectedLogicalWorkspaceId = "workspace-1";
-      harnessState.sidebarShortcutTargets = ["workspace-1", "workspace-2", "workspace-3"];
+      harnessState.digitShortcutTargets = ["pinned-workspace"];
+      harnessState.traversalShortcutTargets = ["workspace-1", "workspace-2", "workspace-3"];
       vi.useFakeTimers();
 
       renderHook(() => useAppShortcuts(commandActions()));
@@ -111,7 +117,7 @@ describe("useAppShortcuts", () => {
     it("cancels an uncommitted preview on Escape without committing", () => {
       harnessState.selectedWorkspaceId = "workspace-1";
       harnessState.selectedLogicalWorkspaceId = "workspace-1";
-      harnessState.sidebarShortcutTargets = ["workspace-1", "workspace-2", "workspace-3"];
+      harnessState.traversalShortcutTargets = ["workspace-1", "workspace-2", "workspace-3"];
       vi.useFakeTimers();
 
       renderHook(() => useAppShortcuts(commandActions()));
@@ -163,7 +169,7 @@ describe("useAppShortcuts", () => {
   it("routes option-number shortcuts to the right panel when right-panel focus is active", () => {
     harnessState.selectedWorkspaceId = "workspace-1";
     harnessState.selectedLogicalWorkspaceId = "workspace-1";
-    harnessState.sidebarShortcutTargets = ["workspace-1", "workspace-2", "workspace-3"];
+    harnessState.digitShortcutTargets = ["workspace-1", "workspace-2", "workspace-3"];
     const zone = document.createElement("div");
     zone.tabIndex = 0;
     zone.setAttribute("data-focus-zone", "right-panel");
@@ -183,7 +189,8 @@ describe("useAppShortcuts", () => {
   it("falls back to workspace selection when a stale right-panel focus request is unhandled", () => {
     harnessState.selectedWorkspaceId = "workspace-1";
     harnessState.selectedLogicalWorkspaceId = "workspace-1";
-    harnessState.sidebarShortcutTargets = ["workspace-1", "workspace-2", "workspace-3"];
+    harnessState.digitShortcutTargets = ["pin-1", "pin-2", "workspace-1"];
+    harnessState.traversalShortcutTargets = ["workspace-1", "pin-1", "pin-2"];
     const zone = document.createElement("div");
     zone.tabIndex = 0;
     zone.setAttribute("data-focus-zone", "right-panel");
@@ -199,7 +206,7 @@ describe("useAppShortcuts", () => {
     })).toBe(true);
     expect(requestRightPanelTabByIndex).toHaveBeenCalledWith(2);
     expect(navigationMocks.selectWorkspaceFromSurface).toHaveBeenCalledWith(
-      "workspace-2",
+      "pin-2",
       "shortcut",
     );
   });

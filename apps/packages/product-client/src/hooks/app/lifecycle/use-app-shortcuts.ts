@@ -29,7 +29,7 @@ import {
 // Owns global app shortcut registration. App command behavior stays in the
 // workflow actions passed by the caller.
 export function useAppShortcuts(actions: AppCommandActions): void {
-  const sidebarShortcutTargetIds = useSidebarShortcutTargets();
+  const { digitTargetIds, traversalTargetIds } = useSidebarShortcutTargets();
   const { selectWorkspaceFromSurface } = useWorkspaceNavigationWorkflow();
 
   // Held-key workspace traversal (Cmd+Opt+Arrow) previews a lightweight cursor
@@ -37,8 +37,8 @@ export function useAppShortcuts(actions: AppCommandActions): void {
   // movement settles. The controller owns the throttle/settle/coalescing state
   // machine; refs keep the once-created controller reading current values
   // without re-subscribing the whole hook to selection changes.
-  const targetIdsRef = useRef(sidebarShortcutTargetIds);
-  targetIdsRef.current = sidebarShortcutTargetIds;
+  const targetIdsRef = useRef(traversalTargetIds);
+  targetIdsRef.current = traversalTargetIds;
   const selectWorkspaceFromSurfaceRef = useRef(selectWorkspaceFromSurface);
   selectWorkspaceFromSurfaceRef.current = selectWorkspaceFromSurface;
 
@@ -166,7 +166,7 @@ export function useAppShortcuts(actions: AppCommandActions): void {
       }
     }
 
-    const targetId = resolveSidebarShortcutDigitTarget(sidebarShortcutTargetIds, digit);
+    const targetId = resolveSidebarShortcutDigitTarget(digitTargetIds, digit);
     if (targetId) {
       selectWorkspaceFromSurface(targetId, "shortcut");
     }

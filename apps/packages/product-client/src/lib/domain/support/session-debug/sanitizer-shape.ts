@@ -161,6 +161,7 @@ const SAFE_OBJECT_KEYS = new Set([
   "pendingPrompts",
   "phase",
   "pid",
+  "pinned",
   "planId",
   "preview",
   "previewOriginalBytes",
@@ -195,6 +196,7 @@ const SAFE_OBJECT_KEYS = new Set([
   "revision",
   "reviewRunId",
   "reviewRoundId",
+  "runtimeId",
   "schedule",
   "scope",
   "seq",
@@ -310,6 +312,7 @@ const SAFE_TYPE_VALUES = new Set([
   "turn_started",
   "usage_update",
   "user_input",
+  "workspace_pin_intent",
 ]);
 
 export function isRedactedObjectKey(key: string): boolean {

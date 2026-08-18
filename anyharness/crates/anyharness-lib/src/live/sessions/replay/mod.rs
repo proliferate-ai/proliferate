@@ -53,6 +53,8 @@ pub fn spawn_replay_actor(
         SessionExecutionPhase::Starting,
     ));
     let actor_handle = handle.clone();
+    let event_sequence_releaser = handle.event_sequence_releaser();
+    let actor_finished_releaser = handle.actor_finished_releaser();
     let (ready_tx, ready_rx) = std::sync::mpsc::channel::<anyhow::Result<String>>();
     let on_exit = config.on_exit.take();
 
@@ -62,6 +64,8 @@ pub fn spawn_replay_actor(
             &session_id[..8.min(session_id.len())]
         ))
         .spawn(move || {
+            let event_sequence_releaser = event_sequence_releaser;
+            let actor_finished_releaser = actor_finished_releaser;
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -79,9 +83,11 @@ pub fn spawn_replay_actor(
                     true
                 }
             };
+            drop(event_sequence_releaser);
             if let Some(cb) = on_exit {
                 cb(errored);
             }
+            drop(actor_finished_releaser);
         })?;
 
     let native_session_id = ready_rx

@@ -4,10 +4,13 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 
-use super::{AgentOperations, AgentOperationsError, AgentWorkspaceOperations};
+use super::{
+    AgentOperations, AgentOperationsError, AgentWorkspaceOperations, AgentWorkspacePinEvents,
+};
 use crate::domains::agent_operations::model::{
     AgentCapability, CreateWorkspaceInput, CreateWorkspaceResult, ListWorkspacesInput,
-    RuntimeIdentity, WorkspaceOptionsView, WorkspacePage, WorkspaceView, MAX_WORKSPACE_PAGE_SIZE,
+    RuntimeIdentity, WorkspaceIdentity, WorkspaceOptionsView, WorkspacePage, WorkspacePinIntent,
+    WorkspacePinRequestResult, WorkspacePinRequestStatus, WorkspaceView, MAX_WORKSPACE_PAGE_SIZE,
 };
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::domains::workspaces::model::WorkspaceRecord;
@@ -99,12 +102,68 @@ impl AgentOperations {
         })
     }
 
+    #[tracing::instrument(skip_all, fields(operation = "request_workspace_pin_state", pinned))]
+    pub async fn request_workspace_pin_state(
+        &self,
+        caller: &crate::domains::agent_operations::model::AuthenticatedAgentCaller,
+        workspace: &WorkspaceIdentity,
+        pinned: bool,
+    ) -> Result<WorkspacePinRequestResult, AgentOperationsError> {
+        let caller_agent = self.resolve_caller_agent(caller)?;
+        let capability = if pinned {
+            AgentCapability::PinWorkspace
+        } else {
+            AgentCapability::UnpinWorkspace
+        };
+        self.assert_caller_capability(&caller_agent, capability)?;
+        if workspace.runtime_id != self.runtime_id {
+            return Err(AgentOperationsError::RuntimeBoundaryDenied);
+        }
+        let record = self
+            .workspace_operations()?
+            .get_workspace(&workspace.workspace_id)
+            .await?
+            .ok_or_else(|| {
+                crate::domains::workspaces::options::WorkspaceOptionsError::WorkspaceNotFound(
+                    workspace.workspace_id.clone(),
+                )
+            })?;
+        let request_id = uuid::Uuid::new_v4().to_string();
+        self.workspace_pin_events()?
+            .emit_workspace_pin_intent(
+                &caller.identity().session_id,
+                WorkspacePinIntent {
+                    request_id: request_id.clone(),
+                    runtime_id: self.runtime_id.as_str().to_string(),
+                    source_session_id: caller.identity().session_id.clone(),
+                    workspace_id: record.id.clone(),
+                    pinned,
+                },
+            )
+            .await
+            .map_err(AgentOperationsError::Internal)?;
+        Ok(WorkspacePinRequestResult {
+            request_id,
+            workspace: project_workspace(&self.runtime_id, record),
+            pinned,
+            status: WorkspacePinRequestStatus::Requested,
+        })
+    }
+
     pub(super) fn workspace_operations(
         &self,
     ) -> Result<&Arc<dyn AgentWorkspaceOperations>, AgentOperationsError> {
         self.workspaces
             .as_ref()
             .ok_or(AgentOperationsError::WorkspaceCatalogsUnavailable)
+    }
+
+    fn workspace_pin_events(
+        &self,
+    ) -> Result<&Arc<dyn AgentWorkspacePinEvents>, AgentOperationsError> {
+        self.workspace_pin_events
+            .as_ref()
+            .ok_or(AgentOperationsError::WorkspacePinEventsUnavailable)
     }
 }
 

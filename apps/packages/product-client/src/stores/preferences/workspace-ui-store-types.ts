@@ -1,9 +1,13 @@
 import type { SetStateAction } from "react";
 import type { ActivitySubagentWire } from "#product/domain/activity/subagent";
-import type { PersistedWorkspaceUiState } from "#product/lib/domain/preferences/workspace-ui/model";
+import type {
+  PersistedWorkspaceUiState,
+  WorkspaceUiChangeTrackedState,
+} from "#product/lib/domain/preferences/workspace-ui/model";
 import type { PersistedWorkspaceGitStatusSnapshot } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 import type { RightPanelDurableState, RightPanelMaterializedState, RightPanelWorkspaceState } from "#product/lib/domain/workspaces/shell/right-panel-model";
 import type { SidebarWorkspaceVariant } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
+import type { ResolvedWorkspacePinIntent } from "#product/lib/domain/workspaces/sidebar/workspace-pin-intents";
 import type { ManualChatGroup } from "#product/lib/domain/workspaces/tabs/manual-groups";
 import type { PendingChatActivation } from "#product/lib/domain/workspaces/tabs/shell-activation";
 import type { WorkspaceShellIntentKey, WorkspaceShellTabKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
@@ -25,6 +29,15 @@ export interface PendingBackgroundSubagentSelection {
 export interface WorkspaceUiState {
   _hydrated: boolean;
   pinnedWorkspaceIds: string[];
+  workspacePinIntentReceiptByTarget: PersistedWorkspaceUiState["workspacePinIntentReceiptByTarget"];
+  workspacePinLocalBarrierById: PersistedWorkspaceUiState["workspacePinLocalBarrierById"];
+  /**
+   * Latest resolved history observation for each logical identity in this
+   * renderer. This is bounded runtime state, not a persisted preference:
+   * renderer-local sequence numbers are not comparable after restart.
+   */
+  workspacePinHistoryObservationById:
+    WorkspaceUiChangeTrackedState["workspacePinHistoryObservationById"];
   hiddenRepoRootIds: string[];
   collapsedRepoGroups: string[];
   showArchived: boolean;
@@ -99,6 +112,9 @@ export interface WorkspaceUiState {
   hydrate: (state: PersistedWorkspaceUiState) => void;
   pinWorkspace: (id: string) => void;
   unpinWorkspace: (ids: string[]) => void;
+  applyWorkspacePinIntentBatch: (
+    intents: readonly ResolvedWorkspacePinIntent[],
+  ) => void;
   hideRepoRoot: (repoRootId: string) => void;
   unhideRepoRoot: (repoRootId: string) => void;
   toggleRepoGroupCollapsed: (repoKey: string) => void;

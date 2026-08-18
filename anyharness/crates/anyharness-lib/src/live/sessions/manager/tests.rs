@@ -1,11 +1,10 @@
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use anyharness_contract::v1::{
     SessionEvent, SessionEventEnvelope, SessionExecutionPhase, SessionInfoUpdatePayload,
     SubagentTurnCompletedPayload, SubagentTurnOutcome,
 };
-use tokio::sync::{broadcast, mpsc, watch};
+use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tokio::time::{sleep, Duration};
 
 use super::LiveSessionManager;
@@ -23,6 +22,8 @@ use crate::live::sessions::model::{
     LaunchEnv, SessionHooks, SessionLaunch, SessionStartupStrategy, SystemPromptAppends,
 };
 use crate::persistence::Db;
+
+mod startup_ownership;
 
 fn resolved_agent(kind: AgentKind) -> ResolvedAgent {
     let descriptor = built_in_registry()
@@ -430,6 +431,120 @@ async fn runtime_event_injection_falls_back_when_live_handle_is_stale() {
     let events = store.list_events("session-1").expect("list events");
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].event_type, "session_info_update");
+}
+
+#[tokio::test]
+async fn runtime_event_injection_waits_for_stale_finalizer_then_uses_replacement() {
+    let store = seeded_session_store();
+    let manager = manager_for_store(&store);
+    let (stale_command_tx, mut stale_command_rx) = mpsc::channel(1);
+    let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
+    let stale_handle = Arc::new(LiveSessionHandle::new(
+        "session-1",
+        stale_command_tx,
+        event_tx.clone(),
+        Some("native-stale".to_string()),
+        SessionExecutionPhase::Idle,
+    ));
+    manager
+        .live_sessions
+        .write()
+        .await
+        .insert("session-1".to_string(), stale_handle.clone());
+    let (stale_mailbox_closed_tx, stale_mailbox_closed_rx) = oneshot::channel();
+    let (release_finalizer_tx, release_finalizer_rx) = oneshot::channel();
+    let finalizer_store = store.clone();
+    let finalizer_handle = stale_handle.clone();
+    let stale_actor = tokio::spawn(async move {
+        let Some(SessionCommand::InjectRuntimeEvent { respond_to, .. }) =
+            stale_command_rx.recv().await
+        else {
+            panic!("expected stale runtime event command");
+        };
+        drop(respond_to);
+        drop(stale_command_rx);
+        let _ = stale_mailbox_closed_tx.send(());
+        let _ = release_finalizer_rx.await;
+        finalizer_store
+            .append_event(&SessionEventRecord {
+                id: 0,
+                session_id: "session-1".to_string(),
+                seq: 1,
+                timestamp: "2026-03-25T00:01:00Z".to_string(),
+                event_type: "session_info_update".to_string(),
+                turn_id: None,
+                item_id: None,
+                payload_json: r#"{"type":"session_info_update"}"#.to_string(),
+            })
+            .expect("persist stale finalizer event");
+        finalizer_handle.relinquish_event_sequence();
+    });
+
+    let injection_manager = manager.clone();
+    let injection = tokio::spawn(async move {
+        injection_manager
+            .emit_runtime_event(
+                "session-1",
+                RuntimeInjectedSessionEvent::SessionInfoUpdate {
+                    title: Some("Pinned".to_string()),
+                    updated_at: None,
+                },
+            )
+            .await
+    });
+    stale_mailbox_closed_rx
+        .await
+        .expect("stale mailbox closed notification");
+    let (replacement_command_tx, mut replacement_command_rx) = mpsc::channel(1);
+    let replacement_handle = Arc::new(LiveSessionHandle::new_for_test(
+        "session-1",
+        replacement_command_tx,
+        event_tx,
+        Some("native-replacement".to_string()),
+        SessionExecutionPhase::Idle,
+    ));
+    manager
+        .live_sessions
+        .write()
+        .await
+        .insert("session-1".to_string(), replacement_handle.clone());
+    tokio::task::yield_now().await;
+    assert!(!injection.is_finished());
+    assert!(store
+        .list_events("session-1")
+        .expect("list events before finalizer")
+        .is_empty());
+    let replacement_store = store.clone();
+    let replacement_actor = tokio::spawn(async move {
+        let Some(SessionCommand::InjectRuntimeEvent { event, respond_to }) =
+            replacement_command_rx.recv().await
+        else {
+            panic!("expected replacement runtime event command");
+        };
+        let envelope = replacement_store
+            .append_event_with_next_seq("session-1", event.into_session_event(), false)
+            .expect("replacement persists runtime event");
+        let _ = respond_to.send(Ok(envelope));
+    });
+
+    let _ = release_finalizer_tx.send(());
+    let envelope = tokio::time::timeout(Duration::from_secs(1), injection)
+        .await
+        .expect("injection timeout")
+        .expect("injection task")
+        .expect("runtime event injection");
+    assert_eq!(envelope.seq, 2);
+    assert!(matches!(
+        manager.live_sessions.read().await.get("session-1"),
+        Some(current) if Arc::ptr_eq(current, &replacement_handle)
+    ));
+    let events = store.list_events("session-1").expect("list events");
+    assert_eq!(
+        events.iter().map(|event| event.seq).collect::<Vec<_>>(),
+        vec![1, 2]
+    );
+    stale_actor.await.expect("stale actor task");
+    replacement_actor.await.expect("replacement actor task");
 }
 
 #[tokio::test]

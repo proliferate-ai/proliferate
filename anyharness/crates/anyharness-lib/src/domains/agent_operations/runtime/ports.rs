@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
+use crate::domains::agent_operations::model::WorkspacePinIntent;
 use crate::domains::agents::catalog::service::ActiveCatalog;
 use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
 use crate::domains::sessions::links::model::SessionLinkRecord;
@@ -15,6 +16,7 @@ use crate::domains::sessions::runtime::{
     CreateOrdinaryAgentSessionError, CreateSubagentAgentSessionError, EnsureLiveSessionError,
     SessionLifecycleError, SessionRuntime, SetSessionConfigOptionError, SubagentLifecycleError,
 };
+use crate::domains::sessions::runtime_event::RuntimeInjectedSessionEvent;
 use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::subagents::model::SubagentCompletionRecord;
 use crate::domains::sessions::subagents::service::SubagentService;
@@ -377,6 +379,45 @@ impl AgentWorkspaceOperations for WorkspaceOptionRuntime {
         input: CreateWorkspaceFromOptionsInput,
     ) -> Result<CreateWorkspaceFromOptionsResult, WorkspaceOptionsError> {
         WorkspaceOptionRuntime::create_workspace(self, caller_workspace_id, input).await
+    }
+}
+
+#[async_trait]
+pub(crate) trait AgentWorkspacePinEvents: Send + Sync {
+    async fn emit_workspace_pin_intent(
+        &self,
+        session_id: &str,
+        intent: WorkspacePinIntent,
+    ) -> anyhow::Result<()>;
+}
+
+#[async_trait]
+impl AgentWorkspacePinEvents for SessionRuntime {
+    async fn emit_workspace_pin_intent(
+        &self,
+        session_id: &str,
+        intent: WorkspacePinIntent,
+    ) -> anyhow::Result<()> {
+        let WorkspacePinIntent {
+            request_id,
+            runtime_id,
+            source_session_id,
+            workspace_id,
+            pinned,
+        } = intent;
+        self.emit_runtime_event(
+            session_id,
+            RuntimeInjectedSessionEvent::WorkspacePinIntent {
+                request_id,
+                runtime_id,
+                source_session_id,
+                workspace_id,
+                pinned,
+            },
+        )
+        .await
+        .map(|_| ())
+        .map_err(anyhow::Error::new)
     }
 }
 

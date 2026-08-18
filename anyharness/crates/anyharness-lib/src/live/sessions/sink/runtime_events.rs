@@ -11,6 +11,11 @@ impl SessionEventSink {
         &mut self,
         event: RuntimeInjectedSessionEvent,
     ) -> Result<SessionEventEnvelope, RuntimeEventInjectionError> {
+        if !self.event_sequence_owned {
+            return Err(RuntimeEventInjectionError::PersistenceFailed(
+                "event sequence ownership has been relinquished".to_string(),
+            ));
+        }
         if self.has_staged_terminal() {
             return Err(RuntimeEventInjectionError::PersistenceFailed(
                 "terminal transaction unresolved".to_string(),

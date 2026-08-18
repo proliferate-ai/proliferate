@@ -39,6 +39,8 @@ async function readWorkspaceUiState(
   } else {
     state = {
       pinnedWorkspaceIds: WORKSPACE_UI_DEFAULTS.pinnedWorkspaceIds,
+      workspacePinIntentReceiptByTarget: WORKSPACE_UI_DEFAULTS.workspacePinIntentReceiptByTarget,
+      workspacePinLocalBarrierById: WORKSPACE_UI_DEFAULTS.workspacePinLocalBarrierById,
       hiddenRepoRootIds: WORKSPACE_UI_DEFAULTS.hiddenRepoRootIds,
       sidebarOpen: WORKSPACE_UI_DEFAULTS.sidebarOpen,
       sidebarWidth: WORKSPACE_UI_DEFAULTS.sidebarWidth,

@@ -94,7 +94,9 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useRepositories: () => ({ data: { repositories: [] }, isPending: false }),
 }));
 vi.mock("#product/hooks/ui/debug/use-debug-render-count", () => ({ useDebugRenderCount: () => {} }));
-vi.mock("#product/hooks/workspaces/derived/use-sidebar-shortcut-targets", () => ({ useSidebarShortcutTargets: () => [] }));
+vi.mock("#product/hooks/workspaces/derived/use-sidebar-shortcut-targets", () => ({
+  useSidebarShortcutTargets: () => ({ digitTargetIds: [], traversalTargetIds: [] }),
+}));
 vi.mock("#product/hooks/support/derived/use-support-report-snapshot", () => ({
   useSupportReportSnapshot: () => ({
     openedAt: "2026-05-30T00:00:00.000Z",

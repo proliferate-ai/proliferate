@@ -97,7 +97,7 @@ pub async fn call_tool(
     name: &str,
     arguments: Option<Value>,
 ) -> anyhow::Result<Value> {
-    // Single outcome record for every Workspace tool. The 18 handlers carry
+    // Single outcome record for every Workspace tool. The handlers carry
     // only a `tracing::instrument` span, so denials, missing targets and
     // successes are all invisible without this.
     let target_id = target_id(arguments.as_ref());
@@ -198,6 +198,18 @@ async fn dispatch_tool(
                             display_name: args.display_name,
                         },
                     )
+                    .await,
+            )
+        }
+        "pin_workspace" | "unpin_workspace" => {
+            let args = parse::<WorkspaceArgs>(arguments)?;
+            let workspace = WorkspaceIdentity {
+                runtime_id: operations.runtime_identity().clone(),
+                workspace_id: args.workspace_id,
+            };
+            serialize(
+                operations
+                    .request_workspace_pin_state(&ctx.caller, &workspace, name == "pin_workspace")
                     .await,
             )
         }
@@ -364,10 +376,14 @@ fn task_output_response(
     })
 }
 
-/// Tool arguments name their target agent uniformly as `agentId`; tools that
-/// address a workspace (or nothing) simply have none.
+/// Tool arguments name their target as either `agentId` or `workspaceId`.
 fn target_id(arguments: Option<&Value>) -> Option<String> {
-    arguments?.get("agentId")?.as_str().map(str::to_string)
+    let arguments = arguments?;
+    arguments
+        .get("agentId")
+        .or_else(|| arguments.get("workspaceId"))?
+        .as_str()
+        .map(str::to_string)
 }
 
 /// One `anyharness.agent_ops.tool_call` record per Workspace tool outcome.
@@ -493,7 +509,7 @@ mod diagnostics_tests {
     use super::*;
 
     #[test]
-    fn target_id_is_read_only_from_the_agent_id_argument() {
+    fn target_id_reads_only_supported_target_arguments() {
         assert_eq!(
             target_id(Some(&json!({ "agentId": "session-2" }))).as_deref(),
             Some("session-2")
@@ -501,9 +517,10 @@ mod diagnostics_tests {
         assert_eq!(target_id(None), None);
         assert_eq!(target_id(Some(&json!({}))), None);
         assert_eq!(
-            target_id(Some(&json!({ "workspaceId": "workspace-1" }))),
-            None
+            target_id(Some(&json!({ "workspaceId": "workspace-1" }))).as_deref(),
+            Some("workspace-1")
         );
+        assert_eq!(target_id(Some(&json!({ "repositoryId": "repo-1" }))), None);
         assert_eq!(target_id(Some(&json!({ "agentId": 7 }))), None);
     }
 }

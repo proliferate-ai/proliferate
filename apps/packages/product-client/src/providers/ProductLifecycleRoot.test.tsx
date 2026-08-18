@@ -41,7 +41,6 @@ vi.mock("#product/hooks/preferences/lifecycle/use-repo-preferences-lifecycle", (
 vi.mock("#product/hooks/preferences/lifecycle/use-user-preferences-lifecycle", () => ({ useUserPreferencesLifecycle: vi.fn() }));
 vi.mock("#product/hooks/preferences/lifecycle/use-workspace-ui-lifecycle", () => ({ useWorkspaceUiLifecycle: vi.fn() }));
 vi.mock("#product/hooks/persistence/lifecycle/use-product-storage-persistence-lifecycle", () => ({ useProductStoragePersistenceLifecycle: vi.fn() }));
-vi.mock("#product/hooks/sessions/lifecycle/use-session-intent-dispatcher", () => ({ useSessionIntentDispatcher: vi.fn() }));
 vi.mock("#product/hooks/sessions/lifecycle/use-session-selection-lifecycle", () => ({ useSessionSelectionLifecycle: vi.fn() }));
 vi.mock("#product/hooks/shortcuts/lifecycle/use-shortcut-dispatcher", () => ({ useShortcutDispatcher: vi.fn() }));
 vi.mock("#product/hooks/support/workflows/use-crash-recovery-support-action", () => ({
@@ -224,11 +223,13 @@ describe("ProductLifecycleRoot", () => {
     const { rerender } = render(tree());
     await waitFor(() => expect(screen.getByTestId("desktop-lifecycle-root")).toBeTruthy());
     expect(screen.queryByTestId("support-report-queue-root")).toBeNull();
+    expect(screen.queryByTestId("authenticated-background-lifecycles")).toBeNull();
 
     authStatus.value = "authenticated";
     rerender(tree());
 
     expect(await screen.findByTestId("support-report-queue-root")).toBeTruthy();
+    expect(await screen.findByTestId("authenticated-background-lifecycles")).toBeTruthy();
   });
 
   it("sweeps support-report retention with no session, where the queue owner never mounts", async () => {

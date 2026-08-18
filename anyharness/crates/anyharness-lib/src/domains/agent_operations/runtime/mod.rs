@@ -11,6 +11,8 @@ mod target_access;
 mod workspaces;
 
 #[cfg(test)]
+mod error_tests;
+#[cfg(test)]
 mod messaging_tests;
 #[cfg(test)]
 mod ordinary_tests;
@@ -24,6 +26,7 @@ use std::sync::Arc;
 use authorization_policy::{CallerFacts, TargetFacts};
 pub use error::{agent_operations_outcome_class, AgentOperationsError};
 pub(crate) use ports::AgentMessageQueue;
+pub(crate) use ports::AgentWorkspacePinEvents;
 pub use ports::{
     AgentCatalogReads, AgentConfigMutationState, AgentExecutionReads, AgentLaunchOptionReads,
     AgentSessionMutations, AgentSessionReads, AgentTaskOutputReads, AgentWorkspaceOperations,
@@ -49,6 +52,7 @@ pub struct AgentOperations {
     relationships: Arc<dyn SubagentRelationshipReads>,
     execution: Arc<dyn AgentExecutionReads>,
     workspaces: Option<Arc<dyn AgentWorkspaceOperations>>,
+    workspace_pin_events: Option<Arc<dyn AgentWorkspacePinEvents>>,
     launch_options: Option<Arc<dyn AgentLaunchOptionReads>>,
     catalog: Option<Arc<dyn AgentCatalogReads>>,
     mutations: Option<Arc<dyn AgentSessionMutations>>,
@@ -73,6 +77,7 @@ impl AgentOperations {
             relationships,
             execution,
             workspaces: None,
+            workspace_pin_events: None,
             launch_options: None,
             catalog: None,
             mutations: None,
@@ -94,6 +99,14 @@ impl AgentOperations {
         self.workspaces = Some(workspaces);
         self.launch_options = Some(launch_options);
         self.catalog = Some(catalog);
+        self
+    }
+
+    pub(crate) fn with_workspace_pin_events(
+        mut self,
+        events: Arc<dyn AgentWorkspacePinEvents>,
+    ) -> Self {
+        self.workspace_pin_events = Some(events);
         self
     }
 

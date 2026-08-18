@@ -250,7 +250,7 @@ It owns only the remaining session-domain mechanics:
 Workspace Agent Operations owns agent discovery, creation, configuration,
 messaging, interruption, Close, Open, Promote, and request-time relationship
 authorization. Its MCP implementation lives under
-`domains/agent_operations/mcp/**`; the exact 18-tool contract lives in
+`domains/agent_operations/mcp/**`; the exact 20-tool contract lives in
 [Workspace Product MCP](../codebase/platforms/product/agent-features/definitions/workspace.md).
 
 Workspace attaches to Standard sessions unless their binding policy is

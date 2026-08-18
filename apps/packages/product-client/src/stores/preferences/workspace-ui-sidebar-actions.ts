@@ -3,6 +3,8 @@ import {
   toggleSidebarWorkspaceTypeSelection,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-workspace-types";
 import { clampWorkspaceSidebarWidth } from "#product/lib/domain/preferences/workspace-ui/sidebar";
+import { nextWorkspacePinLocalOrder } from "#product/stores/preferences/workspace-ui-pin-local-order";
+import { recordBoundedWorkspacePinLocalBarriers } from "#product/stores/preferences/workspace-ui-pin-local-barriers";
 import { resolveStateValue } from "#product/stores/preferences/workspace-ui-state-value";
 import type { WorkspaceUiGet, WorkspaceUiSet, WorkspaceUiState } from "#product/stores/preferences/workspace-ui-store-types";
 
@@ -29,23 +31,37 @@ export function createWorkspaceUiSidebarActions(
 ): WorkspaceUiSidebarActions {
   return {
     pinWorkspace: (id) => {
-      const current = get().pinnedWorkspaceIds;
-      if (current.includes(id)) {
-        return;
-      }
-      set({ pinnedWorkspaceIds: [...current, id] });
+      const manualAt = nextWorkspacePinLocalOrder();
+      set((state) => ({
+        pinnedWorkspaceIds: state.pinnedWorkspaceIds.includes(id)
+          ? state.pinnedWorkspaceIds
+          : [...state.pinnedWorkspaceIds, id],
+        workspacePinLocalBarrierById: recordBoundedWorkspacePinLocalBarriers(
+          state.workspacePinLocalBarrierById,
+          [id],
+          manualAt,
+        ),
+      }));
     },
 
     // Removes every id the workspace answers to, so a pin recorded under a
     // former identity (alias/local-slot/materialization id) cannot survive.
     unpinWorkspace: (ids) => {
-      const idSet = new Set(ids);
-      const current = get().pinnedWorkspaceIds;
-      const next = current.filter((workspaceId) => !idSet.has(workspaceId));
-      if (next.length === current.length) {
+      if (ids.length === 0) {
         return;
       }
-      set({ pinnedWorkspaceIds: next });
+      const manualAt = nextWorkspacePinLocalOrder();
+      const idSet = new Set(ids);
+      set((state) => ({
+        pinnedWorkspaceIds: state.pinnedWorkspaceIds.filter(
+          (workspaceId) => !idSet.has(workspaceId),
+        ),
+        workspacePinLocalBarrierById: recordBoundedWorkspacePinLocalBarriers(
+          state.workspacePinLocalBarrierById,
+          ids,
+          manualAt,
+        ),
+      }));
     },
 
     hideRepoRoot: (repoRootId) => {

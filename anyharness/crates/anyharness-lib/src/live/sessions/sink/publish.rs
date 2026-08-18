@@ -14,6 +14,14 @@ impl SessionEventSink {
         turn_id: Option<String>,
         item_id: Option<String>,
     ) {
+        if !self.event_sequence_owned {
+            tracing::error!(
+                session_id = %self.session_id,
+                failure_code = "event_sequence_relinquished",
+                "event rejected after event sequence relinquishment"
+            );
+            return;
+        }
         if self
             .staged_terminal
             .as_ref()
