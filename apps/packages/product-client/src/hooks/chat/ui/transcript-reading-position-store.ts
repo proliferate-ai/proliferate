@@ -19,6 +19,7 @@
 // "estimates cannot skew the restore" guarantee.
 
 import type { MutableRefObject, RefObject } from "react";
+import type { TranscriptPinTransitionCause } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations-transcript";
 
 // The working set of concurrently open sessions in one runtime is small; this
 // caps the retained set so a very long-lived tab that visits thousands of
@@ -196,7 +197,7 @@ export function beginSessionRestorePlacement(
     >;
     restoreDeadlineRef: MutableRefObject<number>;
   },
-  setPinned: (pinned: boolean) => void,
+  setPinned: (pinned: boolean, cause?: TranscriptPinTransitionCause) => void,
   notifyProgrammaticScroll: (write: () => void) => void,
 ): boolean {
   if (plan.kind !== "restore") {
@@ -209,7 +210,7 @@ export function beginSessionRestorePlacement(
   if (initialTop == null) {
     return false;
   }
-  setPinned(false);
+  setPinned(false, "session_reset");
   refs.restoreResolverRef.current = plan.resolveTargetTop;
   refs.restoreDeadlineRef.current = deadlineMs;
   const viewportEl = viewport;

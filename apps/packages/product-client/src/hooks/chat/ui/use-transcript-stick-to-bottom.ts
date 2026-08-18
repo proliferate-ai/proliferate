@@ -23,6 +23,11 @@ import type {
   TranscriptStickToBottom,
   UseTranscriptStickToBottomOptions,
 } from "#product/hooks/chat/ui/use-transcript-stick-to-bottom-types";
+import {
+  recordTranscriptPinTransition,
+  recordTranscriptUserScrollIntent,
+  type TranscriptPinTransitionCause,
+} from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations-transcript";
 
 export type { TranscriptStickToBottom, UseTranscriptStickToBottomOptions };
 
@@ -34,11 +39,9 @@ function interactionNow(): number {
 // anchor after a finalized-session revisit so residual corrections land.
 const RESTORE_MAX_MS = 500;
 
-// How long after a prepend the frame pass keeps absorbing freshly-mounted rows'
-// estimate-to-measured corrections into scrollTop (reading row stays fixed).
-// Corrections arrive over several frames via the ResizeObserver, so compensation
-// is bounded by this deadline (not the glue window's quiet-frame termination);
-// after it, below-viewport growth is free to move the reader again.
+// How long the frame pass keeps absorbing a prepend's estimate-to-measured
+// corrections into scrollTop, bounded by wall-clock (not the glue window's
+// quiet-frame termination) so a post-glue correction still lands.
 const ABOVE_CHANGE_COMPENSATION_MAX_MS = 500;
 
 /**
@@ -67,35 +70,34 @@ export function useTranscriptStickToBottom({
   } = useTranscriptNewContentSignal();
   const lastScrollTopRef = useRef(0);
   // Last observed content height: lets a scroll event tell a genuine user
-  // displacement (same-size content) apart from our snap lagging a growing stream
-  // (content just grew). Only the former unpins. See onViewportScroll.
+  // displacement apart from our own snap lagging a growing stream. See onViewportScroll.
   const lastContentHeightRef = useRef(0);
   // Ownership markers: the PRIMARY signal telling our own writes apart from a
   // user scroll. See transcript-scroll-ownership.ts.
   const ownershipMarkersRef = useRef(new TranscriptScrollOwnershipMarkers());
   // One per-frame mutate-then-snap pipeline (rung 4 / PRO-187): replaces the
-  // session-entry / submit / tab-resume / above-change rAF loops with one owned
-  // scheduler and ONE snap writer.
+  // session-entry / submit / tab-resume / above-change rAF loops with one
+  // owned scheduler and ONE snap writer.
   const pipelineRef = useRef(new TranscriptFramePipeline());
-  // Active above-change compensation anchor, applied by the single frame writer
-  // while unpinned until its deadline lapses (the deadline, not the glue window,
-  // bounds it so a post-glue correction is still absorbed).
+  // Active above-change compensation anchor, applied while unpinned until its
+  // deadline lapses (so a post-glue correction is still absorbed).
   const compensationAnchorRef = useRef<ContentHeightScrollAnchor | null>(null);
-  // Whether the active compensation cancels on upward user intent: true for a
-  // completed-turn split (autonomous); false for a history prepend (reader-asked).
+  // Whether the active compensation cancels on upward intent: true for a
+  // completed-turn split, false for a history prepend (reader-asked).
   const compensationCancelableRef = useRef(false);
   // Deadline (interactionNow ms) past which the active above-change anchor is
-  // stale: the frame pass compensates each correction before it, then stops so
-  // below-viewport growth can move the reader. Bounds compensation by wall-clock
-  // instead of the glue window's quiet-frame termination (which ends a frame
-  // early on a slow runner and loses the last correction).
+  // stale: compensated each correction before it, then released so
+  // below-viewport growth can move the reader. Wall-clock, not the glue
+  // window's quiet-frame termination (which can end a frame early).
   const compensationDeadlineRef = useRef(0);
   // FR-2 restore (rung 6): frame writer re-resolves this each glued frame so the saved reading row holds as heights settle.
   const restoreResolverRef = useRef<((viewport: HTMLElement) => TranscriptRestoreResolution | null) | null>(null);
   const restoreDeadlineRef = useRef(0);
   const userScrollIntentUntilRef = useRef(0);
 
-  const setPinned = useCallback((next: boolean) => {
+  // Rung 11: `cause` is observation-only for the diagnostics record below;
+  // it never changes what setPinned does. Defaults to "unspecified".
+  const setPinned = useCallback((next: boolean, cause: TranscriptPinTransitionCause = "unspecified") => {
     if (next) {
       // Re-pinning (any path: repin band, submit, button click) means the
       // reader is at the bottom seeing the new content, so the announcement
@@ -107,7 +109,8 @@ export function useTranscriptStickToBottom({
     }
     pinnedRef.current = next;
     setIsPinnedToBottom(next);
-  }, [clearNewContentSignal]);
+    recordTranscriptPinTransition({ sessionId: sessionKey ?? "unknown", pinned: next, cause });
+  }, [clearNewContentSignal, sessionKey]);
 
   const clearAllMarkers = useCallback(() => {
     ownershipMarkersRef.current.clear();
@@ -139,19 +142,20 @@ export function useTranscriptStickToBottom({
     userScrollIntentUntilRef.current = interactionNow() + TRANSCRIPT_USER_SCROLL_SETTLE_MS;
     // The reader is driving: end any in-flight FR-2 restore (rung 6).
     restoreResolverRef.current = null;
+    // Rung 11: records intent so a prod log can tell false-unpin apart from a swallowed user scroll (ADR §5).
+    recordTranscriptUserScrollIntent({ sessionId: sessionKey ?? "unknown", direction });
     if (direction < 0) {
-      // Upward intent cancels only a CANCELABLE above-change compensation (a
-      // completed-turn split): the gesture wins, no per-frame re-anchor. A history
-      // PREPEND is NON-cancelable (reader asked for it by scrolling up) so it holds.
-      // See use-transcript-stick-to-bottom.compensation.test.tsx.
+      // Upward intent cancels only a CANCELABLE compensation (completed-turn
+      // split); a history PREPEND is NON-cancelable and holds regardless. See
+      // use-transcript-stick-to-bottom.compensation.test.tsx.
       if (compensationCancelableRef.current) {
         compensationAnchorRef.current = null;
       }
-      setPinned(false);
+      setPinned(false, "user_intent_unpin");
     }
     // Claim the frame at input time so it can't race a stream/reveal animation frame.
     onScrollSample({ programmatic: false, userInitiated: true });
-  }, [onScrollSample, setPinned]);
+  }, [onScrollSample, sessionKey, setPinned]);
 
   // Owns the consumed-inset machine, follow-target math, and scroll-to-bottom
   // callbacks. See use-transcript-auto-follow-bottom.ts.
@@ -187,13 +191,11 @@ export function useTranscriptStickToBottom({
       return;
     }
 
-    // A NON-cancelable compensation (history prepend) must never let scrollTop
-    // fall below where the reader stood pre-prepend. The frame pipeline only
-    // re-applies its write on a growth-driven pass, never on a scroll EVENT; a
-    // physical wheel gesture moves scrollTop natively between passes, and once
-    // content plateaus nothing schedules another pass to counter it (CI webkit
-    // "prepend anchoring ... scrollTop Received 0"). Clamp synchronously here
-    // to the anchor's pre-prepend floor, already proven safe.
+    // NON-cancelable compensation (history prepend): never let scrollTop fall
+    // below the pre-prepend floor. The pipeline only re-applies its write on a
+    // growth-driven pass, not a scroll EVENT; once content plateaus, a live
+    // wheel gesture erodes scrollTop unopposed (CI webkit "prepend anchoring
+    // ... scrollTop Received 0"). Clamp synchronously to the proven-safe floor.
     const activeCompensationAnchor = compensationAnchorRef.current;
     if (
       activeCompensationAnchor != null
@@ -237,12 +239,12 @@ export function useTranscriptStickToBottom({
       // content max, not the reader; clearing it would kill the frame writer's
       // re-resolution. A real takeover clears via notifyUserScrollIntent.
       dispatchInsetEvent({ type: "leave_band" });
-      setPinned(false);
+      setPinned(false, "leave_band");
     } else if (decision.pin === true) {
       if (decision.consumeInset === "full") {
         dispatchInsetEvent({ type: "consume_full" });
       }
-      setPinned(true);
+      setPinned(true, "repin_band");
     }
     // decision.pin === "hold": our own resize lag — leave pin and inset as they
     // are so a lagging follow is never misread as the user leaving.
@@ -342,7 +344,7 @@ export function useTranscriptStickToBottom({
       notifyProgrammaticScroll,
     );
     if (!restored) {
-      setPinned(true);
+      setPinned(true, "session_reset");
       scrollToBottom();
     }
     beginGlue();
@@ -356,7 +358,7 @@ export function useTranscriptStickToBottom({
   // never mounted the saved row gives up on the coarse estimate and bottom-pins
   // instead — the conservative FR-2 default, same as a vanished saved row.
   const notifyRestoreStranded = useCallback(() => {
-    setPinned(true);
+    setPinned(true, "restore_stranded");
     scrollToBottom();
   }, [scrollToBottom, setPinned]);
 

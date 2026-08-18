@@ -148,40 +148,14 @@ export function recordSessionErrorBanner(input: {
   });
 }
 
-export function recordTranscriptVirtualizerBlank(input: {
-  sessionId: string;
-  workspaceId: string | null;
-  rowCount: number;
-  renderableRowCount: number;
-  virtualItemCount: number;
-  firstVirtualItemIndex: number | null;
-  lastVirtualItemIndex: number | null;
-}): void {
-  recordRendererDiagnostic({
-    name: "renderer.transcript.virtualizer_blank",
-    severity: "error",
-    kind: "message",
-    privacy: "operational",
-    correlation: {
-      sessionId: input.sessionId,
-      ...(input.workspaceId === null ? {} : { workspaceId: input.workspaceId }),
-    },
-    fields: {
-      row_count: diagnosticField(input.rowCount, "operational"),
-      renderable_row_count: diagnosticField(input.renderableRowCount, "operational"),
-      virtual_item_count: diagnosticField(input.virtualItemCount, "operational"),
-      first_virtual_item_index: diagnosticField(
-        input.firstVirtualItemIndex ?? -1,
-        "operational",
-      ),
-      last_virtual_item_index: diagnosticField(
-        input.lastVirtualItemIndex ?? -1,
-        "operational",
-      ),
-    },
-    errorClassification: "virtualizer_blank",
-  });
-}
+// Transcript-only diagnostic records (blank-fallback, pin-transition,
+// user-scroll-intent) live in ./renderer-diagnostic-migrations-transcript
+// instead of here. That file is only reachable from the chat/transcript UI
+// hooks (mounted after auth, inside the AuthenticatedProductClient lazy
+// chunk); this file's exports are also reached from `use-turn-end-diagnostics`,
+// which `ProductLifecycleRoot` mounts unconditionally, so anything added here
+// travels into the /login bundle. See renderer-diagnostic-migrations-transcript.ts
+// for the split rationale (PRO-187, login runtime-budget fix).
 
 export function recordHotWorkspaceReconcileFailure(input: {
   operationId: string | null;

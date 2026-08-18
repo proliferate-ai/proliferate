@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
+import type { TranscriptPinTransitionCause } from "#product/lib/infra/diagnostics/renderer-diagnostic-migrations-transcript";
 
 export interface UseTranscriptSubmitStampRepinOptions {
   /**
@@ -18,7 +19,7 @@ export interface UseTranscriptSubmitStampRepinOptions {
    * value instead of comparing across the switch.
    */
   sessionKey: string | undefined;
-  setPinned: (pinned: boolean) => void;
+  setPinned: (pinned: boolean, cause?: TranscriptPinTransitionCause) => void;
   scrollToBottom: () => void;
   beginGlue: () => void;
   /**
@@ -81,7 +82,7 @@ export function useTranscriptSubmitStampRepin({
       && (previous == null || lastPromptSubmittedAtMs > previous)
     ) {
       onSubmitRepin();
-      setPinned(true);
+      setPinned(true, "submit_repin");
       scrollToBottom();
       beginGlue();
     }

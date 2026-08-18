@@ -4,6 +4,10 @@ import { useRef } from "react";
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTranscriptVirtualizerBlankFallback } from "./use-transcript-virtualizer-blank-fallback";
+import {
+  resetRendererDiagnosticsSinkForTest,
+  setRendererDiagnosticsSink,
+} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 
 let frames: FrameRequestCallback[];
 
@@ -21,6 +25,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  resetRendererDiagnosticsSinkForTest();
 });
 
 function flushFrame() {
@@ -176,6 +181,39 @@ describe("useTranscriptVirtualizerBlankFallback", () => {
     act(flushFrame);
     act(flushFrame);
     expect(onFallback).toHaveBeenCalledWith("blank_viewport");
+  });
+
+  // Rung 11 (PRO-187, Q8): the founder ruling requires the blank-fallback
+  // diagnostic to reach telemetry beyond dev-only console. isMainThreadMeasurementEnabled()
+  // defaults false here (the same as a production build with the debug flag
+  // off), so this proves the record is no longer gated behind it.
+  it("emits the blank-viewport diagnostic even when main-thread measurement is disabled", () => {
+    const emit = vi.fn();
+    setRendererDiagnosticsSink({ emit });
+    const onFallback = vi.fn();
+    const rendered = render(
+      <Harness
+        firstVirtualItem={{ index: 0, start: 0, end: 100 }}
+        lastVirtualItem={{ index: 1, start: 100, end: 200 }}
+        onFallback={onFallback}
+      />,
+    );
+    const viewport = rendered.getByTestId("viewport") as HTMLDivElement;
+    setViewportMetrics(viewport, 2_000);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function () {
+      const top = this === viewport ? 0 : 1_000;
+      const bottom = this === viewport ? 400 : 1_100;
+      return { top, bottom } as DOMRect;
+    });
+
+    act(flushFrame);
+    act(flushFrame);
+    act(flushFrame);
+
+    expect(onFallback).toHaveBeenCalledWith("blank_viewport");
+    expect(emit.mock.calls.map(([input]) => input.name)).toContain(
+      "renderer.transcript.virtualizer_blank",
+    );
   });
 
   it("does not fall back when a suspicious blank recovers before DOM confirmation", () => {
