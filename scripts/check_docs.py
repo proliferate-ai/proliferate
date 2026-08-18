@@ -74,8 +74,8 @@ class Finding:
 
 HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 SETEXT_HEADING = re.compile(r"^\s{0,3}(?:=+|-+)\s*$")
-FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
-HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})([^\r\n]*)$")
+FENCE_CLOSE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
 INLINE_CODE = re.compile(r"(`+)(.+?)\1")
 REFERENCE_DEFINITION = re.compile(r"^\s{0,3}\[[^\]]+\]:\s*(.+?)\s*$")
 HTML_ANCHOR = re.compile(r"<(?:a|[A-Za-z][^>]*)\s+(?:[^>]*?\s)?(?:id|name)=[\"']([^\"']+)[\"']")
@@ -215,27 +215,90 @@ def blank_except_newlines(value: str) -> str:
     return "".join(char if char in "\r\n" else " " for char in value)
 
 
+def opening_fence(line: str) -> tuple[str, int] | None:
+    """Return a legal fenced-code opener's marker state."""
+    match = FENCE_OPEN.match(line)
+    if not match:
+        return None
+    marker, info = match.groups()
+    if marker[0] == "`" and "`" in info:
+        return None
+    return marker[0], len(marker)
+
+
+def is_closing_fence(line: str, character: str, minimum_length: int) -> bool:
+    """Whether a line legally closes the active fenced-code block."""
+    match = FENCE_CLOSE.match(line)
+    if not match:
+        return False
+    marker = match.group(1)
+    return marker[0] == character and len(marker) >= minimum_length
+
+
+def mask_html_comments(line: str, starts_inside_comment: bool) -> tuple[str, bool]:
+    """Mask HTML comments, carrying an unclosed comment into later lines."""
+    inside_comment = starts_inside_comment
+    cursor = 0
+    visible: list[str] = []
+
+    while cursor < len(line):
+        if inside_comment:
+            comment_end = line.find("-->", cursor)
+            if comment_end < 0:
+                visible.append(blank_except_newlines(line[cursor:]))
+                return "".join(visible), inside_comment
+            after_comment = comment_end + 3
+            visible.append(blank_except_newlines(line[cursor:after_comment]))
+            cursor = after_comment
+            inside_comment = False
+            continue
+
+        comment_start = line.find("<!--", cursor)
+        if comment_start < 0:
+            visible.append(line[cursor:])
+            break
+        visible.append(line[cursor:comment_start])
+        comment_end = line.find("-->", comment_start + 4)
+        if comment_end < 0:
+            visible.append(blank_except_newlines(line[comment_start:]))
+            inside_comment = True
+            return "".join(visible), inside_comment
+        after_comment = comment_end + 3
+        visible.append(blank_except_newlines(line[comment_start:after_comment]))
+        cursor = after_comment
+
+    return "".join(visible), inside_comment
+
+
 def visible_markdown_lines(text: str):
     """Yield Markdown outside fenced code and HTML comments with line numbers."""
-    fence: str | None = None
+    fence_character: str | None = None
     minimum_length = 0
-    without_comments = HTML_COMMENT.sub(
-        lambda match: blank_except_newlines(match.group(0)), text
-    )
+    inside_html_comment = False
 
-    for line_number, line in enumerate(without_comments.splitlines(), start=1):
-        match = FENCE.match(line)
-        if match:
-            marker = match.group(1)
-            if fence is None:
-                fence = marker[0]
-                minimum_length = len(marker)
-            elif marker[0] == fence and len(marker) >= minimum_length:
-                fence = None
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        if fence_character is not None:
+            if is_closing_fence(line, fence_character, minimum_length):
+                fence_character = None
                 minimum_length = 0
+            yield line_number, blank_except_newlines(line)
             continue
-        if fence is None:
-            yield line_number, line
+
+        opener = None if inside_html_comment else opening_fence(line)
+        if opener is not None:
+            fence_character, minimum_length = opener
+            yield line_number, blank_except_newlines(line)
+            continue
+
+        visible_line, inside_html_comment = mask_html_comments(
+            line, inside_html_comment
+        )
+        opener = opening_fence(visible_line)
+        if opener is not None:
+            fence_character, minimum_length = opener
+            yield line_number, blank_except_newlines(line)
+        else:
+            yield line_number, visible_line
 
 
 def mask_inline_code(line: str) -> str:

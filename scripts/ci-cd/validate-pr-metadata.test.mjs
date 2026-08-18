@@ -269,6 +269,70 @@ test("ignores H2 headings inside fenced code and HTML comments", () => {
   assert.deepEqual(validatePullRequestBody({ body: commented, headSha }), []);
 });
 
+test("keeps every PR section and receipt field hidden after an invalid fence close", () => {
+  const body = `\`\`\`md
+\`\`\`not-a-close
+${readyBody()}
+\`\`\`
+`;
+  const errors = validatePullRequestBody({ body, headSha }).join("\n");
+
+  for (const heading of [
+    "Summary",
+    "Testing / Verification",
+    "Observability",
+    "Security / Privacy",
+    "Documentation impact",
+    "Affected consumers",
+    "Delivery receipt",
+  ]) {
+    assert.match(errors, new RegExp(`exactly one \\\"## ${heading.replace("/", "\\/")}\\\"`));
+  }
+  assert.match(errors, /Testing \/ Verification must contain Evidence state/);
+  assert.match(errors, /Delivery receipt must contain Current head/);
+});
+
+test("accepts visible PR sections and fields after a legal whitespace-only fence close", () => {
+  const body = `\`\`\`md
+## Example only
+\`\`\`\`\t
+${readyBody()}`;
+
+  assert.deepEqual(validatePullRequestBody({ body, headSha }), []);
+});
+
+test("requires the closing fence marker and minimum length to match", () => {
+  for (const nonClosingMarker of ["~~~", "```"]) {
+    const body = `\`\`\`\`md
+${nonClosingMarker}
+${readyBody()}
+\`\`\`\`
+`;
+    const errors = validatePullRequestBody({ body, headSha }).join("\n");
+
+    assert.match(errors, /exactly one \"## Summary\"/);
+    assert.match(errors, /Delivery receipt must contain Current head/);
+  }
+});
+
+test("keeps PR sections and fields hidden inside an unclosed HTML comment", () => {
+  const errors = validatePullRequestBody({
+    body: `<!--\n${readyBody()}`,
+    headSha,
+  }).join("\n");
+
+  assert.match(errors, /exactly one \"## Summary\"/);
+  assert.match(errors, /exactly one \"## Delivery receipt\"/);
+  assert.match(errors, /Testing \/ Verification must contain Evidence state/);
+  assert.match(errors, /Delivery receipt must contain Current head/);
+});
+
+test("accepts visible PR sections and fields before an unclosed HTML comment", () => {
+  const body = `${readyBody()}\n<!--\n## Summary\nEvidence state: invalid\nCurrent head: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n`;
+
+  assert.deepEqual(validatePullRequestBody({ body, headSha }), []);
+});
+
 test("rejects a documentation impact with neither a path nor reason", () => {
   const errors = validatePullRequestBody({
     body: readyBody({ docsImpact: "- Maybe later." }),
@@ -293,7 +357,7 @@ test("rejects unsafe documentation paths", () => {
 });
 
 test("requires a reason for a no-impact Observability state", () => {
-  for (const observability of ["- none", "Impact:\n- none"]) {
+  for (const observability of ["- none", "Impact:\n- none", "Impact: none"]) {
     const errors = validatePullRequestBody({
       body: readyBody({ observability }),
       headSha,
@@ -304,6 +368,9 @@ test("requires a reason for a no-impact Observability state", () => {
   for (const observability of [
     "- none — documentation-only change.",
     "Impact:\n- none — documentation-only change.",
+    "Impact: none — documentation-only change.",
+    "- Impact: not applicable: documentation-only change.",
+    "Impact: none — x",
   ]) {
     assert.deepEqual(
       validatePullRequestBody({

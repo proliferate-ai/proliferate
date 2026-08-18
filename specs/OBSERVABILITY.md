@@ -2,8 +2,8 @@
 
 How Proliferate stays observable: which signal a change should emit, where
 each signal goes, and what must never travel with it. Consider this document
-in every PR: state the change's observability delta — or an explicit "none" —
-in the PR description. System depth lives in
+in every PR: state the change's observability delta — or an explicit "none"
+plus a same-line reason — in the PR description. System depth lives in
 [`specs/codebase/systems/engineering/observability/`](codebase/systems/engineering/observability/README.md);
 this page is the per-PR decision layer over it.
 
@@ -191,8 +191,8 @@ the fallback evidence source.
    telemetry allowlist — it is not automatically forwarded.
 5. Touched a scrubber, telemetry gate, DSN wiring, or the Sentry crate pins?
    Say so explicitly; these paths carry the known gaps and the incident above.
-6. Nothing observable changed? State "none" — that is a valid answer, silence
-   is not.
+6. Nothing observable changed? State "none" plus a same-line reason — that is
+   a valid answer, silence is not.
 
 Depth: [`observability/README.md`](codebase/systems/engineering/observability/README.md)
 and [`sentry.md`](codebase/systems/engineering/observability/sentry.md) (system

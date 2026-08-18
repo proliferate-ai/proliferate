@@ -21,10 +21,10 @@ const EVIDENCE_STATES = new Set([
   "unavailable",
 ]);
 const HEADING = /^##\s+(.+?)\s*#*\s*$/gm;
-const HTML_COMMENT = /<!--[\s\S]*?-->/g;
-const FENCE = /^\s{0,3}(`{3,}|~{3,})/;
-const NO_IMPACT_REASON = /\b(?:none|not[ -]applicable)\s*(?:—|--|-|:)\s*\S.{2,}/i;
-const NO_IMPACT_STATE = /^\s*(?:[-*+]\s*)?(?:none|not[ -]applicable)\b/i;
+const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})([^\r\n]*?)(?:\r?\n)?$/;
+const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*(?:\r?\n)?$/;
+const NO_IMPACT_REASON = /\b(?:none|not[ -]applicable)\s*(?:—|--|-|:)\s*\S/i;
+const NO_IMPACT_STATE = /^\s*(?:[-*+]\s*)?(?:[A-Za-z][A-Za-z0-9 _/-]*:\s*)?(?:none|not[ -]applicable)\b/i;
 const PLACEHOLDER_SENTINEL = /^\s*(?:[-*+>]\s*)?(?:\[[ xX]\]\s*)?(?:\[?(?:todo|tbd|placeholder)\]?|fill[\s_-]*this[\s_-]*in|n\/a)\b/i;
 
 function normalizedHeading(value) {
@@ -35,35 +35,103 @@ function blankExceptNewlines(value) {
   return value.replace(/[^\r\n]/g, " ");
 }
 
+function openingFence(line) {
+  const match = line.match(FENCE_OPEN);
+  if (!match) {
+    return null;
+  }
+  const marker = match[1];
+  const info = match[2];
+  if (marker[0] === "`" && info.includes("`")) {
+    return null;
+  }
+  return { character: marker[0], length: marker.length };
+}
+
+function isClosingFence(line, character, minimumLength) {
+  const marker = line.match(FENCE_CLOSE)?.[1] || "";
+  return marker[0] === character && marker.length >= minimumLength;
+}
+
+function maskHtmlComments(line, startsInsideComment) {
+  let insideComment = startsInsideComment;
+  let cursor = 0;
+  let visible = "";
+
+  while (cursor < line.length) {
+    if (insideComment) {
+      const commentEnd = line.indexOf("-->", cursor);
+      if (commentEnd === -1) {
+        visible += blankExceptNewlines(line.slice(cursor));
+        return { line: visible, insideComment };
+      }
+      const afterComment = commentEnd + 3;
+      visible += blankExceptNewlines(line.slice(cursor, afterComment));
+      cursor = afterComment;
+      insideComment = false;
+      continue;
+    }
+
+    const commentStart = line.indexOf("<!--", cursor);
+    if (commentStart === -1) {
+      visible += line.slice(cursor);
+      break;
+    }
+    visible += line.slice(cursor, commentStart);
+    const commentEnd = line.indexOf("-->", commentStart + 4);
+    if (commentEnd === -1) {
+      visible += blankExceptNewlines(line.slice(commentStart));
+      insideComment = true;
+      return { line: visible, insideComment };
+    }
+    const afterComment = commentEnd + 3;
+    visible += blankExceptNewlines(line.slice(commentStart, afterComment));
+    cursor = afterComment;
+  }
+
+  return { line: visible, insideComment };
+}
+
 function visibleMarkdown(value) {
-  const withoutComments = value.replace(HTML_COMMENT, blankExceptNewlines);
   let result = "";
   let offset = 0;
   let fenceCharacter = "";
   let fenceLength = 0;
+  let insideHtmlComment = false;
 
-  while (offset < withoutComments.length) {
-    const newline = withoutComments.indexOf("\n", offset);
-    const end = newline === -1 ? withoutComments.length : newline + 1;
-    const line = withoutComments.slice(offset, end);
-    const marker = line.match(FENCE)?.[1] || "";
+  while (offset < value.length) {
+    const newline = value.indexOf("\n", offset);
+    const end = newline === -1 ? value.length : newline + 1;
+    const line = value.slice(offset, end);
 
-    if (!fenceCharacter && marker) {
-      fenceCharacter = marker[0];
-      fenceLength = marker.length;
+    if (fenceCharacter) {
+      if (isClosingFence(line, fenceCharacter, fenceLength)) {
+        fenceCharacter = "";
+        fenceLength = 0;
+      }
       result += blankExceptNewlines(line);
-    } else if (
-      fenceCharacter &&
-      marker[0] === fenceCharacter &&
-      marker.length >= fenceLength
-    ) {
-      fenceCharacter = "";
-      fenceLength = 0;
+      offset = end;
+      continue;
+    }
+
+    let opener = insideHtmlComment ? null : openingFence(line);
+    if (opener) {
+      fenceCharacter = opener.character;
+      fenceLength = opener.length;
       result += blankExceptNewlines(line);
-    } else if (fenceCharacter) {
+      offset = end;
+      continue;
+    }
+
+    const masked = maskHtmlComments(line, insideHtmlComment);
+    insideHtmlComment = masked.insideComment;
+    opener = openingFence(masked.line);
+    if (opener) {
+      fenceCharacter = opener.character;
+      fenceLength = opener.length;
       result += blankExceptNewlines(line);
     } else {
-      result += line;
+      result += masked.line;
     }
     offset = end;
   }
