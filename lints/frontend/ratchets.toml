@@ -195,8 +195,8 @@ reason = "Background Work R2: reports the stick-to-bottom engine's own isPinnedT
 
 [[frontend_structure]]
 path = "apps/packages/product-client/src/components/workspace/chat/transcript/MessageList.tsx"
-max_lines = 442
-reason = "Background Work R6: in-scroll background_work + completion_receipt row orchestration (interleave placement, receipt hosting, pane wiring) grew the transcript list host past 400; extraction pending"
+max_lines = 443
+reason = "Background Work R6+R8: r6 row orchestration grew the transcript list host past 400 (extraction pending); r8 adds 3 lines of background-command click-in wiring, and the refold base carries main's one-line hydration amendment (439->440), so the reviewed-at-442 content lands at 443"
 
 # FE-CHATSCROLL-1 sanctioned scroll-position writers, read by
 # scripts/check_transcript_scroll_writer.py. File-level allowlist: any non-test

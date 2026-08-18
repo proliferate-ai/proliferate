@@ -10,26 +10,55 @@ import {
 } from "#product/domain/chats/transcript/transcript-tool-commands";
 import {
   basename,
+  deriveCommandOutput,
   deriveReadPathTarget,
   formatFetchLabel,
   formatListingLabel,
   formatParsedCommandLabel,
   formatSearchLabel,
 } from "#product/domain/chats/tools/collapsed-action-labels";
+import { useBackgroundCommandStatus } from "#product/hooks/activity/derived/use-background-command-status";
 import { CommandActionRow } from "#product/components/workspace/chat/tool-calls/CollapsedCommandActionRow";
 import { CollapsedActionIcon } from "#product/components/workspace/chat/tool-calls/CollapsedActionIcon";
 import { EditRows } from "#product/components/workspace/chat/tool-calls/CollapsedEditActionRows";
 import { GenericActionRow } from "#product/components/workspace/chat/tool-calls/CollapsedGenericActionRow";
 import {
+  ActionDisclosureRow,
   ActionFileLink,
   ActionRowIcon,
   PlainActionRow,
 } from "#product/components/workspace/chat/tool-calls/CollapsedActionRowPrimitives";
 
-export function CollapsedActionRows({ item }: { item: ToolCallItem }) {
+export function CollapsedActionRows({
+  item,
+  onOpenBackgroundTerminal,
+}: {
+  item: ToolCallItem;
+  /**
+   * bgwork r8 round 2/3: routed to the lone `command`-kind row, or to every
+   * row of a parsed/compound command — a background command is one process
+   * with one result text no matter how many structural rows it renders into.
+   */
+  onOpenBackgroundTerminal?: (processId: string) => void;
+}) {
   const parsedCommands = getToolCallParsedCommands(item);
+  // Resolved once for the whole tool call: a background command's "Command
+  // running in background with ID: ..." sentence lives in the ONE result
+  // text the item carries, regardless of how many display rows the harness's
+  // parsed_cmd breakdown produces below.
+  const { processId: backgroundProcessId, trailingStatus: backgroundTrailingStatus } =
+    useBackgroundCommandStatus(deriveCommandOutput(item));
+
   if (parsedCommands.length > 0) {
-    return <ParsedCommandRows item={item} commands={parsedCommands} />;
+    return (
+      <ParsedCommandRows
+        item={item}
+        commands={parsedCommands}
+        backgroundProcessId={backgroundProcessId}
+        backgroundTrailingStatus={backgroundTrailingStatus}
+        onOpenBackgroundTerminal={onOpenBackgroundTerminal}
+      />
+    );
   }
 
   switch (classifyCollapsedAction(item)) {
@@ -60,7 +89,12 @@ export function CollapsedActionRows({ item }: { item: ToolCallItem }) {
         />
       );
     case "command":
-      return <CommandActionRow item={item} />;
+      return (
+        <CommandActionRow
+          item={item}
+          onOpenBackgroundTerminal={onOpenBackgroundTerminal}
+        />
+      );
     case "edit":
       return <EditRows item={item} />;
     case "action":
@@ -151,10 +185,42 @@ function FileActionRow({
 function ParsedCommandRows({
   item,
   commands,
+  backgroundProcessId,
+  backgroundTrailingStatus,
+  onOpenBackgroundTerminal,
 }: {
   item: ToolCallItem;
   commands: ParsedToolCommand[];
+  backgroundProcessId: string | null;
+  backgroundTrailingStatus: string | undefined;
+  onOpenBackgroundTerminal?: (processId: string) => void;
 }) {
+  // A background command is one process regardless of how many structural
+  // rows its parsed breakdown renders into — every row opens the same
+  // terminal detail, uniformly (bgwork r8 round 3), never a mix of some rows
+  // opening the pane and others keeping their ordinary per-kind treatment
+  // (e.g. a "read"-kind row's file link). Falls back to the ordinary
+  // per-kind rendering below when there's no id to open with, or no caller
+  // wired to open it.
+  if (backgroundProcessId && onOpenBackgroundTerminal) {
+    const processId = backgroundProcessId;
+    return (
+      <>
+        {commands.map((command, idx) => (
+          <ActionDisclosureRow
+            key={`${item.itemId}-parsed-${idx}`}
+            label={formatParsedCommandLabel(item, command)}
+            icon={<CollapsedActionIcon kind={command.kind} />}
+            expanded={false}
+            failed={item.status === "failed"}
+            onToggle={() => onOpenBackgroundTerminal(processId)}
+            trailing={backgroundTrailingStatus}
+          />
+        ))}
+      </>
+    );
+  }
+
   return (
     <>
       {commands.map((command, idx) => command.kind === "read" && command.path

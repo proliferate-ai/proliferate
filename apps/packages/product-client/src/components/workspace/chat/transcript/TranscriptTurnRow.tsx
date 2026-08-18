@@ -71,6 +71,7 @@ export function TranscriptTurnRow({
   onOpenTurnChanges,
   onOpenArtifact,
   onOpenSubagent,
+  onOpenBackgroundTerminal,
   onHandOffPlanToNewSession,
   workspaceReceipt = null,
 }: {
@@ -89,6 +90,7 @@ export function TranscriptTurnRow({
   onOpenTurnChanges?: () => void;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onOpenSubagent?: (subagentId: string) => void;
+  onOpenBackgroundTerminal?: (processId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
   /** The workspace-creation receipt, when this row hosts it (see `hostsWorkspaceReceipt`). */
   workspaceReceipt?: ReactNode;
@@ -290,6 +292,7 @@ export function TranscriptTurnRow({
           workspaceId={selectedWorkspaceId}
           onOpenArtifact={onOpenArtifact}
           onOpenSubagent={onOpenSubagent}
+          onOpenBackgroundTerminal={onOpenBackgroundTerminal}
           onHandOffPlanToNewSession={onHandOffPlanToNewSession}
           workspaceReceipt={workspaceReceipt}
         />

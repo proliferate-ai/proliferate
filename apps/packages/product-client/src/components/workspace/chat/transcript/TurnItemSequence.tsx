@@ -54,6 +54,7 @@ export function TurnItemSequence({
   workspaceId,
   onOpenArtifact,
   onOpenSubagent,
+  onOpenBackgroundTerminal,
   onHandOffPlanToNewSession,
   workspaceReceipt = null,
 }: {
@@ -74,6 +75,7 @@ export function TurnItemSequence({
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onOpenSubagent?: (subagentId: string) => void;
+  onOpenBackgroundTerminal?: (processId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
   /**
    * The workspace-creation receipt, when this row hosts it. Renders as the
@@ -180,6 +182,7 @@ export function TurnItemSequence({
                         transcript={transcript}
                         autoFollowCollapsedActionBlockId={null}
                         animateActivityEntry={false}
+                        onOpenBackgroundTerminal={onOpenBackgroundTerminal}
                         renderItem={(itemId) => (
                           <TranscriptFragment
                             itemId={itemId}
@@ -191,6 +194,7 @@ export function TurnItemSequence({
                             workspaceId={workspaceId}
                             onOpenArtifact={onOpenArtifact}
                             onOpenSubagent={onOpenSubagent}
+                            onOpenBackgroundTerminal={onOpenBackgroundTerminal}
                             onHandOffPlanToNewSession={onHandOffPlanToNewSession}
                           />
                         )}
@@ -207,6 +211,7 @@ export function TurnItemSequence({
               transcript={transcript}
               autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
               animateActivityEntry={animateActivityEntry}
+              onOpenBackgroundTerminal={onOpenBackgroundTerminal}
               renderItem={(itemId) => (
                 <TranscriptFragment
                   itemId={itemId}
@@ -218,6 +223,7 @@ export function TurnItemSequence({
                   workspaceId={workspaceId}
                   onOpenArtifact={onOpenArtifact}
                   onOpenSubagent={onOpenSubagent}
+                  onOpenBackgroundTerminal={onOpenBackgroundTerminal}
                   onHandOffPlanToNewSession={onHandOffPlanToNewSession}
                 />
               )}
@@ -316,6 +322,7 @@ function TranscriptFragment({
   workspaceId,
   onOpenArtifact,
   onOpenSubagent,
+  onOpenBackgroundTerminal,
   onHandOffPlanToNewSession,
 }: {
   itemId: string;
@@ -330,6 +337,7 @@ function TranscriptFragment({
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onOpenSubagent?: (subagentId: string) => void;
+  onOpenBackgroundTerminal?: (processId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
 }) {
   return (
@@ -344,6 +352,7 @@ function TranscriptFragment({
         workspaceId={workspaceId}
         onOpenArtifact={onOpenArtifact}
         onOpenSubagent={onOpenSubagent}
+        onOpenBackgroundTerminal={onOpenBackgroundTerminal}
         onHandOffPlanToNewSession={onHandOffPlanToNewSession}
       />
     </>
