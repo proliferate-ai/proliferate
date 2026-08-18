@@ -182,6 +182,8 @@ Every one of those values is spelled as UTC with a fixed three-digit millisecond
 
 The permit does not normalize. `SupportExportPermit::issue` refuses any window that is not already exact, and `is_exact_support_window` stays strict: UTC offset zero, byte equality against a fixed-millisecond re-spelling, and exactly 900 seconds between the endpoints. The producer is the only place canonical spelling is created, so a drifting producer fails loudly at issuance instead of being silently repaired downstream.
 
+Fixing the producer is not the same as the window being release-complete: it guarantees the spelling the coordinator itself creates, while any other component that stamps a support timestamp remains its own source of truth, so a released build is only correct once every such producer emits this same canonical spelling.
+
 Degradation removes candidate groups from tier 8 upward until the exact
 uncompressed bytes fit the cap, oldest first within a tier, and a lifecycle
 started/terminal pair is admitted or removed atomically. The fixed tiers:

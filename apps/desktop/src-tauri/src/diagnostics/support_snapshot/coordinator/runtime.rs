@@ -1,7 +1,7 @@
 use std::future::Future;
 use std::pin::Pin;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Timelike, Utc};
 use tokio::time::Instant;
 
 use crate::diagnostics_collector::child_status::NativeChildStatusCapture;
@@ -64,4 +64,18 @@ impl CoordinatorRuntime for SystemCoordinatorRuntime {
     fn sleep_until(&self, deadline: Instant) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         Box::pin(tokio::time::sleep_until(deadline))
     }
+}
+
+/// Drops sub-millisecond nanoseconds from one raw clock read, truncating toward
+/// the start of the current millisecond and never rounding. `AutoSi` would
+/// otherwise omit `.000` or emit six or nine fractional digits, and the strict
+/// collector permit accepts neither spelling. A chrono leap-second read reports
+/// `timestamp_subsec_millis()` in `1000..=1999`; clamping to 999 keeps the
+/// emitted fraction three digits wide instead of overflowing into the next
+/// second.
+pub(super) fn truncate_to_milliseconds(value: DateTime<Utc>) -> DateTime<Utc> {
+    let milliseconds = value.timestamp_subsec_millis().min(999);
+    value
+        .with_nanosecond(milliseconds * 1_000_000)
+        .unwrap_or(value)
 }

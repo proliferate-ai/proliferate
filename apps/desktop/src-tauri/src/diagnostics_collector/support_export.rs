@@ -29,20 +29,17 @@ const SUPPORT_EXPORT_BYTES: u64 = 16_777_216;
 const SUPPORT_WINDOW_SECONDS: i64 = 15 * 60;
 
 /// The closed set of reasons the coordinator-only issuance seam can refuse to
-/// mint a support export permit. It is crate-private on purpose: no Tauri
-/// command, renderer bridge, SDK type, collector protocol message, or server
-/// payload may carry it. Variants are evaluated in declaration order.
+/// mint a support export permit. Crate-private on purpose: no Tauri command,
+/// renderer bridge, SDK type, collector protocol message, or server payload may
+/// carry it. Variants are evaluated in declaration order: a non-canonical
+/// `preparation_id`, a deadline not strictly later than now, a window that is
+/// not exact fixed-millisecond UTC `Z` text exactly 900 seconds wide, then the
+/// internally constructed request failing an exact support-request invariant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SupportExportIssuanceError {
-    /// `preparation_id` is not a canonical lowercase UUID string.
     InvalidPreparationId,
-    /// The supplied permit deadline is not strictly later than now.
     ExpiredDeadline,
-    /// An endpoint is not exact fixed-millisecond UTC `Z` text, cannot parse,
-    /// or the interval is not exactly 900 seconds.
     NoncanonicalWindow,
-    /// The internally constructed request failed protocol validation or an
-    /// exact support-request invariant.
     RequestInvariant,
 }
 
@@ -124,14 +121,11 @@ impl SupportExportPermit {
             return Err(SupportExportIssuanceError::NoncanonicalWindow);
         }
         let authorization_id = uuid::Uuid::new_v4().to_string();
-        #[cfg(test)]
-        let collector = probe::apply_request_fault(exact_request(
-            authorization_id.clone(),
-            source_time_from,
-            source_time_to,
-        ));
-        #[cfg(not(test))]
         let collector = exact_request(authorization_id.clone(), source_time_from, source_time_to);
+        // Test-only corruption of the already-constructed request, so the
+        // production validation call below still decides the outcome.
+        #[cfg(test)]
+        let collector = probe::apply_request_fault(collector);
         validate_support_request(&collector, &authorization_id)
             .map_err(|_| SupportExportIssuanceError::RequestInvariant)?;
         #[cfg(test)]
@@ -590,81 +584,8 @@ fn require_canonical_uuid(value: &str) -> Result<(), ()> {
 
 mod validation;
 
-/// Test-only observation of the real issuance seam. It exists so a coordinator
-/// proof can assert that the real permit accepted and consumed the exact
-/// request window bytes, and so the post-construction request-invariant branch
-/// can be forced through the same production validation function. It cannot
-/// exist in a release build and exposes no raw request constructor.
 #[cfg(test)]
-pub(crate) mod probe {
-    use std::cell::Cell;
-    use std::sync::{Mutex, OnceLock};
-
-    use proliferate_diagnostics_protocol::v1::types::ExportRequestV1;
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub(crate) enum IssuanceStage {
-        Issued,
-        Consumed,
-    }
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub(crate) struct ObservedIssuance {
-        pub(crate) stage: IssuanceStage,
-        pub(crate) source_time_from: String,
-        pub(crate) source_time_to: String,
-    }
-
-    thread_local! {
-        static REQUEST_FAULT: Cell<bool> = const { Cell::new(false) };
-    }
-
-    fn observations() -> &'static Mutex<Vec<ObservedIssuance>> {
-        static OBSERVATIONS: OnceLock<Mutex<Vec<ObservedIssuance>>> = OnceLock::new();
-        OBSERVATIONS.get_or_init(|| Mutex::new(Vec::new()))
-    }
-
-    pub(crate) fn record(stage: IssuanceStage, source_time_from: &str, source_time_to: &str) {
-        if let Ok(mut observations) = observations().lock() {
-            observations.push(ObservedIssuance {
-                stage,
-                source_time_from: source_time_from.to_owned(),
-                source_time_to: source_time_to.to_owned(),
-            });
-        }
-    }
-
-    pub(crate) fn reset() {
-        if let Ok(mut observations) = observations().lock() {
-            observations.clear();
-        }
-    }
-
-    pub(crate) fn observed() -> Vec<ObservedIssuance> {
-        observations()
-            .lock()
-            .map(|observations| observations.clone())
-            .unwrap_or_default()
-    }
-
-    /// Arms a same-thread fault that corrupts the internally constructed
-    /// request after `exact_request` returns, so the production
-    /// `validate_support_request` call decides the outcome.
-    pub(crate) fn arm_request_fault() {
-        REQUEST_FAULT.with(|armed| armed.set(true));
-    }
-
-    pub(crate) fn disarm_request_fault() {
-        REQUEST_FAULT.with(|armed| armed.set(false));
-    }
-
-    pub(super) fn apply_request_fault(mut request: ExportRequestV1) -> ExportRequestV1 {
-        if REQUEST_FAULT.with(|armed| armed.get()) {
-            request.record_limit -= 1;
-        }
-        request
-    }
-}
+pub(crate) use tests::probe;
 
 #[cfg(test)]
 #[path = "support_export_tests.rs"]

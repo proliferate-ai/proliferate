@@ -1,3 +1,79 @@
+/// Test-only observation of the real issuance seam. It exists so a coordinator
+/// proof can assert that the real permit accepted and consumed the exact
+/// request window bytes, and so the post-construction request-invariant branch
+/// can be forced through the same production validation function. It cannot
+/// exist in a release build and exposes no raw request constructor.
+#[cfg(test)]
+pub(crate) mod probe {
+    use std::cell::Cell;
+    use std::sync::{Mutex, OnceLock};
+
+    use proliferate_diagnostics_protocol::v1::types::ExportRequestV1;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub(crate) enum IssuanceStage {
+        Issued,
+        Consumed,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub(crate) struct ObservedIssuance {
+        pub(crate) stage: IssuanceStage,
+        pub(crate) source_time_from: String,
+        pub(crate) source_time_to: String,
+    }
+
+    thread_local! {
+        static REQUEST_FAULT: Cell<bool> = const { Cell::new(false) };
+    }
+
+    fn observations() -> &'static Mutex<Vec<ObservedIssuance>> {
+        static OBSERVATIONS: OnceLock<Mutex<Vec<ObservedIssuance>>> = OnceLock::new();
+        OBSERVATIONS.get_or_init(|| Mutex::new(Vec::new()))
+    }
+
+    pub(crate) fn record(stage: IssuanceStage, source_time_from: &str, source_time_to: &str) {
+        if let Ok(mut observations) = observations().lock() {
+            observations.push(ObservedIssuance {
+                stage,
+                source_time_from: source_time_from.to_owned(),
+                source_time_to: source_time_to.to_owned(),
+            });
+        }
+    }
+
+    pub(crate) fn reset() {
+        if let Ok(mut observations) = observations().lock() {
+            observations.clear();
+        }
+    }
+
+    pub(crate) fn observed() -> Vec<ObservedIssuance> {
+        observations()
+            .lock()
+            .map(|observations| observations.clone())
+            .unwrap_or_default()
+    }
+
+    /// Arms a same-thread fault that corrupts the internally constructed
+    /// request after `exact_request` returns, so the production
+    /// `validate_support_request` call decides the outcome.
+    pub(crate) fn arm_request_fault() {
+        REQUEST_FAULT.with(|armed| armed.set(true));
+    }
+
+    pub(crate) fn disarm_request_fault() {
+        REQUEST_FAULT.with(|armed| armed.set(false));
+    }
+
+    pub(crate) fn apply_request_fault(mut request: ExportRequestV1) -> ExportRequestV1 {
+        if REQUEST_FAULT.with(|armed| armed.get()) {
+            request.record_limit -= 1;
+        }
+        request
+    }
+}
+
 use proliferate_diagnostics_protocol::v1::limits::{CURRENT_SCHEMA_VERSION, MAX_EXPORT_RECORDS};
 use proliferate_diagnostics_protocol::v1::types::{
     CollectorAcceptedRecordV1, ComponentV1, ExportManifestV1, ExportPurposeV1, ExportStreamFrameV1,

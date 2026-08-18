@@ -259,20 +259,17 @@ async fn exercise_clock_case(case: &ClockCase) {
         &snapshot.selection.source_time_from,
         &snapshot.selection.source_time_to,
     );
-    if let Some(manifest) = &snapshot.collector.export_manifest {
-        assert_eq!(
-            manifest.filters.source_time_from.as_deref(),
-            Some(case.source_time_from),
-            "{}",
-            case.name
-        );
-        assert_eq!(
-            manifest.filters.source_time_to.as_deref(),
-            Some(case.captured_at),
-            "{}",
-            case.name
-        );
-    }
+    // An export manifest exists only when a packaged collector process actually
+    // answered the export. This fixture deliberately runs with no collector
+    // installed under its private HOME, so the manifest is absent by
+    // construction and asserting on it would be vacuous. The exact request
+    // window bytes are instead proven above by `probe::observed()`, which
+    // records the real permit's own filters at issue and at consume.
+    assert!(
+        snapshot.collector.export_manifest.is_none(),
+        "{}: no collector process runs in this fixture",
+        case.name
+    );
     if auto_si_differs {
         for value in [
             snapshot.generated_at.as_str(),
@@ -479,7 +476,7 @@ async fn a_deadline_interruption_also_suppresses_permit_detail() {
 #[test]
 fn truncation_never_rounds_a_raw_clock_read() {
     for case in CLOCK_CASES {
-        let truncated = super::preparation::truncate_to_milliseconds(parse(case.raw));
+        let truncated = super::runtime::truncate_to_milliseconds(parse(case.raw));
         assert_eq!(
             truncated.to_rfc3339_opts(SecondsFormat::Millis, true),
             case.captured_at,
