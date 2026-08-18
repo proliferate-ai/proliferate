@@ -27,6 +27,9 @@ use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::sessions::LiveSessionManager;
 
 mod agent_creation;
+mod checkpoint_hook;
+#[cfg(test)]
+mod checkpoint_linkage_tests;
 mod config;
 mod creation;
 mod fork;

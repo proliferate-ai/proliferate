@@ -24,6 +24,8 @@ pub mod refs;
 pub mod retention;
 
 #[cfg(test)]
+mod retention_tests;
+#[cfg(test)]
 mod tests;
 
 use std::path::PathBuf;

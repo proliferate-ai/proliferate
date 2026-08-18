@@ -22,18 +22,20 @@ use crate::persistence::Db;
 /// sets it so a concurrent test never observes the wrong flag state.
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
-struct EnvGuard<'a> {
+/// `pub(super)` (rather than private) so `retention_tests` (a sibling test
+/// module split out to stay under the repo line cap) can share this guard.
+pub(super) struct EnvGuard<'a> {
     _lock: std::sync::MutexGuard<'a, ()>,
 }
 
 impl EnvGuard<'_> {
-    fn on() -> Self {
+    pub(super) fn on() -> Self {
         let lock = ENV_LOCK.lock().unwrap_or_else(|poison| poison.into_inner());
         std::env::set_var("ANYHARNESS_CHECKPOINT_CAPTURE", "on");
         EnvGuard { _lock: lock }
     }
 
-    fn off() -> Self {
+    pub(super) fn off() -> Self {
         let lock = ENV_LOCK.lock().unwrap_or_else(|poison| poison.into_inner());
         std::env::remove_var("ANYHARNESS_CHECKPOINT_CAPTURE");
         EnvGuard { _lock: lock }
@@ -46,10 +48,13 @@ impl Drop for EnvGuard<'_> {
     }
 }
 
-struct Harness {
+/// `pub(super)` so `retention_tests` (split out of this file to stay under
+/// the repo line cap) can share the harness; `repo_root` is `pub(super)` too
+/// because the orphan-reap suite writes refs directly against it.
+pub(super) struct Harness {
     base: PathBuf,
     state: AppState,
-    repo_root: PathBuf,
+    pub(super) repo_root: PathBuf,
 }
 
 impl Drop for Harness {
@@ -59,7 +64,7 @@ impl Drop for Harness {
 }
 
 impl Harness {
-    fn new(label: &str) -> Self {
+    pub(super) fn new(label: &str) -> Self {
         let base =
             std::env::temp_dir().join(format!("anyharness-checkpoints-{label}-{}", Uuid::new_v4()));
         let runtime_home = base.join("runtime");
@@ -85,11 +90,11 @@ impl Harness {
         }
     }
 
-    fn service(&self) -> Arc<WorkspaceCheckpointService> {
+    pub(super) fn service(&self) -> Arc<WorkspaceCheckpointService> {
         self.state.workspace_checkpoint_service.clone()
     }
 
-    fn worktree_workspace(&self, id: &str) -> PathBuf {
+    pub(super) fn worktree_workspace(&self, id: &str) -> PathBuf {
         let path = self.base.join("worktrees").join(id);
         git(
             &self.repo_root,
@@ -130,7 +135,7 @@ impl Harness {
     /// and a matching row with a caller-controlled `created_at`/`expired`/
     /// `origin`. The retention and deletion-order tests need staggered ages and
     /// specific states that a live capture cannot produce on demand.
-    fn make_checkpoint(
+    pub(super) fn make_checkpoint(
         &self,
         workspace_id: &str,
         checkpoint_id: &str,
@@ -168,7 +173,7 @@ impl Harness {
             .expect("insert checkpoint row");
     }
 
-    fn checkpoint_ref_ids(&self, workspace_id: &str) -> std::collections::BTreeSet<String> {
+    pub(super) fn checkpoint_ref_ids(&self, workspace_id: &str) -> std::collections::BTreeSet<String> {
         refs::list_for_workspace(&self.repo_root, workspace_id)
             .expect("list checkpoint refs")
             .into_iter()
@@ -211,7 +216,7 @@ fn git_stdout(cwd: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
-fn head_sha(cwd: &Path) -> String {
+pub(super) fn head_sha(cwd: &Path) -> String {
     git_stdout(cwd, &["rev-parse", "HEAD"])
 }
 
@@ -223,7 +228,7 @@ fn make_dirty(path: &Path) {
 }
 
 /// A one-file tree via plumbing only, touching neither index nor worktree.
-fn make_tree(repo: &Path, filename: &str, content: &str) -> String {
+pub(super) fn make_tree(repo: &Path, filename: &str, content: &str) -> String {
     use std::io::Write;
     use std::process::Stdio;
     let mut hash = Command::new("git")
@@ -259,7 +264,7 @@ fn make_tree(repo: &Path, filename: &str, content: &str) -> String {
         .to_string()
 }
 
-fn bare_snapshot(head_sha: String, work_tree: String, index_tree: String) -> WorkspaceSnapshot {
+pub(super) fn bare_snapshot(head_sha: String, work_tree: String, index_tree: String) -> WorkspaceSnapshot {
     WorkspaceSnapshot {
         head_sha,
         branch: Some("main".to_string()),
@@ -283,7 +288,7 @@ fn delete_loose_object(repo: &Path, oid: &str) {
     std::fs::remove_file(&path).expect("remove loose object");
 }
 
-fn timestamp_days_ago(days: i64) -> String {
+pub(super) fn timestamp_days_ago(days: i64) -> String {
     (chrono::Utc::now() - chrono::Duration::days(days)).to_rfc3339()
 }
 
@@ -383,177 +388,6 @@ async fn captured_objects_survive_an_aggressive_gc() {
     );
     refs::verify_checkpoint_refs(&harness.repo_root, "ws-1", &record.id, &snap)
         .expect("objects still peel after gc --prune=now --aggressive");
-}
-
-/// 4. Flag-off = zero capture: retention leaves existing checkpoints untouched
-///    while the flag is off, and the flag reads false.
-#[tokio::test]
-async fn retention_is_a_noop_while_the_flag_is_off() {
-    let _env = EnvGuard::off();
-    assert!(!checkpoint_capture_enabled());
-    let harness = Harness::new("flag-off");
-    harness.worktree_workspace("ws-1");
-    // Way past the age cap and way past N — retention WOULD cull these if it ran.
-    for index in 0..(super::retention::RETENTION_KEEP_N + 5) {
-        harness.make_checkpoint(
-            "ws-1",
-            &format!("cp-{index}"),
-            CheckpointOrigin::TurnStart,
-            &timestamp_days_ago(100),
-            false,
-        );
-    }
-    let before = harness.checkpoint_ref_ids("ws-1");
-
-    harness.service().sweep_retention().await;
-
-    assert_eq!(
-        harness.checkpoint_ref_ids("ws-1"),
-        before,
-        "flag-off retention must leave every checkpoint untouched"
-    );
-}
-
-/// 5. Retention: cull to N, keep the newest N, honor the age cap, and honor the
-///    three exemptions (in-flight claim, newest safety row beyond N, safety past
-///    the age cap).
-#[tokio::test]
-async fn retention_culls_to_n_with_the_age_cap_and_exemptions() {
-    let _env = EnvGuard::on();
-    let harness = Harness::new("retention");
-    harness.worktree_workspace("ws-1");
-    let service = harness.service();
-    let n = super::retention::RETENTION_KEEP_N;
-
-    // N+3 fresh turn-start rows, newest first by created_at (index 0 = newest).
-    for index in 0..(n + 3) {
-        harness.make_checkpoint(
-            "ws-1",
-            &format!("fresh-{index:03}"),
-            CheckpointOrigin::TurnStart,
-            &timestamp_days_ago(index as i64),
-            false,
-        );
-    }
-    // One fresh row inside the newest N but older than the age cap.
-    harness.make_checkpoint(
-        "ws-1",
-        "aged-in-n",
-        CheckpointOrigin::TurnStart,
-        &timestamp_days_ago(20),
-        false,
-    );
-    // The newest safety row, ranked WAY beyond N by age, but exempt from N-cull.
-    harness.make_checkpoint(
-        "ws-1",
-        "safety-old",
-        CheckpointOrigin::Safety,
-        &timestamp_days_ago(9),
-        false,
-    );
-    // A safety row past the age cap: exempt from N, NOT from age → culled.
-    harness.make_checkpoint(
-        "ws-1",
-        "safety-expired",
-        CheckpointOrigin::Safety,
-        &timestamp_days_ago(30),
-        false,
-    );
-    // A row that would be culled by BOTH the age cap AND the N-cut, but a revert
-    // claims it → survives. Dated past the 14-day cap so ONLY the in-flight claim
-    // can explain its survival (remove the `is_claimed` check in `should_retain`
-    // and this test fails).
-    harness.make_checkpoint(
-        "ws-1",
-        "claimed",
-        CheckpointOrigin::TurnStart,
-        &timestamp_days_ago(40),
-        false,
-    );
-    let _claim = service.inflight_reverts().claim("claimed");
-
-    service.sweep_retention().await;
-
-    let surviving = harness.checkpoint_ref_ids("ws-1");
-    assert!(
-        surviving.contains("claimed"),
-        "an in-flight-claimed checkpoint survives even past both the N-cut and the age cap"
-    );
-    assert!(
-        surviving.contains("safety-old"),
-        "the newest safety row is exempt from the N-cull"
-    );
-    assert!(
-        !surviving.contains("safety-expired"),
-        "a safety row past the age cap is still culled"
-    );
-    assert!(
-        !surviving.contains("aged-in-n"),
-        "the age cap culls even inside the newest N"
-    );
-    // A culled row keeps its expired_at set; its refs are gone.
-    let expired = service
-        .store_for_tests()
-        .find_checkpoint("safety-expired")
-        .expect("query")
-        .expect("row");
-    assert!(expired.expired_at.is_some(), "culled rows are expired, not deleted");
-    // The very newest fresh row is intact.
-    assert!(surviving.contains("fresh-000"), "the newest fresh row survives");
-}
-
-/// 6. Deletion-order crash states: a row-expired-but-refs-present state and a
-///    refs-present-but-row-absent state are both reaped, and an unexpired row
-///    never loses its refs.
-#[tokio::test]
-async fn the_orphan_reap_converges_both_crash_states_and_spares_live_rows() {
-    let _env = EnvGuard::on();
-    let harness = Harness::new("deletion-order");
-    harness.worktree_workspace("ws-1");
-    let service = harness.service();
-
-    // A live unexpired row (keeps the workspace a retention candidate and is the
-    // spare-me control).
-    harness.make_checkpoint(
-        "ws-1",
-        "live",
-        CheckpointOrigin::TurnStart,
-        &timestamp_days_ago(1),
-        false,
-    );
-    // Crash state A: the row was expired but its refs never got deleted.
-    harness.make_checkpoint(
-        "ws-1",
-        "expired-refs",
-        CheckpointOrigin::TurnStart,
-        &timestamp_days_ago(1),
-        true,
-    );
-    // Crash state B: refs exist with no row at all (capture crashed before the
-    // insert). Write refs directly, insert no row.
-    {
-        let tree = make_tree(&harness.repo_root, "orphan.txt", "orphan");
-        let snap = bare_snapshot(head_sha(&harness.repo_root), tree.clone(), tree);
-        refs::write_checkpoint_refs(&harness.repo_root, "ws-1", "rowless", &snap)
-            .expect("write orphan refs");
-    }
-    assert!(harness.checkpoint_ref_ids("ws-1").contains("rowless"));
-
-    service.sweep_retention().await;
-
-    let surviving = harness.checkpoint_ref_ids("ws-1");
-    assert!(
-        surviving.contains("live"),
-        "an unexpired row never has its refs deleted"
-    );
-    assert!(
-        !surviving.contains("expired-refs"),
-        "an expired row's leftover refs are reaped"
-    );
-    assert!(
-        !surviving.contains("rowless"),
-        "refs with no row (crash before insert) are reaped"
-    );
 }
 
 /// 7. Sweep isolation regression: the archive sweep's `list_for_repo` ignores
