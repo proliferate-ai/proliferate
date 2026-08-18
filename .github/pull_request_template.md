@@ -2,15 +2,47 @@
 
 -
 
-## Testing
+## Testing / Verification
 
-<!-- State the tier(s) exercised per specs/TESTING.md, or why none is feasible. -->
+<!-- Evidence state: run | pending | not-applicable | unavailable -->
+<!-- List exact commands and results, or the unrun reason, residual risk, and next owner. -->
 
 -
 
 ## Observability
 
 <!-- State the observability delta per specs/OBSERVABILITY.md, or "none". -->
+
+-
+
+## Security / Privacy
+
+<!-- State the security/privacy impact, or "none" plus a reason. Never include secrets or private identifiers. -->
+
+-
+
+## Documentation impact
+
+<!-- List exact repository paths, or "none" plus a reason. -->
+
+-
+
+## Affected consumers
+
+<!-- Name every affected consumer and its proof/follow-up state, or "none" plus a reason. -->
+
+-
+
+## Delivery receipt
+
+<!--
+Spec revision / rulings (or not applicable + reason):
+Base revision:
+Current head:
+Review head / verdict / stable findings (or explicit state):
+Product proof / human acceptance state:
+Limitations / stop / next consumer:
+-->
 
 -
 
@@ -24,7 +56,3 @@
 - [ ] If this PR has support relationships, I linked them through the tracker
   API. No tracker, report, user, or support IDs or private source data appear
   in this PR.
-
-## Verification
-
--

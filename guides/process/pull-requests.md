@@ -32,10 +32,9 @@ text must be nonempty and remain on one line.
 
 A draft PR may have a provisional title and no labels while work is in
 progress. Every title and label rule in this procedure applies before
-readiness. Before readiness, also update the body with:
-
-- a plain summary of the change; and
-- the commands and other evidence that prove it.
+readiness. Draft bodies may remain incomplete while evidence is being gathered.
+Before readiness, update the body with the structured receipt below and keep
+it current with the PR head.
 
 Use the proof depth required by [`../../specs/TESTING.md`](../../specs/TESTING.md).
 
@@ -51,6 +50,30 @@ from the tracker remains behavior owned by the
 Use exactly one `release:*` label and at least one `area:*` label, applying
 every affected `area:*` label. If feature size or affected areas are ambiguous,
 stop and ask a human to choose rather than guessing.
+
+The body must contain one non-placeholder instance of every heading in the PR
+template and report:
+
+- a plain summary;
+- testing/verification with an evidence state of `run`, `pending`,
+  `not-applicable`, or `unavailable`; exact commands and results when run; and
+  an unrun reason, residual risk, and next owner when not run;
+- observability and security/privacy impact, using `none` plus a reason when
+  there is no impact;
+- documentation impact with exact repository paths, or `none` plus a reason;
+- every affected consumer and its proof/follow-up state;
+- exact specification revision and applicable rulings, or `not applicable`
+  plus a reason;
+- exact base and current head revisions;
+- review head, verdict, and stable findings when review has occurred, otherwise
+  its explicit pending/not-applicable/unavailable state;
+- product-proof and human-acceptance state without treating CI as either; and
+- current limitations, stopping point, and next consumer.
+
+The compact schema and state meanings are owned by
+[`delivery-contract.md`](delivery-contract.md). Metadata validation checks
+objective shape only. It does not decide whether evidence is adequate or
+whether a review, acceptance, qualification, or live observation is genuine.
 
 ### Release label
 
@@ -121,6 +144,8 @@ Current mechanical classification has three important edge cases:
 
 When review changes the outcome or ownership, update the summary, proof,
 title, and labels before merge. Recheck the readiness rules after the last
-change. Generated release-note and finalizer behavior remains owned by
+change. Independent review is tied to the exact recorded head; any head move
+invalidates that verdict until the reviewer examines the new delta and records
+a new head and verdict. Generated release-note and finalizer behavior remains owned by
 [`../deploying/README.md`](../deploying/README.md) and the Issue Lifecycle
 system; public polished changelog pages are a separate product surface.
