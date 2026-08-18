@@ -12,8 +12,7 @@ use super::definition::{
     WorkflowDefinition, DEFINITION_SCHEMA_VERSION,
 };
 use super::model::{
-    WorkflowLegStatus, WorkflowNodeFailureCode, WorkflowNodeStatus, WorkflowNodeType,
-    WorkflowRunStatus,
+    WorkflowLegStatus, WorkflowNodeStatus, WorkflowNodeType, WorkflowRunStatus,
 };
 use super::store::{
     node_leg_count, start_side_effect, NewRunParams, ResolvedSideEffect, WorkflowStore,
@@ -627,7 +626,7 @@ fn a_failed_per_leg_relaunch_terminalizes_only_the_addressed_leg() {
     // Only the addressed leg takes the launch failure.
     assert_eq!(
         rows[2].status,
-        WorkflowLegStatus::Failed(WorkflowNodeFailureCode::NodeLaunchFailed)
+        WorkflowLegStatus::Failed(super::model::WorkflowNodeFailureCode::NodeLaunchFailed)
     );
     assert_eq!(applied.state.run.status, WorkflowRunStatus::Failed);
 }
@@ -685,7 +684,7 @@ fn a_failed_per_leg_relaunch_cancels_and_disposes_running_siblings() {
     assert_eq!(rows[0].status, WorkflowLegStatus::Cancelled);
     assert_eq!(
         rows[1].status,
-        WorkflowLegStatus::Failed(WorkflowNodeFailureCode::NodeLaunchFailed)
+        WorkflowLegStatus::Failed(super::model::WorkflowNodeFailureCode::NodeLaunchFailed)
     );
     assert_eq!(rows[2].status, WorkflowLegStatus::Cancelled);
     assert_eq!(applied.state.run.status, WorkflowRunStatus::Failed);
