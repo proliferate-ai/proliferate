@@ -110,27 +110,27 @@ describe("selectWorkflowRunRailWindow", () => {
 
   it("renders every run without an overflow when the visible set fits the cap", () => {
     const runs = [live("a", 3), live("b", 2), live("c", 1)];
-    const window = selectWorkflowRunRailWindow(runs, 0);
-    expect(window.railWindow.map((r) => r.id)).toEqual(["a", "b", "c"]);
-    expect(window.hiddenCount).toBe(0);
-    expect(window.pageCount).toBe(1);
+    const cut = selectWorkflowRunRailWindow(runs, 0);
+    expect(cut.railWindow.map((r) => r.id)).toEqual(["a", "b", "c"]);
+    expect(cut.hiddenCount).toBe(0);
+    expect(cut.pageCount).toBe(1);
   });
 
   it("caps the window at four and counts the rest as hidden (ruling F-A2)", () => {
     const runs = [5, 4, 3, 2, 1].map((m) => live(`r${m}`, m));
-    const window = selectWorkflowRunRailWindow(runs, 0);
-    expect(window.railWindow).toHaveLength(MAX_VISIBLE_RUN_RAILS);
-    expect(window.hiddenCount).toBe(1);
-    expect(window.pageCount).toBe(2);
+    const cut = selectWorkflowRunRailWindow(runs, 0);
+    expect(cut.railWindow).toHaveLength(MAX_VISIBLE_RUN_RAILS);
+    expect(cut.hiddenCount).toBe(1);
+    expect(cut.pageCount).toBe(2);
   });
 
   it("promotes runs waiting on a human onto page 0 ahead of newer running work", () => {
     // The gated run is the OLDEST — without promotion it would be the hidden one.
     const gated = live("gated", 1, "awaiting_human");
     const runs = [live("r5", 5), live("r4", 4), live("r3", 3), live("r2", 2), gated];
-    const window = selectWorkflowRunRailWindow(runs, 0);
-    expect(window.railWindow[0].id).toBe("gated");
-    expect(window.railWindow.map((r) => r.id)).not.toContain("r2");
+    const cut = selectWorkflowRunRailWindow(runs, 0);
+    expect(cut.railWindow[0].id).toBe("gated");
+    expect(cut.railWindow.map((r) => r.id)).not.toContain("r2");
   });
 
   it("pages the window and clamps a page the shrinking set no longer has", () => {
