@@ -327,5 +327,8 @@ fn map_subagent_start_error(error: StartNewAgentSessionError) -> CreateSubagentA
 }
 
 #[cfg(test)]
+#[path = "internal_creation_title_tests.rs"]
+mod internal_creation_title_tests;
+#[cfg(test)]
 #[path = "ordinary_creation_tests.rs"]
 mod ordinary_creation_tests;

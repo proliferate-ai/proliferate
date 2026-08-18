@@ -11,6 +11,7 @@ use crate::domains::sessions::prompt::provenance::{AgentSessionPromptSource, Pro
 use crate::domains::sessions::prompt::PromptPrepareContext;
 use crate::live::sessions::{LiveSessionCommandError, PromptAcceptError, PromptAcceptance};
 
+use super::prompt_errors::classify_text_prompt_command_error;
 use super::prompt_title::PromptTitleAssignment;
 use super::{
     SendPromptError, SendPromptOutcome, SessionLifecycleError, SessionRuntime, StartSessionError,
@@ -70,7 +71,6 @@ impl SessionRuntime {
 
         Ok(queue_seq)
     }
-
     pub(crate) async fn activate_durable_prompt_consumer(
         &self,
         session_id: &str,
@@ -127,11 +127,44 @@ impl SessionRuntime {
     }
 
     #[tracing::instrument(skip_all, fields(session_id = %session_id))]
+    pub async fn send_authored_prompt(
+        &self,
+        session_id: &str,
+        blocks: Vec<PromptInputBlock>,
+        prompt_id: Option<String>,
+    ) -> Result<SendPromptOutcome, SendPromptError> {
+        let title_assignment = PromptTitleAssignment::from_authored_texts(
+            blocks.iter().filter_map(|block| match block {
+                PromptInputBlock::Text { text } => Some(text.as_str()),
+                _ => None,
+            }),
+        );
+        self.send_prompt_with_title_assignment(session_id, blocks, prompt_id, title_assignment)
+            .await
+    }
+
+    #[tracing::instrument(skip_all, fields(session_id = %session_id))]
     pub async fn send_prompt(
         &self,
         session_id: &str,
         blocks: Vec<PromptInputBlock>,
         prompt_id: Option<String>,
+    ) -> Result<SendPromptOutcome, SendPromptError> {
+        self.send_prompt_with_title_assignment(
+            session_id,
+            blocks,
+            prompt_id,
+            PromptTitleAssignment::Disabled,
+        )
+        .await
+    }
+
+    async fn send_prompt_with_title_assignment(
+        &self,
+        session_id: &str,
+        blocks: Vec<PromptInputBlock>,
+        prompt_id: Option<String>,
+        title_assignment: PromptTitleAssignment,
     ) -> Result<SendPromptOutcome, SendPromptError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
@@ -139,12 +172,6 @@ impl SessionRuntime {
         if blocks.is_empty() {
             return Err(SendPromptError::EmptyPrompt);
         }
-        let title_assignment = PromptTitleAssignment::from_authored_texts(
-            blocks.iter().filter_map(|block| match block {
-                PromptInputBlock::Text { text } => Some(text.as_str()),
-                _ => None,
-            }),
-        );
         let started = Instant::now();
         let prompt_id_for_trace = prompt_id.clone();
         tracing::info!(
@@ -458,34 +485,6 @@ pub(crate) enum TextPromptDispatchError {
     Dispatch(SendPromptError),
 }
 
-/// Pure classification of a live-session command failure for the text-prompt
-/// seam: `ResponseDropped` is the one ambiguous case — it proves the command
-/// was enqueued to the actor's mailbox, not that the actor processed it, and
-/// the reply was lost either way; `ActorUnavailable` (command never enqueued)
-/// and an explicit rejection are safe to report as failed dispatch.
-fn classify_text_prompt_command_error(
-    error: LiveSessionCommandError<PromptAcceptError>,
-) -> TextPromptDispatchError {
-    match error {
-        LiveSessionCommandError::ResponseDropped => TextPromptDispatchError::AcknowledgementLost,
-        LiveSessionCommandError::ActorUnavailable => TextPromptDispatchError::Dispatch(
-            SendPromptError::Internal(anyhow::anyhow!("session actor channel closed")),
-        ),
-        LiveSessionCommandError::Rejected(PromptAcceptError::EnqueueFailed(detail)) => {
-            TextPromptDispatchError::Dispatch(SendPromptError::Internal(anyhow::anyhow!(
-                "failed to enqueue prompt: {detail}"
-            )))
-        }
-        LiveSessionCommandError::Rejected(PromptAcceptError::ProductContextUnavailable {
-            incident_id,
-            error,
-        }) => TextPromptDispatchError::Dispatch(SendPromptError::ProductContextUnavailable {
-            incident_id,
-            error,
-        }),
-    }
-}
-
 fn map_lifecycle_error_to_prompt(error: SessionLifecycleError) -> SendPromptError {
     match error {
         SessionLifecycleError::SessionNotFound(session_id) => {
@@ -566,7 +565,7 @@ fn map_start_error_to_prompt(error: StartSessionError) -> SendPromptError {
 }
 
 #[cfg(test)]
-mod dispatch_classification_tests {
+mod prompt_start_error_tests {
     use super::*;
     use crate::domains::agents::model::ResolvedAgentStatus;
 
@@ -603,37 +602,8 @@ mod dispatch_classification_tests {
     }
 
     #[test]
-    fn response_dropped_is_a_lost_acknowledgement() {
-        assert!(matches!(
-            classify_text_prompt_command_error(LiveSessionCommandError::ResponseDropped),
-            TextPromptDispatchError::AcknowledgementLost
-        ));
-    }
-
-    #[test]
-    fn actor_unavailable_and_rejection_are_failed_dispatch() {
-        assert!(matches!(
-            classify_text_prompt_command_error(LiveSessionCommandError::ActorUnavailable),
-            TextPromptDispatchError::Dispatch(SendPromptError::Internal(_))
-        ));
-        assert!(matches!(
-            classify_text_prompt_command_error(LiveSessionCommandError::Rejected(
-                PromptAcceptError::EnqueueFailed("queue closed".to_string())
-            )),
-            TextPromptDispatchError::Dispatch(SendPromptError::Internal(_))
-        ));
-        assert!(matches!(
-            classify_text_prompt_command_error(LiveSessionCommandError::Rejected(
-                PromptAcceptError::ProductContextUnavailable {
-                    incident_id: "incident-1".to_string(),
-                    error: crate::live::sessions::product_context::AgentProductContextResolutionError::new(
-                        anyhow::anyhow!("private")
-                    ),
-                }
-            )),
-            TextPromptDispatchError::Dispatch(
-                SendPromptError::ProductContextUnavailable { incident_id, .. }
-            ) if incident_id == "incident-1"
-        ));
+    fn workspace_missing_start_failure_uses_stable_code() {
+        let code = durable_prompt_start_failure_code(&StartSessionError::WorkspaceNotFound);
+        assert_eq!(code, "workspace_not_found");
     }
 }

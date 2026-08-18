@@ -70,7 +70,7 @@ pub async fn prompt_session(
         .await?;
         let outcome = state
             .session_runtime
-            .send_prompt(&session_id, req.blocks, prompt_id)
+            .send_authored_prompt(&session_id, req.blocks, prompt_id)
             .await
             .map_err(map_send_prompt_error)?;
 

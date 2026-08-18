@@ -44,6 +44,7 @@ mod lifecycle;
 mod lifecycle_tests;
 mod pending_prompts;
 mod prompt;
+mod prompt_errors;
 #[cfg(test)]
 pub(crate) mod prompt_message_actor_tests;
 #[cfg(test)]
@@ -51,6 +52,8 @@ mod prompt_message_cold_start_tests;
 #[cfg(test)]
 mod prompt_message_tests;
 mod prompt_title;
+#[cfg(test)]
+mod prompt_title_assignment_tests;
 mod replay;
 mod startup;
 mod startup_errors;

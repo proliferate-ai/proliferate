@@ -704,12 +704,14 @@ Code path:
 - Config changes requested while busy must not be lost.
 - Session titles keep a fixed precedence. An explicitly assigned title (user
   rename or generated summary through `PATCH /v1/sessions/{id}/title`) always
-  wins and is never overwritten by lower layers. After an authored public
-  prompt or newly created agent's initial task is accepted or queued, the
-  sessions runtime assigns its normalized first text as the title only when
-  the session has none. System/workflow prompt dispatch opts out. Harness
-  `session_info_update` titles are fallback-only: both sources persist through
-  `update_title_if_absent` and never replace an assigned title.
+  wins and is never overwritten by lower layers. Title assignment is an
+  explicit sessions-runtime dispatch policy, not a property of every prompt
+  payload: HTTP-authored prompts and newly created agents' initial tasks opt in
+  to normalized first-text assignment after `Started` or `Queued`, and only
+  when the session has no title. Internal plan, review, workflow, system, and
+  injected dispatch stays title-disabled. Harness `session_info_update` titles
+  are fallback-only: both sources persist through `update_title_if_absent` and
+  never replace an assigned title.
 
 ## Extension Points
 
