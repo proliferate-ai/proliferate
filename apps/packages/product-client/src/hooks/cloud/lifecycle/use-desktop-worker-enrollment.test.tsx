@@ -44,7 +44,13 @@ vi.mock("#product/lib/workflows/cloud/ensure-desktop-worker", () => ({
   teardownDesktopWorker: workflowMocks.teardownDesktopWorker,
 }));
 
-const worker = {} as DesktopWorkerBridge;
+// The enrollment hook now re-asserts worker.isSupported() at the toast's
+// source (defense-in-depth), so the harness worker must answer it. Default
+// true keeps the failure-toast tests exercising the real notification path;
+// individual tests flip it to false to pin the unsupported-transport skip.
+const worker = {
+  isSupported: vi.fn<() => boolean>(() => true),
+} as unknown as DesktopWorkerBridge;
 
 // The enrollment guard is module-level state, so each test loads the hook
 // (and the stores it observes) from a fresh module registry. Normalized auth
@@ -112,6 +118,8 @@ describe("useDesktopWorkerEnrollment", () => {
     workflowMocks.teardownDesktopWorker.mockReset();
     workflowMocks.ensureDesktopWorker.mockResolvedValue(true);
     workflowMocks.teardownDesktopWorker.mockResolvedValue(undefined);
+    vi.mocked(worker.isSupported).mockReset();
+    vi.mocked(worker.isSupported).mockReturnValue(true);
   });
 
   afterEach(() => {
@@ -307,6 +315,29 @@ describe("useDesktopWorkerEnrollment", () => {
         ],
       ]);
     });
+    expect(harness.getToastCalls()).toEqual([]);
+  });
+
+  it("suppresses the failure toast at its source when the transport is unsupported", async () => {
+    // Defense-in-depth: even if a failure reaches onFailure while the native
+    // transport is absent (the #1997 tier-2 failure mode), the toast source
+    // must skip silently rather than raise a sticky, pointer-blocking notice.
+    vi.mocked(worker.isSupported).mockReturnValue(false);
+    workflowMocks.ensureDesktopWorker.mockImplementationOnce(async (
+      _organizationId,
+      _worker,
+      deps,
+    ) => {
+      deps.onFailure(
+        new TypeError("Cannot read properties of undefined (reading 'invoke')"),
+      );
+      return false;
+    });
+    const harness = await loadEnrollmentHarness();
+
+    harness.signIn("user-a");
+    await flushEffects();
+    expect(harness.getErrorToastCalls()).toEqual([]);
     expect(harness.getToastCalls()).toEqual([]);
   });
 
