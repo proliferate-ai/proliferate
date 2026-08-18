@@ -57,14 +57,6 @@ export function workspacePinIntentForEnvelope(
   };
 }
 
-export function workspacePinIntentTargetKey(
-  runtimeId: string,
-  sessionId: string,
-  pinId: string,
-): string {
-  return JSON.stringify([runtimeId, sessionId, pinId]);
-}
-
 export function resolveWorkspacePinIntent(
   intent: WorkspacePinIntent,
   logicalWorkspaces: readonly LogicalWorkspace[],

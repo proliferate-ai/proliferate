@@ -38,8 +38,8 @@ vi.mock("#product/hooks/sessions/lifecycle/use-session-history-subagent-authorit
   useSessionHistorySubagentAuthority: () => mocks.reconcileHydratedSubagents,
 }));
 
-vi.mock("#product/hooks/sessions/lifecycle/use-workspace-pin-intent-reconciliation", () => ({
-  useWorkspacePinIntentReconciliation: () => mocks.reconcileWorkspacePinIntents,
+vi.mock("#product/hooks/sessions/lifecycle/workspace-pin-intent-dispatch", () => ({
+  dispatchWorkspacePinIntentEnvelopes: mocks.reconcileWorkspacePinIntents,
 }));
 
 beforeEach(() => {

@@ -35,14 +35,13 @@ import {
   safeRendererErrorMessage,
   safeRendererErrorName,
 } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
-import { useWorkspacePinIntentReconciliation } from "#product/hooks/sessions/lifecycle/use-workspace-pin-intent-reconciliation";
+import { dispatchWorkspacePinIntentEnvelopes } from "#product/hooks/sessions/lifecycle/workspace-pin-intent-dispatch";
 
 export function useSessionRuntimeActions() {
   const host = useProductHost();
   const ssh = host.desktop?.ssh ?? null;
   const cloudClient = host.cloud.client;
   const sessionStreamCache = useSessionStreamCache();
-  const reconcileWorkspacePinIntents = useWorkspacePinIntentReconciliation();
   const showToast = useToastStore((state) => state.show);
   const { mountSubagentChildSession } = useLinkedSessionMounting();
   const {
@@ -196,7 +195,7 @@ export function useSessionRuntimeActions() {
     persistReconciledControlPreferences,
     refreshSessionSlotMeta,
     rehydrateSessionSlotFromHistory,
-    reconcileWorkspacePinIntents,
+    reconcileWorkspacePinIntents: dispatchWorkspacePinIntentEnvelopes,
     showToast,
   });
 

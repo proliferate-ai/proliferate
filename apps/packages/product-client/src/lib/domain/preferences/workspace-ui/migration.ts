@@ -19,6 +19,7 @@ import {
   sanitizeShellTabOrderByWorkspace,
 } from "#product/lib/domain/preferences/workspace-ui/persisted-shell-tabs";
 import {
+  WORKSPACE_PIN_INTENT_RECEIPT_LIMIT,
   WORKSPACE_UI_DEFAULTS,
   WORKSPACE_UI_MIGRATION_VERSION,
   type PersistedWorkspaceUiState,
@@ -279,6 +280,6 @@ function sanitizeWorkspacePinIntentReceipts(
         && typeof candidate.seq === "number"
         && Number.isSafeInteger(candidate.seq)
         && candidate.seq >= 0;
-    }),
+    }).slice(-WORKSPACE_PIN_INTENT_RECEIPT_LIMIT),
   );
 }

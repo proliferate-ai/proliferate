@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { WORKSPACE_UI_DEFAULTS } from "#product/lib/domain/preferences/workspace-ui/model";
+import {
+  WORKSPACE_PIN_INTENT_RECEIPT_LIMIT,
+  WORKSPACE_UI_DEFAULTS,
+} from "#product/lib/domain/preferences/workspace-ui/model";
 import { createManualChatGroupId } from "#product/lib/domain/workspaces/tabs/manual-groups";
+import { applyWorkspacePinIntentBatch } from "#product/stores/preferences/workspace-ui-pin-intent-actions";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
-import { workspacePinIntentTargetKey } from "#product/lib/domain/workspaces/sidebar/workspace-pin-intents";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -112,9 +115,8 @@ describe("workspace ui tab persistence", () => {
       pinnedWorkspaceIds: ["ws-existing-alias"],
     });
 
-    const store = useWorkspaceUiStore.getState();
-    store.applyWorkspacePinIntentBatch({
-      intents: [
+    applyWorkspacePinIntentBatch(
+      [
         {
           requestId: "request-new",
           runtimeId: "runtime-1",
@@ -134,7 +136,7 @@ describe("workspace ui tab persistence", () => {
           pinned: false,
         },
       ],
-    });
+    );
 
     expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual(["ws-new"]);
     expect(useWorkspaceUiStore.getState().workspacePinIntentReceiptByTarget).toEqual({
@@ -149,8 +151,8 @@ describe("workspace ui tab persistence", () => {
     });
 
     useWorkspaceUiStore.getState().unpinWorkspace(["ws-new"]);
-    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch({
-      intents: [{
+    applyWorkspacePinIntentBatch(
+      [{
         requestId: "request-new",
         runtimeId: "runtime-1",
         sessionId: "session-1",
@@ -159,11 +161,11 @@ describe("workspace ui tab persistence", () => {
         relatedIds: ["ws-new"],
         pinned: true,
       }],
-    });
+    );
     expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual([]);
 
-    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch({
-      intents: [{
+    applyWorkspacePinIntentBatch(
+      [{
         requestId: "request-delayed",
         runtimeId: "runtime-1",
         sessionId: "session-1",
@@ -172,11 +174,11 @@ describe("workspace ui tab persistence", () => {
         relatedIds: ["ws-delayed"],
         pinned: true,
       }],
-    });
+    );
     expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual(["ws-delayed"]);
 
-    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch({
-      intents: [{
+    applyWorkspacePinIntentBatch(
+      [{
         requestId: "request-stale",
         runtimeId: "runtime-1",
         sessionId: "session-1",
@@ -185,8 +187,35 @@ describe("workspace ui tab persistence", () => {
         relatedIds: ["ws-delayed"],
         pinned: false,
       }],
-    });
+    );
     expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual(["ws-delayed"]);
+  });
+
+  it("bounds persisted Workspace MCP pin receipts by most-recent target", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+    });
+
+    applyWorkspacePinIntentBatch(
+      Array.from({ length: WORKSPACE_PIN_INTENT_RECEIPT_LIMIT + 2 }, (_, index) => ({
+        requestId: `request-${index}`,
+        runtimeId: "runtime-1",
+        sessionId: `session-${index}`,
+        seq: index + 1,
+        pinId: `workspace-${index}`,
+        relatedIds: [`workspace-${index}`],
+        pinned: false,
+      })),
+    );
+
+    const receipts = useWorkspaceUiStore.getState().workspacePinIntentReceiptByTarget;
+    expect(Object.keys(receipts)).toHaveLength(WORKSPACE_PIN_INTENT_RECEIPT_LIMIT);
+    expect(receipts[workspacePinIntentTargetKey("runtime-1", "session-0", "workspace-0")])
+      .toBeUndefined();
+    expect(receipts[
+      workspacePinIntentTargetKey("runtime-1", "session-257", "workspace-257")
+    ]).toEqual({ requestId: "request-257", seq: 258 });
   });
 
   it("stores archived workspace visibility", () => {
@@ -472,3 +501,11 @@ describe("workspace ui tab persistence", () => {
     expect(useWorkspaceUiStore.getState().manualChatGroupsByWorkspace.w1).toBeUndefined();
   });
 });
+
+function workspacePinIntentTargetKey(
+  runtimeId: string,
+  sessionId: string,
+  pinId: string,
+): string {
+  return JSON.stringify([runtimeId, sessionId, pinId]);
+}

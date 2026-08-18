@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useRef } from "react";
-import type { SessionEventEnvelope } from "@anyharness/sdk";
 import { useLogicalWorkspaces } from "#product/hooks/workspaces/derived/use-logical-workspaces";
+import {
+  registerWorkspacePinIntentReconciler,
+  type WorkspacePinIntentReconciler,
+} from "#product/hooks/sessions/lifecycle/workspace-pin-intent-dispatch";
 import {
   resolveWorkspacePinIntent,
   workspacePinIntentForEnvelope,
   type ResolvedWorkspacePinIntent,
   type WorkspacePinIntent,
 } from "#product/lib/domain/workspaces/sidebar/workspace-pin-intents";
+import { applyWorkspacePinIntentBatch } from "#product/stores/preferences/workspace-ui-pin-intent-actions";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
-
-export type WorkspacePinIntentReconciler = (
-  envelopes: readonly SessionEventEnvelope[],
-) => void;
 
 const MAX_PENDING_WORKSPACE_PIN_INTENTS = 128;
 
@@ -54,9 +54,17 @@ export function useWorkspacePinIntentReconciliation(): WorkspacePinIntentReconci
   }, [isLoading, logicalWorkspaces, workspaceUiHydrated]);
 }
 
+export function useWorkspacePinIntentReconciliationLifecycle(): void {
+  const reconcile = useWorkspacePinIntentReconciliation();
+  useEffect(
+    () => registerWorkspacePinIntentReconciler(reconcile),
+    [reconcile],
+  );
+}
+
 function applyWorkspacePinIntents(intents: ResolvedWorkspacePinIntent[]): void {
   if (intents.length > 0) {
-    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch({ intents });
+    applyWorkspacePinIntentBatch(intents);
   }
 }
 

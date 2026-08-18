@@ -3,6 +3,7 @@ import { migrateWorkspaceUiState } from "#product/lib/domain/preferences/workspa
 import {
   WORKSPACE_UI_DEFAULTS,
   WORKSPACE_UI_MIGRATION_VERSION,
+  WORKSPACE_PIN_INTENT_RECEIPT_LIMIT,
   type PersistedWorkspaceUiState,
 } from "#product/lib/domain/preferences/workspace-ui/model";
 import { WORKSPACE_SIDEBAR_MAX_WIDTH } from "#product/lib/domain/preferences/workspace-ui/sidebar";
@@ -128,6 +129,27 @@ describe("workspace UI state migration", () => {
     expect(state.workspacePinIntentReceiptByTarget).toEqual({
       valid: { requestId: "request-1", seq: 12 },
     });
+  });
+
+  it("keeps only the newest bounded Workspace MCP pin receipt records", () => {
+    const receipts = Object.fromEntries(
+      Array.from({ length: WORKSPACE_PIN_INTENT_RECEIPT_LIMIT + 2 }, (_, index) => [
+        `target-${index}`,
+        { requestId: `request-${index}`, seq: index + 1 },
+      ]),
+    );
+    const { state, didMigrate } = migrateWorkspaceUiState({
+      ...WORKSPACE_UI_DEFAULTS,
+      migrationVersion: WORKSPACE_UI_MIGRATION_VERSION,
+      workspacePinIntentReceiptByTarget: receipts,
+    });
+
+    expect(didMigrate).toBe(true);
+    expect(Object.keys(state.workspacePinIntentReceiptByTarget))
+      .toHaveLength(WORKSPACE_PIN_INTENT_RECEIPT_LIMIT);
+    expect(state.workspacePinIntentReceiptByTarget["target-0"]).toBeUndefined();
+    expect(state.workspacePinIntentReceiptByTarget["target-257"])
+      .toEqual({ requestId: "request-257", seq: 258 });
   });
 
   it("sanitizes malformed manual chat groups during migration", () => {

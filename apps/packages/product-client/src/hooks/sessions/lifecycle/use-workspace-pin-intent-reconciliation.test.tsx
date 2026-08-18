@@ -10,8 +10,12 @@ import {
 import { WORKSPACE_UI_DEFAULTS } from "#product/lib/domain/preferences/workspace-ui/model";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import {
-  useWorkspacePinIntentReconciliation,
+  useWorkspacePinIntentReconciliationLifecycle,
 } from "#product/hooks/sessions/lifecycle/use-workspace-pin-intent-reconciliation";
+import {
+  dispatchWorkspacePinIntentEnvelopes,
+  resetWorkspacePinIntentDispatchForTests,
+} from "#product/hooks/sessions/lifecycle/workspace-pin-intent-dispatch";
 
 const projection = vi.hoisted(() => ({
   isLoading: true,
@@ -24,6 +28,7 @@ vi.mock("#product/hooks/workspaces/derived/use-logical-workspaces", () => ({
 
 describe("useWorkspacePinIntentReconciliation", () => {
   beforeEach(() => {
+    resetWorkspacePinIntentDispatchForTests();
     projection.isLoading = true;
     projection.logicalWorkspaces = [];
     useWorkspaceUiStore.setState({
@@ -34,14 +39,15 @@ describe("useWorkspacePinIntentReconciliation", () => {
 
   afterEach(() => {
     cleanup();
+    resetWorkspacePinIntentDispatchForTests();
   });
 
   it("retains a runtime intent until workspace projection and preferences are ready", async () => {
     const envelope = pinIntent();
-    const rendered = renderHook(() => useWorkspacePinIntentReconciliation());
+    const rendered = renderHook(() => useWorkspacePinIntentReconciliationLifecycle());
 
     act(() => {
-      rendered.result.current([envelope]);
+      dispatchWorkspacePinIntentEnvelopes([envelope]);
     });
     expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual([]);
 
@@ -67,7 +73,7 @@ describe("useWorkspacePinIntentReconciliation", () => {
 
     act(() => {
       useWorkspaceUiStore.getState().unpinWorkspace(["logical-workspace"]);
-      rendered.result.current([envelope]);
+      dispatchWorkspacePinIntentEnvelopes([envelope]);
     });
     expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual([]);
   });
@@ -75,10 +81,10 @@ describe("useWorkspacePinIntentReconciliation", () => {
   it("retains an unresolved intent after loading until the workspace appears", async () => {
     projection.isLoading = false;
     useWorkspaceUiStore.setState({ _hydrated: true });
-    const rendered = renderHook(() => useWorkspacePinIntentReconciliation());
+    const rendered = renderHook(() => useWorkspacePinIntentReconciliationLifecycle());
 
     act(() => {
-      rendered.result.current([pinIntent()]);
+      dispatchWorkspacePinIntentEnvelopes([pinIntent()]);
     });
     expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual([]);
 
