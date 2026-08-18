@@ -81,6 +81,34 @@ describe("useWorkspacePinIntentReconciliation", () => {
     expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual([]);
   });
 
+  it("waits for a nonempty workspace projection to finish loading", async () => {
+    const staleWorkspace = makeLocalLogicalWorkspace({
+      id: "stale-logical-workspace",
+      repoKey: "/tmp/stale-repo",
+      repoName: "stale-repo",
+    });
+    staleWorkspace.aliasIds = ["workspace-1"];
+    projection.logicalWorkspaces = [staleWorkspace];
+    projection.isLoading = true;
+    useWorkspaceUiStore.setState({ _hydrated: true });
+    const rendered = renderHook(() => useWorkspacePinIntentReconciliationLifecycle());
+
+    act(() => {
+      dispatchWorkspacePinIntentEnvelopes([pinIntent()], "live");
+    });
+    expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual([]);
+
+    projection.logicalWorkspaces = [logicalWorkspace()];
+    projection.isLoading = false;
+    rendered.rerender();
+
+    await waitFor(() => {
+      expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual([
+        "logical-workspace",
+      ]);
+    });
+  });
+
   it("retains an unresolved intent after loading until the workspace appears", async () => {
     projection.isLoading = false;
     useWorkspaceUiStore.setState({ _hydrated: true });

@@ -49,7 +49,7 @@ export function useWorkspacePinIntentReconciliation(): WorkspacePinIntentReconci
       const operationKey = intentOperationKey(intent);
       const authoritativeIntent = pendingByOperationRef.current.get(operationKey) ?? intent;
       const resolved = resolveWorkspacePinIntent(authoritativeIntent, logicalWorkspaces);
-      if (resolved && workspaceUiHydrated) {
+      if (resolved && workspaceUiHydrated && !isLoading) {
         pendingByOperationRef.current.delete(operationKey);
         intents.push(resolved);
       } else {
