@@ -23,19 +23,19 @@ export function useChatLaunchControlActions({
       return;
     }
 
-    void setActiveSessionConfigOption(rawConfigId, value).catch(() => {
-      updateDefaultLaunchControlPreference(activeLaunchAgentKind, rawConfigId, value);
+    void setActiveSessionConfigOption(rawConfigId, value, { controlKey }).catch(() => {
+      updateDefaultLaunchControlPreference(activeLaunchAgentKind, controlKey, value);
     });
   }, [activeLaunchAgentKind, setActiveSessionConfigOption]);
 }
 
 function updateDefaultLaunchControlPreference(
   agentKind: string,
-  rawConfigId: string,
+  controlKey: string,
   value: string,
 ): void {
   const state = useUserPreferencesStore.getState();
-  if (rawConfigId === "mode") {
+  if (controlKey === "mode") {
     state.set("defaultSessionModeByAgentKind", {
       ...state.defaultSessionModeByAgentKind,
       [agentKind]: value,
@@ -47,7 +47,7 @@ function updateDefaultLaunchControlPreference(
     ...state.defaultLiveSessionControlValuesByAgentKind,
     [agentKind]: {
       ...state.defaultLiveSessionControlValuesByAgentKind[agentKind],
-      [rawConfigId]: value,
+      [controlKey]: value,
     },
   });
 }

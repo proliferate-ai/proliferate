@@ -76,7 +76,10 @@ export type SessionConfigIntentApplyState = "applied" | "queued";
 
 export interface SessionUpdateConfigIntent extends SessionIntentBase {
   kind: "update_config";
-  configId: string;
+  /** Advances when queued-tail coalescing reuses this intent ID for a new choice. */
+  generation: number;
+  controlKey: string;
+  rawConfigId: string | null;
   value: string;
   applyState: SessionConfigIntentApplyState | null;
   persistDefaultPreference: boolean;
@@ -168,7 +171,8 @@ export function createUpdateConfigIntent(input: {
   clientSessionId: string;
   materializedSessionId?: string | null;
   workspaceId?: string | null;
-  configId: string;
+  controlKey: string;
+  rawConfigId: string | null;
   value: string;
   persistDefaultPreference?: boolean;
   now?: string;
@@ -187,7 +191,9 @@ export function createUpdateConfigIntent(input: {
     dispatchedAt: null,
     acceptedAt: null,
     reconciledAt: null,
-    configId: input.configId,
+    generation: 1,
+    controlKey: input.controlKey,
+    rawConfigId: input.rawConfigId,
     value: input.value,
     applyState: null,
     persistDefaultPreference: input.persistDefaultPreference ?? true,

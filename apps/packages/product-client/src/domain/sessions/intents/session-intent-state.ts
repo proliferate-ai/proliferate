@@ -1,4 +1,5 @@
 import type {
+  createUpdateConfigIntent,
   PromptOutboxEntry,
   SessionIntent,
   SessionSendPromptIntent,
@@ -11,6 +12,16 @@ export interface SessionIntentStateShape {
 }
 
 export type PromptOutboxStateShape = SessionIntentStateShape;
+
+export type SessionConfigIntentEnqueueInput = Omit<
+  Parameters<typeof createUpdateConfigIntent>[0],
+  "intentId" | "controlKey" | "rawConfigId"
+> & {
+  intentId?: string;
+} & (
+  | { configId: string; controlKey?: string }
+  | { configId: null; controlKey: string }
+);
 
 export function upsertSessionIntent(
   state: SessionIntentStateShape,
@@ -45,13 +56,13 @@ export function upsertSessionIntent(
 export function findSupersedableTailConfigIntent(
   state: SessionIntentStateShape,
   clientSessionId: string,
-  configId: string,
+  controlKey: string,
 ): SessionUpdateConfigIntent | null {
   const intentIds = state.intentIdsByClientSessionId[clientSessionId] ?? [];
   const tailId = intentIds[intentIds.length - 1];
   const tail = tailId ? state.entriesById[tailId] : undefined;
   return tail?.kind === "update_config"
-    && tail.configId === configId
+    && tail.controlKey === controlKey
     && tail.status === "queued"
     ? tail
     : null;

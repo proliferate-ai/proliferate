@@ -33,21 +33,33 @@ import {
 import { buildLatencyRequestOptions } from "#product/hooks/sessions/workflows/session-creation-request-options";
 import {
   materializeExistingSession,
-  pendingConfigValuesForSession,
 } from "#product/hooks/sessions/workflows/session-creation-materialization-helpers";
+import {
+  sessionIntentsForSession,
+} from "#product/domain/sessions/intents/session-intent-state";
+import {
+  configValuesFromIntentSnapshot,
+  planCreationConfigIntentSettlement,
+  rawConfigValuesFromIntentSnapshot,
+  resolvePreMaterializationConfigIntentControlKeys,
+  snapshotPreMaterializationConfigIntents,
+} from "#product/lib/domain/sessions/creation/config-intent-settlement";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 import { buildDesktopLaunchModelRegistries } from "#product/lib/domain/agents/cloud-launch-catalog";
 import { resolveSubmitAgentCatalog } from "#product/lib/domain/agents/agent-catalog-submit-gate";
 import type { CreateSessionWithResolvedConfigOptions } from "#product/hooks/sessions/workflows/session-creation-types";
 import { resolveDesktopRuntimeUrlForWorkspace } from "#product/hooks/sessions/workflows/session-creation-runtime";
 import { annotateLatencyFlow } from "#product/lib/infra/measurement/measurement-port";
 import { logLatency } from "#product/lib/infra/measurement/measurement-port";
-import {
-  publishSessionCreationIfCurrent,
-  shouldDiscardSupersededSessionCreation,
-} from "#product/hooks/sessions/workflows/session-creation-supersession";
+import { publishSessionCreationIfCurrent } from "#product/hooks/sessions/workflows/session-creation-supersession";
 import { filterReplacedSessionTombstones } from "#product/hooks/sessions/workflows/session-replacement-tombstones";
 import { scheduleCreatedRuntimeSessionCleanup } from "#product/hooks/sessions/workflows/session-created-runtime-cleanup";
-import { runInterruptibleSessionCreationStep } from "#product/hooks/sessions/workflows/session-creation-materialization-interruption";
+import {
+  discardCreatedRuntimeSession,
+  discardIfSuperseded,
+  runInterruptibleSessionCreationStep,
+  type MaterializationLifecycle,
+} from "#product/hooks/sessions/workflows/session-creation-materialization-interruption";
 import {
   publishCreatedSessionMaterialization,
   type TrackChatSessionCreated,
@@ -80,11 +92,6 @@ interface MaterializeSessionCreationInput {
   ) => void;
   workspaceId: string;
   onRuntimeSessionCreated?: (session: Session) => Promise<void> | void;
-}
-
-interface MaterializationLifecycle {
-  discardCreatedSession: (() => Promise<boolean>) | null;
-  retainCreatedSession: (() => void) | null;
 }
 
 export async function materializeSessionCreation(
@@ -267,7 +274,6 @@ async function runSessionCreationMaterialization({
     targetSessionId: session.id,
   });
 
-  const queuedConfigValuesBeforeDefaults = pendingConfigValuesForSession(pendingSessionId);
   const catalogStep = await runInterruptibleSessionCreationStep({
     sessionId: pendingSessionId,
     step: resolveSubmitAgentCatalog(ensureCloudAgentCatalog),
@@ -280,10 +286,18 @@ async function runSessionCreationMaterialization({
   const modelRegistries = buildDesktopLaunchModelRegistries(
     cloudLaunchCatalog?.agents ?? [],
   );
+  const configIntentSnapshot = resolvePreMaterializationConfigIntentControlKeys({
+    snapshot: snapshotPreMaterializationConfigIntents(
+      sessionIntentsForSession(useSessionIntentStore.getState(), pendingSessionId),
+    ),
+    launchControls: cloudLaunchCatalog?.agents.find(
+      (agent) => agent.kind === options.agentKind,
+    )?.launchControls ?? [],
+  });
   const liveDefaultsForLaunch = mergeLiveDefaultLaunchControls({
     defaults: frozenDefaultLiveSessionControlValuesByAgentKind,
     agentKind: options.agentKind,
-    values: queuedConfigValuesBeforeDefaults,
+    values: configValuesFromIntentSnapshot(configIntentSnapshot),
   });
   const launchDefaultsStep = await runInterruptibleSessionCreationStep({
     sessionId: pendingSessionId,
@@ -293,6 +307,7 @@ async function runSessionCreationMaterialization({
       agentKind: options.agentKind,
       modelRegistries,
       defaultLiveSessionControlValuesByAgentKind: liveDefaultsForLaunch,
+      rawLiveSessionControlValues: rawConfigValuesFromIntentSnapshot(configIntentSnapshot),
     }),
     onSuperseded: () => discardIfSuperseded(pendingSessionId, lifecycle),
   });
@@ -308,6 +323,10 @@ async function runSessionCreationMaterialization({
     ...launchedSession,
     liveConfig: launchedLiveConfig,
   };
+  const configIntentSettlement = planCreationConfigIntentSettlement({
+    snapshot: configIntentSnapshot,
+    liveConfig: launchedLiveConfig,
+  });
   if (await discardIfSuperseded(pendingSessionId, lifecycle)) {
     return pendingSessionId;
   }
@@ -345,6 +364,7 @@ async function runSessionCreationMaterialization({
         fallbackModeId: resolvedModeId,
         fallbackModelId: options.modelId,
         launchIntentId: options.launchIntentId,
+        configIntentSettlement,
         pendingSessionId,
         record: realRecord,
         session: launchedSession,
@@ -362,39 +382,4 @@ async function runSessionCreationMaterialization({
   lifecycle.discardCreatedSession = null;
   lifecycle.retainCreatedSession = null;
   return pendingSessionId;
-}
-
-async function discardIfSuperseded(
-  sessionId: string,
-  lifecycle: MaterializationLifecycle,
-): Promise<boolean> {
-  if (!await shouldDiscardSupersededSessionCreation(sessionId)) {
-    return false;
-  }
-  const discardCreatedSession = lifecycle.discardCreatedSession;
-  lifecycle.discardCreatedSession = null;
-  if (!discardCreatedSession || await discardCreatedSession()) {
-    lifecycle.retainCreatedSession = null;
-    return true;
-  }
-  // The successor already committed, but this created runtime could not be retired safely. Publish it honestly and stop this older materializer here.
-  const retainCreatedSession = lifecycle.retainCreatedSession;
-  lifecycle.retainCreatedSession = null;
-  retainCreatedSession?.();
-  return true;
-}
-
-async function discardCreatedRuntimeSession(
-  lifecycle: MaterializationLifecycle,
-): Promise<boolean> {
-  const discardCreatedSession = lifecycle.discardCreatedSession;
-  lifecycle.discardCreatedSession = null;
-  if (!discardCreatedSession || await discardCreatedSession()) {
-    lifecycle.retainCreatedSession = null;
-    return true;
-  }
-  const retainCreatedSession = lifecycle.retainCreatedSession;
-  lifecycle.retainCreatedSession = null;
-  retainCreatedSession?.();
-  return false;
 }

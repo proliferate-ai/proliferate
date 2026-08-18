@@ -48,6 +48,7 @@ interface ApplySessionLaunchDefaultsInput {
   modelRegistries: readonly SessionConfigModelRegistry[];
   defaultLiveSessionControlValuesByAgentKind:
     DefaultLiveSessionControlValuesByAgentKind;
+  rawLiveSessionControlValues?: Readonly<Record<string, string>>;
 }
 
 interface ApplySessionLaunchDefaultsResult {
@@ -66,9 +67,10 @@ export async function applySessionLaunchDefaults({
   agentKind,
   modelRegistries,
   defaultLiveSessionControlValuesByAgentKind,
+  rawLiveSessionControlValues = {},
 }: ApplySessionLaunchDefaultsInput): Promise<ApplySessionLaunchDefaultsResult> {
   const registry = modelRegistries.find((candidate) => candidate.kind === agentKind);
-  if (!registry) {
+  if (!registry && Object.keys(rawLiveSessionControlValues).length === 0) {
     return {
       session,
       liveConfig: session.liveConfig ?? null,
@@ -84,7 +86,9 @@ export async function applySessionLaunchDefaults({
     };
   }
 
-  const model = resolveSessionModel(registry, workingSession, workingLiveConfig);
+  const model = registry
+    ? resolveSessionModel(registry, workingSession, workingLiveConfig)
+    : null;
   const metadataByKey = buildDefaultControlMetadataByKey(
     model?.sessionDefaultControls ?? [],
   );
@@ -94,7 +98,11 @@ export async function applySessionLaunchDefaults({
     metadataByKey,
     configuredDefaults,
   );
-  if (metadataByKey.size === 0 && !defaults.collaboration_mode?.trim()) {
+  if (
+    metadataByKey.size === 0
+    && !defaults.collaboration_mode?.trim()
+    && Object.keys(rawLiveSessionControlValues).length === 0
+  ) {
     return {
       session: attachLiveConfig(workingSession, workingLiveConfig),
       liveConfig: workingLiveConfig,
@@ -102,20 +110,24 @@ export async function applySessionLaunchDefaults({
   }
 
   for (const controlKey of CONTROL_APPLY_ORDER) {
-    const defaultValue = defaults[controlKey]?.trim();
+    const liveControl = getLiveControl(workingLiveConfig, controlKey);
+    const rawIntentValue = liveControl
+      ? rawLiveSessionControlValues[liveControl.rawConfigId]?.trim()
+      : undefined;
+    const defaultValue = rawIntentValue || defaults[controlKey]?.trim();
     if (!defaultValue) {
       continue;
     }
 
     const metadata = metadataByKey.get(controlKey);
     if (
-      controlKey !== "collaboration_mode"
+      !rawIntentValue
+      && controlKey !== "collaboration_mode"
       && (!metadata || !metadata.values.some((value) => value.value === defaultValue))
     ) {
       continue;
     }
 
-    const liveControl = getLiveControl(workingLiveConfig, controlKey);
     if (
       !liveControl
       || !liveControl.settable

@@ -1,11 +1,12 @@
 import type { Session } from "@anyharness/sdk";
 import { resolveStatusFromExecutionSummary } from "#product/domain/sessions/activity";
 import {
-  pendingConfigChangesForSessionIntents,
-} from "#product/domain/sessions/intents/session-intent-selectors";
-import {
   sessionIntentsForSession,
 } from "#product/domain/sessions/intents/session-intent-state";
+import {
+  planAdoptedSessionConfigIntentResolution,
+  snapshotPreMaterializationConfigIntents,
+} from "#product/lib/domain/sessions/creation/config-intent-settlement";
 import {
   materializeSessionRecord,
 } from "#product/hooks/sessions/workflows/session-creation-local-state";
@@ -18,6 +19,9 @@ import {
   getSessionRecord,
 } from "#product/stores/sessions/session-records";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import {
+  applyAdoptedSessionConfigIntentResolution,
+} from "#product/stores/sessions/session-intent-store-settlement";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import type { SessionRuntimeRecord } from "#product/stores/sessions/session-types";
 
@@ -57,8 +61,18 @@ export function materializeExistingSession({
     fallbackTitle: existingProjectedRecord?.title ?? null,
     pendingConfigChanges: {},
   });
+  const intentStore = useSessionIntentStore.getState();
+  const configIntentSnapshot = snapshotPreMaterializationConfigIntents(
+    sessionIntentsForSession(intentStore, pendingSessionId),
+  );
+  applyAdoptedSessionConfigIntentResolution(
+    planAdoptedSessionConfigIntentResolution({
+      snapshot: configIntentSnapshot,
+      liveConfig: existingSession.liveConfig ?? null,
+    }),
+  );
   materializeSessionRecord(pendingSessionId, existingSession.id, realRecord);
-  useSessionIntentStore.getState().bindMaterializedSession(
+  intentStore.bindMaterializedSession(
     pendingSessionId,
     existingSession.id,
   );
@@ -82,18 +96,6 @@ export function materializeExistingSession({
     );
   }
   return pendingSessionId;
-}
-
-export function pendingConfigValuesForSession(
-  sessionId: string,
-): Record<string, string> {
-  const pendingConfigChanges = pendingConfigChangesForSessionIntents(
-    sessionIntentsForSession(useSessionIntentStore.getState(), sessionId),
-  );
-  return Object.fromEntries(
-    Object.values(pendingConfigChanges)
-      .map((change) => [change.rawConfigId, change.value] as const),
-  );
 }
 
 export function requeuePromptIntentsBlockedOnMaterialization({

@@ -103,7 +103,7 @@ export function useSessionIntentDispatcher(): void {
             // thing left that can say which change did not take.
             showErrorToast({
               headline: "Setting not changed",
-              consequence: `${intent.configId} is still on its previous value, not ${intent.value}.`,
+              consequence: `${intent.controlKey} is still on its previous value, not ${intent.value}.`,
               cause: message,
               retry: () => void dispatchIntent(intent),
             });

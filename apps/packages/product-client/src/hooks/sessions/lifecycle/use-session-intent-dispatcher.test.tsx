@@ -162,8 +162,9 @@ describe("useSessionIntentDispatcher", () => {
         clientSessionId: "session-1",
         materializedSessionId: "runtime-session-1",
         workspaceId: "workspace-1",
-        configId: "collaboration_mode",
-        value: "plan",
+        configId: "reasoning_effort",
+        controlKey: "effort",
+        value: "max",
       });
     });
 
@@ -175,7 +176,7 @@ describe("useSessionIntentDispatcher", () => {
     // and the exception is reachable only through Details.
     expect(mocks.showErrorToast).toHaveBeenCalledWith(expect.objectContaining({
       headline: "Setting not changed",
-      consequence: "collaboration_mode is still on its previous value, not plan.",
+      consequence: "effort is still on its previous value, not max.",
       cause: "request timed out",
     }));
     expect(mocks.showToast).not.toHaveBeenCalled();

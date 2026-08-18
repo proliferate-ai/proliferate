@@ -157,7 +157,7 @@ export function useSessionIntentActions() {
   }, []);
 
   const setActiveSessionConfigOption = useCallback(async (
-    configId: string,
+    rawConfigId: string,
     value: string,
     options?: SessionConfigOptionUpdateOptions,
   ) => {
@@ -179,11 +179,12 @@ export function useSessionIntentActions() {
       clientSessionId: sessionId,
       materializedSessionId: slot.materializedSessionId ?? null,
       workspaceId,
-      configId,
+      configId: rawConfigId,
+      controlKey: options?.controlKey ?? rawConfigId,
       value,
       persistDefaultPreference: options?.persistDefaultPreference !== false,
     });
-    if (configId === "mode") {
+    if (rawConfigId === "mode") {
       // UX-latency R12: keyed by intentId, which enqueueConfig keeps stable
       // across PRO-261 tail coalescing (a burst of switches reuses the same
       // queued intent), so re-begin here restarts the clock to the latest

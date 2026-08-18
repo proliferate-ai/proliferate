@@ -42,7 +42,11 @@ export interface LiveSessionControlDescriptor {
 export function buildLiveSessionControlDescriptors(
   normalized: NormalizedSessionControls | null | undefined,
   pendingConfigChanges: PendingSessionConfigChanges | null | undefined,
-  onSelect: (rawConfigId: string, value: string) => void,
+  onSelect: (
+    controlKey: SupportedLiveControlKey,
+    rawConfigId: string,
+    value: string,
+  ) => void,
 ): LiveSessionControlDescriptor[] {
   if (!normalized) {
     return [];
@@ -72,7 +76,7 @@ export function buildLiveSessionControlDescriptors(
         selected: value.value === displayedState.currentValue,
       })),
       onSelect: (value: string) => {
-        void onSelect(control.rawConfigId, value);
+        void onSelect(key, control.rawConfigId, value);
       },
     };
 

@@ -7,6 +7,10 @@ import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-st
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 import {
+  getSessionIntentsForSession,
+  useSessionIntentStore,
+} from "#product/stores/sessions/session-intent-store";
+import {
   EMPTY_PENDING_WORKSPACE_REGISTRY,
   type PendingWorkspaceRegistry,
   upsertPendingWorkspaceEntry,
@@ -96,7 +100,10 @@ vi.mock("#product/hooks/chat/derived/use-active-session-config-state", () => ({
 
 vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
   elapsedSince: () => 0,
+  isDebugMeasurementEnabled: () => false,
   logLatency: vi.fn(),
+  now: () => 0,
+  recordStoreActionDebugActivity: vi.fn(),
 }));
 
 describe("useWorkspaceEntryFlow", () => {
@@ -120,6 +127,7 @@ describe("useWorkspaceEntryFlow", () => {
     mocks.harnessState.bumpSessionActivationIntentEpoch.mockReset();
     mocks.harnessState.bumpSessionActivationIntentEpoch.mockReturnValue(1);
     useSessionDirectoryStore.getState().clearEntries();
+    useSessionIntentStore.getState().clear();
     useSessionTranscriptStore.getState().clearEntries();
     useWorkspaceUiStore.setState({
       _hydrated: false,
@@ -193,6 +201,7 @@ describe("useWorkspaceEntryFlow", () => {
         agentKind: "codex",
         modelId: "gpt-5.5",
         modeId: "xhigh",
+        launchControlValues: { reasoning_effort: "high" },
         displayTitle: "gpt-5.5",
       },
     });
@@ -201,6 +210,14 @@ describe("useWorkspaceEntryFlow", () => {
     expect(mocks.enterPendingWorkspaceShell).toHaveBeenCalledWith(entry, {
       initialActiveSessionId: projectedSessionId,
     });
+    expect(getSessionIntentsForSession(projectedSessionId)).toEqual([
+      expect.objectContaining({
+        controlKey: "reasoning_effort",
+        rawConfigId: "reasoning_effort",
+        status: "queued",
+        value: "high",
+      }),
+    ]);
   });
 
   it("materializes projected sessions before clearing finalized pending workspace", async () => {

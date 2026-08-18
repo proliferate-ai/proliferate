@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import {
   buildLiveSessionControlDescriptors,
   type LiveSessionControlDescriptor,
+  type SupportedLiveControlKey,
 } from "#product/lib/domain/chat/session-controls/session-controls";
 import {
   buildComposerSessionControlGroups,
@@ -24,8 +25,12 @@ export function useChatSessionControls(): {
   const showErrorToast = useToastStore((state) => state.showError);
   const { setActiveSessionConfigOption } = useSessionConfigActions();
 
-  const onSelect = useCallback(function onSelect(rawConfigId: string, value: string) {
-    void setActiveSessionConfigOption(rawConfigId, value).catch((error) => {
+  const onSelect = useCallback(function onSelect(
+    controlKey: SupportedLiveControlKey,
+    rawConfigId: string,
+    value: string,
+  ) {
+    void setActiveSessionConfigOption(rawConfigId, value, { controlKey }).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
       showErrorToast({
         headline: "Setting not changed",
@@ -34,7 +39,7 @@ export function useChatSessionControls(): {
         // that can say which choice did not take.
         consequence: `The session is still on its previous value, not ${value}.`,
         cause: message,
-        retry: () => onSelect(rawConfigId, value),
+        retry: () => onSelect(controlKey, rawConfigId, value),
       });
     });
   }, [setActiveSessionConfigOption, showErrorToast]);

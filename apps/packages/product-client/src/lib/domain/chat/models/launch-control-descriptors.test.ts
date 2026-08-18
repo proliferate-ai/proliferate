@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { DesktopAgentLaunchControl } from "#product/lib/domain/agents/cloud-launch-catalog";
 import { buildLaunchControlDescriptors } from "#product/lib/domain/chat/models/launch-control-descriptors";
 
@@ -6,6 +6,7 @@ function control(
   key: string,
   label: string,
   defaultValue: string,
+  liveConfigId = key,
 ): DesktopAgentLaunchControl {
   return {
     key,
@@ -28,7 +29,7 @@ function control(
     },
     apply: {
       createField: null,
-      liveConfigId: key,
+      liveConfigId,
       liveSetter: "runtime_control",
       queueBeforeMaterialized: true,
     },
@@ -318,7 +319,7 @@ describe("buildLaunchControlDescriptors", () => {
         {
           kind: "codex",
           launchControls: [
-            control("access_mode", "Mode", "medium"),
+            control("effort", "Effort", "medium", "reasoning_effort"),
           ],
           models: [{ id: "gpt-5.5" }],
         },
@@ -337,9 +338,82 @@ describe("buildLaunchControlDescriptors", () => {
 
     expect(selections).toEqual([{
       agentKind: "codex",
-      controlKey: "mode",
-      rawConfigId: "access_mode",
+      controlKey: "effort",
+      rawConfigId: "reasoning_effort",
       value: "high",
     }]);
+  });
+
+  it("uses the same mapping logic for an aligned semantic and raw id", () => {
+    const onSelect = vi.fn();
+    const [effort] = buildLaunchControlDescriptors({
+      selection: { kind: "claude", modelId: "claude-fable-5" },
+      launchAgents: [{
+        kind: "claude",
+        launchControls: [control("effort", "Effort", "medium", "effort")],
+        models: [{ id: "claude-fable-5" }],
+      }],
+      preferences: {
+        defaultSessionModeByAgentKind: {},
+        defaultLiveSessionControlValuesByAgentKind: {},
+      },
+      pendingConfigChanges: null,
+      onSelect,
+    });
+
+    effort?.onSelect("high");
+
+    expect(effort).toMatchObject({ key: "effort", rawConfigId: "effort" });
+    expect(onSelect).toHaveBeenCalledWith("claude", "effort", "effort", "high");
+  });
+
+  it("omits a launch control without a live mapping", () => {
+    const missingMapping = control("effort", "Effort", "medium", "");
+
+    expect(buildLaunchControlDescriptors({
+      selection: { kind: "codex", modelId: "gpt-5.5" },
+      launchAgents: [{
+        kind: "codex",
+        launchControls: [missingMapping],
+        models: [{ id: "gpt-5.5" }],
+      }],
+      preferences: {
+        defaultSessionModeByAgentKind: {},
+        defaultLiveSessionControlValuesByAgentKind: {},
+      },
+      pendingConfigChanges: null,
+      onSelect: vi.fn(),
+    })).toEqual([]);
+  });
+
+  it("projects a launch-only pending value by semantic key", () => {
+    const [effort] = buildLaunchControlDescriptors({
+      selection: { kind: "codex", modelId: "gpt-5.5" },
+      launchAgents: [{
+        kind: "codex",
+        launchControls: [control("effort", "Effort", "medium", "reasoning_effort")],
+        models: [{ id: "gpt-5.5" }],
+      }],
+      preferences: {
+        defaultSessionModeByAgentKind: {},
+        defaultLiveSessionControlValuesByAgentKind: {},
+      },
+      pendingConfigChanges: {
+        effort: {
+          rawConfigId: "effort",
+          value: "high",
+          status: "submitting",
+          mutationId: Number.NaN,
+        },
+      },
+      onSelect: vi.fn(),
+    });
+
+    expect(effort).toMatchObject({
+      key: "effort",
+      rawConfigId: "reasoning_effort",
+      detail: "High",
+      pendingState: "submitting",
+    });
   });
 });
