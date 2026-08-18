@@ -12,7 +12,7 @@ use crate::live::sessions::actor::command::{
     PromptAcceptError, PromptAcceptance, QueueMutationError, Resolution,
 };
 use crate::live::sessions::actor::state::SessionActor;
-use crate::live::sessions::model::AttachmentSource;
+use crate::live::sessions::model_attachments::AttachmentSource;
 use crate::live::sessions::queue_durable::{
     PendingPromptDeleteOutcome, PendingPromptUpdateOutcome,
 };

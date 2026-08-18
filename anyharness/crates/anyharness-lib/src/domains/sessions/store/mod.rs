@@ -12,6 +12,7 @@ mod links;
 mod live_config;
 pub(crate) mod mobility;
 mod notifications;
+pub(crate) mod opencode_message_ids;
 pub(in crate::domains::sessions) mod pending_prompts;
 pub(crate) mod persisted_payloads;
 pub(crate) mod sessions;

@@ -55,6 +55,13 @@ pub struct SessionEventSink {
     store: Arc<dyn EventPersist>,
 
     current_turn_id: Option<String>,
+    /// The `item_id` of the current prompt turn's user-message item, set by
+    /// `begin_turn` and cleared at `turn_ended`. Only a prompt-begun turn has a
+    /// known user item; engine-initiated turns leave this `None`. the OpenCode side-door bridge
+    /// uses it to bind a vendor OpenCode `messageId` echo to the right runtime
+    /// `(turn_id, item_id)` identity, and only ever while a turn is open — a
+    /// replayed history echo (no open turn) is never misattributed.
+    current_user_item_id: Option<String>,
     /// True while the open turn was synthesized for engine-initiated activity
     /// (goal continuation/evaluation) rather than begun by a prompt. Only
     /// such turns may be auto-closed by terminal goal events.
@@ -94,6 +101,7 @@ impl SessionEventSink {
             event_tx,
             store,
             current_turn_id: None,
+            current_user_item_id: None,
             engine_initiated_turn: false,
             engine_turn_has_events: false,
             open_assistant_item: None,
@@ -127,6 +135,7 @@ impl SessionEventSink {
             event_tx,
             store,
             current_turn_id: None,
+            current_user_item_id: None,
             engine_initiated_turn: false,
             engine_turn_has_events: false,
             open_assistant_item: None,
@@ -164,6 +173,18 @@ impl SessionEventSink {
 
     pub fn current_turn_id(&self) -> Option<String> {
         self.current_turn_id.clone()
+    }
+
+    /// The open prompt turn's `(turn_id, item_id)` user-message identity, or
+    /// `None` when no prompt turn is open (engine-initiated turn, or between
+    /// turns). The side-door fork binds a vendor OpenCode `messageId` echo to this.
+    pub(in crate::live::sessions) fn current_user_message_identity(
+        &self,
+    ) -> Option<(String, String)> {
+        match (&self.current_turn_id, &self.current_user_item_id) {
+            (Some(turn_id), Some(item_id)) => Some((turn_id.clone(), item_id.clone())),
+            _ => None,
+        }
     }
 
     pub fn close_open_transcript_items(&mut self) {

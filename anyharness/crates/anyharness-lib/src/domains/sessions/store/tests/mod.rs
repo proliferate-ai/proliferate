@@ -75,6 +75,7 @@ mod events;
 mod links;
 mod mobility_cursor;
 mod notifications;
+mod opencode_message_ids;
 mod pending_prompt_events;
 mod pending_prompts;
 mod runtime_event_idempotency;

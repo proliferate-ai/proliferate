@@ -2,18 +2,21 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use agent_client_protocol as acp;
-use anyharness_contract::v1::{SessionActionCapabilities, SessionExecutionPhase};
+use anyharness_contract::v1::SessionExecutionPhase;
 use tokio::sync::{mpsc, Mutex};
 
-use crate::domains::sessions::model::serialize_action_capabilities;
 use crate::domains::sessions::model::RequestedModeApplyError as ModeApplyError;
 use crate::domains::sessions::prompt::capabilities::capabilities_from_acp;
+use crate::live::sessions::actor::capabilities::{
+    action_capabilities_from_acp, persist_session_action_capabilities,
+};
 use crate::live::sessions::actor::config::apply::restore_persisted_live_config_if_needed;
 use crate::live::sessions::actor::config::handle::{
     apply_requested_mode_preference, apply_requested_model_preference,
 };
 use crate::live::sessions::actor::config::persist::{
     emit_live_config_update, emit_startup_state, load_startup_restore_snapshot,
+    log_config_stage_result,
 };
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
 use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
@@ -23,14 +26,14 @@ use crate::live::sessions::background_work::{
 };
 use crate::live::sessions::driver::connection::establish_connection;
 use crate::live::sessions::driver::inbound::InboundDoor;
-use crate::live::sessions::driver::native_session::{
-    has_anyharness_targeted_fork_extension, start_native_session,
+use crate::live::sessions::driver::native_session::start_native_session;
+use crate::live::sessions::driver::opencode_sidedoor::{
+    derive_sidedoor_capability, provision_sidedoor_spawn,
 };
 use crate::live::sessions::driver::process::spawn_agent_process;
 use crate::live::sessions::driver::session_lifecycle::initialize_connection;
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
 use crate::live::sessions::handle::LiveSessionHandle;
-use crate::live::sessions::model::SessionStateDurable;
 use crate::live::sessions::sink::SessionEventSink;
 use crate::observability::AGENT_STDERR_TRACING_TARGET;
 
@@ -42,7 +45,7 @@ impl SessionActor {
     /// which stay out of the struct (they are threaded through the run loop
     /// as parameters).
     pub(in crate::live::sessions::actor) async fn start(
-        config: SessionActorConfig,
+        mut config: SessionActorConfig,
         ready_tx: std::sync::mpsc::Sender<anyhow::Result<String>>,
         handle: Arc<LiveSessionHandle>,
     ) -> anyhow::Result<(
@@ -56,6 +59,13 @@ impl SessionActor {
         let startup_strategy = config.launch.startup.clone();
         let startup_strategy_label = startup_strategy.as_str();
         let startup_started = Instant::now();
+
+        // See `opencode_sidedoor::provision_sidedoor_spawn`: for OpenCode
+        // only, provisions the HTTP side-door (fresh loopback port +
+        // Basic-auth password) and mutates `config.launch.env` to wire it
+        // into the spawned process.
+        let sidedoor_config =
+            provision_sidedoor_spawn(&source_agent_kind, &mut config.launch.env, &session_id);
 
         let spawned = spawn_agent_process(
             &config.launch.agent,
@@ -160,7 +170,7 @@ impl SessionActor {
             .await?;
             anyhow::Ok((init_response, action_capabilities, native))
         };
-        let (init_response, action_capabilities, native_session) = tokio::select! {
+        let (init_response, mut action_capabilities, native_session) = tokio::select! {
             // Biased so a handshake that completed on the same poll as the
             // exit (agent answered and then died) is reported as the success
             // it was; the exit arm only fires while it is genuinely pending.
@@ -205,6 +215,35 @@ impl SessionActor {
         startup_state.prompt_capabilities =
             capabilities_from_acp(Some(&init_response.agent_capabilities.prompt_capabilities));
 
+        // See `opencode_sidedoor::derive_sidedoor_capability`: with the vendor
+        // server up (native session established), runs the fail-closed
+        // side-door readiness check and derives `targeted_fork` for OpenCode.
+        // Every other kind keeps the hardcoded `false` from
+        // `action_capabilities_from_acp`.
+        let sidedoor = if let Some(config_sd) = sidedoor_config {
+            let native_id = native_session_id.to_string();
+            let resolved_native_version = config
+                .launch
+                .agent
+                .native
+                .as_ref()
+                .and_then(|artifact| artifact.version.clone());
+            Some(
+                derive_sidedoor_capability(
+                    config_sd,
+                    &native_id,
+                    &session_id,
+                    &workspace_id,
+                    resolved_native_version.as_deref(),
+                    &mut action_capabilities,
+                    config.caps.state.as_ref(),
+                )
+                .await,
+            )
+        } else {
+            None
+        };
+
         tracing::info!(
             target: "anyharness.session.established",
             session_id = %session_id,
@@ -231,7 +270,7 @@ impl SessionActor {
             emit_startup_state(&mut sink, &startup_state);
         }
         let initial_live_config_started = Instant::now();
-        if let Err(error) = emit_live_config_update(
+        let result = emit_live_config_update(
             &source_agent_kind,
             &session_id,
             config.caps.state.as_ref(),
@@ -240,24 +279,15 @@ impl SessionActor {
             &mut startup_state,
             chrono::Utc::now().to_rfc3339(),
         )
-        .await
-        {
-            tracing::warn!(session_id = %session_id, error = %error, "failed to persist initial live config snapshot");
-            tracing::warn!(
-                session_id = %session_id,
-                workspace_id = %workspace_id,
-                error = %error,
-                elapsed_ms = initial_live_config_started.elapsed().as_millis(),
-                "[workspace-latency] session.actor.initial_live_config.failed"
-            );
-        } else {
-            tracing::info!(
-                session_id = %session_id,
-                workspace_id = %workspace_id,
-                elapsed_ms = initial_live_config_started.elapsed().as_millis(),
-                "[workspace-latency] session.actor.initial_live_config.completed"
-            );
-        }
+        .await;
+        log_config_stage_result(
+            &session_id,
+            &workspace_id,
+            &result,
+            initial_live_config_started.elapsed(),
+            "failed to persist initial live config snapshot",
+            "initial_live_config",
+        );
         apply_requested_model_preference(
             &conn,
             &native_session_id,
@@ -266,7 +296,7 @@ impl SessionActor {
         )
         .await;
         let restore_live_config_started = Instant::now();
-        if let Err(error) = restore_persisted_live_config_if_needed(
+        let result = restore_persisted_live_config_if_needed(
             &conn,
             &native_session_id,
             &source_agent_kind,
@@ -277,24 +307,15 @@ impl SessionActor {
             &mut startup_state,
             startup_restore_snapshot.as_ref(),
         )
-        .await
-        {
-            tracing::warn!(session_id = %session_id, error = %error, "failed to restore persisted live config");
-            tracing::warn!(
-                session_id = %session_id,
-                workspace_id = %workspace_id,
-                error = %error,
-                elapsed_ms = restore_live_config_started.elapsed().as_millis(),
-                "[workspace-latency] session.actor.restore_live_config.failed"
-            );
-        } else {
-            tracing::info!(
-                session_id = %session_id,
-                workspace_id = %workspace_id,
-                elapsed_ms = restore_live_config_started.elapsed().as_millis(),
-                "[workspace-latency] session.actor.restore_live_config.completed"
-            );
-        }
+        .await;
+        log_config_stage_result(
+            &session_id,
+            &workspace_id,
+            &result,
+            restore_live_config_started.elapsed(),
+            "failed to restore persisted live config",
+            "restore_live_config",
+        );
         if let Err(error) = apply_requested_mode_preference(
             &conn,
             &native_session_id,
@@ -308,7 +329,7 @@ impl SessionActor {
             return Err(error);
         }
         let post_preferences_live_config_started = Instant::now();
-        if let Err(error) = emit_live_config_update(
+        let result = emit_live_config_update(
             &source_agent_kind,
             &session_id,
             config.caps.state.as_ref(),
@@ -317,24 +338,15 @@ impl SessionActor {
             &mut startup_state,
             chrono::Utc::now().to_rfc3339(),
         )
-        .await
-        {
-            tracing::warn!(session_id = %session_id, error = %error, "failed to persist post-preference live config snapshot");
-            tracing::warn!(
-                session_id = %session_id,
-                workspace_id = %workspace_id,
-                error = %error,
-                elapsed_ms = post_preferences_live_config_started.elapsed().as_millis(),
-                "[workspace-latency] session.actor.post_preferences_live_config.failed"
-            );
-        } else {
-            tracing::info!(
-                session_id = %session_id,
-                workspace_id = %workspace_id,
-                elapsed_ms = post_preferences_live_config_started.elapsed().as_millis(),
-                "[workspace-latency] session.actor.post_preferences_live_config.completed"
-            );
-        }
+        .await;
+        log_config_stage_result(
+            &session_id,
+            &workspace_id,
+            &result,
+            post_preferences_live_config_started.elapsed(),
+            "failed to persist post-preference live config snapshot",
+            "post_preferences_live_config",
+        );
 
         let _ = ready_tx.send(Ok(native_session_id.to_string()));
         handle
@@ -379,6 +391,7 @@ impl SessionActor {
             native_session_id,
             action_capabilities,
             supports_native_close,
+            sidedoor,
             conn,
             caps,
             hooks,
@@ -392,259 +405,3 @@ impl SessionActor {
     }
 }
 
-pub(in crate::live::sessions::actor) fn persist_session_action_capabilities(
-    store: &dyn SessionStateDurable,
-    session_id: &str,
-    agent_kind: &str,
-    init_response: &acp::schema::InitializeResponse,
-) {
-    let capabilities = action_capabilities_from_acp(agent_kind, init_response);
-    let Ok(json) = serialize_action_capabilities(capabilities) else {
-        tracing::warn!(
-            session_id,
-            "failed to serialize session action capabilities"
-        );
-        return;
-    };
-    let now = chrono::Utc::now().to_rfc3339();
-    if let Err(error) = store.update_action_capabilities_json(session_id, Some(json), &now) {
-        tracing::warn!(
-            session_id,
-            error = %error,
-            "failed to persist session action capabilities"
-        );
-    }
-}
-
-pub(in crate::live::sessions::actor) fn action_capabilities_from_acp(
-    agent_kind: &str,
-    init_response: &acp::schema::InitializeResponse,
-) -> SessionActionCapabilities {
-    let agent_capabilities = &init_response.agent_capabilities;
-    let fork_capability = agent_capabilities.session_capabilities.fork.as_ref();
-    let fork = agent_capabilities.load_session && fork_capability.is_some();
-    let adapter_targeted_fork_ready = fork
-        && fork_capability
-            .and_then(|capability| capability.meta.as_ref())
-            .map(has_anyharness_targeted_fork_extension)
-            .unwrap_or(false);
-    if adapter_targeted_fork_ready {
-        tracing::debug!(
-            "agent advertises edit-safe targeted fork metadata; public targeted fork remains disabled until runtime target dispatch is implemented"
-        );
-    }
-    let (mut supports_loops, loops_native) =
-        loops_capability_from_init_meta(init_response.meta.as_ref());
-    // Runtime-emulated loops (Codex) never advertise `loops` in `_meta` — the
-    // sidecar has no LoopPort — but the runtime scheduler fully drives them.
-    // Advertise support so the ⟳ loops chip is reachable; `loops_native` stays
-    // false, marking the emulated (non-mirror) path.
-    if !supports_loops && crate::domains::loops::runtime::is_emulated_loop_agent_kind(agent_kind) {
-        supports_loops = true;
-    }
-    SessionActionCapabilities {
-        fork,
-        targeted_fork: false,
-        supports_goals: supports_goals_from_init_meta(init_response.meta.as_ref()),
-        supports_loops,
-        loops_native,
-    }
-}
-
-/// `InitializeResponse._meta.anyharness.goals` — the GoalPort capability
-/// advertisement (wire contract v1). Anything short of an explicit
-/// `{ schemaVersion: 1, goals: { supported: true } }` degrades to
-/// unsupported: stale sidecars must never break.
-fn supports_goals_from_init_meta(meta: Option<&acp::schema::Meta>) -> bool {
-    let Some(anyharness) = meta
-        .and_then(|meta| meta.get("anyharness"))
-        .and_then(|value| value.as_object())
-    else {
-        return false;
-    };
-    if anyharness
-        .get("schemaVersion")
-        .and_then(|value| value.as_u64())
-        != Some(1)
-    {
-        return false;
-    }
-    anyharness
-        .get("goals")
-        .and_then(|goals| goals.get("supported"))
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false)
-}
-
-/// `InitializeResponse._meta.anyharness.loops` — the LoopPort capability
-/// advertisement (wire contract v1: `{ supported, native }`). Same
-/// degrade-to-unsupported rule as goals: anything short of an explicit
-/// `{ schemaVersion: 1, loops: { supported: true } }` reports
-/// `(false, false)` so a stale sidecar never breaks. `native` is only
-/// meaningful when `supported` is true — claude-agent-acp advertises
-/// `native: true` (session crons); codex-acp omits `loops` entirely in v1
-/// (runtime-emulated by `LoopSchedulerExtension`, not the sidecar).
-fn loops_capability_from_init_meta(meta: Option<&acp::schema::Meta>) -> (bool, bool) {
-    let Some(anyharness) = meta
-        .and_then(|meta| meta.get("anyharness"))
-        .and_then(|value| value.as_object())
-    else {
-        return (false, false);
-    };
-    if anyharness
-        .get("schemaVersion")
-        .and_then(|value| value.as_u64())
-        != Some(1)
-    {
-        return (false, false);
-    }
-    let Some(loops) = anyharness.get("loops").and_then(|value| value.as_object()) else {
-        return (false, false);
-    };
-    let supported = loops
-        .get("supported")
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false);
-    if !supported {
-        return (false, false);
-    }
-    let native = loops
-        .get("native")
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false);
-    (true, native)
-}
-
-#[cfg(all(test, unix))]
-mod tests {
-    use super::*;
-
-    fn init_meta(value: serde_json::Value) -> acp::schema::Meta {
-        let serde_json::Value::Object(map) = value else {
-            panic!("meta fixture must be an object");
-        };
-        acp::schema::Meta::from_iter(map)
-    }
-
-    #[test]
-    fn supports_goals_requires_schema_version_and_supported_flag() {
-        assert!(supports_goals_from_init_meta(Some(&init_meta(
-            serde_json::json!({
-                "anyharness": {
-                    "schemaVersion": 1,
-                    "goals": { "supported": true, "native": true }
-                }
-            })
-        ))));
-        assert!(!supports_goals_from_init_meta(Some(&init_meta(
-            serde_json::json!({
-                "anyharness": {
-                    "schemaVersion": 2,
-                    "goals": { "supported": true }
-                }
-            })
-        ))));
-        assert!(!supports_goals_from_init_meta(Some(&init_meta(
-            serde_json::json!({
-                "anyharness": { "schemaVersion": 1 }
-            })
-        ))));
-        assert!(!supports_goals_from_init_meta(Some(&init_meta(
-            serde_json::json!({
-                "anyharness": {
-                    "schemaVersion": 1,
-                    "goals": { "supported": false }
-                }
-            })
-        ))));
-        assert!(!supports_goals_from_init_meta(None));
-    }
-
-    #[test]
-    fn loops_capability_requires_schema_version_and_supported_flag() {
-        // claude-agent-acp: native loops.
-        assert_eq!(
-            loops_capability_from_init_meta(Some(&init_meta(serde_json::json!({
-                "anyharness": {
-                    "schemaVersion": 1,
-                    "loops": { "supported": true, "native": true }
-                }
-            })))),
-            (true, true)
-        );
-        // codex-acp v1: loops omitted entirely (runtime-emulated, not the
-        // sidecar) — degrades to unsupported.
-        assert_eq!(
-            loops_capability_from_init_meta(Some(&init_meta(serde_json::json!({
-                "anyharness": {
-                    "schemaVersion": 1,
-                    "goals": { "supported": true, "native": true }
-                }
-            })))),
-            (false, false)
-        );
-        // Wrong schema version degrades to unsupported even if the flag is set.
-        assert_eq!(
-            loops_capability_from_init_meta(Some(&init_meta(serde_json::json!({
-                "anyharness": {
-                    "schemaVersion": 2,
-                    "loops": { "supported": true, "native": true }
-                }
-            })))),
-            (false, false)
-        );
-        // Explicitly unsupported.
-        assert_eq!(
-            loops_capability_from_init_meta(Some(&init_meta(serde_json::json!({
-                "anyharness": {
-                    "schemaVersion": 1,
-                    "loops": { "supported": false }
-                }
-            })))),
-            (false, false)
-        );
-        // Supported but not native (a future runtime-emulated-by-sidecar case).
-        assert_eq!(
-            loops_capability_from_init_meta(Some(&init_meta(serde_json::json!({
-                "anyharness": {
-                    "schemaVersion": 1,
-                    "loops": { "supported": true, "native": false }
-                }
-            })))),
-            (true, false)
-        );
-        assert_eq!(loops_capability_from_init_meta(None), (false, false));
-    }
-
-    #[test]
-    fn action_capabilities_from_acp_wires_loops_capability_into_session_capabilities() {
-        let mut init_response =
-            acp::schema::InitializeResponse::new(acp::schema::ProtocolVersion::V1);
-        init_response.meta = Some(init_meta(serde_json::json!({
-            "anyharness": {
-                "schemaVersion": 1,
-                "goals": { "supported": true, "native": true },
-                "loops": { "supported": true, "native": true }
-            }
-        })));
-        let capabilities = action_capabilities_from_acp("claude", &init_response);
-        assert!(capabilities.supports_goals);
-        assert!(capabilities.supports_loops);
-        assert!(capabilities.loops_native);
-    }
-
-    #[test]
-    fn action_capabilities_from_acp_advertises_emulated_loops_for_codex() {
-        // codex-acp omits `loops` from `_meta` entirely, but the runtime
-        // emulates loops for it — the capability must still report supported so
-        // the ⟳ loops chip is reachable, with loops_native=false.
-        let init_response = acp::schema::InitializeResponse::new(acp::schema::ProtocolVersion::V1);
-        let capabilities = action_capabilities_from_acp("codex", &init_response);
-        assert!(capabilities.supports_loops);
-        assert!(!capabilities.loops_native);
-
-        // A non-emulated kind with no `loops` meta stays unsupported.
-        let claude = action_capabilities_from_acp("claude", &init_response);
-        assert!(!claude.supports_loops);
-    }
-}

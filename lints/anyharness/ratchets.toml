@@ -84,23 +84,13 @@ max_lines = 1510
 reason = "existing AnyHarness oversized test file"
 
 [[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/fork.rs"
-max_lines = 622
-reason = "Forks ADR rung 2 fork orchestration: access gate, item_id boundary validation, capability gate, canonical-digest idempotency (find-then-insert with a UNIQUE-constraint TOCTOU fallback that reconciles the winner), boundary resolution, durable-operation phase machine, and dispatch/start; split into fork/ per guides/domains.md when rung 3 wires targeted native dispatch"
-
-[[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs"
 max_lines = 1283
 reason = "existing AnyHarness oversized test file (launch-env tests moved to their owning module) + A9 Scope C resume/fork revoked-credentials regression tests (AgentNotReady at the common live-start seam) + a review-fix pin (unsatisfiable selection reports RouteAuth, not AgentNotReady, on resume) + Forks ADR rung 2 targeted-fork plumbing tests (item-less rejection, fail-closed no-child downgrade guard, idempotency conflict, unknown-outcome redispatch block, same-payload resume shared by the insert-time TOCTOU fallback)"
 
 [[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs"
-max_lines = 650
-reason = "session startup (+goal/loop capability parsing, roster reconcile-on-attach); R3: +1 line initializing the new pending_stop_response field on SessionActor construction; observability PR9: +2 session.established record fields ; +5: pr11b threads the interaction hooks into the event sink at construction"
-
-[[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/sessions/actor/tests/workspace_stop.rs"
-max_lines = 841
+max_lines = 840
 reason = "R3 real-process stop suite; every case owns a real agent process and a real ACP duplex, so the per-case setup is genuinely irreducible. +130: the dropped-stop re-entry regression (a stop future abandoned mid-escalation must leave the session answerable)"
 
 [[max_lines]]
@@ -182,11 +172,6 @@ reason = "workflows gen-2 pure transition table: the ADR's ruling rows and their
 path = "anyharness/crates/anyharness-lib/src/domains/workflows/transition_tests.rs"
 max_lines = 1190
 reason = "workflows gen-2 transition suite: one test per ADR table row plus staleness and illegal-command proofs ; +76: PR4 adds ForcedUnload-parking and Ruling L redo-from-running proofs ; +55: fix/wf2-run-cancel adds the cancel transition suite ; +32: fix round 1 adds the running-adhoc disposal proof and parameterizes the terminal-command wall over Completed/Failed/Cancelled"
-
-[[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/live/sessions/model.rs"
-max_lines = 606
-reason = "live-session shared model: actor messages, hooks, capabilities, event persist; split per guides/domains.md on next growth ; +7: pr11b adds the interaction-requested/resolved hook fields to SessionHooks"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/workflows/lifecycle_tests.rs"

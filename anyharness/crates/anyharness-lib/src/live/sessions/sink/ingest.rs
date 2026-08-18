@@ -38,6 +38,15 @@ pub(in crate::live::sessions) enum ActorBoundUpdate {
         title: Option<String>,
         updated_at: Option<String>,
     },
+    /// A vendor OpenCode `messageId` echoed on the active prompt
+    /// turn's user message. The sink stays meaning-blind — it only reports the
+    /// binding; the actor (which knows the agent kind) decides whether to
+    /// persist it (opencode only) via first-writer-wins `insert_opencode_message_id`.
+    OpencodeUserMessageId {
+        turn_id: String,
+        item_id: String,
+        vendor_message_id: String,
+    },
 }
 
 /// What one [`SessionEventSink::ingest`] call produced: the observations to
@@ -226,8 +235,23 @@ impl SessionEventSink {
                     cost: serde_json::to_value(&usage.cost).ok(),
                 });
             }
-            UserMessageChunk(_) => {
+            UserMessageChunk(chunk) => {
                 tracing::trace!("ACP UserMessageChunk echo received (deduplicated)");
+                // The vendor ACP layer echoes its native message
+                // id here. Only bind it when a prompt turn is genuinely open
+                // with a known user item — never misattribute a replayed
+                // history echo (no open turn). The actor persists opencode-only.
+                if let Some(vendor_message_id) =
+                    chunk.message_id.as_ref().map(|id| id.to_string())
+                {
+                    if let Some((turn_id, item_id)) = self.current_user_message_identity() {
+                        outcome.needs_actor = Some(ActorBoundUpdate::OpencodeUserMessageId {
+                            turn_id,
+                            item_id,
+                            vendor_message_id,
+                        });
+                    }
+                }
             }
             #[allow(unreachable_patterns)]
             other => {
