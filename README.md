@@ -21,7 +21,7 @@
 <br />
 
 Run Claude Code, Codex, OpenCode, and any other coding agent in parallel, in one workspace.<br />
-Move running sessions between your machine and the cloud. Works solo or across a team.
+Each task gets an isolated git worktree — branch, terminal, conversation, and review state kept together.
 
 <br />
 
@@ -41,9 +41,9 @@ Move running sessions between your machine and the cloud. Works solo or across a
 
 <br />
 
-Proliferate is a desktop and web app for running coding agents in parallel, locally or in cloud sandboxes.
+Proliferate is a desktop and web app for running coding agents in parallel.
 
-- **Run any mix of agents in parallel**, each in its own isolated worktree or sandbox, with native tools, auth, and config intact
+- **Run any mix of agents in parallel**, each in its own isolated worktree, with native tools, auth, and config intact
 - **Let your agents manage each other**, like having Codex hand design work to Claude Code
 - **Set up MCPs and skills once**, shared across every agent
 
@@ -154,11 +154,11 @@ generated Tauri config, and app labels.
 </details>
 
 <details id="self-hosting">
-<summary>Self-host Proliferate Cloud</summary>
+<summary>Self-host Proliferate</summary>
 
 ### Self-hosting
 
-The full Proliferate Cloud control plane is self-hostable. Start with the
+The full Proliferate control plane is self-hostable. Start with the
 [deployment docs](https://proliferate.com/docs/deployment) — Docker, AWS, GCP,
 Azure, Kubernetes, and air-gapped operation.
 
@@ -177,7 +177,11 @@ Point the desktop app at your control plane by following
 
 </details>
 
-## Proliferate Cloud
+## Proliferate Cloud (Coming Soon)
+
+> Proliferate Cloud is not part of the initial launch — we're rebuilding the
+> sandbox infrastructure to remove the E2B dependency and will ship Cloud in a
+> follow-up release. Everything local above is available today.
 
 - ☁️ **Cloud sandboxes** - isolated cloud environments that keep working after you close your laptop
 - 🔁 **Workspace mobility** - move a running workspace between your machine and the cloud, mid-task, with changes and history intact
@@ -191,8 +195,8 @@ Point the desktop app at your control plane by following
 - 📱 **Mobile** - coming soon: dispatch work, approve actions, and follow runs from your phone
 - 🏗️ **Self-hosted Proliferate Cloud** - run the full cloud control plane yourself ([docs](#self-hosting))
 
-Proliferate Cloud is open source (AGPL-3.0) and self-hostable — see
-[Self-hosting](#self-hosting).
+Like everything else, Proliferate Cloud will be open source (AGPL-3.0) and
+self-hostable.
 
 ## Community
 
