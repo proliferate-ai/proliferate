@@ -4,6 +4,7 @@ import type { WorkflowStarterTemplateV2 } from "#product/config/workflows/starte
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
 import { useCloudLaunchModelRegistries } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { useWorkflowBuilder, type WorkflowBuilderDraft } from "#product/hooks/workflows/facade/use-workflow-builder";
+import { useWorkflowNodeLayout } from "#product/hooks/workflows/workflows/use-workflow-node-layout";
 import { workflowBuilderHarnessOptions } from "#product/lib/domain/workflows/workflow-builder-authoring";
 import { workflowRepoRootOptions } from "#product/lib/domain/workflows/workflow-repo-root-options";
 import { WorkflowBuilderChainCanvas } from "#product/components/workflows/builder-v2/WorkflowBuilderChainCanvas";
@@ -89,6 +90,7 @@ export function WorkflowBuilderSurface({
     agentKind: harness.agentKind,
     modelIds: harness.models.map((model) => model.id),
   })), [harnesses]);
+  const layout = useWorkflowNodeLayout(definitionId);
   const builder = useWorkflowBuilder({
     definitionId,
     template,
@@ -158,6 +160,15 @@ export function WorkflowBuilderSurface({
           </NoticeBanner>
         )
       : null,
+    // Every gate that holds Save down says so. The title is not a definition
+    // rule (it lives on the record envelope) and invalid JSON is not visible
+    // from the graph view at all, so neither reaches the issues banner above.
+    draft.title.trim().length === 0
+      ? <NoticeBanner key="title" tone="warning">{WORKFLOW_BUILDER_COPY.titleRequired}</NoticeBanner>
+      : null,
+    !jsonValid
+      ? <NoticeBanner key="json" tone="warning">{WORKFLOW_BUILDER_COPY.jsonInvalid}</NoticeBanner>
+      : null,
     registriesQuery.isError
       ? <NoticeBanner key="catalog" tone="warning">{WORKFLOW_BUILDER_COPY.catalogUnavailable}</NoticeBanner>
       : null,
@@ -195,12 +206,11 @@ export function WorkflowBuilderSurface({
           <ArrowLeft className="icon-compact" aria-hidden />
         </IconButton>
         <Input
-          variant="unstyled"
           aria-label={WORKFLOW_BUILDER_COPY.titleLabel}
           value={draft.title}
           disabled={builder.saving}
           placeholder={WORKFLOW_BUILDER_COPY.titlePlaceholder}
-          className="h-7 w-72 max-w-full px-1 font-mono text-ui"
+          className="h-8 w-72 max-w-full px-2"
           onChange={(event) => actions.setTitle(event.currentTarget.value)}
         />
         <div className="ml-auto flex items-center gap-2">
@@ -253,6 +263,7 @@ export function WorkflowBuilderSurface({
               selectedNodeId={selectedNode?.id ?? null}
               inputSelected={active.kind === "input"}
               issueNodeIds={issueNodeIds}
+              nodePlacements={layout.placements}
               statusSlot={(
                 <div className="flex flex-col gap-1">
                   <span className="text-ui-sm text-muted-foreground">
@@ -273,6 +284,7 @@ export function WorkflowBuilderSurface({
               onConnectInput={actions.connectInput}
               onRemoveEdge={actions.removeEdge}
               onDisconnectInput={actions.disconnectInput}
+              onMoveNode={layout.moveNode}
             />
           </div>
           <div className={authoringMode === "json" ? "h-full" : "hidden"}>

@@ -155,17 +155,37 @@ export function layoutWorkflowRunGraph(slots: readonly WorkflowGraphSlotVM[]): W
   };
 }
 
-/** Deterministic builder placement with authored, rather than implied, edges. */
+/**
+ * Where the author has put a card by hand, in the same content coordinates the
+ * deterministic placement below produces.
+ */
+export interface WorkflowGraphNodePlacement {
+  x: number;
+  y: number;
+}
+
+/**
+ * Deterministic builder placement with authored, rather than implied, edges.
+ *
+ * A card the author has dragged keeps the coordinate they left it at; every
+ * other card falls back to its rank in the chain, so hand placement is an
+ * override of this layout rather than a replacement for it. Edges are derived
+ * from the resulting placements, so a moved card takes its wires with it.
+ */
 export function layoutWorkflowBuilderGraph(
   nodeIds: readonly string[],
   edges: readonly { from: string; to: string }[],
+  placements: Readonly<Record<string, WorkflowGraphNodePlacement>> = {},
 ): WorkflowGraphLayout {
-  const nodes = nodeIds.map((id, index): WorkflowGraphPlacedNode => ({
-    key: id,
-    x: 0,
-    y: index * (WORKFLOW_GRAPH_NODE_HEIGHT + RANK_GAP),
-    branch: false,
-  }));
+  const nodes = nodeIds.map((id, index): WorkflowGraphPlacedNode => {
+    const placement = placements[id];
+    return {
+      key: id,
+      x: placement?.x ?? 0,
+      y: placement?.y ?? index * (WORKFLOW_GRAPH_NODE_HEIGHT + RANK_GAP),
+      branch: false,
+    };
+  });
   const byKey = new Map(nodes.map((node) => [node.key, node]));
   const laidOutEdges = edges.flatMap((edge): WorkflowGraphEdgeLayout[] => {
     const fromNode = byKey.get(edge.from);
@@ -184,7 +204,9 @@ export function layoutWorkflowBuilderGraph(
   return {
     nodes,
     edges: laidOutEdges,
-    width: nodes.length === 0 ? 0 : WORKFLOW_GRAPH_NODE_WIDTH,
-    height: nodes.length === 0 ? 0 : nodes[nodes.length - 1].y + WORKFLOW_GRAPH_NODE_HEIGHT,
+    // Measured from the placements rather than from the chain's length: a card
+    // dragged right or down has to grow the content the canvas pans and fits.
+    width: nodes.reduce((max, node) => Math.max(max, node.x + WORKFLOW_GRAPH_NODE_WIDTH), 0),
+    height: nodes.reduce((max, node) => Math.max(max, node.y + WORKFLOW_GRAPH_NODE_HEIGHT), 0),
   };
 }

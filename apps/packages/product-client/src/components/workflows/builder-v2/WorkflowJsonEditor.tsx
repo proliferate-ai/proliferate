@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { WorkflowDefinitionV2 } from "@proliferate/cloud-sdk";
 import {
   formatWorkflowDefinitionJson,
@@ -27,18 +27,33 @@ export function WorkflowJsonEditor({
     return initial.ok ? null : initial.message;
   });
   const wasActive = useRef(false);
+  const seededSource = useRef(source);
+
+  /**
+   * Replace the pane with the graph's own document. An incomplete draft does
+   * not parse (a step still needs a title or a prompt), and that is the
+   * builder's issue to report, not this pane's: the validity flag the save
+   * gate reads describes JSON the author typed, so seeding always clears it.
+   */
+  const seedFromDefinition = useCallback(() => {
+    const nextSource = formatWorkflowDefinitionJson(definition);
+    const parsed = parseWorkflowDefinitionJson(nextSource);
+    seededSource.current = nextSource;
+    setSource(nextSource);
+    setError(parsed.ok ? null : parsed.message);
+    onValidityChange(true);
+  }, [definition, onValidityChange]);
 
   useEffect(() => {
     const becameActive = active && !wasActive.current;
     wasActive.current = active;
-    if (!becameActive || !parseWorkflowDefinitionJson(source).ok) return;
-
-    const nextSource = formatWorkflowDefinitionJson(definition);
-    const parsed = parseWorkflowDefinitionJson(nextSource);
-    setSource(nextSource);
-    setError(parsed.ok ? null : parsed.message);
-    onValidityChange(parsed.ok);
-  }, [active, definition, onValidityChange, source]);
+    // Unparseable text the author typed is theirs to fix rather than ours to
+    // discard; text this pane seeded is not an edit at all and keeps tracking
+    // the graph even while the draft is still incomplete.
+    if (!becameActive) return;
+    if (source !== seededSource.current && !parseWorkflowDefinitionJson(source).ok) return;
+    seedFromDefinition();
+  }, [active, seedFromDefinition, source]);
 
   const update = (next: string) => {
     setSource(next);
@@ -89,11 +104,7 @@ export function WorkflowJsonEditor({
           variant="ghost"
           size="sm"
           disabled={disabled}
-          onClick={() => {
-            setSource(formatWorkflowDefinitionJson(definition));
-            setError(null);
-            onValidityChange(true);
-          }}
+          onClick={seedFromDefinition}
         >
           Revert
         </Button>

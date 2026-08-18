@@ -112,4 +112,23 @@ describe("layoutWorkflowBuilderGraph", () => {
     const layout = layoutWorkflowBuilderGraph([], []);
     expect(layout).toMatchObject({ nodes: [], edges: [], width: 0, height: 0 });
   });
+
+  it("honours a hand placement, redraws its edges, and grows the content around it", () => {
+    const ranked = layoutWorkflowBuilderGraph(["one", "two"], [{ from: "one", to: "two" }]);
+    const moved = layoutWorkflowBuilderGraph(
+      ["one", "two"],
+      [{ from: "one", to: "two" }],
+      { two: { x: 420, y: 30 } },
+    );
+
+    // The moved card takes the coordinate it was left at; the untouched one
+    // keeps its rank, so placement overrides the layout rather than replacing it.
+    expect(moved.nodes).toEqual([
+      { key: "one", x: 0, y: 0, branch: false },
+      { key: "two", x: 420, y: 30, branch: false },
+    ]);
+    expect(moved.edges[0].path).not.toBe(ranked.edges[0].path);
+    expect(moved.width).toBe(420 + WORKFLOW_GRAPH_NODE_WIDTH);
+    expect(moved.height).toBe(30 + WORKFLOW_GRAPH_NODE_HEIGHT);
+  });
 });

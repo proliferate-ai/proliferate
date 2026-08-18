@@ -84,6 +84,7 @@ export function createProliferateErrorMiddleware(): Middleware {
           | {
               detail?:
                 | ({ code?: string; message?: string } & Record<string, unknown>)
+                | { msg?: string }[]
                 | string;
             }
           | undefined;
@@ -93,6 +94,18 @@ export function createProliferateErrorMiddleware(): Middleware {
           // Fall through to status text.
         }
         const detail = payload?.detail;
+        // A request-validation failure answers with FastAPI's own list of
+        // errors, not the structured single error below. An array is also an
+        // object, so it has to be taken first or it would be destructured into
+        // an error with no message at all.
+        if (Array.isArray(detail)) {
+          const messages = detail.map((entry) => entry?.msg).filter(Boolean);
+          throw new ProliferateClientError(
+            messages.join("; ") || response.statusText || "Request failed",
+            response.status,
+            null,
+          );
+        }
         if (detail && typeof detail === "object") {
           const { code, message, ...rest } = detail;
           throw new ProliferateClientError(

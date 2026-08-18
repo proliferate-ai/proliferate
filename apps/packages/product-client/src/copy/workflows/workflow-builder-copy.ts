@@ -37,6 +37,8 @@ export const WORKFLOW_BUILDER_COPY = {
   repositoriesLoadFailed:
     "Repositories could not be loaded from the runtime. Reconnect to change this workflow's default repository.",
 
+  titleRequired: "Give this workflow a title before saving.",
+  jsonInvalid: "The JSON view holds an invalid definition. Fix or revert it before saving.",
   issuesBanner: (count: number, firstMessage: string) =>
     `Fix ${count} ${count === 1 ? "issue" : "issues"} before saving. ${firstMessage}`,
   catalogUnavailable:

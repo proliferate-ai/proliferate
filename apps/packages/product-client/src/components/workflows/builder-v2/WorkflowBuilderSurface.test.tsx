@@ -68,6 +68,22 @@ vi.mock("@anyharness/sdk-react", () => ({
   useRepoRootsQuery: () => mocks.repoRootsQuery,
 }));
 
+// Hand placements are persisted through the product host, which this surface
+// test does not mount; the in-memory stand-in keeps card moving real.
+vi.mock("#product/hooks/workflows/workflows/use-workflow-node-layout", async () => {
+  const { useCallback, useState } = await import("react");
+  return {
+    useWorkflowNodeLayout: () => {
+      const [placements, setPlacements] = useState({});
+      return {
+        placements,
+        moveNode: useCallback((nodeKey: string, placement: { x: number; y: number }) =>
+          setPlacements((current) => ({ ...current, [nodeKey]: placement })), []),
+      };
+    },
+  };
+});
+
 const RESEARCH_AND_REVIEW = WORKFLOW_STARTER_TEMPLATES_V2.find(
   (template) => template.slug === "bug-investigation",
 )!;
@@ -136,6 +152,10 @@ describe("WorkflowBuilderSurface", () => {
 
     fireEvent.pointerDown(screen.getByLabelText("Connect from Review the findings"));
     fireEvent.pointerUp(screen.getByLabelText("Connect into step-3"));
+    // Connected but still blank: a minted step carries neither of the two
+    // fields every plane requires, so it stays unsavable until both are typed.
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", true);
+    completeSelectedStep();
     expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", false);
   });
 
@@ -160,6 +180,7 @@ describe("WorkflowBuilderSurface", () => {
     await user.keyboard(" ");
 
     expect(screen.getByLabelText("Remove connection from review to step-3")).toBeTruthy();
+    completeSelectedStep();
     expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", false);
 
     // Self-edge, duplicate, and structural-Input target negative controls.
@@ -267,6 +288,11 @@ describe("WorkflowBuilderSurface", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Graph" }));
     expect(screen.getByRole("button", { name: /^01AgentInvestigate atomically/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", true);
+    // The graph view cannot show the JSON error, so the dead Save button says
+    // why it is dead.
+    expect(screen.getByText(
+      "The JSON view holds an invalid definition. Fix or revert it before saving.",
+    )).toBeTruthy();
 
     fireEvent.click(screen.getByRole("radio", { name: "JSON" }));
     expect((screen.getByLabelText("Workflow definition JSON") as HTMLTextAreaElement).value)
@@ -289,6 +315,7 @@ describe("WorkflowBuilderSurface", () => {
     fireEvent.click(screen.getByRole("radio", { name: "JSON" }));
     const editor = screen.getByLabelText("Workflow definition JSON") as HTMLTextAreaElement;
     const first = JSON.parse(editor.value);
+    first.nodes[0].title = "Diagnose";
     first.nodes[0].prompt = "A";
     fireEvent.change(editor, { target: { value: JSON.stringify(first) } });
     first.nodes[0].prompt = "AB";
@@ -341,7 +368,9 @@ describe("WorkflowBuilderSurface", () => {
       />,
     );
 
+    completeSelectedStep();
     expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", true);
+    expect(screen.getByText("Give this workflow a title before saving.")).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
     expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", false);
@@ -399,6 +428,7 @@ describe("WorkflowBuilderSurface", () => {
     );
 
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
+    completeSelectedStep();
     fireEvent.change(screen.getByLabelText("Harness"), { target: { value: "claude" } });
     fireEvent.change(screen.getByLabelText("Model"), { target: { value: "opus" } });
 
@@ -434,6 +464,7 @@ describe("WorkflowBuilderSurface", () => {
     );
 
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Diagnose" } });
     // `@doc:plan.md` is well-formed prose and a malformed reference: declaring
     // a document cannot rescue it, so it must block the save on its own.
     fireEvent.change(screen.getByLabelText("Prompt"), {
@@ -490,6 +521,7 @@ describe("WorkflowBuilderSurface", () => {
     );
 
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
+    completeSelectedStep();
     fireEvent.click(screen.getByRole("button", { name: /Trigger payload/ }));
     fireEvent.click(screen.getByRole("button", { name: "Add input" }));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "my input" } });
@@ -519,6 +551,7 @@ describe("WorkflowBuilderSurface", () => {
     );
 
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
+    completeSelectedStep();
     fireEvent.click(screen.getByRole("button", { name: "Add document" }));
     fireEvent.change(screen.getByLabelText("Slug"), { target: { value: " Research-Findings " } });
 
@@ -563,6 +596,7 @@ describe("WorkflowBuilderSurface", () => {
     );
 
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
+    completeSelectedStep();
     fireEvent.click(screen.getByRole("button", { name: /Trigger payload/ }));
     fireEvent.change(screen.getByLabelText("Default repository"), {
       target: { value: "root-2" },
@@ -615,6 +649,7 @@ describe("WorkflowBuilderSurface", () => {
     )).toBeTruthy();
     // A workflow that names no repository is still savable: the run picks one.
     fireEvent.change(screen.getByLabelText("Workflow title"), { target: { value: "Issue triage" } });
+    completeSelectedStep();
     expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", false);
   });
 
@@ -634,6 +669,15 @@ describe("WorkflowBuilderSurface", () => {
     expect(screen.getByText("Not editable here")).toBeTruthy();
   });
 });
+
+/**
+ * Fill the inspector's step fields. A minted step carries neither, and both
+ * are wire-required, so every save-path test has to type them.
+ */
+function completeSelectedStep(prompt = "Investigate the report.") {
+  fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Diagnose" } });
+  fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: prompt } });
+}
 
 function repoRoots(): RepoRoot[] {
   return [
@@ -667,7 +711,7 @@ function createdRecord(): WorkflowDefinitionRecordV2 {
     defaultRepoConfigId: null,
     definition: {
       schemaVersion: 2,
-      nodes: [{ id: "step-1", type: "agent", title: "", prompt: "" }],
+      nodes: [{ id: "step-1", type: "agent", title: "Diagnose", prompt: "Investigate." }],
       edges: [],
       inputs: [],
       docTemplates: [],

@@ -1,6 +1,9 @@
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -23,6 +26,31 @@ const FIT_PADDING = 24;
 const FIT_OVERLAY_SAFE_BAND = 48;
 /** The design's dot-grid pitch at zoom 1. */
 const GRID_PITCH = 22;
+
+export interface WorkflowCanvasViewport {
+  /**
+   * The scale the canvas is drawing its content at, so a child can turn
+   * pointer motion (screen pixels) into content units — the canvas owns the
+   * transform, and nothing below it can derive the factor on its own.
+   */
+  zoom: number;
+  /**
+   * Take the viewport over the way panning and zooming do. A child gesture
+   * that changes the content box — moving a card grows it — must call this
+   * first, or the auto-fit below would re-frame the view out from under the
+   * gesture that caused the change.
+   */
+  holdViewport: () => void;
+}
+
+const WorkflowCanvasViewportContext = createContext<WorkflowCanvasViewport>({
+  zoom: 1,
+  holdViewport: () => {},
+});
+
+export function useWorkflowCanvasViewport(): WorkflowCanvasViewport {
+  return useContext(WorkflowCanvasViewportContext);
+}
 
 export interface WorkflowCanvasProps {
   /** Content extents in unscaled coordinates (`graph-layout.ts` units). */
@@ -117,6 +145,14 @@ export function WorkflowCanvas({
       return next;
     });
   };
+
+  const holdViewport = useCallback(() => {
+    touchedRef.current = true;
+  }, []);
+  const viewport = useMemo<WorkflowCanvasViewport>(
+    () => ({ zoom, holdViewport }),
+    [holdViewport, zoom],
+  );
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     // Only the background pans; a press on a node card or a zoom control —
@@ -230,7 +266,9 @@ export function WorkflowCanvas({
             />
           ))}
         </svg>
-        {children}
+        <WorkflowCanvasViewportContext.Provider value={viewport}>
+          {children}
+        </WorkflowCanvasViewportContext.Provider>
       </div>
 
       {statusSlot ? (

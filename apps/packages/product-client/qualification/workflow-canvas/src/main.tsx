@@ -1,6 +1,7 @@
 import "@proliferate/design/product.css";
 
 import type { WorkflowEdgeV2, WorkflowNodeV2 } from "@proliferate/cloud-sdk";
+import type { WorkflowGraphNodePlacement } from "#product/domain/workflows/graph-layout";
 import { useState } from "react";
 import ReactDOM from "react-dom/client";
 import { WorkflowBuilderChainCanvas } from "#product/components/workflows/builder-v2/WorkflowBuilderChainCanvas";
@@ -18,6 +19,8 @@ const NODES: WorkflowNodeV2[] = [
 function WorkflowCanvasDepthFixture() {
   const [edges, setEdges] = useState<WorkflowEdgeV2[]>([{ from: "a", to: "b" }]);
   const [inputConnectedTo, setInputConnectedTo] = useState<string | null>("a");
+  const [placements, setPlacements] = useState<Record<string, WorkflowGraphNodePlacement>>({});
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   return (
     <main style={{ width: 720, height: 680, margin: "0 auto", padding: 16 }}>
@@ -27,10 +30,11 @@ function WorkflowCanvasDepthFixture() {
         edges={edges}
         inputConnectedTo={inputConnectedTo}
         harnesses={[]}
-        selectedNodeId={null}
+        selectedNodeId={selectedNodeId}
         inputSelected={false}
         issueNodeIds={new Set()}
-        onSelectNode={() => {}}
+        nodePlacements={placements}
+        onSelectNode={setSelectedNodeId}
         onSelectInput={() => {}}
         onConnectNodes={(from, to) => setEdges((current) => [...current, { from, to }])}
         onConnectInput={setInputConnectedTo}
@@ -38,6 +42,7 @@ function WorkflowCanvasDepthFixture() {
           (edge) => edge.from !== from || edge.to !== to,
         ))}
         onDisconnectInput={() => setInputConnectedTo(null)}
+        onMoveNode={(key, placement) => setPlacements((current) => ({ ...current, [key]: placement }))}
       />
     </main>
   );

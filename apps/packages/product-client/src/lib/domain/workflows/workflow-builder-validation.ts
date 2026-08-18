@@ -27,6 +27,10 @@ export type WorkflowBuilderIssueCode =
   | "invalid_input_name"
   /** A declared doc slug outside `DOC_SLUG_PATTERN`. */
   | "invalid_doc_slug"
+  /** A step with no title; the runtime refuses one outright. */
+  | "empty_node_title"
+  /** A step with no prompt; the wire model refuses an empty one. */
+  | "empty_node_prompt"
   | "input_not_connected";
 
 /**
@@ -44,6 +48,7 @@ export function workflowBuilderIssues(
 ): WorkflowBuilderIssue[] {
   const issues: WorkflowBuilderIssue[] = [
     ...validateDefinitionV2(definition),
+    ...nodeFieldIssues(definition),
     ...declarationGrammarIssues(definition),
   ];
   if (inputConnectedTo !== undefined) {
@@ -58,6 +63,34 @@ export function workflowBuilderIssues(
       });
     }
   }
+  return issues;
+}
+
+/**
+ * The per-step fields every plane requires and the shared validator does not
+ * look at: the control plane's wire model refuses an empty `title`/`prompt`
+ * with `min_length`, and the runtime refuses an untitled node outright. A step
+ * is minted blank, so without these a just-added step would pass every local
+ * check and be refused by the server the moment Save is pressed.
+ */
+function nodeFieldIssues(definition: WorkflowDefinitionV2): WorkflowBuilderIssue[] {
+  const issues: WorkflowBuilderIssue[] = [];
+  definition.nodes.forEach((node, index) => {
+    if (node.title.trim().length === 0) {
+      issues.push({
+        code: "empty_node_title",
+        message: `Step ${index + 1} needs a title.`,
+        nodeId: node.id,
+      });
+    }
+    if (node.prompt.trim().length === 0) {
+      issues.push({
+        code: "empty_node_prompt",
+        message: `Step ${index + 1} needs a prompt.`,
+        nodeId: node.id,
+      });
+    }
+  });
   return issues;
 }
 

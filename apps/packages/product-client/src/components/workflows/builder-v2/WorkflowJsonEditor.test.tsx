@@ -1,0 +1,88 @@
+// @vitest-environment jsdom
+
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import type { WorkflowDefinitionV2 } from "@proliferate/cloud-sdk";
+import { WorkflowJsonEditor } from "#product/components/workflows/builder-v2/WorkflowJsonEditor";
+
+afterEach(() => {
+  cleanup();
+});
+
+/**
+ * What the pane re-seeds from the graph and what it keeps. An incomplete draft
+ * does not parse either — a step still needs a title and a prompt — so "does
+ * the text parse" cannot stand in for "did the author type this".
+ */
+describe("WorkflowJsonEditor", () => {
+  it("re-seeds from a graph that is still incomplete", () => {
+    const onValidityChange = vi.fn();
+    const view = render(
+      <WorkflowJsonEditor
+        definition={definition("", "")}
+        active={false}
+        disabled={false}
+        onApply={() => {}}
+        onValidityChange={onValidityChange}
+      />,
+    );
+    view.rerender(editor(definition("", ""), true, onValidityChange));
+    expect(sourceNodes()[0]).toMatchObject({ title: "", prompt: "" });
+
+    // Away and back with the graph filled in between: the pane never held an
+    // edit of its own, so it must show what the graph now holds.
+    view.rerender(editor(definition("", ""), false, onValidityChange));
+    view.rerender(editor(definition("Diagnose", "Investigate."), true, onValidityChange));
+
+    expect(sourceNodes()[0]).toMatchObject({ title: "Diagnose", prompt: "Investigate." });
+    expect(onValidityChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it("keeps text the author typed that cannot be parsed", () => {
+    const onValidityChange = vi.fn();
+    const view = render(editor(definition("Diagnose", "Investigate."), true, onValidityChange));
+
+    fireEvent.change(screen.getByLabelText("Workflow definition JSON"), {
+      target: { value: '{"schemaVersion": 2' },
+    });
+    expect(onValidityChange).toHaveBeenLastCalledWith(false);
+
+    view.rerender(editor(definition("Diagnose", "Investigate."), false, onValidityChange));
+    view.rerender(editor(definition("Renamed", "Investigate."), true, onValidityChange));
+
+    expect((screen.getByLabelText("Workflow definition JSON") as HTMLTextAreaElement).value)
+      .toBe('{"schemaVersion": 2');
+    expect(onValidityChange).toHaveBeenLastCalledWith(false);
+  });
+});
+
+function editor(
+  value: WorkflowDefinitionV2,
+  active: boolean,
+  onValidityChange: (valid: boolean) => void,
+) {
+  return (
+    <WorkflowJsonEditor
+      definition={value}
+      active={active}
+      disabled={false}
+      onApply={() => {}}
+      onValidityChange={onValidityChange}
+    />
+  );
+}
+
+function sourceNodes(): WorkflowDefinitionV2["nodes"] {
+  const textarea = screen.getByLabelText("Workflow definition JSON") as HTMLTextAreaElement;
+  return JSON.parse(textarea.value).nodes;
+}
+
+function definition(title: string, prompt: string): WorkflowDefinitionV2 {
+  return {
+    schemaVersion: 2,
+    nodes: [{ id: "step-1", type: "agent", title, prompt }],
+    edges: [],
+    inputs: [],
+    docTemplates: [],
+  };
+}

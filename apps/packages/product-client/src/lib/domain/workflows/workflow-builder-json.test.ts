@@ -8,8 +8,8 @@ import {
 const definition: WorkflowDefinitionV2 = {
   schemaVersion: 2,
   nodes: [
-    { id: "first", type: "agent", title: "First", prompt: "" },
-    { id: "second", type: "human_in_loop", title: "Second", prompt: "" },
+    { id: "first", type: "agent", title: "First", prompt: "Investigate." },
+    { id: "second", type: "human_in_loop", title: "Second", prompt: "Review it." },
   ],
   edges: [{ from: "first", to: "second" }],
   inputs: [],

@@ -57,6 +57,7 @@ describe("useWorkflowBuilder validation gating", () => {
     act(() => {
       result.current.actions.setTitle("Issue triage");
       result.current.actions.updateNode("step-1", {
+        title: "Diagnose",
         prompt: "Record what you find in @doc:findings.",
       });
     });
@@ -80,6 +81,7 @@ describe("useWorkflowBuilder validation gating", () => {
     act(() => {
       result.current.actions.setTitle("Issue triage");
       result.current.actions.updateNode("step-1", {
+        title: "Diagnose",
         prompt: "Record what you find in @doc:findings.",
       });
       result.current.actions.addDocTemplate();
@@ -239,6 +241,7 @@ describe("useWorkflowBuilder save mapping", () => {
 
     act(() => {
       result.current.actions.setTitle("  Issue triage  ");
+      completeStep(result);
     });
     await act(async () => {
       await result.current.save();
@@ -252,7 +255,7 @@ describe("useWorkflowBuilder save mapping", () => {
       defaultRepoConfigId: null,
       definition: {
         schemaVersion: 2,
-        nodes: [{ id: "step-1", type: "agent", title: "", prompt: "" }],
+        nodes: [{ id: "step-1", type: "agent", title: "Diagnose", prompt: "Investigate." }],
         edges: [],
         inputs: [],
         docTemplates: [],
@@ -329,6 +332,7 @@ describe("useWorkflowBuilder declaration grammar gating", () => {
 
     act(() => {
       result.current.actions.setTitle("Issue triage");
+      completeStep(result);
       result.current.actions.addInput();
     });
     act(() => {
@@ -350,6 +354,7 @@ describe("useWorkflowBuilder declaration grammar gating", () => {
 
     act(() => {
       result.current.actions.setTitle("Issue triage");
+      completeStep(result);
       result.current.actions.addInput();
     });
     // The name is the ONLY difference from the test above.
@@ -370,6 +375,7 @@ describe("useWorkflowBuilder declaration grammar gating", () => {
 
     act(() => {
       result.current.actions.setTitle("Issue triage");
+      completeStep(result);
       result.current.actions.addDocTemplate();
     });
     act(() => {
@@ -395,6 +401,7 @@ describe("useWorkflowBuilder default repository", () => {
 
     act(() => {
       result.current.actions.setTitle("Issue triage");
+      completeStep(result);
       result.current.actions.setDefaultRepoConfigId("repo-2");
     });
 
@@ -454,6 +461,7 @@ describe("useWorkflowBuilder default repository", () => {
     const fresh = renderBuilder({ availableRepoRootIds: null });
     act(() => {
       fresh.result.current.actions.setTitle("Issue triage");
+      completeStep(fresh.result);
     });
     expect(fresh.result.current.canSave).toBe(true);
   });
@@ -578,6 +586,14 @@ function renderBuilder(args: {
       : args.availableRepoRootIds,
     availableModelSelections: args.availableModelSelections ?? null,
   }));
+}
+
+/**
+ * A blank draft mints its step with no title and no prompt — both are wire
+ * required, so every test that reaches a write has to fill them in.
+ */
+function completeStep(result: ReturnType<typeof renderBuilder>["result"]) {
+  result.current.actions.updateNode("step-1", { title: "Diagnose", prompt: "Investigate." });
 }
 
 function savedRecord(): WorkflowDefinitionRecordV2 {
