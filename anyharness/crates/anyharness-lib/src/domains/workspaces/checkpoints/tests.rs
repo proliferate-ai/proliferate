@@ -7,46 +7,17 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use uuid::Uuid;
 
 use super::flags::checkpoint_capture_enabled;
+use super::test_support::EnvGuard;
 use super::{refs, CheckpointOrigin, CheckpointRecord, WorkspaceCheckpointService};
 use crate::adapters::git::operations::snapshot::WorkspaceSnapshot;
 use crate::app::AppState;
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::persistence::Db;
-
-/// `ANYHARNESS_CHECKPOINT_CAPTURE` is process-global; serialize every test that
-/// sets it so a concurrent test never observes the wrong flag state.
-static ENV_LOCK: Mutex<()> = Mutex::new(());
-
-/// `pub(super)` (rather than private) so `retention_tests` (a sibling test
-/// module split out to stay under the repo line cap) can share this guard.
-pub(super) struct EnvGuard<'a> {
-    _lock: std::sync::MutexGuard<'a, ()>,
-}
-
-impl EnvGuard<'_> {
-    pub(super) fn on() -> Self {
-        let lock = ENV_LOCK.lock().unwrap_or_else(|poison| poison.into_inner());
-        std::env::set_var("ANYHARNESS_CHECKPOINT_CAPTURE", "on");
-        EnvGuard { _lock: lock }
-    }
-
-    pub(super) fn off() -> Self {
-        let lock = ENV_LOCK.lock().unwrap_or_else(|poison| poison.into_inner());
-        std::env::remove_var("ANYHARNESS_CHECKPOINT_CAPTURE");
-        EnvGuard { _lock: lock }
-    }
-}
-
-impl Drop for EnvGuard<'_> {
-    fn drop(&mut self) {
-        std::env::remove_var("ANYHARNESS_CHECKPOINT_CAPTURE");
-    }
-}
 
 /// `pub(super)` so `retention_tests` (split out of this file to stay under
 /// the repo line cap) can share the harness; `repo_root` is `pub(super)` too

@@ -2,7 +2,11 @@
 //! under the repo line cap; the shared fork-state harness
 //! (`build_forkable_fork_state`) lives in `tests.rs`.
 
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
 use super::tests::build_forkable_fork_state;
+use crate::app::AppState;
 
 /// Positive Q-H4 linkage seam. The full targeted-fork path that stamps
 /// `checkpoint_id` from a resolved anchor boundary is undrivable in Tier 1 here
@@ -100,4 +104,150 @@ async fn checkpoint_linkage_stamps_the_boundary_checkpoint_id_onto_the_fork_oper
         "the fork operation row carries the boundary checkpoint id"
     );
     let _ = std::fs::remove_dir_all(&runtime_home);
+}
+
+/// Abort-policy cleanup regression (Lane H, `prompt.rs` site 1). Drives the real
+/// `send_prompt` path over the scripted ACP actor (no mock LLM): the prompt
+/// carries an image attachment that `prepare_prompt` persists to BOTH the store
+/// and the attachment storage, then the turn-start checkpoint capture fails
+/// because `target`'s workspace (`workspace-b`) is a plain directory, not a git
+/// repository (HollowCheckout). Under the `Abort` policy `send_prompt` returns
+/// `CheckpointCaptureFailed`, and the arm under test first calls
+/// `prepared.cleanup_attachments`. This test binds that call: deleting it leaves
+/// the persisted attachment row and its stored `content` file behind, and the
+/// two post-condition assertions below fail.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn abort_capture_failure_cleans_up_the_persisted_prompt_attachment() {
+    use anyharness_contract::v1::PromptInputBlock;
+    use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+
+    use super::prompt_message_actor_tests::{
+        build_state, install_scripted_agent_env, stop_target_actor, temp_runtime_home,
+        wait_for_actor_idle, write_scripted_agent,
+    };
+    use crate::app::test_support;
+    use crate::domains::workspaces::checkpoints::test_support::EnvGuard;
+    use crate::persistence::Db;
+
+    let _env_lock = test_support::lock_env();
+    let _bearer = test_support::set_bearer_token_env(None);
+    let _data_key = test_support::set_data_key_env(None);
+    // Capture ON, sharing the checkpoints suites' single process-global lock so
+    // this test never races their flag writes.
+    let _capture = EnvGuard::on();
+
+    let runtime_home = temp_runtime_home("checkpoint-abort-cleanup");
+    let script = write_scripted_agent(&runtime_home);
+    let (_program, _args) = install_scripted_agent_env(&script);
+    let state = build_state(
+        &runtime_home,
+        Db::open_in_memory().expect("in-memory db"),
+        true,
+    );
+
+    // Start the real target actor and let it settle idle, so the capture hook is
+    // actually reached: it is skipped while `handle.is_busy()`.
+    state
+        .session_runtime
+        .ensure_live_session("target", None)
+        .await
+        .expect("start target actor");
+    wait_for_actor_idle(&state).await;
+    // The persisted live config must advertise image capability before the
+    // attachment can clear `prepare_prompt`'s capability gate.
+    wait_for_image_capability(&state, "target").await;
+
+    // A tiny blob is fine: prepare only checks the `image/` MIME prefix, and the
+    // capture aborts before the agent ever sees the payload.
+    let image_data = BASE64.encode([0u8, 1, 2, 3]);
+    let blocks = vec![
+        PromptInputBlock::Text {
+            text: "prompt with an attachment".into(),
+        },
+        PromptInputBlock::Image {
+            data: Some(image_data),
+            attachment_id: None,
+            mime_type: "image/png".into(),
+            name: Some("shot.png".into()),
+            uri: None,
+            source: None,
+        },
+    ];
+
+    let error = state
+        .session_runtime
+        .send_prompt("target", blocks, Some("prompt-abort-1".into()))
+        .await
+        .expect_err("capture failure aborts the turn");
+    assert!(
+        matches!(error, super::SendPromptError::CheckpointCaptureFailed { .. }),
+        "the abort policy surfaces a checkpoint-capture failure, got: {error:?}"
+    );
+
+    // Store side: the just-persisted attachment row is gone.
+    let rows = state
+        .session_service
+        .store()
+        .list_prompt_attachments("target")
+        .expect("list prompt attachments");
+    assert!(
+        rows.is_empty(),
+        "the aborted turn's persisted attachment row must be cleaned up, got: {rows:?}"
+    );
+
+    // Storage side: no stored `content` file survives under the session dir.
+    let session_dir = runtime_home
+        .join("attachments")
+        .join("sessions")
+        .join("target");
+    let leftover = files_under(&session_dir);
+    assert!(
+        leftover.is_empty(),
+        "the aborted turn's stored attachment file must be cleaned up, got: {leftover:?}"
+    );
+
+    stop_target_actor(&state).await;
+    drop(state);
+    let _ = std::fs::remove_dir_all(&runtime_home);
+}
+
+/// Poll the persisted live config until it advertises image capability, matching
+/// the wait style of the actor suite's `wait_for_actor_idle`.
+async fn wait_for_image_capability(state: &AppState, session_id: &str) {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let ready = state
+                .session_service
+                .get_live_config_snapshot(session_id)
+                .ok()
+                .flatten()
+                .is_some_and(|snapshot| snapshot.prompt_capabilities.image);
+            if ready {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("target advertises image capability");
+}
+
+/// Every regular file beneath `dir` (recursively). Empty when `dir` is absent.
+fn files_under(dir: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(path) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&path) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let entry_path = entry.path();
+            if entry_path.is_dir() {
+                stack.push(entry_path);
+            } else {
+                found.push(entry_path);
+            }
+        }
+    }
+    found
 }

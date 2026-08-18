@@ -1,9 +1,10 @@
 //! Retention + orphan-reap scenario tests, split from `tests.rs` to stay
-//! under the repo line cap; the shared harness (`Harness`, `EnvGuard`, and
-//! their fixture helpers) lives in `tests.rs`.
+//! under the repo line cap; the shared `Harness` and its fixture helpers live
+//! in `tests.rs`, and the shared `EnvGuard` lives in `test_support.rs`.
 
 use super::flags::checkpoint_capture_enabled;
-use super::tests::{bare_snapshot, head_sha, make_tree, timestamp_days_ago, EnvGuard, Harness};
+use super::test_support::EnvGuard;
+use super::tests::{bare_snapshot, head_sha, make_tree, timestamp_days_ago, Harness};
 use super::{refs, CheckpointOrigin};
 
 /// 4. Flag-off = zero capture: retention leaves existing checkpoints untouched
