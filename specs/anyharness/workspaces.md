@@ -381,9 +381,13 @@ checkpoint ref as an archive one.
 The capture cadence is turn-start: a private hook on `SessionRuntime` runs at
 every prompt dispatch seam (`runtime/prompt.rs`) just before the actor command.
 A busy handle (the prompt will queue) skips capture, because a snapshot labelled
-as this boundary would be dishonest. Turns started by the actor draining its own
-queue get no checkpoint in this rung — the hook lives at the runtime seam, not in
-the actor's replay loop. On a capture failure the
+as this boundary would be dishonest. A queue-drain turn start IS a turn start
+under the frozen 4.7 cadence, so those turns are a disclosed conformance
+shortfall of this dispatch-seam hook: the hook lives at the runtime dispatch
+seam, not in the actor's queue-replay loop, so a prompt that queues and later
+drains into a turn is not checkpointed. Each such skip is counted by the
+`checkpoint.capture.skipped` (`reason="busy_will_queue"`) log line, which
+measures the shortfall for the observation phase. On a capture failure the
 `TURN_START_CAPTURE_FAILURE_POLICY` policy point decides: the working-lean choice
 is `Abort` (the prompt is refused with `CHECKPOINT_CAPTURE_FAILED`, retryable),
 with `Degrade` (warn and proceed uncheckpointed) built as the alternative arm.

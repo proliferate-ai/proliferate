@@ -490,9 +490,14 @@ impl SessionRuntime {
             return Ok(None);
         }
         if handle.is_busy() {
-            tracing::debug!(
+            // Coverage metric (observation phase): the prompt will queue, so the
+            // eventual queue-drain turn start is NOT covered by this dispatch-seam
+            // hook. Emit at info with stable field names so every uncovered turn
+            // start is countable under the flag.
+            tracing::info!(
+                reason = "busy_will_queue",
                 session_id = %session_id,
-                "checkpoint capture skipped: the session is busy and this prompt will queue"
+                "checkpoint.capture.skipped"
             );
             return Ok(None);
         }
@@ -546,6 +551,13 @@ impl SessionRuntime {
                 }
             }
             PromptAcceptance::Queued { .. } => {
+                // Coverage metric (observation phase): a checkpoint was captured
+                // for a boundary that turned out to queue, so it is discarded. Stable
+                // field names, counted alongside checkpoint.capture.skipped.
+                tracing::info!(
+                    checkpoint_id = %checkpoint_id,
+                    "checkpoint.capture.discarded_queued"
+                );
                 if let Err(error) = self.checkpoint_service.expire_and_delete(&checkpoint_id).await {
                     tracing::warn!(
                         checkpoint_id = %checkpoint_id,
