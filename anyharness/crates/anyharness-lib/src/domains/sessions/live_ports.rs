@@ -64,6 +64,10 @@ impl EventPersist for SessionStore {
         SessionStore::has_turn_started_event(self, session_id)
     }
 
+    fn has_prompt_added_event(&self, prompt: &PendingPromptRecord) -> anyhow::Result<bool> {
+        SessionStore::has_pending_prompt_added_event(self, prompt)
+    }
+
     fn append_raw_notification(
         &self,
         session_id: &str,

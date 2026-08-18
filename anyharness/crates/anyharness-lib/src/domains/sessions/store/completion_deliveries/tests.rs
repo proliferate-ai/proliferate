@@ -3,6 +3,9 @@ use crate::app::test_support;
 use crate::domains::sessions::model::SessionEventRecord;
 use crate::domains::sessions::store::SessionStore;
 
+#[path = "tests/wake_removal_intents.rs"]
+mod wake_removal_intents;
+
 pub(super) fn seed_link(db: &Db, relationship_closed: bool) {
     test_support::seed_workspace_with_repo_root(
         db,

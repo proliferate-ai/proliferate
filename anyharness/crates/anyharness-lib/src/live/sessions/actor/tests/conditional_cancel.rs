@@ -53,6 +53,7 @@ use crate::persistence::Db;
 mod completion_wake;
 mod completion_wake_outcomes;
 mod product_context;
+mod queue_drain;
 mod terminal_fence;
 mod unload;
 

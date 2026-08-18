@@ -1,8 +1,143 @@
 use rusqlite::{params, OptionalExtension};
 
+use super::super::events::completion_wake_removal_key_for_identity;
+use super::enqueue::RetiredCompletionWake;
 use super::{map_delivery, CompletionDeliveryRecord, CompletionDeliveryStore};
 
 impl CompletionDeliveryStore {
+    pub(crate) fn claim_next_pending_wake_removal(
+        &self,
+        now: &str,
+        lease_expires_at: &str,
+        lease_token: &str,
+    ) -> anyhow::Result<Option<RetiredCompletionWake>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "UPDATE session_link_completion_deliveries
+                 SET lease_token = ?2, lease_expires_at = ?3
+                 WHERE delivery_id IN (
+                     SELECT delivery_id FROM session_link_completion_deliveries
+                     WHERE state = 'delivered'
+                       AND retired_prompt_seq IS NOT NULL
+                       AND removal_event_persisted_at IS NULL
+                       AND next_attempt_at <= ?1
+                       AND (lease_token IS NULL OR lease_expires_at IS NULL
+                            OR lease_expires_at <= ?1)
+                     ORDER BY next_attempt_at ASC, updated_at ASC, delivery_id ASC
+                     LIMIT 1
+                 )
+                 RETURNING delivery_id, parent_session_id,
+                           retired_prompt_seq, retired_prompt_id",
+            )?;
+            stmt.query_row(
+                params![now, lease_token, lease_expires_at],
+                map_retired_wake,
+            )
+            .optional()
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn list_pending_wake_removals(
+        &self,
+        limit: usize,
+    ) -> anyhow::Result<Vec<RetiredCompletionWake>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT delivery_id, parent_session_id, retired_prompt_seq, retired_prompt_id
+                 FROM session_link_completion_deliveries
+                 WHERE state = 'delivered'
+                   AND retired_prompt_seq IS NOT NULL
+                   AND removal_event_persisted_at IS NULL
+                 ORDER BY next_attempt_at ASC, updated_at ASC, delivery_id ASC
+                 LIMIT ?1",
+            )?;
+            let rows = stmt.query_map([limit as i64], map_retired_wake)?.collect();
+            rows
+        })
+    }
+
+    pub(crate) fn has_wake_removal_event(
+        &self,
+        intent: &RetiredCompletionWake,
+    ) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            let key = completion_wake_removal_key_for_identity(
+                &intent.parent_session_id,
+                intent.parent_prompt_seq,
+                intent.prompt_id.as_deref(),
+            )?;
+            conn.query_row(
+                "SELECT EXISTS(
+                    SELECT 1 FROM session_events
+                    WHERE completion_wake_removal_key = ?1
+                 )",
+                [key],
+                |row| row.get(0),
+            )
+        })
+    }
+
+    pub(crate) fn acknowledge_wake_removal(
+        &self,
+        intent: &RetiredCompletionWake,
+        lease_token: &str,
+        persisted_at: &str,
+    ) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            let changed = conn.execute(
+                "UPDATE session_link_completion_deliveries
+                 SET removal_event_persisted_at = ?6, updated_at = ?6,
+                     lease_token = NULL, lease_expires_at = NULL
+                 WHERE delivery_id = ?1 AND parent_session_id = ?2
+                   AND retired_prompt_seq = ?3
+                   AND retired_prompt_id IS ?4
+                   AND lease_token = ?5
+                   AND removal_event_persisted_at IS NULL",
+                params![
+                    intent.delivery_id,
+                    intent.parent_session_id,
+                    intent.parent_prompt_seq,
+                    intent.prompt_id,
+                    lease_token,
+                    persisted_at,
+                ],
+            )?;
+            Ok(changed == 1)
+        })
+    }
+
+    pub(crate) fn release_wake_removal_claim(
+        &self,
+        intent: &RetiredCompletionWake,
+        lease_token: &str,
+        now: &str,
+        next_attempt_at: &str,
+    ) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            let changed = conn.execute(
+                "UPDATE session_link_completion_deliveries
+                 SET lease_token = NULL, lease_expires_at = NULL,
+                     next_attempt_at = ?6, updated_at = ?5
+                 WHERE delivery_id = ?1 AND parent_session_id = ?2
+                   AND retired_prompt_seq = ?3
+                   AND retired_prompt_id IS ?4
+                   AND lease_token = ?7
+                   AND removal_event_persisted_at IS NULL",
+                params![
+                    intent.delivery_id,
+                    intent.parent_session_id,
+                    intent.parent_prompt_seq,
+                    intent.prompt_id,
+                    now,
+                    next_attempt_at,
+                    lease_token,
+                ],
+            )?;
+            Ok(changed == 1)
+        })
+    }
+
     pub fn list_for_parent_sessions(
         &self,
         parent_session_ids: &[String],
@@ -15,7 +150,12 @@ impl CompletionDeliveryStore {
             let mut stmt = conn.prepare(&format!(
                 "SELECT * FROM session_link_completion_deliveries
                  WHERE parent_session_id IN ({placeholders})
-                   AND state IN ('pending', 'enqueued')
+                   AND (
+                       state IN ('pending', 'enqueued')
+                       OR (state = 'delivered'
+                           AND retired_prompt_seq IS NOT NULL
+                           AND removal_event_persisted_at IS NULL)
+                   )
                  ORDER BY created_at ASC, delivery_id ASC"
             ))?;
             let rows = stmt
@@ -37,10 +177,12 @@ impl CompletionDeliveryStore {
                     child_last_event_seq, outcome, assistant_text, notification_text,
                     state, parent_prompt_seq, parent_turn_id, attempt_count,
                     next_attempt_at, lease_token, lease_expires_at, last_error_code,
-                    created_at, updated_at, enqueued_at, delivered_at
+                    created_at, updated_at, enqueued_at, delivered_at,
+                    retired_prompt_seq, retired_prompt_id, removal_event_persisted_at
                  ) VALUES (
                     ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
-                    ?13, ?14, ?15, ?16, ?17, NULL, NULL, ?18, ?19, ?20, ?21, ?22
+                    ?13, ?14, ?15, ?16, ?17, NULL, NULL, ?18, ?19, ?20, ?21, ?22,
+                    ?23, ?24, NULL
                  )",
                 params![
                     record.delivery_id,
@@ -65,6 +207,8 @@ impl CompletionDeliveryStore {
                     record.updated_at,
                     record.enqueued_at,
                     record.delivered_at,
+                    record.retired_prompt_seq,
+                    record.retired_prompt_id,
                 ],
             )?;
             Ok(())
@@ -171,6 +315,15 @@ impl CompletionDeliveryStore {
             rows
         })
     }
+}
+
+fn map_retired_wake(row: &rusqlite::Row<'_>) -> rusqlite::Result<RetiredCompletionWake> {
+    Ok(RetiredCompletionWake {
+        delivery_id: row.get(0)?,
+        parent_session_id: row.get(1)?,
+        parent_prompt_seq: row.get(2)?,
+        prompt_id: row.get(3)?,
+    })
 }
 
 pub(crate) fn delete_parent_deliveries_in_tx(

@@ -1,13 +1,21 @@
 use rusqlite::{params, OptionalExtension};
 
 use super::SessionStore;
-use crate::domains::sessions::model::{PendingPromptRecord, PendingPromptReorderOutcome};
+use crate::domains::sessions::model::{
+    PendingPromptRecord, PendingPromptReorderOutcome, MAX_PENDING_PROMPT_SEQ,
+};
 use crate::domains::sessions::prompt::PromptPayload;
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum PendingPromptWriteError {
     #[error("canonical completion wake pending prompt is protected")]
     Protected,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("pending-prompt sequence space exhausted for session {session_id}")]
+struct PendingPromptSequenceExhausted {
+    session_id: String,
 }
 
 impl SessionStore {
@@ -34,17 +42,7 @@ impl SessionStore {
         let blocks_json = payload.blocks_json()?;
         let provenance_json = payload.provenance_json()?;
         self.db.with_tx(|tx| {
-            tx.execute(
-                "UPDATE sessions
-                 SET pending_prompt_seq_cursor = pending_prompt_seq_cursor + 1
-                 WHERE id = ?1",
-                [session_id],
-            )?;
-            let next_seq: i64 = tx.query_row(
-                "SELECT pending_prompt_seq_cursor FROM sessions WHERE id = ?1",
-                [session_id],
-                |row| row.get(0),
-            )?;
+            let next_seq = allocate_pending_prompt_seq(tx, session_id)?;
             let next_position: i64 = tx.query_row(
                 "SELECT COALESCE(MAX(queue_position), 0) + 1
                  FROM session_pending_prompts WHERE session_id = ?1",
@@ -306,6 +304,39 @@ impl SessionStore {
             Ok(PendingPromptReorderOutcome::Reordered(records))
         })
     }
+}
+
+pub(super) fn allocate_pending_prompt_seq(
+    conn: &rusqlite::Connection,
+    session_id: &str,
+) -> rusqlite::Result<i64> {
+    let next_seq = conn
+        .query_row(
+            "UPDATE sessions
+             SET pending_prompt_seq_cursor = pending_prompt_seq_cursor + 1
+             WHERE id = ?1 AND pending_prompt_seq_cursor < ?2
+             RETURNING pending_prompt_seq_cursor",
+            params![session_id, MAX_PENDING_PROMPT_SEQ],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if let Some(next_seq) = next_seq {
+        return Ok(next_seq);
+    }
+
+    let session_exists: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?1)",
+        [session_id],
+        |row| row.get(0),
+    )?;
+    if !session_exists {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Err(rusqlite::Error::ToSqlConversionFailure(Box::new(
+        PendingPromptSequenceExhausted {
+            session_id: session_id.to_string(),
+        },
+    )))
 }
 
 fn validate_pending_prompt_order(existing: &[i64], requested: &[i64]) -> Result<(), String> {

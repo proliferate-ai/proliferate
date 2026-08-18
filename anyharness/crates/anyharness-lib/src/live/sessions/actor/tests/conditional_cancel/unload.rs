@@ -44,6 +44,13 @@ impl crate::live::sessions::model::EventPersist for FailingTerminalPersist {
         self.store.has_turn_started_event(session_id)
     }
 
+    fn has_prompt_added_event(
+        &self,
+        prompt: &crate::domains::sessions::model::PendingPromptRecord,
+    ) -> anyhow::Result<bool> {
+        self.store.has_pending_prompt_added_event(prompt)
+    }
+
     fn append_raw_notification(
         &self,
         session_id: &str,

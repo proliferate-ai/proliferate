@@ -5,7 +5,7 @@ use anyharness_contract::v1::{
 };
 
 use crate::domains::sessions::model::{
-    PendingPromptReorderOutcome, PromptAttachmentRecord, PromptAttachmentState,
+    PendingPromptRecord, PendingPromptReorderOutcome, PromptAttachmentRecord, PromptAttachmentState,
 };
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::live::sessions::actor::command::{
@@ -16,6 +16,11 @@ use crate::live::sessions::model::AttachmentSource;
 use crate::live::sessions::queue_durable::{
     PendingPromptDeleteOutcome, PendingPromptUpdateOutcome,
 };
+
+pub(in crate::live::sessions::actor) enum PrequeuedPromptVisibility {
+    Present(PendingPromptRecord),
+    Missing,
+}
 
 impl SessionActor {
     pub(in crate::live::sessions::actor) async fn handle_busy_prompt_queue(
@@ -30,7 +35,10 @@ impl SessionActor {
             ));
         }
         if let Some(seq) = from_queue_seq {
-            self.emit_prequeued_pending_prompt_added(seq).await;
+            // A marker is only an activation hint. Its row may have drained
+            // before the actor receives it, so either visibility outcome is
+            // an accepted marker; only inspection/persistence errors fail it.
+            let _visibility = self.ensure_prequeued_pending_prompt_added(seq).await?;
             return Ok(PromptAcceptance::Queued { seq });
         }
 
@@ -65,26 +73,18 @@ impl SessionActor {
         }
     }
 
-    pub(in crate::live::sessions::actor) async fn emit_prequeued_pending_prompt_added(
+    pub(in crate::live::sessions::actor) async fn ensure_prequeued_pending_prompt_added(
         &self,
         seq: i64,
-    ) {
+    ) -> Result<PrequeuedPromptVisibility, PromptAcceptError> {
         if !self.event_mutations_admitted().await {
-            return;
+            return Err(PromptAcceptError::EnqueueFailed(
+                "terminal transaction unresolved".to_string(),
+            ));
         }
-        match self.caps.queue.find_pending_prompt(&self.session_id, seq) {
-            Ok(Some(record)) => {
-                let mut sink = self.event_sink.lock().await;
-                sink.pending_prompt_added(PendingPromptAddedPayload {
-                    seq: record.seq,
-                    prompt_id: record.prompt_id.clone(),
-                    text: record.text.clone(),
-                    content_parts: record.prompt_payload().content_parts(),
-                    queued_at: record.queued_at.clone(),
-                    prompt_provenance: record.prompt_payload().public_provenance(),
-                });
-            }
-            Ok(None) => {}
+        let record = match self.caps.queue.find_pending_prompt(&self.session_id, seq) {
+            Ok(Some(record)) => record,
+            Ok(None) => return Ok(PrequeuedPromptVisibility::Missing),
             Err(error) => {
                 tracing::warn!(
                     session_id = %self.session_id,
@@ -92,8 +92,33 @@ impl SessionActor {
                     error = %error,
                     "failed to load prequeued prompt for pending prompt event",
                 );
+                return Err(PromptAcceptError::EnqueueFailed(error.to_string()));
+            }
+        };
+        match self.caps.events.has_prompt_added_event(&record) {
+            Ok(true) => return Ok(PrequeuedPromptVisibility::Present(record)),
+            Ok(false) => {}
+            Err(error) => {
+                tracing::warn!(
+                    session_id = %self.session_id,
+                    seq,
+                    error = %error,
+                    "failed to inspect prequeued prompt visibility event",
+                );
+                return Err(PromptAcceptError::EnqueueFailed(error.to_string()));
             }
         }
+        let mut sink = self.event_sink.lock().await;
+        sink.pending_prompt_added_strict(PendingPromptAddedPayload {
+            seq: record.seq,
+            prompt_id: record.prompt_id.clone(),
+            text: record.text.clone(),
+            content_parts: record.prompt_payload().content_parts(),
+            queued_at: record.queued_at.clone(),
+            prompt_provenance: record.prompt_payload().public_provenance(),
+        })
+        .map_err(|error| PromptAcceptError::EnqueueFailed(error.to_string()))?;
+        Ok(PrequeuedPromptVisibility::Present(record))
     }
 
     pub(in crate::live::sessions::actor) fn next_pending_prompt_for_drain(

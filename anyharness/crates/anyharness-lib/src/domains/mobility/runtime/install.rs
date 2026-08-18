@@ -20,8 +20,9 @@ use crate::domains::mobility::model::{
     ImportedWorkspaceArchiveSummary, WorkspaceMobilityArchiveData,
 };
 use crate::domains::mobility::service::{
-    map_access_error, validate_archive_size, validate_clean_repo_for_mobility,
-    validate_delegated_archive_graph, write_workspace_file, MobilityError,
+    map_access_error, session_pending_prompt_cursor_lower_bound, validate_archive_size,
+    validate_clean_repo_for_mobility, validate_delegated_archive_graph, write_workspace_file,
+    MobilityError,
 };
 use crate::domains::workspaces::model::WorkspaceRecord;
 
@@ -108,9 +109,12 @@ impl MobilityRuntime {
                     .relocate_session_for_mobility(&session)?;
                 relocated_session_count += 1;
             } else {
+                let pending_prompt_seq_cursor =
+                    session_pending_prompt_cursor_lower_bound(archive, bundle)?;
                 self.session_service.import_session_bundle(
                     &workspace.id,
                     &session,
+                    pending_prompt_seq_cursor,
                     bundle.live_config_snapshot.as_ref(),
                     &bundle.pending_config_changes,
                     &bundle.pending_prompts,

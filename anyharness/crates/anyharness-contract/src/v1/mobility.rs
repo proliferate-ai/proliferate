@@ -163,6 +163,8 @@ pub struct WorkspaceMobilityFileEntry {
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceMobilitySessionBundle {
     pub session: MobilitySessionRecord,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_prompt_seq_cursor: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub live_config_snapshot: Option<MobilitySessionLiveConfigSnapshotRecord>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -287,6 +289,10 @@ pub struct MobilitySessionLinkCompletionDeliveryRecord {
     pub parent_prompt_seq: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_turn_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retired_prompt_seq: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retired_prompt_id: Option<String>,
     #[serde(default)]
     pub attempt_count: i64,
     pub next_attempt_at: String,

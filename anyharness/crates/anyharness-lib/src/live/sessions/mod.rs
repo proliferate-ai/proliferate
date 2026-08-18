@@ -9,6 +9,7 @@ pub mod product_context;
 pub mod queue_durable;
 mod rendezvous;
 mod replay;
+mod runtime_events;
 mod sink;
 pub mod subagent_wake;
 

@@ -315,6 +315,8 @@ mod tests {
             state: CompletionDeliveryState::Pending,
             parent_prompt_seq: None,
             parent_turn_id: None,
+            retired_prompt_seq: None,
+            retired_prompt_id: None,
             attempt_count: 0,
             next_attempt_at: "2026-08-11T00:00:00Z".into(),
             lease_token: None,

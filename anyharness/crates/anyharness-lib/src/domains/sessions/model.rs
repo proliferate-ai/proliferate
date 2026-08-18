@@ -298,6 +298,8 @@ pub struct PendingConfigChangeRecord {
     pub queued_at: String,
 }
 
+pub(crate) const MAX_PENDING_PROMPT_SEQ: i64 = i64::MAX - 1;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingPromptRecord {
     pub session_id: String,

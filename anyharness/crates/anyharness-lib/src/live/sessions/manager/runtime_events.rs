@@ -5,6 +5,7 @@ use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionError, RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
 use crate::live::sessions::model::EventPersist;
+use crate::live::sessions::runtime_events::into_session_event;
 
 impl LiveSessionManager {
     /// Inject a runtime-owned event into a session.
@@ -66,7 +67,7 @@ fn append_offline_runtime_event(
     events
         .append_event_with_next_seq(
             session_id,
-            event.into_session_event(),
+            into_session_event(event),
             touch_session_activity,
         )
         .map_err(|error| RuntimeEventInjectionError::PersistenceFailed(error.to_string()))

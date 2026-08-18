@@ -23,6 +23,8 @@ const CHILD_ID: &str = "child-closed-repair";
 mod pagination;
 #[path = "tests/restart_recovery.rs"]
 mod restart_recovery;
+#[path = "tests/wake_removal_recovery.rs"]
+mod wake_removal_recovery;
 
 #[test]
 fn enqueued_backoff_increases_and_caps_at_sixty_seconds() {
@@ -60,6 +62,8 @@ fn delivery_timing_uses_enqueue_time_for_queue_age() {
         state: CompletionDeliveryState::Enqueued,
         parent_prompt_seq: Some(1),
         parent_turn_id: None,
+        retired_prompt_seq: None,
+        retired_prompt_id: None,
         attempt_count: 0,
         next_attempt_at: "2026-08-13T00:00:00Z".into(),
         lease_token: None,

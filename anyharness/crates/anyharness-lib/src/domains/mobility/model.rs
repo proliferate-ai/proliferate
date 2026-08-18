@@ -48,6 +48,7 @@ pub struct WorkspaceMobilityExportOptions {
 #[derive(Debug, Clone)]
 pub struct WorkspaceMobilitySessionBundleData {
     pub session: SessionRecord,
+    pub pending_prompt_seq_cursor: Option<i64>,
     pub live_config_snapshot: Option<SessionLiveConfigSnapshotRecord>,
     pub pending_config_changes: Vec<PendingConfigChangeRecord>,
     pub pending_prompts: Vec<PendingPromptRecord>,

@@ -1,6 +1,8 @@
 use super::*;
+use rusqlite::params;
+
 use crate::domains::sessions::model::{
-    PendingPromptReorderOutcome, SessionLiveConfigSnapshotRecord,
+    PendingPromptReorderOutcome, SessionLiveConfigSnapshotRecord, MAX_PENDING_PROMPT_SEQ,
 };
 use crate::domains::sessions::prompt::{provenance::PromptProvenance, PromptPayload};
 
@@ -274,4 +276,90 @@ fn pending_prompt_sequence_is_not_reused_after_queue_becomes_empty() {
         .expect("insert replacement prompt");
     assert_eq!(replacement.seq, 2);
     assert_ne!(replacement.seq, old.seq);
+}
+
+#[test]
+fn pending_prompt_allocator_exhausts_before_the_reserved_integer_ceiling() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+    let store = SessionStore::new(db.clone());
+    store.insert(&session_record()).expect("insert session");
+    db.with_conn(|conn| {
+        conn.execute(
+            "UPDATE sessions SET pending_prompt_seq_cursor = ?2 WHERE id = ?1",
+            params!["session-1", MAX_PENDING_PROMPT_SEQ - 1],
+        )?;
+        Ok(())
+    })
+    .expect("seed near-ceiling cursor");
+
+    let last = store
+        .insert_pending_prompt("session-1", "last allocatable", None)
+        .expect("allocate max usable sequence");
+    assert_eq!(last.seq, MAX_PENDING_PROMPT_SEQ);
+
+    let exhausted = store
+        .insert_pending_prompt("session-1", "must not be stored", None)
+        .expect_err("max usable cursor is exhausted");
+    assert!(format!("{exhausted:#}").contains("sequence space exhausted"));
+    let (cursor, row_count, cursor_type): (i64, i64, String) = db
+        .with_conn(|conn| {
+            Ok((
+                conn.query_row(
+                    "SELECT pending_prompt_seq_cursor FROM sessions WHERE id = ?1",
+                    ["session-1"],
+                    |row| row.get(0),
+                )?,
+                conn.query_row(
+                    "SELECT COUNT(*) FROM session_pending_prompts WHERE session_id = ?1",
+                    ["session-1"],
+                    |row| row.get(0),
+                )?,
+                conn.query_row(
+                    "SELECT typeof(pending_prompt_seq_cursor) FROM sessions WHERE id = ?1",
+                    ["session-1"],
+                    |row| row.get(0),
+                )?,
+            ))
+        })
+        .expect("read exhausted queue");
+    assert_eq!(
+        (cursor, row_count, cursor_type.as_str()),
+        (MAX_PENDING_PROMPT_SEQ, 1, "integer"),
+    );
+
+    db.with_conn(|conn| {
+        conn.execute(
+            "UPDATE sessions SET pending_prompt_seq_cursor = ?2 WHERE id = ?1",
+            params!["session-1", i64::MAX],
+        )?;
+        Ok(())
+    })
+    .expect("seed corrupt ceiling cursor");
+    let corrupt = store
+        .insert_pending_prompt("session-1", "must still not be stored", None)
+        .expect_err("reserved ceiling cursor is exhausted");
+    assert!(format!("{corrupt:#}").contains("sequence space exhausted"));
+    let persisted: (i64, i64, String) = db
+        .with_conn(|conn| {
+            Ok((
+                conn.query_row(
+                    "SELECT pending_prompt_seq_cursor FROM sessions WHERE id = ?1",
+                    ["session-1"],
+                    |row| row.get(0),
+                )?,
+                conn.query_row(
+                    "SELECT COUNT(*) FROM session_pending_prompts WHERE session_id = ?1",
+                    ["session-1"],
+                    |row| row.get(0),
+                )?,
+                conn.query_row(
+                    "SELECT typeof(pending_prompt_seq_cursor) FROM sessions WHERE id = ?1",
+                    ["session-1"],
+                    |row| row.get(0),
+                )?,
+            ))
+        })
+        .expect("read corrupt queue");
+    assert_eq!(persisted, (i64::MAX, 1, "integer".to_string()));
 }

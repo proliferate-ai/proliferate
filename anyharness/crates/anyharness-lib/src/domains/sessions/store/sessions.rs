@@ -368,6 +368,7 @@ impl SessionStore {
     pub fn import_bundle(
         &self,
         session: &SessionRecord,
+        pending_prompt_seq_cursor: i64,
         live_config_snapshot: Option<&SessionLiveConfigSnapshotRecord>,
         pending_config_changes: &[PendingConfigChangeRecord],
         pending_prompts: &[PendingPromptRecord],
@@ -377,6 +378,11 @@ impl SessionStore {
     ) -> anyhow::Result<()> {
         self.db.with_tx(|conn| {
             insert_session_row(conn, session)?;
+            super::mobility::restore_pending_prompt_seq_cursor(
+                conn,
+                &session.id,
+                pending_prompt_seq_cursor,
+            )?;
             if let Some(snapshot) = live_config_snapshot {
                 upsert_live_config_snapshot_row(conn, snapshot)?;
             }
