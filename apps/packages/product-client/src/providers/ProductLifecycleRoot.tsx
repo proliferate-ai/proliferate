@@ -87,6 +87,22 @@ const AuthenticatedBackgroundLifecycles = lazy(() =>
   })),
 )
 
+// The workspace-switch shortcuts (Cmd+1..9, Cmd+Opt+Arrow) were the only
+// unconditional (pre-auth) callers of useSidebarShortcutTargets and the
+// held-key traversal cursor controller/store. Same treatment as the owners
+// above: authenticated-only + lazy, so the login first-load chunk never
+// parses the sidebar-shortcut-target projection or the cursor machinery
+// (login runtime JS budget). The shortcuts were already no-ops signed out (no
+// workspace to select). This does NOT gate useWorkspaceNavigationWorkflow's
+// workspace-selection / agent-catalog / session-creation graph, which remains
+// reachable from /login via useAppNavigationCommandActions and
+// useAppNewWorkspaceCommandActions (see use-app-shortcuts.ts).
+const AuthenticatedWorkspaceSwitchShortcuts = lazy(() =>
+  import("#product/providers/AuthenticatedWorkspaceSwitchShortcuts").then((m) => ({
+    default: m.AuthenticatedWorkspaceSwitchShortcuts,
+  })),
+)
+
 const APP_RUNTIME_RENDER_MILESTONES = new Set([1, 2, 3, 5, 10, 25, 50, 100, 250])
 
 let appRuntimeRenderCount = 0
@@ -271,6 +287,11 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
       {authStatus === "authenticated" && (
         <Suspense fallback={null}>
           <AuthenticatedBackgroundLifecycles />
+        </Suspense>
+      )}
+      {authStatus === "authenticated" && (
+        <Suspense fallback={null}>
+          <AuthenticatedWorkspaceSwitchShortcuts />
         </Suspense>
       )}
       {children}
