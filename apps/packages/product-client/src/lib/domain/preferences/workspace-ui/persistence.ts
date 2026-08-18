@@ -80,6 +80,7 @@ export function getChangedWorkspaceUiStateKeys(
     "pinnedWorkspaceIds",
     "workspacePinIntentReceiptByTarget",
     "workspacePinLocalBarrierById",
+    "workspacePinHistoryObservationById",
     "hiddenRepoRootIds",
     "collapsedRepoGroups",
     "showArchived",
@@ -118,5 +119,6 @@ export function isNonPersistedWorkspaceUiStateKey(key: string): boolean {
   return key === "archivingChatSessionIdsByWorkspace"
     || key === "pendingChatActivationByWorkspace"
     || key === "shellActivationEpochByWorkspace"
-    || key === "urgentHighlightedChatSessionByWorkspace";
+    || key === "urgentHighlightedChatSessionByWorkspace"
+    || key === "workspacePinHistoryObservationById";
 }

@@ -112,12 +112,16 @@ expands logical workspace aliases and applies the request to its device-local
 `workspace_ui` preferences. The authenticated reconciliation owner buffers at
 most 128 unresolved startup events. Persisted sets retain at most 256 latest
 request receipts, keyed by runtime, session, and logical target, and 256 latest
-renderer-local ordering barriers, keyed by logical workspace identity. Manual
-choices create a barrier. History observations under one and live observations
-captured before it are acknowledged without mutating the preference; a newly
-observed live request may supersede and advance it. Sequence comparison remains
-scoped to one session and target, while cross-session requests retain renderer
-observation order.
+renderer-local manual/live ordering barriers, keyed by logical workspace
+identity. The current renderer also retains at most 256 resolved-history
+observation marks so a delayed older history target cannot overwrite later
+cross-session history after alias resolution; those marks reset on hydration
+because renderer sequence numbers are not comparable across restarts. Manual
+choices create a persisted barrier. History observations under one and live
+observations captured before it are acknowledged without mutating the
+preference; a newly observed live request may supersede and advance it.
+Sequence comparison remains scoped to one session and target, while
+cross-session requests retain renderer observation order.
 Every client that observes the event reconciles it against its local ordering
 barriers; the tool does not promise cross-device synchronization.
 

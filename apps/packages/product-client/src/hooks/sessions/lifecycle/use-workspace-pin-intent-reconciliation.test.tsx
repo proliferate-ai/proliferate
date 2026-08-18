@@ -36,6 +36,7 @@ describe("useWorkspacePinIntentReconciliation", () => {
     useWorkspaceUiStore.setState({
       ...WORKSPACE_UI_DEFAULTS,
       _hydrated: false,
+      workspacePinHistoryObservationById: {},
     });
   });
 
@@ -158,6 +159,48 @@ describe("useWorkspacePinIntentReconciliation", () => {
     expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual(["logical-workspace"]);
   });
 
+  it("does not let older cross-session history overwrite later history after alias resolution", async () => {
+    projection.logicalWorkspaces = [logicalWorkspace(["workspace-newer"])];
+    projection.isLoading = false;
+    useWorkspaceUiStore.setState({
+      _hydrated: true,
+      pinnedWorkspaceIds: ["logical-workspace"],
+    });
+    const rendered = renderHook(() => useWorkspacePinIntentReconciliationLifecycle());
+
+    act(() => {
+      dispatchWorkspacePinIntentEnvelopes([pinIntent({
+        sessionId: "session-a",
+        requestId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        workspaceId: "workspace-older",
+        pinned: true,
+        seq: 1,
+      })], "history");
+      dispatchWorkspacePinIntentEnvelopes([pinIntent({
+        sessionId: "session-b",
+        requestId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        workspaceId: "workspace-newer",
+        pinned: false,
+        seq: 1,
+      })], "history");
+    });
+
+    expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual([]);
+    expect(Object.keys(useWorkspaceUiStore.getState().workspacePinIntentReceiptByTarget))
+      .toHaveLength(1);
+
+    projection.logicalWorkspaces = [
+      logicalWorkspace(["workspace-newer", "workspace-older"]),
+    ];
+    rendered.rerender();
+
+    await waitFor(() => {
+      expect(Object.keys(useWorkspaceUiStore.getState().workspacePinIntentReceiptByTarget))
+        .toHaveLength(2);
+    });
+    expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual([]);
+  });
+
   it("keeps history provenance when a live duplicate arrives before resolution", async () => {
     projection.isLoading = false;
     useWorkspaceUiStore.setState({
@@ -203,28 +246,35 @@ describe("useWorkspacePinIntentReconciliation", () => {
   });
 });
 
-function logicalWorkspace(): LogicalWorkspace {
+function logicalWorkspace(aliasIds: string[] = ["workspace-1"]): LogicalWorkspace {
   const workspace = makeLocalLogicalWorkspace({
     id: "logical-workspace",
     repoKey: "/tmp/repo",
     repoName: "repo",
   });
-  workspace.aliasIds = ["workspace-1"];
+  workspace.aliasIds = aliasIds;
   return workspace;
 }
 
-function pinIntent(): SessionEventEnvelope {
+function pinIntent(args: {
+  sessionId?: string;
+  requestId?: string;
+  workspaceId?: string;
+  pinned?: boolean;
+  seq?: number;
+} = {}): SessionEventEnvelope {
+  const sessionId = args.sessionId ?? "session-1";
   return {
-    sessionId: "session-1",
-    seq: 2,
+    sessionId,
+    seq: args.seq ?? 2,
     timestamp: "2026-08-17T00:00:02Z",
     event: {
       type: "workspace_pin_intent",
-      requestId: "11111111-1111-4111-8111-111111111111",
+      requestId: args.requestId ?? "11111111-1111-4111-8111-111111111111",
       runtimeId: "runtime-1",
-      sourceSessionId: "session-1",
-      workspaceId: "workspace-1",
-      pinned: true,
+      sourceSessionId: sessionId,
+      workspaceId: args.workspaceId ?? "workspace-1",
+      pinned: args.pinned ?? true,
     },
   };
 }

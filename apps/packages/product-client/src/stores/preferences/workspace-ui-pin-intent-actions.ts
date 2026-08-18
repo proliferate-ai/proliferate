@@ -9,6 +9,10 @@ import type {
 import {
   recordBoundedWorkspacePinLocalBarriers,
 } from "#product/stores/preferences/workspace-ui-pin-local-barriers";
+import {
+  isSupersededByWorkspacePinHistoryObservation,
+  recordBoundedWorkspacePinHistoryObservations,
+} from "#product/stores/preferences/workspace-ui-pin-history-observations";
 
 type WorkspaceUiPinIntentActions = Pick<
   WorkspaceUiState,
@@ -24,8 +28,26 @@ export function createWorkspaceUiPinIntentActions(
         let pinnedWorkspaceIds = state.pinnedWorkspaceIds;
         let receiptByTarget = state.workspacePinIntentReceiptByTarget;
         let localBarrierById = state.workspacePinLocalBarrierById;
+        let historyObservationById = state.workspacePinHistoryObservationById;
         let didRecord = false;
         for (const intent of intents) {
+          const workspaceIds = [intent.pinId, ...intent.relatedIds];
+          const isSupersededHistory = intent.provenance === "history"
+            && isSupersededByWorkspacePinHistoryObservation(
+              historyObservationById,
+              workspaceIds,
+              intent.observedAt,
+            );
+          if (intent.provenance === "history") {
+            // A receipt may already exist after hydration. The observation is
+            // still authoritative for this renderer's cross-session order.
+            historyObservationById = recordBoundedWorkspacePinHistoryObservations(
+              historyObservationById,
+              workspaceIds,
+              intent.observedAt,
+            );
+            didRecord = true;
+          }
           const targetKey = workspacePinIntentTargetKey(
             intent.runtimeId,
             intent.sessionId,
@@ -41,8 +63,7 @@ export function createWorkspaceUiPinIntentActions(
           ) {
             continue;
           }
-          const workspaceIds = [intent.pinId, ...intent.relatedIds];
-          const isBlocked = isBlockedByLocalBarrier(
+          const isBlocked = isSupersededHistory || isBlockedByLocalBarrier(
             intent,
             localBarrierById,
             workspaceIds,
@@ -77,6 +98,7 @@ export function createWorkspaceUiPinIntentActions(
           pinnedWorkspaceIds,
           workspacePinIntentReceiptByTarget: receiptByTarget,
           workspacePinLocalBarrierById: localBarrierById,
+          workspacePinHistoryObservationById: historyObservationById,
         };
       });
     },

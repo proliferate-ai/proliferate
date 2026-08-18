@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use anyharness_contract::v1::{
     SessionEvent, SessionEventEnvelope, SessionExecutionPhase, SessionInfoUpdatePayload,
@@ -23,6 +22,8 @@ use crate::live::sessions::model::{
     LaunchEnv, SessionHooks, SessionLaunch, SessionStartupStrategy, SystemPromptAppends,
 };
 use crate::persistence::Db;
+
+mod startup_ownership;
 
 fn resolved_agent(kind: AgentKind) -> ResolvedAgent {
     let descriptor = built_in_registry()

@@ -1,6 +1,9 @@
 import type { SetStateAction } from "react";
 import type { ActivitySubagentWire } from "#product/domain/activity/subagent";
-import type { PersistedWorkspaceUiState } from "#product/lib/domain/preferences/workspace-ui/model";
+import type {
+  PersistedWorkspaceUiState,
+  WorkspaceUiChangeTrackedState,
+} from "#product/lib/domain/preferences/workspace-ui/model";
 import type { PersistedWorkspaceGitStatusSnapshot } from "#product/lib/domain/workspaces/git-status/workspace-git-status-model";
 import type { RightPanelDurableState, RightPanelMaterializedState, RightPanelWorkspaceState } from "#product/lib/domain/workspaces/shell/right-panel-model";
 import type { SidebarWorkspaceVariant } from "#product/lib/domain/workspaces/sidebar/sidebar-indicators";
@@ -28,6 +31,13 @@ export interface WorkspaceUiState {
   pinnedWorkspaceIds: string[];
   workspacePinIntentReceiptByTarget: PersistedWorkspaceUiState["workspacePinIntentReceiptByTarget"];
   workspacePinLocalBarrierById: PersistedWorkspaceUiState["workspacePinLocalBarrierById"];
+  /**
+   * Latest resolved history observation for each logical identity in this
+   * renderer. This is bounded runtime state, not a persisted preference:
+   * renderer-local sequence numbers are not comparable after restart.
+   */
+  workspacePinHistoryObservationById:
+    WorkspaceUiChangeTrackedState["workspacePinHistoryObservationById"];
   hiddenRepoRootIds: string[];
   collapsedRepoGroups: string[];
   showArchived: boolean;

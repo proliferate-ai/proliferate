@@ -1,14 +1,17 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  WORKSPACE_PIN_HISTORY_OBSERVATION_LIMIT,
   WORKSPACE_PIN_INTENT_RECEIPT_LIMIT,
   WORKSPACE_PIN_LOCAL_BARRIER_LIMIT,
   WORKSPACE_UI_DEFAULTS,
 } from "#product/lib/domain/preferences/workspace-ui/model";
+import type { ResolvedWorkspacePinIntent } from "#product/lib/domain/workspaces/sidebar/workspace-pin-intents";
 import { resetWorkspacePinLocalOrderForTests } from "#product/stores/preferences/workspace-ui-pin-local-order";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 afterEach(() => {
   resetWorkspacePinLocalOrderForTests();
+  useWorkspaceUiStore.setState({ workspacePinHistoryObservationById: {} });
 });
 
 describe("workspace ui pinning", () => {
@@ -165,6 +168,69 @@ describe("workspace ui pinning", () => {
     expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual([]);
   });
 
+  it("receipts delayed older history without overwriting later cross-session history", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      pinnedWorkspaceIds: ["workspace-shared"],
+      workspacePinHistoryObservationById: {},
+    });
+
+    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch([
+      historyIntent({
+        requestId: "request-observed-later",
+        observedSequence: 2,
+        sessionId: "session-b",
+        pinned: false,
+      }),
+    ]);
+    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch([
+      historyIntent({
+        requestId: "request-resolved-late",
+        observedSequence: 1,
+        sessionId: "session-a",
+        pinned: true,
+      }),
+    ]);
+
+    const state = useWorkspaceUiStore.getState();
+    expect(state.pinnedWorkspaceIds).toEqual([]);
+    expect(Object.keys(state.workspacePinIntentReceiptByTarget)).toHaveLength(2);
+    expect(state.workspacePinHistoryObservationById["workspace-shared"])
+      .toEqual(localOrder(2));
+  });
+
+  it("records current-renderer history order even when the receipt is a duplicate", () => {
+    const targetKey = workspacePinIntentTargetKey(
+      "runtime-1",
+      "session-b",
+      "workspace-shared",
+    );
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      workspacePinIntentReceiptByTarget: {
+        [targetKey]: { requestId: "request-existing", seq: 1 },
+      },
+      workspacePinHistoryObservationById: {},
+    });
+
+    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch([
+      historyIntent({
+        requestId: "request-existing",
+        observedSequence: 4,
+        sessionId: "session-b",
+        pinned: false,
+      }),
+    ]);
+
+    const state = useWorkspaceUiStore.getState();
+    expect(state.workspacePinIntentReceiptByTarget[targetKey])
+      .toEqual({ requestId: "request-existing", seq: 1 });
+    expect(state.workspacePinHistoryObservationById["workspace-shared"])
+      .toEqual(localOrder(4));
+  });
+
   it("accepts a new-renderer live observation after a persisted prior-renderer barrier", () => {
     useWorkspaceUiStore.setState({
       ...WORKSPACE_UI_DEFAULTS,
@@ -236,6 +302,53 @@ describe("workspace ui pinning", () => {
       sequence: WORKSPACE_PIN_LOCAL_BARRIER_LIMIT + 2,
     });
   });
+
+  it("bounds current-renderer history observations by most-recent workspace", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      workspacePinHistoryObservationById: {},
+    });
+
+    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch(
+      Array.from({ length: WORKSPACE_PIN_HISTORY_OBSERVATION_LIMIT + 2 }, (_, index) =>
+        historyIntent({
+          requestId: `request-${index}`,
+          observedSequence: index + 1,
+          sessionId: `session-${index}`,
+          pinId: `workspace-${index}`,
+          pinned: false,
+        })),
+    );
+
+    const observations = useWorkspaceUiStore.getState().workspacePinHistoryObservationById;
+    expect(Object.keys(observations)).toHaveLength(WORKSPACE_PIN_HISTORY_OBSERVATION_LIMIT);
+    expect(observations["workspace-0"]).toBeUndefined();
+    expect(observations["workspace-257"]).toEqual(localOrder(258));
+  });
+
+  it("clears current-renderer history order on hydration so new offline history can apply", () => {
+    useWorkspaceUiStore.setState({
+      workspacePinHistoryObservationById: {
+        "workspace-shared": localOrder(10),
+      },
+    });
+
+    useWorkspaceUiStore.getState().hydrate(WORKSPACE_UI_DEFAULTS);
+
+    expect(useWorkspaceUiStore.getState().workspacePinHistoryObservationById).toEqual({});
+
+    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch([
+      historyIntent({
+        requestId: "request-after-hydrate",
+        observedSequence: 1,
+        sessionId: "session-current",
+        pinned: true,
+      }),
+    ]);
+
+    expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual(["workspace-shared"]);
+  });
 });
 
 function workspacePinIntentTargetKey(
@@ -248,4 +361,25 @@ function workspacePinIntentTargetKey(
 
 function localOrder(sequence: number, rendererEpoch = "renderer-current") {
   return { rendererEpoch, sequence };
+}
+
+function historyIntent(args: {
+  requestId: string;
+  observedSequence: number;
+  sessionId: string;
+  pinned: boolean;
+  pinId?: string;
+}): ResolvedWorkspacePinIntent {
+  const pinId = args.pinId ?? "workspace-shared";
+  return {
+    requestId: args.requestId,
+    observedAt: localOrder(args.observedSequence),
+    provenance: "history",
+    runtimeId: "runtime-1",
+    sessionId: args.sessionId,
+    seq: 1,
+    pinId,
+    relatedIds: [pinId],
+    pinned: args.pinned,
+  };
 }

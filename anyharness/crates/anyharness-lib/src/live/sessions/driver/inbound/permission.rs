@@ -5,7 +5,7 @@ use anyharness_contract::v1::{
     PermissionInteractionPayload,
 };
 
-use super::{terminal_mutation_rejected, InboundDoor};
+use super::InboundDoor;
 use crate::integrations::acp::permission_context::permission_context_from_meta;
 use crate::integrations::acp::permission_payload::{bound_raw_json, permission_options};
 use crate::live::sessions::model::{
@@ -70,10 +70,7 @@ impl InboundDoor {
         // here under the same lock hold.
         let mut linked_plan_id: Option<String> = None;
         if let Some(advisor) = self.permission_advisor.as_ref() {
-            let mut sink = self.event_sink.lock().await;
-            if !sink.event_mutations_admitted() {
-                return Err(terminal_mutation_rejected());
-            }
+            let mut sink = self.lock_for_inbound_mutation().await?;
             let ctx = SessionObserverContext {
                 session_id: self.session_id.clone(),
                 workspace_id: self.workspace_id.clone(),
@@ -123,10 +120,7 @@ impl InboundDoor {
         });
 
         let pending_wait = {
-            let mut sink = self.event_sink.lock().await;
-            if !sink.event_mutations_admitted() {
-                return Err(terminal_mutation_rejected());
-            }
+            let mut sink = self.lock_for_inbound_mutation().await?;
             let pending_wait = self
                 .interaction_broker
                 .register_permission(&self.session_id, &request_id, &args.options)

@@ -16,6 +16,7 @@ export type { ShellIntentResult, WorkspaceUiState } from "#product/stores/prefer
 export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
   ...WORKSPACE_UI_DEFAULTS,
   _hydrated: false,
+  workspacePinHistoryObservationById: {},
   shellActivationEpochByWorkspace: {},
   pendingChatActivationByWorkspace: {},
   pendingBackgroundSubagentSelectionByWorkspace: {},
@@ -28,6 +29,7 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
     set({
       ...state,
       _hydrated: true,
+      workspacePinHistoryObservationById: {},
     });
   },
 

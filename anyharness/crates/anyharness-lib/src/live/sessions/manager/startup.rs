@@ -138,7 +138,38 @@ impl LiveSessionManager {
     }
 }
 
-async fn wait_for_new_startup_readiness(
+pub(super) async fn wait_for_new_startup_readiness(
+    pending: PendingSessionActor,
+    startup_tx: watch::Sender<StartupReadinessState>,
+    live_sessions: Arc<RwLock<HashMap<String, Arc<LiveSessionHandle>>>>,
+    pending_startups: Arc<RwLock<HashMap<String, watch::Receiver<StartupReadinessState>>>>,
+    handle: Arc<LiveSessionHandle>,
+    startup_strategy_label: String,
+    actor_start_started: Instant,
+    manager_started: Instant,
+) -> anyhow::Result<ActorReadyResult> {
+    let (result_tx, result_rx) = tokio::sync::oneshot::channel();
+    tokio::spawn(async move {
+        let result = own_new_startup_readiness(
+            pending,
+            startup_tx,
+            live_sessions,
+            pending_startups,
+            handle,
+            startup_strategy_label,
+            actor_start_started,
+            manager_started,
+        )
+        .await;
+        let _ = result_tx.send(result);
+    });
+
+    result_rx
+        .await
+        .map_err(|_| anyhow::anyhow!("manager-owned actor startup wait task stopped"))?
+}
+
+async fn own_new_startup_readiness(
     pending: PendingSessionActor,
     startup_tx: watch::Sender<StartupReadinessState>,
     live_sessions: Arc<RwLock<HashMap<String, Arc<LiveSessionHandle>>>>,
@@ -149,13 +180,15 @@ async fn wait_for_new_startup_readiness(
     manager_started: Instant,
 ) -> anyhow::Result<ActorReadyResult> {
     let session_id = handle.session_id.clone();
-    tokio::task::spawn_blocking(move || {
+    let wait_session_id = session_id.clone();
+    let wait_startup_tx = startup_tx.clone();
+    let ready_result = match tokio::task::spawn_blocking(move || {
         let ready_result = pending.wait_ready();
 
         match &ready_result {
             Ok(ready) => {
                 tracing::info!(
-                    session_id = %session_id,
+                    session_id = %wait_session_id,
                     native_session_id = %ready.native_session_id.as_str(),
                     startup_strategy = %startup_strategy_label,
                     elapsed_ms = actor_start_started.elapsed().as_millis(),
@@ -163,24 +196,62 @@ async fn wait_for_new_startup_readiness(
                     "[workspace-latency] session.acp_manager.start.actor_ready"
                 );
 
-                let _ = startup_tx.send(Some(Ok(ready.native_session_id.clone())));
+                let _ = wait_startup_tx.send(Some(Ok(ready.native_session_id.clone())));
             }
             Err(error) => {
                 let message = error.to_string();
-                let _ = startup_tx.send(Some(Err(message)));
-                let mut sessions = live_sessions.blocking_write();
-                if matches!(sessions.get(&session_id), Some(current) if Arc::ptr_eq(current, &handle))
-                {
-                    sessions.remove(&session_id);
-                }
+                let _ = wait_startup_tx.send(Some(Err(message)));
             }
         }
 
-        pending_startups.blocking_write().remove(&session_id);
         ready_result
     })
     .await
-    .map_err(|error| anyhow::anyhow!("actor startup wait task failed: {error}"))?
+    {
+        Ok(result) => result,
+        Err(error) => {
+            let error = anyhow::anyhow!("actor startup wait task failed: {error}");
+            let _ = startup_tx.send(Some(Err(error.to_string())));
+            Err(error)
+        }
+    };
+
+    if ready_result.is_ok() {
+        let sessions = live_sessions.write().await;
+        let remove_pending_startup = match sessions.get(&session_id) {
+            Some(current) => Arc::ptr_eq(current, &handle),
+            None => true,
+        };
+        if remove_pending_startup {
+            // Keep the live-map lock while removing readiness. If explicit
+            // removal installed a newer generation after this one became
+            // ready, that generation owns the current pending entry.
+            pending_startups.write().await.remove(&session_id);
+        }
+    } else {
+        // A readiness timeout actively cancels this generation. Keep its
+        // handle installed until every sequence writer has gone and the exit
+        // hook has finished, then remove only this exact generation.
+        handle.wait_for_event_sequence_relinquishment().await;
+        handle.wait_until_actor_finished().await;
+        let mut sessions = live_sessions.write().await;
+        let remove_pending_startup = match sessions.get(&session_id) {
+            Some(current) if Arc::ptr_eq(current, &handle) => {
+                sessions.remove(&session_id);
+                true
+            }
+            None => true,
+            Some(_) => false,
+        };
+        if remove_pending_startup {
+            // Keep the live-map lock while removing readiness so startup's
+            // live -> pending lock order cannot install a replacement in the
+            // middle. A newer current handle owns any newer pending entry.
+            pending_startups.write().await.remove(&session_id);
+        }
+    }
+
+    ready_result
 }
 
 async fn wait_for_startup_readiness(

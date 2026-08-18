@@ -41,6 +41,7 @@ import { WORKSPACE_SIDEBAR_DEFAULT_WIDTH } from "#product/lib/domain/preferences
 export const WORKSPACE_UI_MIGRATION_VERSION = 17;
 export const WORKSPACE_PIN_INTENT_RECEIPT_LIMIT = 256;
 export const WORKSPACE_PIN_LOCAL_BARRIER_LIMIT = 256;
+export const WORKSPACE_PIN_HISTORY_OBSERVATION_LIMIT = 256;
 
 export interface WorkspacePinIntentReceipt {
   requestId: string;
@@ -84,6 +85,7 @@ export interface PersistedWorkspaceUiState {
 }
 
 export interface WorkspaceUiChangeTrackedState extends PersistedWorkspaceUiState {
+  workspacePinHistoryObservationById: Record<string, WorkspacePinLocalOrder>;
   archivingChatSessionIdsByWorkspace: Record<string, string[]>;
   shellActivationEpochByWorkspace: Record<string, number>;
   pendingChatActivationByWorkspace: Record<string, unknown>;

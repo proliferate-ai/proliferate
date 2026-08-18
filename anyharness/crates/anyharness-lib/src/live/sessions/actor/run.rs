@@ -87,9 +87,14 @@ impl SessionActor {
         drop(command_rx);
         self.background_work_registry.shutdown();
         self.finalize_exit(exit_reason).await;
-        // Finalization is the actor's last event-producing phase. Release the
-        // generation's sequence ownership before the potentially long process
-        // reap so a replacement can start without racing stale final events.
+        // Finalization is the actor's last event-producing phase. Taking the
+        // sink lock drains any direct writer admitted before shutdown; the
+        // permanent fence rejects detached ACP/background writers that arrive
+        // while the process is still being reaped.
+        self.event_sink.lock().await.seal_event_sequence();
+        // Release the generation's sequence ownership before the potentially
+        // long process reap so a replacement can start without racing stale
+        // final events.
         self.handle.relinquish_event_sequence();
         self.handle.finish_prompt();
         if let Some(respond_to) = self.pending_stop_response.take() {
