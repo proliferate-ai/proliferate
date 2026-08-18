@@ -133,6 +133,17 @@ describe("selectWorkflowRunRailWindow", () => {
     expect(cut.railWindow.map((r) => r.id)).not.toContain("r2");
   });
 
+  it("keeps attention-first ordering even when every run fits under the cap (ruling F-A2(i))", () => {
+    // RULED: attention-first is a STANDING ordering rule, not an
+    // overflow-only behavior — the run waiting on a human is always on top,
+    // and the order does not flip when a fifth run appears or disappears.
+    const gated = live("gated", 1, "awaiting_human");
+    const runs = [live("c", 3), live("b", 2), gated];
+    const cut = selectWorkflowRunRailWindow(runs, 0);
+    expect(cut.hiddenCount).toBe(0);
+    expect(cut.railWindow.map((r) => r.id)).toEqual(["gated", "c", "b"]);
+  });
+
   it("pages the window and clamps a page the shrinking set no longer has", () => {
     const runs = [5, 4, 3, 2, 1].map((m) => live(`r${m}`, m));
     const pageOne = selectWorkflowRunRailWindow(runs, 1);
