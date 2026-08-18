@@ -104,6 +104,7 @@ QUERY_CACHE_CALL_RE = re.compile(
 REACT_IMPORT_RE = re.compile(
     r"^\s*import(?:\s+type)?(?:\s+[^;]*\s+from)?\s+['\"]react['\"]"
 )
+SHELL_NAV_HOOK_RE = re.compile(r"\buseNavigate\b|\buseLocation\b")
 QUERY_HOOK_NAMES = {
     "useInfiniteQuery",
     "useMutation",
@@ -534,6 +535,22 @@ def is_ui_component_library_path(relative_path: str) -> bool:
     return "/" not in primitive_relative or primitive_relative.startswith("patterns/")
 
 
+def is_shell_navigation_scoped_path(relative_path: str) -> bool:
+    """True for the workspace-shell subtree that FE-NAV-1 guards: the shell
+    component tree (MainScreen, StandardWorkspaceShell, MainSidebar and
+    siblings) plus every workspace hook (hooks/workspaces/**) — the ADR
+    invariant is any shell-scoped hook subscribing to router location, not
+    just the two files the PRO-170 incident happened to name.
+    """
+    return is_under(
+        relative_path,
+        "apps/packages/product-client/src/components/workspace/shell/",
+    ) or is_under(
+        relative_path,
+        "apps/packages/product-client/src/hooks/workspaces/",
+    )
+
+
 def is_query_cache_owner_path(relative_path: str) -> bool:
     return (
         is_under(relative_path, "apps/desktop/src/hooks/access/")
@@ -662,6 +679,19 @@ def check_file(path: Path) -> list[Violation]:
             ),
             "import of a retired legacy access path",
         )
+
+        if is_shell_navigation_scoped_path(rel):
+            nav_hit = first_match(line, (SHELL_NAV_HOOK_RE,))
+            add_if(
+                violations,
+                bool(nav_hit),
+                "FE-NAV-1",
+                path,
+                lineno,
+                nav_hit,
+                f"{nav_hit} subscribes the workspace shell to router location "
+                "changes",
+            )
 
         if in_domain:
             domain_anchor = first_present(

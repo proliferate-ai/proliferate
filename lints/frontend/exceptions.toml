@@ -321,3 +321,96 @@ path = "apps/packages/product-client/src/lib/access/anyharness/runtime-bootstrap
 site = "const state::useHarnessConnectionStore.setState"
 reason = "runtime bootstrap mutates imported connection store"
 
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx"
+site = "useLocation"
+reason = "pre-existing direct router subscription; not yet moved to the app-navigate handoff (UX-latency ADR R8/Q18); live on origin/main"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx"
+site = "const navigate::useNavigate"
+reason = "pre-existing direct router subscription; not yet moved to the app-navigate handoff (UX-latency ADR R8/Q18); live on origin/main"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx"
+site = "const location::useLocation"
+reason = "pre-existing direct router subscription; not yet moved to the app-navigate handoff (UX-latency ADR R8/Q18); live on origin/main"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-add-repo.ts"
+site = "useLocation"
+reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; live on origin/main"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-add-repo.ts"
+site = "const location::useLocation"
+reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; live on origin/main"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-pending-workspace-entry-actions.ts"
+site = "useNavigate"
+reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; live on origin/main"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-pending-workspace-entry-actions.ts"
+site = "const navigate::useNavigate"
+reason = "pre-existing direct router subscription in a shell workflow hook; broadened FE-NAV-1 scope now covers hooks/workspaces/**; live on origin/main"
+
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/components/workspace/shell/sidebar/SidebarScrollingNavigationSection.tsx"
+site = "useLocation"
+reason = "pre-existing direct router subscription; became visible to FE-NAV-1 when docs-v1/d6-lints resynced with main (00b72f853); grandfathered as part of the reconciliation the ledger's checklist predicted, shipped for founder review with this PR; retire by migrating to navigateApp"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/components/workspace/shell/sidebar/SidebarScrollingNavigationSection.tsx"
+site = "const location::useLocation"
+reason = "pre-existing direct router subscription; became visible to FE-NAV-1 when docs-v1/d6-lints resynced with main (00b72f853); grandfathered as part of the reconciliation the ledger's checklist predicted, shipped for founder review with this PR; retire by migrating to navigateApp"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/hooks/workspaces/ui/use-repo-added-toast.ts"
+site = "useNavigate"
+reason = "pre-existing direct router subscription; became visible to FE-NAV-1 when docs-v1/d6-lints resynced with main (00b72f853); grandfathered as part of the reconciliation the ledger's checklist predicted, shipped for founder review with this PR; retire by migrating to navigateApp"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/hooks/workspaces/ui/use-repo-added-toast.ts"
+site = "const navigate::useNavigate"
+reason = "pre-existing direct router subscription; became visible to FE-NAV-1 when docs-v1/d6-lints resynced with main (00b72f853); grandfathered as part of the reconciliation the ledger's checklist predicted, shipped for founder review with this PR; retire by migrating to navigateApp"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-add-repo-flow-controller.ts"
+site = "useNavigate"
+reason = "pre-existing direct router subscription; became visible to FE-NAV-1 when docs-v1/d6-lints resynced with main (00b72f853); grandfathered as part of the reconciliation the ledger's checklist predicted, shipped for founder review with this PR; retire by migrating to navigateApp"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-add-repo-flow-controller.ts"
+site = "const navigate::useNavigate"
+reason = "pre-existing direct router subscription; became visible to FE-NAV-1 when docs-v1/d6-lints resynced with main (00b72f853); grandfathered as part of the reconciliation the ledger's checklist predicted, shipped for founder review with this PR; retire by migrating to navigateApp"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-archive-actions.ts"
+site = "type WorkspaceUnarchiveScenarioBody::useNavigate"
+reason = "pre-existing direct router subscription; became visible to FE-NAV-1 when docs-v1/d6-lints resynced with main (00b72f853); grandfathered as part of the reconciliation the ledger's checklist predicted, shipped for founder review with this PR; retire by migrating to navigateApp"
+
+[[exception]]
+rule = "FE-NAV-1"
+path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-archive-actions.ts"
+site = "const navigate::useNavigate"
+reason = "pre-existing direct router subscription; became visible to FE-NAV-1 when docs-v1/d6-lints resynced with main (00b72f853); grandfathered as part of the reconciliation the ledger's checklist predicted, shipped for founder review with this PR; retire by migrating to navigateApp"
+
+# SidebarScrollingNavigationSection.tsx became part of this tree at the
+# docs-v1/d6-lints resync with main (00b72f853) and is grandfathered above.

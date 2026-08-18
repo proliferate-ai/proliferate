@@ -2783,6 +2783,118 @@ class MobileProductClientBoundaryTest(unittest.TestCase):
         )
 
 
+class NavShellBoundaryTest(unittest.TestCase):
+    """FE-NAV-1: the workspace shell tree does not subscribe to router
+    location. Unlike the product-client-parsed rules above, FE-NAV-1 is a
+    line-scan implemented directly in check_file(), so these tests drive
+    check_file() itself rather than find_product_client_violations().
+    """
+
+    def write_files(self, root: Path, files: dict[str, str]) -> list[Path]:
+        paths: list[Path] = []
+        for relative_path, content in files.items():
+            path = root / relative_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+            paths.append(path)
+        return paths
+
+    def run_check_file(self, root: Path, files: dict[str, str]) -> list[check_module.Violation]:
+        paths = self.write_files(root, files)
+        product_src = root / "apps" / "packages" / "product-client" / "src"
+        desktop_src = root / "apps" / "desktop" / "src"
+        with patch.multiple(
+            check_module,
+            REPO_ROOT=root,
+            PRODUCT_CLIENT_SRC=product_src,
+            DESKTOP_SRC=desktop_src,
+        ):
+            return [
+                violation
+                for path in paths
+                for violation in check_module.check_file(path)
+            ]
+
+    def test_shell_component_tree_violation_fails(self) -> None:
+        files = {
+            "apps/packages/product-client/src/components/workspace/shell/screen/MainScreen.tsx": (
+                "import { useNavigate } from 'react-router-dom';\n"
+                "export function MainScreen() {\n"
+                "  const navigate = useNavigate();\n"
+                "  return navigate;\n"
+                "}\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_check_file(Path(directory).resolve(), files)
+
+        nav_violations = [v for v in violations if v.rule_id == "FE-NAV-1"]
+        self.assertEqual(len(nav_violations), 2)
+        self.assertEqual({v.path.name for v in nav_violations}, {"MainScreen.tsx"})
+
+    def test_workspace_hooks_tree_violation_fails(self) -> None:
+        files = {
+            "apps/packages/product-client/src/hooks/workspaces/workflows/use-example-workflow.ts": (
+                "import { useLocation } from 'react-router-dom';\n"
+                "export function useExampleWorkflow() {\n"
+                "  const location = useLocation();\n"
+                "  return location;\n"
+                "}\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_check_file(Path(directory).resolve(), files)
+
+        nav_violations = [v for v in violations if v.rule_id == "FE-NAV-1"]
+        self.assertEqual(len(nav_violations), 2)
+
+    def test_file_outside_shell_scope_passes(self) -> None:
+        """A route-host page component (apps/.../src/pages/**) sits outside
+        both scoped prefixes (components/workspace/shell/**,
+        hooks/workspaces/**) and is not itself grandfathered — it must not
+        raise FE-NAV-1 even though it uses the same hooks, because the rule's
+        scope is the shell tree, not a global router-hook ban.
+        """
+        files = {
+            "apps/packages/product-client/src/pages/WorkflowsPage.tsx": (
+                "import { useLocation, useNavigate } from 'react-router-dom';\n"
+                "export function WorkflowsPage() {\n"
+                "  const location = useLocation();\n"
+                "  const navigate = useNavigate();\n"
+                "  return { location, navigate };\n"
+                "}\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            violations = self.run_check_file(Path(directory).resolve(), files)
+
+        nav_violations = [v for v in violations if v.rule_id == "FE-NAV-1"]
+        self.assertEqual(nav_violations, [])
+
+    def test_ledger_exception_suppresses_the_matching_site_only(self) -> None:
+        files = {
+            "apps/packages/product-client/src/components/workspace/shell/sidebar/MainSidebar.tsx": (
+                "import { useNavigate } from 'react-router-dom';\n"
+                "export function MainSidebar() {\n"
+                "  const navigate = useNavigate();\n"
+                "  return navigate;\n"
+                "}\n"
+            ),
+        }
+        root = Path(tempfile.mkdtemp()).resolve()
+        self.addCleanup(lambda: __import__("shutil").rmtree(root, ignore_errors=True))
+        violations = self.run_check_file(root, files)
+
+        nav_violations = [v for v in violations if v.rule_id == "FE-NAV-1"]
+        self.assertEqual(len(nav_violations), 2)
+
+        tolerated = {
+            "FE-NAV-1": {v.key for v in nav_violations},
+        }
+        failures, stale = check_module.apply_exceptions(violations, tolerated)
+        self.assertEqual([v for v in failures if v.rule_id == "FE-NAV-1"], [])
+        self.assertEqual(stale, [])
+
 class LucideIconSourceTest(unittest.TestCase):
     """UI-conformance review check 5, both halves: imports and manifests."""
 
