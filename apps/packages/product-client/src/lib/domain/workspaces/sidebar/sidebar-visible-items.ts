@@ -1,5 +1,31 @@
 import type { SidebarGroupState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 
+type SidebarWorkspaceItem = SidebarGroupState["items"][number];
+
+export function isSidebarWorkspaceOptimisticallyVisible(
+  item: SidebarWorkspaceItem,
+  optimisticallyArchivedIds: ReadonlySet<string>,
+): boolean {
+  return !optimisticallyArchivedIds.has(item.id)
+    && !(item.localWorkspaceId !== null
+      && optimisticallyArchivedIds.has(item.localWorkspaceId));
+}
+
+export function filterOptimisticallyArchivedSidebarGroups(
+  groups: SidebarGroupState[],
+  optimisticallyArchivedIds: ReadonlySet<string>,
+): SidebarGroupState[] {
+  if (optimisticallyArchivedIds.size === 0) {
+    return groups;
+  }
+
+  return groups.map((group) => ({
+    ...group,
+    items: group.items.filter((item) =>
+      isSidebarWorkspaceOptimisticallyVisible(item, optimisticallyArchivedIds)),
+  }));
+}
+
 /**
  * Rows a repo group's body renders. Pinned rows are excluded — pinning MOVES
  * a workspace into the sidebar's Pinned section rather than duplicating it —

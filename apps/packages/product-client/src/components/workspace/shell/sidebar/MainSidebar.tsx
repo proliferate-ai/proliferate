@@ -31,6 +31,10 @@ import { useWorkspaceAvailabilityIntentStore } from "#product/stores/cloud/works
 import type { WorkspaceAvailabilityCommandKind } from "#product/lib/domain/workspaces/cloud/workspace-availability-commands";
 import { workspaceAvailabilityIntentForCommand } from "#product/lib/domain/workspaces/cloud/workspace-availability-intent-mapping";
 import type { SidebarWorkspaceItemState } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
+import {
+  filterOptimisticallyArchivedSidebarGroups,
+  isSidebarWorkspaceOptimisticallyVisible,
+} from "#product/lib/domain/workspaces/sidebar/sidebar-visible-items";
 import { useCloudBilling } from "#product/hooks/cloud/facade/use-cloud-billing";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useSidebarShortcutTargets } from "#product/hooks/workspaces/derived/use-sidebar-shortcut-targets";
@@ -152,28 +156,19 @@ export const MainSidebar = memo(function MainSidebar({
   // A row is matched on either id space so the hide holds whichever key the
   // caller used (a cloud row is archived by its cloud id, a local row by its
   // runtime UUID).
-  const optimisticallyVisible = useCallback(
-    (item: SidebarWorkspaceItemState) => !optimisticallyArchivedIds.has(item.id)
-      && !(item.localWorkspaceId !== null && optimisticallyArchivedIds.has(item.localWorkspaceId)),
-    [optimisticallyArchivedIds],
-  );
-  const groups = useMemo(() => {
-    if (optimisticallyArchivedIds.size === 0) {
-      return sidebarGroups;
-    }
-    return sidebarGroups.map((group) => ({
-      ...group,
-      items: group.items.filter(optimisticallyVisible),
-    }));
-  }, [optimisticallyArchivedIds, optimisticallyVisible, sidebarGroups]);
+  const groups = useMemo(() => filterOptimisticallyArchivedSidebarGroups(
+    sidebarGroups,
+    optimisticallyArchivedIds,
+  ), [optimisticallyArchivedIds, sidebarGroups]);
   // The Pinned section is a flattened view of the same rows, so the in-flight
   // hide must reach it too or the archived row lingers there.
   const pinnedItems = useMemo(() => {
     if (optimisticallyArchivedIds.size === 0) {
       return sidebarPinnedItems;
     }
-    return sidebarPinnedItems.filter(optimisticallyVisible);
-  }, [optimisticallyArchivedIds, optimisticallyVisible, sidebarPinnedItems]);
+    return sidebarPinnedItems.filter((item) =>
+      isSidebarWorkspaceOptimisticallyVisible(item, optimisticallyArchivedIds));
+  }, [optimisticallyArchivedIds, sidebarPinnedItems]);
 
   const isOnHome = location.pathname === APP_ROUTES.home;
   const hideRepoRoot = useWorkspaceUiStore((s) => s.hideRepoRoot);

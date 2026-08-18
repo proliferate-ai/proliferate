@@ -10,12 +10,16 @@ import {
   SIDEBAR_REPO_GROUP_ITEM_LIMIT,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import {
+  filterOptimisticallyArchivedSidebarGroups,
+} from "#product/lib/domain/workspaces/sidebar/sidebar-visible-items";
+import {
   numberedSidebarShortcutTargetIds,
   visibleSidebarShortcutTargetIds,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useWorkspaceSidebarShowMoreStore } from "#product/stores/workspaces/workspace-sidebar-show-more-store";
+import { useWorkspaceArchiveVisibilityStore } from "#product/stores/workspaces/workspace-archive-visibility-store";
 
 const EMPTY_WORKSPACE_ACTIVITIES = {};
 const EMPTY_PENDING_PROMPT_COUNTS = {};
@@ -27,6 +31,9 @@ export interface SidebarShortcutTargets {
 }
 
 export function useSidebarShortcutTargets(): SidebarShortcutTargets {
+  const optimisticallyArchivedIds = useWorkspaceArchiveVisibilityStore(
+    (state) => state.optimisticallyArchivedIds,
+  );
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
@@ -97,10 +104,14 @@ export function useSidebarShortcutTargets(): SidebarShortcutTargets {
     workspaceLastInteracted,
     workspaceTypes,
   ]);
+  const shortcutGroups = useMemo(() => filterOptimisticallyArchivedSidebarGroups(
+    groups,
+    optimisticallyArchivedIds,
+  ), [groups, optimisticallyArchivedIds]);
 
   return useMemo(() => ({
     digitTargetIds: numberedSidebarShortcutTargetIds({
-      groups,
+      groups: shortcutGroups,
       pinnedWorkspaceIds,
       collapsedRepoGroupKeys,
       repoGroupsShownMore: repoGroupsShownMoreKeys,
@@ -108,7 +119,7 @@ export function useSidebarShortcutTargets(): SidebarShortcutTargets {
       repositoriesCollapsed,
     }),
     traversalTargetIds: visibleSidebarShortcutTargetIds({
-      groups,
+      groups: shortcutGroups,
       collapsedRepoGroupKeys,
       repoGroupsShownMore: repoGroupsShownMoreKeys,
       itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
@@ -116,9 +127,9 @@ export function useSidebarShortcutTargets(): SidebarShortcutTargets {
     }),
   }), [
     collapsedRepoGroupKeys,
-    groups,
     pinnedWorkspaceIds,
     repoGroupsShownMoreKeys,
     repositoriesCollapsed,
+    shortcutGroups,
   ]);
 }

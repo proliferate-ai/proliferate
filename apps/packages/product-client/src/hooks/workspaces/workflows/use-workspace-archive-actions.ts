@@ -3,7 +3,7 @@ import {
   type WorkspaceArchiveNoticeKind,
   type WorkspaceUnarchiveScenarioBody,
 } from "@anyharness/sdk";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "@proliferate/design/motion";
 import { useNavigate } from "react-router-dom";
 import { useArchivedWorkspacesInvalidation } from "#product/hooks/workspaces/cache/use-archived-workspaces-invalidation";
@@ -28,6 +28,7 @@ import {
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import { useWorkspaceArchiveVisibilityStore } from "#product/stores/workspaces/workspace-archive-visibility-store";
 import { showToast } from "#product/primitives/utils/show-toast";
 
 /**
@@ -109,9 +110,15 @@ export function useWorkspaceArchiveActions() {
   const { handleSelectWorkspace } = useWorkspaceSidebarActions();
   const navigate = useNavigate();
 
-  const [optimisticallyArchivedIds, setOptimisticallyArchivedIds] = useState<
+  const [pendingDecisionIds, setPendingDecisionIds] = useState<
     ReadonlySet<string>
   >(new Set());
+  const optimisticallyArchivedIds = useWorkspaceArchiveVisibilityStore(
+    (state) => state.optimisticallyArchivedIds,
+  );
+  const hideWorkspace = useWorkspaceArchiveVisibilityStore((state) => state.hideWorkspace);
+  const showWorkspace = useWorkspaceArchiveVisibilityStore((state) => state.showWorkspace);
+  const resetArchiveVisibility = useWorkspaceArchiveVisibilityStore((state) => state.reset);
   const [scenario, setScenario] = useState<UnarchiveScenarioState | null>(null);
   // Per-pending-id metadata the reconciler needs once the POST has already
   // settled from this hook's own point of view: the name for a late T1, and
@@ -133,14 +140,15 @@ export function useWorkspaceArchiveActions() {
   >(() => {});
 
   const addOptimistic = useCallback((workspaceId: string) => {
-    setOptimisticallyArchivedIds((current) => {
+    setPendingDecisionIds((current) => {
       const next = new Set(current);
       next.add(workspaceId);
       return next;
     });
-  }, []);
-  const removeOptimistic = useCallback((workspaceId: string) => {
-    setOptimisticallyArchivedIds((current) => {
+    hideWorkspace(workspaceId);
+  }, [hideWorkspace]);
+  const removePendingDecision = useCallback((workspaceId: string) => {
+    setPendingDecisionIds((current) => {
       if (!current.has(workspaceId)) {
         return current;
       }
@@ -149,6 +157,12 @@ export function useWorkspaceArchiveActions() {
       return next;
     });
   }, []);
+  const removeOptimistic = useCallback((workspaceId: string) => {
+    removePendingDecision(workspaceId);
+    showWorkspace(workspaceId);
+  }, [removePendingDecision, showWorkspace]);
+
+  useEffect(() => () => resetArchiveVisibility(), [resetArchiveVisibility]);
 
   const invalidateBoth = useCallback(async () => {
     await Promise.all([invalidateActiveCollections(), invalidateArchived()]);
@@ -160,27 +174,12 @@ export function useWorkspaceArchiveActions() {
   // as T1 pops), so these stay hidden — but they must leave the reconciler's
   // pending set at settle, or a poll tick inside that window would confirm
   // the same archive twice and raise a duplicate T1.
-  const [settlingHiddenIds, setSettlingHiddenIds] = useState<ReadonlySet<string>>(
-    new Set(),
-  );
   const releaseHiddenAfterListsSettle = useCallback((workspaceId: string) => {
-    setSettlingHiddenIds((current) => {
-      const next = new Set(current);
-      next.add(workspaceId);
-      return next;
-    });
-    removeOptimistic(workspaceId);
+    removePendingDecision(workspaceId);
     void invalidateBoth().finally(() => {
-      setSettlingHiddenIds((current) => {
-        if (!current.has(workspaceId)) {
-          return current;
-        }
-        const next = new Set(current);
-        next.delete(workspaceId);
-        return next;
-      });
+      showWorkspace(workspaceId);
     });
-  }, [invalidateBoth, removeOptimistic]);
+  }, [invalidateBoth, removePendingDecision, showWorkspace]);
 
   const raiseArchiveFailureToast = useCallback((workspaceId: string, name: string, error: unknown) => {
     const code = error instanceof AnyHarnessError ? error.problem.code : undefined;
@@ -448,21 +447,11 @@ export function useWorkspaceArchiveActions() {
 
   const dismissScenario = useCallback(() => setScenario(null), []);
 
-  // The UI-facing hide set: rows with an undecided POST in flight PLUS rows
-  // whose settled archive is waiting out its list refetch. The reconciler
-  // gets only the undecided half (`pendingDecisionIds`).
-  const hiddenWorkspaceIds = useMemo<ReadonlySet<string>>(() => {
-    if (settlingHiddenIds.size === 0) {
-      return optimisticallyArchivedIds;
-    }
-    return new Set([...optimisticallyArchivedIds, ...settlingHiddenIds]);
-  }, [optimisticallyArchivedIds, settlingHiddenIds]);
-
   return {
     archive,
     unarchive,
-    optimisticallyArchivedIds: hiddenWorkspaceIds,
-    pendingDecisionIds: optimisticallyArchivedIds,
+    optimisticallyArchivedIds,
+    pendingDecisionIds,
     confirmArchived,
     reinstateOptimistic,
     scenario,
