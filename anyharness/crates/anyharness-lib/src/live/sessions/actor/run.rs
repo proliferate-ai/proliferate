@@ -5,6 +5,7 @@ use crate::live::sessions::actor::command::{ConditionalCancelOutcome, Resolution
 use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
 use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::actor::turn::active::ActivePromptRequest;
+use crate::live::sessions::actor::turn::queue::MissingPrequeuedPromptPolicy;
 use crate::live::sessions::background_work::BackgroundWorkUpdate;
 use crate::live::sessions::AgentExtMethodError;
 
@@ -205,7 +206,13 @@ impl SessionActor {
                     startup_drain_grace = false;
                     let (payload, prompt_id, seq) =
                         queued_prompt.expect("guarded queued prompt must exist");
-                    if let Err(error) = self.ensure_prequeued_pending_prompt_added(seq).await {
+                    if let Err(error) = self
+                        .ensure_prequeued_pending_prompt_added(
+                            seq,
+                            MissingPrequeuedPromptPolicy::RejectDrain,
+                        )
+                        .await
+                    {
                         tracing::warn!(
                             session_id = %self.session_id,
                             seq,

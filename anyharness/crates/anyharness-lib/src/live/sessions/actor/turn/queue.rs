@@ -17,6 +17,12 @@ use crate::live::sessions::queue_durable::{
     PendingPromptDeleteOutcome, PendingPromptUpdateOutcome,
 };
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(in crate::live::sessions::actor) enum MissingPrequeuedPromptPolicy {
+    AcknowledgeMarker,
+    RejectDrain,
+}
+
 impl SessionActor {
     pub(in crate::live::sessions::actor) async fn handle_busy_prompt_queue(
         &self,
@@ -30,7 +36,11 @@ impl SessionActor {
             ));
         }
         if let Some(seq) = from_queue_seq {
-            self.ensure_prequeued_pending_prompt_added(seq).await?;
+            self.ensure_prequeued_pending_prompt_added(
+                seq,
+                MissingPrequeuedPromptPolicy::AcknowledgeMarker,
+            )
+            .await?;
             return Ok(PromptAcceptance::Queued { seq });
         }
 
@@ -68,6 +78,7 @@ impl SessionActor {
     pub(in crate::live::sessions::actor) async fn ensure_prequeued_pending_prompt_added(
         &self,
         seq: i64,
+        missing_policy: MissingPrequeuedPromptPolicy,
     ) -> Result<(), PromptAcceptError> {
         if !self.event_mutations_admitted().await {
             return Err(PromptAcceptError::EnqueueFailed(
@@ -77,6 +88,11 @@ impl SessionActor {
         let record = match self.caps.queue.find_pending_prompt(&self.session_id, seq) {
             Ok(Some(record)) => record,
             Ok(None) => {
+                // Marker payloads are never executed directly, so a marker
+                // that arrives after its row drained is safe to acknowledge.
+                if missing_policy == MissingPrequeuedPromptPolicy::AcknowledgeMarker {
+                    return Ok(());
+                }
                 return Err(PromptAcceptError::EnqueueFailed(format!(
                     "prequeued prompt {seq} disappeared before its visibility event"
                 )));
