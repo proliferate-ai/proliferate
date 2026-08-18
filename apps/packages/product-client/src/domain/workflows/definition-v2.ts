@@ -242,6 +242,21 @@ export function orderedNodes(def: WorkflowDefinitionV2): WorkflowNodeV2[] {
 }
 
 /**
+ * The one node no edge points at — the graph's head — or `null` when the
+ * edges leave no single starting point (an empty graph, a branch of roots, or
+ * a cycle). Stated once here because both the builder's Input connection and
+ * its validation ask the same question of the same document.
+ */
+export function definitionHeadId(def: WorkflowDefinitionV2): string | null {
+  if (def.nodes.length === 0) {
+    return null;
+  }
+  const incoming = new Set(def.edges.map((edge) => edge.to));
+  const heads = def.nodes.filter((node) => !incoming.has(node.id));
+  return heads.length === 1 ? heads[0].id : null;
+}
+
+/**
  * The chain of node ids head → tail, or `null` if the edges over this
  * definition's distinct node ids do not form exactly one linear path
  * covering all of them (branch, merge, cycle, or disconnected components).

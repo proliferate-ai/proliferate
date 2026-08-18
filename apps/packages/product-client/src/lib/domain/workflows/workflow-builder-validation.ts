@@ -2,6 +2,7 @@ import type { WorkflowDefinitionV2 } from "@proliferate/cloud-sdk";
 import {
   DOC_SLUG_PATTERN,
   INPUT_NAME_PATTERN,
+  definitionHeadId,
   validateDefinitionV2,
   type DefinitionV2Issue,
   type DefinitionV2IssueCode,
@@ -52,9 +53,7 @@ export function workflowBuilderIssues(
     ...declarationGrammarIssues(definition),
   ];
   if (inputConnectedTo !== undefined) {
-    const incoming = new Set(definition.edges.map((edge) => edge.to));
-    const heads = definition.nodes.filter((node) => !incoming.has(node.id));
-    const head = heads.length === 1 ? heads[0].id : null;
+    const head = definitionHeadId(definition);
     if (head === null || inputConnectedTo !== head) {
       issues.push({
         code: "input_not_connected",

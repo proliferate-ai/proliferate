@@ -38,6 +38,39 @@ describe("WorkflowJsonEditor", () => {
     expect(onValidityChange).toHaveBeenLastCalledWith(true);
   });
 
+  it("names an unknown field, refuses the edit, and reverts to the graph", () => {
+    const onApply = vi.fn();
+    const onValidityChange = vi.fn();
+    render(
+      <WorkflowJsonEditor
+        definition={definition("Diagnose", "Investigate.")}
+        active
+        disabled={false}
+        onApply={onApply}
+        onValidityChange={onValidityChange}
+      />,
+    );
+    const textarea = screen.getByLabelText("Workflow definition JSON") as HTMLTextAreaElement;
+    const source = textarea.value;
+
+    fireEvent.change(textarea, {
+      target: {
+        value: JSON.stringify({ ...JSON.parse(source) as object, unexpected: true }, null, 2),
+      },
+    });
+
+    // The exact sentence the tier-2 definition-lifecycle spec waits for.
+    expect(screen.getByText("The definition contains an unknown field.")).toBeTruthy();
+    expect(onValidityChange).toHaveBeenLastCalledWith(false);
+    expect(onApply).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Revert" }));
+    expect(screen.getByText("Valid WorkflowDefinitionV2")).toBeTruthy();
+    expect((screen.getByLabelText("Workflow definition JSON") as HTMLTextAreaElement).value)
+      .toBe(source);
+    expect(onValidityChange).toHaveBeenLastCalledWith(true);
+  });
+
   it("keeps text the author typed that cannot be parsed", () => {
     const onValidityChange = vi.fn();
     const view = render(editor(definition("Diagnose", "Investigate."), true, onValidityChange));

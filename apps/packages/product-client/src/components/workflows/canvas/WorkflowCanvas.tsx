@@ -27,6 +27,11 @@ const FIT_OVERLAY_SAFE_BAND = 48;
 /** The design's dot-grid pitch at zoom 1. */
 const GRID_PITCH = 22;
 
+interface WorkflowCanvasView {
+  zoom: number;
+  pan: { x: number; y: number };
+}
+
 export interface WorkflowCanvasViewport {
   /**
    * The scale the canvas is drawing its content at, so a child can turn
@@ -92,8 +97,14 @@ export function WorkflowCanvas({
   className = "",
 }: WorkflowCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: FIT_PADDING, y: FIT_PADDING });
+  // Zoom and pan are one value: anchored zooming derives the next pan from the
+  // zoom it lands on, and two states would have to compute one inside the
+  // other's updater — a side effect React is free to run twice.
+  const [view, setView] = useState<WorkflowCanvasView>({
+    zoom: 1,
+    pan: { x: FIT_PADDING, y: FIT_PADDING },
+  });
+  const { zoom, pan } = view;
   /** Once the user pans or zooms, content changes stop re-framing the view. */
   const touchedRef = useRef(false);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; panX: number; panY: number } | null>(null);
@@ -113,10 +124,12 @@ export function WorkflowCanvas({
       1,
     );
     const clamped = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, scale));
-    setZoom(clamped);
-    setPan({
-      x: Math.max(FIT_PADDING, (bounds.width - contentWidth * clamped) / 2),
-      y: FIT_PADDING,
+    setView({
+      zoom: clamped,
+      pan: {
+        x: Math.max(FIT_PADDING, (bounds.width - contentWidth * clamped) / 2),
+        y: FIT_PADDING,
+      },
     });
   }, [contentHeight, contentWidth]);
 
@@ -130,19 +143,22 @@ export function WorkflowCanvas({
 
   const zoomBy = (delta: number, anchor?: { x: number; y: number }) => {
     touchedRef.current = true;
-    setZoom((current) => {
-      const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, current + delta));
-      const container = containerRef.current;
-      const point = anchor ?? (container
-        ? { x: container.clientWidth / 2, y: container.clientHeight / 2 }
-        : { x: 0, y: 0 });
-      if (next !== current) {
-        setPan((currentPan) => ({
-          x: point.x - (point.x - currentPan.x) * (next / current),
-          y: point.y - (point.y - currentPan.y) * (next / current),
-        }));
-      }
-      return next;
+    const container = containerRef.current;
+    const point = anchor ?? (container
+      ? { x: container.clientWidth / 2, y: container.clientHeight / 2 }
+      : { x: 0, y: 0 });
+    setView((current) => {
+      const zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, current.zoom + delta));
+      if (zoom === current.zoom) return current;
+      const ratio = zoom / current.zoom;
+      return {
+        zoom,
+        // Keep the anchor over the same content point across the scale change.
+        pan: {
+          x: point.x - (point.x - current.pan.x) * ratio,
+          y: point.y - (point.y - current.pan.y) * ratio,
+        },
+      };
     });
   };
 
@@ -176,10 +192,13 @@ export function WorkflowCanvas({
     if (!drag || drag.pointerId !== event.pointerId) {
       return;
     }
-    setPan({
-      x: drag.panX + (event.clientX - drag.startX),
-      y: drag.panY + (event.clientY - drag.startY),
-    });
+    setView((current) => ({
+      ...current,
+      pan: {
+        x: drag.panX + (event.clientX - drag.startX),
+        y: drag.panY + (event.clientY - drag.startY),
+      },
+    }));
   };
 
   const onPointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {

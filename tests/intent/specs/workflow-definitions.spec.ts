@@ -158,7 +158,11 @@ test("creates, reloads, reopens, edits, and deletes a durable gen-2 definition",
   await page.getByRole("radio", { name: "JSON", exact: true }).click();
   const jsonEditor = page.getByRole("textbox", { name: "Workflow definition JSON", exact: true });
   const validJson = await jsonEditor.inputValue();
-  await jsonEditor.fill(validJson.replace(/\n}$/, ',\n  "unexpected": true\n}'));
+  // Add the unknown field to the decoded document rather than to its text: the
+  // pane's formatting (trailing newline included) is not what is under test.
+  await jsonEditor.fill(
+    JSON.stringify({ ...JSON.parse(validJson) as object, unexpected: true }, null, 2),
+  );
   await expect(page.getByText("The definition contains an unknown field.", { exact: true })).toBeVisible();
   await expect(saveButton).toBeDisabled();
   await page.getByRole("button", { name: "Revert", exact: true }).click();

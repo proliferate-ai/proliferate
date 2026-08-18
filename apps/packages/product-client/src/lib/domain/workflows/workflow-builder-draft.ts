@@ -7,7 +7,7 @@ import type {
   WorkflowNodeV2,
 } from "@proliferate/cloud-sdk";
 import type { WorkflowStarterTemplateV2 } from "#product/config/workflows/starter-templates";
-import { validateDefinitionV2 } from "#product/domain/workflows/definition-v2";
+import { definitionHeadId, validateDefinitionV2 } from "#product/domain/workflows/definition-v2";
 import { normalizeDocSlugInput } from "#product/lib/domain/workflows/workflow-builder-validation";
 
 /**
@@ -318,11 +318,4 @@ function draftPartsFromDefinition(definition: WorkflowDefinitionV2): {
     inputs: (definition.inputs ?? []).map((input) => ({ ...input })),
     docTemplates: (definition.docTemplates ?? []).map((doc) => ({ ...doc })),
   };
-}
-
-export function definitionHeadId(definition: WorkflowDefinitionV2): string | null {
-  if (definition.nodes.length === 0) return null;
-  const incoming = new Set(definition.edges.map((edge) => edge.to));
-  const heads = definition.nodes.filter((node) => !incoming.has(node.id));
-  return heads.length === 1 ? heads[0].id : null;
 }
