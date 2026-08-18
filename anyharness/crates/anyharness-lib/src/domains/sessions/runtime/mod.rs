@@ -32,6 +32,8 @@ mod checkpoint_hook;
 mod checkpoint_linkage_tests;
 mod config;
 mod creation;
+#[cfg(test)]
+mod dispatch_classification_tests;
 mod fork;
 pub(crate) mod fork_boundary;
 pub(crate) mod fork_qualification;

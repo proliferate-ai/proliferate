@@ -5,8 +5,10 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use super::tests::build_forkable_fork_state;
+use super::tests::{build_forkable_fork_state, link_record, session_record};
 use crate::app::AppState;
+use crate::domains::sessions::links::service::SessionLinkService;
+use crate::domains::sessions::links::store::SessionLinkStore;
 
 /// Positive Q-H4 linkage seam. The full targeted-fork path that stamps
 /// `checkpoint_id` from a resolved anchor boundary is undrivable in Tier 1 here
@@ -250,4 +252,90 @@ fn files_under(dir: &Path) -> Vec<PathBuf> {
         }
     }
     found
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn same_key_same_payload_resumes_the_existing_child() {
+    // The idempotency contract's success arm, shared by the insert-time
+    // UNIQUE-constraint TOCTOU fallback: a repeat with the same key + same
+    // canonical payload returns the already-persisted child, never a second.
+    use super::fork::canonical_fork_request_digest;
+    use crate::domains::sessions::links::model::SessionLinkRelation;
+    use crate::domains::sessions::model::{ForkOperationPhase, ForkOperationRecord};
+    let (state, parent_id, runtime_home) = build_forkable_fork_state(r#"{"fork":true}"#);
+
+    // Seed a completed fork: child session + fork link + a completed operation.
+    let mut child = session_record("claude");
+    child.id = "reserved-child".to_string();
+    child.workspace_id = "workspace-fork-rung2".to_string();
+    let link = link_record(
+        "fork-link-1",
+        SessionLinkRelation::Fork,
+        &parent_id,
+        "reserved-child",
+    );
+    state
+        .session_service
+        .store()
+        .insert_session_with_link(&child, &link)
+        .expect("insert child + link");
+
+    let operation = ForkOperationRecord {
+        id: uuid::Uuid::new_v4().to_string(),
+        idempotency_key: "reserved-child".to_string(),
+        request_digest: canonical_fork_request_digest(&parent_id, None),
+        parent_session_id: parent_id.clone(),
+        child_session_id: "reserved-child".to_string(),
+        phase: ForkOperationPhase::Completed,
+        anchor_turn_id: None,
+        anchor_item_id: None,
+        provider_anchor_kind: Some("tip".to_string()),
+        provider_anchor_value: None,
+        provider_anchor_inclusive: None,
+        prefix_terminal_seq: Some(0),
+        prefix_digest: Some("digest".to_string()),
+        adapter_version: None,
+        native_version: None,
+        native_child_session_id: None,
+        checkpoint_id: None,
+        created_at: "2026-03-25T00:00:00Z".to_string(),
+        updated_at: "2026-03-25T00:00:00Z".to_string(),
+    };
+    state
+        .session_service
+        .store()
+        .insert_fork_operation(&operation)
+        .expect("insert operation");
+
+    let outcome = state
+        .session_runtime
+        .fork_session(&parent_id, None, Some("reserved-child".to_string()), None)
+        .await
+        .expect("same key + same payload resumes");
+    assert_eq!(outcome.session.id, "reserved-child");
+    assert_eq!(outcome.link.child_session_id, "reserved-child");
+
+    // Checkpoint linkage is best-effort (Lane H, Q-H4) and never a fork blocker:
+    // with no checkpoint at the boundary the fork completes normally and the
+    // stored operation row carries `checkpoint_id = NULL`. This also guards the
+    // ?1..?19 insert / map-row column offset that the new column added.
+    let stored = state
+        .session_service
+        .store()
+        .find_fork_operation_by_key("reserved-child")
+        .expect("read fork operation")
+        .expect("operation row present");
+    assert_eq!(
+        stored.checkpoint_id, None,
+        "a fork with no boundary checkpoint stores checkpoint_id = NULL"
+    );
+
+    // Exactly one fork child — the resume created no second child.
+    let link_service = SessionLinkService::new(
+        SessionLinkStore::new(state.db.clone()),
+        state.session_service.store().clone(),
+    );
+    let children = link_service.list_by_parent(&parent_id).expect("list links");
+    assert_eq!(children.len(), 1);
+    let _ = std::fs::remove_dir_all(&runtime_home);
 }

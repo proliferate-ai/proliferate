@@ -85,8 +85,8 @@ reason = "existing AnyHarness oversized test file"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs"
-max_lines = 1304
-reason = "existing AnyHarness oversized test file (launch-env tests moved to their owning module) + A9 Scope C resume/fork revoked-credentials regression tests (AgentNotReady at the common live-start seam) + a review-fix pin (unsatisfiable selection reports RouteAuth, not AgentNotReady, on resume) + Forks ADR rung 2 targeted-fork plumbing tests (item-less rejection, fail-closed no-child downgrade guard, idempotency conflict, unknown-outcome redispatch block, same-payload resume shared by the insert-time TOCTOU fallback) ; +21: Lane H fork NULL-checkpoint-linkage assertions on the resume happy path (the linkage suite lives in checkpoint_linkage_tests.rs)"
+max_lines = 1218
+reason = "existing AnyHarness oversized test file (launch-env tests moved to their owning module) + A9 Scope C resume/fork revoked-credentials regression tests (AgentNotReady at the common live-start seam) + a review-fix pin (unsatisfiable selection reports RouteAuth, not AgentNotReady, on resume) + Forks ADR rung 2 targeted-fork plumbing tests (item-less rejection, fail-closed no-child downgrade guard, idempotency conflict, unknown-outcome redispatch block; the same-payload resume test moved to checkpoint_linkage_tests.rs with the Lane H NULL-linkage pins, -65)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/sessions/actor/tests/workspace_stop.rs"
@@ -142,11 +142,6 @@ reason = "existing SDK oversized test file; legacy Subagents MCP reducer coverag
 path = "anyharness/sdk/src/reducer/transcript.ts"
 max_lines = 1515
 reason = "existing SDK oversized file; legacy Subagents MCP reducer branch removed in PR10"
-
-[[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/prompt.rs"
-max_lines = 657
-reason = "session prompt dispatch ; +39: workflows gen-2 PR4 adds send_text_blocks_prompt_with_id (the workflow envelope's multi-block twin) sharing one send_payload_prompt_with_id seam with the text path ; +48: Lane H turn-start checkpoint capture/finalize call sites at the three dispatch seams (the hook bodies live in checkpoint_hook.rs)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/prompt_message_actor_tests.rs"
