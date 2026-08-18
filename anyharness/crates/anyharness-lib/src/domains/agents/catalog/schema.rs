@@ -319,13 +319,17 @@ pub struct AgentCatalogModel {
 }
 
 impl AgentCatalogModel {
-    /// Whether this model carries a fast-mode control. Harnesses name it
-    /// differently — claude's option is `fast`, codex's is `fast-mode`
+    /// Whether this model carries a toggleable fast-mode control. Harnesses
+    /// name it differently — claude's option is `fast`, codex's is `fast-mode`
     /// (`fast_mode` before the rung-1 fork) — and all mean the same capability.
+    /// A single-value entry is a probe-observed variant dimension (cursor's
+    /// bracket-param `fast`), not a switchable control, so it does not count.
     pub fn supports_fast_mode(&self) -> bool {
-        ["fast_mode", "fast", "fast-mode"]
-            .iter()
-            .any(|key| self.controls.contains_key(*key))
+        ["fast_mode", "fast", "fast-mode"].iter().any(|key| {
+            self.controls
+                .get(*key)
+                .is_some_and(|control| control.values.len() >= 2)
+        })
     }
 }
 

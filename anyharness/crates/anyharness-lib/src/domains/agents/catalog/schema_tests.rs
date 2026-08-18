@@ -378,3 +378,31 @@ fn codex_fast_mode_control_is_mapped_and_reported() {
         );
     }
 }
+
+/// Cursor's `fast` entry is a probe-observed bracket-param variant dimension
+/// with a single value per model — not a switchable control. It must not be
+/// classified as fast-mode capability.
+#[test]
+fn cursor_single_value_fast_is_not_fast_mode_capability() {
+    let catalog = crate::domains::agents::catalog::bundled::bundled_agent_catalog_document();
+    let cursor = catalog
+        .agents
+        .iter()
+        .find(|agent| agent.kind == "cursor")
+        .expect("cursor agent");
+    let carriers: Vec<_> = cursor
+        .session
+        .models
+        .iter()
+        .filter(|model| model.controls.contains_key("fast"))
+        .collect();
+    assert!(!carriers.is_empty(), "cursor models carry a `fast` variant");
+    for model in carriers {
+        assert_eq!(model.controls["fast"].values.len(), 1);
+        assert!(
+            !model.supports_fast_mode(),
+            "{} must not report fast-mode capability",
+            model.id
+        );
+    }
+}
