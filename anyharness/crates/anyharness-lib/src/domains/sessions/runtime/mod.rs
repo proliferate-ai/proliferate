@@ -50,6 +50,7 @@ pub(crate) mod prompt_message_actor_tests;
 mod prompt_message_cold_start_tests;
 #[cfg(test)]
 mod prompt_message_tests;
+mod prompt_title;
 mod replay;
 mod startup;
 mod startup_errors;

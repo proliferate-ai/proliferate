@@ -11,6 +11,7 @@ use crate::domains::sessions::prompt::provenance::{AgentSessionPromptSource, Pro
 use crate::domains::sessions::prompt::PromptPrepareContext;
 use crate::live::sessions::{LiveSessionCommandError, PromptAcceptError, PromptAcceptance};
 
+use super::prompt_title::PromptTitleAssignment;
 use super::{
     SendPromptError, SendPromptOutcome, SessionLifecycleError, SessionRuntime, StartSessionError,
 };
@@ -138,6 +139,12 @@ impl SessionRuntime {
         if blocks.is_empty() {
             return Err(SendPromptError::EmptyPrompt);
         }
+        let title_assignment = PromptTitleAssignment::from_authored_texts(
+            blocks.iter().filter_map(|block| match block {
+                PromptInputBlock::Text { text } => Some(text.as_str()),
+                _ => None,
+            }),
+        );
         let started = Instant::now();
         let prompt_id_for_trace = prompt_id.clone();
         tracing::info!(
@@ -237,6 +244,7 @@ impl SessionRuntime {
             .get_session(session_id)
             .map_err(SendPromptError::Internal)?
             .unwrap_or(record);
+        let session = title_assignment.apply_after_acceptance(self, session_id, session);
 
         Ok(match acceptance {
             PromptAcceptance::Started { turn_id } => {
@@ -261,21 +269,35 @@ impl SessionRuntime {
         text: String,
         prompt_id: String,
     ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
-        self.send_text_prompt_with_id_inner(session_id, text, prompt_id, None)
-            .await
+        self.send_text_prompt_with_id_inner(
+            session_id,
+            text,
+            prompt_id,
+            None,
+            PromptTitleAssignment::Disabled,
+        )
+        .await
     }
 
     /// Creation-only variant carrying trusted agent-session provenance without
     /// activating the general cross-agent message surface.
-    pub(crate) async fn send_text_prompt_with_id_and_provenance(
+    pub(crate) async fn send_initial_task_prompt_with_id(
         &self,
         session_id: &str,
         text: String,
         prompt_id: String,
         provenance: PromptProvenance,
     ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
-        self.send_text_prompt_with_id_inner(session_id, text, prompt_id, Some(provenance))
-            .await
+        let title_assignment =
+            PromptTitleAssignment::from_authored_texts(std::iter::once(text.as_str()));
+        self.send_text_prompt_with_id_inner(
+            session_id,
+            text,
+            prompt_id,
+            Some(provenance),
+            title_assignment,
+        )
+        .await
     }
 
     /// Workflow-owned multi-block twin of [`Self::send_text_prompt_with_id`]:
@@ -295,8 +317,13 @@ impl SessionRuntime {
                 SendPromptError::EmptyPrompt,
             ));
         }
-        self.send_payload_prompt_with_id(session_id, payload, prompt_id)
-            .await
+        self.send_payload_prompt_with_id(
+            session_id,
+            payload,
+            prompt_id,
+            PromptTitleAssignment::Disabled,
+        )
+        .await
     }
 
     async fn send_text_prompt_with_id_inner(
@@ -305,6 +332,7 @@ impl SessionRuntime {
         text: String,
         prompt_id: String,
         provenance: Option<PromptProvenance>,
+        title_assignment: PromptTitleAssignment,
     ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
         if text.trim().is_empty() {
             return Err(TextPromptDispatchError::Dispatch(
@@ -315,7 +343,7 @@ impl SessionRuntime {
         if let Some(provenance) = provenance {
             payload = payload.with_provenance(provenance);
         }
-        self.send_payload_prompt_with_id(session_id, payload, prompt_id)
+        self.send_payload_prompt_with_id(session_id, payload, prompt_id, title_assignment)
             .await
     }
 
@@ -324,6 +352,7 @@ impl SessionRuntime {
         session_id: &str,
         payload: crate::domains::sessions::prompt::PromptPayload,
         prompt_id: String,
+        title_assignment: PromptTitleAssignment,
     ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
@@ -353,6 +382,7 @@ impl SessionRuntime {
             .ok()
             .flatten()
             .unwrap_or(record);
+        let session = title_assignment.apply_after_acceptance(self, session_id, session);
         Ok(match acceptance {
             PromptAcceptance::Started { turn_id } => {
                 SendPromptOutcome::Running { session, turn_id }

@@ -534,6 +534,67 @@ describe("TranscriptToolCallItemBlock", () => {
     expect(screen.getByText("created")).toBeTruthy();
   });
 
+  it.each(["completed create", "lifecycle", "directory-backed send_message"] as const)(
+    "renders the semantic AnyHarness title for a %s receipt",
+    (receiptKind) => {
+      const semanticTitle = "Inspect the replay boundary";
+      const providerPrefix = "System instruction from AnyHarness, not user content:";
+      let item: ToolCallItem;
+
+      if (receiptKind === "completed create") {
+        item = workspaceTool("create_agent", {
+          rawInput: {
+            workspaceId: "workspace-1",
+            kind: "subagent",
+            task: "  Inspect\n the replay boundary  ",
+          },
+          rawOutput: agentView({ title: semanticTitle }),
+        });
+      } else if (receiptKind === "lifecycle") {
+        item = workspaceTool("resume_agent", {
+          rawInput: { agentId: "agent-session-1" },
+          rawOutput: agentView({ title: semanticTitle }),
+        });
+      } else {
+        mocks.directoryEntries["client-session:message-target"] = {
+          sessionId: "client-session:message-target",
+          materializedSessionId: "agent-session-1",
+          title: semanticTitle,
+          workspaceId: "workspace-1",
+          activity: { transcriptTitle: null },
+          sessionRelationship: {
+            kind: "subagent_child",
+            parentSessionId: "parent-session",
+            relation: "subagent",
+            workspaceId: "workspace-1",
+          },
+        };
+        item = workspaceTool("send_message", {
+          rawInput: { agentId: "agent-session-1", message: "Continue the audit" },
+          rawOutput: {
+            target: { runtimeId: "runtime-1", sessionId: "agent-session-1" },
+            queueSeq: 8,
+            status: "durably_queued",
+          },
+        });
+      }
+
+      render(
+        <TranscriptContextProviders sessionId="parent-session" onOpenSession={vi.fn()}>
+          <TranscriptToolCallItemBlock
+            item={item}
+            workspaceId="workspace-1"
+            onOpenArtifact={() => {}}
+          />
+        </TranscriptContextProviders>,
+      );
+
+      expect(screen.getByText(semanticTitle)).toBeTruthy();
+      expect(screen.queryByText("Agent")).toBeNull();
+      expect(screen.queryByText(new RegExp(providerPrefix))).toBeNull();
+    },
+  );
+
   it("keeps a targeted Workspace read foldable while using the agent glyph", () => {
     const item = workspaceTool("get_task_output", {
       rawInput: { agentId: "target-agent", limit: 10 },

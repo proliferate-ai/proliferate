@@ -68,7 +68,6 @@ pub async fn prompt_session(
             WorkspaceOperationKind::SessionPrompt,
         )
         .await?;
-        let prompt_title = prompt_fallback_title(&req.blocks);
         let outcome = state
             .session_runtime
             .send_prompt(&session_id, req.blocks, prompt_id)
@@ -82,7 +81,7 @@ pub async fn prompt_session(
             "[workspace-latency] session.http.prompt.completed"
         );
 
-        let (mut record, status, queued_seq) = match outcome {
+        let (record, status, queued_seq) = match outcome {
             SendPromptOutcome::Running { session, .. } => (
                 session,
                 anyharness_contract::v1::PromptSessionStatus::Running,
@@ -95,19 +94,6 @@ pub async fn prompt_session(
             ),
         };
 
-        // An untitled session takes its prompt text as the title so every
-        // surface shows something meaningful right away; a generated summary
-        // or user rename replaces it later via the title endpoint.
-        if let Some(title) = prompt_title {
-            if state
-                .session_service
-                .update_session_title_if_absent(&session_id, &title)
-                .unwrap_or(false)
-            {
-                record.title = Some(title);
-            }
-        }
-
         Ok(Json(PromptSessionResponse {
             session: session_to_contract(&state, &record).await?,
             status,
@@ -116,27 +102,6 @@ pub async fn prompt_session(
     }
     .instrument(span)
     .await
-}
-
-const PROMPT_TITLE_MAX_CHARS: usize = 160;
-
-fn prompt_fallback_title(
-    blocks: &[anyharness_contract::v1::PromptInputBlock],
-) -> Option<String> {
-    let text = blocks.iter().find_map(|block| match block {
-        anyharness_contract::v1::PromptInputBlock::Text { text } => {
-            let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
-            (!collapsed.is_empty()).then_some(collapsed)
-        }
-        _ => None,
-    })?;
-    Some(
-        text.chars()
-            .take(PROMPT_TITLE_MAX_CHARS)
-            .collect::<String>()
-            .trim_end()
-            .to_string(),
-    )
 }
 
 fn request_prompt_id(
@@ -196,32 +161,6 @@ fn normalize_prompt_id(prompt_id: Option<&str>) -> Result<Option<String>, ApiErr
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn prompt_fallback_title_collapses_whitespace_and_caps_length() {
-        let blocks = vec![
-            anyharness_contract::v1::PromptInputBlock::Text {
-                text: "  Fix\n\nthe   login \tflow  ".to_string(),
-            },
-        ];
-        assert_eq!(
-            prompt_fallback_title(&blocks).as_deref(),
-            Some("Fix the login flow")
-        );
-
-        let long = vec![anyharness_contract::v1::PromptInputBlock::Text {
-            text: "word ".repeat(64),
-        }];
-        let title = prompt_fallback_title(&long).expect("title");
-        assert!(title.chars().count() <= PROMPT_TITLE_MAX_CHARS);
-        assert!(!title.ends_with(' '));
-
-        assert_eq!(prompt_fallback_title(&[]), None);
-        let blank = vec![anyharness_contract::v1::PromptInputBlock::Text {
-            text: "   ".to_string(),
-        }];
-        assert_eq!(prompt_fallback_title(&blank), None);
-    }
 
     #[test]
     fn prompt_request_ignores_unknown_provenance_field() {
