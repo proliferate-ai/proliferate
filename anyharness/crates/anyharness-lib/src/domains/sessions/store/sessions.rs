@@ -368,6 +368,7 @@ impl SessionStore {
     pub fn import_bundle(
         &self,
         session: &SessionRecord,
+        pending_prompt_seq_cursor: i64,
         live_config_snapshot: Option<&SessionLiveConfigSnapshotRecord>,
         pending_config_changes: &[PendingConfigChangeRecord],
         pending_prompts: &[PendingPromptRecord],
@@ -377,6 +378,11 @@ impl SessionStore {
     ) -> anyhow::Result<()> {
         self.db.with_tx(|conn| {
             insert_session_row(conn, session)?;
+            super::mobility::restore_pending_prompt_seq_cursor(
+                conn,
+                &session.id,
+                pending_prompt_seq_cursor,
+            )?;
             if let Some(snapshot) = live_config_snapshot {
                 upsert_live_config_snapshot_row(conn, snapshot)?;
             }
@@ -392,42 +398,12 @@ impl SessionStore {
             for event in events {
                 insert_event_row(conn, event)?;
             }
-            restore_pending_prompt_seq_cursor_from_event_history(conn, &session.id, events)?;
             for notification in raw_notifications {
                 insert_raw_notification_row(conn, notification)?;
             }
             Ok(())
         })
     }
-}
-
-fn restore_pending_prompt_seq_cursor_from_event_history(
-    conn: &rusqlite::Connection,
-    session_id: &str,
-    events: &[SessionEventRecord],
-) -> rusqlite::Result<()> {
-    let max_prompt_seq = events
-        .iter()
-        .filter(|event| event.session_id == session_id)
-        .filter_map(|event| {
-            let payload = serde_json::from_str::<serde_json::Value>(&event.payload_json).ok()?;
-            matches!(
-                payload.get("type")?.as_str()?,
-                "pending_prompt_added" | "pending_prompt_updated" | "pending_prompt_removed"
-            )
-            .then(|| payload.get("seq")?.as_i64())
-            .flatten()
-        })
-        .max();
-    if let Some(max_prompt_seq) = max_prompt_seq {
-        conn.execute(
-            "UPDATE sessions
-             SET pending_prompt_seq_cursor = MAX(pending_prompt_seq_cursor, ?2)
-             WHERE id = ?1",
-            params![session_id, max_prompt_seq],
-        )?;
-    }
-    Ok(())
 }
 
 pub(crate) fn list_session_ids_by_workspace_in_tx(

@@ -33,38 +33,6 @@ fn detects_when_a_session_has_started_a_turn() {
 }
 
 #[test]
-fn detects_a_durable_pending_prompt_added_identity() {
-    let db = Db::open_in_memory().expect("open db");
-    seed_workspace(&db);
-
-    let store = SessionStore::new(db);
-    store.insert(&session_record()).expect("insert session");
-    assert!(!store
-        .has_pending_prompt_added_event("session-1", 17)
-        .expect("check empty prompt history"));
-
-    store
-        .append_event(&SessionEventRecord {
-            id: 0,
-            session_id: "session-1".to_string(),
-            seq: 1,
-            timestamp: "2026-03-25T00:01:00Z".to_string(),
-            event_type: "pending_prompt_added".to_string(),
-            turn_id: None,
-            item_id: None,
-            payload_json: r#"{"type":"pending_prompt_added","seq":17}"#.to_string(),
-        })
-        .expect("append pending_prompt_added");
-
-    assert!(store
-        .has_pending_prompt_added_event("session-1", 17)
-        .expect("find prompt identity"));
-    assert!(!store
-        .has_pending_prompt_added_event("session-1", 18)
-        .expect("reject another prompt identity"));
-}
-
-#[test]
 fn append_event_sanitizes_large_persisted_payloads() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);

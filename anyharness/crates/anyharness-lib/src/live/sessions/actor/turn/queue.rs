@@ -74,36 +74,8 @@ impl SessionActor {
                 "terminal transaction unresolved".to_string(),
             ));
         }
-        match self
-            .caps
-            .events
-            .has_prompt_added_event(&self.session_id, seq)
-        {
-            Ok(true) => return Ok(()),
-            Ok(false) => {}
-            Err(error) => {
-                tracing::warn!(
-                    session_id = %self.session_id,
-                    seq,
-                    error = %error,
-                    "failed to inspect prequeued prompt visibility event",
-                );
-                return Err(PromptAcceptError::EnqueueFailed(error.to_string()));
-            }
-        }
-        match self.caps.queue.find_pending_prompt(&self.session_id, seq) {
-            Ok(Some(record)) => {
-                let mut sink = self.event_sink.lock().await;
-                sink.pending_prompt_added_strict(PendingPromptAddedPayload {
-                    seq: record.seq,
-                    prompt_id: record.prompt_id.clone(),
-                    text: record.text.clone(),
-                    content_parts: record.prompt_payload().content_parts(),
-                    queued_at: record.queued_at.clone(),
-                    prompt_provenance: record.prompt_payload().public_provenance(),
-                })
-                .map_err(|error| PromptAcceptError::EnqueueFailed(error.to_string()))?;
-            }
+        let record = match self.caps.queue.find_pending_prompt(&self.session_id, seq) {
+            Ok(Some(record)) => record,
             Ok(None) => {
                 return Err(PromptAcceptError::EnqueueFailed(format!(
                     "prequeued prompt {seq} disappeared before its visibility event"
@@ -118,7 +90,30 @@ impl SessionActor {
                 );
                 return Err(PromptAcceptError::EnqueueFailed(error.to_string()));
             }
+        };
+        match self.caps.events.has_prompt_added_event(&record) {
+            Ok(true) => return Ok(()),
+            Ok(false) => {}
+            Err(error) => {
+                tracing::warn!(
+                    session_id = %self.session_id,
+                    seq,
+                    error = %error,
+                    "failed to inspect prequeued prompt visibility event",
+                );
+                return Err(PromptAcceptError::EnqueueFailed(error.to_string()));
+            }
         }
+        let mut sink = self.event_sink.lock().await;
+        sink.pending_prompt_added_strict(PendingPromptAddedPayload {
+            seq: record.seq,
+            prompt_id: record.prompt_id.clone(),
+            text: record.text.clone(),
+            content_parts: record.prompt_payload().content_parts(),
+            queued_at: record.queued_at.clone(),
+            prompt_provenance: record.prompt_payload().public_provenance(),
+        })
+        .map_err(|error| PromptAcceptError::EnqueueFailed(error.to_string()))?;
         Ok(())
     }
 

@@ -21256,6 +21256,13 @@
               "$ref": "#/components/schemas/MobilityPendingConfigChangeRecord"
             }
           },
+          "pendingPromptSeqCursor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
           "pendingPrompts": {
             "type": "array",
             "items": {

@@ -24,12 +24,27 @@ pub(crate) struct WorkspaceMobilitySnapshot {
 #[derive(Debug, Clone)]
 pub(crate) struct SessionMobilitySnapshot {
     pub session: SessionRecord,
+    pub pending_prompt_seq_cursor: i64,
     pub live_config_snapshot: Option<SessionLiveConfigSnapshotRecord>,
     pub pending_config_changes: Vec<PendingConfigChangeRecord>,
     pub pending_prompts: Vec<PendingPromptRecord>,
     pub prompt_attachments: Vec<PromptAttachmentRecord>,
     pub events: Vec<SessionEventRecord>,
     pub raw_notifications: Vec<SessionRawNotificationRecord>,
+}
+
+pub(super) fn restore_pending_prompt_seq_cursor(
+    conn: &rusqlite::Connection,
+    session_id: &str,
+    lower_bound: i64,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE sessions
+         SET pending_prompt_seq_cursor = MAX(pending_prompt_seq_cursor, ?2)
+         WHERE id = ?1",
+        params![session_id, lower_bound],
+    )?;
+    Ok(())
 }
 
 impl SessionStore {
@@ -69,16 +84,21 @@ impl SessionStore {
                 "SELECT * FROM sessions WHERE workspace_id = ?1 ORDER BY updated_at DESC",
             )?;
             let sessions = session_stmt
-                .query_map([workspace_id], super::sessions::map_session)?
+                .query_map([workspace_id], |row| {
+                    Ok((
+                        super::sessions::map_session(row)?,
+                        row.get::<_, i64>("pending_prompt_seq_cursor")?,
+                    ))
+                })?
                 .collect::<rusqlite::Result<Vec<_>>>()?;
             drop(session_stmt);
 
             let session_ids = sessions
                 .iter()
-                .map(|session| session.id.clone())
+                .map(|(session, _)| session.id.clone())
                 .collect::<Vec<_>>();
             let mut session_snapshots = Vec::with_capacity(sessions.len());
-            for session in sessions {
+            for (session, pending_prompt_seq_cursor) in sessions {
                 let session_id = session.id.as_str();
                 let live_config_snapshot = conn
                     .query_row(
@@ -127,6 +147,7 @@ impl SessionStore {
                 };
                 session_snapshots.push(SessionMobilitySnapshot {
                     session,
+                    pending_prompt_seq_cursor,
                     live_config_snapshot,
                     pending_config_changes,
                     pending_prompts,

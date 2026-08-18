@@ -5546,6 +5546,8 @@ export interface components {
             events?: components["schemas"]["MobilitySessionEventRecord"][];
             liveConfigSnapshot?: null | components["schemas"]["MobilitySessionLiveConfigSnapshotRecord"];
             pendingConfigChanges?: components["schemas"]["MobilityPendingConfigChangeRecord"][];
+            /** Format: int64 */
+            pendingPromptSeqCursor?: number | null;
             pendingPrompts?: components["schemas"]["MobilityPendingPromptRecord"][];
             promptAttachments?: components["schemas"]["MobilityPromptAttachmentRecord"][];
             rawNotifications?: components["schemas"]["MobilitySessionRawNotificationRecord"][];

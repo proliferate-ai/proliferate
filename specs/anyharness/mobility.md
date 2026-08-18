@@ -58,8 +58,14 @@ artifacts, and the complete included session-link graph. Raw provider
 notifications are included only behind their existing environment gate.
 Subagent links carry the optional `subagentClosedAt` operability marker; older
 archives without that field import the relationship as Open.
-Install reconstructs each pending-prompt sequence cursor from durable queue
-event history, so an empty imported queue cannot reuse a historical identity.
+New archives carry each session's authoritative pending-prompt sequence cursor.
+Install restores the maximum of that cursor and every archived queue identity,
+including pending rows, scalar and reordered queue events, completion
+projections, and delivery-held active or retired prompts. Older archives without
+the cursor field use the same durable identities as a conservative fallback, so
+an empty imported queue cannot reuse an identity that a later event may target.
+Install rejects cross-session events and event columns whose type disagrees with
+their payload tag before writing session state.
 
 Pending and enqueued subagent-completion deliveries, plus delivered rows with
 an unacknowledged completion-wake removal intent, are archived by parent

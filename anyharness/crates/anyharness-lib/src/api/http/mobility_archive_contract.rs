@@ -3,8 +3,8 @@ use anyharness_contract::v1::{
     MobilitySessionEventRecord, MobilitySessionLinkCompletionDeliveryRecord,
     MobilitySessionLinkCompletionRecord, MobilitySessionLinkRecord,
     MobilitySessionLinkWakeScheduleRecord, MobilitySessionLiveConfigSnapshotRecord,
-    MobilitySessionRawNotificationRecord, MobilitySessionRecord, WorkspaceMobilityArchive,
-    WorkspaceMobilityFileEntry, WorkspaceMobilitySessionBundle,
+    MobilitySessionRawNotificationRecord, MobilitySessionRecord, SessionEvent,
+    WorkspaceMobilityArchive, WorkspaceMobilityFileEntry, WorkspaceMobilitySessionBundle,
 };
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -121,8 +121,18 @@ fn from_contract_session_bundle(
 ) -> Result<WorkspaceMobilitySessionBundleData, ApiError> {
     let session = from_contract_session_record(bundle.session, workspace_id);
     let session_id = session.id.clone();
+    if bundle
+        .pending_prompt_seq_cursor
+        .is_some_and(|cursor| cursor < 0)
+    {
+        return Err(ApiError::bad_request(
+            format!("Session {session_id} has a negative pending-prompt sequence cursor"),
+            "MOBILITY_INVALID_ARCHIVE",
+        ));
+    }
     Ok(WorkspaceMobilitySessionBundleData {
         session,
+        pending_prompt_seq_cursor: bundle.pending_prompt_seq_cursor,
         live_config_snapshot: bundle
             .live_config_snapshot
             .map(from_contract_live_config_snapshot),
@@ -142,7 +152,11 @@ fn from_contract_session_bundle(
             .into_iter()
             .map(|record| from_contract_prompt_attachment(record, &session_id, attachment_storage))
             .collect::<Result<Vec<_>, _>>()?,
-        events: bundle.events.into_iter().map(from_contract_event).collect(),
+        events: bundle
+            .events
+            .into_iter()
+            .map(|record| from_contract_event(record, &session_id))
+            .collect::<Result<Vec<_>, _>>()?,
         raw_notifications: bundle
             .raw_notifications
             .into_iter()
@@ -400,8 +414,50 @@ fn from_contract_prompt_attachment(
     })
 }
 
-fn from_contract_event(record: MobilitySessionEventRecord) -> SessionEventRecord {
-    SessionEventRecord {
+fn from_contract_event(
+    record: MobilitySessionEventRecord,
+    expected_session_id: &str,
+) -> Result<SessionEventRecord, ApiError> {
+    if record.session_id != expected_session_id {
+        return Err(ApiError::bad_request(
+            format!(
+                "Session {expected_session_id} contains an event owned by {}",
+                record.session_id
+            ),
+            "MOBILITY_INVALID_ARCHIVE",
+        ));
+    }
+    let payload: serde_json::Value =
+        serde_json::from_str(&record.payload_json).map_err(|error| {
+            ApiError::bad_request(
+                format!("Invalid {} event payload: {error}", record.event_type),
+                "MOBILITY_INVALID_ARCHIVE",
+            )
+        })?;
+    if payload.get("type").and_then(serde_json::Value::as_str) != Some(record.event_type.as_str()) {
+        return Err(ApiError::bad_request(
+            format!(
+                "Event type {} disagrees with its payload type",
+                record.event_type
+            ),
+            "MOBILITY_INVALID_ARCHIVE",
+        ));
+    }
+    if matches!(
+        record.event_type.as_str(),
+        "pending_prompt_added"
+            | "pending_prompt_updated"
+            | "pending_prompt_removed"
+            | "pending_prompts_reordered"
+    ) {
+        serde_json::from_value::<SessionEvent>(payload).map_err(|error| {
+            ApiError::bad_request(
+                format!("Invalid pending-prompt event payload: {error}"),
+                "MOBILITY_INVALID_ARCHIVE",
+            )
+        })?;
+    }
+    Ok(SessionEventRecord {
         id: 0,
         session_id: record.session_id,
         seq: record.seq,
@@ -410,7 +466,7 @@ fn from_contract_event(record: MobilitySessionEventRecord) -> SessionEventRecord
         turn_id: record.turn_id,
         item_id: record.item_id,
         payload_json: record.payload_json,
-    }
+    })
 }
 
 fn from_contract_raw_notification(
@@ -423,5 +479,49 @@ fn from_contract_raw_notification(
         timestamp: record.timestamp,
         notification_kind: record.notification_kind,
         payload_json: record.payload_json,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn event(session_id: &str, event_type: &str, payload_json: &str) -> MobilitySessionEventRecord {
+        MobilitySessionEventRecord {
+            session_id: session_id.to_string(),
+            seq: 1,
+            timestamp: "2026-03-25T00:00:00Z".to_string(),
+            event_type: event_type.to_string(),
+            turn_id: None,
+            item_id: None,
+            payload_json: payload_json.to_string(),
+        }
+    }
+
+    #[test]
+    fn archive_events_require_matching_ownership_and_payload_type() {
+        assert!(from_contract_event(
+            event(
+                "session-1",
+                "pending_prompt_added",
+                r#"{"type":"pending_prompt_added","seq":1,"text":"queued","queuedAt":"2026-03-25T00:00:00Z"}"#,
+            ),
+            "session-1",
+        )
+        .is_ok());
+        assert!(from_contract_event(
+            event(
+                "other-session",
+                "pending_prompt_added",
+                r#"{"type":"pending_prompt_added","seq":1,"text":"queued","queuedAt":"2026-03-25T00:00:00Z"}"#,
+            ),
+            "session-1",
+        )
+        .is_err());
+        assert!(from_contract_event(
+            event("session-1", "pending_prompt_added", r#"{"seq":1}"#),
+            "session-1",
+        )
+        .is_err());
     }
 }

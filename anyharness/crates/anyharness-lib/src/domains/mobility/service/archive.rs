@@ -7,6 +7,125 @@ use crate::domains::mobility::model::{
 
 use super::MobilityError;
 
+pub(in crate::domains::mobility) fn session_pending_prompt_cursor_lower_bound(
+    archive: &WorkspaceMobilityArchiveData,
+    bundle: &WorkspaceMobilitySessionBundleData,
+) -> Result<i64, MobilityError> {
+    let session_id = bundle.session.id.as_str();
+    let mut lower_bound = bundle.pending_prompt_seq_cursor.unwrap_or(0);
+    if lower_bound < 0 {
+        return Err(MobilityError::Invalid(format!(
+            "archive session {session_id} has a negative pending-prompt sequence cursor"
+        )));
+    }
+
+    for pending in &bundle.pending_prompts {
+        if pending.session_id != session_id {
+            return Err(MobilityError::Invalid(format!(
+                "archive session {session_id} contains pending prompt owned by {}",
+                pending.session_id
+            )));
+        }
+        lower_bound = lower_bound.max(valid_prompt_seq(session_id, pending.seq)?);
+    }
+
+    for event in &bundle.events {
+        if event.session_id != session_id {
+            return Err(MobilityError::Invalid(format!(
+                "archive session {session_id} contains event owned by {}",
+                event.session_id
+            )));
+        }
+        let payload: serde_json::Value =
+            serde_json::from_str(&event.payload_json).map_err(|error| {
+                MobilityError::Invalid(format!(
+                    "archive session {session_id} has invalid {} event payload: {error}",
+                    event.event_type
+                ))
+            })?;
+        if payload.get("type").and_then(serde_json::Value::as_str)
+            != Some(event.event_type.as_str())
+        {
+            return Err(MobilityError::Invalid(format!(
+                "archive session {session_id} event type {} disagrees with its payload",
+                event.event_type
+            )));
+        }
+        if matches!(
+            event.event_type.as_str(),
+            "pending_prompt_added"
+                | "pending_prompt_updated"
+                | "pending_prompt_removed"
+                | "pending_prompts_reordered"
+        ) {
+            if event.event_type == "pending_prompts_reordered" {
+                let pending_prompts = payload
+                    .get("pendingPrompts")
+                    .and_then(serde_json::Value::as_array)
+                    .ok_or_else(|| {
+                        MobilityError::Invalid(format!(
+                            "archive session {session_id} has an invalid reordered-prompt event"
+                        ))
+                    })?;
+                for pending in pending_prompts {
+                    let seq = pending
+                        .get("seq")
+                        .and_then(serde_json::Value::as_i64)
+                        .ok_or_else(|| {
+                            MobilityError::Invalid(format!(
+                                "archive session {session_id} has a reordered prompt without an integer sequence"
+                            ))
+                        })?;
+                    lower_bound = lower_bound.max(valid_prompt_seq(session_id, seq)?);
+                }
+            } else {
+                let seq = payload
+                    .get("seq")
+                    .and_then(serde_json::Value::as_i64)
+                    .ok_or_else(|| {
+                        MobilityError::Invalid(format!(
+                            "archive session {session_id} has a pending-prompt event without an integer sequence"
+                        ))
+                    })?;
+                lower_bound = lower_bound.max(valid_prompt_seq(session_id, seq)?);
+            }
+        }
+    }
+
+    for delivery in archive
+        .session_link_completion_deliveries
+        .iter()
+        .filter(|delivery| delivery.parent_session_id == session_id)
+    {
+        for seq in [delivery.parent_prompt_seq, delivery.retired_prompt_seq]
+            .into_iter()
+            .flatten()
+        {
+            lower_bound = lower_bound.max(valid_prompt_seq(session_id, seq)?);
+        }
+    }
+    for completion in &archive.session_link_completions {
+        let belongs_to_session = archive.session_links.iter().any(|link| {
+            link.id == completion.session_link_id && link.parent_session_id == session_id
+        });
+        if belongs_to_session {
+            if let Some(seq) = completion.parent_prompt_seq {
+                lower_bound = lower_bound.max(valid_prompt_seq(session_id, seq)?);
+            }
+        }
+    }
+    Ok(lower_bound)
+}
+
+fn valid_prompt_seq(session_id: &str, seq: i64) -> Result<i64, MobilityError> {
+    if seq <= 0 {
+        return Err(MobilityError::Invalid(format!(
+            "archive session {session_id} contains invalid pending-prompt sequence {seq}"
+        )));
+    }
+    Ok(seq)
+}
+
 pub(super) fn validate_completion_deliveries(
     archive: &WorkspaceMobilityArchiveData,
     session_ids: &HashSet<&str>,
@@ -126,6 +245,7 @@ fn completion_delivery_size_bytes(
 
 fn session_bundle_size_bytes(bundle: &WorkspaceMobilitySessionBundleData) -> u64 {
     encoded_session_size_bytes(&bundle.session)
+        .saturating_add(bundle.pending_prompt_seq_cursor.unwrap_or_default().max(0) as u64)
         .saturating_add(
             bundle
                 .live_config_snapshot
@@ -272,3 +392,6 @@ fn str_size(value: &str) -> u64 {
 fn option_string_size(value: &Option<String>) -> u64 {
     value.as_ref().map(|value| value.len() as u64).unwrap_or(0)
 }
+
+#[cfg(test)]
+mod tests;

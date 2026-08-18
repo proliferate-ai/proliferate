@@ -7,6 +7,7 @@ use super::persisted_payloads::sanitize_session_event_for_sqlite;
 use super::SessionStore;
 use crate::domains::sessions::model::SessionEventRecord;
 
+mod pending_prompts;
 mod repair;
 
 impl SessionStore {
@@ -35,29 +36,6 @@ impl SessionStore {
                 |row| row.get(0),
             )?;
             Ok(max.unwrap_or(0) + 1)
-        })
-    }
-
-    pub(crate) fn has_pending_prompt_added_event(
-        &self,
-        session_id: &str,
-        pending_prompt_seq: i64,
-    ) -> anyhow::Result<bool> {
-        self.db.with_conn(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT payload_json FROM session_events
-                 WHERE session_id = ?1 AND event_type = 'pending_prompt_added'",
-            )?;
-            let payloads = stmt.query_map([session_id], |row| row.get::<_, String>(0))?;
-            for payload in payloads {
-                let Ok(value) = serde_json::from_str::<serde_json::Value>(&payload?) else {
-                    continue;
-                };
-                if value["seq"].as_i64() == Some(pending_prompt_seq) {
-                    return Ok(true);
-                }
-            }
-            Ok(false)
         })
     }
 
@@ -115,6 +93,8 @@ impl SessionStore {
             )?;
             let timestamp = chrono::Utc::now().to_rfc3339();
             let event_type = event.event_type().to_string();
+            // Persist a sanitized copy while returning the original event.
+            let persisted_event = sanitize_session_event_for_sqlite(&event);
             let envelope = anyharness_contract::v1::SessionEventEnvelope {
                 session_id: session_id.to_string(),
                 seq,
@@ -123,7 +103,6 @@ impl SessionStore {
                 item_id: None,
                 event,
             };
-            let persisted_event = sanitize_session_event_for_sqlite(&envelope.event);
             let payload_json = serde_json::to_string(&persisted_event)
                 .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
             let removal_key = completion_wake_removal_key_from_payload(session_id, &payload_json)?;

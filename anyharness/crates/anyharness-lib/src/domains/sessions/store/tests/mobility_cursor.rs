@@ -2,7 +2,7 @@ use super::*;
 use crate::domains::sessions::model::SessionEventRecord;
 
 #[test]
-fn import_restores_pending_prompt_cursor_from_drained_history() {
+fn import_applies_legacy_prompt_cursor_floor_before_allocation() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);
 
@@ -41,7 +41,7 @@ fn import_restores_pending_prompt_cursor_from_drained_history() {
         },
     ];
     store
-        .import_bundle(&session_record(), None, &[], &[], &[], &events, &[])
+        .import_bundle(&session_record(), 1, None, &[], &[], &[], &events, &[])
         .expect("import queue-empty mobility bundle");
 
     let next = store
@@ -49,6 +49,22 @@ fn import_restores_pending_prompt_cursor_from_drained_history() {
         .expect("insert after mobility");
     assert_eq!(next.seq, 2);
     assert!(!store
-        .has_pending_prompt_added_event("session-1", next.seq)
+        .has_pending_prompt_added_event(&next)
         .expect("new row must not match historical visibility"));
+}
+
+#[test]
+fn import_restores_authoritative_prompt_cursor_without_queue_history() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+
+    let store = SessionStore::new(db);
+    store
+        .import_bundle(&session_record(), 7, None, &[], &[], &[], &[], &[])
+        .expect("import queue-empty mobility bundle");
+
+    let next = store
+        .insert_pending_prompt("session-1", "new after mobility", None)
+        .expect("insert after mobility");
+    assert_eq!(next.seq, 8);
 }

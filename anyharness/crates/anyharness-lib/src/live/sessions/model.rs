@@ -159,7 +159,7 @@ pub trait EventPersist: Send + Sync {
     fn next_event_seq(&self, session_id: &str) -> anyhow::Result<i64>;
     fn last_event_seq(&self, session_id: &str) -> anyhow::Result<i64>;
     fn has_turn_started_event(&self, session_id: &str) -> anyhow::Result<bool>;
-    fn has_prompt_added_event(&self, session_id: &str, prompt_seq: i64) -> anyhow::Result<bool>;
+    fn has_prompt_added_event(&self, prompt: &PendingPromptRecord) -> anyhow::Result<bool>;
     fn append_raw_notification(
         &self,
         session_id: &str,

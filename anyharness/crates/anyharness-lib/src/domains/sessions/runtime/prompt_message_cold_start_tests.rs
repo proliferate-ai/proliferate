@@ -99,7 +99,7 @@ async fn startup_drain_persists_pending_prompt_added_before_executing_agent_mess
         )
         .expect("commit child message without activation");
     assert!(!store
-        .has_pending_prompt_added_event("target", pending.seq)
+        .has_pending_prompt_added_event(&pending)
         .expect("no visibility event before startup"));
     assert!(state.acp_manager.get_handle("target").await.is_none());
 

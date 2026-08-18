@@ -144,6 +144,7 @@ fn to_contract_session_bundle(
 ) -> WorkspaceMobilitySessionBundle {
     WorkspaceMobilitySessionBundle {
         session: to_contract_session_record(bundle.session),
+        pending_prompt_seq_cursor: bundle.pending_prompt_seq_cursor,
         live_config_snapshot: bundle
             .live_config_snapshot
             .map(to_contract_live_config_snapshot),

@@ -163,6 +163,8 @@ pub struct WorkspaceMobilityFileEntry {
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceMobilitySessionBundle {
     pub session: MobilitySessionRecord,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_prompt_seq_cursor: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub live_config_snapshot: Option<MobilitySessionLiveConfigSnapshotRecord>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
