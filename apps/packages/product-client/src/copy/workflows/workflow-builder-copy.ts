@@ -40,7 +40,9 @@ export const WORKFLOW_BUILDER_COPY = {
   issuesBanner: (count: number, firstMessage: string) =>
     `Fix ${count} ${count === 1 ? "issue" : "issues"} before saving. ${firstMessage}`,
   catalogUnavailable:
-    "The agent catalog could not be loaded. Steps save without a model and use the run's default.",
+    "The agent catalog could not be loaded. Stored selections remain visible and cannot be saved until availability is known.",
+  modelUnavailable:
+    "A stored harness or model is unavailable. Choose an available selection or clear it before saving.",
 
   stepHeading: (position: number) => `Step ${position}`,
   /** Accessible name of the pannable chain canvas. */
@@ -55,7 +57,7 @@ export const WORKFLOW_BUILDER_COPY = {
   addAgentStepLabel: "Agent",
   addHumanStepLabel: "Human in the loop",
   railHelp:
-    "Steps run top to bottom from the input. Select a card to edit it in the inspector, and reorder from there.",
+    "Connect ports to author the run path. Select a card to edit it; moving a card changes display order only.",
 
   /** The left rail's context-docs section. */
   contextDocsHeading: "Context docs",
@@ -78,8 +80,7 @@ export const WORKFLOW_BUILDER_COPY = {
   moveStepDownLabel: (position: number) => `Move step ${position} down`,
   stepTitleLabel: "Title",
   stepTitlePlaceholder: "Draft the research questions",
-  requiresApprovalLabel: "Requires approval",
-  humanStepNote: "The run pauses here until someone approves the step.",
+  requiresApprovalLabel: "Requires human approval",
   harnessLabel: "Harness",
   harnessDefaultOption: "Run default",
   harnessUnavailableOption: (agentKind: string) => `Unavailable harness (${agentKind})`,

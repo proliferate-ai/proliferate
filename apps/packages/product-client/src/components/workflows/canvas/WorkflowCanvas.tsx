@@ -19,6 +19,8 @@ const ZOOM_MAX = 1.5;
 const ZOOM_STEP = 0.15;
 /** Content padding inside the viewport when fitting, and the initial offset. */
 const FIT_PADDING = 24;
+/** Bottom controls/readout stay outside the fitted content band. */
+const FIT_OVERLAY_SAFE_BAND = 48;
 /** The design's dot-grid pitch at zoom 1. */
 const GRID_PITCH = 22;
 
@@ -76,7 +78,7 @@ export function WorkflowCanvas({
     }
     const scale = Math.min(
       (bounds.width - FIT_PADDING * 2) / contentWidth,
-      (bounds.height - FIT_PADDING * 2) / contentHeight,
+      (bounds.height - FIT_PADDING * 2 - FIT_OVERLAY_SAFE_BAND) / contentHeight,
       1,
     );
     const clamped = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, scale));
@@ -95,9 +97,22 @@ export function WorkflowCanvas({
     }
   }, [fit]);
 
-  const zoomBy = (delta: number) => {
+  const zoomBy = (delta: number, anchor?: { x: number; y: number }) => {
     touchedRef.current = true;
-    setZoom((current) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, current + delta)));
+    setZoom((current) => {
+      const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, current + delta));
+      const container = containerRef.current;
+      const point = anchor ?? (container
+        ? { x: container.clientWidth / 2, y: container.clientHeight / 2 }
+        : { x: 0, y: 0 });
+      if (next !== current) {
+        setPan((currentPan) => ({
+          x: point.x - (point.x - currentPan.x) * (next / current),
+          y: point.y - (point.y - currentPan.y) * (next / current),
+        }));
+      }
+      return next;
+    });
   };
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -141,7 +156,11 @@ export function WorkflowCanvas({
       return;
     }
     event.preventDefault();
-    zoomBy(event.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP);
+    const bounds = event.currentTarget.getBoundingClientRect();
+    zoomBy(event.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP, {
+      x: event.clientX - bounds.left,
+      y: event.clientY - bounds.top,
+    });
   };
 
   return (

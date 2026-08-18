@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRepoRootsQuery } from "@anyharness/sdk-react";
 import type { WorkflowStarterTemplateV2 } from "#product/config/workflows/starter-templates";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
@@ -12,6 +12,7 @@ import { WorkflowBuilderDocInspector } from "#product/components/workflows/build
 import { WorkflowBuilderInputsPanel } from "#product/components/workflows/builder-v2/WorkflowBuilderInputsPanel";
 import { WorkflowBuilderNodeCard } from "#product/components/workflows/builder-v2/WorkflowBuilderNodeCard";
 import { WorkflowBuilderRail } from "#product/components/workflows/builder-v2/WorkflowBuilderRail";
+import { WorkflowJsonEditor } from "#product/components/workflows/builder-v2/WorkflowJsonEditor";
 import { WorkflowResourceState } from "#product/components/workflows/WorkflowResourceState";
 import { Button } from "#product/primitives/Button";
 import { IconButton } from "#product/primitives/IconButton";
@@ -19,6 +20,7 @@ import { Input } from "#product/primitives/Input";
 import { ArrowLeft } from "#product/primitives/icons/core";
 import { StatusDot } from "#product/primitives/StatusDot";
 import { NoticeBanner } from "#product/primitives/patterns/NoticeBanner";
+import { SegmentedControl } from "#product/primitives/SegmentedControl";
 
 export interface WorkflowBuilderSurfaceProps {
   /** `null` = a new workflow, blank or seeded from `template`. */
@@ -62,15 +64,7 @@ function resolveSelection(
     : { kind: "input" };
 }
 
-/**
- * The gen-2 builder as the design's three-pane graph page: the step palette
- * and context-docs roster on the left, the chain drawn full-bleed on the
- * canvas in the middle, and an inspector on the right editing exactly the
- * selected object. There is still no edge editing — the chain is the card
- * order, and `useWorkflowBuilder` renders it as the linear edge list a save
- * sends. Every rule the surface enforces comes from `validateDefinitionV2`
- * through that hook; this component only decides where each issue is shown.
- */
+/** Three-pane authoring surface with explicit graph edges and schema-backed validation. */
 export function WorkflowBuilderSurface({
   definitionId,
   template = null,
@@ -78,31 +72,30 @@ export function WorkflowBuilderSurface({
   onSaved,
   onBack,
 }: WorkflowBuilderSurfaceProps) {
-  // Runtime repo roots, the same source `WorkflowTriggerDialog` picks a run's
-  // repository from. No `enabled` gate: unlike the dialog's `open`, this surface
-  // is only mounted while a workflow is being edited, and the query already
-  // disables itself when no runtime is connected.
   const repoRootsQuery = useRepoRootsQuery();
   const repositories = useMemo(
     () => workflowRepoRootOptions(repoRootsQuery.data ?? []),
     [repoRootsQuery.data],
   );
-  // `null` while the list is unknown: an id cannot be confirmed against a list
-  // that has not arrived, and confirming it is what the save gate needs.
   const availableRepoRootIds = repoRootsQuery.data
     ? repoRootsQuery.data.map((repoRoot) => repoRoot.id)
     : null;
-  const builder = useWorkflowBuilder({
-    definitionId,
-    template,
-    authCacheScope,
-    availableRepoRootIds,
-  });
   const registriesQuery = useCloudLaunchModelRegistries();
   const harnesses = useMemo(
     () => workflowBuilderHarnessOptions(registriesQuery.data),
     [registriesQuery.data],
   );
+  const availableModelSelections = useMemo(() => harnesses.map((harness) => ({
+    agentKind: harness.agentKind,
+    modelIds: harness.models.map((model) => model.id),
+  })), [harnesses]);
+  const builder = useWorkflowBuilder({
+    definitionId,
+    template,
+    authCacheScope,
+    availableRepoRootIds,
+    availableModelSelections,
+  });
 
   const { draft, issues, actions } = builder;
   const inputNames = useMemo(
@@ -115,9 +108,8 @@ export function WorkflowBuilderSurface({
   );
 
   const [selection, setSelection] = useState<BuilderSelection | null>(null);
-  // A just-added step selects itself so the palette lands the user in the
-  // fields they came for. Docs do the same, but synchronously in the add
-  // handler (the new doc's index is known there).
+  const [authoringMode, setAuthoringMode] = useState<"graph" | "json">("graph");
+  const [jsonValid, setJsonValid] = useState(true);
   const previousNodeCountRef = useRef(draft.nodes.length);
   useEffect(() => {
     if (draft.nodes.length > previousNodeCountRef.current) {
@@ -169,23 +161,27 @@ export function WorkflowBuilderSurface({
     registriesQuery.isError
       ? <NoticeBanner key="catalog" tone="warning">{WORKFLOW_BUILDER_COPY.catalogUnavailable}</NoticeBanner>
       : null,
+    builder.modelSelectionUnavailable
+      ? <NoticeBanner key="model" tone="warning">{WORKFLOW_BUILDER_COPY.modelUnavailable}</NoticeBanner>
+      : null,
     repoRootsQuery.isError
       ? <NoticeBanner key="repos" tone="warning">{WORKFLOW_BUILDER_COPY.repositoriesLoadFailed}</NoticeBanner>
       : null,
   ].filter((banner) => banner !== null);
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background" data-telemetry-block>
-      {/* `MainSidebarPageShell` draws an absolute, always-on-top 46px window-
-          drag strip over its content area (see that file), so any real
-          control in a directly-nested page's own top 46px is unreachable —
-          the same reason `ProductPageShell` reserves `pt-14` for the list
-          page next to this one. This surface has its own header instead of
-          going through that shell, so it reserves the identical clearance
-          itself. The pixel height comes from that same shared native-chrome
-          constant, not a one-off measurement, so it is set inline rather
-          than through the (sealed-zero, arbitrary-bracket-banned) class
-          scale this directory enforces. */}
+    <div
+      className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background"
+      data-telemetry-block
+      onKeyDown={(event) => handleBuilderKeyDown(event, {
+        active,
+        removeNode: actions.removeNode,
+        removeDoc: actions.removeDocTemplate,
+        undo: builder.undo,
+        redo: builder.redo,
+      })}
+    >
+      {/* Reserve the same native drag-strip clearance as ProductPageShell. */}
       <div className="shrink-0" style={{ height: 46 }} data-tauri-drag-region="true" />
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border/70 px-3">
         <IconButton
@@ -198,20 +194,28 @@ export function WorkflowBuilderSurface({
           <ArrowLeft className="icon-compact" aria-hidden />
         </IconButton>
         <Input
+          variant="unstyled"
           aria-label={WORKFLOW_BUILDER_COPY.titleLabel}
           value={draft.title}
           disabled={builder.saving}
           placeholder={WORKFLOW_BUILDER_COPY.titlePlaceholder}
-          className="h-7 w-72 max-w-full border-0 bg-transparent px-1 font-mono text-ui shadow-none focus:ring-0"
+          className="h-7 w-72 max-w-full px-1 font-mono text-ui"
           onChange={(event) => actions.setTitle(event.currentTarget.value)}
         />
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <SegmentedControl
+            ariaLabel="Workflow authoring view"
+            variant="plain"
+            value={authoringMode}
+            items={[{ id: "graph", label: "Graph" }, { id: "json", label: "JSON" }]}
+            onChange={setAuthoringMode}
+          />
           <Button
             type="button"
             variant="primary"
             size="md"
             loading={builder.saving}
-            disabled={!builder.canSave}
+            disabled={!builder.canSave || !jsonValid}
             onClick={submit}
           >
             {saveLabel(builder.saving, builder.saved)}
@@ -238,29 +242,47 @@ export function WorkflowBuilderSurface({
         />
 
         <div className="min-w-0 flex-1 p-3">
-          <WorkflowBuilderChainCanvas
-            className="h-full"
-            nodes={draft.nodes}
-            harnesses={harnesses}
-            selectedNodeId={selectedNode?.id ?? null}
-            inputSelected={active.kind === "input"}
-            issueNodeIds={issueNodeIds}
-            statusSlot={(
-              <div className="flex flex-col gap-1">
-                <span className="text-ui-sm text-muted-foreground">
-                  {WORKFLOW_BUILDER_COPY.statusSummary(draft.nodes.length, draft.nodes.length + 1)}
-                </span>
-                <span className="flex items-center gap-1.5 text-ui-sm text-foreground">
-                  <StatusDot tone={issues.length > 0 ? "warning" : "success"} />
-                  {issues.length > 0
-                    ? WORKFLOW_BUILDER_COPY.statusIssues(issues.length)
-                    : WORKFLOW_BUILDER_COPY.statusValid}
-                </span>
-              </div>
-            )}
-            onSelectNode={(id) => setSelection({ kind: "node", id })}
-            onSelectInput={() => setSelection({ kind: "input" })}
-          />
+          <div className={authoringMode === "graph" ? "h-full" : "hidden"}>
+            <WorkflowBuilderChainCanvas
+              className="h-full"
+              nodes={draft.nodes}
+              edges={draft.edges}
+              inputConnectedTo={draft.inputConnectedTo}
+              harnesses={harnesses}
+              selectedNodeId={selectedNode?.id ?? null}
+              inputSelected={active.kind === "input"}
+              issueNodeIds={issueNodeIds}
+              statusSlot={(
+                <div className="flex flex-col gap-1">
+                  <span className="text-ui-sm text-muted-foreground">
+                    {WORKFLOW_BUILDER_COPY.statusSummary(draft.nodes.length, draft.nodes.length + 1)}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-ui-sm text-foreground">
+                    <StatusDot tone={issues.length > 0 ? "warning" : "success"} />
+                    {issues.length > 0
+                      ? WORKFLOW_BUILDER_COPY.statusIssues(issues.length)
+                      : WORKFLOW_BUILDER_COPY.statusValid}
+                  </span>
+                </div>
+              )}
+              onSelectNode={(id) => setSelection({ kind: "node", id })}
+              onSelectInput={() => setSelection({ kind: "input" })}
+              onConnectNodes={actions.connectNodes}
+              onConnectInput={actions.connectInput}
+              onRemoveEdge={actions.removeEdge}
+              onDisconnectInput={actions.disconnectInput}
+            />
+          </div>
+          <div className={authoringMode === "json" ? "h-full" : "hidden"}>
+            <WorkflowJsonEditor
+              key={definitionId ?? template?.slug ?? "blank"}
+              definition={builder.definition}
+              active={authoringMode === "json"}
+              disabled={builder.saving}
+              onApply={actions.replaceDefinition}
+              onValidityChange={setJsonValid}
+            />
+          </div>
         </div>
 
         <aside className="flex w-80 shrink-0 flex-col gap-3 overflow-y-auto border-l border-border/70 p-3">
@@ -321,6 +343,34 @@ export function WorkflowBuilderSurface({
       </div>
     </div>
   );
+}
+
+function handleBuilderKeyDown(
+  event: KeyboardEvent<HTMLDivElement>,
+  actions: {
+    active: BuilderSelection;
+    removeNode: (id: string) => void;
+    removeDoc: (index: number) => void;
+    undo: () => void;
+    redo: () => void;
+  },
+) {
+  const target = event.target;
+  if (target instanceof Element && target.closest("input, textarea, select, [contenteditable=true]")) {
+    return;
+  }
+  const modifier = event.metaKey || event.ctrlKey;
+  if (modifier && event.key.toLowerCase() === "z") {
+    event.preventDefault();
+    if (event.shiftKey) actions.redo();
+    else actions.undo();
+    return;
+  }
+  if (event.key !== "Backspace" && event.key !== "Delete") return;
+  if (actions.active.kind === "node") actions.removeNode(actions.active.id);
+  else if (actions.active.kind === "doc") actions.removeDoc(actions.active.index);
+  else return;
+  event.preventDefault();
 }
 
 function saveLabel(saving: boolean, saved: boolean): string {

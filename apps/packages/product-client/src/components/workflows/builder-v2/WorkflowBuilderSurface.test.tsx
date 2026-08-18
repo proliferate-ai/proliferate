@@ -67,7 +67,9 @@ vi.mock("@anyharness/sdk-react", () => ({
   useRepoRootsQuery: () => mocks.repoRootsQuery,
 }));
 
-const [, RESEARCH_AND_REVIEW] = WORKFLOW_STARTER_TEMPLATES_V2;
+const RESEARCH_AND_REVIEW = WORKFLOW_STARTER_TEMPLATES_V2.find(
+  (template) => template.slug === "bug-investigation",
+)!;
 
 beforeEach(() => {
   mocks.detailQuery.data = undefined;
@@ -97,7 +99,7 @@ describe("WorkflowBuilderSurface", () => {
 
     // Both steps sit on the canvas as selectable cards; the inspector under
     // it opens on the first step and edits exactly one at a time.
-    expect(screen.getByRole("button", { name: /Research/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^01AgentResearch/ })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Step 1" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Step 2" })).toBeNull();
     // Step 1 heads the chain, so it cannot move up.
@@ -106,7 +108,7 @@ describe("WorkflowBuilderSurface", () => {
     expect(screen.getByRole("button", { name: "Move step 1 down" }))
       .toHaveProperty("disabled", false);
 
-    fireEvent.click(screen.getByRole("button", { name: /Review the findings/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^02Human in the loopReview the findings/ }));
 
     expect(screen.getByRole("heading", { name: "Step 2" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Step 1" })).toBeNull();
@@ -128,7 +130,66 @@ describe("WorkflowBuilderSurface", () => {
 
     expect(screen.getByRole("heading", { name: "Step 3" })).toBeTruthy();
     // The palette's second entry mints a gated step, not an agent.
-    expect(screen.getByLabelText("Requires approval").getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByLabelText("Requires human approval").getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", true);
+
+    fireEvent.pointerDown(screen.getByLabelText("Connect from Review the findings"));
+    fireEvent.pointerUp(screen.getByLabelText("Connect into step-3"));
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", false);
+  });
+
+  it("keeps invalid JSON for correction without mutating the last valid graph", () => {
+    render(
+      <WorkflowBuilderSurface
+        definitionId={null}
+        template={RESEARCH_AND_REVIEW}
+        authCacheScope="user-1"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("radio", { name: "JSON" }));
+    const editor = screen.getByLabelText("Workflow definition JSON");
+    expect((editor as HTMLTextAreaElement).value).toContain('"schemaVersion": 2');
+    const editedDefinition = JSON.parse((editor as HTMLTextAreaElement).value);
+    editedDefinition.nodes[0].title = "Investigate atomically";
+    fireEvent.change(editor, { target: { value: JSON.stringify(editedDefinition) } });
+    fireEvent.click(screen.getByRole("button", { name: "Format" }));
+    expect((editor as HTMLTextAreaElement).value).toContain('\n  "nodes":');
+    fireEvent.click(screen.getByRole("radio", { name: "Graph" }));
+    expect(screen.getByRole("button", { name: /^01AgentInvestigate atomically/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "JSON" }));
+    fireEvent.change(editor, { target: { value: '{"schemaVersion": 2' } });
+    expect(screen.getByText("JSON syntax is invalid.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", true);
+
+    fireEvent.click(screen.getByRole("radio", { name: "Graph" }));
+    expect(screen.getByRole("button", { name: /^01AgentInvestigate atomically/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", true);
+
+    fireEvent.click(screen.getByRole("radio", { name: "JSON" }));
+    expect((screen.getByLabelText("Workflow definition JSON") as HTMLTextAreaElement).value)
+      .toBe('{"schemaVersion": 2');
+    fireEvent.click(screen.getByRole("button", { name: "Revert" }));
+    expect(screen.queryByText("JSON syntax is invalid.")).toBeNull();
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toHaveProperty("disabled", false);
+  });
+
+  it("uses Delete for selected nodes, keeps Enter inert, and leaves incident edges detached", () => {
+    render(
+      <WorkflowBuilderSurface
+        definitionId={null}
+        template={WORKFLOW_STARTER_TEMPLATES_V2[0]}
+        authCacheScope="user-1"
+      />,
+    );
+    const canvas = screen.getByRole("group", { name: "Workflow chain" });
+    fireEvent.click(screen.getByRole("button", { name: /^02AgentAnswer the questions/ }));
+    fireEvent.keyDown(canvas, { key: "Enter" });
+    expect(screen.getByRole("button", { name: /^02AgentAnswer the questions/ })).toBeTruthy();
+    fireEvent.keyDown(canvas, { key: "Delete" });
+    expect(screen.queryByRole("button", { name: /^02AgentAnswer the questions/ })).toBeNull();
+    expect(screen.getByText(/Nodes and edges must form exactly one linear path/)).toBeTruthy();
+    expect(screen.queryByLabelText("Remove connection from research-questions to design")).toBeNull();
   });
 
   it("gates Save on a title and creates through the access seam", async () => {
@@ -203,11 +264,11 @@ describe("WorkflowBuilderSurface", () => {
     fireEvent.change(screen.getByLabelText("Harness"), { target: { value: "claude" } });
     fireEvent.change(screen.getByLabelText("Model"), { target: { value: "opus" } });
 
-    fireEvent.click(screen.getByLabelText("Requires approval"));
+    fireEvent.click(screen.getByLabelText("Requires human approval"));
 
     // A gated step still runs an agent session, so the model configuration
     // survives the toggle: the fields stay rendered, editable, and populated.
-    expect(screen.getByText("The run pauses here until someone approves the step.")).toBeTruthy();
+    expect(screen.queryByText("The run pauses here until someone approves the step.")).toBeNull();
     expect(screen.getByLabelText("Harness")).toHaveProperty("disabled", false);
     expect(screen.getByLabelText("Model")).toHaveProperty("value", "opus");
 
@@ -221,7 +282,7 @@ describe("WorkflowBuilderSurface", () => {
     });
 
     // Toggling back off keeps it too — the toggle only moves `type`.
-    fireEvent.click(screen.getByLabelText("Requires approval"));
+    fireEvent.click(screen.getByLabelText("Requires human approval"));
     expect(screen.getByLabelText("Model")).toHaveProperty("value", "opus");
   });
 

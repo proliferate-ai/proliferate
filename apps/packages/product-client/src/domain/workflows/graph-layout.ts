@@ -32,6 +32,7 @@ export interface WorkflowGraphEdgeLayout {
   kind: "chain" | "branch";
   /** SVG path in content coordinates, ready for a `<path d>` attribute. */
   path: string;
+  midpoint: { x: number; y: number };
 }
 
 export interface WorkflowGraphLayout {
@@ -117,6 +118,7 @@ export function layoutWorkflowRunGraph(slots: readonly WorkflowGraphSlotVM[]): W
           toKey: placed.key,
           kind: "branch",
           path: edgePath(from.x, from.y, to.x, to.y),
+          midpoint: { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 },
         });
       }
     });
@@ -129,6 +131,7 @@ export function layoutWorkflowRunGraph(slots: readonly WorkflowGraphSlotVM[]): W
         toKey: rankLatest.key,
         kind: "chain",
         path: edgePath(from.x, from.y, to.x, to.y),
+        midpoint: { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 },
       });
     }
     if (rankLatest) {
@@ -152,35 +155,36 @@ export function layoutWorkflowRunGraph(slots: readonly WorkflowGraphSlotVM[]): W
   };
 }
 
-/**
- * Lays out the builder's draft chain: one card per rank, straight down, one
- * chain edge between neighbours. The chain IS the card order — the canvas is
- * a presentation of that order, not an edge editor — so this takes the node
- * ids alone and invents nothing else.
- */
-export function layoutWorkflowChainGraph(nodeIds: readonly string[]): WorkflowGraphLayout {
+/** Deterministic builder placement with authored, rather than implied, edges. */
+export function layoutWorkflowBuilderGraph(
+  nodeIds: readonly string[],
+  edges: readonly { from: string; to: string }[],
+): WorkflowGraphLayout {
   const nodes = nodeIds.map((id, index): WorkflowGraphPlacedNode => ({
     key: id,
     x: 0,
     y: index * (WORKFLOW_GRAPH_NODE_HEIGHT + RANK_GAP),
     branch: false,
   }));
-  const edges = nodes.slice(1).map((node, index): WorkflowGraphEdgeLayout => {
-    const from = bottomPort(nodes[index]);
-    const to = topPort(node);
-    return {
-      fromKey: nodes[index].key,
-      toKey: node.key,
+  const byKey = new Map(nodes.map((node) => [node.key, node]));
+  const laidOutEdges = edges.flatMap((edge): WorkflowGraphEdgeLayout[] => {
+    const fromNode = byKey.get(edge.from);
+    const toNode = byKey.get(edge.to);
+    if (!fromNode || !toNode) return [];
+    const from = bottomPort(fromNode);
+    const to = topPort(toNode);
+    return [{
+      fromKey: edge.from,
+      toKey: edge.to,
       kind: "chain",
       path: edgePath(from.x, from.y, to.x, to.y),
-    };
+      midpoint: { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 },
+    }];
   });
   return {
     nodes,
-    edges,
+    edges: laidOutEdges,
     width: nodes.length === 0 ? 0 : WORKFLOW_GRAPH_NODE_WIDTH,
-    height: nodes.length === 0
-      ? 0
-      : nodes[nodes.length - 1].y + WORKFLOW_GRAPH_NODE_HEIGHT,
+    height: nodes.length === 0 ? 0 : nodes[nodes.length - 1].y + WORKFLOW_GRAPH_NODE_HEIGHT,
   };
 }

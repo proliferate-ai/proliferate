@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "#product/primitives/DropdownMenu";
 import { Plus } from "#product/primitives/icons/core";
+import { ShortcutBadge } from "#product/primitives/ShortcutBadge";
 
 /**
  * The main page's one "New workflow" affordance: a blank chain, or one of the
@@ -33,7 +34,10 @@ export function WorkflowMainNewMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[240px]">
         <DropdownMenuItem onSelect={() => onNew(null)}>
-          {WORKFLOW_MAIN_COPY.newBlankLabel}
+          <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
+            {WORKFLOW_MAIN_COPY.newBlankLabel}
+            <ShortcutBadge label="⌘N" />
+          </span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <div className="px-2.5 py-1 text-ui-sm text-muted-foreground">

@@ -3,7 +3,7 @@ import type { WorkflowRunNodeV2 } from "@anyharness/sdk";
 
 import type { WorkflowGraphNodeVM, WorkflowGraphSlotVM } from "./run-view-model";
 import {
-  layoutWorkflowChainGraph,
+  layoutWorkflowBuilderGraph,
   layoutWorkflowRunGraph,
   WORKFLOW_GRAPH_NODE_HEIGHT,
   WORKFLOW_GRAPH_NODE_WIDTH,
@@ -94,22 +94,22 @@ describe("layoutWorkflowRunGraph", () => {
   });
 });
 
-describe("layoutWorkflowChainGraph", () => {
-  it("lays a chain straight down with one edge per neighbour pair", () => {
-    const layout = layoutWorkflowChainGraph(["one", "two", "three"]);
+describe("layoutWorkflowBuilderGraph", () => {
+  it("keeps deterministic display order while drawing only authored edges", () => {
+    const layout = layoutWorkflowBuilderGraph(
+      ["one", "two", "three"],
+      [{ from: "one", to: "three" }],
+    );
 
     expect(layout.nodes.map((node) => node.x)).toEqual([0, 0, 0]);
-    expect(layout.edges.map((edge) => `${edge.fromKey}->${edge.toKey}`)).toEqual([
-      "one->two",
-      "two->three",
-    ]);
+    expect(layout.edges.map((edge) => `${edge.fromKey}->${edge.toKey}`)).toEqual(["one->three"]);
     expect(layout.height).toBe(
       layout.nodes[2].y + WORKFLOW_GRAPH_NODE_HEIGHT,
     );
   });
 
   it("is empty for an empty chain", () => {
-    const layout = layoutWorkflowChainGraph([]);
+    const layout = layoutWorkflowBuilderGraph([], []);
     expect(layout).toMatchObject({ nodes: [], edges: [], width: 0, height: 0 });
   });
 });

@@ -5,7 +5,7 @@
  */
 export const WORKFLOW_MAIN_COPY = {
   pageTitle: "Workflows",
-  pageDescription: "Reusable agent chains you can run against any repository.",
+  pageDescription: "Saved workflow definitions and the runs recorded from them.",
 
   newWorkflowLabel: "New workflow",
   newBlankLabel: "Blank workflow",
@@ -14,8 +14,8 @@ export const WORKFLOW_MAIN_COPY = {
 
   loadingTitle: "Loading workflows",
   loadingDescription: "Loading your saved workflows.",
-  errorTitle: "Could not load workflows",
-  errorDescription: "Refresh the page or sign in again.",
+  errorTitle: "Workflows could not be loaded",
+  errorDescription: "The definitions list failed to load. Retrying does not lose any saved work.",
   retryLabel: "Retry",
 
   emptyTitle: "No workflows yet",
@@ -35,7 +35,7 @@ export const WORKFLOW_MAIN_COPY = {
 
   filterPlaceholder: "Filter workflows...",
   filterLabel: "Filter workflows",
-  filterNoMatches: "Nothing here matches this filter.",
+  filterNoMatches: (query: string) => `Nothing matches “${query}”.`,
 
   savedGroupTitle: "Saved Workflows",
   savedGroupDescription: "Definitions you can run, edit, or start a new run from.",

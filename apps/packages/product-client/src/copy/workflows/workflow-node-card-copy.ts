@@ -26,7 +26,7 @@ export const WORKFLOW_NODE_CARD_COPY = {
     nodeType: "agent" | "human_in_loop",
     kind: "defined" | "replacement" | "adhoc",
   ): string => {
-    const base = nodeType === "agent" ? "Agent" : "Approval step";
+    const base = nodeType === "agent" ? "Agent" : "Human in the loop";
     if (kind === "replacement") return `${base} · Retry`;
     if (kind === "adhoc") return `${base} · Side node`;
     return base;

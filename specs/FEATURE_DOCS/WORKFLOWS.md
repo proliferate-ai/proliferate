@@ -25,6 +25,37 @@ Read before touching: `apps/packages/product-client/src/**/*workflow*`, `server/
 
 This document covers the Workflow system spanning server ↔ runtime ↔ workspace placement, including definitions, invocations, runs, run control, workspace placement, and managed cloud execution.
 
+## Current gen-2 authoring experience
+
+The authenticated Workflows surface keeps the production shell and routes. Its
+index lists saved schema-v2 definitions, legacy delete-only definitions, and
+runtime executions; creation starts from a blank workflow or one of the four
+starter templates. Definition Run continues through the existing Cloud
+invocation/runtime courier and opens the exact workspace. The workspace
+right-panel run pane is unchanged.
+
+The schema-v2 builder has a fixed palette rail, deterministic graph canvas,
+and inspector. The draft owns explicit real-node `edges`; the editor-only Input
+sentinel connects to the unique head and is never serialized. New nodes start
+detached, removing a node removes only incident edges, and moving a node changes
+display order without rewiring. Save requires one linear path covering every
+node and an Input-to-head connection, in addition to the definition,
+reference, catalog, and repository rules. Canvas Backspace/Delete removes the
+selected node or document, while Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z undo and redo
+the whole draft outside editable controls.
+
+The JSON tab edits only the camelCase `WorkflowDefinitionV2` document. Title,
+description, and default repository stay in the record envelope. Valid JSON is
+applied atomically to the graph; malformed, semantically invalid, or
+unknown-field JSON keeps the last valid graph, retains its editor text, and
+blocks Save. Format prettifies the valid document and Revert restores the last
+valid graph projection.
+
+This current behavior explicitly supersedes the older PR7 delivery-spec rules
+that treated graph editing as a non-goal and rebuilt edges from array order.
+There is no schema, API, database, runtime, or run-pane change in this UI
+migration.
+
 ## Overview
 
 

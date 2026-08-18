@@ -26,7 +26,8 @@ export type WorkflowBuilderIssueCode =
   /** A declared input name outside `INPUT_NAME_PATTERN`. */
   | "invalid_input_name"
   /** A declared doc slug outside `DOC_SLUG_PATTERN`. */
-  | "invalid_doc_slug";
+  | "invalid_doc_slug"
+  | "input_not_connected";
 
 /**
  * Same shape as `DefinitionV2Issue` over a wider code union, so the validator's
@@ -39,8 +40,25 @@ export interface WorkflowBuilderIssue extends Omit<DefinitionV2Issue, "code"> {
 /** Every rule the builder gates a save on. Empty array = savable definition. */
 export function workflowBuilderIssues(
   definition: WorkflowDefinitionV2,
+  inputConnectedTo?: string | null,
 ): WorkflowBuilderIssue[] {
-  return [...validateDefinitionV2(definition), ...declarationGrammarIssues(definition)];
+  const issues: WorkflowBuilderIssue[] = [
+    ...validateDefinitionV2(definition),
+    ...declarationGrammarIssues(definition),
+  ];
+  if (inputConnectedTo !== undefined) {
+    const incoming = new Set(definition.edges.map((edge) => edge.to));
+    const heads = definition.nodes.filter((node) => !incoming.has(node.id));
+    const head = heads.length === 1 ? heads[0].id : null;
+    if (head === null || inputConnectedTo !== head) {
+      issues.push({
+        code: "input_not_connected",
+        message: "Connect Input to the first node in the workflow path.",
+        ref: inputConnectedTo ?? undefined,
+      });
+    }
+  }
+  return issues;
 }
 
 /**

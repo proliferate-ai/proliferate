@@ -18,6 +18,7 @@ import {
   workflowBuilderActions,
   type WorkflowBuilderActions,
   type WorkflowBuilderDraft,
+  type WorkflowBuilderEditOptions,
 } from "#product/lib/domain/workflows/workflow-builder-draft";
 import {
   useWorkflowDefinitionV2Access,
@@ -32,7 +33,7 @@ export type WorkflowBuilderSaveStatus = "idle" | "saving" | "saved";
 export interface WorkflowBuilderModel {
   status: WorkflowBuilderStatus;
   draft: WorkflowBuilderDraft;
-  /** Exactly what a save would send: card order rendered as a linear edge list. */
+  /** Exactly what a save would send, including authored real-node edges. */
   definition: WorkflowDefinitionV2;
   issues: WorkflowBuilderIssue[];
   /** The persisted record behind the draft; `null` until a new workflow is created. */
@@ -46,9 +47,14 @@ export interface WorkflowBuilderModel {
    * showing it so nothing is misreported, and the save gate refuses it.
    */
   repoDefaultUnavailable: boolean;
+  modelSelectionUnavailable: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
   error: string | null;
   reload: () => void;
   actions: WorkflowBuilderActions;
+  undo: () => void;
+  redo: () => void;
   save: () => Promise<WorkflowDefinitionRecordV2 | null>;
 }
 
@@ -64,7 +70,11 @@ export interface UseWorkflowBuilderArgs {
    * gate below is the only thing this hook needs from it.
    */
   availableRepoRootIds: readonly string[] | null;
+  availableModelSelections?: readonly { agentKind: string; modelIds: readonly string[] }[] | null;
 }
+
+const HISTORY_LIMIT = 60;
+const TYPING_COALESCE_MS = 600;
 
 /**
  * Draft state for one gen-2 workflow definition: load or seed it, edit it, and
@@ -72,15 +82,16 @@ export interface UseWorkflowBuilderArgs {
  *
  * The rules are not this hook's: `validateDefinitionV2` owns them, runs on
  * every change, and its issues are both what the surface renders and the gate
- * `save()` refuses to cross. Edges are never edited — the chain is the card
- * order and `draftToDefinition` renders it — so the linearity rule holds by
- * construction.
+ * `save()` refuses to cross. Authored edges and the editor-only Input
+ * connection are draft state, so detached or non-linear graphs remain visible
+ * but cannot be persisted.
  */
 export function useWorkflowBuilder({
   definitionId,
   template = null,
   authCacheScope,
   availableRepoRootIds,
+  availableModelSelections = null,
 }: UseWorkflowBuilderArgs): WorkflowBuilderModel {
   const detailQuery = useWorkflowDefinitionV2Access(definitionId, authCacheScope);
   const {
@@ -132,22 +143,65 @@ export function useWorkflowBuilder({
   // The builder's validation IS the shared validator plus the shared grammar
   // patterns it leaves to the wire models; every rule the cards display comes
   // from `workflowBuilderIssues` and nowhere else.
-  const issues = useMemo(() => workflowBuilderIssues(definition), [definition]);
+  const issues = useMemo(
+    () => workflowBuilderIssues(definition, state.draft.inputConnectedTo),
+    [definition, state.draft.inputConnectedTo],
+  );
 
   const editDraft = useCallback((
     edit: (draft: WorkflowBuilderDraft) => WorkflowBuilderDraft,
+    options?: WorkflowBuilderEditOptions,
   ) => {
     // Any edit clears the "Saved" flash and the last write's error: both
     // describe the draft as it was, not as it now is.
-    setState((previous) => ({
-      ...previous,
-      draft: edit(previous.draft),
-      status: "idle",
-      error: null,
-    }));
+    setState((previous) => {
+      const draft = edit(previous.draft);
+      if (serializeDraft(draft) === serializeDraft(previous.draft)) return previous;
+      const now = Date.now();
+      const coalesces = options?.coalesceKey !== undefined
+        && previous.lastEdit?.key === options.coalesceKey
+        && now - previous.lastEdit.at <= TYPING_COALESCE_MS;
+      return {
+        ...previous,
+        draft,
+        past: coalesces
+          ? previous.past
+          : [...previous.past, previous.draft].slice(-HISTORY_LIMIT),
+        future: [],
+        lastEdit: options?.coalesceKey ? { key: options.coalesceKey, at: now } : null,
+        status: "idle",
+        error: null,
+      };
+    });
   }, []);
 
   const actions = useMemo(() => workflowBuilderActions(editDraft), [editDraft]);
+  const undo = useCallback(() => setState((previous) => {
+    const draft = previous.past[previous.past.length - 1];
+    if (!draft) return previous;
+    return {
+      ...previous,
+      draft,
+      past: previous.past.slice(0, -1),
+      future: [previous.draft, ...previous.future].slice(0, HISTORY_LIMIT),
+      lastEdit: null,
+      status: "idle",
+      error: null,
+    };
+  }), []);
+  const redo = useCallback(() => setState((previous) => {
+    const [draft, ...future] = previous.future;
+    if (!draft) return previous;
+    return {
+      ...previous,
+      draft,
+      past: [...previous.past, previous.draft].slice(-HISTORY_LIMIT),
+      future,
+      lastEdit: null,
+      status: "idle",
+      error: null,
+    };
+  }), []);
 
   const dirty = serializeDraft(state.draft) !== state.baseline;
   const saving = state.status === "saving";
@@ -165,7 +219,15 @@ export function useWorkflowBuilder({
   const repoDefaultUnavailable = state.draft.defaultRepoConfigId.length > 0
     && (availableRepoRootIds === null
       || !availableRepoRootIds.includes(state.draft.defaultRepoConfigId));
-  const savableNow = issues.length === 0 && titled && !repoDefaultUnavailable;
+  const modelSelectionUnavailable = state.draft.nodes.some((node) => {
+    if (!node.model) return false;
+    const harness = availableModelSelections?.find(
+      (candidate) => candidate.agentKind === node.model?.agentKind,
+    );
+    return !harness || (node.model.modelId != null && !harness.modelIds.includes(node.model.modelId));
+  });
+  const savableNow = issues.length === 0 && titled && !repoDefaultUnavailable
+    && !modelSelectionUnavailable;
   const canSave = savableNow && !saving && (dirty || record === null);
 
   const inFlight = useRef(false);
@@ -249,9 +311,14 @@ export function useWorkflowBuilder({
     saved: state.status === "saved" && !dirty,
     canSave,
     repoDefaultUnavailable,
+    modelSelectionUnavailable,
+    canUndo: state.past.length > 0,
+    canRedo: state.future.length > 0,
     error: state.error,
     reload,
     actions,
+    undo,
+    redo,
     save,
   };
 }
@@ -283,10 +350,22 @@ interface BuilderState {
   baseline: string;
   status: WorkflowBuilderSaveStatus;
   error: string | null;
+  past: WorkflowBuilderDraft[];
+  future: WorkflowBuilderDraft[];
+  lastEdit: { key: string; at: number } | null;
 }
 
 function seedState(seedKey: string, draft: WorkflowBuilderDraft): BuilderState {
-  return { seedKey, draft, baseline: serializeDraft(draft), status: "idle", error: null };
+  return {
+    seedKey,
+    draft,
+    baseline: serializeDraft(draft),
+    status: "idle",
+    error: null,
+    past: [],
+    future: [],
+    lastEdit: null,
+  };
 }
 
 function templateSeedKey(template: WorkflowStarterTemplateV2 | null | undefined): string {

@@ -5,10 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkflowDefinitionRecordV2 } from "@proliferate/cloud-sdk";
 import { WORKFLOW_STARTER_TEMPLATES_V2 } from "#product/config/workflows/starter-templates";
 import { useWorkflowBuilder } from "#product/hooks/workflows/facade/use-workflow-builder";
-import {
-  linearEdges,
-  nextNodeId,
-} from "#product/lib/domain/workflows/workflow-builder-draft";
+import { nextNodeId } from "#product/lib/domain/workflows/workflow-builder-draft";
 
 const mocks = vi.hoisted(() => ({
   detailQuery: {
@@ -34,7 +31,10 @@ vi.mock("#product/hooks/access/cloud/workflows/use-workflow-definitions-v2-acces
   }),
 }));
 
-const [AGENT_ENGINEERING_PROCESS, RESEARCH_AND_REVIEW] = WORKFLOW_STARTER_TEMPLATES_V2;
+const AGENT_ENGINEERING_PROCESS = WORKFLOW_STARTER_TEMPLATES_V2[0];
+const BUG_INVESTIGATION = WORKFLOW_STARTER_TEMPLATES_V2.find(
+  (template) => template.slug === "bug-investigation",
+)!;
 
 beforeEach(() => {
   mocks.detailQuery.data = undefined;
@@ -101,7 +101,7 @@ describe("useWorkflowBuilder validation gating", () => {
   });
 });
 
-describe("useWorkflowBuilder chain order", () => {
+describe("useWorkflowBuilder authored graph", () => {
   it("seeds a starter template clean, in its own node order", () => {
     const { result } = renderBuilder({ template: AGENT_ENGINEERING_PROCESS });
 
@@ -113,8 +113,8 @@ describe("useWorkflowBuilder chain order", () => {
     expect(result.current.draft.inputs.map((input) => input.name)).toEqual(["goal", "constraints"]);
   });
 
-  it("rebuilds the edge list linearly when a step moves down", () => {
-    const { result } = renderBuilder({ template: RESEARCH_AND_REVIEW });
+  it("changes display order without rewiring authored edges", () => {
+    const { result } = renderBuilder({ template: BUG_INVESTIGATION });
 
     expect(result.current.definition.edges).toEqual([{ from: "research", to: "review" }]);
 
@@ -123,13 +123,11 @@ describe("useWorkflowBuilder chain order", () => {
     });
 
     expect(result.current.draft.nodes.map((node) => node.id)).toEqual(["review", "research"]);
-    expect(result.current.definition.edges).toEqual([{ from: "review", to: "research" }]);
-    // Reordering rewrites the chain rather than breaking it: the definition
-    // stays linear, so the reorder never invents a validation failure.
+    expect(result.current.definition.edges).toEqual([{ from: "research", to: "review" }]);
     expect(result.current.issues).toEqual([]);
   });
 
-  it("seeds an existing record in chain order, not stored array order", () => {
+  it("preserves stored display order while synthesizing Input to the real head", () => {
     mocks.detailQuery.data = {
       ...savedRecord(),
       definition: {
@@ -144,11 +142,62 @@ describe("useWorkflowBuilder chain order", () => {
     const { result } = renderBuilder({ definitionId: "wf-1" });
 
     expect(result.current.status).toBe("ready");
-    expect(result.current.draft.nodes.map((node) => node.id)).toEqual(["a", "b"]);
+    expect(result.current.draft.nodes.map((node) => node.id)).toEqual(["b", "a"]);
+    expect(result.current.draft.inputConnectedTo).toBe("a");
+  });
+
+  it("adds a detached node and refuses to save until it is connected", () => {
+    const { result } = renderBuilder({ template: BUG_INVESTIGATION });
+    act(() => result.current.actions.addNode());
+
+    expect(result.current.draft.edges).toEqual([{ from: "research", to: "review" }]);
+    expect(result.current.issues.map((issue) => issue.code)).toContain("not_linear");
+    expect(result.current.canSave).toBe(false);
+  });
+
+  it("removes only incident edges and does not heal across a deleted middle node", () => {
+    const { result } = renderBuilder({ template: AGENT_ENGINEERING_PROCESS });
+    act(() => result.current.actions.removeNode("research"));
+
+    expect(result.current.draft.edges).not.toContainEqual({ from: "research-questions", to: "design" });
+    expect(result.current.draft.edges).toEqual([
+      { from: "design", to: "design-gate" },
+      { from: "design-gate", to: "implement" },
+      { from: "implement", to: "review-gate" },
+    ]);
+    expect(result.current.issues.map((issue) => issue.code)).toContain("not_linear");
+    expect(result.current.canSave).toBe(false);
   });
 });
 
 describe("useWorkflowBuilder save mapping", () => {
+  it("retains but refuses a stored model selection missing from the live catalog", () => {
+    mocks.detailQuery.data = {
+      ...savedRecord(),
+      definition: {
+        ...savedRecord().definition,
+        nodes: [{
+          id: "diagnose",
+          type: "agent",
+          title: "Diagnose",
+          prompt: "Investigate.",
+          model: { agentKind: "retired-harness", modelId: "retired-model" },
+        }],
+      },
+    };
+    const { result } = renderBuilder({
+      definitionId: "wf-1",
+      availableModelSelections: [{ agentKind: "codex", modelIds: ["gpt-current"] }],
+    });
+
+    expect(result.current.draft.nodes[0].model).toEqual({
+      agentKind: "retired-harness",
+      modelId: "retired-model",
+    });
+    expect(result.current.modelSelectionUnavailable).toBe(true);
+    expect(result.current.canSave).toBe(false);
+  });
+
   it("creates with an empty description when none was written", async () => {
     const { result } = renderBuilder();
 
@@ -384,12 +433,8 @@ describe("useWorkflowBuilder draft edits", () => {
     ])).toBe("step-4");
   });
 
-  it("derives no edge from a single step", () => {
-    expect(linearEdges([{ id: "only", type: "agent", title: "", prompt: "" }])).toEqual([]);
-  });
-
   it("reports a document orphaned by removing the step that wrote it", () => {
-    const { result } = renderBuilder({ template: RESEARCH_AND_REVIEW });
+    const { result } = renderBuilder({ template: BUG_INVESTIGATION });
 
     act(() => {
       result.current.actions.removeNode("research");
@@ -397,6 +442,43 @@ describe("useWorkflowBuilder draft edits", () => {
 
     expect(result.current.issues.map((issue) => issue.code)).toContain("unknown_producing_node");
     expect(result.current.canSave).toBe(false);
+  });
+
+  it("undoes and redoes a structural edit while coalescing adjacent typing", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-17T12:00:00Z"));
+    const { result } = renderBuilder();
+    act(() => {
+      result.current.actions.setTitle("I");
+      result.current.actions.setTitle("Issue");
+    });
+    expect(result.current.draft.title).toBe("Issue");
+    act(() => result.current.undo());
+    expect(result.current.draft.title).toBe("");
+    act(() => result.current.redo());
+    expect(result.current.draft.title).toBe("Issue");
+    vi.advanceTimersByTime(601);
+    act(() => result.current.actions.setTitle("Issue triage"));
+    act(() => result.current.undo());
+    expect(result.current.draft.title).toBe("Issue");
+    act(() => result.current.redo());
+    expect(result.current.draft.title).toBe("Issue triage");
+    vi.useRealTimers();
+  });
+
+  it("caps whole-draft undo history at sixty entries", () => {
+    const { result } = renderBuilder();
+    act(() => {
+      for (let index = 0; index < 65; index += 1) {
+        result.current.actions.setDefaultRepoConfigId(index % 2 === 0 ? "repo-1" : "repo-2");
+      }
+    });
+    let undos = 0;
+    while (result.current.canUndo) {
+      act(() => result.current.undo());
+      undos += 1;
+    }
+    expect(undos).toBe(60);
   });
 });
 
@@ -408,6 +490,7 @@ function renderBuilder(args: {
   definitionId?: string | null;
   template?: (typeof WORKFLOW_STARTER_TEMPLATES_V2)[number] | null;
   availableRepoRootIds?: readonly string[] | null;
+  availableModelSelections?: readonly { agentKind: string; modelIds: readonly string[] }[] | null;
 } = {}) {
   return renderHook(() => useWorkflowBuilder({
     definitionId: args.definitionId ?? null,
@@ -416,6 +499,7 @@ function renderBuilder(args: {
     availableRepoRootIds: args.availableRepoRootIds === undefined
       ? ["repo-1", "repo-2"]
       : args.availableRepoRootIds,
+    availableModelSelections: args.availableModelSelections ?? null,
   }));
 }
 
