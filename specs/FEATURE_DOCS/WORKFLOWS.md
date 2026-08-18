@@ -8,7 +8,7 @@
 > `workflow_run_nodes`, `workflow_run_docs`). The gen-2 model — multi-node
 > runs on a linear chain, one session per node, a pure transition table, and
 > a client-delivered invocation snapshot — is documented by the delivery
-> specs (`specs/delivery/workflows-gen2/delivery-spec-workflows-gen2-pr1.md`
+> specs (`delivery/workflows-gen2/delivery-spec-workflows-gen2-pr1.md`
 > and successors) until this
 > document is rewritten at the end of that ladder. Only the workspace
 > placement section below still describes live code
