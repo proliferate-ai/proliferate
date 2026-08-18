@@ -126,7 +126,7 @@ impl SessionStore {
             let persisted_event = sanitize_session_event_for_sqlite(&envelope.event);
             let payload_json = serde_json::to_string(&persisted_event)
                 .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
-            let removal_key = completion_wake_removal_key(session_id, &persisted_event)?;
+            let removal_key = completion_wake_removal_key_from_payload(session_id, &payload_json)?;
             conn.execute(
                 "INSERT INTO session_events (
                     session_id, seq, timestamp, event_type, turn_id, item_id, payload_json,
@@ -526,10 +526,11 @@ pub(super) fn insert_event_row(
     conn: &rusqlite::Connection,
     record: &SessionEventRecord,
 ) -> rusqlite::Result<()> {
-    let payload_json = sanitize_session_event_payload_json(&record.payload_json)?;
-    let removal_key = match serde_json::from_str(&payload_json) {
-        Ok(event) => completion_wake_removal_key(&record.session_id, &event)?,
-        Err(_) => None,
+    let (payload_json, parsed_event) = sanitize_session_event_payload_json(&record.payload_json)?;
+    let removal_key = if parsed_event {
+        completion_wake_removal_key_from_payload(&record.session_id, &payload_json)?
+    } else {
+        None
     };
     conn.execute(
         "INSERT INTO session_events (
@@ -550,18 +551,27 @@ pub(super) fn insert_event_row(
     Ok(())
 }
 
-pub(super) fn completion_wake_removal_key(
+fn completion_wake_removal_key_from_payload(
     session_id: &str,
-    event: &anyharness_contract::v1::SessionEvent,
+    payload_json: &str,
 ) -> rusqlite::Result<Option<String>> {
-    let anyharness_contract::v1::SessionEvent::PendingPromptRemoved(payload) = event else {
+    let Ok(payload) = serde_json::from_str::<serde_json::Value>(payload_json) else {
         return Ok(None);
     };
-    if payload.reason != anyharness_contract::v1::PendingPromptRemovalReason::Deleted {
+    if payload.get("type").and_then(serde_json::Value::as_str) != Some("pending_prompt_removed")
+        || payload.get("reason").and_then(serde_json::Value::as_str) != Some("deleted")
+    {
         return Ok(None);
     }
-    completion_wake_removal_key_for_identity(session_id, payload.seq, payload.prompt_id.as_deref())
-        .map(Some)
+    let Some(prompt_seq) = payload.get("seq").and_then(serde_json::Value::as_i64) else {
+        return Ok(None);
+    };
+    let prompt_id = match payload.get("promptId") {
+        Some(serde_json::Value::String(prompt_id)) => Some(prompt_id.as_str()),
+        Some(serde_json::Value::Null) | None => None,
+        Some(_) => return Ok(None),
+    };
+    completion_wake_removal_key_for_identity(session_id, prompt_seq, prompt_id).map(Some)
 }
 
 pub(super) fn completion_wake_removal_key_for_identity(
@@ -574,12 +584,13 @@ pub(super) fn completion_wake_removal_key_for_identity(
         .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))
 }
 
-fn sanitize_session_event_payload_json(payload_json: &str) -> rusqlite::Result<String> {
+fn sanitize_session_event_payload_json(payload_json: &str) -> rusqlite::Result<(String, bool)> {
     let Ok(event) = serde_json::from_str::<anyharness_contract::v1::SessionEvent>(payload_json)
     else {
-        return Ok(payload_json.to_string());
+        return Ok((payload_json.to_string(), false));
     };
     let sanitized = sanitize_session_event_for_sqlite(&event);
     serde_json::to_string(&sanitized)
+        .map(|payload_json| (payload_json, true))
         .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))
 }

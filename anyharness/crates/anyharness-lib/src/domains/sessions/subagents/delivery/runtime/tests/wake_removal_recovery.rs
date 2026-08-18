@@ -1,4 +1,4 @@
-use anyharness_contract::v1::PendingPromptAddedPayload;
+use anyharness_contract::v1::{PendingPromptAddedPayload, SessionEvent};
 
 use super::*;
 
@@ -22,11 +22,10 @@ async fn mixed_message_suppression_retries_retired_wake_removal_after_restart() 
         .find_pending_prompt(PARENT_ID, first.parent_prompt_seq.expect("first wake seq"))
         .expect("load first wake")
         .expect("first wake remains queued");
-    state
-        .session_runtime
-        .emit_runtime_event(
+    SessionStore::new(state.db.clone())
+        .append_event_with_next_seq(
             PARENT_ID,
-            RuntimeInjectedSessionEvent::pending_prompt_added(PendingPromptAddedPayload {
+            SessionEvent::PendingPromptAdded(PendingPromptAddedPayload {
                 seq: first_pending.seq,
                 prompt_id: first_pending.prompt_id.clone(),
                 text: first_pending.text.clone(),
@@ -34,8 +33,8 @@ async fn mixed_message_suppression_retries_retired_wake_removal_after_restart() 
                 queued_at: first_pending.queued_at.clone(),
                 prompt_provenance: first_pending.prompt_payload().public_provenance(),
             }),
+            false,
         )
-        .await
         .expect("make first wake visible to queue replay");
 
     let store = SessionStore::new(state.db.clone());
