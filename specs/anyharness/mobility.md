@@ -58,6 +58,8 @@ artifacts, and the complete included session-link graph. Raw provider
 notifications are included only behind their existing environment gate.
 Subagent links carry the optional `subagentClosedAt` operability marker; older
 archives without that field import the relationship as Open.
+Install reconstructs each pending-prompt sequence cursor from durable queue
+event history, so an empty imported queue cannot reuse a historical identity.
 
 Pending and enqueued subagent-completion deliveries, plus delivered rows with
 an unacknowledged completion-wake removal intent, are archived by parent

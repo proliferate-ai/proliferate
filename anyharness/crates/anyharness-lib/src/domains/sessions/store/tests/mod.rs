@@ -73,6 +73,7 @@ mod background_work;
 mod delete;
 mod events;
 mod links;
+mod mobility_cursor;
 mod notifications;
 mod pending_prompts;
 mod runtime_event_idempotency;
