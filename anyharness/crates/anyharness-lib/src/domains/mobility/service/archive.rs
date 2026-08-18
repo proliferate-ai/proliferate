@@ -4,6 +4,9 @@ use crate::domains::agents::portability::AgentArtifactFileData;
 use crate::domains::mobility::model::{
     MobilityFileData, WorkspaceMobilityArchiveData, WorkspaceMobilitySessionBundleData,
 };
+use crate::domains::sessions::extensions::SessionTurnOutcome;
+use crate::domains::sessions::model::MAX_PENDING_PROMPT_SEQ;
+use crate::domains::sessions::store::completion_deliveries::CompletionDeliveryState;
 
 use super::MobilityError;
 
@@ -13,9 +16,9 @@ pub(in crate::domains::mobility) fn session_pending_prompt_cursor_lower_bound(
 ) -> Result<i64, MobilityError> {
     let session_id = bundle.session.id.as_str();
     let mut lower_bound = bundle.pending_prompt_seq_cursor.unwrap_or(0);
-    if lower_bound < 0 {
+    if !(0..=MAX_PENDING_PROMPT_SEQ).contains(&lower_bound) {
         return Err(MobilityError::Invalid(format!(
-            "archive session {session_id} has a negative pending-prompt sequence cursor"
+            "archive session {session_id} has an invalid pending-prompt sequence cursor {lower_bound}"
         )));
     }
 
@@ -118,7 +121,7 @@ pub(in crate::domains::mobility) fn session_pending_prompt_cursor_lower_bound(
 }
 
 fn valid_prompt_seq(session_id: &str, seq: i64) -> Result<i64, MobilityError> {
-    if seq <= 0 {
+    if !(1..=MAX_PENDING_PROMPT_SEQ).contains(&seq) {
         return Err(MobilityError::Invalid(format!(
             "archive session {session_id} contains invalid pending-prompt sequence {seq}"
         )));
@@ -182,6 +185,54 @@ pub(super) fn validate_completion_deliveries(
                 )));
             }
         }
+        validate_retired_wake_intent(archive, delivery)?;
+    }
+    Ok(())
+}
+
+fn validate_retired_wake_intent(
+    archive: &WorkspaceMobilityArchiveData,
+    delivery: &crate::domains::sessions::subagents::delivery::CompletionDeliveryRecord,
+) -> Result<(), MobilityError> {
+    let (retired_seq, retired_id) = match (
+        delivery.retired_prompt_seq,
+        delivery.retired_prompt_id.as_deref(),
+    ) {
+        (None, None) => return Ok(()),
+        (Some(seq), Some(prompt_id)) => (seq, prompt_id),
+        _ => {
+            return Err(MobilityError::Invalid(format!(
+                "archive completion delivery {} has an incomplete retired wake identity",
+                delivery.delivery_id
+            )));
+        }
+    };
+
+    let canonical_prompt_id = delivery.prompt_id();
+    let producer_invariant_matches = delivery.state == CompletionDeliveryState::Delivered
+        && delivery.outcome == SessionTurnOutcome::Completed
+        && delivery.parent_prompt_seq.is_none()
+        && delivery.parent_turn_id.is_none()
+        && retired_id == canonical_prompt_id.as_str();
+    if !producer_invariant_matches {
+        return Err(MobilityError::Invalid(format!(
+            "archive completion delivery {} has an invalid retired wake intent",
+            delivery.delivery_id
+        )));
+    }
+
+    let active_row_collides = archive.sessions.iter().any(|bundle| {
+        bundle.session.id == delivery.parent_session_id
+            && bundle
+                .pending_prompts
+                .iter()
+                .any(|pending| pending.seq == retired_seq)
+    });
+    if active_row_collides {
+        return Err(MobilityError::Invalid(format!(
+            "archive completion delivery {} retired wake sequence {retired_seq} collides with an active pending prompt",
+            delivery.delivery_id
+        )));
     }
     Ok(())
 }

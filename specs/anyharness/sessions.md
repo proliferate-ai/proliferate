@@ -298,12 +298,16 @@ Every automatic durable-queue drain first ensures that the row's
 `pending_prompt_added` event is persisted. Detached activation and startup
 replay therefore preserve the original queue identity and `queued_at` before
 the row can become an executed transcript item, including across a crash
-between queue commit and activation. The visibility check matches both sequence
-and immutable `queued_at`, so a legacy reused numeric sequence cannot impersonate
-the current allocation. Database migration backfill raises existing cursors from
-pending rows, scalar and reordered queue events, completion projections, and
-delivery-held prompt identities or review-feedback receipts before new prompts
-are allocated.
+between queue commit and activation. The visibility check matches sequence,
+immutable `queued_at`, and the current prompt projection (`prompt_id`, text,
+content parts, and prompt provenance), so neither a legacy reused numeric
+sequence nor an earlier projection of an in-place completion-wake rewrite can
+impersonate the current row. A rewritten row receives a replacement
+`pending_prompt_added` before execution. If a staged row is removed before this
+check, the drain discards its staged payload and re-peeks the durable queue.
+Database migration backfill raises existing cursors from pending rows, scalar
+and reordered queue events, completion projections, and delivery-held prompt
+identities or review-feedback receipts before new prompts are allocated.
 
 Neither applies to a delivery that ever reached the parent queue
 (recreate/retry reconciliation keeps its legacy exactly-once path). A retired

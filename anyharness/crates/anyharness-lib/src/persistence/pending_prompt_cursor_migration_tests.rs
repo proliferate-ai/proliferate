@@ -62,6 +62,26 @@ fn backfill_prevents_reuse_of_drained_and_reordered_prompt_sequences() {
             "pending_prompts_reordered",
             r#"{"type":"pending_prompts_reordered","pendingPrompts":["malformed"]}"#.to_string(),
         ),
+        (
+            4,
+            "pending_prompt_added",
+            r#"{"type":"pending_prompt_added","seq":9223372036854775807}"#.to_string(),
+        ),
+        (
+            5,
+            "pending_prompt_added",
+            r#"{"type":"pending_prompt_added","seq":9223372036854775808}"#.to_string(),
+        ),
+        (
+            6,
+            "pending_prompts_reordered",
+            r#"{"type":"pending_prompts_reordered","pendingPrompts":[{"seq":9223372036854775807}]}"#.to_string(),
+        ),
+        (
+            7,
+            "pending_prompts_reordered",
+            r#"{"type":"pending_prompts_reordered","pendingPrompts":[{"seq":9223372036854775808}]}"#.to_string(),
+        ),
     ] {
         store
             .append_event(&SessionEventRecord {
@@ -81,7 +101,7 @@ fn backfill_prevents_reuse_of_drained_and_reordered_prompt_sequences() {
             "INSERT INTO session_events (
                 session_id, seq, timestamp, event_type, payload_json
              ) VALUES (
-                'session-1', 4, '2026-03-25T00:03:00Z',
+                'session-1', 8, '2026-03-25T00:03:00Z',
                 'pending_prompts_reordered', '{'
              );
              INSERT INTO session_link_completions (
@@ -98,7 +118,8 @@ fn backfill_prevents_reuse_of_drained_and_reordered_prompt_sequences() {
                 next_attempt_at, created_at, updated_at
              ) VALUES (
                 'delivery-1', 'delivery-completion-1', 'link-1', 'session-1',
-                'child', 'turn-2', 2, 'completed', 'done', 'delivered', 10, 11,
+                'child', 'turn-2', 2, 'completed', 'done', 'delivered', 10,
+                9223372036854775807,
                 '2026-03-25T00:03:00Z', '2026-03-25T00:03:00Z',
                 '2026-03-25T00:03:00Z'
              );
@@ -130,6 +151,18 @@ fn backfill_prevents_reuse_of_drained_and_reordered_prompt_sequences() {
         conn.execute_batch(include_str!("sql/0073_pending_prompt_cursor_backfill.sql"))
     })
     .expect("run cursor backfill");
+
+    let (backfilled_cursor, cursor_type): (i64, String) = db
+        .with_conn(|conn| {
+            conn.query_row(
+                "SELECT pending_prompt_seq_cursor, typeof(pending_prompt_seq_cursor)
+                 FROM sessions WHERE id = 'session-1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+        })
+        .expect("read backfilled cursor");
+    assert_eq!((backfilled_cursor, cursor_type.as_str()), (12, "integer"));
 
     let next = store
         .insert_pending_prompt("session-1", "new after upgrade", None)

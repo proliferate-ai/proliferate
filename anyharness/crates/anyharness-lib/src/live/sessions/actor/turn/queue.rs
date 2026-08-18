@@ -5,7 +5,7 @@ use anyharness_contract::v1::{
 };
 
 use crate::domains::sessions::model::{
-    PendingPromptReorderOutcome, PromptAttachmentRecord, PromptAttachmentState,
+    PendingPromptRecord, PendingPromptReorderOutcome, PromptAttachmentRecord, PromptAttachmentState,
 };
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::live::sessions::actor::command::{
@@ -17,10 +17,9 @@ use crate::live::sessions::queue_durable::{
     PendingPromptDeleteOutcome, PendingPromptUpdateOutcome,
 };
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(in crate::live::sessions::actor) enum MissingPrequeuedPromptPolicy {
-    AcknowledgeMarker,
-    RejectDrain,
+pub(in crate::live::sessions::actor) enum PrequeuedPromptVisibility {
+    Present(PendingPromptRecord),
+    Missing,
 }
 
 impl SessionActor {
@@ -36,11 +35,10 @@ impl SessionActor {
             ));
         }
         if let Some(seq) = from_queue_seq {
-            self.ensure_prequeued_pending_prompt_added(
-                seq,
-                MissingPrequeuedPromptPolicy::AcknowledgeMarker,
-            )
-            .await?;
+            // A marker is only an activation hint. Its row may have drained
+            // before the actor receives it, so either visibility outcome is
+            // an accepted marker; only inspection/persistence errors fail it.
+            let _visibility = self.ensure_prequeued_pending_prompt_added(seq).await?;
             return Ok(PromptAcceptance::Queued { seq });
         }
 
@@ -78,8 +76,7 @@ impl SessionActor {
     pub(in crate::live::sessions::actor) async fn ensure_prequeued_pending_prompt_added(
         &self,
         seq: i64,
-        missing_policy: MissingPrequeuedPromptPolicy,
-    ) -> Result<(), PromptAcceptError> {
+    ) -> Result<PrequeuedPromptVisibility, PromptAcceptError> {
         if !self.event_mutations_admitted().await {
             return Err(PromptAcceptError::EnqueueFailed(
                 "terminal transaction unresolved".to_string(),
@@ -87,16 +84,7 @@ impl SessionActor {
         }
         let record = match self.caps.queue.find_pending_prompt(&self.session_id, seq) {
             Ok(Some(record)) => record,
-            Ok(None) => {
-                // Marker payloads are never executed directly, so a marker
-                // that arrives after its row drained is safe to acknowledge.
-                if missing_policy == MissingPrequeuedPromptPolicy::AcknowledgeMarker {
-                    return Ok(());
-                }
-                return Err(PromptAcceptError::EnqueueFailed(format!(
-                    "prequeued prompt {seq} disappeared before its visibility event"
-                )));
-            }
+            Ok(None) => return Ok(PrequeuedPromptVisibility::Missing),
             Err(error) => {
                 tracing::warn!(
                     session_id = %self.session_id,
@@ -108,7 +96,7 @@ impl SessionActor {
             }
         };
         match self.caps.events.has_prompt_added_event(&record) {
-            Ok(true) => return Ok(()),
+            Ok(true) => return Ok(PrequeuedPromptVisibility::Present(record)),
             Ok(false) => {}
             Err(error) => {
                 tracing::warn!(
@@ -130,7 +118,7 @@ impl SessionActor {
             prompt_provenance: record.prompt_payload().public_provenance(),
         })
         .map_err(|error| PromptAcceptError::EnqueueFailed(error.to_string()))?;
-        Ok(())
+        Ok(PrequeuedPromptVisibility::Present(record))
     }
 
     pub(in crate::live::sessions::actor) fn next_pending_prompt_for_drain(

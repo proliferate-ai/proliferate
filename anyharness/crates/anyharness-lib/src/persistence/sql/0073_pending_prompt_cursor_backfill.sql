@@ -6,10 +6,10 @@ WITH prompt_sequences AS (
 
     SELECT
         session_id,
-        CAST(json_extract(
+        json_extract(
             CASE WHEN json_valid(payload_json) THEN payload_json ELSE '{}' END,
             '$.seq'
-        ) AS INTEGER)
+        )
     FROM session_events
     WHERE event_type IN (
         'pending_prompt_added',
@@ -29,10 +29,10 @@ WITH prompt_sequences AS (
 
     SELECT
         events.session_id,
-        CAST(json_extract(
+        json_extract(
             CASE WHEN json_valid(entries.value) THEN entries.value ELSE '{}' END,
             '$.seq'
-        ) AS INTEGER)
+        )
     FROM session_events AS events
     JOIN json_each(
         CASE WHEN json_valid(events.payload_json)
@@ -78,7 +78,9 @@ WITH prompt_sequences AS (
 ), prompt_sequence_maxima AS (
     SELECT session_id, MAX(seq) AS max_seq
     FROM prompt_sequences
-    WHERE seq > 0
+    WHERE typeof(seq) = 'integer'
+      AND seq > 0
+      AND seq < 9223372036854775807
     GROUP BY session_id
 )
 UPDATE sessions

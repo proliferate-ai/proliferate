@@ -3,7 +3,9 @@ use crate::domains::sessions::extensions::SessionTurnOutcome;
 use crate::domains::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
 };
-use crate::domains::sessions::model::{SessionEventRecord, SessionMcpBindingPolicy, SessionRecord};
+use crate::domains::sessions::model::{
+    PendingPromptRecord, SessionEventRecord, SessionMcpBindingPolicy, SessionRecord,
+};
 use crate::domains::sessions::store::completion_deliveries::{
     CompletionDeliveryRecord, CompletionDeliveryState,
 };
@@ -49,6 +51,87 @@ fn cursor_floor_rejects_cross_session_event_ownership() {
     let mut archive = archive();
     archive.sessions[0].events[0].session_id = "other-session".to_string();
     assert!(session_pending_prompt_cursor_lower_bound(&archive, &archive.sessions[0]).is_err());
+}
+
+#[test]
+fn cursor_floor_reserves_the_sql_integer_ceiling() {
+    let mut archive_data = archive();
+    archive_data.sessions[0].pending_prompt_seq_cursor = Some(MAX_PENDING_PROMPT_SEQ);
+    assert_eq!(
+        session_pending_prompt_cursor_lower_bound(&archive_data, &archive_data.sessions[0])
+            .expect("greatest usable cursor is a clean exhausted state"),
+        MAX_PENDING_PROMPT_SEQ,
+    );
+
+    archive_data.sessions[0].pending_prompt_seq_cursor = Some(i64::MAX);
+    assert!(
+        session_pending_prompt_cursor_lower_bound(&archive_data, &archive_data.sessions[0])
+            .is_err()
+    );
+
+    let mut derived = archive();
+    derived.sessions[0].events[0].payload_json = serde_json::json!({
+        "type": "pending_prompts_reordered",
+        "pendingPrompts": [{ "seq": i64::MAX }],
+    })
+    .to_string();
+    assert!(session_pending_prompt_cursor_lower_bound(&derived, &derived.sessions[0]).is_err());
+
+    let mut delivery_held = archive();
+    delivery_held.session_link_completion_deliveries[0].retired_prompt_seq = Some(i64::MAX);
+    assert!(
+        session_pending_prompt_cursor_lower_bound(&delivery_held, &delivery_held.sessions[0])
+            .is_err()
+    );
+}
+
+#[test]
+fn completion_delivery_validation_accepts_only_producible_retired_wake_intents() {
+    let archive_data = archive();
+    validate_archive_deliveries(&archive_data).expect("producer-shaped retired intent");
+
+    assert_invalid_retired_intent(|delivery| delivery.retired_prompt_seq = None);
+    assert_invalid_retired_intent(|delivery| delivery.retired_prompt_id = None);
+    assert_invalid_retired_intent(|delivery| delivery.state = CompletionDeliveryState::Enqueued);
+    assert_invalid_retired_intent(|delivery| delivery.outcome = SessionTurnOutcome::Failed);
+    assert_invalid_retired_intent(|delivery| delivery.parent_prompt_seq = Some(9));
+    assert_invalid_retired_intent(|delivery| delivery.parent_turn_id = Some("turn".to_string()));
+    assert_invalid_retired_intent(|delivery| {
+        delivery.retired_prompt_id = Some("unrelated-prompt".to_string())
+    });
+
+    let mut collision = archive();
+    let retired_prompt_id = collision.session_link_completion_deliveries[0].prompt_id();
+    collision.sessions[0]
+        .pending_prompts
+        .push(PendingPromptRecord {
+            session_id: "parent".to_string(),
+            seq: 9,
+            queue_position: 1,
+            prompt_id: Some(retired_prompt_id),
+            text: "still active".to_string(),
+            blocks_json: None,
+            provenance_json: None,
+            queued_at: "2026-03-25T00:00:00Z".to_string(),
+        });
+    assert!(validate_archive_deliveries(&collision).is_err());
+}
+
+fn validate_archive_deliveries(
+    archive: &WorkspaceMobilityArchiveData,
+) -> Result<(), MobilityError> {
+    let session_ids = archive
+        .sessions
+        .iter()
+        .map(|bundle| bundle.session.id.as_str())
+        .collect();
+    validate_completion_deliveries(archive, &session_ids)
+}
+
+fn assert_invalid_retired_intent(mutate: impl FnOnce(&mut CompletionDeliveryRecord)) {
+    let mut archive = archive();
+    mutate(&mut archive.session_link_completion_deliveries[0]);
+    assert!(validate_archive_deliveries(&archive).is_err());
 }
 
 fn archive() -> WorkspaceMobilityArchiveData {
@@ -143,7 +226,7 @@ fn link() -> SessionLinkRecord {
 }
 
 fn delivery() -> CompletionDeliveryRecord {
-    CompletionDeliveryRecord {
+    let mut record = CompletionDeliveryRecord {
         delivery_id: "delivery-1".to_string(),
         completion_id: "completion-1".to_string(),
         session_link_id: "link-1".to_string(),
@@ -160,7 +243,7 @@ fn delivery() -> CompletionDeliveryRecord {
         parent_prompt_seq: None,
         parent_turn_id: None,
         retired_prompt_seq: Some(9),
-        retired_prompt_id: Some("retired-1".to_string()),
+        retired_prompt_id: None,
         attempt_count: 0,
         next_attempt_at: "2026-03-25T00:00:00Z".to_string(),
         lease_token: None,
@@ -170,5 +253,7 @@ fn delivery() -> CompletionDeliveryRecord {
         updated_at: "2026-03-25T00:00:00Z".to_string(),
         enqueued_at: Some("2026-03-25T00:00:00Z".to_string()),
         delivered_at: Some("2026-03-25T00:00:00Z".to_string()),
-    }
+    };
+    record.retired_prompt_id = Some(record.prompt_id());
+    record
 }

@@ -8,7 +8,7 @@ use super::{
 use crate::domains::sessions::model::PendingPromptRecord;
 use crate::domains::sessions::prompt::{provenance::PromptProvenance, PromptPayload};
 use crate::domains::sessions::store::pending_prompts::{
-    insert_pending_prompt_row, map_pending_prompt,
+    allocate_pending_prompt_seq, insert_pending_prompt_row, map_pending_prompt,
 };
 
 mod coalescing;
@@ -392,20 +392,7 @@ fn insert_canonical_prompt(
     let payload = canonical_wake_payload(delivery);
     let blocks_json = payload.blocks_json().map_err(sql_conversion_error)?;
     let provenance_json = payload.provenance_json().map_err(sql_conversion_error)?;
-    let changed = conn.execute(
-        "UPDATE sessions
-         SET pending_prompt_seq_cursor = pending_prompt_seq_cursor + 1
-         WHERE id = ?1",
-        [delivery.parent_session_id.as_str()],
-    )?;
-    if changed != 1 {
-        return Err(rusqlite::Error::QueryReturnedNoRows);
-    }
-    let next_seq: i64 = conn.query_row(
-        "SELECT pending_prompt_seq_cursor FROM sessions WHERE id = ?1",
-        [delivery.parent_session_id.as_str()],
-        |row| row.get(0),
-    )?;
+    let next_seq = allocate_pending_prompt_seq(conn, &delivery.parent_session_id)?;
     let next_position: i64 = conn.query_row(
         "SELECT COALESCE(MAX(queue_position), 0) + 1
          FROM session_pending_prompts WHERE session_id = ?1",

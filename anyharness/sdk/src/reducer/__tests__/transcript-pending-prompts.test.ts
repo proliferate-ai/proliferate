@@ -67,6 +67,62 @@ describe("transcript pending-prompt reducer", () => {
       { seq: 1, promptId: "prompt-1", text: "first" },
     ]);
   });
+
+  it("replaces the complete snapshot when Added repeats for a rewritten row", () => {
+    const queuedAt = "2026-04-04T00:00:00Z";
+    const state = reduceEvents(
+      [
+        {
+          sessionId: "session-1",
+          seq: 1,
+          timestamp: "2026-04-04T00:00:01Z",
+          event: {
+            type: "pending_prompt_added",
+            seq: 10,
+            promptId: "prompt-old",
+            text: "old completion",
+            contentParts: [{ type: "text", text: "old completion" }],
+            queuedAt,
+            promptProvenance: {
+              type: "subagentWake",
+              sessionLinkId: "link-1",
+              completionId: "completion-old",
+            },
+          },
+        },
+        {
+          sessionId: "session-1",
+          seq: 2,
+          timestamp: "2026-04-04T00:00:02Z",
+          event: {
+            type: "pending_prompt_added",
+            seq: 10,
+            promptId: null,
+            text: "replacement message",
+            contentParts: [
+              { type: "text", text: "replacement message details" },
+            ],
+            queuedAt,
+            promptProvenance: null,
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    expect(state.pendingPrompts).toEqual([
+      {
+        seq: 10,
+        promptId: null,
+        text: "replacement message",
+        contentParts: [
+          { type: "text", text: "replacement message details" },
+        ],
+        queuedAt,
+        promptProvenance: null,
+      },
+    ]);
+  });
 });
 
 function pendingPromptAdded(
