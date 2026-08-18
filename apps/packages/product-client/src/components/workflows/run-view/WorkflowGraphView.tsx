@@ -125,7 +125,7 @@ export function WorkflowGraphView({
                 {WORKFLOW_NODE_CARD_COPY.needsInputBadge}
               </Badge>
             ) : vm.node.prompt.trim().length > 0 ? (
-              <span className="line-clamp-2 w-full text-ui-sm text-muted-foreground">
+              <span className="line-clamp-2 w-full whitespace-normal text-ui-sm text-muted-foreground">
                 {vm.node.prompt}
               </span>
             ) : null}

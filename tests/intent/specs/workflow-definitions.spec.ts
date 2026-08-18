@@ -93,6 +93,22 @@ test("creates, reloads, reopens, edits, and deletes a durable gen-2 definition",
   // it waits for the claim to be visible on the read-only signal directly
   // rather than racing a UI-driven sign-in against it.
   await awaitInstanceClaimVisible();
+  // This environment provisions no integrations, so the capability-liveness
+  // toast ("Integrations unavailable") re-raises for the whole session and its
+  // bottom-right card intercepts clicks aimed at the inspector's lower inputs.
+  // Dismiss it whenever it surfaces instead of racing individual clicks.
+  await page.addLocatorHandler(
+    page.getByText("Integrations unavailable", { exact: true }),
+    async () => {
+      // ToastBody's close affordance is aria-labelled "Close"; scope to the
+      // notifications region so no dialog close button can match instead.
+      await page
+        .getByRole("region", { name: /Notifications/ })
+        .getByRole("button", { name: "Close", exact: true })
+        .first()
+        .click();
+    },
+  );
   await signInThroughUi(page);
 
   await page.goto(`${webBaseUrl()}/workflows`);
