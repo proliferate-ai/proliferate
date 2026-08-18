@@ -116,9 +116,15 @@ export function useWorkspaceArchiveActions() {
   const optimisticallyArchivedIds = useWorkspaceArchiveVisibilityStore(
     (state) => state.optimisticallyArchivedIds,
   );
-  const hideWorkspace = useWorkspaceArchiveVisibilityStore((state) => state.hideWorkspace);
-  const showWorkspace = useWorkspaceArchiveVisibilityStore((state) => state.showWorkspace);
-  const resetArchiveVisibility = useWorkspaceArchiveVisibilityStore((state) => state.reset);
+  const beginVisibilityOwner = useWorkspaceArchiveVisibilityStore((state) => state.beginOwner);
+  const endVisibilityOwner = useWorkspaceArchiveVisibilityStore((state) => state.endOwner);
+  const hideWorkspaceForOwner = useWorkspaceArchiveVisibilityStore(
+    (state) => state.hideWorkspace,
+  );
+  const showWorkspaceForOwner = useWorkspaceArchiveVisibilityStore(
+    (state) => state.showWorkspace,
+  );
+  const visibilityOwnerGenerationRef = useRef<number | null>(null);
   const [scenario, setScenario] = useState<UnarchiveScenarioState | null>(null);
   // Per-pending-id metadata the reconciler needs once the POST has already
   // settled from this hook's own point of view: the name for a late T1, and
@@ -145,8 +151,11 @@ export function useWorkspaceArchiveActions() {
       next.add(workspaceId);
       return next;
     });
-    hideWorkspace(workspaceId);
-  }, [hideWorkspace]);
+    const generation = visibilityOwnerGenerationRef.current;
+    if (generation !== null) {
+      hideWorkspaceForOwner(generation, workspaceId);
+    }
+  }, [hideWorkspaceForOwner]);
   const removePendingDecision = useCallback((workspaceId: string) => {
     setPendingDecisionIds((current) => {
       if (!current.has(workspaceId)) {
@@ -159,10 +168,20 @@ export function useWorkspaceArchiveActions() {
   }, []);
   const removeOptimistic = useCallback((workspaceId: string) => {
     removePendingDecision(workspaceId);
-    showWorkspace(workspaceId);
-  }, [removePendingDecision, showWorkspace]);
+    const generation = visibilityOwnerGenerationRef.current;
+    if (generation !== null) {
+      showWorkspaceForOwner(generation, workspaceId);
+    }
+  }, [removePendingDecision, showWorkspaceForOwner]);
 
-  useEffect(() => () => resetArchiveVisibility(), [resetArchiveVisibility]);
+  useEffect(() => {
+    const generation = beginVisibilityOwner();
+    visibilityOwnerGenerationRef.current = generation;
+    return () => {
+      visibilityOwnerGenerationRef.current = null;
+      endVisibilityOwner(generation);
+    };
+  }, [beginVisibilityOwner, endVisibilityOwner]);
 
   const invalidateBoth = useCallback(async () => {
     await Promise.all([invalidateActiveCollections(), invalidateArchived()]);
@@ -177,9 +196,12 @@ export function useWorkspaceArchiveActions() {
   const releaseHiddenAfterListsSettle = useCallback((workspaceId: string) => {
     removePendingDecision(workspaceId);
     void invalidateBoth().finally(() => {
-      showWorkspace(workspaceId);
+      const generation = visibilityOwnerGenerationRef.current;
+      if (generation !== null) {
+        showWorkspaceForOwner(generation, workspaceId);
+      }
     });
-  }, [invalidateBoth, removePendingDecision, showWorkspace]);
+  }, [invalidateBoth, removePendingDecision, showWorkspaceForOwner]);
 
   const raiseArchiveFailureToast = useCallback((workspaceId: string, name: string, error: unknown) => {
     const code = error instanceof AnyHarnessError ? error.problem.code : undefined;

@@ -157,6 +157,50 @@ describe("useWorkspacePinIntentReconciliation", () => {
 
     expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual(["logical-workspace"]);
   });
+
+  it("keeps history provenance when a live duplicate arrives before resolution", async () => {
+    projection.isLoading = false;
+    useWorkspaceUiStore.setState({
+      _hydrated: true,
+      pinnedWorkspaceIds: ["logical-workspace"],
+    });
+    const rendered = renderHook(() => useWorkspacePinIntentReconciliationLifecycle());
+
+    act(() => {
+      dispatchWorkspacePinIntentEnvelopes([pinIntent()], "history");
+      useWorkspaceUiStore.getState().unpinWorkspace(["logical-workspace", "workspace-1"]);
+      dispatchWorkspacePinIntentEnvelopes([pinIntent()], "live");
+    });
+    projection.logicalWorkspaces = [logicalWorkspace()];
+    rendered.rerender();
+
+    await waitFor(() => {
+      expect(Object.keys(useWorkspaceUiStore.getState().workspacePinIntentReceiptByTarget))
+        .toHaveLength(1);
+    });
+    expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual([]);
+  });
+
+  it("keeps live provenance when a history duplicate arrives before resolution", async () => {
+    projection.isLoading = false;
+    useWorkspaceUiStore.setState({
+      _hydrated: true,
+      pinnedWorkspaceIds: ["logical-workspace"],
+    });
+    const rendered = renderHook(() => useWorkspacePinIntentReconciliationLifecycle());
+
+    act(() => {
+      useWorkspaceUiStore.getState().unpinWorkspace(["logical-workspace", "workspace-1"]);
+      dispatchWorkspacePinIntentEnvelopes([pinIntent()], "live");
+      dispatchWorkspacePinIntentEnvelopes([pinIntent()], "history");
+    });
+    projection.logicalWorkspaces = [logicalWorkspace()];
+    rendered.rerender();
+
+    await waitFor(() => {
+      expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual(["logical-workspace"]);
+    });
+  });
 });
 
 function logicalWorkspace(): LogicalWorkspace {

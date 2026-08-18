@@ -46,12 +46,14 @@ export function useWorkspacePinIntentReconciliation(): WorkspacePinIntentReconci
         observedAt: observation.observedAt,
         provenance: observation.provenance,
       };
-      const resolved = resolveWorkspacePinIntent(intent, logicalWorkspaces);
+      const operationKey = intentOperationKey(intent);
+      const authoritativeIntent = pendingByOperationRef.current.get(operationKey) ?? intent;
+      const resolved = resolveWorkspacePinIntent(authoritativeIntent, logicalWorkspaces);
       if (resolved && workspaceUiHydrated) {
-        pendingByOperationRef.current.delete(intentOperationKey(intent));
+        pendingByOperationRef.current.delete(operationKey);
         intents.push(resolved);
       } else {
-        rememberPendingIntent(pendingByOperationRef.current, intent);
+        rememberPendingIntent(pendingByOperationRef.current, authoritativeIntent);
       }
     }
     applyWorkspacePinIntents(intents);
@@ -76,7 +78,11 @@ function rememberPendingIntent(
   pending: Map<string, ObservedWorkspacePinIntent>,
   intent: ObservedWorkspacePinIntent,
 ): void {
-  pending.set(intentOperationKey(intent), intent);
+  const operationKey = intentOperationKey(intent);
+  if (pending.has(operationKey)) {
+    return;
+  }
+  pending.set(operationKey, intent);
   while (pending.size > MAX_PENDING_WORKSPACE_PIN_INTENTS) {
     const oldestKey = pending.keys().next().value;
     if (typeof oldestKey !== "string") {

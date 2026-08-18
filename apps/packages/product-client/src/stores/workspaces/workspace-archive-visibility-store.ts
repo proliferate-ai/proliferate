@@ -1,16 +1,32 @@
 import { create } from "zustand";
 
 interface WorkspaceArchiveVisibilityState {
+  activeOwnerGeneration: number | null;
   optimisticallyArchivedIds: ReadonlySet<string>;
-  hideWorkspace: (workspaceId: string) => void;
-  showWorkspace: (workspaceId: string) => void;
-  reset: () => void;
+  beginOwner: () => number;
+  endOwner: (generation: number) => void;
+  hideWorkspace: (generation: number, workspaceId: string) => void;
+  showWorkspace: (generation: number, workspaceId: string) => void;
 }
+
+let nextOwnerGeneration = 0;
 
 export const useWorkspaceArchiveVisibilityStore = create<WorkspaceArchiveVisibilityState>(
   (set) => ({
+    activeOwnerGeneration: null,
     optimisticallyArchivedIds: new Set(),
-    hideWorkspace: (workspaceId) => set((state) => {
+    beginOwner: () => {
+      const generation = ++nextOwnerGeneration;
+      set({ activeOwnerGeneration: generation, optimisticallyArchivedIds: new Set() });
+      return generation;
+    },
+    endOwner: (generation) => set((state) => state.activeOwnerGeneration === generation
+      ? { activeOwnerGeneration: null, optimisticallyArchivedIds: new Set() }
+      : state),
+    hideWorkspace: (generation, workspaceId) => set((state) => {
+      if (state.activeOwnerGeneration !== generation) {
+        return state;
+      }
       if (state.optimisticallyArchivedIds.has(workspaceId)) {
         return state;
       }
@@ -21,7 +37,10 @@ export const useWorkspaceArchiveVisibilityStore = create<WorkspaceArchiveVisibil
         ]),
       };
     }),
-    showWorkspace: (workspaceId) => set((state) => {
+    showWorkspace: (generation, workspaceId) => set((state) => {
+      if (state.activeOwnerGeneration !== generation) {
+        return state;
+      }
       if (!state.optimisticallyArchivedIds.has(workspaceId)) {
         return state;
       }
@@ -29,8 +48,5 @@ export const useWorkspaceArchiveVisibilityStore = create<WorkspaceArchiveVisibil
       optimisticallyArchivedIds.delete(workspaceId);
       return { optimisticallyArchivedIds };
     }),
-    reset: () => set((state) => state.optimisticallyArchivedIds.size === 0
-      ? state
-      : { optimisticallyArchivedIds: new Set() }),
   }),
 );
