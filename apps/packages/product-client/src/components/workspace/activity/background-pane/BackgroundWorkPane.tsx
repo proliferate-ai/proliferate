@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft } from "#product/primitives/icons/core";
-import { Button } from "#product/primitives/Button";
 import { SegmentedControl, type SegmentedControlItem } from "#product/primitives/SegmentedControl";
 import { RosterPanel } from "#product/primitives/patterns/RosterPanel";
 import { AgentsRosterPanel } from "#product/components/workspace/activity/AgentsRosterPanel";
 import { LiveTerminalsRosterPanel } from "#product/components/workspace/activity/LiveTerminalsRosterPanel";
 import { BackgroundTerminalView } from "#product/components/workspace/activity/background-pane/BackgroundTerminalView";
+import { BackgroundSubagentView } from "#product/components/workspace/activity/background-pane/BackgroundSubagentView";
 import { useSessionActivity } from "#product/hooks/activity/derived/use-session-activity";
 import { useBackgroundWorkRowCounts } from "#product/hooks/activity/derived/use-background-work-row";
 import { isProcessRunning } from "#product/domain/activity/process";
+import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
 // Same 15s cadence as the shared `useActivityNowMs`, but reimplemented locally
 // rather than reusing it: that hook is documented to tick unconditionally
@@ -40,13 +40,10 @@ const CLOSED_SUBAGENTS_EMPTY_COPY =
  * Loops are descoped by founder ruling for this slice — `LoopsPanel` is not
  * re-hosted here and stays untouched at its current call site.
  *
- * `BackgroundTerminalView` (rung R3) is wired in below: selecting a terminal
- * row stores its process id in pane-local state and swaps the roster body
- * for the real read-only detail view. `BackgroundSubagentView` (rung R4) is
- * still the placeholder seam below — `AgentsRosterPanel`'s `onOpen` stub
- * becomes real here: selecting a subagent row stores its id in pane-local
- * state and swaps the roster body for a minimal placeholder with a back
- * button, clearly marked as the R4 seam `BackgroundSubagentView` fills in.
+ * `BackgroundTerminalView` (rung R3) and `BackgroundSubagentView` (rung R4)
+ * are both wired in below: selecting a roster row stores its id in
+ * pane-local state and swaps the roster body for the matching real
+ * read-only detail view.
  */
 export function BackgroundWorkPane({ workspaceId, sessionId, isOpen }: BackgroundWorkPaneProps) {
   const [scope, setScope] = useState<BackgroundWorkScope>("running");
@@ -98,6 +95,59 @@ export function BackgroundWorkPane({ workspaceId, sessionId, isOpen }: Backgroun
     }
   }, [selectedProcessId, selectedProcess]);
 
+  const selectedSubagent = selectedSubagentId
+    ? activity.agents.find((agent) => agent.id === selectedSubagentId) ?? null
+    : null;
+  // Unlike processes, subagents DO leave the roster the instant they finish
+  // (the invariant the Closed scope depends on — see `CLOSED_SUBAGENTS_EMPTY_COPY`
+  // above), so losing the resolved subagent here is an expected path, not
+  // just a defensive guard. Bouncing back to the roster is correct: there is
+  // nothing left to mirror live, and the subagent's own final result already
+  // lives in the transcript.
+  useEffect(() => {
+    if (selectedSubagentId && !selectedSubagent) {
+      setSelectedSubagentId(null);
+    }
+  }, [selectedSubagentId, selectedSubagent]);
+
+  // Deep-open target: a native subagent's transcript block click
+  // (`TranscriptAgentGroupBlock`'s `onOpenSubagent`, threaded through
+  // `useOpenBackgroundWorkPane`'s extended return) writes a one-shot pending
+  // selection into the right-panel model rather than reaching into this pane
+  // directly (Delivery Spec — Background Work Slice 1, rung R4 fix-forward).
+  // Consume it the instant it appears and clear it immediately — a single
+  // writer (the transcript click), a single reader (here).
+  //
+  // Session-scoped on read (review round 2): the entry is keyed by
+  // workspace only, but carries the `sessionId` that was active at write
+  // time. A click can land here for a session other than this pane's own
+  // (e.g. the active session flips between the write and this effect
+  // running, or the click originated from an embedded transcript for a
+  // different session in the same workspace) — mismatched entries are
+  // discarded rather than applied, whether this is a fresh mount or an
+  // already-mounted re-render, so a stale cross-session id never leaks into
+  // this session's roster lookup.
+  const pendingSubagentSelection = useWorkspaceUiStore(
+    (state) => state.pendingBackgroundSubagentSelectionByWorkspace[workspaceId] ?? null,
+  );
+  const clearPendingBackgroundSubagentSelectionForWorkspace = useWorkspaceUiStore(
+    (state) => state.clearPendingBackgroundSubagentSelectionForWorkspace,
+  );
+  useEffect(() => {
+    if (!pendingSubagentSelection) {
+      return;
+    }
+    if (pendingSubagentSelection.sessionId === sessionId) {
+      setSelectedSubagentId(pendingSubagentSelection.subagentId);
+    }
+    clearPendingBackgroundSubagentSelectionForWorkspace(workspaceId);
+  }, [
+    clearPendingBackgroundSubagentSelectionForWorkspace,
+    pendingSubagentSelection,
+    sessionId,
+    workspaceId,
+  ]);
+
   if (selectedProcess) {
     return (
       <BackgroundTerminalView
@@ -118,11 +168,20 @@ export function BackgroundWorkPane({ workspaceId, sessionId, isOpen }: Backgroun
     );
   }
 
-  if (selectedSubagentId) {
+  if (selectedSubagent) {
     return (
-      <BackgroundWorkSubagentSeam
+      <BackgroundSubagentView
+        subagent={
+          // Same feed-gating seam as `BackgroundTerminalView` above: the
+          // right panel stays mounted-but-hidden via CSS while closed, so
+          // streaming must stop at this boundary rather than at mount.
+          // `BackgroundSubagentView`'s frozen (subagent, sessionId,
+          // workspaceId, onBack) contract has no separate feed prop, so the
+          // gate clones the roster entry with its `feed` nulled instead.
+          isOpen ? selectedSubagent : { ...selectedSubagent, feed: null }
+        }
+        sessionId={sessionId}
         workspaceId={workspaceId}
-        subagentId={selectedSubagentId}
         onBack={() => setSelectedSubagentId(null)}
       />
     );
@@ -160,6 +219,7 @@ export function BackgroundWorkPane({ workspaceId, sessionId, isOpen }: Backgroun
               <AgentsRosterPanel
                 agents={activity.agents}
                 nowMs={nowMs}
+                workspaceId={workspaceId}
                 onOpen={setSelectedSubagentId}
               />
             </>
@@ -187,54 +247,6 @@ export function BackgroundWorkPane({ workspaceId, sessionId, isOpen }: Backgroun
       </div>
       <footer className="border-t border-border px-3 py-2 text-ui-sm text-muted-foreground">
         Read-only. Output is mirrored from the agent; nothing here can steer it.
-      </footer>
-    </section>
-  );
-}
-
-/**
- * R4 seam: a minimal, clearly-labeled placeholder standing in for
- * `BackgroundSubagentView` (rung R4). Keeps the selected subagent id in
- * pane-local state (owned by the parent) and offers only a back action —
- * no transcript, no composer, nothing to interact with yet.
- */
-function BackgroundWorkSubagentSeam({
-  workspaceId,
-  subagentId,
-  onBack,
-}: {
-  workspaceId: string;
-  subagentId: string;
-  onBack: () => void;
-}) {
-  return (
-    <section
-      aria-label="Background work — subagent detail"
-      data-background-work-subagent-seam=""
-      data-workspace-id={workspaceId}
-      data-subagent-id={subagentId}
-      className="flex h-full min-h-0 flex-col"
-    >
-      <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Back to background work"
-          onClick={onBack}
-        >
-          <ArrowLeft className="icon-compact" />
-        </Button>
-        <h2 className="min-w-0 flex-1 truncate text-ui font-medium text-foreground">
-          Subagent detail
-        </h2>
-      </header>
-      <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-center text-ui-sm text-muted-foreground">
-        The read-only subagent transcript (`BackgroundSubagentView`) lands in
-        rung R4 — this is that seam, holding the selected subagent's id.
-      </div>
-      <footer className="border-t border-border px-3 py-2 text-ui-sm text-muted-foreground">
-        Read-only. Transcript mirrored from the agent; no composer.
       </footer>
     </section>
   );

@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { ToolCallItem } from "@anyharness/sdk";
+import { createTranscriptState } from "@anyharness/sdk";
+import type { ToolCallItem, TranscriptState } from "@anyharness/sdk";
 import {
+  findSubagentLaunchItem,
+  isSubagentLaunchStatusVisibleInTranscript,
   isSubagentWorkComplete,
   parseAsyncSubagentLaunch,
+  resolveSubagentIdForItem,
   resolveSubagentLaunchDisplay,
   resolveSubagentExecutionState,
 } from "./subagent-launch";
@@ -265,6 +269,137 @@ describe("resolveSubagentLaunchDisplay", () => {
       meta: null,
       prompt: "Inspect transcript rendering.",
     });
+  });
+});
+
+describe("isSubagentLaunchStatusVisibleInTranscript", () => {
+  it("suppresses the three retired transcript status lines", () => {
+    expect(isSubagentLaunchStatusVisibleInTranscript("running")).toBe(false);
+    expect(isSubagentLaunchStatusVisibleInTranscript("background")).toBe(false);
+    expect(isSubagentLaunchStatusVisibleInTranscript("completed_background")).toBe(false);
+  });
+
+  it("keeps every other execution state's status line visible", () => {
+    expect(isSubagentLaunchStatusVisibleInTranscript("completed")).toBe(true);
+    expect(isSubagentLaunchStatusVisibleInTranscript("failed")).toBe(true);
+    expect(isSubagentLaunchStatusVisibleInTranscript("expired_background")).toBe(true);
+  });
+});
+
+describe("findSubagentLaunchItem", () => {
+  it("finds the parent transcript's launch tool call by background-work agentId", () => {
+    const item = toolCallItem({
+      itemId: "tool-launch",
+      status: "completed",
+      semanticKind: "subagent",
+      nativeToolName: "Agent",
+      rawInput: { run_in_background: true, prompt: "Inspect the repo." },
+      rawOutput: backgroundWork("pending"),
+    });
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById[item.itemId] = item;
+
+    expect(findSubagentLaunchItem(transcript, "ad5087d157aab3117")).toBe(item);
+  });
+
+  it("returns null when no tool call correlates to the subagent id", () => {
+    const item = toolCallItem({
+      itemId: "tool-launch",
+      status: "completed",
+      semanticKind: "subagent",
+      nativeToolName: "Agent",
+      rawInput: { run_in_background: true },
+      rawOutput: backgroundWork("pending"),
+    });
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById[item.itemId] = item;
+
+    expect(findSubagentLaunchItem(transcript, "some-other-agent-id")).toBeNull();
+  });
+
+  it("returns null for harnesses with no background-work correlation (e.g. Codex)", () => {
+    const item = toolCallItem({
+      itemId: "tool-launch",
+      status: "completed",
+      semanticKind: "subagent",
+      nativeToolName: "Agent",
+      rawInput: { prompt: "Inspect the repo." },
+      rawOutput: undefined,
+    });
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById[item.itemId] = item;
+
+    expect(findSubagentLaunchItem(transcript, "child-thread-1")).toBeNull();
+  });
+
+  it("ignores non-tool-call items", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById["message-1"] = {
+      kind: "assistant_prose",
+      itemId: "message-1",
+      turnId: "turn-1",
+    } as unknown as TranscriptState["itemsById"][string];
+
+    expect(findSubagentLaunchItem(transcript, "ad5087d157aab3117")).toBeNull();
+  });
+});
+
+describe("resolveSubagentIdForItem", () => {
+  // Delivery Spec — Background Work Slice 1, rung R4 fix-forward review
+  // round 2: this is now load-bearing for navigation
+  // (`TranscriptAgentGroupBlock`'s click-to-open-pane affordance), so it
+  // gets direct unit coverage of the pure function rather than only
+  // integration-level coverage through the component.
+  it("returns the agentId on the happy path (valid claude_async_agent background-work metadata)", () => {
+    const item = toolCallItem({
+      status: "completed",
+      semanticKind: "subagent",
+      nativeToolName: "Agent",
+      rawInput: { run_in_background: true },
+      rawOutput: backgroundWork("pending"),
+    });
+
+    expect(resolveSubagentIdForItem(item)).toBe("ad5087d157aab3117");
+  });
+
+  it("returns null when rawOutput is a string, not a record", () => {
+    const item = toolCallItem({
+      rawOutput: "Async agent launched successfully." as unknown as ToolCallItem["rawOutput"],
+    });
+
+    expect(resolveSubagentIdForItem(item)).toBeNull();
+  });
+
+  it("returns null when rawOutput is an array, not a record", () => {
+    const item = toolCallItem({
+      rawOutput: ["agentId", "ad5087d157aab3117"] as unknown as ToolCallItem["rawOutput"],
+    });
+
+    expect(resolveSubagentIdForItem(item)).toBeNull();
+  });
+
+  it("returns null when _anyharness.backgroundWork is present but trackerKind is unrecognized", () => {
+    const item = toolCallItem({
+      rawOutput: {
+        agentId: "ad5087d157aab3117",
+        _anyharness: {
+          backgroundWork: {
+            trackerKind: "codex_thread",
+            state: "pending",
+          },
+        },
+      },
+    });
+
+    expect(resolveSubagentIdForItem(item)).toBeNull();
+  });
+
+  it("returns null when rawOutput has no _anyharness.backgroundWork at all", () => {
+    const item = toolCallItem({
+      rawOutput: { agentId: "ad5087d157aab3117" },
+    });
+
+    expect(resolveSubagentIdForItem(item)).toBeNull();
   });
 });
 

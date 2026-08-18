@@ -5,6 +5,7 @@ import { SubagentRosterRow } from "./SubagentRosterRow";
 export interface AgentsRosterPanelProps {
   agents: ActivitySubagentWire[];
   nowMs: number;
+  workspaceId: string;
   onOpen?: (subagentId: string) => void;
 }
 
@@ -17,7 +18,7 @@ export interface AgentsRosterPanelProps {
  * (`features/delegated-work.md`) as a new `subagent` source, inheriting
  * generated identity/color there.
  */
-export function AgentsRosterPanel({ agents, nowMs, onOpen }: AgentsRosterPanelProps) {
+export function AgentsRosterPanel({ agents, nowMs, workspaceId, onOpen }: AgentsRosterPanelProps) {
   const runningAgents = agents.filter((agent) => agent.status.status === "running");
   const sorted = sortSubagentsForDisplay(runningAgents);
   return (
@@ -28,7 +29,7 @@ export function AgentsRosterPanel({ agents, nowMs, onOpen }: AgentsRosterPanelPr
     >
       {sorted.map((agent) => (
         <li key={agent.id}>
-          <SubagentRosterRow subagent={agent} nowMs={nowMs} onOpen={onOpen} />
+          <SubagentRosterRow subagent={agent} nowMs={nowMs} workspaceId={workspaceId} onOpen={onOpen} />
         </li>
       ))}
     </RosterPanel>

@@ -96,6 +96,10 @@ vi.mock("#product/hooks/cowork/workflows/use-open-cowork-artifact", () => ({
   useOpenCoworkArtifact: () => ({ openArtifact: vi.fn() }),
 }));
 
+vi.mock("#product/hooks/activity/workflows/use-open-background-work-pane", () => ({
+  useOpenBackgroundWorkPane: () => vi.fn(),
+}));
+
 vi.mock("#product/hooks/ui/debug/use-debug-render-count", () => ({
   useDebugRenderCount: () => {},
 }));

@@ -24,6 +24,7 @@ describe("useOpenBackgroundWorkPane", () => {
       _hydrated: true,
       shellActivationEpochByWorkspace: {},
       pendingChatActivationByWorkspace: {},
+      pendingBackgroundSubagentSelectionByWorkspace: {},
       urgentHighlightedChatSessionByWorkspace: {},
     });
   });
@@ -65,6 +66,61 @@ describe("useOpenBackgroundWorkPane", () => {
     ).toContain("tool:background");
     expect(useWorkspaceUiStore.getState().rightPanelDurableByWorkspace["logical-1"])
       .toMatchObject({ open: true });
+  });
+
+  it("writes a session-scoped pending subagent selection for the active workspace when given a subagent id and session id", () => {
+    useSessionSelectionStore.getState().activateWorkspace({
+      logicalWorkspaceId: "logical-1",
+      workspaceId: "workspace-1",
+    });
+
+    const { result } = renderHook(() => useOpenBackgroundWorkPane());
+
+    act(() => {
+      result.current("agent-42", "session-1");
+    });
+
+    expect(
+      useWorkspaceUiStore.getState().pendingBackgroundSubagentSelectionByWorkspace["workspace-1"],
+    ).toEqual({ subagentId: "agent-42", sessionId: "session-1" });
+    // Still opens the pane exactly as the zero-arg call does.
+    expect(
+      useWorkspaceUiStore.getState().rightPanelMaterializedByWorkspace["workspace-1"],
+    ).toMatchObject({ activeEntryKey: "tool:background" });
+  });
+
+  it("does not write a pending subagent selection for the zero-arg call", () => {
+    useSessionSelectionStore.getState().activateWorkspace({
+      logicalWorkspaceId: "logical-1",
+      workspaceId: "workspace-1",
+    });
+
+    const { result } = renderHook(() => useOpenBackgroundWorkPane());
+
+    act(() => {
+      result.current();
+    });
+
+    expect(
+      useWorkspaceUiStore.getState().pendingBackgroundSubagentSelectionByWorkspace["workspace-1"],
+    ).toBeUndefined();
+  });
+
+  it("does not write a pending subagent selection when the subagent id is given without a session id", () => {
+    useSessionSelectionStore.getState().activateWorkspace({
+      logicalWorkspaceId: "logical-1",
+      workspaceId: "workspace-1",
+    });
+
+    const { result } = renderHook(() => useOpenBackgroundWorkPane());
+
+    act(() => {
+      result.current("agent-42");
+    });
+
+    expect(
+      useWorkspaceUiStore.getState().pendingBackgroundSubagentSelectionByWorkspace["workspace-1"],
+    ).toBeUndefined();
   });
 
   it("does not duplicate the background entry in the header order when opened twice", () => {

@@ -70,6 +70,7 @@ export function TranscriptTurnRow({
   onOpenFile,
   onOpenTurnChanges,
   onOpenArtifact,
+  onOpenSubagent,
   onHandOffPlanToNewSession,
   workspaceReceipt = null,
 }: {
@@ -87,6 +88,7 @@ export function TranscriptTurnRow({
   onOpenFile: (filePath: string) => void;
   onOpenTurnChanges?: () => void;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
+  onOpenSubagent?: (subagentId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
   /** The workspace-creation receipt, when this row hosts it (see `hostsWorkspaceReceipt`). */
   workspaceReceipt?: ReactNode;
@@ -277,6 +279,7 @@ export function TranscriptTurnRow({
           showCompletedArtifactFallback={row.isLastTurnRow}
           workspaceId={selectedWorkspaceId}
           onOpenArtifact={onOpenArtifact}
+          onOpenSubagent={onOpenSubagent}
           onHandOffPlanToNewSession={onHandOffPlanToNewSession}
           workspaceReceipt={workspaceReceipt}
         />

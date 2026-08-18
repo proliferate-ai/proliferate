@@ -20,6 +20,7 @@ export function TranscriptToolCallGroupBlock({
   childrenByParentId,
   workspaceId,
   onOpenArtifact,
+  onOpenSubagent,
   renderChild,
 }: {
   item: ToolCallItem;
@@ -28,6 +29,7 @@ export function TranscriptToolCallGroupBlock({
   childrenByParentId: Map<string, string[]>;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
+  onOpenSubagent?: (subagentId: string) => void;
   renderChild: (childId: string) => ReactNode;
 }) {
   if (isSubagentItem(item)) {
@@ -38,6 +40,7 @@ export function TranscriptToolCallGroupBlock({
         transcript={transcript}
         childrenByParentId={childrenByParentId}
         renderChild={renderChild}
+        onOpenSubagent={onOpenSubagent}
       />
     );
   }

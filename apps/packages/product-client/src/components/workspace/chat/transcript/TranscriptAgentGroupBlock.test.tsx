@@ -1,5 +1,8 @@
+// @vitest-environment jsdom
+
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import {
   createTranscriptState,
   reduceEvents,
@@ -9,7 +12,7 @@ import type {
   ToolCallItem,
   TranscriptState,
 } from "@anyharness/sdk";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildTurnPresentation,
 } from "#product/domain/chats/transcript/transcript-presentation";
@@ -97,6 +100,120 @@ const fixtures = {
   codex: codexFixtureJson as unknown as NativeSubagentFixture,
 };
 
+afterEach(cleanup);
+
+// Review round 3 (keyboard access): the header's `role="button"` /
+// `tabIndex` / `onKeyDown` live on the outer clickable `<div>`, but
+// `getByText` resolves to the innermost element carrying that exact text
+// (the header-verb `<span>`). Keyboard events target whatever element
+// actually has focus — the header div itself, per its `tabIndex={0}` — so
+// keydown assertions must dispatch on that ancestor, not the inner span.
+function headerButtonFor(textNode: HTMLElement): HTMLElement {
+  const header = textNode.closest('[role="button"]');
+  if (!header) {
+    throw new Error("expected an ancestor with role=\"button\"");
+  }
+  return header as HTMLElement;
+}
+
+describe("TranscriptAgentGroupBlock muted status lines", () => {
+  // Design Handoff — MODIFIED `SubagentLaunchLedger`; Delivery Spec —
+  // Background Work Slice 1, rung R4, acceptance line 52: "the two muted
+  // transcript status lines no longer render." (A third — `Creating` — was
+  // also retired; see the handoff's exact three-state list.)
+  it("never shows Creating/Running in background/Completed in background once expanded", () => {
+    const transcript = createTranscriptState("session-1");
+    const item: ToolCallItem = {
+      ...toolItem("native-task", "turn-1", 1, "subagent", "completed"),
+      title: "Inspect the repository",
+      nativeToolName: "Task",
+      rawInput: { run_in_background: true, prompt: "Inspect the transcript pipeline" },
+      rawOutput: {
+        isAsync: true,
+        agentId: "agent-1",
+        outputFile: "/tmp/task.output",
+        _anyharness: { backgroundWork: { trackerKind: "claude_async_agent", state: "pending" } },
+      },
+    };
+    const childItem: ToolCallItem = toolItem("child-tool", "turn-1", 2, "other", "completed");
+    transcript.itemsById[item.itemId] = item;
+    transcript.itemsById[childItem.itemId] = childItem;
+
+    const { getByText, container } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [childItem.itemId],
+        transcript,
+        childrenByParentId: new Map([[item.itemId, [childItem.itemId]]]),
+        renderChild: () => null,
+      }),
+    );
+
+    fireEvent.click(getByText("Creating subagent"));
+
+    // The header verb itself is allowed to read "Creating subagent" — it is
+    // the retired *status line* (rendered on its own, muted, below the
+    // header) that must be gone.
+    expect(container.textContent).not.toContain("Running in background");
+    expect(container.textContent).not.toContain("Completed in background");
+    expect(container.textContent).not.toContain("View initial prompt");
+  });
+
+  it("still shows the non-retired status lines (e.g. Launch failed) once expanded", () => {
+    const transcript = createTranscriptState("session-1");
+    const item: ToolCallItem = {
+      ...toolItem("native-task-failed", "turn-1", 1, "subagent", "failed"),
+      title: "Inspect the repository",
+      nativeToolName: "Task",
+      rawInput: { prompt: "Inspect the transcript pipeline" },
+    };
+    transcript.itemsById[item.itemId] = item;
+
+    const { getByText } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [],
+        transcript,
+        childrenByParentId: new Map(),
+        renderChild: () => null,
+      }),
+    );
+
+    fireEvent.click(getByText("Subagent launch failed"));
+
+    expect(getByText("Launch failed")).not.toBeNull();
+  });
+
+  it("expands via Enter on the header when there is no onOpenSubagent (expand-fallback keyboard access)", () => {
+    const transcript = createTranscriptState("session-1");
+    const item: ToolCallItem = {
+      ...toolItem("native-task-failed-kbd", "turn-1", 1, "subagent", "failed"),
+      title: "Inspect the repository",
+      nativeToolName: "Task",
+      rawInput: { prompt: "Inspect the transcript pipeline" },
+    };
+    transcript.itemsById[item.itemId] = item;
+
+    const { getByText } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [],
+        transcript,
+        childrenByParentId: new Map(),
+        renderChild: () => null,
+      }),
+    );
+
+    const header = headerButtonFor(getByText("Subagent launch failed"));
+    expect(header.getAttribute("role")).toBe("button");
+    expect(header.getAttribute("tabindex")).toBe("0");
+
+    fireEvent.keyDown(header, { key: " " });
+
+    expect(getByText("Launch failed")).not.toBeNull();
+  });
+});
+
 describe.each(["in_progress", "completed"] as const)(
   "TranscriptAgentGroupBlock %s",
   (status) => {
@@ -128,6 +245,206 @@ describe.each(["in_progress", "completed"] as const)(
     });
   },
 );
+
+describe("TranscriptAgentGroupBlock onOpenSubagent (native routing)", () => {
+  // Delivery Spec — Background Work Slice 1, rung R4 fix-forward: the
+  // native subagent's transcript block must click-open BackgroundWorkPane's
+  // subagent detail, correlated via the same `ToolBackgroundWorkMetadata`
+  // agentId `findSubagentLaunchItem` already reads in reverse.
+  function backgroundWorkItem(agentId: string): ToolCallItem {
+    return {
+      ...toolItem("native-task", "turn-1", 1, "subagent", "in_progress"),
+      title: "Inspect the repository",
+      nativeToolName: "Task",
+      rawInput: { run_in_background: true, prompt: "Inspect the transcript pipeline" },
+      rawOutput: {
+        isAsync: true,
+        agentId,
+        outputFile: "/tmp/task.output",
+        _anyharness: { backgroundWork: { trackerKind: "claude_async_agent", state: "pending" } },
+      },
+    };
+  }
+
+  it("calls onOpenSubagent with the correct subagent id when the header is clicked", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = backgroundWorkItem("agent-42");
+    transcript.itemsById[item.itemId] = item;
+    const onOpenSubagent = vi.fn();
+
+    const { getByText } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [],
+        transcript,
+        childrenByParentId: new Map(),
+        renderChild: () => null,
+        onOpenSubagent,
+      }),
+    );
+
+    fireEvent.click(getByText("Creating subagent"));
+
+    expect(onOpenSubagent).toHaveBeenCalledTimes(1);
+    expect(onOpenSubagent).toHaveBeenCalledWith("agent-42");
+  });
+
+  it("still allows expand/collapse via the chevron when onOpenSubagent is wired", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = backgroundWorkItem("agent-7");
+    const childItem: ToolCallItem = toolItem("child-tool", "turn-1", 2, "other", "completed");
+    transcript.itemsById[item.itemId] = item;
+    transcript.itemsById[childItem.itemId] = childItem;
+    const onOpenSubagent = vi.fn();
+
+    const { getByRole, queryByText } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [childItem.itemId],
+        transcript,
+        childrenByParentId: new Map([[item.itemId, [childItem.itemId]]]),
+        renderChild: () => null,
+        onOpenSubagent,
+      }),
+    );
+
+    // The header itself now opens the pane, not the disclosure — expanding
+    // must go through the dedicated chevron control instead.
+    expect(queryByText("Launch failed")).toBeNull();
+    fireEvent.click(getByRole("button", { name: "Expand subagent details" }));
+
+    expect(onOpenSubagent).not.toHaveBeenCalled();
+    expect(getByRole("button", { name: "Collapse subagent details" })).not.toBeNull();
+  });
+
+  it("calls onOpenSubagent with the correct subagent id when Enter is pressed on the header", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = backgroundWorkItem("agent-42");
+    transcript.itemsById[item.itemId] = item;
+    const onOpenSubagent = vi.fn();
+
+    const { getByText } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [],
+        transcript,
+        childrenByParentId: new Map(),
+        renderChild: () => null,
+        onOpenSubagent,
+      }),
+    );
+
+    // Keyboard activation targets the header `[role="button"]` itself, not
+    // the inner text span — that's the element that actually receives focus
+    // (and thus the keydown) when a user tabs to it.
+    fireEvent.keyDown(headerButtonFor(getByText("Creating subagent")), { key: "Enter" });
+
+    expect(onOpenSubagent).toHaveBeenCalledTimes(1);
+    expect(onOpenSubagent).toHaveBeenCalledWith("agent-42");
+  });
+
+  it("calls onOpenSubagent with the correct subagent id when Space is pressed on the header", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = backgroundWorkItem("agent-42");
+    transcript.itemsById[item.itemId] = item;
+    const onOpenSubagent = vi.fn();
+
+    const { getByText } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [],
+        transcript,
+        childrenByParentId: new Map(),
+        renderChild: () => null,
+        onOpenSubagent,
+      }),
+    );
+
+    fireEvent.keyDown(headerButtonFor(getByText("Creating subagent")), { key: " " });
+
+    expect(onOpenSubagent).toHaveBeenCalledTimes(1);
+    expect(onOpenSubagent).toHaveBeenCalledWith("agent-42");
+  });
+
+  it("exposes the header as a keyboard-focusable button when it opens a subagent", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = backgroundWorkItem("agent-42");
+    transcript.itemsById[item.itemId] = item;
+
+    const { getByText } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [],
+        transcript,
+        childrenByParentId: new Map(),
+        renderChild: () => null,
+        onOpenSubagent: vi.fn(),
+      }),
+    );
+
+    const header = getByText("Creating subagent").closest('[role="button"]');
+    expect(header).not.toBeNull();
+    expect(header?.getAttribute("tabindex")).toBe("0");
+    expect(header?.getAttribute("aria-label")).toBe("Open subagent detail");
+  });
+
+  it("does not re-trigger the header's action when Enter is pressed on the nested chevron button", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = backgroundWorkItem("agent-7");
+    const childItem: ToolCallItem = toolItem("child-tool", "turn-1", 2, "other", "completed");
+    transcript.itemsById[item.itemId] = item;
+    transcript.itemsById[childItem.itemId] = childItem;
+    const onOpenSubagent = vi.fn();
+
+    const { getByRole } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [childItem.itemId],
+        transcript,
+        childrenByParentId: new Map([[item.itemId, [childItem.itemId]]]),
+        renderChild: () => null,
+        onOpenSubagent,
+      }),
+    );
+
+    fireEvent.keyDown(getByRole("button", { name: "Expand subagent details" }), { key: "Enter" });
+
+    expect(onOpenSubagent).not.toHaveBeenCalled();
+  });
+
+  it("does not get the pane-opening affordance when rawOutput has no background metadata", () => {
+    const transcript = createTranscriptState("session-1");
+    const item: ToolCallItem = {
+      ...toolItem("native-task-no-meta", "turn-1", 1, "subagent", "failed"),
+      title: "Inspect the repository",
+      nativeToolName: "Task",
+      rawInput: { prompt: "Inspect the transcript pipeline" },
+    };
+    transcript.itemsById[item.itemId] = item;
+    const onOpenSubagent = vi.fn();
+
+    const { getByText, queryByRole } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [],
+        transcript,
+        childrenByParentId: new Map(),
+        renderChild: () => null,
+        onOpenSubagent,
+      }),
+    );
+
+    // No chevron affordance: this block has no background-work correlation
+    // for onOpenSubagent to resolve an id from.
+    expect(queryByRole("button", { name: "Expand subagent details" })).toBeNull();
+
+    // Falls back to byte-identical expand-on-click behavior.
+    fireEvent.click(getByText("Subagent launch failed"));
+
+    expect(onOpenSubagent).not.toHaveBeenCalled();
+    expect(getByText("Launch failed")).not.toBeNull();
+  });
+});
 
 describe("native subagent transcript tree rendering", () => {
   it("renders Codex collaboration activity as a tool, not another spawn", () => {

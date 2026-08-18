@@ -17,6 +17,8 @@ type WorkspaceUiRightPanelActions = Pick<
   | "setRightPanelMaterializedForWorkspace"
   | "setRightPanelWidthForWorkspace"
   | "setRightPanelOpenForWorkspace"
+  | "setPendingBackgroundSubagentSelectionForWorkspace"
+  | "clearPendingBackgroundSubagentSelectionForWorkspace"
 >;
 
 function rightPanelStateUpdate(
@@ -107,6 +109,24 @@ export function createWorkspaceUiRightPanelActions(
           },
         };
       });
+    },
+
+    setPendingBackgroundSubagentSelectionForWorkspace: (workspaceId, selection) => {
+      set((state) => ({
+        pendingBackgroundSubagentSelectionByWorkspace: {
+          ...state.pendingBackgroundSubagentSelectionByWorkspace,
+          [workspaceId]: selection,
+        },
+      }));
+    },
+
+    clearPendingBackgroundSubagentSelectionForWorkspace: (workspaceId) => {
+      set((state) => ({
+        pendingBackgroundSubagentSelectionByWorkspace: {
+          ...state.pendingBackgroundSubagentSelectionByWorkspace,
+          [workspaceId]: null,
+        },
+      }));
     },
   };
 }

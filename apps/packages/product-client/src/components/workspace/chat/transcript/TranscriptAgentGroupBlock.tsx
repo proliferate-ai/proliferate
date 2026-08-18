@@ -10,6 +10,7 @@ import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import { Button } from "#product/primitives/Button";
+import { ChevronRight } from "#product/primitives/icons/core";
 import { Robot } from "#product/primitives/icons/product";
 import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
@@ -20,8 +21,10 @@ import {
 } from "#product/components/workspace/chat/transcript/ScopedTranscriptBlocks";
 import {
   resolveSubagentExecutionState,
+  resolveSubagentIdForItem,
   resolveSubagentLaunchDisplay,
   isSubagentExecutionStateRunning,
+  isSubagentLaunchStatusVisibleInTranscript,
   isSubagentWorkComplete,
 } from "#product/domain/chats/subagents/subagent-launch";
 import {
@@ -38,12 +41,21 @@ export function TranscriptAgentGroupBlock({
   transcript,
   childrenByParentId,
   renderChild,
+  onOpenSubagent,
 }: {
   item: ToolCallItem;
   childIds: string[];
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
   renderChild: (childId: string) => ReactNode;
+  /**
+   * Opens this native subagent's `BackgroundWorkPane` detail
+   * (`BackgroundSubagentView`) — the spec's "native routing" intent,
+   * delivered here rather than at `SpawnIdentityReceipt` (that component is
+   * delegated-work-only; see the PR body's disclosed spec correction).
+   * Absent for embedded/read-only transcripts that have no pane to open.
+   */
+  onOpenSubagent?: (subagentId: string) => void;
 }) {
   const executionState = resolveSubagentExecutionState(item);
   const isRunning = isSubagentExecutionStateRunning(executionState);
@@ -61,8 +73,12 @@ export function TranscriptAgentGroupBlock({
   const [expanded, setExpanded] = useState(false);
   const [workExpanded, setWorkExpanded] = useState(false);
 
+  // The initial prompt this display used to surface is no longer shown
+  // inline (Design Handoff — MODIFIED `SubagentLaunchLedger`; Delivery Spec
+  // — Background Work Slice 1, rung R4): it moved to
+  // `BackgroundSubagentView`'s dedicated "Initial prompt" panel, reached via
+  // the activity roster, not this transcript group.
   const subagentDisplay = resolveSubagentLaunchDisplay(item);
-  const normalizedPrompt = subagentDisplay.prompt?.trim() ?? "";
 
   // Only ever surface the structured `rawOutput.summary` — the clean result
   // the parent agent received. NEVER the raw tool_result_text content parts:
@@ -92,7 +108,7 @@ export function TranscriptAgentGroupBlock({
   const shouldShowDescription = description.length > 0
     && description.toLowerCase() !== "subagent";
   const hasWork = childIds.length > 0;
-  const hasLaunchLedger = !!normalizedPrompt;
+  const hasLaunchLedger = isSubagentLaunchStatusVisibleInTranscript(executionState);
   const hasBodyContent = hasWork || hasLaunchLedger || !!normalizedAgentResult;
   // The activity roster is a session-level summary. This durable transcript
   // item is the canonical place to inspect the native subagent's nested work.
@@ -117,14 +133,70 @@ export function TranscriptAgentGroupBlock({
         ? "Completed in background"
         : null);
   const headerExpandable = hasBodyContent;
+  // Native-routing affordance (Delivery Spec — Background Work Slice 1, rung
+  // R4 fix-forward): only a block whose `rawOutput` actually carries the
+  // background-work correlation gets the click-to-open-pane behavior — a
+  // block with no `subagentId` (no correlation available for this harness,
+  // or no pane consumer wired at this transcript's call site) falls back to
+  // today's byte-identical expand/collapse-on-click header.
+  const subagentId = resolveSubagentIdForItem(item);
+  const canOpenSubagent = Boolean(onOpenSubagent && subagentId);
+  const headerClickable = canOpenSubagent || headerExpandable;
+  // Keyboard access (review round 3): the header used to be a pure
+  // expand/collapse toggle, where losing keyboard access was a pre-existing
+  // gap; now it can navigate away to a subagent's pane, which makes keyboard
+  // parity load-bearing. `activateHeader` is the single source of truth for
+  // "what does activating this header do," shared by the pointer and
+  // keyboard paths so they can never drift apart.
+  const activateHeader = () => {
+    if (onOpenSubagent && subagentId) {
+      onOpenSubagent(subagentId);
+      return;
+    }
+    if (headerExpandable) {
+      setExpanded(!expanded);
+    }
+  };
+  // Distinct wording from the chevron's own "Expand/Collapse subagent
+  // details" label (kept as-is below, per handoff) — the two controls are
+  // mutually exclusive in the DOM (the chevron only renders alongside a
+  // clickable header when `canOpenSubagent`), but giving them identical
+  // accessible names would still be confusing for anyone landing on either
+  // by name, and it collides with `getByRole("button", { name: … })`
+  // lookups that target the chevron specifically.
+  const headerAriaLabel = canOpenSubagent
+    ? "Open subagent detail"
+    : headerExpandable
+      ? (expanded ? "Hide subagent details" : "Show subagent details")
+      : undefined;
 
   return (
     <div className="py-0.5">
       <div
-        {...(headerExpandable ? { "data-chat-transcript-ignore": true } : {})}
-        onClick={() => headerExpandable && setExpanded(!expanded)}
+        {...(headerClickable
+          ? {
+              "data-chat-transcript-ignore": true,
+              role: "button" as const,
+              tabIndex: 0,
+              "aria-label": headerAriaLabel,
+            }
+          : {})}
+        onClick={activateHeader}
+        onKeyDown={(event) => {
+          // Ignore keydown bubbling up from the nested chevron `Button`
+          // below — it's a real, independently-focusable `<button>`, and
+          // its own Enter/Space activation must not also re-trigger this
+          // header's action.
+          if (!headerClickable || event.target !== event.currentTarget) {
+            return;
+          }
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            activateHeader();
+          }
+        }}
         className={`group/tool-action-row inline-flex items-center gap-1 rounded-md pl-0.5 pr-1.5 py-1 text-chat transition-colors ${
-          headerExpandable
+          headerClickable
             ? "cursor-pointer text-muted-foreground hover:bg-muted/40 hover:text-foreground"
             : "cursor-default text-muted-foreground"
         }`}
@@ -134,7 +206,7 @@ export function TranscriptAgentGroupBlock({
           className={`icon-compact shrink-0 transition-colors ${
             expanded
               ? "text-foreground/70"
-              : headerExpandable
+              : headerClickable
                 ? "text-faint group-hover/tool-action-row:text-muted-foreground"
                 : "text-muted-foreground"
           }`}
@@ -148,14 +220,30 @@ export function TranscriptAgentGroupBlock({
             · {collapsedSummary}
           </span>
         )}
+        {canOpenSubagent && hasBodyContent && (
+          <Button
+            type="button"
+            variant="unstyled"
+            data-chat-transcript-ignore
+            aria-expanded={expanded}
+            aria-label={expanded ? "Collapse subagent details" : "Expand subagent details"}
+            onClick={(event) => {
+              event.stopPropagation();
+              setExpanded(!expanded);
+            }}
+            className="ml-1 flex shrink-0 items-center justify-center rounded p-0.5 text-faint hover:bg-muted/40 hover:text-foreground"
+          >
+            <ChevronRight
+              aria-hidden="true"
+              className={`icon-compact shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+            />
+          </Button>
+        )}
       </div>
 
       {expanded && hasBodyContent && <div className="ml-1 border-l border-border/70 pl-2">
         {hasLaunchLedger && (
-          <SubagentLaunchLedger
-            prompt={normalizedPrompt || null}
-            executionState={executionState}
-          />
+          <SubagentLaunchLedger executionState={executionState} />
         )}
 
         {hasWork && (
