@@ -934,4 +934,89 @@ test.describe("transcript scroll physics", () => {
       expect(new Set(trace.slice(-6)).size).toBe(1);
     }
   });
+
+  // Rung 9 (PRO-187, Q18): the scroll-to-latest affordance derives visibility
+  // from the model (unpinned AND overflow) and its new-content variant from
+  // the model's own ResizeObserver-measured growth signal, never a separate
+  // scroll listener or DOM poll. This fixture asserts BOTH stay stable
+  // (visible, then accented) across a run of streaming growth while
+  // unpinned, matching the failure mode named in the ADR (section 5,
+  // "Scroll-to-latest visibility flicker").
+  test("scroll-to-latest: visibility and new-content indicator stay stable during unpinned streaming growth", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 8);
+    await waitForViewport(page);
+    await settle(page);
+    await wheelToBottom(page);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+
+    // Read up away from the bottom: unpins, button becomes visible, no new
+    // content has arrived yet so the accent is absent.
+    await keyboardScrollUp(page, 4);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+    expect(await drive<boolean>(page, "hasNewContentIndicator")).toBe(false);
+
+    await drive(page, "beginStreamingTurn");
+    await settle(page);
+    for (let batch = 0; batch < 15; batch += 1) {
+      await drive(page, "streamChunk");
+      await settle(page, 60);
+      // Visibility never flickers off mid-growth: still unpinned every batch.
+      await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+      // Once content has grown at least once, the accent stays ON for every
+      // remaining batch (no flicker), the failure mode this fixture guards.
+      if (batch > 0) {
+        expect(await drive<boolean>(page, "hasNewContentIndicator")).toBe(true);
+      }
+    }
+    await drive(page, "finalizeStreamingTurn");
+    await settle(page);
+    // Still reading, still unpinned, accent still on after the stream ends.
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+    expect(await drive<boolean>(page, "hasNewContentIndicator")).toBe(true);
+  });
+
+  // Rung 9 (PRO-187, Q18): clicking the affordance must route through the
+  // engine's single writer (FR-1) and land at the true bottom in one motion,
+  // not a visible crawl or a second corrective snap.
+  test("scroll-to-latest: click lands at the true bottom in one motion and re-pins", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 10);
+    await waitForViewport(page);
+    await settle(page);
+    await wheelToBottom(page);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+
+    await keyboardScrollUp(page, 6);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+    const beforeClick = await metrics(page);
+    expect(beforeClick.bottomDistance).toBeGreaterThan(REPIN_BAND_PX * 4);
+
+    await drive(page, "startScrollTrace");
+    await drive(page, "clickScrollToBottom");
+    await settle(page, 300);
+    const trace = (await drive<number[]>(page, "stopScrollTrace")).filter((v) =>
+      Number.isFinite(v),
+    );
+
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+    expect((await metrics(page)).bottomDistance).toBeLessThanOrEqual(2);
+    expect(await drive<boolean>(page, "hasNewContentIndicator")).toBe(false);
+    // One motion: the trace's scrollTop values are monotonically non-decreasing
+    // toward the bottom (a single cut or a smooth single sweep), never a snap
+    // past the target followed by a corrective bounce back.
+    for (let i = 1; i < trace.length; i += 1) {
+      expect(trace[i]).toBeGreaterThanOrEqual(trace[i - 1] - 1);
+    }
+  });
 });

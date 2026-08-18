@@ -77,6 +77,7 @@ export function FullTranscriptRowList({
   const lastPrefetchDecisionLogRef = useRef<string | null>(null);
   const {
     isPinnedToBottom,
+    hasNewContentWhileUnpinned,
     pinnedRef,
     onViewportScroll,
     notifyUserScrollIntent,
@@ -327,6 +328,7 @@ export function FullTranscriptRowList({
       <TranscriptFloatingControls
         bottomInsetPx={bottomInsetPx}
         isPinnedToBottom={isPinnedToBottom}
+        hasNewContentWhileUnpinned={hasNewContentWhileUnpinned}
         onScrollToBottomClick={handleScrollToBottomClick}
       />
     </div>
