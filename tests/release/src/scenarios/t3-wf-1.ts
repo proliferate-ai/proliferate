@@ -36,9 +36,9 @@ import type { PlannedCellV1 } from "../runner/result.js";
  * a finding, not silently absorbed, exactly as the SDK file itself plans for.
  *
  * ── The journey ──────────────────────────────────────────────────────────
- * The definition mirrors the shipped "Research and review" starter template
+ * The definition mirrors the shipped "Bug investigation" starter template
  * verbatim (`apps/packages/product-client/src/config/workflows/
- * starter-templates.ts`'s `RESEARCH_AND_REVIEW`, node ids/prompts/docTemplate
+ * starter-templates.ts`'s `BUG_INVESTIGATION`, node ids/prompts/docTemplate
  * copied unchanged below plus the resolved model attached to the research
  * node) — duplicated rather than imported because `tests/release` has no
  * dependency on `@proliferate/product-client` (see its package.json); the
@@ -225,14 +225,14 @@ export interface WorkflowRunProjectionV2 {
 }
 
 /**
- * The "Research and review" starter template's definition, copied verbatim
+ * The "Bug investigation" starter template's definition, copied verbatim
  * (node ids, titles, prompts, edges, inputs, docTemplates) from
  * `apps/packages/product-client/src/config/workflows/
- * starter-templates.ts`'s `RESEARCH_AND_REVIEW`, with the resolved model
+ * starter-templates.ts`'s `BUG_INVESTIGATION`, with the resolved model
  * attached to the research node. The colocated `.test.ts` guards this copy
  * against silent drift from the shipped template.
  */
-export function researchAndReviewDefinition(model: WorkflowNodeModelV2): WorkflowSnapshotDefinitionV2 {
+export function bugInvestigationDefinition(model: WorkflowNodeModelV2): WorkflowSnapshotDefinitionV2 {
   return {
     schemaVersion: 2,
     nodes: [
@@ -317,7 +317,7 @@ async function runResearchAndReviewJourney(
   await runtime.deleteWorkspace(scratchWorkspace.id).catch(() => undefined);
 
   const runId = randomUUID();
-  const definition = researchAndReviewDefinition({ agentKind: T3_WF_1_HARNESS, modelId });
+  const definition = bugInvestigationDefinition({ agentKind: T3_WF_1_HARNESS, modelId });
   const invocation: WorkflowInvocationJsonV2 = {
     schemaVersion: 2,
     workflowDefinitionId: randomUUID(),

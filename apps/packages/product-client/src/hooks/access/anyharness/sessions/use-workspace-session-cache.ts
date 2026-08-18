@@ -74,6 +74,17 @@ export function useWorkspaceSessionCache() {
     );
   }, [cacheScopeKey, queryClient]);
 
+  /**
+   * Mark the roster stale so its mounted readers refetch it. For sessions the
+   * runtime minted on its own — a workflow node launch, say — where the client
+   * knows a row is missing but not what it holds.
+   */
+  const invalidateWorkspaceSessions = useCallback((workspaceId: string) => {
+    void queryClient.invalidateQueries({
+      queryKey: anyHarnessSessionsKey(cacheScopeKey, workspaceId),
+    });
+  }, [cacheScopeKey, queryClient]);
+
   const removeWorkspaceSessionRecord = useCallback((
     workspaceId: string,
     sessionId: string,
@@ -86,6 +97,7 @@ export function useWorkspaceSessionCache() {
 
   return {
     getWorkspaceSessionCacheSnapshot,
+    invalidateWorkspaceSessions,
     setWorkspaceSessions,
     upsertWorkspaceSessionRecord,
     removeWorkspaceSessionRecord,

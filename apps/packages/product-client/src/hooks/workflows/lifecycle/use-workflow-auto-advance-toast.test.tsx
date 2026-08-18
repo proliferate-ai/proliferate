@@ -42,6 +42,8 @@ const mocks = vi.hoisted(() => {
     showToast: vi.fn(),
     toastError: vi.fn(),
     workflowsV2Enabled: true,
+    sessionCacheSnapshot: { sessions: [], dataUpdatedAt: 0, isInvalidated: false },
+    invalidateWorkspaceSessions: vi.fn(),
   };
 });
 
@@ -53,6 +55,15 @@ vi.mock("@anyharness/sdk-react", () => ({
 
 vi.mock("#product/lib/domain/capabilities/workflows-v2", () => ({
   isWorkflowsV2Enabled: () => mocks.workflowsV2Enabled,
+}));
+
+// The roster reconciler the watch also mounts owns its own suite; here it only
+// has to resolve without a react-query provider.
+vi.mock("#product/hooks/access/anyharness/sessions/use-workspace-session-cache", () => ({
+  useWorkspaceSessionCache: () => ({
+    getWorkspaceSessionCacheSnapshot: () => mocks.sessionCacheSnapshot,
+    invalidateWorkspaceSessions: mocks.invalidateWorkspaceSessions,
+  }),
 }));
 
 vi.mock("#product/primitives/utils/show-toast", () => ({

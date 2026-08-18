@@ -1,7 +1,10 @@
+import type { Workspace } from "@anyharness/sdk";
 import { useWorkflowRunProjectionWriter } from "@anyharness/sdk-react";
 import { useCallback, useRef, useState } from "react";
 import { useWorkflowRunPut } from "#product/hooks/access/anyharness/workflows/use-workflow-run-put";
 import { useWorkflowInvocationV2MutationsAccess } from "#product/hooks/access/cloud/workflows/use-workflow-trigger-access";
+import { useWorkspaceCollectionsInvalidationActions } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { getWorkspace } from "#product/lib/access/anyharness/workspaces";
 import { workflowTriggerFailureMessage } from "#product/lib/domain/workflows/workflow-trigger-failure";
 import { workflowTriggerIdentityKey } from "#product/lib/domain/workflows/workflow-trigger-identity";
 import {
@@ -15,6 +18,11 @@ import {
   type TriggerCourierInput,
   type TriggerCourierResult,
 } from "#product/lib/workflows/trigger/trigger-courier";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+
+/** Bounded read-back of the launched workspace; see `readBackLaunchedWorkspace`. */
+const WORKSPACE_READ_BACK_ATTEMPTS = 3;
+const WORKSPACE_READ_BACK_DELAY_MS = 150;
 
 /**
  * Stable lowercase class for a non-courier launch error, from its name only,
@@ -29,9 +37,45 @@ function classifyUnknownLaunchError(caught: unknown): string {
   return /^[a-z0-9]/.test(normalized) ? normalized : "unknown";
 }
 
+/**
+ * The workspace a launch just materialized, read from the runtime.
+ *
+ * This read is the only thing that makes the new workspace selectable: the
+ * collections cache was last filled before it existed, and refreshing that
+ * cache cannot help the navigation about to happen — selection already holds
+ * the snapshot it was rendered with. So one refused read would turn a
+ * successful launch into "Workspace not found", and the read is retried
+ * briefly rather than attempted once. `null` only after every attempt failed.
+ */
+async function readBackLaunchedWorkspace(
+  runtimeUrl: string,
+  workspaceId: string,
+): Promise<Workspace | null> {
+  for (let attempt = 0; attempt < WORKSPACE_READ_BACK_ATTEMPTS; attempt += 1) {
+    const workspace = await getWorkspace({ runtimeUrl }, workspaceId).catch(() => null);
+    if (workspace) {
+      return workspace;
+    }
+    if (attempt < WORKSPACE_READ_BACK_ATTEMPTS - 1) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, WORKSPACE_READ_BACK_DELAY_MS * (attempt + 1));
+      });
+    }
+  }
+  return null;
+}
+
 export interface WorkflowTriggerLaunch {
   runId: string;
   workspaceId: string;
+  /**
+   * The workspace the run PUT just materialized, read back from the runtime.
+   * Selection cannot find it in the workspace-collections cache — that cache
+   * was last filled before this workspace existed — so the launch carries the
+   * record itself as selection's `knownWorkspace` hint. `null` only if the
+   * read-back failed; navigation is still attempted from the id.
+   */
+  workspace: Workspace | null;
 }
 
 /** Ids from a failed attempt, and the input they were minted for. */
@@ -57,6 +101,8 @@ export function useWorkflowTriggerActions({
   const { putWorkflowInvocationV2 } = useWorkflowInvocationV2MutationsAccess(authCacheScope);
   const putRun = useWorkflowRunPut();
   const writeRunProjection = useWorkflowRunProjectionWriter();
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const { invalidateWorkspaceCollectionsForRuntime } = useWorkspaceCollectionsInvalidationActions();
   const [triggering, setTriggering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Ids held across a failed attempt, keyed to the input they were minted for.
@@ -100,7 +146,27 @@ export function useWorkflowTriggerActions({
           workspaceId: result.workspaceId,
         },
       });
-      onLaunched?.({ runId: result.runId, workspaceId: result.workspaceId });
+      // The run PUT is what creates this workspace, so nothing else in the
+      // client knows it exists: read it back for selection's `knownWorkspace`
+      // hint and refresh the collections cache so the sidebar lists it.
+      let workspace = await readBackLaunchedWorkspace(runtimeUrl, result.workspaceId);
+      // Selection takes its collections snapshot when it is called, so a
+      // refreshed cache resolves the workspace even with no hint at all. That
+      // is the fallback for a read-back that never answered: wait for it, then
+      // read once more however it settled. A refusal and a snapshot that
+      // simply does not carry the new workspace yet leave selection with the
+      // same nothing, and by then the runtime has had the whole refresh
+      // attempt to answer for a row it has already committed. With a hint in
+      // hand none of that is needed and the refresh settles behind the
+      // navigation.
+      const collectionsRefreshed = invalidateWorkspaceCollectionsForRuntime(runtimeUrl);
+      if (workspace) {
+        collectionsRefreshed.catch(() => {});
+      } else {
+        await collectionsRefreshed.catch(() => {});
+        workspace = await readBackLaunchedWorkspace(runtimeUrl, result.workspaceId);
+      }
+      onLaunched?.({ runId: result.runId, workspaceId: result.workspaceId, workspace });
       return result;
     } catch (caught) {
       const failure = caught instanceof WorkflowTriggerError ? caught : null;
@@ -131,7 +197,14 @@ export function useWorkflowTriggerActions({
       inFlight.current = false;
       setTriggering(false);
     }
-  }, [onLaunched, putRun, putWorkflowInvocationV2, writeRunProjection]);
+  }, [
+    invalidateWorkspaceCollectionsForRuntime,
+    onLaunched,
+    putRun,
+    putWorkflowInvocationV2,
+    runtimeUrl,
+    writeRunProjection,
+  ]);
 
   return { triggerRun, triggering, error };
 }

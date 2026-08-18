@@ -5,6 +5,12 @@ use anyharness_contract::v1;
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::origin::OriginContext;
 
+/// The longest title a session row accepts, in characters. Declared here
+/// rather than inside the service that validates it because writers outside
+/// that service — the workflow node title law — have to clip to the same
+/// cap instead of failing the write.
+pub const SESSION_TITLE_MAX_CHARS: usize = 160;
+
 /// Startup failure whose ordinary formatting is safe for telemetry, while an
 /// authenticated API mapper may deliberately surface the bounded local stderr
 /// diagnostic to the caller that requested the session.

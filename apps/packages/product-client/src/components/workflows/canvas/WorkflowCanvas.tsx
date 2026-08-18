@@ -1,6 +1,9 @@
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -19,8 +22,40 @@ const ZOOM_MAX = 1.5;
 const ZOOM_STEP = 0.15;
 /** Content padding inside the viewport when fitting, and the initial offset. */
 const FIT_PADDING = 24;
+/** Bottom controls/readout stay outside the fitted content band. */
+const FIT_OVERLAY_SAFE_BAND = 48;
 /** The design's dot-grid pitch at zoom 1. */
 const GRID_PITCH = 22;
+
+interface WorkflowCanvasView {
+  zoom: number;
+  pan: { x: number; y: number };
+}
+
+export interface WorkflowCanvasViewport {
+  /**
+   * The scale the canvas is drawing its content at, so a child can turn
+   * pointer motion (screen pixels) into content units — the canvas owns the
+   * transform, and nothing below it can derive the factor on its own.
+   */
+  zoom: number;
+  /**
+   * Take the viewport over the way panning and zooming do. A child gesture
+   * that changes the content box — moving a card grows it — must call this
+   * first, or the auto-fit below would re-frame the view out from under the
+   * gesture that caused the change.
+   */
+  holdViewport: () => void;
+}
+
+const WorkflowCanvasViewportContext = createContext<WorkflowCanvasViewport>({
+  zoom: 1,
+  holdViewport: () => {},
+});
+
+export function useWorkflowCanvasViewport(): WorkflowCanvasViewport {
+  return useContext(WorkflowCanvasViewportContext);
+}
 
 export interface WorkflowCanvasProps {
   /** Content extents in unscaled coordinates (`graph-layout.ts` units). */
@@ -32,6 +67,8 @@ export interface WorkflowCanvasProps {
   ariaLabel: string;
   /** Optional readout pinned to the bottom-left corner (validity, counts). */
   statusSlot?: ReactNode;
+  /** Ends a feature-owned gesture when the pointer/keyboard leaves it unfinished. */
+  onCancelInteraction?: () => void;
   className?: string;
 }
 
@@ -56,11 +93,18 @@ export function WorkflowCanvas({
   children,
   ariaLabel,
   statusSlot,
+  onCancelInteraction,
   className = "",
 }: WorkflowCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: FIT_PADDING, y: FIT_PADDING });
+  // Zoom and pan are one value: anchored zooming derives the next pan from the
+  // zoom it lands on, and two states would have to compute one inside the
+  // other's updater — a side effect React is free to run twice.
+  const [view, setView] = useState<WorkflowCanvasView>({
+    zoom: 1,
+    pan: { x: FIT_PADDING, y: FIT_PADDING },
+  });
+  const { zoom, pan } = view;
   /** Once the user pans or zooms, content changes stop re-framing the view. */
   const touchedRef = useRef(false);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; panX: number; panY: number } | null>(null);
@@ -76,14 +120,16 @@ export function WorkflowCanvas({
     }
     const scale = Math.min(
       (bounds.width - FIT_PADDING * 2) / contentWidth,
-      (bounds.height - FIT_PADDING * 2) / contentHeight,
+      (bounds.height - FIT_PADDING * 2 - FIT_OVERLAY_SAFE_BAND) / contentHeight,
       1,
     );
     const clamped = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, scale));
-    setZoom(clamped);
-    setPan({
-      x: Math.max(FIT_PADDING, (bounds.width - contentWidth * clamped) / 2),
-      y: FIT_PADDING,
+    setView({
+      zoom: clamped,
+      pan: {
+        x: Math.max(FIT_PADDING, (bounds.width - contentWidth * clamped) / 2),
+        y: FIT_PADDING,
+      },
     });
   }, [contentHeight, contentWidth]);
 
@@ -95,10 +141,34 @@ export function WorkflowCanvas({
     }
   }, [fit]);
 
-  const zoomBy = (delta: number) => {
+  const zoomBy = (delta: number, anchor?: { x: number; y: number }) => {
     touchedRef.current = true;
-    setZoom((current) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, current + delta)));
+    const container = containerRef.current;
+    const point = anchor ?? (container
+      ? { x: container.clientWidth / 2, y: container.clientHeight / 2 }
+      : { x: 0, y: 0 });
+    setView((current) => {
+      const zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, current.zoom + delta));
+      if (zoom === current.zoom) return current;
+      const ratio = zoom / current.zoom;
+      return {
+        zoom,
+        // Keep the anchor over the same content point across the scale change.
+        pan: {
+          x: point.x - (point.x - current.pan.x) * ratio,
+          y: point.y - (point.y - current.pan.y) * ratio,
+        },
+      };
+    });
   };
+
+  const holdViewport = useCallback(() => {
+    touchedRef.current = true;
+  }, []);
+  const viewport = useMemo<WorkflowCanvasViewport>(
+    () => ({ zoom, holdViewport }),
+    [holdViewport, zoom],
+  );
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     // Only the background pans; a press on a node card or a zoom control —
@@ -122,16 +192,20 @@ export function WorkflowCanvas({
     if (!drag || drag.pointerId !== event.pointerId) {
       return;
     }
-    setPan({
-      x: drag.panX + (event.clientX - drag.startX),
-      y: drag.panY + (event.clientY - drag.startY),
-    });
+    setView((current) => ({
+      ...current,
+      pan: {
+        x: drag.panX + (event.clientX - drag.startX),
+        y: drag.panY + (event.clientY - drag.startY),
+      },
+    }));
   };
 
   const onPointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (dragRef.current?.pointerId === event.pointerId) {
       dragRef.current = null;
     }
+    onCancelInteraction?.();
   };
 
   const onWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
@@ -141,7 +215,11 @@ export function WorkflowCanvas({
       return;
     }
     event.preventDefault();
-    zoomBy(event.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP);
+    const bounds = event.currentTarget.getBoundingClientRect();
+    zoomBy(event.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP, {
+      x: event.clientX - bounds.left,
+      y: event.clientY - bounds.top,
+    });
   };
 
   return (
@@ -159,6 +237,12 @@ export function WorkflowCanvas({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerEnd}
       onPointerCancel={onPointerEnd}
+      onLostPointerCapture={() => onCancelInteraction?.()}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          onCancelInteraction?.();
+        }
+      }}
       onWheel={onWheel}
     >
       <div
@@ -201,7 +285,9 @@ export function WorkflowCanvas({
             />
           ))}
         </svg>
-        {children}
+        <WorkflowCanvasViewportContext.Provider value={viewport}>
+          {children}
+        </WorkflowCanvasViewportContext.Provider>
       </div>
 
       {statusSlot ? (

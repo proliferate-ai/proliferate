@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { WorkflowDefinitionV2, WorkflowNodeV2 } from "@proliferate/cloud-sdk";
 import v2FullFixture from "../../../../../../fixtures/contracts/workflow-definition/v2-full.json";
-import { orderedNodes, validateDefinitionV2 } from "./definition-v2";
+import { definitionHeadId, orderedNodes, validateDefinitionV2 } from "./definition-v2";
 
 // Structural validation. The reference-grammar cases live in
 // `definition-v2-references.test.ts`.
@@ -394,5 +394,43 @@ describe("orderedNodes", () => {
       docTemplates: [],
     };
     expect(orderedNodes(def)).toEqual([]);
+  });
+});
+
+describe("definitionHeadId", () => {
+  function graph(
+    nodeIds: string[],
+    edges: { from: string; to: string }[],
+  ): WorkflowDefinitionV2 {
+    return {
+      schemaVersion: 2,
+      nodes: nodeIds.map((id) => node({ id })),
+      edges,
+      inputs: [],
+      docTemplates: [],
+    };
+  }
+
+  it("names the one node no edge points at, whatever the array order", () => {
+    expect(definitionHeadId(graph(["b", "c", "a"], [
+      { from: "c", to: "a" },
+      { from: "a", to: "b" },
+    ]))).toBe("c");
+  });
+
+  it("names a lone node with no edges at all", () => {
+    expect(definitionHeadId(graph(["solo"], []))).toBe("solo");
+  });
+
+  it("answers null when more than one node could be the head", () => {
+    expect(definitionHeadId(graph(["a", "b", "c"], [{ from: "a", to: "c" }]))).toBeNull();
+  });
+
+  it("answers null for a cycle, which has no head, and for an empty graph", () => {
+    expect(definitionHeadId(graph(["a", "b"], [
+      { from: "a", to: "b" },
+      { from: "b", to: "a" },
+    ]))).toBeNull();
+    expect(definitionHeadId(graph([], []))).toBeNull();
   });
 });

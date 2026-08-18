@@ -168,6 +168,7 @@ describe("useWorkspaceNavigationWorkflow", () => {
     });
     expect(selectionMocks.selectWorkspace).toHaveBeenCalledWith("logical-current", {
       latencyFlowId: "flow-1",
+      knownWorkspace: null,
     });
   });
 
@@ -212,6 +213,7 @@ describe("useWorkspaceNavigationWorkflow", () => {
     expect(shellMocks.openExternal).not.toHaveBeenCalled();
     expect(selectionMocks.selectWorkspace).toHaveBeenCalledWith("logical-unclaimed", {
       latencyFlowId: "flow-1",
+      knownWorkspace: null,
     });
   });
 });

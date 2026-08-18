@@ -17,7 +17,7 @@ import { Switch } from "#product/primitives/Switch";
 
 export interface WorkflowBuilderNodeCardProps {
   node: WorkflowNodeV2;
-  /** 1-based position in the chain; the chain IS the card order. */
+  /** 1-based display position; authored edges are unchanged by moving it. */
   position: number;
   nodeCount: number;
   harnesses: readonly WorkflowBuilderHarnessOption[];
@@ -33,9 +33,8 @@ export interface WorkflowBuilderNodeCardProps {
 }
 
 /**
- * One step in the chain. Order is edited with the two move affordances and
- * nothing else — there is no canvas and no drag surface, so "what runs next"
- * is always the card below and the saved edge list is derived from that.
+ * One step in the graph. The move affordances change deterministic display
+ * order only; connection ports on the canvas own execution edges.
  */
 export function WorkflowBuilderNodeCard({
   node,
@@ -66,13 +65,14 @@ export function WorkflowBuilderNodeCard({
     <Card as="section" surface="opaque" className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          <h3 className="text-body-emphasis font-medium text-foreground">
+          <h3 className="shrink-0 whitespace-nowrap text-body-emphasis font-medium text-foreground">
             {WORKFLOW_BUILDER_COPY.stepHeading(position)}
           </h3>
           <Badge
             size="micro"
             tone={nodeIdInvalid ? "destructive" : "neutral"}
             data-invalid={nodeIdInvalid ? "true" : undefined}
+            className="min-w-0 truncate"
           >
             {node.id}
           </Badge>
@@ -143,11 +143,6 @@ export function WorkflowBuilderNodeCard({
               })}
             />
           </div>
-          {node.type === "human_in_loop" ? (
-            <p className="mt-1 text-ui-sm text-muted-foreground">
-              {WORKFLOW_BUILDER_COPY.humanStepNote}
-            </p>
-          ) : null}
         </div>
       </div>
 

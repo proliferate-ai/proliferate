@@ -2,6 +2,7 @@
 
 import { AnyHarnessError } from "@anyharness/sdk";
 import type {
+  Workspace,
   WorkflowRunProjectionV2,
   WorkflowRunV2,
 } from "@anyharness/sdk";
@@ -24,13 +25,22 @@ import {
 } from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
 import { prevalidateRendererDiagnostic } from "@/lib/infra/diagnostics/renderer-diagnostic-prevalidate";
 import type { TriggerCourierInput } from "#product/lib/workflows/trigger/trigger-courier";
-import { useWorkflowTriggerActions } from "./use-workflow-trigger-actions";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
+import {
+  useWorkflowTriggerActions,
+  type WorkflowTriggerLaunch,
+} from "./use-workflow-trigger-actions";
 
 const RUNTIME_URL = "http://runtime.test";
+
+/** The workspace `PUT /v1/workflow-runs/{id}` materializes for the run. */
+const PLACED_WORKSPACE = { id: "workspace-1" } as unknown as Workspace;
 
 const planes = vi.hoisted(() => ({
   putInvocation: vi.fn(),
   putRun: vi.fn(),
+  getWorkspace: vi.fn(),
+  invalidateCollections: vi.fn(),
 }));
 
 vi.mock("#product/hooks/access/cloud/workflows/use-workflow-trigger-access", () => ({
@@ -41,6 +51,16 @@ vi.mock("#product/hooks/access/cloud/workflows/use-workflow-trigger-access", () 
 
 vi.mock("#product/hooks/access/anyharness/workflows/use-workflow-run-put", () => ({
   useWorkflowRunPut: () => planes.putRun,
+}));
+
+vi.mock("#product/lib/access/anyharness/workspaces", () => ({
+  getWorkspace: planes.getWorkspace,
+}));
+
+vi.mock("#product/hooks/workspaces/cache/use-workspace-collections-invalidation", () => ({
+  useWorkspaceCollectionsInvalidationActions: () => ({
+    invalidateWorkspaceCollectionsForRuntime: planes.invalidateCollections,
+  }),
 }));
 
 const INPUT: TriggerCourierInput = {
@@ -58,6 +78,9 @@ beforeEach(() => {
     input: { invocationId: string },
   ) => invocation(input.invocationId));
   planes.putRun.mockImplementation(async (runId: string) => projection(runId));
+  planes.getWorkspace.mockImplementation(async () => PLACED_WORKSPACE);
+  planes.invalidateCollections.mockResolvedValue(undefined);
+  useHarnessConnectionStore.getState().setRuntimeUrl(RUNTIME_URL);
 });
 
 afterEach(() => {
@@ -65,6 +88,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
   planes.putInvocation.mockReset();
   planes.putRun.mockReset();
+  planes.getWorkspace.mockReset();
+  planes.invalidateCollections.mockReset();
+  useHarnessConnectionStore.getState().resetConnectionState();
 });
 
 describe("useWorkflowTriggerActions retry identity", () => {
@@ -171,6 +197,121 @@ describe("useWorkflowTriggerActions failure copy", () => {
   });
 });
 
+describe("useWorkflowTriggerActions placed workspace", () => {
+  it("hands the launch the workspace record the run PUT just materialized", async () => {
+    const onLaunched = vi.fn();
+    const { result } = renderTriggerActions(createQueryClient(), onLaunched);
+
+    await act(async () => {
+      await result.current.triggerRun(INPUT);
+    });
+
+    expect(planes.getWorkspace).toHaveBeenCalledWith({ runtimeUrl: RUNTIME_URL }, "workspace-1");
+    // Selection reads the collections cache, which was filled before this
+    // workspace existed; the record is what keeps the launch off the
+    // "Workspace not found." path.
+    expect(onLaunched).toHaveBeenCalledWith({
+      runId: "id-2",
+      workspaceId: "workspace-1",
+      workspace: PLACED_WORKSPACE,
+    });
+  });
+
+  it("retries a refused read-back rather than launching without the record", async () => {
+    // Refreshing the collections cache cannot rescue this: the navigation
+    // about to happen reads the snapshot selection already rendered with. The
+    // record is the only hint, so one refusal must not be the end of it.
+    planes.getWorkspace.mockRejectedValueOnce(new Error("offline"));
+    const onLaunched = vi.fn();
+    const { result } = renderTriggerActions(createQueryClient(), onLaunched);
+
+    await act(async () => {
+      await result.current.triggerRun(INPUT);
+    });
+
+    expect(planes.getWorkspace).toHaveBeenCalledTimes(2);
+    expect(onLaunched).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "workspace-1", workspace: PLACED_WORKSPACE }),
+    );
+  });
+
+  it("waits for the refreshed collections when no read-back answered", async () => {
+    // Selection resolves a workspace either from the hint or from the
+    // collections snapshot it reads when called. With no hint left, the
+    // refreshed snapshot is the only thing standing between this launch and
+    // "Workspace not found.", so navigation has to wait for it.
+    planes.getWorkspace.mockRejectedValue(new Error("offline"));
+    let releaseRefresh: (() => void) | null = null;
+    planes.invalidateCollections.mockImplementation(() => new Promise<void>((resolve) => {
+      releaseRefresh = resolve;
+    }));
+    const onLaunched = vi.fn();
+    const { result } = renderTriggerActions(createQueryClient(), onLaunched);
+
+    let launched: Promise<unknown> | undefined;
+    await act(async () => {
+      launched = result.current.triggerRun(INPUT);
+      await vi.waitFor(() => expect(planes.invalidateCollections).toHaveBeenCalled());
+    });
+    expect(onLaunched).not.toHaveBeenCalled();
+
+    await act(async () => {
+      releaseRefresh?.();
+      await launched;
+    });
+    expect(onLaunched).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "workspace-1", workspace: null }),
+    );
+  });
+
+  it.each([
+    ["refused", () => planes.invalidateCollections.mockRejectedValue(new Error("refresh failed"))],
+    ["answered", () => planes.invalidateCollections.mockResolvedValue(undefined)],
+  ])("reads the workspace once more when the refresh it fell back to %s", async (_settled, arrange) => {
+    // The two resolvers are the hint and the refreshed collections snapshot.
+    // Neither a refused refresh nor a snapshot that does not carry the new
+    // workspace yet gives selection anything to resolve, so handing it no hint
+    // on top of either is a launch heading straight for "Workspace not
+    // found." — one last read is what is left to try, however the refresh
+    // settled.
+    planes.getWorkspace
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockRejectedValueOnce(new Error("offline"));
+    arrange();
+    const onLaunched = vi.fn();
+    const { result } = renderTriggerActions(createQueryClient(), onLaunched);
+
+    await act(async () => {
+      await result.current.triggerRun(INPUT);
+    });
+
+    expect(planes.getWorkspace).toHaveBeenCalledTimes(4);
+    expect(onLaunched).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "workspace-1", workspace: PLACED_WORKSPACE }),
+    );
+  });
+
+  it("still navigates when every read-back attempt fails", async () => {
+    planes.getWorkspace.mockRejectedValue(new Error("offline"));
+    const onLaunched = vi.fn();
+    const { result } = renderTriggerActions(createQueryClient(), onLaunched);
+
+    await act(async () => {
+      await result.current.triggerRun(INPUT);
+    });
+
+    // Bounded on both passes: the first read-back, then the one the refresh
+    // fallback takes. The run exists and the projection is written, so the
+    // launch is reported either way — the surface's own error toast owns what
+    // follows.
+    expect(planes.getWorkspace).toHaveBeenCalledTimes(6);
+    expect(onLaunched).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "workspace-1", workspace: null }),
+    );
+  });
+});
+
 describe("useWorkflowTriggerActions cache write-through", () => {
   it("puts the placed run in the run-detail cache and in every cached runs list", async () => {
     const queryClient = createQueryClient();
@@ -256,10 +397,14 @@ describe("useWorkflowTriggerActions diagnostics", () => {
   });
 });
 
-function renderTriggerActions(queryClient: QueryClient = createQueryClient()) {
-  return renderHook(() => useWorkflowTriggerActions({ authCacheScope: "user-1" }), {
-    wrapper: createWrapper(queryClient),
-  });
+function renderTriggerActions(
+  queryClient: QueryClient = createQueryClient(),
+  onLaunched?: (launch: WorkflowTriggerLaunch) => void,
+) {
+  return renderHook(
+    () => useWorkflowTriggerActions({ authCacheScope: "user-1", onLaunched }),
+    { wrapper: createWrapper(queryClient) },
+  );
 }
 
 function createQueryClient(): QueryClient {

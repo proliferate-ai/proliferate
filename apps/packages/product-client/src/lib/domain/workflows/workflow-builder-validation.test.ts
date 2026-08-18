@@ -64,8 +64,25 @@ describe("workflowBuilderIssues declaration grammar", () => {
 
     // The validator's own rules still run through the same call.
     expect(workflowBuilderIssues(definition({
-      nodes: [{ id: "step-1", type: "agent", title: "", prompt: "Write @doc:plan.md" }],
+      nodes: [{ id: "step-1", type: "agent", title: "Research", prompt: "Write @doc:plan.md" }],
     })).map((issue) => issue.code)).toEqual(["malformed_reference"]);
+  });
+});
+
+describe("workflowBuilderIssues step fields", () => {
+  it("reports the title and prompt every plane requires and the validator never sees", () => {
+    // A step is minted blank, so this is the state a just-added step is in;
+    // without these rules the builder would offer a save the server refuses.
+    const issues = workflowBuilderIssues(definition({
+      nodes: [{ id: "step-1", type: "agent", title: "  ", prompt: "\n" }],
+    }));
+
+    expect(issues.map((issue) => [issue.code, issue.nodeId, issue.message])).toEqual([
+      ["empty_node_title", "step-1", "Step 1 needs a title."],
+      ["empty_node_prompt", "step-1", "Step 1 needs a prompt."],
+    ]);
+    // Negative control: the same step, filled in.
+    expect(workflowBuilderIssues(definition())).toEqual([]);
   });
 });
 
@@ -87,7 +104,7 @@ describe("normalizeDocSlugInput", () => {
 function definition(overrides: Partial<WorkflowDefinitionV2> = {}): WorkflowDefinitionV2 {
   return {
     schemaVersion: 2,
-    nodes: [{ id: "step-1", type: "agent", title: "", prompt: "" }],
+    nodes: [{ id: "step-1", type: "agent", title: "Research", prompt: "Investigate." }],
     edges: [],
     inputs: [],
     docTemplates: [],

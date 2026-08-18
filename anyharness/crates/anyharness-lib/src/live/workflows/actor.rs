@@ -21,7 +21,9 @@ use crate::domains::workflows::model::{
     RenderedEnvelope, WorkflowNodeKind, WorkflowRunNodeRecord,
 };
 use crate::domains::workflows::projection::RunProjection;
-use crate::domains::workflows::render::{render_envelope, RenderInputs, CONTEXT_DIR_RELATIVE};
+use crate::domains::workflows::render::{
+    node_session_title, render_envelope, RenderInputs, CONTEXT_DIR_RELATIVE,
+};
 use crate::domains::workflows::store::{emit_decision_events, ResolvedSideEffect, WorkflowStore};
 use crate::domains::workflows::transition::{
     next, Decision, IllegalTransition, RunState, TurnFinished, WorkflowCommand, WorkflowEvent,
@@ -32,7 +34,7 @@ use crate::origin::OriginContext;
 
 /// The default agent for nodes without a model pick (RULED: the boring
 /// app-default harness; the definition's `NodeModel` overrides all three).
-const DEFAULT_WORKFLOW_AGENT_KIND: &str = "claude";
+pub(super) const DEFAULT_WORKFLOW_AGENT_KIND: &str = "claude";
 
 pub(super) type CommandReply = oneshot::Sender<Result<RunProjection, IllegalTransition>>;
 
@@ -346,6 +348,7 @@ impl WorkflowActor {
         self.deps
             .session_store
             .link_workflow_columns(&session.id, &self.run_id, &node.id)?;
+        self.title_node_session(node, &session.id);
         self.deps
             .store
             .stamp_session(&node.id, &session.id, Some(&prompt_id), Some(agent_kind))?;
@@ -383,6 +386,31 @@ impl WorkflowActor {
             Err(TextPromptDispatchError::Dispatch(error)) => {
                 Err(anyhow::anyhow!("envelope dispatch failed: {error:?}"))
             }
+        }
+    }
+
+    /// Name the node's session after the node, before the stamp that first
+    /// makes that session findable from the projection: a client raising a tab
+    /// for it never has to show the harness's own guess (which echoes the
+    /// first message, preamble and all) or the bare agent name.
+    ///
+    /// Written unconditionally, and it stays: the two writers that can follow
+    /// — the harness info update and the prompt-derived fallback — are both
+    /// if-absent, so only a deliberate rename replaces it.
+    ///
+    /// Cosmetic, so a failure is logged and the launch continues: an untitled
+    /// node session is still a working one.
+    fn title_node_session(&self, node: &WorkflowRunNodeRecord, session_id: &str) {
+        let title = node_session_title(node.chain_index, &node.title);
+        let now = chrono::Utc::now().to_rfc3339();
+        if let Err(error) = self.deps.session_store.update_title(session_id, &title, &now) {
+            tracing::warn!(
+                run_id = %self.run_id,
+                node_row_id = %node.id,
+                session_id = %session_id,
+                error = %error,
+                "workflow node session title write failed; leaving the session untitled",
+            );
         }
     }
 
@@ -479,7 +507,7 @@ impl WorkflowActor {
 /// adhoc-redo inheritance per Ruling K.1); a defined/replacement row resolves
 /// through the frozen definition by its `definition_node_id`; otherwise the
 /// boring app default.
-fn launch_model(
+pub(super) fn launch_model(
     node: &WorkflowRunNodeRecord,
     definition: &WorkflowDefinition,
 ) -> (String, Option<String>, Option<String>) {
@@ -492,112 +520,5 @@ fn launch_model(
     match model {
         Some(model) => (model.agent_kind, model.model_id, model.mode_id),
         None => (DEFAULT_WORKFLOW_AGENT_KIND.to_string(), None, None),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::domains::workflows::definition::{
-        DefinitionNode, NodeModel, DEFINITION_SCHEMA_VERSION,
-    };
-    use crate::domains::workflows::model::{WorkflowNodeStatus, WorkflowNodeType};
-
-    fn node(
-        model: Option<NodeModel>,
-        definition_node_id: Option<&str>,
-    ) -> WorkflowRunNodeRecord {
-        WorkflowRunNodeRecord {
-            id: "row-1".into(),
-            run_id: "run-1".into(),
-            definition_node_id: definition_node_id.map(str::to_string),
-            kind: if model.is_some() {
-                WorkflowNodeKind::Adhoc
-            } else {
-                WorkflowNodeKind::Defined
-            },
-            node_type: WorkflowNodeType::Agent,
-            replaces_node_row_id: None,
-            anchor_node_row_id: None,
-            chain_index: Some(0),
-            title: "t".into(),
-            prompt: "p".into(),
-            status: WorkflowNodeStatus::Running,
-            session_id: None,
-            prompt_id: None,
-            model,
-            rendered_envelope: None,
-            failure_code: None,
-            first_turn_finished_at: None,
-            created_at: "now".into(),
-            started_at: None,
-            completed_at: None,
-        }
-    }
-
-    fn definition_with_model(model: Option<NodeModel>) -> WorkflowDefinition {
-        WorkflowDefinition {
-            schema_version: DEFINITION_SCHEMA_VERSION,
-            nodes: vec![DefinitionNode {
-                id: "plan".into(),
-                node_type: WorkflowNodeType::Agent,
-                title: "Plan".into(),
-                prompt: "plan".into(),
-                model,
-            }],
-            edges: Vec::new(),
-            inputs: Vec::new(),
-            doc_templates: Vec::new(),
-        }
-    }
-
-    #[test]
-    fn the_node_rows_own_pick_beats_the_definition() {
-        let definition = definition_with_model(Some(NodeModel {
-            agent_kind: "codex".into(),
-            model_id: Some("definition-model".into()),
-            mode_id: None,
-        }));
-        let node = node(
-            Some(NodeModel {
-                agent_kind: "claude".into(),
-                model_id: Some("row-model".into()),
-                mode_id: Some("row-mode".into()),
-            }),
-            Some("plan"),
-        );
-        assert_eq!(
-            launch_model(&node, &definition),
-            (
-                "claude".to_string(),
-                Some("row-model".to_string()),
-                Some("row-mode".to_string())
-            )
-        );
-    }
-
-    #[test]
-    fn a_defined_row_resolves_through_the_frozen_definition() {
-        let definition = definition_with_model(Some(NodeModel {
-            agent_kind: "codex".into(),
-            model_id: None,
-            mode_id: None,
-        }));
-        assert_eq!(
-            launch_model(&node(None, Some("plan")), &definition),
-            ("codex".to_string(), None, None)
-        );
-    }
-
-    #[test]
-    fn no_pick_anywhere_falls_back_to_the_app_default() {
-        assert_eq!(
-            launch_model(&node(None, None), &definition_with_model(None)),
-            (DEFAULT_WORKFLOW_AGENT_KIND.to_string(), None, None)
-        );
-        assert_eq!(
-            launch_model(&node(None, Some("plan")), &definition_with_model(None)),
-            (DEFAULT_WORKFLOW_AGENT_KIND.to_string(), None, None)
-        );
     }
 }

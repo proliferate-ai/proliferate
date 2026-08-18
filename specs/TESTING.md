@@ -153,6 +153,32 @@ pnpm --filter @proliferate/product-client test:scroll-physics
 `workers=1`; it does not rebuild `dist`.) CI runs it in the `scroll-physics`
 job, which builds the shared packages and installs both browser engines.
 
+### Workflow-canvas suite (builder graph surface)
+
+The same shape as the scroll-physics suite, for the one part of the Workflows
+builder a simulated DOM cannot answer for: the canvas's real stacking, hit
+testing, pointer capture and pointer routing. The shipped
+`WorkflowBuilderChainCanvas` mounts in real Chromium over a scripted graph, and
+the specs assert what a pointer can actually reach — a midpoint control above
+the cards it sits over, a press that selects without moving a card, a drag that
+moves one, and a connection released off-canvas leaving no armed source.
+
+Chromium only: unlike scroll physics, no behavior here is engine-specific, and
+the geometry it measures is the same in both.
+
+Lives in `apps/packages/product-client/qualification/workflow-canvas/` (Vite
+fixture host plus `specs/`). Run locally:
+
+```
+pnpm --filter @proliferate/product-client test:workflow-canvas
+```
+
+(`test:workflow-canvas` builds the fixture, then runs Playwright at
+`workers=1`; `typecheck:workflow-canvas` checks the fixture on its own.) It is
+run on demand rather than by a CI job — the graph invariants that gate a merge
+are covered by the ProductClient suite, and this harness exists for the
+pointer-level questions that suite cannot ask.
+
 ## Tier 3 — live end-to-end
 
 Tests the **deploy artifact, not just the code** in three deliberately

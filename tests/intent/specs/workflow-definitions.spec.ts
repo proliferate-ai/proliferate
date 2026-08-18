@@ -3,22 +3,21 @@
 // server, and real Postgres, with AnyHarness deliberately skipped because
 // definitions do not execute yet.
 //
-// The scenario proves the full acceptance surface: a linear chain of two
-// uniquely identifiable ordered nodes (agent, human_in_loop) whose prompts
+// The scenario proves the full acceptance surface: a two-step explicit graph
+// with uniquely identifiable ordered nodes (agent, human_in_loop) whose prompts
 // reference declared names via @input:/@doc: tokens, authored through the
 // inputs panel and doc-templates panel rather than free-standing
 // stages/steps; live validation blocks save while a prompt references an
 // unresolved name and unblocks the moment the reference is declared; and
-// exact ordered node/edge/input/docTemplate arrays after create, hard
+// detached-node and malformed-JSON negative controls; and exact ordered
+// node/edge/input/docTemplate arrays after create, hard
 // reload, list reopen, authenticated GET, and the revision-2 update (which
-// also reorders the chain, so the ordering assertions cannot pass
-// vacuously). Then delete and assert both the list and the authenticated API
+// reorders display order without rewriting the authored edge). Then delete
+// and assert both the list and the authenticated API
 // no longer expose it.
 //
-// The gen-2 builder has no repository picker (see
-// lib/domain/workflows/workflow-builder-draft.ts's own comment on this): a
-// definition's `defaultRepoConfigId` is never set by this surface, so it is
-// asserted `null` throughout rather than seeded.
+// The test stack exposes no connected runtime repository, so the builder's
+// optional default-repository selection remains null throughout.
 //
 // Flag: workflows_v2 (lib/domain/capabilities/workflows-v2.ts) defaults to
 // `false` today and flips to `true` in this ladder's final rung, landed as its
@@ -72,14 +71,14 @@ const ORIGINAL_NODES: ComparableNode[] = [
 ];
 const ORIGINAL_EDGES = [{ from: "step-1", to: "step-2" }];
 
-// Revision 2 both edits content AND reorders the chain (step-2 moves to the
-// front): a swapped, non-vacuous ordering assertion, mirroring gen-1's own
-// "unique ordinal marker" rationale for its stage/step arrays.
+// Revision 2 edits content and moves step-2 to the front in authored display
+// order. The explicit edge remains step-1 -> step-2: this is the negative
+// control that would fail if moving cards silently rewired persisted topology.
 const UPDATED_NODES: ComparableNode[] = [
   { id: "step-2", type: "human_in_loop", title: NODE2_TITLE, prompt: UPDATED_STAGE2_PROMPT, model: null },
   { id: "step-1", type: "agent", title: NODE1_TITLE, prompt: STAGE1_PROMPT, model: null },
 ];
-const UPDATED_EDGES = [{ from: "step-2", to: "step-1" }];
+const UPDATED_EDGES = ORIGINAL_EDGES;
 
 const DOC_TEMPLATES = [{ slug: "findings", producingNodeId: "step-1", body: DOC_BODY }];
 
@@ -148,9 +147,39 @@ test("creates, reloads, reopens, edits, and deletes a durable gen-2 definition",
   await page.locator("#workflow-builder-node-step-2-title").fill(NODE2_TITLE);
   await page.locator("#workflow-builder-node-step-2-prompt").fill(STAGE2_PROMPT);
 
+  // A new card is intentionally detached. That invalid production topology
+  // must block save until the author explicitly connects the real ports.
+  const saveButton = page.getByRole("button", { name: "Save Workflow", exact: true });
+  await expect(saveButton).toBeDisabled();
+  await connectNodePorts(page, NODE1_TITLE, NODE2_TITLE);
+
+  // JSON edits project through the same graph definition. Unknown fields are
+  // retained as invalid source, block save, and do not replace the last graph.
+  await page.getByRole("radio", { name: "JSON", exact: true }).click();
+  const jsonEditor = page.getByRole("textbox", { name: "Workflow definition JSON", exact: true });
+  const validJson = await jsonEditor.inputValue();
+  // Add the unknown field to the decoded document rather than to its text: the
+  // pane's formatting (trailing newline included) is not what is under test.
+  await jsonEditor.fill(
+    JSON.stringify({ ...JSON.parse(validJson) as object, unexpected: true }, null, 2),
+  );
+  await expect(page.getByText("The definition contains an unknown field.", { exact: true })).toBeVisible();
+  await expect(saveButton).toBeDisabled();
+  await page.getByRole("button", { name: "Revert", exact: true }).click();
+  // Revert drops the author's text for the graph's own document — which is not
+  // itself valid yet (@doc:findings is still undeclared, the negative control
+  // below), so the pane stops naming the unknown field and goes back to
+  // showing exactly what the graph holds.
+  await expect(page.getByText("The definition contains an unknown field.", { exact: true }))
+    .toHaveCount(0);
+  await expect(jsonEditor).toHaveValue(validJson);
+  await page.getByRole("radio", { name: "Graph", exact: true }).click();
+  await expect(page.getByRole("group", { name: "Workflow chain", exact: true })
+    .getByRole("button")
+    .filter({ hasText: NODE2_TITLE })).toBeVisible();
+
   // Negative control: an unresolved @doc: reference blocks save with an
   // exact, non-generic message, and the chip preview marks it unresolved.
-  const saveButton = page.getByRole("button", { name: "Save Workflow", exact: true });
   await expect(
     page.getByText(
       "Fix 1 issue before saving. Node “step-2” prompt references unknown doc template “@doc:findings”.",
@@ -239,9 +268,9 @@ test("creates, reloads, reopens, edits, and deletes a durable gen-2 definition",
   expect(persisted.body.definition.inputs).toEqual(ORIGINAL_INPUTS);
   expect(persisted.body.definition.docTemplates).toEqual(DOC_TEMPLATES);
 
-  // Edit: title/description, reorder the chain (step-2 moves up), and edit
-  // step-2's prompt — content and order both change, so reload cannot pass
-  // by re-reading either the old order or the old text. `expectBuilderState`
+  // Edit: title/description, move step-2's display order up, and edit its
+  // prompt. The explicit step-1 -> step-2 edge must remain unchanged.
+  // `expectBuilderState`
   // above leaves step-2 selected (the last node in `ORIGINAL_NODES`), so its
   // move affordance is already visible without an extra canvas click.
   await titleField.fill(UPDATED_TITLE);
@@ -479,6 +508,15 @@ async function selectNodeCard(page: Page, title: string): Promise<void> {
     .getByRole("button")
     .filter({ hasText: title })
     .click();
+}
+
+/** Exercise the production pointer-driven ports instead of mutating draft data. */
+async function connectNodePorts(page: Page, fromTitle: string, toTitle: string): Promise<void> {
+  const canvas = page.getByRole("group", { name: "Workflow chain", exact: true });
+  await canvas.getByRole("button", { name: `Connect from ${fromTitle}`, exact: true })
+    .dispatchEvent("pointerdown", { pointerId: 1, pointerType: "mouse", isPrimary: true });
+  await canvas.getByRole("button", { name: `Connect into ${toTitle}`, exact: true })
+    .dispatchEvent("pointerup", { pointerId: 1, pointerType: "mouse", isPrimary: true });
 }
 
 /** Assert the full builder state: title/description plus every ordered node's

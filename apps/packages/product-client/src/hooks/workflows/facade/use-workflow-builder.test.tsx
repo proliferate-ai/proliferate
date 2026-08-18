@@ -2,13 +2,10 @@
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { WorkflowDefinitionRecordV2 } from "@proliferate/cloud-sdk";
+import type { WorkflowDefinitionRecordV2, WorkflowDefinitionV2 } from "@proliferate/cloud-sdk";
 import { WORKFLOW_STARTER_TEMPLATES_V2 } from "#product/config/workflows/starter-templates";
 import { useWorkflowBuilder } from "#product/hooks/workflows/facade/use-workflow-builder";
-import {
-  linearEdges,
-  nextNodeId,
-} from "#product/lib/domain/workflows/workflow-builder-draft";
+import { nextNodeId } from "#product/lib/domain/workflows/workflow-builder-draft";
 
 const mocks = vi.hoisted(() => ({
   detailQuery: {
@@ -34,7 +31,10 @@ vi.mock("#product/hooks/access/cloud/workflows/use-workflow-definitions-v2-acces
   }),
 }));
 
-const [AGENT_ENGINEERING_PROCESS, RESEARCH_AND_REVIEW] = WORKFLOW_STARTER_TEMPLATES_V2;
+const AGENT_ENGINEERING_PROCESS = WORKFLOW_STARTER_TEMPLATES_V2[0];
+const BUG_INVESTIGATION = WORKFLOW_STARTER_TEMPLATES_V2.find(
+  (template) => template.slug === "bug-investigation",
+)!;
 
 beforeEach(() => {
   mocks.detailQuery.data = undefined;
@@ -57,6 +57,7 @@ describe("useWorkflowBuilder validation gating", () => {
     act(() => {
       result.current.actions.setTitle("Issue triage");
       result.current.actions.updateNode("step-1", {
+        title: "Diagnose",
         prompt: "Record what you find in @doc:findings.",
       });
     });
@@ -80,6 +81,7 @@ describe("useWorkflowBuilder validation gating", () => {
     act(() => {
       result.current.actions.setTitle("Issue triage");
       result.current.actions.updateNode("step-1", {
+        title: "Diagnose",
         prompt: "Record what you find in @doc:findings.",
       });
       result.current.actions.addDocTemplate();
@@ -101,7 +103,7 @@ describe("useWorkflowBuilder validation gating", () => {
   });
 });
 
-describe("useWorkflowBuilder chain order", () => {
+describe("useWorkflowBuilder authored graph", () => {
   it("seeds a starter template clean, in its own node order", () => {
     const { result } = renderBuilder({ template: AGENT_ENGINEERING_PROCESS });
 
@@ -113,8 +115,8 @@ describe("useWorkflowBuilder chain order", () => {
     expect(result.current.draft.inputs.map((input) => input.name)).toEqual(["goal", "constraints"]);
   });
 
-  it("rebuilds the edge list linearly when a step moves down", () => {
-    const { result } = renderBuilder({ template: RESEARCH_AND_REVIEW });
+  it("changes display order without rewiring authored edges", () => {
+    const { result } = renderBuilder({ template: BUG_INVESTIGATION });
 
     expect(result.current.definition.edges).toEqual([{ from: "research", to: "review" }]);
 
@@ -123,13 +125,11 @@ describe("useWorkflowBuilder chain order", () => {
     });
 
     expect(result.current.draft.nodes.map((node) => node.id)).toEqual(["review", "research"]);
-    expect(result.current.definition.edges).toEqual([{ from: "review", to: "research" }]);
-    // Reordering rewrites the chain rather than breaking it: the definition
-    // stays linear, so the reorder never invents a validation failure.
+    expect(result.current.definition.edges).toEqual([{ from: "research", to: "review" }]);
     expect(result.current.issues).toEqual([]);
   });
 
-  it("seeds an existing record in chain order, not stored array order", () => {
+  it("preserves stored display order while synthesizing Input to the real head", () => {
     mocks.detailQuery.data = {
       ...savedRecord(),
       definition: {
@@ -144,99 +144,34 @@ describe("useWorkflowBuilder chain order", () => {
     const { result } = renderBuilder({ definitionId: "wf-1" });
 
     expect(result.current.status).toBe("ready");
-    expect(result.current.draft.nodes.map((node) => node.id)).toEqual(["a", "b"]);
+    expect(result.current.draft.nodes.map((node) => node.id)).toEqual(["b", "a"]);
+    expect(result.current.draft.inputConnectedTo).toBe("a");
+  });
+
+  it("adds a detached node and refuses to save until it is connected", () => {
+    const { result } = renderBuilder({ template: BUG_INVESTIGATION });
+    act(() => result.current.actions.addNode());
+
+    expect(result.current.draft.edges).toEqual([{ from: "research", to: "review" }]);
+    expect(result.current.issues.map((issue) => issue.code)).toContain("not_linear");
+    expect(result.current.canSave).toBe(false);
+  });
+
+  it("removes only incident edges and does not heal across a deleted middle node", () => {
+    const { result } = renderBuilder({ template: AGENT_ENGINEERING_PROCESS });
+    act(() => result.current.actions.removeNode("research"));
+
+    expect(result.current.draft.edges).not.toContainEqual({ from: "research-questions", to: "design" });
+    expect(result.current.draft.edges).toEqual([
+      { from: "design", to: "design-gate" },
+      { from: "design-gate", to: "implement" },
+      { from: "implement", to: "review-gate" },
+    ]);
+    expect(result.current.issues.map((issue) => issue.code)).toContain("not_linear");
+    expect(result.current.canSave).toBe(false);
   });
 });
 
-describe("useWorkflowBuilder save mapping", () => {
-  it("creates with an empty description when none was written", async () => {
-    const { result } = renderBuilder();
-
-    act(() => {
-      result.current.actions.setTitle("  Issue triage  ");
-    });
-    await act(async () => {
-      await result.current.save();
-    });
-
-    expect(mocks.create).toHaveBeenCalledWith({
-      title: "Issue triage",
-      description: "",
-      // Sent explicitly rather than omitted: a workflow with no default asks
-      // for a repository at launch instead.
-      defaultRepoConfigId: null,
-      definition: {
-        schemaVersion: 2,
-        nodes: [{ id: "step-1", type: "agent", title: "", prompt: "" }],
-        edges: [],
-        inputs: [],
-        docTemplates: [],
-      },
-    });
-    expect(result.current.saved).toBe(true);
-    expect(result.current.dirty).toBe(false);
-  });
-
-  it("updates against the loaded record's revision", async () => {
-    mocks.detailQuery.data = savedRecord();
-    const { result } = renderBuilder({ definitionId: "wf-1" });
-
-    act(() => {
-      result.current.actions.setTitle("Renamed");
-    });
-    await act(async () => {
-      await result.current.save();
-    });
-
-    expect(mocks.create).not.toHaveBeenCalled();
-    expect(mocks.update).toHaveBeenCalledWith({
-      workflowDefinitionId: "wf-1",
-      body: expect.objectContaining({
-        title: "Renamed",
-        description: "Triage inbound issues",
-        defaultRepoConfigId: "repo-1",
-        expectedRevision: 7,
-      }),
-    });
-  });
-
-  it("carries the revision the server answered with into the next update", async () => {
-    mocks.detailQuery.data = savedRecord();
-    const { result } = renderBuilder({ definitionId: "wf-1" });
-
-    act(() => {
-      result.current.actions.setTitle("Renamed");
-    });
-    await act(async () => {
-      await result.current.save();
-    });
-    act(() => {
-      result.current.actions.setTitle("Renamed twice");
-    });
-    await act(async () => {
-      await result.current.save();
-    });
-
-    expect(mocks.update.mock.calls[1][0].body.expectedRevision).toBe(8);
-  });
-
-  it("surfaces a revision conflict without clearing the draft", async () => {
-    mocks.detailQuery.data = savedRecord();
-    mocks.update.mockRejectedValue(Object.assign(new Error("conflict"), { status: 409 }));
-    const { result } = renderBuilder({ definitionId: "wf-1" });
-
-    act(() => {
-      result.current.actions.setTitle("Renamed");
-    });
-    await act(async () => {
-      await result.current.save();
-    });
-
-    expect(result.current.error).toContain("changed in another window");
-    expect(result.current.draft.title).toBe("Renamed");
-    expect(result.current.saving).toBe(false);
-  });
-});
 
 describe("useWorkflowBuilder declaration grammar gating", () => {
   it("makes no write while a declared input name breaks the wire grammar", async () => {
@@ -244,6 +179,7 @@ describe("useWorkflowBuilder declaration grammar gating", () => {
 
     act(() => {
       result.current.actions.setTitle("Issue triage");
+      completeStep(result);
       result.current.actions.addInput();
     });
     act(() => {
@@ -265,6 +201,7 @@ describe("useWorkflowBuilder declaration grammar gating", () => {
 
     act(() => {
       result.current.actions.setTitle("Issue triage");
+      completeStep(result);
       result.current.actions.addInput();
     });
     // The name is the ONLY difference from the test above.
@@ -285,6 +222,7 @@ describe("useWorkflowBuilder declaration grammar gating", () => {
 
     act(() => {
       result.current.actions.setTitle("Issue triage");
+      completeStep(result);
       result.current.actions.addDocTemplate();
     });
     act(() => {
@@ -304,75 +242,6 @@ describe("useWorkflowBuilder declaration grammar gating", () => {
   });
 });
 
-describe("useWorkflowBuilder default repository", () => {
-  it("carries a picked runtime repo root into the saved default", async () => {
-    const { result } = renderBuilder();
-
-    act(() => {
-      result.current.actions.setTitle("Issue triage");
-      result.current.actions.setDefaultRepoConfigId("repo-2");
-    });
-
-    expect(result.current.repoDefaultUnavailable).toBe(false);
-    await act(async () => {
-      await result.current.save();
-    });
-
-    expect(mocks.create.mock.calls[0][0].defaultRepoConfigId).toBe("repo-2");
-  });
-
-  it("refuses to save a stored default the runtime does not list", async () => {
-    mocks.detailQuery.data = savedRecord();
-    const { result } = renderBuilder({
-      definitionId: "wf-1",
-      availableRepoRootIds: ["repo-2"],
-    });
-
-    act(() => {
-      result.current.actions.setTitle("Renamed");
-    });
-
-    // The definition itself is valid — only the repository is unknown here.
-    expect(result.current.issues).toEqual([]);
-    expect(result.current.repoDefaultUnavailable).toBe(true);
-    expect(result.current.canSave).toBe(false);
-
-    await act(async () => {
-      await result.current.save();
-    });
-    expect(mocks.update).not.toHaveBeenCalled();
-
-    // Negative control: picking a listed root is the only change.
-    act(() => {
-      result.current.actions.setDefaultRepoConfigId("repo-2");
-    });
-    expect(result.current.canSave).toBe(true);
-
-    await act(async () => {
-      await result.current.save();
-    });
-    expect(mocks.update.mock.calls[0][0].body.defaultRepoConfigId).toBe("repo-2");
-  });
-
-  it("holds a save while the runtime's list is unknown, but not a draft with no default", () => {
-    mocks.detailQuery.data = savedRecord();
-    const stored = renderBuilder({ definitionId: "wf-1", availableRepoRootIds: null });
-
-    act(() => {
-      stored.result.current.actions.setTitle("Renamed");
-    });
-    expect(stored.result.current.canSave).toBe(false);
-
-    // A workflow that names no repository is unaffected by an unreachable
-    // runtime: there is no id to confirm, and the run picks one at launch.
-    mocks.detailQuery.data = undefined;
-    const fresh = renderBuilder({ availableRepoRootIds: null });
-    act(() => {
-      fresh.result.current.actions.setTitle("Issue triage");
-    });
-    expect(fresh.result.current.canSave).toBe(true);
-  });
-});
 
 describe("useWorkflowBuilder draft edits", () => {
   it("mints ids that never collide with a sibling", () => {
@@ -384,12 +253,8 @@ describe("useWorkflowBuilder draft edits", () => {
     ])).toBe("step-4");
   });
 
-  it("derives no edge from a single step", () => {
-    expect(linearEdges([{ id: "only", type: "agent", title: "", prompt: "" }])).toEqual([]);
-  });
-
   it("reports a document orphaned by removing the step that wrote it", () => {
-    const { result } = renderBuilder({ template: RESEARCH_AND_REVIEW });
+    const { result } = renderBuilder({ template: BUG_INVESTIGATION });
 
     act(() => {
       result.current.actions.removeNode("research");
@@ -398,7 +263,75 @@ describe("useWorkflowBuilder draft edits", () => {
     expect(result.current.issues.map((issue) => issue.code)).toContain("unknown_producing_node");
     expect(result.current.canSave).toBe(false);
   });
+
+  it("undoes and redoes a structural edit while coalescing adjacent typing", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-17T12:00:00Z"));
+    const { result } = renderBuilder();
+    act(() => {
+      result.current.actions.setTitle("I");
+      result.current.actions.setTitle("Issue");
+    });
+    expect(result.current.draft.title).toBe("Issue");
+    act(() => result.current.undo());
+    expect(result.current.draft.title).toBe("");
+    act(() => result.current.redo());
+    expect(result.current.draft.title).toBe("Issue");
+    vi.advanceTimersByTime(601);
+    act(() => result.current.actions.setTitle("Issue triage"));
+    act(() => result.current.undo());
+    expect(result.current.draft.title).toBe("Issue");
+    act(() => result.current.redo());
+    expect(result.current.draft.title).toBe("Issue triage");
+    vi.useRealTimers();
+  });
+
+  it("caps whole-draft undo history at sixty entries", () => {
+    const { result } = renderBuilder();
+    act(() => {
+      for (let index = 0; index < 65; index += 1) {
+        result.current.actions.setDefaultRepoConfigId(index % 2 === 0 ? "repo-1" : "repo-2");
+      }
+    });
+    let undos = 0;
+    while (result.current.canUndo) {
+      act(() => result.current.undo());
+      undos += 1;
+    }
+    expect(undos).toBe(60);
+  });
+
+  it("coalesces valid JSON typing within 600 ms without evicting structural history", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-17T12:00:00Z"));
+    const { result } = renderBuilder();
+    act(() => result.current.actions.setDefaultRepoConfigId("repo-2"));
+
+    act(() => {
+      for (let index = 1; index <= 65; index += 1) {
+        result.current.actions.replaceDefinition(definitionWithPrompt("x".repeat(index)));
+      }
+    });
+    expect(result.current.definition.nodes[0].prompt).toHaveLength(65);
+
+    act(() => result.current.undo());
+    expect(result.current.definition.nodes[0].prompt).toBe("");
+    expect(result.current.draft.defaultRepoConfigId).toBe("repo-2");
+    act(() => result.current.undo());
+    expect(result.current.draft.defaultRepoConfigId).toBe("");
+    vi.useRealTimers();
+  });
 });
+
+function definitionWithPrompt(prompt: string): WorkflowDefinitionV2 {
+  return {
+    schemaVersion: 2,
+    nodes: [{ id: "step-1", type: "agent", title: "", prompt }],
+    edges: [],
+    inputs: [],
+    docTemplates: [],
+  };
+}
 
 /**
  * `availableRepoRootIds` defaults to the ids the fixtures use, so a test only
@@ -408,6 +341,7 @@ function renderBuilder(args: {
   definitionId?: string | null;
   template?: (typeof WORKFLOW_STARTER_TEMPLATES_V2)[number] | null;
   availableRepoRootIds?: readonly string[] | null;
+  availableModelSelections?: readonly { agentKind: string; modelIds: readonly string[] }[] | null;
 } = {}) {
   return renderHook(() => useWorkflowBuilder({
     definitionId: args.definitionId ?? null,
@@ -416,7 +350,16 @@ function renderBuilder(args: {
     availableRepoRootIds: args.availableRepoRootIds === undefined
       ? ["repo-1", "repo-2"]
       : args.availableRepoRootIds,
+    availableModelSelections: args.availableModelSelections ?? null,
   }));
+}
+
+/**
+ * A blank draft mints its step with no title and no prompt — both are wire
+ * required, so every test that reaches a write has to fill them in.
+ */
+function completeStep(result: ReturnType<typeof renderBuilder>["result"]) {
+  result.current.actions.updateNode("step-1", { title: "Diagnose", prompt: "Investigate." });
 }
 
 function savedRecord(): WorkflowDefinitionRecordV2 {

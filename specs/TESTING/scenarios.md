@@ -746,7 +746,7 @@ Authored against the frozen Workflows gen-2 ADR contract
 in the parallel gen-2 ladder's PR5a (Lane R), which is not yet in this chain's
 base, so this scenario is authored and registered only — never executed —
 until that PR lands (see `tests/release/src/scenarios/t3-wf-1.ts`'s module
-docstring). The definition mirrors the shipped "Research and review" starter
+docstring). The definition mirrors the shipped "Bug investigation" starter
 template (`apps/packages/product-client/src/config/workflows/
 starter-templates.ts`) verbatim: one `agent` node ("research") whose prompt
 uses `@input:question` and writes findings into `@doc:findings`, then one
