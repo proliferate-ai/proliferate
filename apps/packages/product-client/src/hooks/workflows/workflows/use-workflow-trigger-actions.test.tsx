@@ -264,6 +264,29 @@ describe("useWorkflowTriggerActions placed workspace", () => {
     );
   });
 
+  it("reads the workspace once more when the refresh it fell back to refused", async () => {
+    // The two resolvers are the hint and the refreshed collections snapshot.
+    // A rejected refresh leaves selection the same stale snapshot it already
+    // held, so handing it no hint on top of that is a launch heading straight
+    // for "Workspace not found." — one last read is what is left to try.
+    planes.getWorkspace
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockRejectedValueOnce(new Error("offline"));
+    planes.invalidateCollections.mockRejectedValue(new Error("refresh failed"));
+    const onLaunched = vi.fn();
+    const { result } = renderTriggerActions(createQueryClient(), onLaunched);
+
+    await act(async () => {
+      await result.current.triggerRun(INPUT);
+    });
+
+    expect(planes.getWorkspace).toHaveBeenCalledTimes(4);
+    expect(onLaunched).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "workspace-1", workspace: PLACED_WORKSPACE }),
+    );
+  });
+
   it("still navigates when every read-back attempt fails", async () => {
     planes.getWorkspace.mockRejectedValue(new Error("offline"));
     const onLaunched = vi.fn();

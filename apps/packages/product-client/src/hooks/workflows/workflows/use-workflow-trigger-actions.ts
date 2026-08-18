@@ -149,16 +149,22 @@ export function useWorkflowTriggerActions({
       // The run PUT is what creates this workspace, so nothing else in the
       // client knows it exists: read it back for selection's `knownWorkspace`
       // hint and refresh the collections cache so the sidebar lists it.
-      const workspace = await readBackLaunchedWorkspace(runtimeUrl, result.workspaceId);
+      let workspace = await readBackLaunchedWorkspace(runtimeUrl, result.workspaceId);
       // Selection takes its collections snapshot when it is called, so a
       // refreshed cache resolves the workspace even with no hint at all. That
       // is the fallback for a read-back that never answered — wait for it in
       // that case only; otherwise the hint has already answered and the
       // refresh can settle behind the navigation.
-      const collectionsRefreshed = invalidateWorkspaceCollectionsForRuntime(runtimeUrl)
-        .catch(() => {});
-      if (!workspace) {
-        await collectionsRefreshed;
+      const collectionsRefreshed = invalidateWorkspaceCollectionsForRuntime(runtimeUrl);
+      if (workspace) {
+        collectionsRefreshed.catch(() => {});
+      } else if (!(await collectionsRefreshed.then(() => true, () => false))) {
+        // A refused refresh leaves the same stale snapshot selection would
+        // search, so with no hint either the launch is heading for "Workspace
+        // not found". One last direct read is the only thing left that can
+        // answer, and by now the runtime has had the whole refresh attempt to
+        // settle.
+        workspace = await readBackLaunchedWorkspace(runtimeUrl, result.workspaceId);
       }
       onLaunched?.({ runId: result.runId, workspaceId: result.workspaceId, workspace });
       return result;
