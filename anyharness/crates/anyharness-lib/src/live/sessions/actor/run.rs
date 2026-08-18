@@ -87,6 +87,10 @@ impl SessionActor {
         drop(command_rx);
         self.background_work_registry.shutdown();
         self.finalize_exit(exit_reason).await;
+        // Finalization is the actor's last event-producing phase. Release the
+        // generation's sequence ownership before the potentially long process
+        // reap so a replacement can start without racing stale final events.
+        self.handle.relinquish_event_sequence();
         self.handle.finish_prompt();
         if let Some(respond_to) = self.pending_stop_response.take() {
             let kills = self.kill_process_group_and_reap().await;

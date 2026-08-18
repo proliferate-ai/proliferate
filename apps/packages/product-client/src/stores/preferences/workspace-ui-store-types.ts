@@ -27,6 +27,7 @@ export interface WorkspaceUiState {
   _hydrated: boolean;
   pinnedWorkspaceIds: string[];
   workspacePinIntentReceiptByTarget: PersistedWorkspaceUiState["workspacePinIntentReceiptByTarget"];
+  workspacePinLocalBarrierById: PersistedWorkspaceUiState["workspacePinLocalBarrierById"];
   hiddenRepoRootIds: string[];
   collapsedRepoGroups: string[];
   showArchived: boolean;

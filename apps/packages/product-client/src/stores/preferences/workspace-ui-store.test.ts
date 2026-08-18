@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  WORKSPACE_PIN_INTENT_RECEIPT_LIMIT,
-  WORKSPACE_UI_DEFAULTS,
-} from "#product/lib/domain/preferences/workspace-ui/model";
+import { WORKSPACE_UI_DEFAULTS } from "#product/lib/domain/preferences/workspace-ui/model";
 import { createManualChatGroupId } from "#product/lib/domain/workspaces/tabs/manual-groups";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
@@ -84,137 +81,6 @@ describe("workspace ui tab persistence", () => {
     store.markSessionViewedAt("s1", "2026-04-04T00:00:12.000Z");
     expect(useWorkspaceUiStore.getState().sessionLastViewedAt.s1)
       .toBe("2026-04-04T00:00:12.000Z");
-  });
-
-  it("pins and unpins workspaces in pin order", () => {
-    useWorkspaceUiStore.setState({
-      ...WORKSPACE_UI_DEFAULTS,
-      _hydrated: true,
-    });
-
-    const store = useWorkspaceUiStore.getState();
-    store.pinWorkspace("ws-1");
-    store.pinWorkspace("ws-2");
-    store.pinWorkspace("ws-1");
-
-    expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual(["ws-1", "ws-2"]);
-
-    // Unpin clears every id the workspace answers to, including pins recorded
-    // under a former identity, and ignores ids that were never pinned.
-    useWorkspaceUiStore.getState().unpinWorkspace(["ws-1", "ws-1-former-alias"]);
-    useWorkspaceUiStore.getState().unpinWorkspace(["ws-missing"]);
-
-    expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual(["ws-2"]);
-  });
-
-  it("applies Workspace MCP pin intents once per target and tolerates delayed targets", () => {
-    useWorkspaceUiStore.setState({
-      ...WORKSPACE_UI_DEFAULTS,
-      _hydrated: true,
-      pinnedWorkspaceIds: ["ws-existing-alias"],
-    });
-
-    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch(
-      [
-        {
-          requestId: "request-new",
-          runtimeId: "runtime-1",
-          sessionId: "session-1",
-          seq: 3,
-          pinId: "ws-new",
-          relatedIds: ["ws-new"],
-          pinned: true,
-        },
-        {
-          requestId: "request-existing",
-          runtimeId: "runtime-1",
-          sessionId: "session-1",
-          seq: 4,
-          pinId: "ws-existing",
-          relatedIds: ["ws-existing", "ws-existing-alias"],
-          pinned: false,
-        },
-      ],
-    );
-
-    expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual(["ws-new"]);
-    expect(useWorkspaceUiStore.getState().workspacePinIntentReceiptByTarget).toEqual({
-      [workspacePinIntentTargetKey("runtime-1", "session-1", "ws-new")]: {
-        requestId: "request-new",
-        seq: 3,
-      },
-      [workspacePinIntentTargetKey("runtime-1", "session-1", "ws-existing")]: {
-        requestId: "request-existing",
-        seq: 4,
-      },
-    });
-
-    useWorkspaceUiStore.getState().unpinWorkspace(["ws-new"]);
-    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch(
-      [{
-        requestId: "request-new",
-        runtimeId: "runtime-1",
-        sessionId: "session-1",
-        seq: 3,
-        pinId: "ws-new",
-        relatedIds: ["ws-new"],
-        pinned: true,
-      }],
-    );
-    expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual([]);
-
-    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch(
-      [{
-        requestId: "request-delayed",
-        runtimeId: "runtime-1",
-        sessionId: "session-1",
-        seq: 2,
-        pinId: "ws-delayed",
-        relatedIds: ["ws-delayed"],
-        pinned: true,
-      }],
-    );
-    expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual(["ws-delayed"]);
-
-    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch(
-      [{
-        requestId: "request-stale",
-        runtimeId: "runtime-1",
-        sessionId: "session-1",
-        seq: 1,
-        pinId: "ws-delayed",
-        relatedIds: ["ws-delayed"],
-        pinned: false,
-      }],
-    );
-    expect(useWorkspaceUiStore.getState().pinnedWorkspaceIds).toEqual(["ws-delayed"]);
-  });
-
-  it("bounds persisted Workspace MCP pin receipts by most-recent target", () => {
-    useWorkspaceUiStore.setState({
-      ...WORKSPACE_UI_DEFAULTS,
-      _hydrated: true,
-    });
-
-    useWorkspaceUiStore.getState().applyWorkspacePinIntentBatch(
-      Array.from({ length: WORKSPACE_PIN_INTENT_RECEIPT_LIMIT + 2 }, (_, index) => ({
-        requestId: `request-${index}`,
-        runtimeId: "runtime-1",
-        sessionId: `session-${index}`,
-        seq: index + 1,
-        pinId: `workspace-${index}`,
-        relatedIds: [`workspace-${index}`],
-        pinned: false,
-      })),
-    );
-
-    const receipts = useWorkspaceUiStore.getState().workspacePinIntentReceiptByTarget;
-    expect(Object.keys(receipts)).toHaveLength(WORKSPACE_PIN_INTENT_RECEIPT_LIMIT);
-    expect(receipts[workspacePinIntentTargetKey("runtime-1", "session-0", "workspace-0")])
-      .toBeUndefined();
-    expect(receipts[
-      workspacePinIntentTargetKey("runtime-1", "session-257", "workspace-257")
-    ]).toEqual({ requestId: "request-257", seq: 258 });
   });
 
   it("stores archived workspace visibility", () => {
@@ -500,11 +366,3 @@ describe("workspace ui tab persistence", () => {
     expect(useWorkspaceUiStore.getState().manualChatGroupsByWorkspace.w1).toBeUndefined();
   });
 });
-
-function workspacePinIntentTargetKey(
-  runtimeId: string,
-  sessionId: string,
-  pinId: string,
-): string {
-  return JSON.stringify([runtimeId, sessionId, pinId]);
-}

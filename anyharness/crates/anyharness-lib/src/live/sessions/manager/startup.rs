@@ -86,19 +86,13 @@ impl LiveSessionManager {
 
         let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4096);
 
-        let live_sessions = self.live_sessions.clone();
         let exit_session_id = session_id.clone();
         let exit_state = self.caps.state.clone();
         let caller_on_exit = hooks.on_exit.take();
         let on_exit: Box<dyn FnOnce(bool) + Send + 'static> = Box::new(move |errored| {
-            // Remove the dead handle from the live map so future callers do not
-            // get a stale reference after the actor thread exits.
-            let live = live_sessions.clone();
-            let sid = exit_session_id.clone();
-            live.blocking_write().remove(&sid);
             if errored {
                 let now = chrono::Utc::now().to_rfc3339();
-                let _ = exit_state.update_status(&sid, "errored", &now);
+                let _ = exit_state.update_status(&exit_session_id, "errored", &now);
             }
             if let Some(caller_on_exit) = caller_on_exit {
                 caller_on_exit(errored);
@@ -121,6 +115,7 @@ impl LiveSessionManager {
         let handle = pending.handle.clone();
         let (startup_tx, startup_rx) = watch::channel::<StartupReadinessState>(None);
         sessions.insert(session_id.clone(), handle.clone());
+        self.retire_generation_after_actor_finish(session_id.clone(), handle.clone());
         self.pending_startups
             .write()
             .await

@@ -26,6 +26,7 @@ export function selectPersistedWorkspaceUiState(
     migrationVersion: WORKSPACE_UI_MIGRATION_VERSION,
     pinnedWorkspaceIds: state.pinnedWorkspaceIds,
     workspacePinIntentReceiptByTarget: state.workspacePinIntentReceiptByTarget,
+    workspacePinLocalBarrierById: state.workspacePinLocalBarrierById,
     hiddenRepoRootIds: state.hiddenRepoRootIds,
     collapsedRepoGroups: state.collapsedRepoGroups,
     showArchived: state.showArchived,
@@ -78,6 +79,7 @@ export function getChangedWorkspaceUiStateKeys(
   return [
     "pinnedWorkspaceIds",
     "workspacePinIntentReceiptByTarget",
+    "workspacePinLocalBarrierById",
     "hiddenRepoRootIds",
     "collapsedRepoGroups",
     "showArchived",

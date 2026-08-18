@@ -59,6 +59,8 @@ describe("resolveWorkspacePinIntent", () => {
       runtimeId: "runtime-1",
       sessionId: "session-1",
       requestId: "11111111-1111-4111-8111-111111111111",
+      observedAt: { rendererEpoch: "renderer-current", sequence: 1 },
+      provenance: "live",
       seq: 2,
       workspaceId: "workspace-1",
       pinned: false,
@@ -71,6 +73,8 @@ describe("resolveWorkspacePinIntent", () => {
   it("rejects a workspace that is not in the local logical projection", () => {
     expect(resolveWorkspacePinIntent({
       requestId: "11111111-1111-4111-8111-111111111111",
+      observedAt: { rendererEpoch: "renderer-current", sequence: 1 },
+      provenance: "history",
       runtimeId: "runtime-1",
       sessionId: "session-1",
       seq: 2,

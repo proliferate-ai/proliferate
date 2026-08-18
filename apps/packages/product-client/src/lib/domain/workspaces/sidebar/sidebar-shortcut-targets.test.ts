@@ -50,6 +50,7 @@ describe("visibleSidebarShortcutTargetIds", () => {
       collapsedRepoGroupKeys: new Set(),
       repoGroupsShownMore: new Set(),
       itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+      repositoriesCollapsed: false,
     })).toEqual([
       "repo-b-latest",
       "repo-a-older-record-newer-work",
@@ -80,6 +81,7 @@ describe("visibleSidebarShortcutTargetIds", () => {
       collapsedRepoGroupKeys: new Set(),
       repoGroupsShownMore: new Set(),
       itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+      repositoriesCollapsed: false,
     })).toEqual(["local-visible", "cloud-selected"]);
   });
 
@@ -106,6 +108,7 @@ describe("visibleSidebarShortcutTargetIds", () => {
       collapsedRepoGroupKeys: new Set(),
       repoGroupsShownMore: new Set(),
       itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+      repositoriesCollapsed: false,
     })).toEqual(["local-visible"]);
   });
 
@@ -133,6 +136,7 @@ describe("visibleSidebarShortcutTargetIds", () => {
       collapsedRepoGroupKeys: new Set(["/tmp/repo-b"]),
       repoGroupsShownMore: new Set(),
       itemLimit: 6,
+      repositoriesCollapsed: false,
     })).toEqual([
       "repo-a-1",
       "repo-a-2",
@@ -147,6 +151,7 @@ describe("visibleSidebarShortcutTargetIds", () => {
       collapsedRepoGroupKeys: new Set(["/tmp/repo-b"]),
       repoGroupsShownMore: new Set(["/tmp/repo-a"]),
       itemLimit: 6,
+      repositoriesCollapsed: false,
     })).toEqual([
       "repo-a-1",
       "repo-a-2",
@@ -179,6 +184,7 @@ describe("visibleSidebarShortcutTargetIds", () => {
       collapsedRepoGroupKeys: new Set(),
       repoGroupsShownMore: new Set(),
       itemLimit: 6,
+      repositoriesCollapsed: false,
     })).toEqual([
       "repo-a-1",
       "repo-a-2",
@@ -223,6 +229,7 @@ describe("visibleSidebarShortcutTargetIds", () => {
       collapsedRepoGroupKeys: new Set(),
       repoGroupsShownMore: new Set(),
       itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+      repositoriesCollapsed: false,
     });
 
     expect(readTargets(visualGroups)).toEqual(readTargets(baseGroups));
@@ -258,6 +265,7 @@ describe("visibleSidebarShortcutTargetIds", () => {
       collapsedRepoGroupKeys: new Set(["/tmp/repo-b"]),
       repoGroupsShownMore: new Set(),
       itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+      repositoriesCollapsed: false,
     })).toEqual([
       "repo-b-pinned",
       "repo-a-pinned",
@@ -269,10 +277,44 @@ describe("visibleSidebarShortcutTargetIds", () => {
       collapsedRepoGroupKeys: new Set(["/tmp/repo-b"]),
       repoGroupsShownMore: new Set(),
       itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+      repositoriesCollapsed: false,
     })).toEqual([
       "repo-a-visible",
       "repo-a-pinned",
     ]);
+  });
+
+  it("exposes only pinned numbered targets when the repositories section is collapsed", () => {
+    const pinnedWorkspaceIds = ["workspace-pinned"];
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "workspace-visible",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+        }),
+        makeLocalLogicalWorkspace({
+          id: "workspace-pinned",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+        }),
+      ],
+      pinnedIds: pinnedWorkspaceIds,
+    });
+    const shared = {
+      groups,
+      collapsedRepoGroupKeys: new Set<string>(),
+      repoGroupsShownMore: new Set<string>(),
+      itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+      repositoriesCollapsed: true,
+    };
+
+    expect(numberedSidebarShortcutTargetIds({
+      ...shared,
+      pinnedWorkspaceIds,
+    })).toEqual(["workspace-pinned"]);
+    expect(visibleSidebarShortcutTargetIds(shared)).toEqual([]);
   });
 });
 

@@ -9,7 +9,11 @@ export function visibleSidebarShortcutTargetIds(args: {
   collapsedRepoGroupKeys: ReadonlySet<string>;
   repoGroupsShownMore: ReadonlySet<string>;
   itemLimit: number;
+  repositoriesCollapsed: boolean;
 }): string[] {
+  if (args.repositoriesCollapsed) {
+    return [];
+  }
   const ids: string[] = [];
 
   for (const group of args.groups) {
@@ -36,9 +40,14 @@ export function numberedSidebarShortcutTargetIds(args: {
   collapsedRepoGroupKeys: ReadonlySet<string>;
   repoGroupsShownMore: ReadonlySet<string>;
   itemLimit: number;
+  repositoriesCollapsed: boolean;
 }): string[] {
   const ids = collectPinnedSidebarItems(args.groups, args.pinnedWorkspaceIds)
     .map((item) => item.id);
+
+  if (args.repositoriesCollapsed) {
+    return ids;
+  }
 
   for (const group of args.groups) {
     if (args.collapsedRepoGroupKeys.has(group.sourceRoot)) {

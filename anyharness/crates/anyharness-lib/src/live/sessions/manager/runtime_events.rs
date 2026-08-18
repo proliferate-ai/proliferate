@@ -37,25 +37,19 @@ impl LiveSessionManager {
             match result {
                 Ok(result) => return Ok(result),
                 Err(RuntimeEventInjectionError::ActorUnavailable) => {
+                    // A closed mailbox precedes the actor's final event writes.
+                    // Wait only for this generation to relinquish sequencing,
+                    // without holding the registry lock, then re-check so a
+                    // replacement generation receives the event through its
+                    // own sink instead of an offline append racing it.
+                    handle.wait_for_event_sequence_relinquishment().await;
                     let mut sessions = self.live_sessions.write().await;
-                    match sessions.get(session_id) {
-                        Some(current) if Arc::ptr_eq(current, &handle) => {
-                            sessions.remove(session_id);
-                            return append_offline_runtime_event(
-                                session_id,
-                                self.caps.events.as_ref(),
-                                event,
-                            );
-                        }
-                        None => {
-                            return append_offline_runtime_event(
-                                session_id,
-                                self.caps.events.as_ref(),
-                                event,
-                            );
-                        }
-                        Some(_) => continue,
+                    if matches!(sessions.get(session_id), Some(current) if Arc::ptr_eq(current, &handle))
+                    {
+                        sessions.remove(session_id);
                     }
+                    drop(sessions);
+                    continue;
                 }
                 Err(error) => return Err(error),
             }

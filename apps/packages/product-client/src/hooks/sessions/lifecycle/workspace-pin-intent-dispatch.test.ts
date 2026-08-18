@@ -1,10 +1,15 @@
 import type { SessionEventEnvelope } from "@anyharness/sdk";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   dispatchWorkspacePinIntentEnvelopes,
   registerWorkspacePinIntentReconciler,
   resetWorkspacePinIntentDispatchForTests,
 } from "#product/hooks/sessions/lifecycle/workspace-pin-intent-dispatch";
+import { resetWorkspacePinLocalOrderForTests } from "#product/stores/preferences/workspace-ui-pin-local-order";
+
+beforeEach(() => {
+  resetWorkspacePinLocalOrderForTests();
+});
 
 afterEach(() => {
   resetWorkspacePinIntentDispatchForTests();
@@ -17,14 +22,21 @@ describe("workspace pin intent dispatch", () => {
     dispatchWorkspacePinIntentEnvelopes([
       envelope(1, "session_started"),
       envelope(2, "workspace_pin_intent"),
-    ]);
+    ], "history");
     const unregister = registerWorkspacePinIntentReconciler(reconcile);
 
     expect(reconcile).toHaveBeenCalledOnce();
-    expect(reconcile).toHaveBeenCalledWith([envelope(2, "workspace_pin_intent")]);
+    expect(reconcile).toHaveBeenCalledWith([{
+      envelope: envelope(2, "workspace_pin_intent"),
+      observedAt: {
+        rendererEpoch: expect.any(String),
+        sequence: 1,
+      },
+      provenance: "history",
+    }]);
 
     unregister();
-    dispatchWorkspacePinIntentEnvelopes([envelope(3, "workspace_pin_intent")]);
+    dispatchWorkspacePinIntentEnvelopes([envelope(3, "workspace_pin_intent")], "live");
     expect(reconcile).toHaveBeenCalledOnce();
   });
 
@@ -34,23 +46,28 @@ describe("workspace pin intent dispatch", () => {
       Array.from({ length: 130 }, (_, index) => (
         envelope(index + 1, "workspace_pin_intent")
       )),
+      "history",
     );
 
     registerWorkspacePinIntentReconciler(reconcile);
 
-    const delivered = reconcile.mock.calls[0]?.[0] as SessionEventEnvelope[];
+    const delivered = reconcile.mock.calls[0]?.[0] ?? [];
     expect(delivered).toHaveLength(128);
-    expect(delivered[0]?.seq).toBe(3);
-    expect(delivered.at(-1)?.seq).toBe(130);
+    expect(delivered[0]?.envelope.seq).toBe(3);
+    expect(delivered.at(-1)?.envelope.seq).toBe(130);
+    expect(delivered.every((observation) => observation.provenance === "history")).toBe(true);
   });
 
   it("delivers directly while a reconciler is registered", () => {
     const reconcile = vi.fn();
     registerWorkspacePinIntentReconciler(reconcile);
 
-    dispatchWorkspacePinIntentEnvelopes([envelope(4, "workspace_pin_intent")]);
+    dispatchWorkspacePinIntentEnvelopes([envelope(4, "workspace_pin_intent")], "live");
 
-    expect(reconcile).toHaveBeenCalledWith([envelope(4, "workspace_pin_intent")]);
+    expect(reconcile).toHaveBeenCalledWith([expect.objectContaining({
+      envelope: envelope(4, "workspace_pin_intent"),
+      provenance: "live",
+    })]);
   });
 });
 

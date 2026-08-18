@@ -7,8 +7,8 @@ import {
 import {
   resolveWorkspacePinIntent,
   workspacePinIntentForEnvelope,
+  type ObservedWorkspacePinIntent,
   type ResolvedWorkspacePinIntent,
-  type WorkspacePinIntent,
 } from "#product/lib/domain/workspaces/sidebar/workspace-pin-intents";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 
@@ -17,7 +17,7 @@ const MAX_PENDING_WORKSPACE_PIN_INTENTS = 128;
 export function useWorkspacePinIntentReconciliation(): WorkspacePinIntentReconciler {
   const { logicalWorkspaces, isLoading } = useLogicalWorkspaces();
   const workspaceUiHydrated = useWorkspaceUiStore((state) => state._hydrated);
-  const pendingByOperationRef = useRef(new Map<string, WorkspacePinIntent>());
+  const pendingByOperationRef = useRef(new Map<string, ObservedWorkspacePinIntent>());
 
   useEffect(() => {
     if (!workspaceUiHydrated || isLoading || pendingByOperationRef.current.size === 0) {
@@ -34,13 +34,18 @@ export function useWorkspacePinIntentReconciliation(): WorkspacePinIntentReconci
     applyWorkspacePinIntents(resolved);
   }, [isLoading, logicalWorkspaces, workspaceUiHydrated]);
 
-  return useCallback((envelopes) => {
+  return useCallback((observations) => {
     const intents: ResolvedWorkspacePinIntent[] = [];
-    for (const envelope of envelopes) {
-      const intent = workspacePinIntentForEnvelope(envelope);
-      if (!intent) {
+    for (const observation of observations) {
+      const parsedIntent = workspacePinIntentForEnvelope(observation.envelope);
+      if (!parsedIntent) {
         continue;
       }
+      const intent: ObservedWorkspacePinIntent = {
+        ...parsedIntent,
+        observedAt: observation.observedAt,
+        provenance: observation.provenance,
+      };
       const resolved = resolveWorkspacePinIntent(intent, logicalWorkspaces);
       if (resolved && workspaceUiHydrated) {
         pendingByOperationRef.current.delete(intentOperationKey(intent));
@@ -68,8 +73,8 @@ function applyWorkspacePinIntents(intents: ResolvedWorkspacePinIntent[]): void {
 }
 
 function rememberPendingIntent(
-  pending: Map<string, WorkspacePinIntent>,
-  intent: WorkspacePinIntent,
+  pending: Map<string, ObservedWorkspacePinIntent>,
+  intent: ObservedWorkspacePinIntent,
 ): void {
   pending.set(intentOperationKey(intent), intent);
   while (pending.size > MAX_PENDING_WORKSPACE_PIN_INTENTS) {
@@ -81,6 +86,6 @@ function rememberPendingIntent(
   }
 }
 
-function intentOperationKey(intent: WorkspacePinIntent): string {
+function intentOperationKey(intent: ObservedWorkspacePinIntent): string {
   return JSON.stringify([intent.runtimeId, intent.sessionId, intent.requestId]);
 }

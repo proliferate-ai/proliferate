@@ -110,12 +110,16 @@ data and never authorize the preference mutation. The event's
 sessions. Unknown local workspace targets cannot mutate preferences. The client
 expands logical workspace aliases and applies the request to its device-local
 `workspace_ui` preferences. The authenticated reconciliation owner buffers at
-most 128 unresolved startup events. A persisted set of at most 256 latest
-requests, keyed by runtime, session, and logical target, prevents replayed or
-older same-target history from overwriting a later manual pin change while
-allowing delayed requests for other targets. Every client that observes the
-event applies it locally; the tool does not promise cross-device
-synchronization.
+most 128 unresolved startup events. Persisted sets retain at most 256 latest
+request receipts, keyed by runtime, session, and logical target, and 256 latest
+renderer-local ordering barriers, keyed by logical workspace identity. Manual
+choices create a barrier. History observations under one and live observations
+captured before it are acknowledged without mutating the preference; a newly
+observed live request may supersede and advance it. Sequence comparison remains
+scoped to one session and target, while cross-session requests retain renderer
+observation order.
+Every client that observes the event reconciles it against its local ordering
+barriers; the tool does not promise cross-device synchronization.
 
 ## Per-Turn Product Context
 

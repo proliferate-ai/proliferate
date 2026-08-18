@@ -20,6 +20,7 @@ import {
 } from "#product/lib/domain/preferences/workspace-ui/persisted-shell-tabs";
 import {
   WORKSPACE_PIN_INTENT_RECEIPT_LIMIT,
+  WORKSPACE_PIN_LOCAL_BARRIER_LIMIT,
   WORKSPACE_UI_DEFAULTS,
   WORKSPACE_UI_MIGRATION_VERSION,
   type PersistedWorkspaceUiState,
@@ -94,6 +95,17 @@ export function migrateWorkspaceUiState(
     !== JSON.stringify(state.workspacePinIntentReceiptByTarget)
   ) {
     state.workspacePinIntentReceiptByTarget = workspacePinIntentReceiptByTarget;
+    didMigrate = true;
+  }
+
+  const workspacePinLocalBarrierById = sanitizeWorkspacePinLocalBarriers(
+    state.workspacePinLocalBarrierById,
+  );
+  if (
+    JSON.stringify(workspacePinLocalBarrierById)
+    !== JSON.stringify(state.workspacePinLocalBarrierById)
+  ) {
+    state.workspacePinLocalBarrierById = workspacePinLocalBarrierById;
     didMigrate = true;
   }
 
@@ -281,5 +293,31 @@ function sanitizeWorkspacePinIntentReceipts(
         && Number.isSafeInteger(candidate.seq)
         && candidate.seq >= 0;
     }).slice(-WORKSPACE_PIN_INTENT_RECEIPT_LIMIT),
+  );
+}
+
+function sanitizeWorkspacePinLocalBarriers(
+  value: unknown,
+): PersistedWorkspaceUiState["workspacePinLocalBarrierById"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(value).filter(([workspaceId, order]) => {
+      if (
+        workspaceId.trim().length === 0
+        || !order
+        || typeof order !== "object"
+        || Array.isArray(order)
+      ) {
+        return false;
+      }
+      const candidate = order as Record<string, unknown>;
+      return typeof candidate.rendererEpoch === "string"
+        && candidate.rendererEpoch.trim().length > 0
+        && typeof candidate.sequence === "number"
+        && Number.isSafeInteger(candidate.sequence)
+        && candidate.sequence > 0;
+    }).slice(-WORKSPACE_PIN_LOCAL_BARRIER_LIMIT),
   );
 }

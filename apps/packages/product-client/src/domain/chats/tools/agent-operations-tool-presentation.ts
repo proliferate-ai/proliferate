@@ -245,9 +245,9 @@ function actionLabel(
     case "create_workspace":
       return running ? "Creating workspace" : failed ? "Failed to create workspace" : "Created workspace";
     case "pin_workspace":
-      return running ? "Pinning workspace" : failed ? "Failed to pin workspace" : "Pinned workspace";
+      return running ? "Pinning workspace" : failed ? "Failed to pin workspace" : "Requested pin";
     case "unpin_workspace":
-      return running ? "Unpinning workspace" : failed ? "Failed to unpin workspace" : "Unpinned workspace";
+      return running ? "Unpinning workspace" : failed ? "Failed to unpin workspace" : "Requested unpin";
     case "create_agent":
       return running ? "Creating agent" : failed ? "Failed to create agent" : "Created agent";
     case "configure_agent":

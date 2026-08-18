@@ -1,13 +1,12 @@
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Instant;
 
 use anyharness_contract::v1::SessionExecutionPhase;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::mpsc;
 
 use crate::live::sessions::actor::command::SessionCommand;
 use crate::live::sessions::actor::state::{SessionActor, SessionActorConfig};
-use crate::live::sessions::handle::{LiveSessionExecutionSnapshot, LiveSessionHandle};
+use crate::live::sessions::handle::LiveSessionHandle;
 
 pub struct ActorReadyResult {
     pub native_session_id: String,
@@ -83,20 +82,16 @@ pub fn spawn_session_actor_pending(
     );
     let (command_tx, command_rx) = mpsc::channel::<SessionCommand>(32);
     let event_tx = config.event_tx.clone();
-    let busy = Arc::new(AtomicBool::new(false));
-    let execution = Arc::new(RwLock::new(LiveSessionExecutionSnapshot::new(
-        SessionExecutionPhase::Starting,
-    )));
-
-    let handle = Arc::new(LiveSessionHandle {
-        session_id: session_id.clone(),
+    let handle = Arc::new(LiveSessionHandle::new(
+        session_id.clone(),
         command_tx,
-        event_tx: event_tx.clone(),
-        busy: busy.clone(),
-        execution,
-        native_session_id: Arc::new(std::sync::RwLock::new(None)),
-    });
+        event_tx.clone(),
+        None,
+        SessionExecutionPhase::Starting,
+    ));
     let actor_handle = handle.clone();
+    let event_sequence_releaser = handle.event_sequence_releaser();
+    let actor_finished_releaser = handle.actor_finished_releaser();
 
     let (ready_tx, ready_rx) = std::sync::mpsc::channel::<anyhow::Result<String>>();
 
@@ -108,6 +103,8 @@ pub fn spawn_session_actor_pending(
             &session_id[..8.min(session_id.len())]
         ))
         .spawn(move || {
+            let event_sequence_releaser = event_sequence_releaser;
+            let actor_finished_releaser = actor_finished_releaser;
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -130,9 +127,11 @@ pub fn spawn_session_actor_pending(
                     }
                 }
             });
+            drop(event_sequence_releaser);
             if let Some(cb) = on_exit {
                 cb(errored);
             }
+            drop(actor_finished_releaser);
         })?;
 
     Ok(PendingSessionActor {

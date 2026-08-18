@@ -6,6 +6,9 @@ import type {
   WorkspaceUiSet,
   WorkspaceUiState,
 } from "#product/stores/preferences/workspace-ui-store-types";
+import {
+  recordBoundedWorkspacePinLocalBarriers,
+} from "#product/stores/preferences/workspace-ui-pin-local-barriers";
 
 type WorkspaceUiPinIntentActions = Pick<
   WorkspaceUiState,
@@ -20,8 +23,9 @@ export function createWorkspaceUiPinIntentActions(
       set((state) => {
         let pinnedWorkspaceIds = state.pinnedWorkspaceIds;
         let receiptByTarget = state.workspacePinIntentReceiptByTarget;
-        let didApply = false;
-        for (const intent of [...intents].sort((left, right) => left.seq - right.seq)) {
+        let localBarrierById = state.workspacePinLocalBarrierById;
+        let didRecord = false;
+        for (const intent of intents) {
           const targetKey = workspacePinIntentTargetKey(
             intent.runtimeId,
             intent.sessionId,
@@ -37,30 +41,61 @@ export function createWorkspaceUiPinIntentActions(
           ) {
             continue;
           }
-          if (intent.pinned) {
-            if (!intent.relatedIds.some((id) => pinnedWorkspaceIds.includes(id))) {
-              pinnedWorkspaceIds = [...pinnedWorkspaceIds, intent.pinId];
+          const workspaceIds = [intent.pinId, ...intent.relatedIds];
+          const isBlocked = isBlockedByLocalBarrier(
+            intent,
+            localBarrierById,
+            workspaceIds,
+          );
+          if (!isBlocked) {
+            if (intent.pinned) {
+              if (!intent.relatedIds.some((id) => pinnedWorkspaceIds.includes(id))) {
+                pinnedWorkspaceIds = [...pinnedWorkspaceIds, intent.pinId];
+              }
+            } else {
+              const relatedIds = new Set(intent.relatedIds);
+              pinnedWorkspaceIds = pinnedWorkspaceIds.filter((id) => !relatedIds.has(id));
             }
-          } else {
-            const relatedIds = new Set(intent.relatedIds);
-            pinnedWorkspaceIds = pinnedWorkspaceIds.filter((id) => !relatedIds.has(id));
+          }
+          if (!isBlocked && intent.provenance === "live") {
+            localBarrierById = recordBoundedWorkspacePinLocalBarriers(
+              localBarrierById,
+              workspaceIds,
+              intent.observedAt,
+            );
           }
           receiptByTarget = recordBoundedReceipt(receiptByTarget, targetKey, {
             requestId: intent.requestId,
             seq: intent.seq,
           });
-          didApply = true;
+          didRecord = true;
         }
-        if (!didApply) {
+        if (!didRecord) {
           return {};
         }
         return {
           pinnedWorkspaceIds,
           workspacePinIntentReceiptByTarget: receiptByTarget,
+          workspacePinLocalBarrierById: localBarrierById,
         };
       });
     },
   };
+}
+
+function isBlockedByLocalBarrier(
+  intent: Parameters<WorkspaceUiState["applyWorkspacePinIntentBatch"]>[0][number],
+  barriers: WorkspaceUiState["workspacePinLocalBarrierById"],
+  workspaceIds: readonly string[],
+): boolean {
+  const targetBarriers = workspaceIds.flatMap((id) => barriers[id] ?? []);
+  if (intent.provenance === "history") {
+    return targetBarriers.length > 0;
+  }
+  return targetBarriers.some((barrier) => (
+    barrier.rendererEpoch === intent.observedAt.rendererEpoch
+    && barrier.sequence >= intent.observedAt.sequence
+  ));
 }
 
 function workspacePinIntentTargetKey(

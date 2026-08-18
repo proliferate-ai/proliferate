@@ -239,8 +239,8 @@ describe("deriveAgentOperationsReceiptPresentation", () => {
   });
 
   it.each([
-    ["pin_workspace", true, "Pinned workspace"],
-    ["unpin_workspace", false, "Unpinned workspace"],
+    ["pin_workspace", true, "Requested pin"],
+    ["unpin_workspace", false, "Requested unpin"],
   ] as const)("reads %s from its requested workspace envelope", (action, pinned, actionLabel) => {
     expect(deriveAgentOperationsReceiptPresentation(item(action, {
       rawInput: { workspaceId: "workspace-2" },

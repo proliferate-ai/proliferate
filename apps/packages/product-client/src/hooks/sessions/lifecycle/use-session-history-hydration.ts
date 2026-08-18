@@ -163,7 +163,7 @@ export function useSessionHistoryHydration() {
         });
 
         if (!nextState.applied) {
-          dispatchWorkspacePinIntentEnvelopes(events);
+          dispatchWorkspacePinIntentEnvelopes(events, "history");
           const mountStartedAt = performance.now();
           if (!await reconcileHydratedSubagents({
             sessionId,
@@ -197,7 +197,7 @@ export function useSessionHistoryHydration() {
           transcript: nextState.state.transcript,
           reconcileEnvelopes: events,
         });
-        dispatchWorkspacePinIntentEnvelopes(events);
+        dispatchWorkspacePinIntentEnvelopes(events, "history");
         recordHistoryApplyStepMetrics(historyApplyOperationIds, {
           phase: "store",
           startedAt: storeStartedAt,
@@ -256,7 +256,7 @@ export function useSessionHistoryHydration() {
           transcript: nextState.transcript,
           reconcileEnvelopes: events,
         });
-        dispatchWorkspacePinIntentEnvelopes(events);
+        dispatchWorkspacePinIntentEnvelopes(events, "history");
         recordHistoryApplyStepMetrics(historyApplyOperationIds, {
           phase: "store",
           startedAt: storeStartedAt,
@@ -313,7 +313,7 @@ export function useSessionHistoryHydration() {
         transcript: nextState.transcript,
         reconcileEnvelopes: replacementEvents,
       });
-      dispatchWorkspacePinIntentEnvelopes(replacementEvents);
+      dispatchWorkspacePinIntentEnvelopes(replacementEvents, "history");
       recordHistoryApplyStepMetrics(historyApplyOperationIds, {
         phase: "store",
         startedAt: storeStartedAt,

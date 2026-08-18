@@ -1,4 +1,5 @@
 import type { SessionEventEnvelope } from "@anyharness/sdk";
+import type { WorkspacePinLocalOrder } from "#product/lib/domain/preferences/workspace-ui/model";
 import {
   findLogicalWorkspace,
   logicalWorkspaceRelatedIds,
@@ -14,7 +15,14 @@ export interface WorkspacePinIntent {
   pinned: boolean;
 }
 
-export interface ResolvedWorkspacePinIntent extends WorkspacePinIntent {
+export type WorkspacePinIntentProvenance = "history" | "live";
+
+export interface ObservedWorkspacePinIntent extends WorkspacePinIntent {
+  observedAt: WorkspacePinLocalOrder;
+  provenance: WorkspacePinIntentProvenance;
+}
+
+export interface ResolvedWorkspacePinIntent extends ObservedWorkspacePinIntent {
   pinId: string;
   relatedIds: string[];
 }
@@ -58,7 +66,7 @@ export function workspacePinIntentForEnvelope(
 }
 
 export function resolveWorkspacePinIntent(
-  intent: WorkspacePinIntent,
+  intent: ObservedWorkspacePinIntent,
   logicalWorkspaces: readonly LogicalWorkspace[],
 ): ResolvedWorkspacePinIntent | null {
   const logicalWorkspace = findLogicalWorkspace(logicalWorkspaces, intent.workspaceId);

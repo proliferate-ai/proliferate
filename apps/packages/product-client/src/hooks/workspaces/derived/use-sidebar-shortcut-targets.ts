@@ -38,12 +38,14 @@ export function useSidebarShortcutTargets(): SidebarShortcutTargets {
     pinnedWorkspaceIds,
     hiddenRepoRootIds,
     collapsedRepoGroups,
+    repositoriesCollapsed,
     workspaceTypes,
     workspaceLastInteracted,
   } = useWorkspaceUiStore(useShallow((state) => ({
     pinnedWorkspaceIds: state.pinnedWorkspaceIds,
     hiddenRepoRootIds: state.hiddenRepoRootIds,
     collapsedRepoGroups: state.collapsedRepoGroups,
+    repositoriesCollapsed: state.repositoriesCollapsed,
     workspaceTypes: state.workspaceTypes,
     workspaceLastInteracted: state.workspaceLastInteracted,
   })));
@@ -103,17 +105,20 @@ export function useSidebarShortcutTargets(): SidebarShortcutTargets {
       collapsedRepoGroupKeys,
       repoGroupsShownMore: repoGroupsShownMoreKeys,
       itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+      repositoriesCollapsed,
     }),
     traversalTargetIds: visibleSidebarShortcutTargetIds({
       groups,
       collapsedRepoGroupKeys,
       repoGroupsShownMore: repoGroupsShownMoreKeys,
       itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+      repositoriesCollapsed,
     }),
   }), [
     collapsedRepoGroupKeys,
     groups,
     pinnedWorkspaceIds,
     repoGroupsShownMoreKeys,
+    repositoriesCollapsed,
   ]);
 }

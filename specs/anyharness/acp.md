@@ -177,6 +177,10 @@ To prevent duplicate seq values:
 - live runtime event injection routes through `SessionCommand::InjectRuntimeEvent`
   so the actor’s `SessionEventSink` remains the only seq owner while the actor
   is live.
+- a closed actor mailbox is not itself a sequencing handoff: stale-handle
+  fallback waits for that exact actor generation to finish its final event
+  writes, then re-checks the registry before either routing through a
+  replacement generation or appending offline.
 
 This lock is a process-local critical section. It must cover both the final
 live-handle check and the durable seq read/append.
