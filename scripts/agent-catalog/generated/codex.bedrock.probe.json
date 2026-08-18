@@ -1,62 +1,62 @@
 {
-  "probedAt": "2026-07-17T20:49:47.676715+00:00",
+  "probedAt": "2026-08-16T11:54:52.840296+00:00",
   "agentKind": "codex",
   "authContext": "bedrock",
   "attestation": {
-    "name": "codex-acp",
-    "version": "0.18.3-proliferate.1",
+    "name": "@proliferate/codex-acp",
+    "version": "1.1.14-proliferate.1",
     "title": "Codex"
   },
   "modelSource": "modelConfigOption",
   "nativeCli": {
     "path": "/Users/pablohansen/.proliferate-local/anyharness/agents/codex/native/codex",
-    "version": "codex-cli 0.144.5"
+    "version": "codex-cli 0.147.0"
   },
   "trials": [],
   "currentModelId": null,
-  "currentModeId": "read-only",
+  "currentModeId": "agent",
   "modes": {
     "availableModes": [
       {
-        "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+        "description": "Requires approval to edit files and run commands.",
         "id": "read-only",
-        "name": "Read Only"
+        "name": "Read-only"
       },
       {
-        "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
-        "id": "auto",
-        "name": "Default"
+        "description": "Read and edit files, and run commands.",
+        "id": "agent",
+        "name": "Agent"
       },
       {
-        "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
-        "id": "full-access",
-        "name": "Full Access"
+        "description": "Codex can edit files outside this workspace and run commands with network access. Exercise caution when using.",
+        "id": "agent-full-access",
+        "name": "Agent (full access)"
       }
     ],
-    "currentModeId": "read-only"
+    "currentModeId": "agent"
   },
   "baselineConfigOptions": [
     {
       "category": "mode",
-      "currentValue": "read-only",
-      "description": "Choose an approval and sandboxing preset for your session",
+      "currentValue": "agent",
+      "description": "Approval and sandboxing preset for the session",
       "id": "mode",
-      "name": "Approval Preset",
+      "name": "Mode",
       "options": [
         {
-          "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
-          "name": "Read Only",
+          "description": "Requires approval to edit files and run commands.",
+          "name": "Read-only",
           "value": "read-only"
         },
         {
-          "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
-          "name": "Default",
-          "value": "auto"
+          "description": "Read and edit files, and run commands.",
+          "name": "Agent",
+          "value": "agent"
         },
         {
-          "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
-          "name": "Full Access",
-          "value": "full-access"
+          "description": "Codex can edit files outside this workspace and run commands with network access. Exercise caution when using.",
+          "name": "Agent (full access)",
+          "value": "agent-full-access"
         }
       ],
       "type": "select"
@@ -64,12 +64,11 @@
     {
       "category": "collaboration_mode",
       "currentValue": "default",
-      "description": "Choose whether Codex should work in default or planning mode",
+      "description": "How Codex collaborates for subsequent turns",
       "id": "collaboration_mode",
-      "name": "Collaboration Mode",
+      "name": "Collaboration mode",
       "options": [
         {
-          "description": "Work directly on the task",
           "name": "Default",
           "value": "default"
         },
@@ -84,13 +83,28 @@
     {
       "category": "model",
       "currentValue": "openai.gpt-oss-120b",
-      "description": "Choose which model Codex should use",
+      "description": "Model Codex uses for the session",
       "id": "model",
       "name": "Model",
       "options": [
         {
           "name": "openai.gpt-oss-120b",
           "value": "openai.gpt-oss-120b"
+        },
+        {
+          "description": "Latest frontier agentic coding model.",
+          "name": "GPT-5.6 Sol",
+          "value": "openai.gpt-5.6-sol"
+        },
+        {
+          "description": "Balanced agentic coding model for everyday work.",
+          "name": "GPT-5.6 Terra",
+          "value": "openai.gpt-5.6-terra"
+        },
+        {
+          "description": "Fast and affordable agentic coding model.",
+          "name": "GPT-5.6 Luna",
+          "value": "openai.gpt-5.6-luna"
         },
         {
           "description": "Frontier model for complex coding, research, and real-world work.",
@@ -101,21 +115,6 @@
           "description": "Strong model for everyday coding.",
           "name": "GPT-5.4",
           "value": "openai.gpt-5.4"
-        },
-        {
-          "description": "Frontier model for complex coding, research, and real-world work.",
-          "name": "GPT-5.6 Sol",
-          "value": "openai.gpt-5.6-sol"
-        },
-        {
-          "description": "Frontier model for complex coding, research, and real-world work.",
-          "name": "GPT-5.6 Terra",
-          "value": "openai.gpt-5.6-terra"
-        },
-        {
-          "description": "Frontier model for complex coding, research, and real-world work.",
-          "name": "GPT-5.6 Luna",
-          "value": "openai.gpt-5.6-luna"
         }
       ],
       "type": "select"
@@ -129,25 +128,25 @@
       "configOptions": [
         {
           "category": "mode",
-          "currentValue": "read-only",
-          "description": "Choose an approval and sandboxing preset for your session",
+          "currentValue": "agent",
+          "description": "Approval and sandboxing preset for the session",
           "id": "mode",
-          "name": "Approval Preset",
+          "name": "Mode",
           "options": [
             {
-              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
-              "name": "Read Only",
+              "description": "Requires approval to edit files and run commands.",
+              "name": "Read-only",
               "value": "read-only"
             },
             {
-              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
-              "name": "Default",
-              "value": "auto"
+              "description": "Read and edit files, and run commands.",
+              "name": "Agent",
+              "value": "agent"
             },
             {
-              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
-              "name": "Full Access",
-              "value": "full-access"
+              "description": "Codex can edit files outside this workspace and run commands with network access. Exercise caution when using.",
+              "name": "Agent (full access)",
+              "value": "agent-full-access"
             }
           ],
           "type": "select"
@@ -155,12 +154,11 @@
         {
           "category": "collaboration_mode",
           "currentValue": "default",
-          "description": "Choose whether Codex should work in default or planning mode",
+          "description": "How Codex collaborates for subsequent turns",
           "id": "collaboration_mode",
-          "name": "Collaboration Mode",
+          "name": "Collaboration mode",
           "options": [
             {
-              "description": "Work directly on the task",
               "name": "Default",
               "value": "default"
             },
@@ -175,225 +173,41 @@
         {
           "category": "model",
           "currentValue": "openai.gpt-oss-120b",
-          "description": "Choose which model Codex should use",
+          "description": "Model Codex uses for the session",
           "id": "model",
           "name": "Model",
           "options": [],
           "type": "select",
           "valuesElided": true
-        }
-      ]
-    },
-    {
-      "modelId": "openai.gpt-5.5",
-      "name": "GPT-5.5",
-      "description": "Frontier model for complex coding, research, and real-world work.",
-      "configOptions": [
-        {
-          "category": "mode",
-          "currentValue": "read-only",
-          "description": "Choose an approval and sandboxing preset for your session",
-          "id": "mode",
-          "name": "Approval Preset",
-          "options": [
-            {
-              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
-              "name": "Read Only",
-              "value": "read-only"
-            },
-            {
-              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
-              "name": "Default",
-              "value": "auto"
-            },
-            {
-              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
-              "name": "Full Access",
-              "value": "full-access"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "collaboration_mode",
-          "currentValue": "default",
-          "description": "Choose whether Codex should work in default or planning mode",
-          "id": "collaboration_mode",
-          "name": "Collaboration Mode",
-          "options": [
-            {
-              "description": "Work directly on the task",
-              "name": "Default",
-              "value": "default"
-            },
-            {
-              "description": "Plan before making changes",
-              "name": "Plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "model",
-          "currentValue": "openai.gpt-5.5",
-          "description": "Choose which model Codex should use",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "medium",
-          "description": "Choose how much reasoning effort the model should use",
-          "id": "reasoning_effort",
-          "name": "Reasoning Effort",
-          "options": [
-            {
-              "description": "Fast responses with lighter reasoning",
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "description": "Balances speed and reasoning depth for everyday tasks",
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "description": "Greater reasoning depth for complex problems",
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "description": "Extra high reasoning depth for complex problems",
-              "name": "Xhigh",
-              "value": "xhigh"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai.gpt-5.4",
-      "name": "GPT-5.4",
-      "description": "Strong model for everyday coding.",
-      "configOptions": [
-        {
-          "category": "mode",
-          "currentValue": "read-only",
-          "description": "Choose an approval and sandboxing preset for your session",
-          "id": "mode",
-          "name": "Approval Preset",
-          "options": [
-            {
-              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
-              "name": "Read Only",
-              "value": "read-only"
-            },
-            {
-              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
-              "name": "Default",
-              "value": "auto"
-            },
-            {
-              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
-              "name": "Full Access",
-              "value": "full-access"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "collaboration_mode",
-          "currentValue": "default",
-          "description": "Choose whether Codex should work in default or planning mode",
-          "id": "collaboration_mode",
-          "name": "Collaboration Mode",
-          "options": [
-            {
-              "description": "Work directly on the task",
-              "name": "Default",
-              "value": "default"
-            },
-            {
-              "description": "Plan before making changes",
-              "name": "Plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "model",
-          "currentValue": "openai.gpt-5.4",
-          "description": "Choose which model Codex should use",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "medium",
-          "description": "Choose how much reasoning effort the model should use",
-          "id": "reasoning_effort",
-          "name": "Reasoning Effort",
-          "options": [
-            {
-              "description": "Fast responses with lighter reasoning",
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "description": "Balances speed and reasoning depth for everyday tasks",
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "description": "Greater reasoning depth for complex problems",
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "description": "Extra high reasoning depth for complex problems",
-              "name": "Xhigh",
-              "value": "xhigh"
-            }
-          ],
-          "type": "select"
         }
       ]
     },
     {
       "modelId": "openai.gpt-5.6-sol",
       "name": "GPT-5.6 Sol",
-      "description": "Frontier model for complex coding, research, and real-world work.",
+      "description": "Latest frontier agentic coding model.",
       "configOptions": [
         {
           "category": "mode",
-          "currentValue": "read-only",
-          "description": "Choose an approval and sandboxing preset for your session",
+          "currentValue": "agent",
+          "description": "Approval and sandboxing preset for the session",
           "id": "mode",
-          "name": "Approval Preset",
+          "name": "Mode",
           "options": [
             {
-              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
-              "name": "Read Only",
+              "description": "Requires approval to edit files and run commands.",
+              "name": "Read-only",
               "value": "read-only"
             },
             {
-              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
-              "name": "Default",
-              "value": "auto"
+              "description": "Read and edit files, and run commands.",
+              "name": "Agent",
+              "value": "agent"
             },
             {
-              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
-              "name": "Full Access",
-              "value": "full-access"
+              "description": "Codex can edit files outside this workspace and run commands with network access. Exercise caution when using.",
+              "name": "Agent (full access)",
+              "value": "agent-full-access"
             }
           ],
           "type": "select"
@@ -401,12 +215,11 @@
         {
           "category": "collaboration_mode",
           "currentValue": "default",
-          "description": "Choose whether Codex should work in default or planning mode",
+          "description": "How Codex collaborates for subsequent turns",
           "id": "collaboration_mode",
-          "name": "Collaboration Mode",
+          "name": "Collaboration mode",
           "options": [
             {
-              "description": "Work directly on the task",
               "name": "Default",
               "value": "default"
             },
@@ -421,7 +234,7 @@
         {
           "category": "model",
           "currentValue": "openai.gpt-5.6-sol",
-          "description": "Choose which model Codex should use",
+          "description": "Model Codex uses for the session",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -431,9 +244,9 @@
         {
           "category": "thought_level",
           "currentValue": "medium",
-          "description": "Choose how much reasoning effort the model should use",
+          "description": "How much reasoning effort the model should use",
           "id": "reasoning_effort",
-          "name": "Reasoning Effort",
+          "name": "Reasoning effort",
           "options": [
             {
               "description": "Fast responses with lighter reasoning",
@@ -468,29 +281,29 @@
     {
       "modelId": "openai.gpt-5.6-terra",
       "name": "GPT-5.6 Terra",
-      "description": "Frontier model for complex coding, research, and real-world work.",
+      "description": "Balanced agentic coding model for everyday work.",
       "configOptions": [
         {
           "category": "mode",
-          "currentValue": "read-only",
-          "description": "Choose an approval and sandboxing preset for your session",
+          "currentValue": "agent",
+          "description": "Approval and sandboxing preset for the session",
           "id": "mode",
-          "name": "Approval Preset",
+          "name": "Mode",
           "options": [
             {
-              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
-              "name": "Read Only",
+              "description": "Requires approval to edit files and run commands.",
+              "name": "Read-only",
               "value": "read-only"
             },
             {
-              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
-              "name": "Default",
-              "value": "auto"
+              "description": "Read and edit files, and run commands.",
+              "name": "Agent",
+              "value": "agent"
             },
             {
-              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
-              "name": "Full Access",
-              "value": "full-access"
+              "description": "Codex can edit files outside this workspace and run commands with network access. Exercise caution when using.",
+              "name": "Agent (full access)",
+              "value": "agent-full-access"
             }
           ],
           "type": "select"
@@ -498,12 +311,11 @@
         {
           "category": "collaboration_mode",
           "currentValue": "default",
-          "description": "Choose whether Codex should work in default or planning mode",
+          "description": "How Codex collaborates for subsequent turns",
           "id": "collaboration_mode",
-          "name": "Collaboration Mode",
+          "name": "Collaboration mode",
           "options": [
             {
-              "description": "Work directly on the task",
               "name": "Default",
               "value": "default"
             },
@@ -518,7 +330,7 @@
         {
           "category": "model",
           "currentValue": "openai.gpt-5.6-terra",
-          "description": "Choose which model Codex should use",
+          "description": "Model Codex uses for the session",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -528,9 +340,9 @@
         {
           "category": "thought_level",
           "currentValue": "medium",
-          "description": "Choose how much reasoning effort the model should use",
+          "description": "How much reasoning effort the model should use",
           "id": "reasoning_effort",
-          "name": "Reasoning Effort",
+          "name": "Reasoning effort",
           "options": [
             {
               "description": "Fast responses with lighter reasoning",
@@ -565,29 +377,29 @@
     {
       "modelId": "openai.gpt-5.6-luna",
       "name": "GPT-5.6 Luna",
-      "description": "Frontier model for complex coding, research, and real-world work.",
+      "description": "Fast and affordable agentic coding model.",
       "configOptions": [
         {
           "category": "mode",
-          "currentValue": "read-only",
-          "description": "Choose an approval and sandboxing preset for your session",
+          "currentValue": "agent",
+          "description": "Approval and sandboxing preset for the session",
           "id": "mode",
-          "name": "Approval Preset",
+          "name": "Mode",
           "options": [
             {
-              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
-              "name": "Read Only",
+              "description": "Requires approval to edit files and run commands.",
+              "name": "Read-only",
               "value": "read-only"
             },
             {
-              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
-              "name": "Default",
-              "value": "auto"
+              "description": "Read and edit files, and run commands.",
+              "name": "Agent",
+              "value": "agent"
             },
             {
-              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
-              "name": "Full Access",
-              "value": "full-access"
+              "description": "Codex can edit files outside this workspace and run commands with network access. Exercise caution when using.",
+              "name": "Agent (full access)",
+              "value": "agent-full-access"
             }
           ],
           "type": "select"
@@ -595,12 +407,11 @@
         {
           "category": "collaboration_mode",
           "currentValue": "default",
-          "description": "Choose whether Codex should work in default or planning mode",
+          "description": "How Codex collaborates for subsequent turns",
           "id": "collaboration_mode",
-          "name": "Collaboration Mode",
+          "name": "Collaboration mode",
           "options": [
             {
-              "description": "Work directly on the task",
               "name": "Default",
               "value": "default"
             },
@@ -615,7 +426,7 @@
         {
           "category": "model",
           "currentValue": "openai.gpt-5.6-luna",
-          "description": "Choose which model Codex should use",
+          "description": "Model Codex uses for the session",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -625,9 +436,9 @@
         {
           "category": "thought_level",
           "currentValue": "medium",
-          "description": "Choose how much reasoning effort the model should use",
+          "description": "How much reasoning effort the model should use",
           "id": "reasoning_effort",
-          "name": "Reasoning Effort",
+          "name": "Reasoning effort",
           "options": [
             {
               "description": "Fast responses with lighter reasoning",
@@ -653,6 +464,188 @@
               "description": "Maximum reasoning depth for the hardest problems",
               "name": "Max",
               "value": "max"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "openai.gpt-5.5",
+      "name": "GPT-5.5",
+      "description": "Frontier model for complex coding, research, and real-world work.",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Approval and sandboxing preset for the session",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Requires approval to edit files and run commands.",
+              "name": "Read-only",
+              "value": "read-only"
+            },
+            {
+              "description": "Read and edit files, and run commands.",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and run commands with network access. Exercise caution when using.",
+              "name": "Agent (full access)",
+              "value": "agent-full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "How Codex collaborates for subsequent turns",
+          "id": "collaboration_mode",
+          "name": "Collaboration mode",
+          "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
+            {
+              "description": "Plan before making changes",
+              "name": "Plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "openai.gpt-5.5",
+          "description": "Model Codex uses for the session",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "medium",
+          "description": "How much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning effort",
+          "options": [
+            {
+              "description": "Fast responses with lighter reasoning",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Balances speed and reasoning depth for everyday tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Greater reasoning depth for complex problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning depth for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "openai.gpt-5.4",
+      "name": "GPT-5.4",
+      "description": "Strong model for everyday coding.",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Approval and sandboxing preset for the session",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Requires approval to edit files and run commands.",
+              "name": "Read-only",
+              "value": "read-only"
+            },
+            {
+              "description": "Read and edit files, and run commands.",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and run commands with network access. Exercise caution when using.",
+              "name": "Agent (full access)",
+              "value": "agent-full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "How Codex collaborates for subsequent turns",
+          "id": "collaboration_mode",
+          "name": "Collaboration mode",
+          "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
+            {
+              "description": "Plan before making changes",
+              "name": "Plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "openai.gpt-5.4",
+          "description": "Model Codex uses for the session",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "medium",
+          "description": "How much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning effort",
+          "options": [
+            {
+              "description": "Fast responses with lighter reasoning",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Balances speed and reasoning depth for everyday tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Greater reasoning depth for complex problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning depth for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
             }
           ],
           "type": "select"

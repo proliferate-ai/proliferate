@@ -50,7 +50,7 @@ fn active_catalog_surfaces_only_declared_unattended_modes() {
     raw["agents"][0]["session"]["unattendedModeId"] =
         serde_json::Value::String("bypassPermissions".to_string());
     raw["agents"][1]["session"]["unattendedModeId"] =
-        serde_json::Value::String("full-access".to_string());
+        serde_json::Value::String("agent-full-access".to_string());
     raw["agents"][2]["session"]
         .as_object_mut()
         .expect("cursor session")
@@ -63,7 +63,7 @@ fn active_catalog_surfaces_only_declared_unattended_modes() {
         catalog.unattended_mode_id("claude"),
         Some("bypassPermissions")
     );
-    assert_eq!(catalog.unattended_mode_id("codex"), Some("full-access"));
+    assert_eq!(catalog.unattended_mode_id("codex"), Some("agent-full-access"));
     assert_eq!(catalog.unattended_mode_id("cursor"), None);
     assert_eq!(catalog.unattended_mode_id("unknown"), None);
 }
@@ -73,10 +73,10 @@ fn pins_surface_catalog_harness_versions() {
     let catalog = draft_catalog();
 
     let claude = catalog.pins("claude").expect("claude pins");
-    assert_eq!(claude.agent_process.version, "0.59.0-proliferate.1");
+    assert_eq!(claude.agent_process.version, "0.66.0-proliferate.2");
     assert_eq!(
         claude.native.as_ref().map(|pin| pin.version.as_str()),
-        Some("2.1.212")
+        Some("2.1.234")
     );
 
     // Cursor has no native pin; unknown kinds have no pins at all.
@@ -144,13 +144,13 @@ fn models_intersect_availability_with_active_contexts() {
             "claude-opus-4-8"
         ]
     );
+    // claude-fable-5 is api-only: the 2.1.234 oauth trial launch was refused.
     assert_eq!(
         model_ids(catalog.models("claude", &contexts(&["anthropic-oauth"]))),
         vec![
             "default",
             "sonnet",
             "haiku",
-            "claude-fable-5",
             "claude-opus-4-8",
             "opus"
         ]
@@ -186,10 +186,11 @@ fn baseline_counts_as_a_context_when_active() {
 fn visible_models_are_the_default_visible_subset_of_available() {
     let catalog = draft_catalog();
 
-    // claude-fable-5 and claude-opus-4-8 are oauth/api-only (the us.anthropic.*
-    // Bedrock variants are unavailable here), so they are NOT gateway duplicates
-    // and stay visible on native/api — an OAuth login serves them and this is
-    // the only form it can use.
+    // claude-opus-4-8 is oauth/api-only (the us.anthropic.* Bedrock variants
+    // are unavailable here), so it is NOT a gateway duplicate and stays
+    // visible on native/api — an OAuth login serves it and this is the only
+    // form it can use. claude-fable-5 dropped out of oauth availability when
+    // the 2.1.234 oauth probe's trial launch of it was refused.
     let available = model_ids(catalog.models("claude", &contexts(&["anthropic-oauth"])));
     assert!(available.contains(&"claude-opus-4-8"));
     assert_eq!(
@@ -198,7 +199,6 @@ fn visible_models_are_the_default_visible_subset_of_available() {
             "default",
             "sonnet",
             "haiku",
-            "claude-fable-5",
             "claude-opus-4-8",
             "opus"
         ]

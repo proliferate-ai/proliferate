@@ -1,16 +1,16 @@
 {
-  "probedAt": "2026-07-17T20:46:58.500864+00:00",
+  "probedAt": "2026-08-17T20:42:06.076672+00:00",
   "agentKind": "claude",
   "authContext": "anthropic-api",
   "attestation": {
     "name": "@proliferate/claude-agent-acp",
-    "version": "0.59.0-proliferate.1",
+    "version": "0.66.0-proliferate.2",
     "title": "Claude Agent"
   },
   "modelSource": "modelConfigOption",
   "nativeCli": {
     "path": "/Users/pablohansen/.proliferate-local/anyharness/agents/claude/native/claude",
-    "version": "2.1.212 (Claude Code)"
+    "version": "2.1.234 (Claude Code)"
   },
   "trials": [
     {
@@ -66,13 +66,13 @@
           "name": "Model",
           "options": [
             {
-              "description": "Use the default model (currently Opus 4.8 (1M context)) · $5/$25 per Mtok",
+              "description": "Use the default model (currently Opus 5 (1M context)) · $5/$25 per Mtok",
               "name": "Default (recommended)",
               "value": "default"
             },
             {
-              "description": "Opus 4.8 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
-              "name": "Opus",
+              "description": "Opus 5 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
+              "name": "Opus (1M context)",
               "value": "opus[1m]"
             },
             {
@@ -132,6 +132,7 @@
     {
       "modelId": "claude-opus-4-8",
       "accepted": true,
+      "name": "Opus 4.8",
       "configOptions": [
         {
           "category": "mode",
@@ -175,19 +176,19 @@
         },
         {
           "category": "model",
-          "currentValue": "opus[1m]",
+          "currentValue": "claude-opus-4-8",
           "description": "AI model to use",
           "id": "model",
           "name": "Model",
           "options": [
             {
-              "description": "Use the default model (currently Opus 4.8 (1M context)) · $5/$25 per Mtok",
+              "description": "Use the default model (currently Opus 5 (1M context)) · $5/$25 per Mtok",
               "name": "Default (recommended)",
               "value": "default"
             },
             {
-              "description": "Opus 4.8 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
-              "name": "Opus",
+              "description": "Opus 5 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
+              "name": "Opus (1M context)",
               "value": "opus[1m]"
             },
             {
@@ -199,6 +200,11 @@
               "description": "Haiku 4.5 · Fastest for quick answers · $1/$5 per Mtok",
               "name": "Haiku",
               "value": "haiku"
+            },
+            {
+              "description": "Newer version available · select Opus for Opus 5",
+              "name": "Opus 4.8",
+              "value": "claude-opus-4-8"
             }
           ],
           "type": "select"
@@ -344,13 +350,13 @@
       "name": "Model",
       "options": [
         {
-          "description": "Use the default model (currently Opus 4.8 (1M context)) · $5/$25 per Mtok",
+          "description": "Use the default model (currently Opus 5 (1M context)) · $5/$25 per Mtok",
           "name": "Default (recommended)",
           "value": "default"
         },
         {
-          "description": "Opus 4.8 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
-          "name": "Opus",
+          "description": "Opus 5 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
+          "name": "Opus (1M context)",
           "value": "opus[1m]"
         },
         {
@@ -423,7 +429,7 @@
     {
       "modelId": "default",
       "name": "Default (recommended)",
-      "description": "Use the default model (currently Opus 4.8 (1M context)) · $5/$25 per Mtok",
+      "description": "Use the default model (currently Opus 5 (1M context)) · $5/$25 per Mtok",
       "configOptions": [
         {
           "category": "mode",
@@ -531,8 +537,8 @@
     },
     {
       "modelId": "opus[1m]",
-      "name": "Opus",
-      "description": "Opus 4.8 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
+      "name": "Opus (1M context)",
+      "description": "Opus 5 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
       "configOptions": [
         {
           "category": "mode",

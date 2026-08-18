@@ -1,16 +1,16 @@
 {
-  "probedAt": "2026-07-17T20:48:49.740807+00:00",
+  "probedAt": "2026-08-17T20:42:09.068225+00:00",
   "agentKind": "claude",
   "authContext": "bedrock",
   "attestation": {
     "name": "@proliferate/claude-agent-acp",
-    "version": "0.59.0-proliferate.1",
+    "version": "0.66.0-proliferate.2",
     "title": "Claude Agent"
   },
   "modelSource": "modelConfigOption",
   "nativeCli": {
     "path": "/Users/pablohansen/.proliferate-local/anyharness/agents/claude/native/claude",
-    "version": "2.1.212 (Claude Code)"
+    "version": "2.1.234 (Claude Code)"
   },
   "trials": [
     {
@@ -66,7 +66,7 @@
           "name": "Model",
           "options": [
             {
-              "description": "Use the default model (currently Opus 4.8)",
+              "description": "Use the default model (currently Opus 5)",
               "name": "Default",
               "value": "default"
             },
@@ -96,13 +96,23 @@
               "value": "us.anthropic.claude-opus-4-1-20250805-v1:0"
             },
             {
-              "description": "Opus 4.8 · Best for everyday, complex tasks",
+              "description": "Opus 5 · Best for everyday, complex tasks",
               "name": "Opus",
+              "value": "us.anthropic.claude-opus-5"
+            },
+            {
+              "description": "Opus 5 for long sessions",
+              "name": "Opus (1M context)",
+              "value": "us.anthropic.claude-opus-5[1m]"
+            },
+            {
+              "description": "Opus 4.8 · Previous Opus version",
+              "name": "Opus 4.8",
               "value": "us.anthropic.claude-opus-4-8"
             },
             {
               "description": "Opus 4.8 for long sessions",
-              "name": "Opus (1M context)",
+              "name": "Opus 4.8 (1M context)",
               "value": "us.anthropic.claude-opus-4-8[1m]"
             },
             {
@@ -381,7 +391,7 @@
       "name": "Model",
       "options": [
         {
-          "description": "Use the default model (currently Opus 4.8)",
+          "description": "Use the default model (currently Opus 5)",
           "name": "Default",
           "value": "default"
         },
@@ -411,13 +421,23 @@
           "value": "us.anthropic.claude-opus-4-1-20250805-v1:0"
         },
         {
-          "description": "Opus 4.8 · Best for everyday, complex tasks",
+          "description": "Opus 5 · Best for everyday, complex tasks",
           "name": "Opus",
+          "value": "us.anthropic.claude-opus-5"
+        },
+        {
+          "description": "Opus 5 for long sessions",
+          "name": "Opus (1M context)",
+          "value": "us.anthropic.claude-opus-5[1m]"
+        },
+        {
+          "description": "Opus 4.8 · Previous Opus version",
+          "name": "Opus 4.8",
           "value": "us.anthropic.claude-opus-4-8"
         },
         {
           "description": "Opus 4.8 for long sessions",
-          "name": "Opus (1M context)",
+          "name": "Opus 4.8 (1M context)",
           "value": "us.anthropic.claude-opus-4-8[1m]"
         },
         {
@@ -487,7 +507,7 @@
     {
       "modelId": "default",
       "name": "Default",
-      "description": "Use the default model (currently Opus 4.8)",
+      "description": "Use the default model (currently Opus 5)",
       "configOptions": [
         {
           "category": "mode",
@@ -974,9 +994,191 @@
       ]
     },
     {
-      "modelId": "us.anthropic.claude-opus-4-8",
+      "modelId": "us.anthropic.claude-opus-5",
       "name": "Opus",
-      "description": "Opus 4.8 · Best for everyday, complex tasks",
+      "description": "Opus 5 · Best for everyday, complex tasks",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "default",
+          "description": "Session permission mode",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Use a model classifier to approve/deny permission prompts",
+              "name": "Auto",
+              "value": "auto"
+            },
+            {
+              "description": "Standard behavior, prompts for dangerous operations",
+              "name": "Manual",
+              "value": "default"
+            },
+            {
+              "description": "Auto-accept file edit operations",
+              "name": "Accept Edits",
+              "value": "acceptEdits"
+            },
+            {
+              "description": "Planning mode, no actual tool execution",
+              "name": "Plan Mode",
+              "value": "plan"
+            },
+            {
+              "description": "Don't prompt for permissions, deny if not pre-approved",
+              "name": "Don't Ask",
+              "value": "dontAsk"
+            },
+            {
+              "description": "Bypass all permission checks",
+              "name": "Bypass Permissions",
+              "value": "bypassPermissions"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "us.anthropic.claude-opus-5",
+          "description": "AI model to use",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "us.anthropic.claude-opus-5[1m]",
+      "name": "Opus (1M context)",
+      "description": "Opus 5 for long sessions",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "default",
+          "description": "Session permission mode",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Use a model classifier to approve/deny permission prompts",
+              "name": "Auto",
+              "value": "auto"
+            },
+            {
+              "description": "Standard behavior, prompts for dangerous operations",
+              "name": "Manual",
+              "value": "default"
+            },
+            {
+              "description": "Auto-accept file edit operations",
+              "name": "Accept Edits",
+              "value": "acceptEdits"
+            },
+            {
+              "description": "Planning mode, no actual tool execution",
+              "name": "Plan Mode",
+              "value": "plan"
+            },
+            {
+              "description": "Don't prompt for permissions, deny if not pre-approved",
+              "name": "Don't Ask",
+              "value": "dontAsk"
+            },
+            {
+              "description": "Bypass all permission checks",
+              "name": "Bypass Permissions",
+              "value": "bypassPermissions"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "us.anthropic.claude-opus-5[1m]",
+          "description": "AI model to use",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "us.anthropic.claude-opus-4-8",
+      "name": "Opus 4.8",
+      "description": "Opus 4.8 · Previous Opus version",
       "configOptions": [
         {
           "category": "mode",
@@ -1066,7 +1268,7 @@
     },
     {
       "modelId": "us.anthropic.claude-opus-4-8[1m]",
-      "name": "Opus (1M context)",
+      "name": "Opus 4.8 (1M context)",
       "description": "Opus 4.8 for long sessions",
       "configOptions": [
         {
