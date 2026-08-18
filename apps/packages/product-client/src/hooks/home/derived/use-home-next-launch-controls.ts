@@ -91,11 +91,14 @@ export function useHomeNextLaunchControls({
       preferences: effectivePreferences,
       onSelect: (
         _agentKind: string,
-        _controlKey: SupportedLiveControlKey,
-        rawConfigId: string,
+        controlKey: SupportedLiveControlKey,
+        _rawConfigId: string,
         value: string,
       ) => {
-        onSelectControl(rawConfigId, value);
+        // Overrides feed back through defaultLiveSessionControlValuesByAgentKind,
+        // which buildLaunchControlDescriptors reads by NORMALIZED key — raw
+        // catalog ids (codex `reasoning_effort`) would never round-trip.
+        onSelectControl(controlKey, value);
       },
     }),
     [effectivePreferences, launchAgents, modelSelection, onSelectControl],
