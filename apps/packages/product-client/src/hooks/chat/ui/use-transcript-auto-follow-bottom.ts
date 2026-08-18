@@ -66,6 +66,13 @@ export interface TranscriptAutoFollowBottom {
   scrollToBottom: () => void;
   /** Snap + re-pin, for the scroll-to-bottom button. */
   handleScrollToBottomClick: () => void;
+  /**
+   * PRO-168 (rung 12, Q16): the same follow-target derivation `scrollToBottom`
+   * writes instantly, exposed as a pure read so the flag-gated eased writer
+   * (use-transcript-frame-pipeline-lifecycle.ts) can resolve a live target
+   * each pass without a second copy of this state machine.
+   */
+  resolveFollowTargetTop: (viewport: HTMLElement) => number;
 }
 
 /**
@@ -189,10 +196,25 @@ export function useTranscriptAutoFollowBottom({
     scrollToBottom();
   }, [dispatchInsetEvent, scrollToBottom, setPinned]);
 
+  const resolveFollowTargetTop = useCallback((viewport: HTMLElement) => {
+    const state = insetStateRef.current;
+    const requestedTop = resolveTranscriptFollowTarget({
+      scrollHeight: viewport.scrollHeight,
+      clientHeight: viewport.clientHeight,
+      dockInset: {
+        structuralInsetPx: state.structuralInsetPx,
+        nonDisplacingInsetPx: state.nonDisplacingInsetPx,
+      },
+      consumedNonDisplacingInsetPx: state.consumedNonDisplacingInsetPx,
+    });
+    return Math.min(requestedTop, Math.max(0, viewport.scrollHeight - viewport.clientHeight));
+  }, []);
+
   return {
     insetStateRef,
     dispatchInsetEvent,
     scrollToBottom,
     handleScrollToBottomClick,
+    resolveFollowTargetTop,
   };
 }

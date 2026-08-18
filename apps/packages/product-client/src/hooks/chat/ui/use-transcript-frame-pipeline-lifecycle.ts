@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 
 import type { ContentHeightScrollAnchor } from "#product/hooks/chat/ui/transcript-row-list-model";
 import type { TranscriptFramePipeline } from "#product/hooks/chat/ui/transcript-frame-pipeline";
 import type { TranscriptRestoreResolution } from "#product/hooks/chat/ui/transcript-reading-position-store";
+import { resolveEasedFollowStep } from "#product/hooks/chat/ui/transcript-eased-follow";
 
 // While an above-change compensation anchor is live, each estimate-to-measured
 // correction of a freshly-prepended older row grows the total above the reader
@@ -50,6 +51,23 @@ export interface UseTranscriptFramePipelineLifecycleOptions {
   restoreDeadlineRef: RefObject<number>;
   /** Snap to the active follow target (the pinned write). */
   scrollToBottom: () => void;
+  /**
+   * PRO-168 (rung 12, Q16): flag-gated eased-follow motion writer. Default
+   * OFF, resolved once at mount by the caller from the
+   * `proliferate:transcriptEasedFollow` flag. False keeps the pinned branch
+   * calling `scrollToBottom` exactly as before (byte-identical instant glue);
+   * true routes it through `resolveFollowTargetTop` and the eased step below
+   * instead, without touching classification (FR-1) — every write still
+   * flows through `notifyProgrammaticScroll`.
+   */
+  easedFollowEnabled: boolean;
+  /**
+   * The same follow-target derivation `scrollToBottom` uses internally
+   * (dock inset plus consumed-overlay state), exposed so the eased writer can
+   * read a live target each pass without duplicating that state machine.
+   * Returns the reachable (clamped) scrollTop for the given viewport.
+   */
+  resolveFollowTargetTop: (viewport: HTMLElement) => number;
   /** Wrap a scrollTop write so its event is excluded from pin/direction. */
   notifyProgrammaticScroll: (write: () => void) => void;
   /** Clear all ownership markers (on unmount). */
@@ -87,11 +105,18 @@ export function useTranscriptFramePipelineLifecycle({
   restoreResolverRef,
   restoreDeadlineRef,
   scrollToBottom,
+  easedFollowEnabled,
+  resolveFollowTargetTop,
   notifyProgrammaticScroll,
   clearAllMarkers,
   beginGlue,
   onRestoreStranded,
 }: UseTranscriptFramePipelineLifecycleOptions): void {
+  // PRO-168 (rung 12): true while the eased writer's last step has not yet
+  // reached its target. Read by the pipeline's `hasPendingMotion` hook so it
+  // keeps scheduling frames purely for this writer's own catch-up. Always
+  // false (never read) when the flag is off.
+  const easedMotionPendingRef = useRef(false);
   // Running maximum of the viewport's reported total content height within the
   // CURRENT compensation anchor's window, so the compensation delta can be
   // clamped monotonic (see runFramePass). Keyed by anchor identity: a fresh
@@ -119,9 +144,30 @@ export function useTranscriptFramePipelineLifecycle({
       return;
     }
     if (pinnedRef.current) {
-      scrollToBottom();
+      // PRO-168 (rung 12, Q16): flag off takes the original instant path
+      // verbatim — byte-identical to pre-rung-12 v1. Flag on substitutes the
+      // eased writer, which still writes exclusively through
+      // `notifyProgrammaticScroll` (classification is untouched, FR-1).
+      if (!easedFollowEnabled) {
+        scrollToBottom();
+        return;
+      }
+      const targetTop = resolveFollowTargetTop(viewport);
+      const step = resolveEasedFollowStep(viewport.scrollTop, targetTop);
+      easedMotionPendingRef.current = !step.converged;
+      if (step.nextTop !== viewport.scrollTop) {
+        notifyProgrammaticScroll(() => {
+          viewport.scrollTop = step.nextTop;
+        });
+      }
       return;
     }
+    // PRO-168 (rung 12): unpinned takes over from here; the eased writer's
+    // pending flag only ever describes a PINNED catch-up, so clear it rather
+    // than leave it stale until the reader re-pins (the `hasPendingMotion`
+    // hook above also gates on `pinnedRef.current`, so this is defense in
+    // depth, not the only thing preventing a stale-true leak).
+    easedMotionPendingRef.current = false;
     // FR-2 restore (rung 6): re-resolve the saved reading anchor to scrollTop
     // each frame until the deadline, so the reading row holds under the top edge
     // as freshly-mounted rows settle their heights. Writing the resolved target
@@ -277,6 +323,8 @@ export function useTranscriptFramePipelineLifecycle({
     pinnedRef,
     scrollRef,
     scrollToBottom,
+    easedFollowEnabled,
+    resolveFollowTargetTop,
   ]);
 
   useLayoutEffect(() => {
@@ -284,6 +332,15 @@ export function useTranscriptFramePipelineLifecycle({
     pipeline.setWriter({
       runFramePass,
       measureContentHeight: () => scrollRef.current?.scrollHeight ?? -1,
+      // PRO-168 (rung 12): only the eased writer ever reports pending motion;
+      // the instant path never sets the ref, so this stays a permanent no-op
+      // with the flag off. Gated on `pinnedRef.current` too, not just the
+      // ref: the ref is written ONLY from the pinned branch above, so it can
+      // go stale (stay true) if the user unpins mid-catch-up — the unpinned
+      // branch never revisits it. Without this gate a stale `true` would have
+      // the motion continuation re-arm forever on any later resize, even
+      // though nothing pinned is asking for another eased step.
+      hasPendingMotion: () => easedFollowEnabled && pinnedRef.current && easedMotionPendingRef.current,
       shouldContinueGlue: () => {
         const viewport = scrollRef.current;
         if (!viewport) {
@@ -306,6 +363,7 @@ export function useTranscriptFramePipelineLifecycle({
     pipelineRef,
     runFramePass,
     scrollRef,
+    easedFollowEnabled,
   ]);
 
   // On tab/window re-show while pinned, glue to the bottom for a few frames so
