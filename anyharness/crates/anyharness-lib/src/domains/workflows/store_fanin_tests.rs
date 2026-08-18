@@ -383,3 +383,46 @@ fn resume_truncates_the_ledger_and_re_fans_out() {
         }
     );
 }
+
+#[test]
+fn a_failed_fan_out_launch_terminalizes_every_leg_it_stamped() {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(parallel_params("run-p", 3))
+        .expect("create");
+    let node_id = created.first_node_row_id.clone();
+    let legs = vec![
+        (0i64, "sess-0".to_string()),
+        (1, "sess-1".to_string()),
+        (2, "sess-2".to_string()),
+    ];
+    store
+        .stamp_fanout(&node_id, Some("wf2-panel"), Some("claude"), &legs)
+        .expect("stamp fanout");
+    let state = store.load_run_state("run-p").expect("load").expect("run");
+
+    let failed = apply(
+        &store,
+        "run-p",
+        &state,
+        &WorkflowEvent::NodeLaunchFailed {
+            node_row_id: node_id.clone(),
+        },
+    );
+
+    // Rung-5 review finding: the representative fallback stamped only leg 0,
+    // stranding legs 1..N at 'running' against compensated sessions. The
+    // launch-failure stamp covers every row the fan-out inserted.
+    let mut rows = failed.legs_of(&node_id);
+    rows.sort_by_key(|leg| leg.leg_index);
+    assert_eq!(rows.len(), 3);
+    for leg in rows {
+        assert_eq!(
+            leg.status,
+            WorkflowLegStatus::Failed(super::model::WorkflowNodeFailureCode::NodeLaunchFailed),
+            "leg {}",
+            leg.leg_index
+        );
+        assert!(leg.completed_at.is_some(), "leg {}", leg.leg_index);
+    }
+}

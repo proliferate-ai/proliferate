@@ -663,8 +663,13 @@ impl WorkflowStore {
             if let Transition::Cancel { .. } = transition {
                 node_sessions::cancel_all_run_legs_tx(tx, run_id, &timestamp)?;
             } else if let Some((leg_node, leg_status)) = node_sessions::finished_leg_of(transition) {
-                let session = turn_session(event)
-                    .or_else(|| state.node(leg_node).and_then(|node| node.session_id.clone()));
+                // A launch failure has no turn session and strands every
+                // freshly stamped leg, so its stamp goes keyless (whole node).
+                let session = match event {
+                    WorkflowEvent::NodeLaunchFailed { .. } => None,
+                    _ => turn_session(event)
+                        .or_else(|| state.node(leg_node).and_then(|node| node.session_id.clone())),
+                };
                 node_sessions::mark_leg_terminal_tx(
                     tx,
                     leg_node,
