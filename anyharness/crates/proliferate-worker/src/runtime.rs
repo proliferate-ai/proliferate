@@ -120,7 +120,13 @@ async fn heartbeat_and_converge(
 
     // Model-snapshot sync: non-fatal, runs first (a worker binary swap
     // exec's and never returns, so anything on this tick must precede it).
+    //
+    // REL-10: the server's verdict off THIS tick's ack is handed straight to the
+    // admission gate. Absent decodes to `false`, so an old server pauses snapshot
+    // sync before any local read; the bit is never cached, aged, or reinterpreted
+    // here, and it never influences the convergence work below.
     model_snapshot_sync::maybe_sync(
+        response.model_snapshot_upload_allowed,
         config,
         cloud,
         &identity.worker_token,
@@ -239,3 +245,7 @@ async fn converge_anyharness_runtime(
         );
     }
 }
+
+#[cfg(test)]
+#[path = "runtime_tests.rs"]
+mod tests;

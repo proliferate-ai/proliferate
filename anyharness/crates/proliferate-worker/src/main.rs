@@ -13,6 +13,8 @@ mod runtime;
 mod self_update;
 mod store;
 mod supervisor_bridge;
+#[cfg(test)]
+mod test_support;
 mod versions;
 
 use std::path::PathBuf;

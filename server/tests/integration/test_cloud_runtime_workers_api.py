@@ -16,8 +16,11 @@ from proliferate.constants.organizations import (
 )
 from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
 from proliferate.db.models.organizations import Organization, OrganizationMembership
-from tests.e2e.cloud.helpers.auth import create_user_and_login
-from tests.e2e.cloud.helpers.github import seed_linked_github_account
+from tests.helpers.worker_heartbeat import (
+    authed_user as _authed_user,
+    desktop_enrollment_token as _desktop_enrollment_token,
+    enroll_worker as _enroll_worker,
+)
 
 GATEWAY_URL = "/v1/cloud/integration-gateway/mcp"
 
@@ -27,16 +30,6 @@ def _worker_cloud_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
     # Enrollment mints an integration-gateway URL from the configured base;
     # CI has no .env, so provide one the way production config would.
     monkeypatch.setattr(settings, "cloud_worker_base_url", "http://cloud.test")
-
-
-async def _authed_user(client: AsyncClient, db_session: AsyncSession, *, prefix: str):
-    auth = await create_user_and_login(client, db_session, email_prefix=prefix)
-    await seed_linked_github_account(
-        db_session,
-        user_id=auth.user_id,
-        access_token=f"gh-{prefix}",
-    )
-    return auth
 
 
 async def _create_org_with_member(db_session: AsyncSession, *, user_id: str) -> str:
@@ -63,24 +56,6 @@ async def _create_org_with_member(db_session: AsyncSession, *, user_id: str) -> 
     )
     await db_session.commit()
     return str(organization.id)
-
-
-async def _desktop_enrollment_token(
-    client: AsyncClient,
-    auth,
-    *,
-    install_id: str,
-) -> str:
-    response = await client.post(
-        "/v1/cloud/workers/desktop/enrollment",
-        headers=auth.headers,
-        json={"desktopInstallId": install_id},
-    )
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["expiresAt"]
-    assert body["pendingTicketPolicy"] == "newest_wins"
-    return body["enrollmentToken"]
 
 
 class TestRuntimeWorkerEnrollment:
@@ -324,13 +299,6 @@ class TestOrgScopedEnrollment:
             )
         ).scalar_one()
         assert worker.organization_id is None
-
-
-async def _enroll_worker(client: AsyncClient, auth, *, install_id: str) -> dict:
-    token = await _desktop_enrollment_token(client, auth, install_id=install_id)
-    enroll = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token})
-    assert enroll.status_code == 200, enroll.text
-    return enroll.json()
 
 
 async def _gateway_request(client: AsyncClient, *, authorization: str):

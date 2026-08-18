@@ -92,6 +92,7 @@ src/
 ├── integration_gateway.rs
 ├── self_update.rs
 ├── anyharness_update.rs
+├── model_snapshot_sync.rs
 ├── supervisor_bridge.rs
 ├── cloud_client/
 │   ├── mod.rs
@@ -126,6 +127,7 @@ inventory, or materialization subsystems.
 | `self_update.rs` | Verify, preflight, swap, and exec the Worker binary on a **legacy** (non-supervisor-owned) target; deprecated, scheduled for deletion after the bridge window | AnyHarness or Supervisor updates, any behavior on a supervisor-owned target | [Lifecycle](#worker-lifecycle-and-convergence) |
 | `anyharness_update.rs` | Verify, stop, swap, relaunch, health-gate, and roll back AnyHarness on a **legacy** target; deprecated, scheduled for deletion after the bridge window | General runtime lifecycle, any behavior on a supervisor-owned target | [Lifecycle](#worker-lifecycle-and-convergence) |
 | `supervisor_bridge.rs` | Write one durable mailbox update request per diverging heartbeat on a supervisor-owned target; the one-time D5 bridge that hands an already-provisioned legacy target to Proliferate Supervisor | Update download, verification, activation, health-gating, or rollback (Supervisor owns all of that) | [Lifecycle](#worker-lifecycle-and-convergence) |
+| `model_snapshot_sync.rs` | Consume the server's `modelSnapshotUploadAllowed` verdict as the single admission gate; when allowed, read local snapshot documents and upload changed ones; latch off after an unexpected 403 | Deciding eligibility (the server's Agent Models rule owns it), snapshot content, or the ingest contract | [Lifecycle](#worker-lifecycle-and-convergence) |
 | `integration_gateway.rs` | Write the private gateway credential file returned by enrollment and repair it after an authenticated heartbeat when a predecessor overwrote it | Credential issuance or re-enrollment | [Identity](#worker-identity) |
 | `cloud_client/**` | Raw Cloud HTTP and wire shapes | Convergence decisions or local persistence | [Clients](#worker-http-clients) |
 | `store/**` | Durable Worker identity and AnyHarness update state in local SQLite | Cloud or AnyHarness product truth | [Store](#worker-store) |
@@ -358,6 +360,7 @@ inside the runtime binary, so there is no catalog version on the wire.
 POST /v1/cloud/worker/heartbeat
   request: status=online, Worker version, current AnyHarness version
   response: acknowledgement + optional desiredVersions
+            + required modelSnapshotUploadAllowed (not desired state)
 ```
 
 The interval is `heartbeat_interval_seconds` from local configuration with a
@@ -375,6 +378,47 @@ authentication: once a superseded Worker's heartbeat fails, it cannot keep
 reasserting a revoked gateway token. A success returned immediately before
 revocation can race one final stale write, which the active successor repairs
 on its next successful heartbeat.
+
+## Model-Snapshot Sync (server-gated, no convergence)
+
+Snapshot sync is not convergence — there is no desired state to reach — but it
+runs on the same tick, before the bridge and the binary swaps, because a Worker
+self-update ends by exec'ing and never returns.
+
+**Eligibility is heartbeat-gated and server-owned.** The 200 ack carries a
+required `modelSnapshotUploadAllowed` boolean, decided by one pure Agent Models
+rule that the cloud ingest route also enforces; the Worker consumes it as
+admission and never re-derives it from its own configuration, runtime kind, or
+Supervisor topology. `HeartbeatResponse.model_snapshot_upload_allowed` is
+`#[serde(default)]`, so a server too old to state a verdict decodes as `false`:
+an old server cannot promise the upload is legal, and compatibility must fail
+closed before side effects.
+
+`model_snapshot_sync::maybe_sync(upload_allowed, …)` is the single executable
+admission gate. On `false` it returns **before** runtime bearer resolution, HTTP
+client construction, the local `GET /v1/agents`, per-harness status reads, and any
+cloud upload, changing no state and logging nothing — expected ineligibility is
+silent beyond the ordinary acknowledgement, which carries the verdict as a typed
+boolean field. **Desktop therefore skips before any read**, rather than reading
+every document and collecting one 403 per changed harness on every heartbeat.
+
+**An unexpected 403 is process-latched.** A refusal after the ack said `true`
+contradicts the server's own statement, so retrying on the heartbeat timer would
+only slow the request storm down. The first such 403 atomically trips a
+process-local `disabled_after_forbidden` fuse (allocated once in `runtime::run`),
+stops the remaining harnesses in that tick, suppresses all later ticks even if the
+server advertises `true` again, leaves `last_pushed` unadvanced, and emits exactly
+one bounded `WARN` for the process:
+`model snapshot sync disabled after server denied advertised eligibility`, with
+only `reason="unexpected_forbidden"`, numeric `http_status=403`, and the harness
+kind. The response body, URL, bearer, local path, and snapshot content are never
+logged on that branch, and there is no `?error` Debug field. The fuse is not
+persisted, timed, or resettable; a Worker restart is the one recovery boundary.
+Network failures and every non-403 status keep their existing retry behavior and
+never trip it.
+
+See [MODELS.md "Write path"](FEATURE_DOCS/MODELS.md#write-path)
+for the server half of this contract.
 
 ## Catalog Convergence (none)
 

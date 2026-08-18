@@ -1,0 +1,12 @@
+{
+  "workerId": "2f5b3c14-8d1e-4a7b-9c60-1f2e3d4a5b6c",
+  "serverTime": "2026-08-18T00:00:00Z",
+  "heartbeatIntervalSeconds": 30,
+  "desiredVersions": {
+    "worker": "0.4.13",
+    "anyharness": "0.66.0"
+  },
+  "desiredTopology": null,
+  "supervisorBridge": null,
+  "modelSnapshotUploadAllowed": true
+}

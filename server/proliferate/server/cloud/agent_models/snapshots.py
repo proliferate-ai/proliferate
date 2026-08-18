@@ -37,6 +37,9 @@ from proliferate.db.store.agent_gateway import (
 )
 from proliferate.server.catalogs.domain.selection import catalog_agent
 from proliferate.server.catalogs.service import read_agent_catalog
+from proliferate.server.cloud.agent_models.domain.snapshot_upload import (
+    snapshot_upload_owner,
+)
 from proliferate.server.cloud.agent_models.overrides import (
     apply_override,
     normalize_entry,
@@ -241,21 +244,35 @@ async def resolve_upload_owner(
     machineless consumer picks models for cloud execution, so a local
     observation would be machinery without a reader (model-catalog.md §The
     cloud copy).
+
+    REL-10: the decision itself is the one pure Agent Models rule in
+    ``domain/snapshot_upload.py``, shared verbatim with the Worker heartbeat that
+    advertises ``modelSnapshotUploadAllowed``. This function keeps only the row
+    load and the 403 translation, so the advertised bit can never drift from what
+    ingest enforces. The row is reloaded here on every upload precisely because
+    the sandbox can be destroyed between the heartbeat and the upload — this
+    remains the final authorization boundary, not a cached echo of the ack.
     """
-    if runtime_kind != "cloud_sandbox" or cloud_sandbox_id is None:
+    sandbox = (
+        await cloud_sandboxes_store.load_cloud_sandbox_by_id(db, cloud_sandbox_id)
+        if cloud_sandbox_id is not None
+        else None
+    )
+    owner_user_id = snapshot_upload_owner(
+        runtime_kind=runtime_kind,
+        cloud_sandbox_id=cloud_sandbox_id,
+        sandbox_exists=sandbox is not None,
+        sandbox_owner_user_id=sandbox.owner_user_id if sandbox is not None else None,
+        sandbox_destroyed_at=sandbox.destroyed_at if sandbox is not None else None,
+    )
+    if owner_user_id is None:
         raise CloudApiError(
             "agent_model_snapshot_upload_forbidden",
-            "Only a cloud-sandbox worker may upload model snapshots.",
+            "Only a cloud-sandbox worker whose live sandbox resolves to an owner "
+            "may upload model snapshots.",
             status_code=403,
         )
-    sandbox = await cloud_sandboxes_store.load_cloud_sandbox_by_id(db, cloud_sandbox_id)
-    if sandbox is None or sandbox.owner_user_id is None or sandbox.destroyed_at is not None:
-        raise CloudApiError(
-            "agent_model_snapshot_upload_forbidden",
-            "The uploading worker's sandbox no longer resolves to an owner.",
-            status_code=403,
-        )
-    return sandbox.owner_user_id
+    return owner_user_id
 
 
 async def ingest_snapshot(

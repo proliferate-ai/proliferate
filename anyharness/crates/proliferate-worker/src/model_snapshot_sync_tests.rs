@@ -1,6 +1,7 @@
 use super::*;
 use std::io::{Read, Write};
 use std::net::TcpListener;
+use crate::test_support::{cloud_config_for, minimal_config};
 
 fn status(probed_at: Option<&str>) -> RuntimeModelSnapshotStatus {
     RuntimeModelSnapshotStatus {
@@ -82,29 +83,6 @@ fn plan_push_treats_each_harness_independently() {
 }
 
 // ── resolve_runtime_bearer_token ─────────────────────────────────────
-
-fn minimal_config() -> WorkerConfig {
-    WorkerConfig {
-        cloud_base_url: "https://cloud.test".to_string(),
-        enrollment_token: None,
-        worker_db_path: "/tmp/worker.sqlite3".into(),
-        integration_gateway_home: None,
-        heartbeat_interval_seconds: 30,
-        self_update_enabled: false,
-        anyharness_update_enabled: false,
-        anyharness_binary_path: None,
-        anyharness_launcher_path: None,
-        anyharness_workdir: None,
-        runtime_base_url: "http://127.0.0.1:8457".to_string(),
-        runtime_bearer_token: None,
-        supervisor_update_request_dir: None,
-        supervisor_binary_path: None,
-        supervisor_config_path: None,
-        supervisor_config_toml: None,
-        supervisor_bridge_marker_dir: None,
-        config_path: None,
-    }
-}
 
 #[test]
 fn resolve_runtime_bearer_token_prefers_config_over_env() {
@@ -222,16 +200,6 @@ fn observed_status_json() -> String {
     .to_string()
 }
 
-fn cloud_config_for(
-    runtime_addr: std::net::SocketAddr,
-    cloud_addr: std::net::SocketAddr,
-) -> WorkerConfig {
-    let mut config = minimal_config();
-    config.cloud_base_url = format!("http://{cloud_addr}");
-    config.runtime_base_url = format!("http://{runtime_addr}");
-    config
-}
-
 #[tokio::test]
 async fn maybe_sync_uploads_a_changed_document_with_the_workers_bearer() {
     let (runtime_addr, runtime_handle) =
@@ -246,7 +214,7 @@ async fn maybe_sync_uploads_a_changed_document_with_the_workers_bearer() {
     let cloud = CloudClient::new(&config).expect("build cloud client");
     let state = ModelSnapshotSyncState::new();
 
-    maybe_sync(&config, &cloud, "worker-secret-token", &state).await;
+    maybe_sync(true, &config, &cloud, "worker-secret-token", &state).await;
 
     let runtime_requests = runtime_handle.join().expect("runtime server thread");
     assert_eq!(runtime_requests[0].path, "/v1/agents");
@@ -295,7 +263,7 @@ async fn maybe_sync_does_not_wedge_on_a_cloud_error_and_leaves_the_push_pending(
     let state = ModelSnapshotSyncState::new();
 
     // Must return normally — never panic, never propagate an error.
-    maybe_sync(&config, &cloud, "worker-secret-token", &state).await;
+    maybe_sync(true, &config, &cloud, "worker-secret-token", &state).await;
 
     runtime_handle.join().expect("runtime server thread");
     let cloud_requests = cloud_handle.join().expect("cloud server thread");
@@ -311,3 +279,13 @@ async fn maybe_sync_does_not_wedge_on_a_cloud_error_and_leaves_the_push_pending(
     let retry = plan_push("opencode", &status(Some("2026-07-27T00:00:00Z")), &recorded);
     assert!(retry.is_some(), "the next tick must retry the failed push");
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REL-10: server-decided eligibility, the process-lifetime 403 fuse, and the
+// bounded one-WARN privacy contract.
+//
+// Everything below observes REQUESTS and CAPTURED EVENTS rather than inferring
+// behavior from `maybe_sync`'s `()` return or from a latch transition. Each case
+// owns a fresh sync state and a fresh trace collector, so no proof can borrow
+// another's fuse or events.
+// ═══════════════════════════════════════════════════════════════════════════

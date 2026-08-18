@@ -35,6 +35,9 @@ from proliferate.integrations.sandbox import (
 )
 from proliferate.lib.infra.encryption.fernet import decrypt_text
 from proliferate.lib.infra.time.wall_clock import utcnow
+from proliferate.server.cloud.agent_models.domain.snapshot_upload import (
+    snapshot_upload_owner,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.bootstrap import (
     build_runtime_env,
@@ -305,6 +308,19 @@ async def record_heartbeat(
     anyharness_version: str | None = None,
     catalog_version: str | None = None,
 ) -> WorkerHeartbeatResponse:
+    # Authentication is revalidated here, not merely inherited from the request
+    # dependency (REL-10): the Worker row can be deleted or revoked between the
+    # auth context resolving and this service reloading it. That race must keep
+    # producing the same ``401 cloud_worker_unauthorized`` with no heartbeat body
+    # — a missing Worker is never represented as a 200 whose snapshot-upload
+    # verdict happens to be false.
+    worker = await store.get_worker(db, worker_id=worker_id)
+    if worker is None or worker.status == "revoked":
+        raise CloudApiError(
+            "cloud_worker_unauthorized",
+            "Worker token is invalid or revoked.",
+            status_code=401,
+        )
     await store.touch_worker_heartbeat(
         db,
         worker_id=worker_id,
@@ -319,8 +335,8 @@ async def record_heartbeat(
     worker_pin = pinned_worker_version()
     desired_topology: str | None = None
     supervisor_bridge: WorkerSupervisorBridge | None = None
-    worker = await store.get_worker(db, worker_id=worker_id)
-    if worker is not None and worker.cloud_sandbox_id is not None:
+    sandbox: CloudSandboxValue | None = None
+    if worker.cloud_sandbox_id is not None:
         sandbox = await cloud_sandbox_store.load_cloud_sandbox_by_id(db, worker.cloud_sandbox_id)
         if sandbox is not None:
             if sandbox.desired_anyharness_version is not None:
@@ -336,6 +352,10 @@ async def record_heartbeat(
                 # already-provisioned LEGACY target (whose persisted worker
                 # config has none of the bridge fields) can actually bridge.
                 supervisor_bridge = _build_supervisor_bridge_inputs(sandbox)
+    # REL-10: the advertised snapshot-upload verdict comes from the SAME pure
+    # Agent Models rule the ingest route enforces, evaluated against the rows
+    # just loaded. Nothing about the decision is restated here, so the ack can
+    # never promise an upload that ingest would refuse.
     return WorkerHeartbeatResponse(
         worker_id=str(worker_id),
         server_time=utcnow(),
@@ -346,6 +366,14 @@ async def record_heartbeat(
         ),
         desired_topology=desired_topology,
         supervisor_bridge=supervisor_bridge,
+        model_snapshot_upload_allowed=snapshot_upload_owner(
+            runtime_kind=worker.runtime_kind,
+            cloud_sandbox_id=worker.cloud_sandbox_id,
+            sandbox_exists=sandbox is not None,
+            sandbox_owner_user_id=sandbox.owner_user_id if sandbox is not None else None,
+            sandbox_destroyed_at=sandbox.destroyed_at if sandbox is not None else None,
+        )
+        is not None,
     )
 
 

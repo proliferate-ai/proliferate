@@ -177,6 +177,10 @@ async fn bridge_not_requested_without_topology() {
         desired_versions: None,
         desired_topology: None,
         supervisor_bridge: None,
+        // REL-10: an explicit false — the bridge decision is independent of
+        // snapshot-upload eligibility, and this literal must say so rather than
+        // lean on a Default.
+        model_snapshot_upload_allowed: false,
     };
     let outcome = maybe_bridge_to_supervisor(&config, &response)
         .await

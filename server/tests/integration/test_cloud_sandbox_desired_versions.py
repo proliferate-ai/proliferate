@@ -24,72 +24,24 @@ from proliferate.constants.organizations import (
     ORGANIZATION_ROLE_MEMBER,
     ORGANIZATION_STATUS_ACTIVE,
 )
-from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import instance_organizations as instance_organization_store
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime_workers import service
-from proliferate.server.cloud.runtime_workers.service import create_cloud_sandbox_enrollment
 from proliferate.lib.infra.encryption.fernet import encrypt_text
 from tests.e2e.cloud.helpers.auth import create_user_and_login
+from tests.helpers.worker_heartbeat import (
+    enroll_sandbox_worker as _enroll_sandbox_worker,
+    heartbeat as _heartbeat,
+    seed_owner as _seed_owner,
+    seed_sandbox as _seed_sandbox,
+)
 
 
 @pytest.fixture(autouse=True)
 def _worker_cloud_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "cloud_worker_base_url", "http://cloud.test")
-
-
-async def _seed_owner(db_session: AsyncSession, *, prefix: str) -> User:
-    user = User(
-        email=f"{prefix}-{uuid.uuid4().hex[:10]}@example.com",
-        hashed_password="unused-oauth-only",
-        is_active=True,
-        is_verified=True,
-    )
-    db_session.add(user)
-    await db_session.flush()
-    return user
-
-
-async def _seed_sandbox(db_session: AsyncSession, *, prefix: str) -> CloudSandbox:
-    owner = await _seed_owner(db_session, prefix=prefix)
-    sandbox = CloudSandbox(
-        owner_user_id=owner.id,
-        provider_sandbox_id=f"sandbox-{uuid.uuid4().hex[:8]}",
-        status=CloudSandboxStatus.ready,
-    )
-    db_session.add(sandbox)
-    await db_session.commit()
-    return sandbox
-
-
-async def _enroll_sandbox_worker(
-    client: AsyncClient,
-    db_session: AsyncSession,
-    *,
-    sandbox: CloudSandbox,
-) -> str:
-    """Enroll a cloud-sandbox worker (not a desktop worker) and return its bearer token."""
-    token = await create_cloud_sandbox_enrollment(
-        db_session,
-        cloud_sandbox_id=sandbox.id,
-        owner_user_id=sandbox.owner_user_id,
-    )
-    await db_session.commit()
-    enroll = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token})
-    assert enroll.status_code == 200, enroll.text
-    return enroll.json()["workerToken"]
-
-
-async def _heartbeat(client: AsyncClient, worker_token: str) -> dict:
-    response = await client.post(
-        "/v1/cloud/worker/heartbeat",
-        headers={"Authorization": f"Bearer {worker_token}"},
-        json={},
-    )
-    assert response.status_code == 200, response.text
-    return response.json()
 
 
 async def _make_instance_admin(db_session: AsyncSession, *, user_id: str, role: str) -> None:

@@ -117,6 +117,18 @@ pub struct HeartbeatResponse {
     /// inputs) and for every non-flag-enabled target.
     #[serde(default)]
     pub supervisor_bridge: Option<SupervisorBridgeInputs>,
+    /// The server's verdict on whether THIS Worker may upload an agent-model
+    /// snapshot (REL-10). The server owns `runtime_kind`, sandbox existence and
+    /// destruction, and the owner the ingest route derives, so it — not the
+    /// Worker — decides eligibility; the Worker only consumes the bit as
+    /// admission to `model_snapshot_sync::maybe_sync`.
+    ///
+    /// `#[serde(default)]` is load-bearing compatibility, not tidiness: a server
+    /// that predates this field cannot promise the upload is legal, so its
+    /// omission must fail CLOSED to `false` and pause snapshot sync before any
+    /// local read or network call. Never treat absent as permission.
+    #[serde(default)]
+    pub model_snapshot_upload_allowed: bool,
 }
 
 /// A Worker's upload of one changed model-snapshot document (model-catalog.md
@@ -428,156 +440,6 @@ async fn parse_json_response<T: DeserializeOwned>(
     Ok(response.json().await?)
 }
 
+
 #[cfg(test)]
-mod tests {
-    use super::{EnrollResponse, HeartbeatResponse};
-
-    #[test]
-    fn enroll_response_parses_integration_gateway() {
-        let payload = br#"{
-            "workerId": "worker",
-            "workerToken": "token",
-            "heartbeatIntervalSeconds": 30,
-            "integrationGateway": {
-                "url": "http://127.0.0.1:8300",
-                "authorization": "Bearer gw-secret"
-            }
-        }"#;
-        let response = serde_json::from_slice::<EnrollResponse>(payload)
-            .expect("enroll response with integrationGateway");
-        assert_eq!(response.worker_id, "worker");
-        assert_eq!(response.worker_token, "token");
-        assert_eq!(response.heartbeat_interval_seconds, 30);
-        assert_eq!(response.integration_gateway.url, "http://127.0.0.1:8300");
-        assert_eq!(
-            response.integration_gateway.authorization,
-            "Bearer gw-secret"
-        );
-    }
-
-    #[test]
-    fn heartbeat_response_parses_minimal_ack() {
-        // Mirrors an older server's body: workerId + serverTime + interval,
-        // no status and no desiredVersions.
-        let payload = br#"{
-            "workerId": "worker",
-            "serverTime": "2026-07-01T00:00:00Z",
-            "heartbeatIntervalSeconds": 30
-        }"#;
-        let response =
-            serde_json::from_slice::<HeartbeatResponse>(payload).expect("minimal heartbeat ack");
-        assert_eq!(response.worker_id, "worker");
-        assert_eq!(response.status, None);
-        assert_eq!(
-            response.server_time.as_deref(),
-            Some("2026-07-01T00:00:00Z")
-        );
-        assert!(response.desired_versions.is_none());
-    }
-
-    #[test]
-    fn heartbeat_response_parses_desired_versions() {
-        let payload = br#"{
-            "workerId": "worker",
-            "serverTime": "2026-07-01T00:00:00Z",
-            "heartbeatIntervalSeconds": 30,
-            "desiredVersions": {"worker": "0.2.16", "anyharness": "0.2.16"}
-        }"#;
-        let response = serde_json::from_slice::<HeartbeatResponse>(payload)
-            .expect("heartbeat ack with desiredVersions");
-        let desired = response.desired_versions.expect("desiredVersions present");
-        assert_eq!(desired.worker.as_deref(), Some("0.2.16"));
-        assert_eq!(desired.anyharness.as_deref(), Some("0.2.16"));
-    }
-
-    #[test]
-    fn heartbeat_response_tolerates_partial_desired_versions() {
-        // Future shape changes must never break heartbeating.
-        let payload = br#"{
-            "workerId": "worker",
-            "desiredVersions": {"worker": "0.2.16"}
-        }"#;
-        let response = serde_json::from_slice::<HeartbeatResponse>(payload)
-            .expect("heartbeat ack with partial desiredVersions");
-        let desired = response.desired_versions.expect("desiredVersions present");
-        assert_eq!(desired.worker.as_deref(), Some("0.2.16"));
-        assert_eq!(desired.anyharness, None);
-    }
-
-    #[test]
-    fn heartbeat_response_ignores_a_legacy_servers_catalog_version() {
-        // The catalog is binary-only (agent-distribution.md "Convergence"), so
-        // the worker no longer models a served catalog version. A server that
-        // still advertises one — a not-yet-deployed or rolled-back server
-        // during the window this deletion rides out — must be acked normally
-        // with the field simply ignored, never a deserialization failure.
-        let payload = br#"{
-            "workerId": "worker",
-            "desiredVersions": {
-                "worker": "0.2.16",
-                "anyharness": "0.2.16",
-                "catalogVersion": "2026-07-06.1"
-            }
-        }"#;
-        let response = serde_json::from_slice::<HeartbeatResponse>(payload)
-            .expect("heartbeat ack from a server still advertising catalogVersion");
-        let desired = response.desired_versions.expect("desiredVersions present");
-        assert_eq!(desired.worker.as_deref(), Some("0.2.16"));
-        assert_eq!(desired.anyharness.as_deref(), Some("0.2.16"));
-    }
-
-    #[test]
-    fn heartbeat_response_tolerates_absent_desired_topology() {
-        // Servers that predate supervisor-owned topology omit the field.
-        let payload = br#"{
-            "workerId": "worker",
-            "desiredVersions": {"worker": "0.2.16", "anyharness": "0.2.16"}
-        }"#;
-        let response = serde_json::from_slice::<HeartbeatResponse>(payload)
-            .expect("heartbeat ack without desiredTopology");
-        assert_eq!(response.desired_topology, None);
-    }
-
-    #[test]
-    fn heartbeat_response_parses_supervisor_owned_topology() {
-        let payload = br#"{
-            "workerId": "worker",
-            "desiredVersions": {"worker": "0.2.16", "anyharness": "0.2.16"},
-            "desiredTopology": "supervisor_owned"
-        }"#;
-        let response = serde_json::from_slice::<HeartbeatResponse>(payload)
-            .expect("heartbeat ack with desiredTopology");
-        assert_eq!(
-            response.desired_topology.as_deref(),
-            Some("supervisor_owned")
-        );
-    }
-
-    #[test]
-    fn heartbeat_request_serializes_versions_camel_case() {
-        let request = super::HeartbeatRequest {
-            status: Some("online".to_string()),
-            worker_version: Some("0.1.0".to_string()),
-            anyharness_version: None,
-            catalog_version: None,
-        };
-        let value = serde_json::to_value(&request).expect("serialize heartbeat request");
-        assert_eq!(value["status"], "online");
-        assert_eq!(value["workerVersion"], "0.1.0");
-        // Absent versions are omitted entirely, not sent as null.
-        assert!(value.get("anyharnessVersion").is_none());
-        assert!(value.get("catalogVersion").is_none());
-    }
-
-    #[test]
-    fn heartbeat_request_serializes_catalog_version_when_present() {
-        let request = super::HeartbeatRequest {
-            status: Some("online".to_string()),
-            worker_version: Some("0.1.0".to_string()),
-            anyharness_version: None,
-            catalog_version: Some("2026.08.15-1".to_string()),
-        };
-        let value = serde_json::to_value(&request).expect("serialize heartbeat request");
-        assert_eq!(value["catalogVersion"], "2026.08.15-1");
-    }
-}
+mod tests;
