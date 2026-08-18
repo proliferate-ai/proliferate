@@ -30,6 +30,54 @@ describe("workflow node layout preferences", () => {
     expect(await readWorkflowNodeLayout("wf-unknown", dependencies)).toEqual({});
   });
 
+  it("orders overlapping writes so the last placement is the one stored", async () => {
+    // Both writes read-modify-write the same key. Give the first one the
+    // slower read, which is exactly the interleaving that would otherwise let
+    // it land last and overwrite the newer coordinates.
+    let firstRead = true;
+    dependencies = {
+      readPersistedValue: async (key) => {
+        if (firstRead) {
+          firstRead = false;
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        return stored[key];
+      },
+      persistValue: async (key, value) => {
+        stored[key] = JSON.parse(JSON.stringify(value));
+      },
+    };
+
+    const slow = writeWorkflowNodeLayout("wf-1", { "step-1": { x: 1, y: 1 } }, dependencies);
+    const fast = writeWorkflowNodeLayout("wf-1", { "step-1": { x: 2, y: 2 } }, dependencies);
+    await Promise.all([slow, fast]);
+
+    expect(await readWorkflowNodeLayout("wf-1", dependencies))
+      .toEqual({ "step-1": { x: 2, y: 2 } });
+  });
+
+  it("runs the writes behind a failed one", async () => {
+    let failNext = true;
+    dependencies = {
+      readPersistedValue: async (key) => stored[key],
+      persistValue: async (key, value) => {
+        if (failNext) {
+          failNext = false;
+          throw new Error("storage refused");
+        }
+        stored[key] = JSON.parse(JSON.stringify(value));
+      },
+    };
+
+    const refused = writeWorkflowNodeLayout("wf-1", { "step-1": { x: 1, y: 1 } }, dependencies);
+    const accepted = writeWorkflowNodeLayout("wf-1", { "step-1": { x: 3, y: 3 } }, dependencies);
+
+    await expect(refused).rejects.toThrow("storage refused");
+    await accepted;
+    expect(await readWorkflowNodeLayout("wf-1", dependencies))
+      .toEqual({ "step-1": { x: 3, y: 3 } });
+  });
+
   it("drops a workflow whose placements are all gone", async () => {
     await writeWorkflowNodeLayout("wf-1", { "step-1": { x: 10, y: 20 } }, dependencies);
     await writeWorkflowNodeLayout("wf-1", {}, dependencies);

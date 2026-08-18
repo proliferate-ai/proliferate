@@ -40,6 +40,7 @@ const planes = vi.hoisted(() => ({
   putInvocation: vi.fn(),
   putRun: vi.fn(),
   getWorkspace: vi.fn(),
+  invalidateCollections: vi.fn(),
 }));
 
 vi.mock("#product/hooks/access/cloud/workflows/use-workflow-trigger-access", () => ({
@@ -54,6 +55,12 @@ vi.mock("#product/hooks/access/anyharness/workflows/use-workflow-run-put", () =>
 
 vi.mock("#product/lib/access/anyharness/workspaces", () => ({
   getWorkspace: planes.getWorkspace,
+}));
+
+vi.mock("#product/hooks/workspaces/cache/use-workspace-collections-invalidation", () => ({
+  useWorkspaceCollectionsInvalidationActions: () => ({
+    invalidateWorkspaceCollectionsForRuntime: planes.invalidateCollections,
+  }),
 }));
 
 const INPUT: TriggerCourierInput = {
@@ -72,6 +79,7 @@ beforeEach(() => {
   ) => invocation(input.invocationId));
   planes.putRun.mockImplementation(async (runId: string) => projection(runId));
   planes.getWorkspace.mockImplementation(async () => PLACED_WORKSPACE);
+  planes.invalidateCollections.mockResolvedValue(undefined);
   useHarnessConnectionStore.getState().setRuntimeUrl(RUNTIME_URL);
 });
 
@@ -81,6 +89,7 @@ afterEach(() => {
   planes.putInvocation.mockReset();
   planes.putRun.mockReset();
   planes.getWorkspace.mockReset();
+  planes.invalidateCollections.mockReset();
   useHarnessConnectionStore.getState().resetConnectionState();
 });
 
@@ -223,6 +232,35 @@ describe("useWorkflowTriggerActions placed workspace", () => {
     expect(planes.getWorkspace).toHaveBeenCalledTimes(2);
     expect(onLaunched).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: "workspace-1", workspace: PLACED_WORKSPACE }),
+    );
+  });
+
+  it("waits for the refreshed collections when no read-back answered", async () => {
+    // Selection resolves a workspace either from the hint or from the
+    // collections snapshot it reads when called. With no hint left, the
+    // refreshed snapshot is the only thing standing between this launch and
+    // "Workspace not found.", so navigation has to wait for it.
+    planes.getWorkspace.mockRejectedValue(new Error("offline"));
+    let releaseRefresh: (() => void) | null = null;
+    planes.invalidateCollections.mockImplementation(() => new Promise<void>((resolve) => {
+      releaseRefresh = resolve;
+    }));
+    const onLaunched = vi.fn();
+    const { result } = renderTriggerActions(createQueryClient(), onLaunched);
+
+    let launched: Promise<unknown> | undefined;
+    await act(async () => {
+      launched = result.current.triggerRun(INPUT);
+      await vi.waitFor(() => expect(planes.invalidateCollections).toHaveBeenCalled());
+    });
+    expect(onLaunched).not.toHaveBeenCalled();
+
+    await act(async () => {
+      releaseRefresh?.();
+      await launched;
+    });
+    expect(onLaunched).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "workspace-1", workspace: null }),
     );
   });
 

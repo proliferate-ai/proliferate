@@ -30,10 +30,31 @@ export async function readWorkflowNodeLayout(
 }
 
 /**
+ * Every workflow's placements share one stored key, so a write is a
+ * read-modify-write of the whole record. Two of them in flight at once would
+ * interleave, and the slower one would land last with the older coordinates —
+ * so writes queue behind each other instead of racing.
+ */
+let writes: Promise<unknown> = Promise.resolve();
+
+/**
  * Replaces this workflow's placements. An empty layout drops the workflow's
  * entry entirely, so resetting a graph leaves nothing behind.
  */
-export async function writeWorkflowNodeLayout(
+export function writeWorkflowNodeLayout(
+  workflowId: string,
+  layout: WorkflowNodeLayout,
+  dependencies: WorkflowNodeLayoutDependencies,
+): Promise<void> {
+  const write = writes
+    // A failed write is that write's problem; the queue behind it still runs.
+    .catch(() => {})
+    .then(() => replaceStoredLayout(workflowId, layout, dependencies));
+  writes = write;
+  return write;
+}
+
+async function replaceStoredLayout(
   workflowId: string,
   layout: WorkflowNodeLayout,
   dependencies: WorkflowNodeLayoutDependencies,

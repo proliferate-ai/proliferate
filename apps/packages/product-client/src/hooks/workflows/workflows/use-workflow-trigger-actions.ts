@@ -150,7 +150,16 @@ export function useWorkflowTriggerActions({
       // client knows it exists: read it back for selection's `knownWorkspace`
       // hint and refresh the collections cache so the sidebar lists it.
       const workspace = await readBackLaunchedWorkspace(runtimeUrl, result.workspaceId);
-      void invalidateWorkspaceCollectionsForRuntime(runtimeUrl);
+      // Selection takes its collections snapshot when it is called, so a
+      // refreshed cache resolves the workspace even with no hint at all. That
+      // is the fallback for a read-back that never answered — wait for it in
+      // that case only; otherwise the hint has already answered and the
+      // refresh can settle behind the navigation.
+      const collectionsRefreshed = invalidateWorkspaceCollectionsForRuntime(runtimeUrl)
+        .catch(() => {});
+      if (!workspace) {
+        await collectionsRefreshed;
+      }
       onLaunched?.({ runId: result.runId, workspaceId: result.workspaceId, workspace });
       return result;
     } catch (caught) {
