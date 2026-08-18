@@ -14,12 +14,15 @@ async fn minimal_support_snapshot_coordinator(
     preparation_id: &str,
     cancellation: watch::Receiver<bool>,
 ) -> Result<ValidatedSupportExport, SupportExportError> {
+    // Issuance now fails with the typed private cause; execution-time failures
+    // keep using `SupportExportError`.
     let invocation = issue_support_export_for_coordinator(
         preparation_id,
         FROM.to_string(),
         TO.to_string(),
         Instant::now() + Duration::from_secs(25),
-    )?;
+    )
+    .map_err(|_| SupportExportError::InvalidRequest)?;
     supervisor
         .export_support_snapshot(invocation, cancellation)
         .await

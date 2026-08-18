@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex as StdMutex};
 
-use chrono::{DateTime, SecondsFormat, Utc};
+use chrono::{DateTime, SecondsFormat, Timelike, Utc};
 use tokio::time::Duration;
 
 use crate::diagnostics_collector::producer::lifecycle::support_lifecycle::SupportSnapshotPreparationFailureClassificationV1 as Failure;
@@ -20,15 +20,18 @@ use super::state::{
     PreparationTerminal, ReadinessState,
 };
 use super::terminal::{
-    finish_error_code, interruption_error_code, terminal_for_finish_error,
-    terminal_for_interruption,
+    finish_error_code, interruption_error_code, note_export_permit_noncanonical_window,
+    terminal_for_finish_error, terminal_for_interruption,
 };
 use super::watchdog::spawn_preparation_watchdog;
 use super::SupportSnapshotCoordinator;
 
 const PREPARATION_TIMEOUT: Duration = Duration::from_secs(25);
 const FINISH_TIMEOUT: Duration = Duration::from_secs(10);
-const CAPTURE_WINDOW_MINUTES: i64 = 15;
+/// The support window is exactly 900 seconds. The strict collector permit
+/// rejects any other duration, so this is the sole subtraction the producer
+/// applies to its one truncated capture instant.
+const SUPPORT_WINDOW_SECONDS: i64 = 900;
 
 impl SupportSnapshotCoordinator {
     pub(crate) async fn begin_preparation(
@@ -36,11 +39,17 @@ impl SupportSnapshotCoordinator {
         input: BeginSupportSnapshotInput,
     ) -> Result<SupportSnapshotPreparationOutput, String> {
         validate_begin(&input)?;
+        // One raw UTC read owns the capture instant and both window endpoints.
+        // Consent and report-opened validation still uses the raw value.
         let captured = self.runtime.utc_now();
         validate_begin_times(&input, &captured)?;
-        let captured_at = captured.to_rfc3339_opts(SecondsFormat::AutoSi, true);
-        let source_time_from = (captured - chrono::Duration::minutes(CAPTURE_WINDOW_MINUTES))
-            .to_rfc3339_opts(SecondsFormat::AutoSi, true);
+        // Truncate toward the start of the current UTC second. Never round, and
+        // never reparse formatted text as a second clock.
+        let captured = truncate_to_milliseconds(captured);
+        let captured_at = captured.to_rfc3339_opts(SecondsFormat::Millis, true);
+        let source_time_from = (captured
+            - chrono::Duration::seconds(SUPPORT_WINDOW_SECONDS))
+        .to_rfc3339_opts(SecondsFormat::Millis, true);
         let source_time_to = captured_at.clone();
         let deadline = self.runtime.instant_now() + PREPARATION_TIMEOUT;
         let preparation_id = self.runtime.new_id();
@@ -180,7 +189,20 @@ impl SupportSnapshotCoordinator {
                     },
                 })
             }
-            _ => {
+            capture => {
+                // Interruption is first-wins. It was already arbitrated above,
+                // and this second read keeps permit detail off any terminal a
+                // cancellation, deadline, or abandonment owns.
+                if control.interruption() == PreparationInterruption::Running
+                    && capture
+                        .as_ref()
+                        .err()
+                        .is_some_and(|error| error.is_noncanonical_window())
+                {
+                    if let Some(open) = state.preparation.as_ref() {
+                        note_export_permit_noncanonical_window(&open.operation);
+                    }
+                }
                 let closing = state
                     .transfer_preparation_to_closing(
                         &preparation_id,
@@ -516,6 +538,16 @@ impl SupportSnapshotCoordinator {
             }
         }
     }
+}
+
+/// Drops sub-millisecond nanoseconds from one raw clock read. `AutoSi` would
+/// otherwise omit `.000` or emit six or nine fractional digits, and the strict
+/// collector permit accepts neither spelling.
+pub(super) fn truncate_to_milliseconds(value: DateTime<Utc>) -> DateTime<Utc> {
+    let milliseconds = value.timestamp_subsec_millis();
+    value
+        .with_nanosecond(milliseconds.saturating_mul(1_000_000))
+        .unwrap_or(value)
 }
 
 fn validate_begin(input: &BeginSupportSnapshotInput) -> Result<(), String> {
