@@ -20,6 +20,7 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
   shellActivationEpochByWorkspace: {},
   pendingChatActivationByWorkspace: {},
   pendingBackgroundSubagentSelectionByWorkspace: {},
+  pendingBackgroundProcessSelectionByWorkspace: {},
   backgroundWorkLastViewedAtBySession: {},
   backgroundWorkLastFinishedSubagentBySession: {},
   urgentHighlightedChatSessionByWorkspace: {},

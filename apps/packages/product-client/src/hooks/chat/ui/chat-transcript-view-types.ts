@@ -10,6 +10,7 @@ import type { SessionViewState } from "#product/domain/sessions/activity";
 import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import type { TurnDisplayBlock } from "#product/domain/chats/transcript/transcript-presentation";
 import type { GoalTranscriptEvent } from "#product/domain/activity/goal-transcript-events";
+import type { BackgroundCompletionReceipt } from "#product/domain/activity/background-completion-receipt";
 
 export interface ChatTranscriptOutboxActions {
   retryPrompt: (clientPromptId: string) => void;
@@ -61,6 +62,18 @@ export interface ChatTranscriptGoalEventRenderInput {
   event: GoalTranscriptEvent;
 }
 
+export interface ChatTranscriptCompletionReceiptRenderInput {
+  row: Extract<TranscriptVirtualRow, { kind: "completion_receipt" }>;
+  rowIndex: number;
+  receipt: BackgroundCompletionReceipt;
+}
+
+export interface ChatTranscriptBackgroundWorkRenderInput {
+  row: Extract<TranscriptVirtualRow, { kind: "background_work" }>;
+  rowIndex: number;
+  runningCount: number;
+}
+
 /** Active chat content-search state driving the prose paint layer. */
 export interface ChatTranscriptContentSearch {
   query: string;
@@ -87,6 +100,13 @@ export interface ChatTranscriptViewProps {
   renderTurnTrailingStatus?: (input: ChatTranscriptTurnStatusInput) => ReactNode;
   /** Omitted surfaces (e.g. the cloud preview transcript) render no goal rows. */
   renderGoalEventRow?: (input: ChatTranscriptGoalEventRenderInput) => ReactNode;
+  /**
+   * Renders an inline background-work completion receipt row (bgwork r6 round
+   * 2). Omitted surfaces render no receipts even if the state carries them.
+   */
+  renderCompletionReceiptRow?: (input: ChatTranscriptCompletionReceiptRenderInput) => ReactNode;
+  /** Renders the quiet running-background-work footer row (bgwork r6 round 2). */
+  renderBackgroundWorkRow?: (input: ChatTranscriptBackgroundWorkRenderInput) => ReactNode;
   /**
    * Chat content search. When set (search open on the chat surface), the
    * transcript prose is highlighted for `query`. Null/undefined disables the

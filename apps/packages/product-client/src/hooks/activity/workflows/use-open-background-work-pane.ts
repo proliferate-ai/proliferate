@@ -29,7 +29,14 @@ import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-st
  * Existing zero-arg call sites (`BackgroundWorkTranscriptRow`'s `onOpen`)
  * are unaffected: both arguments are optional and only take effect together.
  */
-export function useOpenBackgroundWorkPane(): (subagentId?: string, sessionId?: string) => void {
+interface BackgroundWorkPaneOpener {
+  /** The workspace a pending selection must be keyed under, or null when none is active. */
+  materializedWorkspaceId: string | null;
+  /** Materialize the `background` tool entry and open the right panel. No-op with no active workspace. */
+  openPane: () => void;
+}
+
+function useBackgroundWorkPaneOpener(): BackgroundWorkPaneOpener {
   const { workspaceUiKey, materializedWorkspaceId } = useWorkspaceFileContext();
   const setRightPanelMaterializedForWorkspace = useWorkspaceUiStore(
     (state) => state.setRightPanelMaterializedForWorkspace,
@@ -37,22 +44,11 @@ export function useOpenBackgroundWorkPane(): (subagentId?: string, sessionId?: s
   const setRightPanelOpenForWorkspace = useWorkspaceUiStore(
     (state) => state.setRightPanelOpenForWorkspace,
   );
-  const setPendingBackgroundSubagentSelectionForWorkspace = useWorkspaceUiStore(
-    (state) => state.setPendingBackgroundSubagentSelectionForWorkspace,
-  );
 
-  return useCallback((subagentId?: string, sessionId?: string) => {
+  const openPane = useCallback(() => {
     if (!materializedWorkspaceId || !workspaceUiKey) {
       return;
     }
-
-    if (subagentId && sessionId) {
-      setPendingBackgroundSubagentSelectionForWorkspace(materializedWorkspaceId, {
-        subagentId,
-        sessionId,
-      });
-    }
-
     const backgroundEntryKey = rightPanelToolHeaderKey("background");
     setRightPanelMaterializedForWorkspace(materializedWorkspaceId, (previous) => ({
       ...previous,
@@ -64,9 +60,53 @@ export function useOpenBackgroundWorkPane(): (subagentId?: string, sessionId?: s
     setRightPanelOpenForWorkspace(workspaceUiKey, true);
   }, [
     materializedWorkspaceId,
-    setPendingBackgroundSubagentSelectionForWorkspace,
     setRightPanelMaterializedForWorkspace,
     setRightPanelOpenForWorkspace,
     workspaceUiKey,
   ]);
+
+  return { materializedWorkspaceId, openPane };
+}
+
+export function useOpenBackgroundWorkPane(): (subagentId?: string, sessionId?: string) => void {
+  const { materializedWorkspaceId, openPane } = useBackgroundWorkPaneOpener();
+  const setPendingBackgroundSubagentSelectionForWorkspace = useWorkspaceUiStore(
+    (state) => state.setPendingBackgroundSubagentSelectionForWorkspace,
+  );
+
+  return useCallback((subagentId?: string, sessionId?: string) => {
+    if (materializedWorkspaceId && subagentId && sessionId) {
+      setPendingBackgroundSubagentSelectionForWorkspace(materializedWorkspaceId, {
+        subagentId,
+        sessionId,
+      });
+    }
+    openPane();
+  }, [materializedWorkspaceId, openPane, setPendingBackgroundSubagentSelectionForWorkspace]);
+}
+
+/**
+ * Terminal counterpart of `useOpenBackgroundWorkPane` (bgwork r6): deep-opens
+ * the Background work pane straight to one process's `BackgroundTerminalView`.
+ * A background terminal's completion receipt (`BackgroundCompletionReceipt`)
+ * wires its command button here. Same one-shot, session-scoped selection
+ * mechanism as the subagent path — the pane consumes and clears it on its next
+ * render, discarding a cross-session entry. The `processId`/`sessionId` pair
+ * only takes effect together; a bare call just opens the pane on its roster.
+ */
+export function useOpenBackgroundTerminalDetail(): (processId?: string, sessionId?: string) => void {
+  const { materializedWorkspaceId, openPane } = useBackgroundWorkPaneOpener();
+  const setPendingBackgroundProcessSelectionForWorkspace = useWorkspaceUiStore(
+    (state) => state.setPendingBackgroundProcessSelectionForWorkspace,
+  );
+
+  return useCallback((processId?: string, sessionId?: string) => {
+    if (materializedWorkspaceId && processId && sessionId) {
+      setPendingBackgroundProcessSelectionForWorkspace(materializedWorkspaceId, {
+        processId,
+        sessionId,
+      });
+    }
+    openPane();
+  }, [materializedWorkspaceId, openPane, setPendingBackgroundProcessSelectionForWorkspace]);
 }

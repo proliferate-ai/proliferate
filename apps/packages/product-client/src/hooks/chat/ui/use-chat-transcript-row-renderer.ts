@@ -8,6 +8,8 @@ import type { SessionViewState } from "#product/domain/sessions/activity";
 import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import type { TurnDisplayBlock } from "#product/domain/chats/transcript/transcript-presentation";
 import type {
+  ChatTranscriptBackgroundWorkRenderInput,
+  ChatTranscriptCompletionReceiptRenderInput,
   ChatTranscriptGoalEventRenderInput,
   ChatTranscriptOutboxActions,
   ChatTranscriptPendingPromptRenderInput,
@@ -32,6 +34,8 @@ export function useChatTranscriptRowRenderer({
   renderPendingPromptRow,
   renderTurnRow,
   renderGoalEventRow,
+  renderCompletionReceiptRow,
+  renderBackgroundWorkRow,
   selectedWorkspaceId,
   sessionViewState,
   transcript,
@@ -49,6 +53,8 @@ export function useChatTranscriptRowRenderer({
   renderPendingPromptRow: (input: ChatTranscriptPendingPromptRenderInput) => ReactNode;
   renderTurnRow: (input: ChatTranscriptTurnRowRenderInput) => ReactNode;
   renderGoalEventRow?: (input: ChatTranscriptGoalEventRenderInput) => ReactNode;
+  renderCompletionReceiptRow?: (input: ChatTranscriptCompletionReceiptRenderInput) => ReactNode;
+  renderBackgroundWorkRow?: (input: ChatTranscriptBackgroundWorkRenderInput) => ReactNode;
   selectedWorkspaceId: string | null;
   sessionViewState: SessionViewState;
   transcript: TranscriptState;
@@ -83,6 +89,14 @@ export function useChatTranscriptRowRenderer({
       return renderGoalEventRow?.({ row, rowIndex, event: row.event }) ?? null;
     }
 
+    if (row.kind === "completion_receipt") {
+      return renderCompletionReceiptRow?.({ row, rowIndex, receipt: row.receipt }) ?? null;
+    }
+
+    if (row.kind === "background_work") {
+      return renderBackgroundWorkRow?.({ row, rowIndex, runningCount: row.runningCount }) ?? null;
+    }
+
     const turn = transcript.turnsById[row.turnId];
     if (!turn) {
       return null;
@@ -113,6 +127,8 @@ export function useChatTranscriptRowRenderer({
     renderPendingPromptRow,
     renderTurnRow,
     renderGoalEventRow,
+    renderCompletionReceiptRow,
+    renderBackgroundWorkRow,
     selectedWorkspaceId,
     sessionViewState,
     transcript,
@@ -154,6 +170,12 @@ export function useChatTranscriptRowRenderer({
     visibleOutboxEntries,
   ]);
   const goalEventRenderRevision = useMemo(() => ({}), [renderGoalEventRow]);
+  // Both background-work rows carry their state in the row model itself (a new
+  // row object is minted whenever the receipt list or running count changes),
+  // so a renderer-identity revision is all these need — the memo's own
+  // `prev.row === next.row` check drives the re-render.
+  const completionReceiptRenderRevision = useMemo(() => ({}), [renderCompletionReceiptRow]);
+  const backgroundWorkRenderRevision = useMemo(() => ({}), [renderBackgroundWorkRow]);
 
   const getRowRenderRevision = useCallback((row: TranscriptVirtualRow): object => {
     if (row.kind === "pending_prompt" || row.kind === "outbox_prompt") {
@@ -161,6 +183,12 @@ export function useChatTranscriptRowRenderer({
     }
     if (row.kind === "goal_event") {
       return goalEventRenderRevision;
+    }
+    if (row.kind === "completion_receipt") {
+      return completionReceiptRenderRevision;
+    }
+    if (row.kind === "background_work") {
+      return backgroundWorkRenderRevision;
     }
     if (row.turnId === latestTurnId) {
       return latestTurnRenderRevision;
@@ -170,6 +198,8 @@ export function useChatTranscriptRowRenderer({
     }
     return turnRenderRevision;
   }, [
+    backgroundWorkRenderRevision,
+    completionReceiptRenderRevision,
     goalEventRenderRevision,
     latestCompletedTurnId,
     latestCompletedTurnRenderRevision,

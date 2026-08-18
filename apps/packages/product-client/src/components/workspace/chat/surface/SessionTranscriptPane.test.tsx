@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { ReactNode } from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { replaySessionHistory } from "#product/lib/domain/sessions/stream/stream-state";
 import { SessionTranscriptPane } from "#product/components/workspace/chat/surface/SessionTranscriptPane";
@@ -31,37 +31,27 @@ const hydrationMocks = vi.hoisted(() => ({
   rehydrateSessionSlotFromHistory: vi.fn(),
 }));
 
-// Heavy leaf UI is not under test — the deferred content_stable hand-off is.
-// The mock echoes the two inset props it received as data attributes so
-// dock-reactivity (the background-work row staying live-reactive to
-// bottomInsetPx/nonDisplacingBottomInsetPx) can be asserted without needing
-// the real virtualized transcript. It also exposes two plain buttons that
-// invoke `onIsPinnedToBottomChange`, standing in for the REAL stick-to-bottom
-// engine's reported pin state — this suite doesn't mount the real virtualized
-// row list, so it can't fire a genuine scroll event.
+// Heavy leaf UI is not under test — the deferred content_stable hand-off is,
+// plus (bgwork r6 round 2) the pane's remaining background-work responsibility:
+// forwarding the live running count and completion receipts down as MessageList
+// props. The row and receipts are now real in-scroll transcript rows rendered
+// INSIDE MessageList (covered by the transcript-row-model + MessageList tests),
+// so the pane no longer floats a band or augments the inset to reserve one. The
+// mock echoes the props it receives as data attributes.
 vi.mock("#product/components/workspace/chat/transcript/MessageList", () => ({
   MessageList: (props: {
     bottomInsetPx: number;
     nonDisplacingBottomInsetPx: number;
-    onIsPinnedToBottomChange?: (isPinnedToBottom: boolean) => void;
+    backgroundWorkRunningCount?: number;
+    completionReceipts?: readonly { key: string }[];
   }) => (
-    <>
-      <div
-        data-testid="message-list"
-        data-bottom-inset-px={props.bottomInsetPx}
-        data-non-displacing-bottom-inset-px={props.nonDisplacingBottomInsetPx}
-      />
-      <button
-        type="button"
-        data-testid="simulate-scroll-away"
-        onClick={() => props.onIsPinnedToBottomChange?.(false)}
-      />
-      <button
-        type="button"
-        data-testid="simulate-scroll-to-bottom"
-        onClick={() => props.onIsPinnedToBottomChange?.(true)}
-      />
-    </>
+    <div
+      data-testid="message-list"
+      data-bottom-inset-px={props.bottomInsetPx}
+      data-non-displacing-bottom-inset-px={props.nonDisplacingBottomInsetPx}
+      data-background-work-running-count={props.backgroundWorkRunningCount ?? 0}
+      data-completion-receipt-count={props.completionReceipts?.length ?? 0}
+    />
   ),
 }));
 vi.mock("#product/components/workspace/chat/plans/ConnectedPlanHandoffDialog", () => ({
@@ -96,17 +86,12 @@ vi.mock("#product/hooks/workspaces/derived/use-workspace-creation-receipt", () =
   useWorkspaceCreationReceiptKey: () => null,
 }));
 const backgroundWorkMocks = vi.hoisted(() => ({
-  openBackgroundWorkPane: vi.fn(),
   rowCounts: { runningCount: 0, finishedCount: 0 },
 }));
-// Requires ProductHostProvider (`useWorkspaceFileContext` -> `useWorkspaces`)
-// via real host wiring that is out of scope for this diagnostics-timing
-// suite; the mechanism itself is covered by
-// use-open-background-work-pane.test.tsx. Here we only need to assert the
-// transcript row's `onOpen` is wired to whatever this hook returns.
-vi.mock("#product/hooks/activity/workflows/use-open-background-work-pane", () => ({
-  useOpenBackgroundWorkPane: () => backgroundWorkMocks.openBackgroundWorkPane,
-}));
+// The pane's only remaining background-work read is the live running count it
+// forwards to MessageList; the open-pane actions moved down to MessageList
+// alongside the rows themselves (covered by use-open-background-work-pane.test
+// and the MessageList render path).
 vi.mock("#product/hooks/activity/derived/use-background-work-row", () => ({
   useBackgroundWorkRowCounts: () => backgroundWorkMocks.rowCounts,
 }));
@@ -129,7 +114,6 @@ beforeEach(() => {
   useSessionTranscriptStore.getState().clearEntries();
   useSessionSelectionStore.getState().deselectWorkspacePreservingSessions();
   backgroundWorkMocks.rowCounts = { runningCount: 0, finishedCount: 0 };
-  backgroundWorkMocks.openBackgroundWorkPane.mockClear();
 });
 
 afterEach(() => {
@@ -256,174 +240,50 @@ describe("SessionTranscriptPane deferred workspace_open content_stable", () => {
   });
 });
 
-describe("SessionTranscriptPane background-work row (carried R1 items)", () => {
-  it("passes the live, unclamped bottomInsetPx/nonDisplacingBottomInsetPx through to MessageList even while the row is visible (carried item 1: dock-reactivity)", () => {
+describe("SessionTranscriptPane background-work wiring (in-flow rows, bgwork r6 round 2)", () => {
+  it("passes the live, unclamped bottomInsetPx/nonDisplacingBottomInsetPx straight through to MessageList — the running-count row is now an in-scroll transcript row, so the pane no longer augments the inset to reserve a floating band", () => {
     backgroundWorkMocks.rowCounts = { runningCount: 2, finishedCount: 0 };
     beginDeferredColdOpen();
     render(<SessionTranscriptPane bottomInsetPx={64} nonDisplacingBottomInsetPx={8} />);
 
     const messageList = screen.getByTestId("message-list");
+    // Unaugmented: exactly the props it was handed (round-2 supersedes the R2
+    // inset-reserve that used to add the measured row height here).
     expect(messageList.getAttribute("data-bottom-inset-px")).toBe("64");
     expect(messageList.getAttribute("data-non-displacing-bottom-inset-px")).toBe("8");
-    expect(screen.getByText("2 background tasks")).toBeTruthy();
   });
 
-  it("still passes the same inset values through when there is no background work", () => {
-    backgroundWorkMocks.rowCounts = { runningCount: 0, finishedCount: 0 };
-    beginDeferredColdOpen();
-    render(<SessionTranscriptPane bottomInsetPx={64} nonDisplacingBottomInsetPx={8} />);
-
-    const messageList = screen.getByTestId("message-list");
-    expect(messageList.getAttribute("data-bottom-inset-px")).toBe("64");
-    expect(messageList.getAttribute("data-non-displacing-bottom-inset-px")).toBe("8");
-    expect(screen.queryByText(/background task/)).toBeNull();
-  });
-
-  it("wires the transcript row's onOpen to the background-work-pane open action (carried R1 seam, R2 wiring)", () => {
-    backgroundWorkMocks.rowCounts = { runningCount: 1, finishedCount: 0 };
+  it("threads the live running count down to MessageList, which renders the tail footer row in-flow", () => {
+    backgroundWorkMocks.rowCounts = { runningCount: 2, finishedCount: 0 };
     beginDeferredColdOpen();
     render(<SessionTranscriptPane bottomInsetPx={0} nonDisplacingBottomInsetPx={0} />);
 
-    fireEvent.click(screen.getByText("1 background task"));
-
-    expect(backgroundWorkMocks.openBackgroundWorkPane).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByTestId("message-list").getAttribute("data-background-work-running-count"),
+    ).toBe("2");
   });
 
-  // The row is real content sitting ABOVE MessageList's own reserved
-  // end-padding, not a scrim inside it — its own height must be reserved
-  // too, or it paints over the last turn's tail. jsdom's
-  // `getBoundingClientRect` returns all-zero rects by default, so this test
-  // spies it to a fixed, nonzero row height to exercise the real
-  // measure -> augment -> anchor wiring (the actual pixel geometry is proven
-  // end-to-end by the throwaway Playwright fixture, not by this unit test).
-  it("reserves the row's own measured height on top of the live bottomInsetPx, and anchors the row at the raw bottomInsetPx regardless of nonDisplacing", () => {
-    backgroundWorkMocks.rowCounts = { runningCount: 1, finishedCount: 0 };
-    const rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
-      height: 32,
-      width: 0,
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
-    } as DOMRect);
-    try {
-      beginDeferredColdOpen();
-      render(<SessionTranscriptPane bottomInsetPx={64} nonDisplacingBottomInsetPx={8} />);
-
-      const messageList = screen.getByTestId("message-list");
-      // Augmented total fed to MessageList = 64 + 32 (row height).
-      expect(messageList.getAttribute("data-bottom-inset-px")).toBe("96");
-      expect(messageList.getAttribute("data-non-displacing-bottom-inset-px")).toBe("8");
-
-      const rowAnchor = screen.getByTestId("background-work-row-anchor");
-      // Anchored at the raw bottomInsetPx (64), NOT `bottomInsetPx -
-      // nonDisplacing` (56) — the last real row's distance from the
-      // viewport's bottom is `bottomInsetPx`, constant regardless of the
-      // nonDisplacing/structural split, because the composer's scrim overlay
-      // (`VirtualTranscriptViewport`'s `top-full` sibling div) extends the
-      // scrollable region by exactly `nonDisplacing` past the shrunk
-      // `structural` paddingEnd. Anchoring at the structural share alone
-      // (56) would reopen an 8px gap — confirmed via Playwright measurement
-      // (see the throwaway fixture in the PR description).
-      expect(rowAnchor.style.bottom).toBe("64px");
-    } finally {
-      rectSpy.mockRestore();
-    }
-  });
-
-  it("does not augment MessageList's bottomInsetPx when there is no background work, even if a stale row height was measured earlier", () => {
+  it("passes the same plain inset through and a zero running count when there is no background work — no floating band, no reserved padding", () => {
     backgroundWorkMocks.rowCounts = { runningCount: 0, finishedCount: 0 };
     beginDeferredColdOpen();
     render(<SessionTranscriptPane bottomInsetPx={64} nonDisplacingBottomInsetPx={8} />);
 
     const messageList = screen.getByTestId("message-list");
     expect(messageList.getAttribute("data-bottom-inset-px")).toBe("64");
+    expect(messageList.getAttribute("data-non-displacing-bottom-inset-px")).toBe("8");
+    expect(messageList.getAttribute("data-background-work-running-count")).toBe("0");
+    // Negative control: the retired R1/R2 floating band anchor is gone — the
+    // pane no longer renders any background-work element of its own.
     expect(screen.queryByTestId("background-work-row-anchor")).toBeNull();
   });
 
-  // A floating row that stays visible while the user has scrolled away from
-  // the bottom would paint over arbitrary mid-transcript content, so the row
-  // must hide the instant the transcript is no longer pinned to bottom,
-  // reusing the SAME `isPinnedToBottom` signal the stick-to-bottom engine
-  // already computes (reported here via the mocked MessageList's
-  // `onIsPinnedToBottomChange`, standing in for a real scroll). The reserve
-  // stays constant across pin flips; only the row's render reacts to pin —
-  // shrinking `paddingEnd` on unpin isn't covered by the stick-to-bottom
-  // engine's non-user-scroll guard (keyed only on `autoFollowBottomInsetPx`,
-  // not this row's height), so a live shrink could strand the viewport at
-  // zero distance-from-bottom but unpinned. The reserved band is below the
-  // fold and invisible while unpinned regardless, so there is no visible
-  // cost to keeping it constant for as long as background work exists.
-  it("hides the row (but keeps the reserved inset) the instant the transcript scrolls away from the bottom, then restores the row on return to bottom", () => {
-    backgroundWorkMocks.rowCounts = { runningCount: 1, finishedCount: 0 };
-    const rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
-      height: 32,
-      width: 0,
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
-    } as DOMRect);
-    try {
-      beginDeferredColdOpen();
-      render(<SessionTranscriptPane bottomInsetPx={64} nonDisplacingBottomInsetPx={8} />);
+  it("forwards the session's completion receipts (empty with no observed completions) as a MessageList prop rather than rendering them itself", () => {
+    backgroundWorkMocks.rowCounts = { runningCount: 0, finishedCount: 0 };
+    beginDeferredColdOpen();
+    render(<SessionTranscriptPane bottomInsetPx={0} nonDisplacingBottomInsetPx={0} />);
 
-      // Pinned by default: row present, inset augmented by its measured height.
-      expect(screen.getByTestId("background-work-row-anchor")).toBeTruthy();
-      expect(screen.getByTestId("message-list").getAttribute("data-bottom-inset-px")).toBe("96");
-
-      // Scrolled away: only the row disappears — the reserve stays augmented
-      // (it's below the fold, invisible while unpinned, and must not shrink
-      // paddingEnd mid-scroll purely from unpinning).
-      fireEvent.click(screen.getByTestId("simulate-scroll-away"));
-      expect(screen.queryByTestId("background-work-row-anchor")).toBeNull();
-      expect(screen.getByTestId("message-list").getAttribute("data-bottom-inset-px")).toBe("96");
-
-      // Back to bottom: the row reappears; the inset was never disturbed.
-      fireEvent.click(screen.getByTestId("simulate-scroll-to-bottom"));
-      expect(screen.getByTestId("background-work-row-anchor")).toBeTruthy();
-      expect(screen.getByTestId("message-list").getAttribute("data-bottom-inset-px")).toBe("96");
-    } finally {
-      rectSpy.mockRestore();
-    }
-  });
-
-  it("drops the reserved inset to the plain bottomInsetPx only when background work itself ends, even while unpinned", () => {
-    backgroundWorkMocks.rowCounts = { runningCount: 1, finishedCount: 0 };
-    const rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
-      height: 32,
-      width: 0,
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
-    } as DOMRect);
-    try {
-      beginDeferredColdOpen();
-      const { rerender } = render(
-        <SessionTranscriptPane bottomInsetPx={64} nonDisplacingBottomInsetPx={8} />,
-      );
-
-      fireEvent.click(screen.getByTestId("simulate-scroll-away"));
-      expect(screen.getByTestId("message-list").getAttribute("data-bottom-inset-px")).toBe("96");
-
-      // Background work itself ends (independent of pin state): the reserve
-      // must drop back to the plain bottomInsetPx — no ghost band.
-      backgroundWorkMocks.rowCounts = { runningCount: 0, finishedCount: 0 };
-      rerender(<SessionTranscriptPane bottomInsetPx={64} nonDisplacingBottomInsetPx={8} />);
-      expect(screen.getByTestId("message-list").getAttribute("data-bottom-inset-px")).toBe("64");
-      expect(screen.queryByTestId("background-work-row-anchor")).toBeNull();
-    } finally {
-      rectSpy.mockRestore();
-    }
+    expect(
+      screen.getByTestId("message-list").getAttribute("data-completion-receipt-count"),
+    ).toBe("0");
   });
 });

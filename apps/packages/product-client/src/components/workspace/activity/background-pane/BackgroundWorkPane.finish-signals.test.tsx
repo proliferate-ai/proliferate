@@ -15,11 +15,11 @@ import {
 import { BackgroundWorkPane } from "./BackgroundWorkPane";
 
 // R5 finish-signal ladder concerns: pending-selection consumption, feed
-// isOpen-gating, and the NoticeBanner (dirty/mark-viewed interactions). The
-// roster/scopes/seam/detail-routing coverage lives in the sibling
-// `BackgroundWorkPane.test.tsx` — split for PROD-SIZE-1 (repo-wide 600-line
-// cap); see the fixtures module's docstring. No behavior or assertion
-// changed by the split.
+// isOpen-gating, and the mark-viewed write that clears the tab dirty-dot (the
+// in-pane NoticeBanner was removed in bgwork r6 round 2 — see the negative
+// controls below). The roster/scopes/seam/detail-routing coverage lives in the
+// sibling `BackgroundWorkPane.test.tsx` — split for PROD-SIZE-1 (repo-wide
+// 600-line cap); see the fixtures module's docstring.
 let sessionActivity: SessionActivityState = {
   loops: [],
   loopCapabilities: { supported: false, native: false },
@@ -30,7 +30,7 @@ let rowCounts: BackgroundWorkRowCounts = { runningCount: 0, finishedCount: 0 };
 
 vi.mock("#product/hooks/activity/derived/use-session-activity", () => ({
   useSessionActivity: () => sessionActivity,
-  // `useBackgroundWorkFinishSignal` (feeding this pane's NoticeBanner rung)
+  // `useBackgroundWorkFinishSignal` (feeding this pane's mark-viewed write)
   // reads the per-session accessor rather than the active-session-only one
   // (R5 review round 2 — MAJOR fix). This pane is always scoped to the
   // active session, so mirroring the same fixture here is faithful — the
@@ -216,8 +216,13 @@ describe("BackgroundWorkPane — finish signals", () => {
     ).toBe("true");
   });
 
-  describe("finish-signal ladder rung 2 — NoticeBanner", () => {
-    it("names a finished process, offers View, and View opens its terminal detail", () => {
+  // Founder ruling (bgwork r6 round 2): "we don't want the checkmark + box at
+  // the top of background work." The in-pane NoticeBanner was removed entirely
+  // — completions now read solely as inline transcript receipts. What survives
+  // is the tab dirty-dot's mark-viewed write (R5's dot stays). These are the
+  // negative controls for that removal.
+  describe("finish-signal ladder rung 2 — in-pane NoticeBanner removed", () => {
+    it("does NOT render an in-pane notice banner when a process finishes (the exact scenario that used to show it)", () => {
       sessionActivity = {
         loops: [],
         loopCapabilities: { supported: false, native: false },
@@ -233,18 +238,13 @@ describe("BackgroundWorkPane — finish signals", () => {
       };
       render(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />);
 
-      const notice = document.querySelector("[data-background-work-notice]");
-      expect(notice).not.toBeNull();
-      expect(notice?.textContent).toContain("npm run build");
-
-      fireEvent.click(screen.getByRole("button", { name: "View" }));
-
-      expect(screen.getByTestId("background-terminal-view").getAttribute("data-process-id")).toBe(
-        "proc-done",
-      );
+      expect(document.querySelector("[data-background-work-notice]")).toBeNull();
+      // The banner's "View" action is gone with it (the Closed-scope roster
+      // row keeps its own separate open affordance, tested elsewhere).
+      expect(screen.queryByRole("button", { name: "View" })).toBeNull();
     });
 
-    it("names a finished subagent with no View action (finished subagents have already left the live roster)", () => {
+    it("does NOT render an in-pane notice banner when a native subagent finishes either", () => {
       useWorkspaceUiStore.getState().recordBackgroundWorkFinishedSubagentForSession(
         "sess-1",
         makeAgent({ id: "agent-done", description: "Explore ACP lifecycle", status: { status: "completed", summary: null } }),
@@ -252,50 +252,10 @@ describe("BackgroundWorkPane — finish signals", () => {
       );
       render(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />);
 
-      const notice = document.querySelector("[data-background-work-notice]");
-      expect(notice).not.toBeNull();
-      expect(notice?.textContent).toContain("Explore ACP lifecycle");
-      expect(screen.queryByRole("button", { name: "View" })).toBeNull();
-    });
-
-    it("does not show the notice while the pane is collapsed (mounted, isOpen=false)", () => {
-      sessionActivity = {
-        loops: [],
-        loopCapabilities: { supported: false, native: false },
-        processes: [
-          makeProcess({
-            id: "proc-done",
-            status: { status: "exited", exitCode: 0 },
-            endedAt: "2026-08-17T00:00:05Z",
-          }),
-        ],
-        agents: [],
-      };
-      render(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen={false} />);
-
       expect(document.querySelector("[data-background-work-notice]")).toBeNull();
     });
 
-    it("does not show the notice for work that had already finished before the pane was last viewed", () => {
-      useWorkspaceUiStore.getState().markBackgroundWorkViewedForSession("sess-1", Date.parse("2026-08-17T00:00:10Z"));
-      sessionActivity = {
-        loops: [],
-        loopCapabilities: { supported: false, native: false },
-        processes: [
-          makeProcess({
-            id: "proc-stale",
-            status: { status: "exited", exitCode: 0 },
-            endedAt: "2026-08-17T00:00:05Z",
-          }),
-        ],
-        agents: [],
-      };
-      render(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />);
-
-      expect(document.querySelector("[data-background-work-notice]")).toBeNull();
-    });
-
-    it("hides the notice while its matching detail view is open, and shows it again on Back (documented minimal dismissal)", () => {
+    it("still marks the latest finish viewed on mount so the tab dirty-dot clears (R5 dot behavior retained)", () => {
       sessionActivity = {
         loops: [],
         loopCapabilities: { supported: false, native: false },
@@ -309,74 +269,12 @@ describe("BackgroundWorkPane — finish signals", () => {
         agents: [],
       };
       render(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />);
-      expect(document.querySelector("[data-background-work-notice]")).not.toBeNull();
 
-      // The process is exited, so it only lists under the Closed scope; the
-      // banner's own View action (unlike the roster row) works from
-      // whichever scope happens to be showing.
-      fireEvent.click(screen.getByRole("button", { name: "View" }));
-      expect(document.querySelector("[data-background-work-notice]")).toBeNull();
-
-      fireEvent.click(screen.getByRole("button", { name: "Back to background work" }));
-      expect(document.querySelector("[data-background-work-notice]")).not.toBeNull();
-    });
-
-    it("does not flicker away on its own re-renders while the pane stays open (frozen-at-mount baseline)", () => {
-      sessionActivity = {
-        loops: [],
-        loopCapabilities: { supported: false, native: false },
-        processes: [
-          makeProcess({
-            id: "proc-done",
-            status: { status: "exited", exitCode: 0 },
-            endedAt: "2026-08-17T00:00:05Z",
-          }),
-        ],
-        agents: [],
-      };
-      const { rerender } = render(
-        <BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />,
-      );
-      expect(document.querySelector("[data-background-work-notice]")).not.toBeNull();
-
-      // The mark-viewed-on-mount effect has by now advanced the LIVE
-      // `backgroundWorkLastViewedAtBySession["sess-1"]` past this signal's
-      // `atMs` — re-rendering with unchanged props must not read that live
-      // value, or the banner would vanish on its own the instant after it
-      // appeared.
-      rerender(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />);
-      expect(document.querySelector("[data-background-work-notice]")).not.toBeNull();
-    });
-
-    it("does not leak a stale finished signal or baseline into a freshly switched-to session", () => {
-      sessionActivity = {
-        loops: [],
-        loopCapabilities: { supported: false, native: false },
-        processes: [
-          makeProcess({
-            id: "proc-done",
-            status: { status: "exited", exitCode: 0 },
-            endedAt: "2026-08-17T00:00:05Z",
-          }),
-        ],
-        agents: [],
-      };
-      const { rerender } = render(
-        <BackgroundWorkPane workspaceId="ws-1" sessionId="sess-1" isOpen />,
-      );
-      expect(document.querySelector("[data-background-work-notice]")).not.toBeNull();
-
-      // A real session switch also switches the roster `useSessionActivity`
-      // reports — the new session has its own (here: empty) activity, not
-      // sess-1's finished process.
-      sessionActivity = {
-        loops: [],
-        loopCapabilities: { supported: false, native: false },
-        processes: [],
-        agents: [],
-      };
-      rerender(<BackgroundWorkPane workspaceId="ws-1" sessionId="sess-2" isOpen />);
-      expect(document.querySelector("[data-background-work-notice]")).toBeNull();
+      // The mark-viewed effect advanced the live baseline to this finish's
+      // atMs — the tab dot the pane's mount is meant to clear.
+      expect(
+        useWorkspaceUiStore.getState().backgroundWorkLastViewedAtBySession["sess-1"],
+      ).toBe(Date.parse("2026-08-17T00:00:05Z"));
     });
   });
 });

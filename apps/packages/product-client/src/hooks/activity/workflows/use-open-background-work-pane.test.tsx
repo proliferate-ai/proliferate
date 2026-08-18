@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WORKSPACE_UI_DEFAULTS } from "#product/lib/domain/preferences/workspace-ui/model";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
-import { useOpenBackgroundWorkPane } from "./use-open-background-work-pane";
+import {
+  useOpenBackgroundTerminalDetail,
+  useOpenBackgroundWorkPane,
+} from "./use-open-background-work-pane";
 
 const mocks = vi.hoisted(() => ({
   useWorkspaces: vi.fn(),
@@ -139,5 +142,83 @@ describe("useOpenBackgroundWorkPane", () => {
     const headerOrder = useWorkspaceUiStore.getState()
       .rightPanelMaterializedByWorkspace["workspace-1"]?.headerOrder ?? [];
     expect(headerOrder.filter((key) => key === "tool:background")).toHaveLength(1);
+  });
+});
+
+describe("useOpenBackgroundTerminalDetail (bgwork r6)", () => {
+  beforeEach(() => {
+    useSessionSelectionStore.getState().clearSelection();
+    mocks.useWorkspaces.mockReturnValue({ data: undefined });
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      shellActivationEpochByWorkspace: {},
+      pendingChatActivationByWorkspace: {},
+      pendingBackgroundSubagentSelectionByWorkspace: {},
+      pendingBackgroundProcessSelectionByWorkspace: {},
+      rightPanelMaterializedByWorkspace: {},
+      rightPanelDurableByWorkspace: {},
+      urgentHighlightedChatSessionByWorkspace: {},
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    useSessionSelectionStore.getState().clearSelection();
+  });
+
+  it("writes a session-scoped pending process selection and opens the pane", () => {
+    useSessionSelectionStore.getState().activateWorkspace({
+      logicalWorkspaceId: "logical-1",
+      workspaceId: "workspace-1",
+    });
+
+    const { result } = renderHook(() => useOpenBackgroundTerminalDetail());
+
+    act(() => {
+      result.current("proc-7", "session-1");
+    });
+
+    expect(
+      useWorkspaceUiStore.getState().pendingBackgroundProcessSelectionByWorkspace["workspace-1"],
+    ).toEqual({ processId: "proc-7", sessionId: "session-1" });
+    expect(
+      useWorkspaceUiStore.getState().rightPanelMaterializedByWorkspace["workspace-1"],
+    ).toMatchObject({ activeEntryKey: "tool:background" });
+  });
+
+  it("does not write a pending process selection for the bare (pane-only) call", () => {
+    useSessionSelectionStore.getState().activateWorkspace({
+      logicalWorkspaceId: "logical-1",
+      workspaceId: "workspace-1",
+    });
+
+    const { result } = renderHook(() => useOpenBackgroundTerminalDetail());
+
+    act(() => {
+      result.current();
+    });
+
+    expect(
+      useWorkspaceUiStore.getState().pendingBackgroundProcessSelectionByWorkspace["workspace-1"],
+    ).toBeUndefined();
+    // Still opens the pane.
+    expect(
+      useWorkspaceUiStore.getState().rightPanelMaterializedByWorkspace["workspace-1"],
+    ).toMatchObject({ activeEntryKey: "tool:background" });
+  });
+
+  it("does nothing when no workspace is selected", () => {
+    const { result } = renderHook(() => useOpenBackgroundTerminalDetail());
+
+    act(() => {
+      result.current("proc-7", "session-1");
+    });
+
+    expect(useWorkspaceUiStore.getState().rightPanelMaterializedByWorkspace).toEqual({});
+    expect(
+      useWorkspaceUiStore.getState().pendingBackgroundProcessSelectionByWorkspace,
+    ).toEqual({});
   });
 });
