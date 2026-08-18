@@ -54,16 +54,22 @@ public `/health` URL, and writes it to `.env.runtime`; the stack reports
 initial creation or a physical-instance replacement as successful only after
 both the local API and that advertised public HTTPS endpoint respond.
 
+`/health` proves process liveness and reports release identity. It does not
+check PostgreSQL, Redis, storage, or another dependency, so these deployment
+gates prove that the expected process is reachable—not that the deployment can
+serve every critical request. Dependency-aware readiness is not currently
+provided and remains a product follow-up.
+
 The instance gives `cfn-init` an 18-minute inner deadline, followed by a
 30-second forced-kill fallback if it does not stop on `TERM`, and always reports
 its bootstrap and local API status through the EC2 resource's 20-minute
 CreationPolicy. Keeping that resource signal preserves fail-closed behavior
 when a latest-AMI or network change replaces the instance. Once the instance is
-locally ready, its Elastic IP association and DNS can converge. A separate
+locally live, its Elastic IP association and DNS can converge. A separate
 Lambda-backed CloudFormation custom resource then probes the advertised public
 HTTPS `/health` endpoint for up to seven minutes. Its instance-generation
 property changes on physical-instance replacements, so stack creation and
-replacement updates remain gated on external public readiness. Release-only
+replacement updates remain gated on external public liveness. Release-only
 metadata updates are applied later by `cfn-hup`; CloudFormation can reach
 `UPDATE_COMPLETE` before that asynchronous host update finishes, so that status
 is not a release-deployment attestation. The canonical `update.sh` still waits

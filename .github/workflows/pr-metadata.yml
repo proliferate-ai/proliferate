@@ -20,12 +20,13 @@ env:
 
 jobs:
   validate-pr-metadata:
-    name: Validate PR title and labels
+    name: Validate PR title, labels, and receipt
     runs-on: ubuntu-latest
     steps:
       # pull_request_target runs with write-capable secrets, so only trusted
       # base-revision code is checked out and executed. The untrusted PR head is
-      # never checked out; changed paths come from the GitHub API instead.
+      # never checked out; changed paths and body/head metadata come from the
+      # event/API instead.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.base.sha }}
@@ -50,10 +51,19 @@ jobs:
               "changed-files.json",
               JSON.stringify(files.map((file) => file.filename)),
             );
+            fs.writeFileSync(
+              "pr-body.md",
+              context.payload.pull_request.body || "",
+              "utf8",
+            );
             core.info(`Collected ${files.length} changed path(s).`);
 
       - name: Validate metadata
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: >-
           node scripts/ci-cd/validate-pr-metadata.mjs
           --event "$GITHUB_EVENT_PATH"
           --changed-files-json changed-files.json
+          --body-file pr-body.md
+          --head-sha "$PR_HEAD_SHA"

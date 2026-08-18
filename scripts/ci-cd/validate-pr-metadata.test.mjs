@@ -5,10 +5,67 @@ import {
   deriveAreaExpectation,
   validatePullRequestMetadata,
 } from "./pr-metadata.mjs";
+import {
+  validatePullRequestBody,
+  validateReadyPullRequest,
+} from "./validate-pr-metadata.mjs";
 
 const valid = {
   title: "fix(server): preserve support report identity",
   labels: ["release:fix", "area:server"],
+};
+const headSha = "0123456789abcdef0123456789abcdef01234567";
+
+function readyBody({
+  evidenceState = "run",
+  docsImpact = "- `guides/process/pull-requests.md`",
+  observability = "- none — documentation-only behavior has no runtime telemetry delta.",
+  currentHead = headSha,
+} = {}) {
+  return `## Summary
+
+- Tighten the repository documentation contract.
+
+## Testing / Verification
+
+Evidence state: ${evidenceState}
+
+- \`python3.12 scripts/check_docs.py\` — passed.
+
+## Observability
+
+${observability}
+
+## Security / Privacy
+
+- none — no credential, authorization, private-data, or destructive boundary changed.
+
+## Documentation impact
+
+${docsImpact}
+
+## Affected consumers
+
+- Documentation contributors; proof is the docs checker above.
+
+## Delivery receipt
+
+- Spec revision / rulings: not applicable — standalone documentation repair.
+- Base revision: fedcba9876543210fedcba9876543210fedcba98
+Current head: ${currentHead}
+- Review state: pending.
+- Product proof: not-applicable — no product behavior changed.
+- Human acceptance: pending.
+- Limitations / stop / next consumer: ready for exact-head review.
+`;
+}
+
+const ready = {
+  title: "docs(process): clarify delivery receipts",
+  labels: ["release:docs", "area:docs"],
+  draft: false,
+  body: readyBody(),
+  headSha,
 };
 
 test("accepts the release metadata contract", () => {
@@ -115,4 +172,283 @@ test("ambiguity is resolved once one candidate area is applied", () => {
   });
 
   assert.deepEqual(errors, []);
+});
+
+test("drafts bypass title, label, body, and receipt enforcement", () => {
+  assert.deepEqual(
+    validateReadyPullRequest({
+      title: "unfinished",
+      labels: [],
+      draft: true,
+      body: "",
+      headSha: "",
+    }),
+    [],
+  );
+});
+
+test("accepts a complete minimal docs-only ready receipt", () => {
+  assert.deepEqual(validateReadyPullRequest(ready), []);
+});
+
+test("accepts a no-documentation-impact reason", () => {
+  const body = readyBody({
+    docsImpact: "- none — existing owner documentation already covers this refactor.",
+  });
+
+  assert.deepEqual(validatePullRequestBody({ body, headSha }), []);
+});
+
+test("accepts safe repository-relative documentation paths generically", () => {
+  for (const docsImpact of [
+    "- `SECURITY.md`",
+    "- `THIRD_PARTY_NOTICES.md`",
+    "- `adrs/0016-example.md`",
+    "- `delivery-spec-workflows-gen2-pr7.md`",
+  ]) {
+    assert.deepEqual(
+      validatePullRequestBody({ body: readyBody({ docsImpact }), headSha }),
+      [],
+    );
+  }
+});
+
+test("accepts every enumerated evidence state", () => {
+  for (const evidenceState of [
+    "pending",
+    "not-applicable",
+    "run",
+    "unavailable",
+  ]) {
+    assert.deepEqual(
+      validatePullRequestBody({
+        body: readyBody({ evidenceState }),
+        headSha,
+      }),
+      [],
+    );
+  }
+});
+
+test("rejects missing and duplicate required headings", () => {
+  const missing = readyBody().replace("## Observability", "## Runtime signals");
+  const missingErrors = validatePullRequestBody({ body: missing, headSha });
+  assert.match(missingErrors.join("\n"), /exactly one "## Observability"/);
+
+  const duplicate = `${readyBody()}\n## Summary\n\n- A second summary.\n`;
+  const duplicateErrors = validatePullRequestBody({ body: duplicate, headSha });
+  assert.match(duplicateErrors.join("\n"), /duplicate "## Summary"/);
+});
+
+test("rejects common placeholder sentinels in required sections", () => {
+  for (const placeholder of [
+    "TODO: fill this in after review.",
+    "- TBD — replace with the result.",
+    "fill-this-in: describe the change.",
+  ]) {
+    const body = readyBody().replace(
+      /## Summary[\s\S]*?## Testing \/ Verification/,
+      `## Summary\n\n${placeholder}\n\n## Testing / Verification`,
+    );
+    const errors = validatePullRequestBody({ body, headSha });
+    assert.match(errors.join("\n"), /Summary.*placeholder content/);
+  }
+});
+
+test("ignores H2 headings inside fenced code and HTML comments", () => {
+  const fenced = readyBody().replace(
+    "- Tighten the repository documentation contract.",
+    "- Tighten the repository documentation contract.\n\n```md\n## Summary\n\n- Example only.\n```",
+  );
+  assert.deepEqual(validatePullRequestBody({ body: fenced, headSha }), []);
+
+  const commented = readyBody().replace(
+    "- Tighten the repository documentation contract.",
+    "- Tighten the repository documentation contract.\n\n<!--\n## Summary\n\n- Template example.\n-->",
+  );
+  assert.deepEqual(validatePullRequestBody({ body: commented, headSha }), []);
+});
+
+test("keeps every PR section and receipt field hidden after an invalid fence close", () => {
+  const body = `\`\`\`md
+\`\`\`not-a-close
+${readyBody()}
+\`\`\`
+`;
+  const errors = validatePullRequestBody({ body, headSha }).join("\n");
+
+  for (const heading of [
+    "Summary",
+    "Testing / Verification",
+    "Observability",
+    "Security / Privacy",
+    "Documentation impact",
+    "Affected consumers",
+    "Delivery receipt",
+  ]) {
+    assert.match(errors, new RegExp(`exactly one \\\"## ${heading.replace("/", "\\/")}\\\"`));
+  }
+  assert.match(errors, /Testing \/ Verification must contain Evidence state/);
+  assert.match(errors, /Delivery receipt must contain Current head/);
+});
+
+test("accepts visible PR sections and fields after a legal whitespace-only fence close", () => {
+  const body = `\`\`\`md
+## Example only
+\`\`\`\`\t
+${readyBody()}`;
+
+  assert.deepEqual(validatePullRequestBody({ body, headSha }), []);
+});
+
+test("requires the closing fence marker and minimum length to match", () => {
+  for (const nonClosingMarker of ["~~~", "```"]) {
+    const body = `\`\`\`\`md
+${nonClosingMarker}
+${readyBody()}
+\`\`\`\`
+`;
+    const errors = validatePullRequestBody({ body, headSha }).join("\n");
+
+    assert.match(errors, /exactly one \"## Summary\"/);
+    assert.match(errors, /Delivery receipt must contain Current head/);
+  }
+});
+
+test("keeps PR sections and fields hidden inside an unclosed HTML comment", () => {
+  const errors = validatePullRequestBody({
+    body: `<!--\n${readyBody()}`,
+    headSha,
+  }).join("\n");
+
+  assert.match(errors, /exactly one \"## Summary\"/);
+  assert.match(errors, /exactly one \"## Delivery receipt\"/);
+  assert.match(errors, /Testing \/ Verification must contain Evidence state/);
+  assert.match(errors, /Delivery receipt must contain Current head/);
+});
+
+test("accepts visible PR sections and fields before an unclosed HTML comment", () => {
+  const body = `${readyBody()}\n<!--\n## Summary\nEvidence state: invalid\nCurrent head: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n`;
+
+  assert.deepEqual(validatePullRequestBody({ body, headSha }), []);
+});
+
+test("rejects a documentation impact with neither a path nor reason", () => {
+  const errors = validatePullRequestBody({
+    body: readyBody({ docsImpact: "- Maybe later." }),
+    headSha,
+  });
+
+  assert.match(errors.join("\n"), /must name a repository path/);
+});
+
+test("rejects unsafe documentation paths", () => {
+  for (const docsImpact of [
+    "- `../../etc/passwd`",
+    "- `/etc/passwd`",
+    "- `https://example.com/SECURITY.md`",
+  ]) {
+    const errors = validatePullRequestBody({
+      body: readyBody({ docsImpact }),
+      headSha,
+    });
+    assert.match(errors.join("\n"), /must name a repository path/);
+  }
+});
+
+test("requires a reason for a no-impact Observability state", () => {
+  for (const observability of ["- none", "Impact:\n- none", "Impact: none"]) {
+    const errors = validatePullRequestBody({
+      body: readyBody({ observability }),
+      headSha,
+    });
+    assert.match(errors.join("\n"), /Observability.*plus a reason/);
+  }
+
+  for (const observability of [
+    "- none — documentation-only change.",
+    "Impact:\n- none — documentation-only change.",
+    "Impact: none — documentation-only change.",
+    "- Impact: not applicable: documentation-only change.",
+    "Impact: none — x",
+  ]) {
+    assert.deepEqual(
+      validatePullRequestBody({
+        body: readyBody({ observability }),
+        headSha,
+      }),
+      [],
+    );
+  }
+});
+
+test("ignores evidence-state and current-head fields inside fenced code", () => {
+  const body = readyBody()
+    .replace(
+      "Evidence state: run",
+      "Verification details follow.\n\n```text\nEvidence state: run\n```",
+    )
+    .replace(
+      `Current head: ${headSha}`,
+      `Receipt details follow.\n\n~~~text\nCurrent head: ${headSha}\n~~~`,
+    );
+  const errors = validatePullRequestBody({ body, headSha });
+
+  assert.match(errors.join("\n"), /Testing \/ Verification must contain Evidence state/);
+  assert.match(errors.join("\n"), /Delivery receipt must contain Current head/);
+});
+
+test("accepts visible evidence-state and current-head fields beside fenced examples", () => {
+  const body = readyBody()
+    .replace(
+      "Evidence state: run",
+      "```text\nEvidence state: invalid\n```\nEvidence state: run",
+    )
+    .replace(
+      `Current head: ${headSha}`,
+      `~~~text\nCurrent head: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n~~~\nCurrent head: ${headSha}`,
+    );
+
+  assert.deepEqual(validatePullRequestBody({ body, headSha }), []);
+});
+
+test("rejects an unrecognized evidence state", () => {
+  const errors = validatePullRequestBody({
+    body: readyBody({ evidenceState: "passed" }),
+    headSha,
+  });
+
+  assert.match(errors.join("\n"), /pending \| not-applicable \| run \| unavailable/);
+});
+
+test("rejects a missing or stale exact-head receipt", () => {
+  const missingHead = readyBody().replace(/^Current head:.*$/m, "Current revision: pending");
+  assert.match(
+    validatePullRequestBody({ body: missingHead, headSha }).join("\n"),
+    /must contain Current head/,
+  );
+
+  const staleHead = readyBody({
+    currentHead: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  });
+  assert.match(
+    validatePullRequestBody({ body: staleHead, headSha }).join("\n"),
+    /does not match the PR head/,
+  );
+});
+
+test("rejects a missing event head", () => {
+  assert.match(
+    validatePullRequestBody({ body: readyBody(), headSha: "" }).join("\n"),
+    /Current PR head SHA is required/,
+  );
+});
+
+test("accepts a fuller receipt without judging semantic adequacy", () => {
+  const body = readyBody().replace(
+    "- Documentation contributors; proof is the docs checker above.",
+    "- Contributors: docs check run.\n- Release readers: review pending.\n- Operators: not-applicable — no procedure changed.",
+  );
+
+  assert.deepEqual(validatePullRequestBody({ body, headSha }), []);
 });

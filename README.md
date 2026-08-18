@@ -95,6 +95,12 @@ Proliferate is AGPL-3.0. The desktop and web apps are open today.
 Self-hosting the full cloud control plane is in beta — see
 [Self-hosting](#self-hosting) below.
 
+## Developing or Contributing
+
+Start with [`AGENTS.md`](./AGENTS.md) for repository-wide invariants and the
+single source-area router, then follow the human contribution process in
+[`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
 ## Getting Started
 
 ### Quick Start
@@ -129,7 +135,8 @@ Requirements:
 - pnpm
 - Python 3.12+
 - `uv`
-- Docker, for the local control plane database
+- PostgreSQL and Redis; Docker is the default local-service option, while
+  existing native services are supported
 
 Use named dev profiles for full-stack development when multiple worktrees run at
 the same time.
@@ -142,8 +149,10 @@ make dev-list
 make run PROFILE=main
 ```
 
-See [dev profiles](./guides/local/dev-profiles.md) for profile state, ports,
-generated Tauri config, and app labels.
+See the [local-development guide](./guides/local/README.md) for service options,
+constrained-host development, and setup troubleshooting. The
+[dev-profiles reference](./guides/local/dev-profiles.md) covers profile state,
+ports, generated Tauri config, and app labels.
 
 </details>
 

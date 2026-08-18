@@ -193,3 +193,72 @@ undescribed one, because it reads as complete."""
 [rule.example]
 bad = "a catalog entry with no description, or tagged with an unknown surface"
 good = "name, secret, default, description, and tags all present and valid"
+
+[[rule]]
+id = "PROD-DOCS-10"
+title = "canonical routes resolve to usable current or explicit target owners"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_docs.py"
+mode = "lint"
+scope = "local document links derived from the Source router and Cross-plane systems tables in AGENTS.md"
+
+rule = """The Source router and Cross-plane systems tables in AGENTS.md must
+both exist and contain a local owner route. Every canonical route must resolve
+to at least one landing owner and may not resolve to a document marked
+superseded. A routed target document must explicitly identify itself as target
+and expose its current gaps or implementation status."""
+alternative = """Route to the current owner, or retain the target label and add
+an explicit current-gap/status section. For a directory route, provide a
+README.md landing document; an established fenced peer-owner directory is
+checked across each immediate Markdown owner."""
+why = """A router is an authority decision. Sending a reader to reversed law,
+or to ideal-state prose whose divergence is hidden, makes a green link check
+actively misleading."""
+
+[rule.example]
+bad = "an AGENTS.md system row routes to a document whose preamble says SUPERSEDED"
+good = "the row routes to current law, or a Status: target owner with Current gaps"
+
+[[rule]]
+id = "PROD-DOCS-11"
+title = "AGENTS.md is the sole source-area router"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_docs.py"
+mode = "lint"
+scope = "README.md, CONTRIBUTING.md, specs/README.md, and ARCHITECTURE.md"
+
+rule = """Every repository entry page must link to AGENTS.md for task routing
+and must not define its own source router, source map, or Source area / Start
+here table."""
+alternative = """Keep public, contribution, authority, or educational content
+on the entry page, then link to AGENTS.md for source-path decisions."""
+why = """One generated-looking route copied into several familiar entry pages
+will drift. A sole router lets owners change one mapping and gives cold readers
+one answer."""
+
+[rule.example]
+bad = "CONTRIBUTING.md repeats Frontend changes and Server changes routes"
+good = "CONTRIBUTING.md links to AGENTS.md and keeps only contribution procedure"
+
+[[rule]]
+id = "PROD-DOCS-12"
+title = "the tracked harness loader defers to AGENTS.md"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_docs.py"
+mode = "lint"
+scope = "CLAUDE.md"
+
+rule = """The tracked CLAUDE.md loader must exist, link to AGENTS.md, and must
+not contain a competing source router."""
+alternative = """Keep CLAUDE.md as a thin harness-specific loader that points
+to AGENTS.md and the shared document lifecycle."""
+why = """A harness loader is useful only as a stable door into repository law.
+Copying the router into it creates harness-specific instructions that age at a
+different rate."""
+
+[rule.example]
+bad = "CLAUDE.md disappears or carries its own Source area / Start here table"
+good = "the tracked thin shim says to read and follow AGENTS.md"

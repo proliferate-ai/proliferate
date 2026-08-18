@@ -121,8 +121,11 @@ incident owner and a follow-up issue because they bypass the idempotent webhook
 path.
 
 1. Fix the delivery blocker first:
-   - Endpoint down or 5xx: restore the server, confirm `/api/health`, and
-     check recent deploys.
+   - Endpoint down or 5xx: restore the server, confirm `/api/health` process
+     liveness/release identity, check recent deploys, and inspect current
+     PostgreSQL/Redis/storage dependency evidence before replay. `/api/health`
+     is not dependency readiness, and no dependency-aware readiness endpoint
+     is currently provided.
    - Signature failure: verify the endpoint belongs to the same Stripe mode and
      environment, then refresh `STRIPE_WEBHOOK_SECRET` in the owning hosted
      secret store. Do not print the secret.

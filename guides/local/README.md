@@ -112,6 +112,65 @@ variables. For a nondefault Redis endpoint, keep `LOCAL_REDIS_HOST` and
 `LOCAL_REDIS_PORT` aligned with the server's `REDBEAT_REDIS_URL`; the readiness
 checks only prove that the configured TCP ports accept connections.
 
+## Constrained Hosts, Frontend Work, And Documentation
+
+Frontend or documentation work does not require a new AnyHarness/runtime Rust
+build when it can run against a known-good prebuilt AnyHarness binary. Choose
+an explicit binary owned by the current checkout, a trusted shared build, or a
+teammate-provided artifact; do not copy a machine-specific path into repository
+instructions.
+
+```bash
+PROLIFERATE_SHARED_RUNTIME=/absolute/path/to/known-good/anyharness
+test -x "$PROLIFERATE_SHARED_RUNTIME"
+
+make setup PROFILE=<name> USE_EXISTING_POSTGRES=1
+SKIP_RUST=1 \
+  ANYHARNESS_DEV_RUNTIME_BIN="$PROLIFERATE_SHARED_RUNTIME" \
+  make run PROFILE=<name> USE_EXISTING_POSTGRES=1 USE_EXISTING_REDIS=1
+```
+
+Prerequisites are a previously built runtime compatible with the checked-out
+AnyHarness API, native Postgres and Redis reachable at the configured
+endpoints, server dependencies installed, and the frontend artifacts required
+by `make run`. `SKIP_RUST=1` skips the Makefile's AnyHarness/workspace Cargo
+builds; the explicit runtime path is what makes `run` use the shared binary.
+It does not make the Desktop launch Rust-free: `make run` invokes `tauri dev`,
+which may compile the native shell, especially on its first run in a worktree.
+
+On a constrained machine, treat that Desktop/Tauri launch as a Rust build.
+Before `make run`, check the machine-wide build slot:
+
+```bash
+pgrep -x cargo
+pgrep -x rustc
+```
+
+If either command prints a process, wait; do not start another Tauri/Cargo
+build. Narrow documentation checks are Rust-free. So are frontend package or
+web-only commands that do not invoke `make run`, Tauri, or an SDK-regeneration
+target; for example, `pnpm shared:build` rebuilds ProductClient and design
+packages without Cargo when their generated inputs are already fresh.
+
+Artifact freshness is part of the contract:
+
+- If `make run` reports a missing frontend artifact, run the narrow frontend or
+  package build it names. `pnpm shared:build` rebuilds the design and
+  ProductClient packages without compiling Rust.
+- Rebuild the real Rust workspace/runtime when Rust source, AnyHarness wire
+  contracts, generated AnyHarness SDK inputs, migrations, or runtime behavior
+  changed. A shared binary cannot validate those changes.
+- If the checked-out client expects a newer runtime contract than the shared
+  binary provides, stop and obtain/build a matching runtime rather than
+  treating startup or 404/shape failures as product regressions.
+- Documentation-only work needs no profile or runtime at all; use the
+  documentation proof below.
+
+This path avoids Docker and the AnyHarness/runtime Rust build. It avoids all
+Rust work only for the docs and narrow package/web-only commands described
+above; a Desktop/Tauri launch still requires the Rust-slot preflight. It does
+not qualify a release artifact or replace the owning package's tests.
+
 ## Windows And WSL2
 
 On Windows, run the Linux development workflow inside WSL2 and keep the
@@ -195,5 +254,8 @@ by that source area's documentation.
 For documentation-only changes:
 
 ```bash
-python3 scripts/check_docs.py
+/opt/homebrew/bin/python3.12 scripts/check_docs.py
 ```
+
+The checker requires Python 3.12. On a non-Homebrew host, invoke an equivalent
+Python 3.12 interpreter from that host's managed toolchain.

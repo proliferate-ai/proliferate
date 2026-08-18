@@ -29,6 +29,30 @@ success, in [`TESTING/core-release-validation.md`](TESTING/core-release-validati
 **Real-LLM tests assert outcomes, not transcripts.** "Run reached `completed`,
 file exists, emit validated against schema" — never "the agent said X."
 
+### Current enforced baseline versus target gates
+
+The table above is the target gate model. Current enforcement at this revision
+is narrower and must not be reported as full Tier 1–4 qualification:
+
+| Surface | Current enforcement | Gap to the target |
+| --- | --- | --- |
+| Rust, server Python, ProductClient, generated SDK/build contracts, release-runner tooling, and selected browser seams | Ordinary PR CI runs these relevant suites/checks. | A green subset proves only the named surfaces. |
+| TypeScript package tests | ProductClient tests gate. | Five test-owning package groups are not run as their package suites in ordinary PR CI: Desktop (44 files), Web (10), Mobile (4), AnyHarness SDK (24), and Cloud SDK React (12). Mobile also lacks a package `test` script. |
+| Tier 2 | The focused v2 Workflow-definition browser cell gates ordinary CI. | The broad `intent-tests` and `intent-billing` jobs are provisional/non-blocking; billing can skip when its test credential is absent. |
+| Target scenario manifest | The checked-in manifest validates inventory and agreement shape. | Its 186 required scenarios are `planned` or `deferred`; none is `collected` or `enforced`, and all 47 composed journeys are planned. Presence is not proof. |
+| Tier 3/4 and production | Strict runners and evidence contracts exist and can be invoked. Production promotion verifies main ancestry and staging deployment. | Production does not yet consume a complete exact-SHA/exact-artifact qualification aggregate. This is the documented production-qualification exception. |
+
+Do not describe a planned/deferred manifest cell, a non-blocking job, a skipped
+credentialed lane, or a locally passing package subset as collected or enforced
+qualification. Closing these rows requires CI/product work outside a
+documentation-only change.
+
+“Flake-free” graduation evidence means first-attempt results are observable for
+the whole measurement window. A graduation run must either use zero retries or
+retain and aggregate every attempt so a retry-success is counted as a flake.
+The current Tier 2 configs use one retry and retain traces only on final job
+failure, so they do not yet produce that evidence.
+
 ## Tier 1 — unit / contract
 
 Three sub-kinds, in every language:
@@ -234,9 +258,10 @@ in the same PR; generated flow and execution views must remain clean.
 answer to "which lower tier should have owned this," and that test lands with
 the fix.
 
-Named migration exceptions: desktop vitest is not yet wired into the merge
-gate; the broad tier-2 intent lanes (`intent-tests` + `intent-billing`) run
-provisional/non-blocking until they earn a flake-free record; and
+Named migration exceptions: the five unwired TypeScript package groups and the
+broad Tier 2/manifest/production-qualification gaps are enumerated in the
+current baseline above. In addition,
 `scripts/validate-agent-catalog.mjs` remains a hand-kept mirror of the Rust
 catalog validator until the contract-fixture pattern absorbs it. Target gate
-tables and the exception's closure order live in the same contract linked above.
+tables and the exceptions' closure order live in the same contract linked
+above.

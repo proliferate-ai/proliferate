@@ -21,6 +21,26 @@ from pathlib import Path
 from urllib.parse import unquote
 
 
+MINIMUM_PYTHON = (3, 12)
+
+
+def python_version_diagnostic(version: tuple[int, ...]) -> str | None:
+    """Return the one-line interpreter remediation, if the version is too old."""
+    if version[:2] >= MINIMUM_PYTHON:
+        return None
+    found = ".".join(str(part) for part in version[:3])
+    return (
+        "scripts/check_docs.py requires Python 3.12 or newer "
+        f"(found {found}); rerun with a Python 3.12 interpreter."
+    )
+
+
+_VERSION_DIAGNOSTIC = python_version_diagnostic(tuple(sys.version_info))
+if _VERSION_DIAGNOSTIC is not None:
+    print(_VERSION_DIAGNOSTIC, file=sys.stderr)
+    raise SystemExit(2)
+
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     # Run as `python3 scripts/check_docs.py` from the repo root, sys.path[0] is
@@ -54,7 +74,8 @@ class Finding:
 
 HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 SETEXT_HEADING = re.compile(r"^\s{0,3}(?:=+|-+)\s*$")
-FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
+FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})([^\r\n]*)$")
+FENCE_CLOSE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
 INLINE_CODE = re.compile(r"(`+)(.+?)\1")
 REFERENCE_DEFINITION = re.compile(r"^\s{0,3}\[[^\]]+\]:\s*(.+?)\s*$")
 HTML_ANCHOR = re.compile(r"<(?:a|[A-Za-z][^>]*)\s+(?:[^>]*?\s)?(?:id|name)=[\"']([^\"']+)[\"']")
@@ -134,6 +155,22 @@ REQUIRED_READMES = (
     "specs/anyharness/README.md",
     "specs/GENERATED/README.md",
 )
+ROUTER_SECTIONS = ("Source router", "Cross-plane systems")
+ENTRY_PAGES = (
+    "README.md",
+    "CONTRIBUTING.md",
+    "specs/README.md",
+    "ARCHITECTURE.md",
+    "CLAUDE.md",
+)
+SOURCE_MAP_HEADING = re.compile(
+    r"^(?:source|source-area|code|task)(?: area)? (?:router|routing|map)$",
+    re.IGNORECASE,
+)
+SOURCE_MAP_TABLE = re.compile(
+    r"^\s*\|[^\n]*\bsource area\b[^\n]*\bstart here\b[^\n]*\|\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 
 def tracked_files(*patterns: str) -> list[Path]:
@@ -173,24 +210,95 @@ def tracked_paths(*patterns: str) -> list[Path]:
     ]
 
 
+def blank_except_newlines(value: str) -> str:
+    """Mask content while preserving line breaks and character offsets."""
+    return "".join(char if char in "\r\n" else " " for char in value)
+
+
+def opening_fence(line: str) -> tuple[str, int] | None:
+    """Return a legal fenced-code opener's marker state."""
+    match = FENCE_OPEN.match(line)
+    if not match:
+        return None
+    marker, info = match.groups()
+    if marker[0] == "`" and "`" in info:
+        return None
+    return marker[0], len(marker)
+
+
+def is_closing_fence(line: str, character: str, minimum_length: int) -> bool:
+    """Whether a line legally closes the active fenced-code block."""
+    match = FENCE_CLOSE.match(line)
+    if not match:
+        return False
+    marker = match.group(1)
+    return marker[0] == character and len(marker) >= minimum_length
+
+
+def mask_html_comments(line: str, starts_inside_comment: bool) -> tuple[str, bool]:
+    """Mask HTML comments, carrying an unclosed comment into later lines."""
+    inside_comment = starts_inside_comment
+    cursor = 0
+    visible: list[str] = []
+
+    while cursor < len(line):
+        if inside_comment:
+            comment_end = line.find("-->", cursor)
+            if comment_end < 0:
+                visible.append(blank_except_newlines(line[cursor:]))
+                return "".join(visible), inside_comment
+            after_comment = comment_end + 3
+            visible.append(blank_except_newlines(line[cursor:after_comment]))
+            cursor = after_comment
+            inside_comment = False
+            continue
+
+        comment_start = line.find("<!--", cursor)
+        if comment_start < 0:
+            visible.append(line[cursor:])
+            break
+        visible.append(line[cursor:comment_start])
+        comment_end = line.find("-->", comment_start + 4)
+        if comment_end < 0:
+            visible.append(blank_except_newlines(line[comment_start:]))
+            inside_comment = True
+            return "".join(visible), inside_comment
+        after_comment = comment_end + 3
+        visible.append(blank_except_newlines(line[comment_start:after_comment]))
+        cursor = after_comment
+
+    return "".join(visible), inside_comment
+
+
 def visible_markdown_lines(text: str):
-    """Yield non-fenced Markdown lines with one-based line numbers."""
-    fence: str | None = None
+    """Yield Markdown outside fenced code and HTML comments with line numbers."""
+    fence_character: str | None = None
     minimum_length = 0
+    inside_html_comment = False
 
     for line_number, line in enumerate(text.splitlines(), start=1):
-        match = FENCE.match(line)
-        if match:
-            marker = match.group(1)
-            if fence is None:
-                fence = marker[0]
-                minimum_length = len(marker)
-            elif marker[0] == fence and len(marker) >= minimum_length:
-                fence = None
+        if fence_character is not None:
+            if is_closing_fence(line, fence_character, minimum_length):
+                fence_character = None
                 minimum_length = 0
+            yield line_number, blank_except_newlines(line)
             continue
-        if fence is None:
-            yield line_number, line
+
+        opener = None if inside_html_comment else opening_fence(line)
+        if opener is not None:
+            fence_character, minimum_length = opener
+            yield line_number, blank_except_newlines(line)
+            continue
+
+        visible_line, inside_html_comment = mask_html_comments(
+            line, inside_html_comment
+        )
+        opener = opening_fence(visible_line)
+        if opener is not None:
+            fence_character, minimum_length = opener
+            yield line_number, blank_except_newlines(line)
+        else:
+            yield line_number, visible_line
 
 
 def mask_inline_code(line: str) -> str:
@@ -240,6 +348,198 @@ def markdown_targets(text: str):
             yield line_number, definition.group(1)
         for target in inline_link_targets(visible_line):
             yield line_number, target
+
+
+def markdown_section(text: str, heading: str) -> list[tuple[int, str]]:
+    """Return visible lines beneath one exact level-two heading."""
+    lines = list(visible_markdown_lines(text))
+    start: int | None = None
+    section: list[tuple[int, str]] = []
+    for line_number, line in lines:
+        match = HEADING.match(line)
+        if match and len(match.group(1)) == 2:
+            if start is not None:
+                break
+            if match.group(2).strip().casefold() == heading.casefold():
+                start = line_number
+            continue
+        if start is not None:
+            section.append((line_number, line))
+    return section
+
+
+def router_targets(text: str) -> list[tuple[str, int, str]]:
+    """Derive canonical local links from AGENTS.md's two routing tables."""
+    targets: list[tuple[str, int, str]] = []
+    for section_name in ROUTER_SECTIONS:
+        for line_number, line in markdown_section(text, section_name):
+            if not line.lstrip().startswith("|"):
+                continue
+            for raw_target in inline_link_targets(line):
+                target = unquote(normalized_target(raw_target))
+                path_text = target.partition("#")[0]
+                if path_text and not path_text.startswith(EXTERNAL_PREFIXES):
+                    targets.append((section_name, line_number, path_text))
+    return targets
+
+
+def resolve_router_target(root: Path, raw_target: str) -> list[Path]:
+    """Resolve a canonical route, using a directory's landing documents."""
+    target = (root / raw_target).resolve()
+    try:
+        target.relative_to(root.resolve())
+    except ValueError:
+        return []
+    if not target.is_dir():
+        return [target] if target.is_file() else []
+
+    readme = target / "README.md"
+    if readme.is_file():
+        return [readme]
+
+    # A few established feature families deliberately fence several peer
+    # owner documents without a second index. Validate every immediate owner
+    # instead of silently exempting the directory route.
+    return sorted(path for path in target.glob("*.md") if path.is_file())
+
+
+def document_authority(text: str) -> str:
+    """Classify the explicit authority marker in a document preamble."""
+    preamble: list[str] = []
+    for _, line in visible_markdown_lines(text):
+        if line.startswith("## "):
+            break
+        preamble.append(line)
+    header = "\n".join(preamble)
+    if re.search(r"(?im)^\s*(?:>\s*)?(?:\*\*)?SUPERSEDED\b", header) or re.search(
+        r"(?im)^\s*Status:\s*superseded\b", header
+    ):
+        return "superseded"
+    if re.search(r"(?im)^\s*Status:\s*target\b", header):
+        return "target"
+    return "current"
+
+
+def exposes_current_gaps(text: str) -> bool:
+    """Whether a target document exposes its observed-current delta."""
+    for _, line in visible_markdown_lines(text):
+        match = HEADING.match(line)
+        if match and re.search(
+            r"\b(?:current gaps?|implementation status)\b",
+            match.group(2),
+            re.IGNORECASE,
+        ):
+            return True
+    visible_text = "\n".join(line for _, line in visible_markdown_lines(text))
+    return bool(
+        re.search(r"\[Current gaps?\]\([^)]*\)", visible_text, re.IGNORECASE)
+    )
+
+
+def check_canonical_routes() -> list[Finding]:
+    """Enforce authority/status semantics on routes derived from AGENTS.md."""
+    agents = ROOT / "AGENTS.md"
+    if not agents.is_file():
+        return [Finding("PROD-DOCS-10", "AGENTS.md", "canonical router is missing")]
+
+    findings: list[Finding] = []
+    targets = router_targets(agents.read_text(encoding="utf-8"))
+    for section_name in ROUTER_SECTIONS:
+        if not any(target[0] == section_name for target in targets):
+            findings.append(
+                Finding(
+                    "PROD-DOCS-10",
+                    "AGENTS.md",
+                    f'{section_name!r} section/table is missing or has no local owner route',
+                )
+            )
+
+    for section_name, line_number, raw_target in targets:
+        resolved_targets = resolve_router_target(ROOT, raw_target)
+        if not resolved_targets:
+            findings.append(
+                Finding(
+                    "PROD-DOCS-10",
+                    f"AGENTS.md:{line_number}",
+                    f"canonical route {raw_target!r} resolves to no landing owner",
+                )
+            )
+            continue
+
+        for target in resolved_targets:
+            text = target.read_text(encoding="utf-8")
+            authority = document_authority(text)
+            location = f"AGENTS.md:{line_number} -> {target.relative_to(ROOT)}"
+            if authority == "superseded":
+                findings.append(
+                    Finding(
+                        "PROD-DOCS-10",
+                        location,
+                        "canonical route resolves to a superseded document",
+                    )
+                )
+            elif authority == "target" and not exposes_current_gaps(text):
+                findings.append(
+                    Finding(
+                        "PROD-DOCS-10",
+                        location,
+                        f"target route from {section_name} does not expose current gaps",
+                    )
+                )
+    return findings
+
+
+def has_competing_source_map(text: str) -> bool:
+    """Detect a second source-area router on an entry page."""
+    for _, line in visible_markdown_lines(text):
+        match = HEADING.match(line)
+        if match and SOURCE_MAP_HEADING.fullmatch(match.group(2).strip()):
+            return True
+    visible_text = "\n".join(line for _, line in visible_markdown_lines(text))
+    return SOURCE_MAP_TABLE.search(visible_text) is not None
+
+
+def defers_to_agents(relative_path: str, text: str, root: Path) -> bool:
+    """Whether an entry page contains an actual local link to root AGENTS.md."""
+    source = root / relative_path
+    expected = (root / "AGENTS.md").resolve()
+    for _, raw_target in markdown_targets(text):
+        target = unquote(normalized_target(raw_target)).partition("#")[0]
+        if not target or target.startswith(EXTERNAL_PREFIXES):
+            continue
+        if (source.parent / target).resolve() == expected:
+            return True
+    return False
+
+
+def check_entry_page_deference() -> list[Finding]:
+    """Keep source routing in AGENTS.md and the tracked harness shim thin."""
+    findings: list[Finding] = []
+    tracked_claude = Path("CLAUDE.md") in tracked_paths("CLAUDE.md")
+    for relative_path in ENTRY_PAGES:
+        path = ROOT / relative_path
+        rule_id = (
+            "PROD-DOCS-12" if relative_path == "CLAUDE.md" else "PROD-DOCS-11"
+        )
+        if not path.is_file():
+            findings.append(Finding(rule_id, relative_path, "entry page is missing"))
+            continue
+        if relative_path == "CLAUDE.md" and not tracked_claude:
+            findings.append(
+                Finding(rule_id, relative_path, "harness loader is not tracked")
+            )
+            continue
+
+        text = path.read_text(encoding="utf-8")
+        if not defers_to_agents(relative_path, text, ROOT):
+            findings.append(
+                Finding(rule_id, relative_path, "entry page does not link to AGENTS.md")
+            )
+        if has_competing_source_map(text):
+            findings.append(
+                Finding(rule_id, relative_path, "entry page defines a competing source map")
+            )
+    return findings
 
 
 def github_slug(value: str) -> str:
@@ -486,6 +786,8 @@ def main() -> int:
     findings = (
         check_routing_roots()
         + check_developing_roots()
+        + check_canonical_routes()
+        + check_entry_page_deference()
         + check_markdown()
         + check_structured_data()
     )

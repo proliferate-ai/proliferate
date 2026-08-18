@@ -413,42 +413,31 @@ owning layer instead of growing a new global bucket.
 
 ## Hard Rules
 
-- `anyharness` stays thin. It owns CLI/bootstrap only, not runtime behavior.
-- `anyharness-contract` owns wire schemas only. It must not grow runtime logic.
-- `anyharness-credential-discovery` owns shared provider credential parsing and
-  portable auth-file normalization. It must not own runtime orchestration.
-- `proliferate-diagnostics-protocol` owns only the versioned provider-neutral
-  diagnostics wire contract, bounds, and pure validation. It must not own
-  collection, transport, files, processes, export, or product orchestration.
-- `proliferate-diagnostics-client` owns only the bounded local producer
-  adapter linked into Desktop-owned Rust children: tracing capture, secret
-  filtering, the admission queue and receipts, descriptor-possession bridge
-  activation, and per-component fallback files. It must not own collector
-  state, Desktop/Tauri wiring, product behavior, persistence, or replay.
-- `proliferate-diagnostics-collector` owns only the standalone bounded
-  in-memory collector and its loopback process boundary. It must not own
-  Desktop/Tauri wiring, producer queues, AnyHarness runtime behavior, Worker
-  behavior, server/cloud integration, persistence, or export destinations.
-- `anyharness-lib` owns runtime behavior, durable domain rules, live
-  orchestration, workspace adapters, and protocol integrations.
-- `api/` is transport. It parses requests, calls the owning domain/runtime, and
-  maps responses/errors.
-- `app/` wires dependencies. `AppState` is not a place for business logic.
-- `domains/` owns product concepts and durable business rules.
-- `live/` owns long-lived in-memory managers, handles, actors, drivers,
-  streams, subprocesses, and interaction rendezvous.
-- `adapters/` owns local workspace/machine capabilities such as file, git,
-  hosting, and process operations.
-- `integrations/` owns external protocol/vendor mechanics such as MCP, ACP
-  protocol glue, and provider CLI quirks.
-- `persistence/` owns SQLite setup, migrations, and DB wiring. Product stores
-  own product-specific queries.
-- `observability/` owns reusable latency/tracing/measurement helpers.
-- Avoid generic catch-all modules such as `utils`, `helpers`, `misc`, or flat
-  `services`.
-- Keep imports direct and concrete. Do not add barrel files or convenience
-  re-export modules unless a focused guide explicitly documents an exception.
-- Delete dead runtime code instead of preserving parallel implementations.
+Exact placement/import/catch-all matchers and their legal alternatives live in
+[`lints/anyharness/`](../../lints/anyharness/), not in this mental-model
+document:
+
+- `AH-API-*`, `AH-DOMAIN-*`, `AH-ADAPTER-*`, `AH-INTEG-*`, `AH-STORE-*`, and
+  `AH-PERSIST-*` own dependency direction and SQL/store placement.
+- `AH-LIVE-*`, `AH-STATE-1`, and `AH-CONTRACT-*` own live-runtime powers,
+  application-state placement, and wire/domain separation.
+- `AH-POLICY-1` owns pure policy files; `AH-PATHS-1` keeps the retired tree
+  from returning; `AH-ADMIT-*` owns mutation-admission classification.
+
+Read the applicable stable record for its exact matcher, current exception
+sites, and remediation. The architectural judgment is that the executable
+crate stays thin, contract/protocol crates own wire vocabulary, reusable
+credential and diagnostics crates stay narrowly scoped, and `anyharness-lib`
+owns runtime behavior. Within that library: `api/` translates transport,
+`app/` composes dependencies, `domains/` owns durable product rules, `live/`
+owns reconstructible in-memory execution, `adapters/` owns machine
+capabilities, `integrations/` owns external protocol mechanics, and
+`persistence/` owns generic SQLite setup while domain stores own their queries.
+
+Preserve these owner boundaries, use direct concept-named modules, and delete
+replaced runtime paths rather than retaining parallel implementations. The
+stable `AH-*` records—not copied exception prose here—decide the mechanical
+case.
 
 ## Dependency Direction
 

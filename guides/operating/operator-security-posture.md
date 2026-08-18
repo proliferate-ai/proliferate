@@ -6,15 +6,27 @@ Use this runbook before actions that can expose customer data, rotate secrets,
 revoke worker access, attach directly to runtime infrastructure, or modify
 billing/support/runtime state outside normal product flows.
 
+The repository-wide exposed-secret invariant is in
+[`AGENTS.md`](../../AGENTS.md); this runbook defines the operating response.
+
+Ordinary product operations that are explicitly authorized and covered by a
+current runbook do not become incidents merely because they are operational.
+The incident owner and incident/run receipt requirements below are mandatory
+for break-glass access, exposure response, manual customer-data repair,
+credential rotation/revocation, direct attach, and other work outside normal
+authorized product/admin flows.
+
 ## Required posture
 
-- Name one incident owner before starting privileged work.
+- Name one incident owner before starting work in the mandatory-receipt scope
+  above.
 - Use the least-privileged access path that can answer the question or perform
   the recovery.
 - Prefer read-only evidence collection before write actions.
 - Keep secrets in the owning secret store. Never paste them into chat, issues,
   PRs, docs, terminal transcripts, screenshots, or support tickets.
-- Record operator actions in the incident issue with sanitized ids and links.
+- Record actions in the incident/run receipt with sanitized ids and links when
+  that receipt is required.
 - Create a follow-up issue when a manual action reveals missing product or
   operator tooling.
 
@@ -30,6 +42,14 @@ Break-glass access is for active incidents only.
 6. Add an audit closeout to the incident issue.
 
 ## Secret rotation
+
+If a secret value appears in chat, tool input/output, a terminal transcript,
+an issue, a PR, documentation, or a screenshot, treat it as exposed. Stop
+handling it; never quote, paste, test, or replay it. Notify the responsible
+human/security owner, rotate or revoke it through the owning provider, and
+request sanitized retention cleanup for every authorized store that may have
+captured it. Record only the secret name, environment, exposure channel,
+rotation/revocation result, and cleanup owner—never the value.
 
 Rotate secrets through the owning hosted secret manager or provider dashboard.
 Do not rotate by editing local env files and copying values around.
@@ -115,7 +135,8 @@ of bypassing one-time admission.
 
 ## Audit closeout
 
-Every privileged action should leave an incident note with:
+Every action in the mandatory-receipt scope must leave a sanitized incident or
+operator-run closeout with:
 
 - operator;
 - timestamp;
@@ -130,7 +151,7 @@ Every privileged action should leave an incident note with:
 
 | Symptom | First response |
 | --- | --- |
-| Secret value appears in chat or an issue | Treat as exposure; rotate the secret and ask security/incident owner for retention cleanup. |
+| Secret value appears in chat, tool output, a terminal, or an issue | Stop handling it; do not replay it; notify the owner; rotate/revoke it; request sanitized retention cleanup. |
 | Operator cannot prove what was changed | Stop additional manual work and reconstruct evidence from logs, provider audit trails, and database updated timestamps. |
 | Temporary access remains active | Revoke it before closing the incident and record the revocation evidence. |
 | Manual data repair was required | Open a product/operator-tooling follow-up so the action becomes audited and repeatable. |

@@ -186,40 +186,35 @@ layer you are changing:
 
 ## Hard Rules
 
-- Keep imports direct and concrete. Do not add barrel files or convenience
-  re-export modules.
-- Use `@/` imports for app-root paths in apps where the alias is configured.
-- `components/**` is `.tsx` only.
-- `hooks/**`, `lib/**`, `stores/**`, `config/**`, `copy/**`, and
-  `providers/**` are `.ts` only unless a file must render JSX.
-- Pages are route entrypoints only: read params/navigation state, call
-  page-level hooks, and render a screen component.
-- Product hook domains use responsibility folders. Hook files should not sit
-  directly under `hooks/<domain>/`.
+Exact path matches, import grammar, and exception sites are owned by the stable
+records under [`lints/frontend/`](../../lints/frontend/), not repeated here:
+
+- `FE-STRUCT-1`–`FE-STRUCT-7` and `FE-SIZE-1` own component/primitive
+  placement, hook responsibility folders, junk-drawer names, package imports,
+  and file-size ratchets.
+- `FE-ACCESS-*`, `FE-CACHE-*`, `FE-DOMAIN-*`, `FE-COMPONENT-*`, `FE-STORE-*`,
+  and `FE-UI-*` own connected-layer and UI-library dependency mechanics.
+- `FE-PC-*`, `FE-MOBILE-1`, and `FE-EXPORT-*` own ProductClient purity,
+  internal package consumption, and Mobile export mechanics.
+
+Read the applicable record for its exact matcher, legal alternative, and named
+exceptions. The design judgment behind those records is:
+
 - Components render. Hooks own React behavior. Stores hold shared client-only
   state. `lib/domain` holds app-local or connected-client rules;
   `product-client/src/domain/**` holds pure rules shared with Mobile.
-- ProductClient code uses `apps/packages/product-client/src/primitives/**` for
-  DOM primitives. Desktop and Web mount product UI through ProductClient's
-  public host boundary and do not import its internal primitives directly.
-  Existing explicitly named internal host-assembly/auth seams remain narrow;
-  Mobile's separate domain-only restriction does not apply to those hosts.
-- Do not define DOM primitive components outside
-  `apps/packages/product-client/src/primitives/**`. This
-  includes differently named local wrappers around buttons, inputs, dialogs,
-  menus, tabs, tooltips, badges, layout shells, or similar reusable controls.
+- ProductClient owns the DOM primitive library. Desktop and Web mount product
+  UI through its public host boundary; Mobile consumes pure product rules and
+  renders native UI.
 - Desktop and Web share presentational product components through
   ProductClient, which owns them alongside connected Cloud surfaces using its
   standard component, access-hook, workflow-hook, and domain layers.
-- Mobile shares product rules through concrete ProductClient
-  `internal/domain/<file>` imports and renders native UI in the app.
 - Preserve current UI and behavior unless an explicit behavior change is
   requested.
 - Delete dead code when replacing an implementation.
 - Do not create empty folder trees or speculative abstractions.
-- Avoid god modules and god stores. Prefer splitting before roughly 400 lines.
-  Files at 600+ lines need a strong reason to stay whole. Mixed ownership
-  should be split even below those thresholds.
+- Avoid god modules and god stores. Split on ownership rather than growing a
+  mixed concern; `FE-SIZE-1` owns the exact measured thresholds and ratchet.
 - Colocate types with the code that owns them. Generated API types live with
   the generated client. App-defined domain models live with their owning
   domain logic. Store types live with their store.
