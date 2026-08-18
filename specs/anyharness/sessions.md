@@ -707,11 +707,17 @@ Code path:
   wins and is never overwritten by lower layers. Title assignment is an
   explicit sessions-runtime dispatch policy, not a property of every prompt
   payload: HTTP-authored prompts and newly created agents' initial tasks opt in
-  to normalized first-text assignment after `Started` or `Queued`, and only
-  when the session has no title. Internal plan, review, workflow, system, and
-  injected dispatch stays title-disabled. Harness `session_info_update` titles
-  are fallback-only: both sources persist through `update_title_if_absent` and
-  never replace an assigned title.
+  to normalized first-text assignment, and only when the session has no title.
+  Internal plan, review, workflow, system, and injected dispatch stays
+  title-disabled. Harness `session_info_update` titles are fallback-only: both
+  sources persist through `update_title_if_absent` and never replace an
+  assigned title. Because both write through that one absent-only update, an
+  opted-in prompt stores its title before the prompt is dispatched, so no
+  harness title reported for that same turn can take the row. The write is
+  best effort and never fails an accepted prompt; a dispatch that verifiably
+  never reached the actor clears the title again, matched so a title assigned
+  in the meantime survives, while a dropped acknowledgement keeps it because
+  the turn may be running.
 
 ## Extension Points
 

@@ -123,6 +123,34 @@ fn update_title_if_absent_never_replaces_an_assigned_title() {
 }
 
 #[test]
+fn clear_title_if_matches_only_clears_the_title_it_was_given() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+
+    let store = SessionStore::new(db);
+    let mut record = session_record();
+    record.title = None;
+    store.insert(&record).expect("insert session");
+
+    assert!(store
+        .update_title_if_absent("session-1", "Prompt title", "2026-03-25T01:00:00Z")
+        .expect("set title on untitled session"));
+    assert!(!store
+        .clear_title_if_matches("session-1", "Some other title", "2026-03-25T02:00:00Z")
+        .expect("leave a title assigned since the write"));
+    assert!(store
+        .clear_title_if_matches("session-1", "Prompt title", "2026-03-25T03:00:00Z")
+        .expect("clear the matching title"));
+
+    let stored = store
+        .find_by_id("session-1")
+        .expect("find session")
+        .expect("session record");
+    assert_eq!(stored.title, None);
+    assert_eq!(stored.updated_at, "2026-03-25T03:00:00Z");
+}
+
+#[test]
 fn visible_session_lists_exclude_dismissed_and_closed_sessions() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);

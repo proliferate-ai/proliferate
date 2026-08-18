@@ -1,4 +1,5 @@
 use crate::domains::sessions::model::SessionRecord;
+use crate::live::sessions::{LiveSessionCommandError, PromptAcceptError};
 
 use super::SessionRuntime;
 
@@ -14,26 +15,59 @@ impl PromptTitleAssignment {
         Self::FirstAuthoredText(normalize_first_authored_text(texts))
     }
 
-    /// Runs only after the actor has returned `Started` or `Queued`. The
-    /// compare-and-set remains best effort: an accepted prompt is never
-    /// retroactively failed because its fallback title could not be stored.
-    pub(super) fn apply_after_acceptance(
+    /// Stores the title before the prompt reaches the actor. Authored titles
+    /// and harness `session_info_update` titles compete for one absent-only
+    /// write, so writing ahead of dispatch is what keeps a title the same turn
+    /// reports from taking the row. The compare-and-set stays best effort: an
+    /// accepted prompt is never failed because its title could not be stored.
+    pub(super) fn apply_before_dispatch(
         self,
         runtime: &SessionRuntime,
         session_id: &str,
-        mut session: SessionRecord,
-    ) -> SessionRecord {
+    ) -> AssignedPromptTitle {
         let Self::FirstAuthoredText(Some(title)) = self else {
-            return session;
+            return AssignedPromptTitle(None);
         };
-        if runtime
-            .session_service
-            .update_session_title_if_absent(session_id, &title)
-            .unwrap_or(false)
-        {
-            session.title = Some(title);
+        AssignedPromptTitle(
+            runtime
+                .session_service
+                .update_session_title_if_absent(session_id, &title)
+                .unwrap_or(false)
+                .then_some(title),
+        )
+    }
+}
+
+/// The title this dispatch stored, held so the write can be reflected in the
+/// returned snapshot and undone when the dispatch turns out to have failed.
+pub(super) struct AssignedPromptTitle(Option<String>);
+
+impl AssignedPromptTitle {
+    pub(super) fn merge_into(&self, mut session: SessionRecord) -> SessionRecord {
+        if let Some(title) = self.0.as_ref() {
+            session.title = Some(title.clone());
         }
         session
+    }
+
+    /// Undoes the write when the prompt verifiably never reached the actor. A
+    /// dropped acknowledgement is ambiguous - the turn may be running - so the
+    /// title stays, and a title reassigned since is left alone by the match.
+    pub(super) fn revert_if_undelivered(
+        &self,
+        runtime: &SessionRuntime,
+        session_id: &str,
+        error: &LiveSessionCommandError<PromptAcceptError>,
+    ) {
+        let Some(title) = self.0.as_deref() else {
+            return;
+        };
+        if matches!(error, LiveSessionCommandError::ResponseDropped) {
+            return;
+        }
+        let _ = runtime
+            .session_service
+            .clear_session_title_if_matches(session_id, title);
     }
 }
 

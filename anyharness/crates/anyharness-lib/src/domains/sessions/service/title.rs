@@ -48,4 +48,18 @@ impl SessionService {
             &chrono::Utc::now().to_rfc3339(),
         )
     }
+
+    /// Undoes a prompt title stored before dispatch; returns whether it was
+    /// still the stored title. A title assigned since is left in place.
+    pub fn clear_session_title_if_matches(
+        &self,
+        session_id: &str,
+        title: &str,
+    ) -> anyhow::Result<bool> {
+        self.session_store.clear_title_if_matches(
+            session_id,
+            title,
+            &chrono::Utc::now().to_rfc3339(),
+        )
+    }
 }

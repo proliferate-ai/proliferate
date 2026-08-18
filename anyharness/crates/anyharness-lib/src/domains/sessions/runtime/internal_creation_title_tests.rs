@@ -105,7 +105,7 @@ async fn subagent_initial_task_persists_semantic_title_and_projects_agent_view()
 
     // This stand-in replaces only provider execution. It preserves the real
     // runtime -> LiveSessionHandle mailbox, `Started` acceptance, initially
-    // untitled SQLite row, post-acceptance normalization/CAS, and production
+    // untitled SQLite row, pre-dispatch normalization/CAS, and production
     // Agent Operations projection used by the guarantee under test.
     let mut observed = state
         .session_runtime
@@ -153,4 +153,66 @@ async fn subagent_initial_task_persists_semantic_title_and_projects_agent_view()
         .find(|agent| agent.identity.session_id == child_id)
         .expect("projected child");
     assert_eq!(projected.title.as_deref(), Some(expected_title.as_str()));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn subagent_keeps_its_task_title_when_the_acknowledgement_is_lost() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap();
+    let _bearer_guard = test_support::set_bearer_token_env(None);
+    let _data_key_guard = test_support::set_data_key_env(None);
+    let (state, _program_guard) = test_state("subagent-lost-ack", "#!/bin/sh\nexit 0\n");
+    let parent_id = "45234567-89ab-4def-8123-456789abcdef";
+    create_known_record(&state.session_runtime, parent_id);
+    let (child, link) = state
+        .session_runtime
+        .create_durable_subagent_session_and_link(
+            "workspace-1",
+            "claude",
+            None,
+            None,
+            parent_id,
+            None,
+        )
+        .expect("durable initially untitled subagent");
+    let child_id = child.id.clone();
+
+    // The prompt enters the real mailbox and its reply sender is then dropped:
+    // the acknowledgement is lost, the turn may be running, and the agent
+    // survives. It must survive carrying the task title it was created with.
+    let mut observed = state
+        .session_runtime
+        .acp_manager_for_test()
+        .insert_prompt_response_dropper_for_test(&child_id)
+        .await;
+    let created = state
+        .session_runtime
+        .start_new_agent_session(
+            child,
+            Some("Inspect the replay boundary".into()),
+            PromptProvenance::AgentSession {
+                source_session_id: parent_id.into(),
+                session_link_id: Some(link.id),
+                label: Some("Parent".into()),
+            },
+        )
+        .await;
+    let created = match created {
+        Ok(created) => created,
+        Err(_) => panic!("ambiguous acknowledgement must preserve the agent"),
+    };
+    observed.recv().await.expect("prompt observed");
+
+    assert_eq!(
+        created.title.as_deref(),
+        Some("Inspect the replay boundary")
+    );
+    let fresh = state
+        .session_service
+        .get_session(&child_id)
+        .expect("fresh SQLite read")
+        .expect("child row");
+    assert_eq!(fresh.title.as_deref(), Some("Inspect the replay boundary"));
 }

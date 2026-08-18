@@ -2,10 +2,12 @@ use std::sync::Mutex;
 
 use anyharness_contract::v1::PromptInputBlock;
 
+use super::prompt_title::PromptTitleAssignment;
 use super::*;
 use crate::app::{test_support, AppState};
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::sessions::model::SessionMcpBindingPolicy;
+use crate::live::sessions::LiveSessionCommandError;
 use crate::origin::OriginContext;
 use crate::persistence::Db;
 
@@ -62,6 +64,15 @@ fn test_state(label: &str) -> (AppState, AgentProgramGuard) {
     (state, guard)
 }
 
+fn stored_title(state: &AppState, session_id: &str) -> Option<String> {
+    state
+        .session_service
+        .get_session(session_id)
+        .expect("fresh SQLite read")
+        .expect("session row")
+        .title
+}
+
 fn create_untitled_record(runtime: &SessionRuntime, session_id: &str) -> SessionRecord {
     let record = runtime
         .create_durable_session(
@@ -83,7 +94,7 @@ fn create_untitled_record(runtime: &SessionRuntime, session_id: &str) -> Session
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn authored_http_prompt_assigns_title_after_acceptance() {
+async fn authored_http_prompt_titles_the_session_before_the_prompt_is_dispatched() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))
         .lock()
@@ -99,20 +110,30 @@ async fn authored_http_prompt_assigns_title_after_acceptance() {
         .insert_prompt_observer_for_test(session_id)
         .await;
 
-    let outcome = state
-        .session_runtime
-        .send_authored_prompt(
+    // The observer resolves when the prompt reaches the provider seam, and a
+    // harness `session_info_update` for this turn cannot be earlier than that.
+    // Attempting the harness fallback there proves the authored title already
+    // holds the row both sources write through.
+    let (outcome, provider_fallback_applied) = tokio::join!(
+        state.session_runtime.send_authored_prompt(
             session_id,
             vec![PromptInputBlock::Text {
                 text: "  Inspect\n the replay boundary  ".into(),
             }],
             Some("http-authored-prompt".into()),
-        )
-        .await
-        .expect("authored prompt accepted");
-    observed.recv().await.expect("prompt observed");
+        ),
+        async {
+            observed.recv().await.expect("prompt observed");
+            state
+                .session_service
+                .store()
+                .update_title_if_absent(session_id, "Harness title", "2026-03-25T00:02:00Z")
+                .expect("harness fallback compare-and-set")
+        }
+    );
+    assert!(!provider_fallback_applied);
 
-    let returned = match outcome {
+    let returned = match outcome.expect("authored prompt accepted") {
         SendPromptOutcome::Running { session, .. } => session,
         SendPromptOutcome::Queued { .. } => panic!("observer returns running for direct prompt"),
     };
@@ -173,4 +194,54 @@ async fn internal_plan_or_review_prompt_leaves_untitled_session_untitled() {
         .expect("fresh SQLite read")
         .expect("session row");
     assert_eq!(fresh.title, None);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn verified_dispatch_failure_reverts_only_the_title_it_stored() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap();
+    let _bearer_guard = test_support::set_bearer_token_env(None);
+    let _data_key_guard = test_support::set_data_key_env(None);
+    let (state, _program_guard) = test_state("dispatch-failure");
+    let session_id = "a5234567-89ab-4def-8123-456789abcdef";
+    create_untitled_record(&state.session_runtime, session_id);
+    let runtime = &state.session_runtime;
+
+    let assigned = PromptTitleAssignment::from_authored_texts(["Inspect the replay boundary"])
+        .apply_before_dispatch(runtime, session_id);
+    // A dropped acknowledgement is ambiguous: the turn may be running, so the
+    // title stays with the session it titled.
+    assigned.revert_if_undelivered(
+        runtime,
+        session_id,
+        &LiveSessionCommandError::ResponseDropped,
+    );
+    assert_eq!(
+        stored_title(&state, session_id).as_deref(),
+        Some("Inspect the replay boundary")
+    );
+    assigned.revert_if_undelivered(
+        runtime,
+        session_id,
+        &LiveSessionCommandError::ActorUnavailable,
+    );
+    assert_eq!(stored_title(&state, session_id), None);
+
+    let assigned = PromptTitleAssignment::from_authored_texts(["Second attempt"])
+        .apply_before_dispatch(runtime, session_id);
+    state
+        .session_service
+        .update_session_title(session_id, "Renamed by the user")
+        .expect("explicit rename");
+    assigned.revert_if_undelivered(
+        runtime,
+        session_id,
+        &LiveSessionCommandError::ActorUnavailable,
+    );
+    assert_eq!(
+        stored_title(&state, session_id).as_deref(),
+        Some("Renamed by the user")
+    );
 }
