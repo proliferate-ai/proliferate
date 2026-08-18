@@ -11,11 +11,18 @@ import {
 } from "./transcript-presentation";
 import type { PromptOutboxEntry } from "../../sessions/intents/session-intent-model";
 import type { GoalTranscriptEvent } from "../../activity/goal-transcript-events";
+import type { BackgroundCompletionReceipt } from "../../activity/background-completion-receipt";
 import {
   createTranscriptTurnRowCacheKey,
   isTranscriptTurnRowCacheHit,
   type TranscriptTurnRowCacheKey,
 } from "./transcript-row-cache-key";
+import {
+  EMPTY_GOAL_ROWS,
+  bucketCompletionReceiptRows,
+  bucketGoalEventRows,
+  interleaveGoalRowsBySeq,
+} from "./transcript-interleave-rows";
 
 export const TURN_CONTENT_BLOCK_KEY = "content";
 export const TURN_COMPLETED_HISTORY_BLOCK_KEY = "completed-history";
@@ -64,6 +71,31 @@ export type TranscriptRow =
     kind: "goal_event";
     key: `goal-event:${string}`;
     event: GoalTranscriptEvent;
+  }
+  | {
+    /**
+     * An inline background-work completion receipt (a terminal that exited or a
+     * native subagent that finished), synthesized client-side from the activity
+     * fold — see `background-completion-receipt.ts`. Interleaved into the row
+     * sequence right after the turn that was latest when the completion was
+     * observed (`receipt.anchorTurnId`), so it reads in stream order: agent
+     * turn → receipt → wake turn (bgwork r6 round 2, superseding the r6
+     * floating tail band).
+     */
+    kind: "completion_receipt";
+    key: `completion-receipt:${string}`;
+    receipt: BackgroundCompletionReceipt;
+  }
+  | {
+    /**
+     * The quiet running-background-work footer row. A true in-scroll row at the
+     * transcript tail (bgwork r6 round 2, superseding R1's dock-anchored
+     * placement) — present only while `runningCount > 0`, scrolling with
+     * content like any other row.
+     */
+    kind: "background_work";
+    key: "background-work";
+    runningCount: number;
   };
 
 export interface BuildTranscriptRowModelInput {
@@ -113,6 +145,22 @@ export interface BuildTranscriptRowModelInput {
    * it when the full history is loaded (no older pages above).
    */
   workspaceReceiptKey?: string | null;
+  /**
+   * Inline background-work completion receipts (bgwork r6 round 2). Each is
+   * interleaved right after its `anchorTurnId` turn — the turn that was latest
+   * when the completion was folded — so the receipt reads in stream order
+   * before any later (wake) turn. Client-side composition only, like
+   * `goalEvents`; ephemeral (fold-only, does not survive reload — lane defect
+   * D1). Empty/omitted for surfaces that render no background work.
+   */
+  completionReceipts?: readonly BackgroundCompletionReceipt[];
+  /**
+   * Count of still-running background work (live terminals + running native
+   * subagents). When > 0, a single quiet `background_work` footer row renders
+   * at the very tail of the transcript; at 0 no row renders (bgwork r6 round
+   * 2). Client-side derived, like the receipts above.
+   */
+  backgroundWorkRunningCount?: number;
 }
 
 export interface TranscriptRowModelCache {
@@ -138,10 +186,13 @@ export function buildTranscriptRowModel({
   latestTurnHasAssistantRenderableContent,
   goalEvents = EMPTY_GOAL_EVENTS,
   workspaceReceiptKey = null,
+  completionReceipts = EMPTY_COMPLETION_RECEIPTS,
+  backgroundWorkRunningCount = 0,
 }: BuildTranscriptRowModelInput, cache?: TranscriptRowModelCache): TranscriptRow[] {
   const rows: TranscriptRow[] = [];
   const seenTurnIds = new Set<string>();
   const goalRows = bucketGoalEventRows(goalEvents, transcript);
+  const receiptRows = bucketCompletionReceiptRows(completionReceipts, transcript);
 
   // The receipt reads as one of the first turn's tool calls: it hosts on
   // whichever row of that turn will render the completed-history "Worked for
@@ -154,6 +205,9 @@ export function buildTranscriptRowModel({
   let turnHostedWorkspaceReceipt = false;
 
   rows.push(...goalRows.beforeFirstTurn);
+  // Receipts whose anchor turn never existed (observed before any turn) lead
+  // the list, after any start-anchored goal rows.
+  rows.push(...receiptRows.beforeFirstTurn);
 
   for (const turnId of transcript.turnOrder) {
     const turn = transcript.turnsById[turnId];
@@ -194,10 +248,23 @@ export function buildTranscriptRowModel({
       transcript,
     );
     rows.push(...interleavedRows);
+    // Completion receipts anchored to this turn render at its END (after all
+    // of the turn's own rows), so a later turn — the wake reply — falls after
+    // them: agent turn → receipt → wake turn.
+    const turnReceiptRows = receiptRows.byTurnId.get(turnId);
+    if (turnReceiptRows) {
+      rows.push(...turnReceiptRows);
+    }
     if (hostsWorkspaceReceipt) {
       turnHostedWorkspaceReceipt = true;
     }
   }
+
+  // Receipts whose anchor turn is no longer loaded (e.g. it aged out above the
+  // history window) fall in after the last rendered turn rather than leading
+  // the transcript — a rare edge, and receipts do not survive reload anyway
+  // (lane defect D1).
+  rows.push(...receiptRows.afterAllTurns);
 
   let lastPromptRowIndex = -1;
   if (visibleOptimisticPrompt) {
@@ -229,6 +296,17 @@ export function buildTranscriptRowModel({
     }
   }
 
+  // The running-work footer is always the absolute last row while any work is
+  // live — an in-scroll row at the tail (bgwork r6 round 2), below the last
+  // turn, any completion receipts, and any pending-prompt echo.
+  if (backgroundWorkRunningCount > 0) {
+    rows.push({
+      kind: "background_work",
+      key: "background-work",
+      runningCount: backgroundWorkRunningCount,
+    });
+  }
+
   if (cache) {
     for (const turnId of cache.turnRowsById.keys()) {
       if (!seenTurnIds.has(turnId)) {
@@ -241,246 +319,7 @@ export function buildTranscriptRowModel({
 }
 
 const EMPTY_GOAL_EVENTS: readonly GoalTranscriptEvent[] = [];
-const EMPTY_GOAL_ROWS: readonly GoalEventRow[] = [];
-
-type GoalEventRow = Extract<TranscriptRow, { kind: "goal_event" }>;
-
-export function buildGoalEventRowKey(eventId: string): `goal-event:${string}` {
-  return `goal-event:${eventId}`;
-}
-
-interface GoalEventRowBuckets {
-  beforeFirstTurn: GoalEventRow[];
-  byTurnId: Map<string, GoalEventRow[]>;
-}
-
-/**
- * Buckets goal lifecycle rows against the transcript's turns purely by seq
- * (both the goal event and every item ride the same global per-session
- * sequence space).
- *
- * A turn "hosts" an event when the turn's earliest item `startedSeq` is at
- * or before the event's seq and no later turn's earliest item is too — i.e.
- * the last turn that had already started by that seq. Events earlier than
- * every turn's start (including when there are no turns yet) lead the row
- * list.
- *
- * All goal events for a given turn are collected together; the caller
- * (`interleaveGoalRowsBySeq`) will position them by seq within the turn's
- * item sequence.
- */
-function bucketGoalEventRows(
-  goalEvents: readonly GoalTranscriptEvent[],
-  transcript: TranscriptState,
-): GoalEventRowBuckets {
-  const beforeFirstTurn: GoalEventRow[] = [];
-  const byTurnId = new Map<string, GoalEventRow[]>();
-  if (goalEvents.length === 0) {
-    return { beforeFirstTurn, byTurnId };
-  }
-
-  const orderedTurnRanges = transcript.turnOrder
-    .map((turnId) => ({ turnId, range: turnItemSeqRange(transcript, turnId) }))
-    .filter((entry): entry is { turnId: string; range: TurnItemSeqRange } =>
-      entry.range !== null
-    );
-
-  const sortedEvents = [...goalEvents].sort((left, right) => left.seq - right.seq);
-  for (const event of sortedEvents) {
-    const row: GoalEventRow = {
-      kind: "goal_event",
-      key: buildGoalEventRowKey(event.id),
-      event,
-    };
-
-    let host: { turnId: string; range: TurnItemSeqRange } | null = null;
-    for (const candidate of orderedTurnRanges) {
-      if (candidate.range.minSeq > event.seq) {
-        break;
-      }
-      host = candidate;
-    }
-
-    if (host === null) {
-      beforeFirstTurn.push(row);
-      continue;
-    }
-
-    const bucket = byTurnId.get(host.turnId);
-    if (bucket) {
-      bucket.push(row);
-    } else {
-      byTurnId.set(host.turnId, [row]);
-    }
-  }
-
-  return { beforeFirstTurn, byTurnId };
-}
-
-interface TurnItemSeqRange {
-  minSeq: number;
-  maxSeq: number;
-}
-
-function turnItemSeqRange(transcript: TranscriptState, turnId: string): TurnItemSeqRange | null {
-  const turn = transcript.turnsById[turnId];
-  if (!turn) {
-    return null;
-  }
-  let minSeq: number | null = null;
-  let maxSeq: number | null = null;
-  for (const itemId of turn.itemOrder) {
-    const item = transcript.itemsById[itemId];
-    if (!item) {
-      continue;
-    }
-    if (minSeq === null || item.startedSeq < minSeq) {
-      minSeq = item.startedSeq;
-    }
-    if (maxSeq === null || item.startedSeq > maxSeq) {
-      maxSeq = item.startedSeq;
-    }
-  }
-  return minSeq === null || maxSeq === null ? null : { minSeq, maxSeq };
-}
-
-/**
- * Interleaves goal event rows by seq among a turn's rows, positioning each
- * goal event at its true chronological location within the turn's content.
- *
- * Strategy:
- * - Collect all items from all turn rows with their seq values.
- * - For each goal event, find its insertion point: after the last item whose
- *   startedSeq < event.seq, which determines which turn row it should follow.
- * - Special case: if the turn has a leading user-message row split, goal
- *   events whose seq falls before all assistant content still render after
- *   the user message row (preserving the "goal set right after user prompt" UX).
- */
-function interleaveGoalRowsBySeq(
-  turnRows: readonly Extract<TranscriptRow, { kind: "turn" }>[],
-  goalRows: readonly GoalEventRow[],
-  _turn: TurnRecord,
-  transcript: TranscriptState,
-): TranscriptRow[] {
-  if (goalRows.length === 0) {
-    return [...turnRows];
-  }
-
-  // Build a list of all items across all rows, tracking which row each item belongs to.
-  interface ItemEntry {
-    seq: number;
-    rowIndex: number;
-  }
-  const items: ItemEntry[] = [];
-
-  for (let rowIndex = 0; rowIndex < turnRows.length; rowIndex += 1) {
-    const turnRow = turnRows[rowIndex];
-    for (const block of turnRow.renderPresentation.displayBlocks) {
-      if (block.kind === "item") {
-        const item = transcript.itemsById[block.itemId];
-        if (item) {
-          items.push({ seq: item.startedSeq, rowIndex });
-        }
-      } else if (
-        block.kind === "collapsed_actions"
-        || block.kind === "inline_tools"
-        || block.kind === "subagent_creations"
-      ) {
-        for (const itemId of block.itemIds) {
-          const item = transcript.itemsById[itemId];
-          if (item) {
-            items.push({ seq: item.startedSeq, rowIndex });
-          }
-        }
-      }
-    }
-  }
-
-  // Sort items by seq to enable binary-search-like positioning.
-  items.sort((a, b) => a.seq - b.seq);
-
-  // Determine if the first row is a leading user-message split.
-  const hasLeadingSplit = turnRows.length > 1 && turnRows[0].isFirstTurnRow && !turnRows[0].isLastTurnRow;
-
-  // Sort goal rows by seq to maintain order.
-  const sortedGoalRows = [...goalRows].sort((a, b) => a.event.seq - b.event.seq);
-
-  // For each goal event, determine which row it should be inserted after.
-  // A goal at seq N should appear:
-  // - AFTER the row containing the last item with seq < N, AND
-  // - BEFORE the row containing the first item with seq >= N
-  // This ensures goals render at their chronological position, even if that
-  // position is mid-way through a row's content (the row will have been split
-  // to enable this).
-  const goalInsertionPoints = new Map<number, GoalEventRow[]>(); // rowIndex -> goals to insert after
-
-  for (const goalRow of sortedGoalRows) {
-    const goalSeq = goalRow.event.seq;
-
-    // Find the row containing the last item with seq < goalSeq.
-    // If the next item (seq >= goalSeq) is in a DIFFERENT row, insert after
-    // the current row. Otherwise, the goal falls mid-row, and the row should
-    // have been split — but if not, we insert before that row.
-    let lastItemBefore: ItemEntry | null = null;
-    let firstItemAtOrAfter: ItemEntry | null = null;
-
-    for (const item of items) {
-      if (item.seq < goalSeq) {
-        lastItemBefore = item;
-      } else if (item.seq >= goalSeq && firstItemAtOrAfter === null) {
-        firstItemAtOrAfter = item;
-        break;
-      }
-    }
-
-    let targetRowIndex: number;
-    if (lastItemBefore === null) {
-      // Goal precedes all items. Insert after the leading split row if it
-      // exists, otherwise before all rows.
-      targetRowIndex = hasLeadingSplit ? 0 : -1;
-    } else if (firstItemAtOrAfter === null) {
-      // Goal follows all items. Insert after the row containing the last item.
-      targetRowIndex = lastItemBefore.rowIndex;
-    } else if (lastItemBefore.rowIndex !== firstItemAtOrAfter.rowIndex) {
-      // Goal falls between two different rows. This is the clean case: insert
-      // after lastItemBefore's row, which places it before firstItemAtOrAfter's row.
-      targetRowIndex = lastItemBefore.rowIndex;
-    } else {
-      // Goal falls mid-row: the row contains both the last item <= goalSeq
-      // and the first item > goalSeq. Insert the goal AFTER this row, since
-      // we can't split it finer than the user/content boundary.
-      targetRowIndex = lastItemBefore.rowIndex;
-    }
-
-    const existing = goalInsertionPoints.get(targetRowIndex);
-    if (existing) {
-      existing.push(goalRow);
-    } else {
-      goalInsertionPoints.set(targetRowIndex, [goalRow]);
-    }
-  }
-
-  // Assemble the result by interleaving turn rows with goal rows.
-  const result: TranscriptRow[] = [];
-
-  // Insert any goals that should come before all rows.
-  const beforeAllGoals = goalInsertionPoints.get(-1);
-  if (beforeAllGoals) {
-    result.push(...beforeAllGoals);
-  }
-
-  for (let rowIndex = 0; rowIndex < turnRows.length; rowIndex += 1) {
-    result.push(turnRows[rowIndex]);
-
-    // Insert any goals that should come after this row.
-    const afterThisRowGoals = goalInsertionPoints.get(rowIndex);
-    if (afterThisRowGoals) {
-      result.push(...afterThisRowGoals);
-    }
-  }
-
-  return result;
-}
+const EMPTY_COMPLETION_RECEIPTS: readonly BackgroundCompletionReceipt[] = [];
 
 /**
  * Selects the row that hosts the workspace-creation receipt among a turn's

@@ -15,10 +15,10 @@ import {
 import { BackgroundWorkPane } from "./BackgroundWorkPane";
 
 // Roster/scopes/seam/detail-routing coverage. The R5 finish-signal ladder
-// concerns (NoticeBanner, pending-selection consumption, feed isOpen-gating)
-// live in the sibling `BackgroundWorkPane.finish-signals.test.tsx` — split
-// for PROD-SIZE-1 (repo-wide 600-line cap); see the fixtures module's
-// docstring.
+// concerns (the removed in-pane NoticeBanner's negative controls,
+// pending-selection consumption, feed isOpen-gating) live in the sibling
+// `BackgroundWorkPane.finish-signals.test.tsx` — split for PROD-SIZE-1
+// (repo-wide 600-line cap); see the fixtures module's docstring.
 let sessionActivity: SessionActivityState = {
   loops: [],
   loopCapabilities: { supported: false, native: false },
@@ -29,7 +29,7 @@ let rowCounts: BackgroundWorkRowCounts = { runningCount: 0, finishedCount: 0 };
 
 vi.mock("#product/hooks/activity/derived/use-session-activity", () => ({
   useSessionActivity: () => sessionActivity,
-  // `useBackgroundWorkFinishSignal` (feeding this pane's NoticeBanner rung)
+  // `useBackgroundWorkFinishSignal` (feeding this pane's mark-viewed write)
   // reads the per-session accessor rather than the active-session-only one
   // (R5 review round 2 — MAJOR fix). This pane is always scoped to the
   // active session, so mirroring the same fixture here is faithful — the

@@ -12,7 +12,10 @@ import { CHAT_SCROLL_BASE_BOTTOM_PADDING_PX } from "#product/config/chat-layout"
 import { useWorkspaceFileActions } from "#product/hooks/workspaces/facade/files/use-workspace-file-actions";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
 import { useOpenCoworkArtifact } from "#product/hooks/cowork/workflows/use-open-cowork-artifact";
-import { useOpenBackgroundWorkPane } from "#product/hooks/activity/workflows/use-open-background-work-pane";
+import {
+  useOpenBackgroundTerminalDetail,
+  useOpenBackgroundWorkPane,
+} from "#product/hooks/activity/workflows/use-open-background-work-pane";
 import type { PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
 import type { PromptOutboxEntry } from "#product/domain/sessions/intents/session-intent-model";
 import { usePromptOutboxActions } from "#product/hooks/chat/workflows/use-prompt-outbox-actions";
@@ -24,10 +27,13 @@ import type {
 } from "@anyharness/sdk";
 import type { SessionViewState } from "#product/domain/sessions/activity";
 import type { GoalTranscriptEvent } from "#product/domain/activity/goal-transcript-events";
+import type { BackgroundCompletionReceipt } from "#product/domain/activity/background-completion-receipt";
 import {
   ChatTranscriptView,
 } from "#product/components/workspace/chat/transcript/ChatTranscriptView";
 import type {
+  ChatTranscriptBackgroundWorkRenderInput,
+  ChatTranscriptCompletionReceiptRenderInput,
   ChatTranscriptGoalEventRenderInput,
   ChatTranscriptPendingPromptRenderInput,
   ChatTranscriptPendingStatusInput,
@@ -35,6 +41,8 @@ import type {
   ChatTranscriptTurnRowRenderInput,
   ChatTranscriptTurnStatusInput,
 } from "#product/hooks/chat/ui/chat-transcript-view-types";
+import { BackgroundCompletionReceipt as BackgroundCompletionReceiptRow } from "#product/components/workspace/activity/BackgroundCompletionReceipt";
+import { BackgroundWorkTranscriptRow } from "#product/components/workspace/activity/BackgroundWorkTranscriptRow";
 import { useContentSearchStore } from "#product/stores/search/content-search-store";
 import { useChatTranscriptContentSearch } from "#product/hooks/chat/lifecycle/use-chat-transcript-content-search";
 import {
@@ -61,6 +69,7 @@ import { useTranscriptScrollSample } from "#product/hooks/chat/ui/use-transcript
 
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
 const EMPTY_GOAL_EVENTS: readonly GoalTranscriptEvent[] = [];
+const EMPTY_COMPLETION_RECEIPTS: readonly BackgroundCompletionReceipt[] = [];
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 
 // INPUT-PRIORITY (the "typing must never be laggy" rule): WHILE THE USER IS
@@ -82,6 +91,14 @@ interface MessageListProps {
   sessionViewState: SessionViewState;
   goalEvents?: readonly GoalTranscriptEvent[];
   workspaceReceiptKey?: string | null;
+  /**
+   * Inline background-work completion receipts, interleaved into the row
+   * sequence by anchor turn (bgwork r6 round 2). The host pane synthesizes
+   * these from the immediate session's activity fold.
+   */
+  completionReceipts?: readonly BackgroundCompletionReceipt[];
+  /** Live background-work count driving the quiet tail footer row. */
+  backgroundWorkRunningCount?: number;
   hasOlderHistory?: boolean;
   isLoadingOlderHistory?: boolean;
   olderHistoryCursor?: number | null;
@@ -111,6 +128,8 @@ export function MessageList({
   sessionViewState,
   goalEvents = EMPTY_GOAL_EVENTS,
   workspaceReceiptKey = null,
+  completionReceipts = EMPTY_COMPLETION_RECEIPTS,
+  backgroundWorkRunningCount = 0,
   hasOlderHistory = false,
   isLoadingOlderHistory = false,
   olderHistoryCursor = null,
@@ -140,6 +159,10 @@ export function MessageList({
   // detail via the same hook `BackgroundWorkTranscriptRow`'s seam already
   // uses — no parallel mechanism.
   const openBackgroundWorkPane = useOpenBackgroundWorkPane();
+  // Terminal receipts deep-open the Background work pane straight to their
+  // process's `BackgroundTerminalView` (bgwork r6); subagent receipts and the
+  // footer row reuse `openBackgroundWorkPane`.
+  const openBackgroundTerminalDetail = useOpenBackgroundTerminalDetail();
   const transcriptViewState = useMemo<ChatTranscriptState>(() => ({
     activeSessionId,
     selectedWorkspaceId,
@@ -149,6 +172,8 @@ export function MessageList({
     sessionViewState,
     goalEvents,
     workspaceReceiptKey,
+    completionReceipts,
+    backgroundWorkRunningCount,
     history: {
       hasOlderHistory,
       isLoadingOlderHistory,
@@ -161,7 +186,9 @@ export function MessageList({
     },
   }), [
     activeSessionId,
+    backgroundWorkRunningCount,
     bottomInsetPx,
+    completionReceipts,
     nonDisplacingBottomInsetPx,
     goalEvents,
     hasOlderHistory,
@@ -320,6 +347,34 @@ export function MessageList({
   const renderGoalEventRow = useCallback((input: ChatTranscriptGoalEventRenderInput) => (
     <GoalTranscriptEventRow event={input.event} />
   ), []);
+  const renderCompletionReceiptRow = useCallback(
+    (input: ChatTranscriptCompletionReceiptRenderInput) => {
+      const { receipt } = input;
+      return (
+        <BackgroundCompletionReceiptRow
+          receipt={receipt}
+          workspaceId={selectedWorkspaceId}
+          onOpen={() => {
+            if (receipt.kind === "terminal") {
+              openBackgroundTerminalDetail(receipt.processId, activeSessionId);
+            } else {
+              openBackgroundWorkPane(receipt.subagentId, activeSessionId);
+            }
+          }}
+        />
+      );
+    },
+    [activeSessionId, openBackgroundTerminalDetail, openBackgroundWorkPane, selectedWorkspaceId],
+  );
+  const renderBackgroundWorkRow = useCallback(
+    (input: ChatTranscriptBackgroundWorkRenderInput) => (
+      <BackgroundWorkTranscriptRow
+        runningCount={input.runningCount}
+        onOpen={() => openBackgroundWorkPane()}
+      />
+    ),
+    [openBackgroundWorkPane],
+  );
   // Stable renderer identities — required for DeferredChatTranscriptView's
   // memo to bail out on urgent (typing) passes.
   const renderPendingPromptTrailingStatusRow = useCallback(
@@ -367,6 +422,8 @@ export function MessageList({
                     renderPendingPromptRow={renderPendingPromptRow}
                     renderTurnRow={renderTurnRow}
                     renderGoalEventRow={renderGoalEventRow}
+                    renderCompletionReceiptRow={renderCompletionReceiptRow}
+                    renderBackgroundWorkRow={renderBackgroundWorkRow}
                     renderPendingPromptTrailingStatus={renderPendingPromptTrailingStatusRow}
                     renderTurnTrailingStatus={renderTurnTrailingStatusRow}
                     contentSearch={contentSearchPaint}

@@ -299,4 +299,78 @@ describe("useChatTranscriptRowRenderer", () => {
     expect(rendered.getByTestId("integrated-latest-row").textContent).toBe("working:Renamed");
     expect(renderTurnRow).toHaveBeenCalledTimes(3);
   });
+
+  const COMPLETION_RECEIPT_ROW = {
+    kind: "completion_receipt",
+    key: "completion-receipt:terminal:p1",
+    receipt: {
+      kind: "terminal",
+      key: "terminal:p1",
+      processId: "p1",
+      command: "echo hi",
+      exitCode: 0,
+      atMs: 1,
+      anchorTurnId: "turn-a",
+    },
+  } as TranscriptVirtualRow;
+  const BACKGROUND_WORK_ROW = {
+    kind: "background_work",
+    key: "background-work",
+    runningCount: 2,
+  } as TranscriptVirtualRow;
+
+  function baseRendererInput(overrides: {
+    renderCompletionReceiptRow?: (input: unknown) => ReactNode;
+    renderBackgroundWorkRow?: (input: unknown) => ReactNode;
+  }) {
+    return {
+      activeSessionId: "session-1",
+      latestLiveExplorationBlock: null,
+      latestLiveStatus: null,
+      latestCompletedTurnId: null,
+      latestTurnId: "latest",
+      optimisticPromptTrailingStatus: null,
+      outboxActions: OUTBOX_ACTIONS,
+      outboxStartedAtByPromptId: OUTBOX_STARTED_AT_BY_PROMPT_ID,
+      renderPendingPromptRow: () => null,
+      renderTurnRow: () => null,
+      selectedWorkspaceId: "workspace-1",
+      sessionViewState: "working" as const,
+      transcript: createTranscriptState("session-1"),
+      visibleOutboxEntries: [],
+      visibleOptimisticPrompt: null,
+      ...overrides,
+    };
+  }
+
+  it("dispatches completion_receipt and background_work rows to their render callbacks (bgwork r6 round 2)", () => {
+    const renderCompletionReceiptRow = vi.fn(() => <span>receipt</span>);
+    const renderBackgroundWorkRow = vi.fn(() => <span>footer</span>);
+    const { result } = renderHook(() =>
+      useChatTranscriptRowRenderer(
+        baseRendererInput({ renderCompletionReceiptRow, renderBackgroundWorkRow }),
+      ),
+    );
+
+    result.current.renderRow(COMPLETION_RECEIPT_ROW, 3);
+    result.current.renderRow(BACKGROUND_WORK_ROW, 4);
+
+    expect(renderCompletionReceiptRow).toHaveBeenCalledWith(expect.objectContaining({
+      row: COMPLETION_RECEIPT_ROW,
+      rowIndex: 3,
+      receipt: expect.objectContaining({ kind: "terminal", processId: "p1" }),
+    }));
+    expect(renderBackgroundWorkRow).toHaveBeenCalledWith(expect.objectContaining({
+      row: BACKGROUND_WORK_ROW,
+      rowIndex: 4,
+      runningCount: 2,
+    }));
+  });
+
+  it("renders null for background-work rows when the surface omits the callbacks (e.g. cloud preview)", () => {
+    const { result } = renderHook(() => useChatTranscriptRowRenderer(baseRendererInput({})));
+
+    expect(result.current.renderRow(COMPLETION_RECEIPT_ROW, 0)).toBeNull();
+    expect(result.current.renderRow(BACKGROUND_WORK_ROW, 0)).toBeNull();
+  });
 });

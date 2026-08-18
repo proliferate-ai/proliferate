@@ -19,6 +19,8 @@ type WorkspaceUiRightPanelActions = Pick<
   | "setRightPanelOpenForWorkspace"
   | "setPendingBackgroundSubagentSelectionForWorkspace"
   | "clearPendingBackgroundSubagentSelectionForWorkspace"
+  | "setPendingBackgroundProcessSelectionForWorkspace"
+  | "clearPendingBackgroundProcessSelectionForWorkspace"
   | "markBackgroundWorkViewedForSession"
   | "recordBackgroundWorkFinishedSubagentForSession"
 >;
@@ -126,6 +128,24 @@ export function createWorkspaceUiRightPanelActions(
       set((state) => ({
         pendingBackgroundSubagentSelectionByWorkspace: {
           ...state.pendingBackgroundSubagentSelectionByWorkspace,
+          [workspaceId]: null,
+        },
+      }));
+    },
+
+    setPendingBackgroundProcessSelectionForWorkspace: (workspaceId, selection) => {
+      set((state) => ({
+        pendingBackgroundProcessSelectionByWorkspace: {
+          ...state.pendingBackgroundProcessSelectionByWorkspace,
+          [workspaceId]: selection,
+        },
+      }));
+    },
+
+    clearPendingBackgroundProcessSelectionForWorkspace: (workspaceId) => {
+      set((state) => ({
+        pendingBackgroundProcessSelectionByWorkspace: {
+          ...state.pendingBackgroundProcessSelectionByWorkspace,
           [workspaceId]: null,
         },
       }));

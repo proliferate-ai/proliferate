@@ -22,6 +22,18 @@ export interface PendingBackgroundSubagentSelection {
   sessionId: string;
 }
 
+/**
+ * Terminal counterpart of `PendingBackgroundSubagentSelection` (bgwork r6): a
+ * background terminal's completion receipt deep-opens straight to its
+ * `BackgroundTerminalView`. Same session-scoping contract — `sessionId` is the
+ * session active at write time, checked against the consuming pane's own
+ * `sessionId` so a cross-session entry is discarded rather than applied.
+ */
+export interface PendingBackgroundProcessSelection {
+  processId: string;
+  sessionId: string;
+}
+
 export interface WorkspaceUiState {
   _hydrated: boolean;
   pinnedWorkspaceIds: string[];
@@ -55,6 +67,17 @@ export interface WorkspaceUiState {
   pendingBackgroundSubagentSelectionByWorkspace: Record<
     string,
     PendingBackgroundSubagentSelection | null
+  >;
+  /**
+   * One-shot deep-link target for a background terminal's completion receipt
+   * (bgwork r6) — a process id to select the instant `BackgroundWorkPane` next
+   * renders for this workspace. Same ephemeral, workspace-keyed, session-
+   * checked contract as `pendingBackgroundSubagentSelectionByWorkspace` above;
+   * cleared by the pane the instant it is read, matched or not.
+   */
+  pendingBackgroundProcessSelectionByWorkspace: Record<
+    string,
+    PendingBackgroundProcessSelection | null
   >;
   /**
    * Finish-signal ladder rung 1 (`PanelHeaderEntry` dirty dot) — the epoch-ms
@@ -131,6 +154,13 @@ export interface WorkspaceUiState {
     selection: PendingBackgroundSubagentSelection,
   ) => void;
   clearPendingBackgroundSubagentSelectionForWorkspace: (
+    workspaceId: string,
+  ) => void;
+  setPendingBackgroundProcessSelectionForWorkspace: (
+    workspaceId: string,
+    selection: PendingBackgroundProcessSelection,
+  ) => void;
+  clearPendingBackgroundProcessSelectionForWorkspace: (
     workspaceId: string,
   ) => void;
   markBackgroundWorkViewedForSession: (sessionId: string, atMs?: number) => void;

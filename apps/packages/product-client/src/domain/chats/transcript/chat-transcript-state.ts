@@ -5,6 +5,7 @@ import type {
 import type { SessionViewState } from "../../sessions/activity";
 import type { PromptOutboxEntry } from "../../sessions/intents/session-intent-model";
 import type { GoalTranscriptEvent } from "../../activity/goal-transcript-events";
+import type { BackgroundCompletionReceipt } from "../../activity/background-completion-receipt";
 
 export type {
   PendingPromptEntry,
@@ -34,6 +35,18 @@ export interface ChatTranscriptState {
    * while older history pages remain unloaded.
    */
   workspaceReceiptKey?: string | null;
+  /**
+   * Inline background-work completion receipts (bgwork r6 round 2), interleaved
+   * into the row sequence after each receipt's anchor turn. Client-side
+   * composition like `goalEvents`; set only by the main chat surface.
+   */
+  completionReceipts?: readonly BackgroundCompletionReceipt[];
+  /**
+   * Count of still-running background work; drives the quiet `background_work`
+   * footer row at the transcript tail (bgwork r6 round 2). 0/undefined renders
+   * no row.
+   */
+  backgroundWorkRunningCount?: number;
 }
 
 export interface ChatTranscriptHistoryState {

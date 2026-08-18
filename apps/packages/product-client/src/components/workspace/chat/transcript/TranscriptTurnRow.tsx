@@ -22,6 +22,7 @@ import { hostsSynthesizedReceiptDisclosure } from "#product/components/workspace
 import {
   findTailAssistantProseRootId,
   getAssistantProseContent,
+  resolveTurnAssistantFooterModeForRow,
   resolveTurnPromptTiming,
 } from "#product/domain/chats/transcript/transcript-rendering";
 import {
@@ -39,7 +40,6 @@ import {
 } from "#product/domain/chats/transcript/turn-stopped-presentation";
 import {
   resolveTranscriptTurnDiffPanelKind,
-  resolveTurnAssistantFooterMode,
   resolveTurnFrontierStatusMode,
   shouldRenderAssistantEndResource,
   shouldRenderStandaloneStoppedNotice,
@@ -182,16 +182,26 @@ export function TranscriptTurnRow({
   // The end-of-turn diff panel is completion-only and renders BELOW the final
   // prose, directly above that footer — it appears in the same paint as the
   // footer swap, so nothing shifts under a live stream.
-  const assistantFooterMode = resolveTurnAssistantFooterMode({
+  // The runtime drops the completion tail (item_completed + turn_ended) for
+  // injected wake turns, so the footer cannot rely on turn/item completion
+  // stamps. The session's own view state is the authority for "still live":
+  // only the latest turn of a session that is actively "working" is genuinely
+  // streaming. A reloaded or idle session leaves this false, so a dropped-tail
+  // wake message becomes copyable.
+  const turnIsActivelyStreaming = isLatestTurn && sessionViewState === "working";
+  const assistantFooterMode = resolveTurnAssistantFooterModeForRow({
     rowIsLastTurnRow: row.isLastTurnRow,
-    turnCompleted: !!turn.completedAt,
-    hasAssistantCopyContent: !!tailAssistantCopyContent,
+    turn,
+    transcript,
+    presentation,
     assistantRevealComplete,
+    turnIsActivelyStreaming,
   });
   const frontierStatusMode = resolveTurnFrontierStatusMode({
     hasTrailingStatus: trailingStatus !== null && trailingStatus !== undefined,
     rowIsLastTurnRow: row.isLastTurnRow,
     isLatestTurnInProgress,
+    turnIsActivelyStreaming,
     assistantRevealComplete,
   });
   const revertPatchesMutation = useRevertGitPatchesMutation({ workspaceId: selectedWorkspaceId });

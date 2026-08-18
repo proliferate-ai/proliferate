@@ -92,6 +92,7 @@ describe("frontier status box", () => {
     hasTrailingStatus: false,
     rowIsLastTurnRow: true,
     isLatestTurnInProgress: true,
+    turnIsActivelyStreaming: true,
     assistantRevealComplete: true,
   };
 
@@ -114,6 +115,37 @@ describe("frontier status box", () => {
       assistantRevealComplete: false,
       hasTrailingStatus: true,
     })).toBe("hidden");
+  });
+
+  it("hides the reserve on a dropped-tail wake turn once the session goes idle (R5)", () => {
+    // The runtime drops the wake turn's completion tail, so isLatestTurnInProgress
+    // stays true forever; only genuine stream liveness may reserve the band. An
+    // idle session (turnIsActivelyStreaming false) must resolve "hidden" so no
+    // dead ~44-56px gap sits between the settled prose and the timestamp footer.
+    expect(resolveTurnFrontierStatusMode({
+      ...base,
+      turnIsActivelyStreaming: false,
+    })).toBe("hidden");
+  });
+
+  it("keeps the reserve while the latest turn is genuinely streaming (working)", () => {
+    // isLatestTurnInProgress AND turnIsActivelyStreaming both true: unchanged
+    // anti-jitter reserve through the whole live turn.
+    expect(resolveTurnFrontierStatusMode({
+      ...base,
+      isLatestTurnInProgress: true,
+      turnIsActivelyStreaming: true,
+    })).toBe("reserved");
+  });
+
+  it("shows a real trailing status regardless of liveness (e.g. a needs_input pause)", () => {
+    // A permission-pause turn is not actively streaming, but its interaction
+    // indicator is a trailing status, so "status" wins before the reserve branch.
+    expect(resolveTurnFrontierStatusMode({
+      ...base,
+      hasTrailingStatus: true,
+      turnIsActivelyStreaming: false,
+    })).toBe("status");
   });
 });
 

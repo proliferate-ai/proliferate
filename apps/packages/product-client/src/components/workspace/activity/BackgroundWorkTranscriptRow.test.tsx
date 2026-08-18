@@ -11,54 +11,38 @@ const PROLIFERATE_MARK_SELECTOR = 'svg[viewBox="300 300 200 200"]';
 const CIRCLE_CHECK_SELECTOR = 'svg[viewBox="0 0 24 24"]';
 
 describe("BackgroundWorkTranscriptRow", () => {
-  it("renders nothing when nothing is running and nothing finished", () => {
+  // Founder ruling (bgwork r6): the row counts RUNNING work only and is not
+  // rendered at count 0. Completed tasks leave the count; the row disappears
+  // at 0. There is no settled/finished display state — completed work is
+  // announced solely by the inline `BackgroundCompletionReceipt` rows.
+  it("renders nothing when nothing is running", () => {
     const { container } = render(
-      <BackgroundWorkTranscriptRow runningCount={0} finishedCount={0} onOpen={() => {}} />,
+      <BackgroundWorkTranscriptRow runningCount={0} onOpen={() => {}} />,
     );
     expect(container.firstChild).toBeNull();
   });
 
   it("renders the singular running copy", () => {
-    render(<BackgroundWorkTranscriptRow runningCount={1} finishedCount={0} onOpen={() => {}} />);
+    render(<BackgroundWorkTranscriptRow runningCount={1} onOpen={() => {}} />);
     expect(screen.getByText("1 background task")).toBeTruthy();
   });
 
   it("renders the plural running copy", () => {
-    render(<BackgroundWorkTranscriptRow runningCount={3} finishedCount={0} onOpen={() => {}} />);
+    render(<BackgroundWorkTranscriptRow runningCount={3} onOpen={() => {}} />);
     expect(screen.getByText("3 background tasks")).toBeTruthy();
   });
 
-  it("renders the static Proliferate mark while running, not CircleCheck", () => {
+  it("renders the static Proliferate mark while running, never CircleCheck", () => {
     const { container } = render(
-      <BackgroundWorkTranscriptRow runningCount={2} finishedCount={0} onOpen={() => {}} />,
+      <BackgroundWorkTranscriptRow runningCount={2} onOpen={() => {}} />,
     );
     expect(container.querySelector(PROLIFERATE_MARK_SELECTOR)).toBeTruthy();
     expect(container.querySelector(CIRCLE_CHECK_SELECTOR)).toBeNull();
   });
 
-  it("renders the settled copy, pluralized, once the running count is zero", () => {
-    render(<BackgroundWorkTranscriptRow runningCount={0} finishedCount={2} onOpen={() => {}} />);
-    expect(screen.getByText("2 background tasks finished")).toBeTruthy();
-  });
-
-  it("renders the singular settled copy", () => {
-    render(<BackgroundWorkTranscriptRow runningCount={0} finishedCount={1} onOpen={() => {}} />);
-    expect(screen.getByText("1 background task finished")).toBeTruthy();
-  });
-
-  it("swaps the glyph to CircleCheck once settled, and rests at text-faint", () => {
+  it("rests at text-muted-foreground and shares one hover treatment between glyph and label", () => {
     const { container } = render(
-      <BackgroundWorkTranscriptRow runningCount={0} finishedCount={1} onOpen={() => {}} />,
-    );
-    expect(container.querySelector(CIRCLE_CHECK_SELECTOR)).toBeTruthy();
-    expect(container.querySelector(PROLIFERATE_MARK_SELECTOR)).toBeNull();
-    const label = screen.getByText("1 background task finished");
-    expect(label.className.split(" ")).toContain("text-faint");
-  });
-
-  it("shares one hover treatment between the glyph wrapper and the label", () => {
-    const { container } = render(
-      <BackgroundWorkTranscriptRow runningCount={1} finishedCount={0} onOpen={() => {}} />,
+      <BackgroundWorkTranscriptRow runningCount={1} onOpen={() => {}} />,
     );
     const label = screen.getByText("1 background task");
     const glyphWrapper = container.querySelector(PROLIFERATE_MARK_SELECTOR)?.parentElement;
@@ -71,24 +55,36 @@ describe("BackgroundWorkTranscriptRow", () => {
     expect(label.className.split(" ")).toContain("text-muted-foreground");
   });
 
-  it("carries no motion class in the running state", () => {
+  it("carries no motion class", () => {
     const { container } = render(
-      <BackgroundWorkTranscriptRow runningCount={1} finishedCount={0} onOpen={() => {}} />,
-    );
-    expect(container.innerHTML).not.toMatch(/animate-|motion-safe:/);
-  });
-
-  it("carries no motion class in the settled state", () => {
-    const { container } = render(
-      <BackgroundWorkTranscriptRow runningCount={0} finishedCount={1} onOpen={() => {}} />,
+      <BackgroundWorkTranscriptRow runningCount={1} onOpen={() => {}} />,
     );
     expect(container.innerHTML).not.toMatch(/animate-|motion-safe:/);
   });
 
   it("fires onOpen when clicked", () => {
     const onOpen = vi.fn();
-    render(<BackgroundWorkTranscriptRow runningCount={1} finishedCount={0} onOpen={onOpen} />);
+    render(<BackgroundWorkTranscriptRow runningCount={1} onOpen={onOpen} />);
     fireEvent.click(screen.getByRole("button", { name: "1 background task" }));
     expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  // NEGATIVE CONTROL: the removed settled state is gone in every arrangement —
+  // no "finished" copy, no CircleCheck glyph, and no `text-faint` settled tone,
+  // whether running is positive or zero.
+  it("never renders the removed settled state (no finished copy, no CircleCheck, no text-faint)", () => {
+    const running = render(
+      <BackgroundWorkTranscriptRow runningCount={2} onOpen={() => {}} />,
+    );
+    expect(running.container.textContent).not.toMatch(/finished/i);
+    expect(running.container.querySelector(CIRCLE_CHECK_SELECTOR)).toBeNull();
+    expect(running.container.innerHTML).not.toContain("text-faint");
+    cleanup();
+
+    // At zero running, the row is absent entirely — the old code would have
+    // shown "N background tasks finished" here.
+    const zero = render(<BackgroundWorkTranscriptRow runningCount={0} onOpen={() => {}} />);
+    expect(zero.container.firstChild).toBeNull();
+    expect(screen.queryByText(/finished/i)).toBeNull();
   });
 });

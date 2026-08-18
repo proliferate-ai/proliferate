@@ -53,8 +53,8 @@ reason = "relocated existing oversized domain test; +workspace-creation-receipt 
 
 [[max_lines]]
 path = "apps/packages/product-client/src/domain/chats/transcript/transcript-row-model.ts"
-max_lines = 1017
-reason = "relocated existing oversized domain source; receipt folded into first turn's Worked-for group; the standalone workspace_receipt row kind is deleted — before any turn exists the receipt instead hosts via hostsWorkspaceReceipt on the last pending/outbox prompt row (composer-dock-receipt placement fix)"
+max_lines = 856
+reason = "relocated existing oversized domain source; receipt folded into first turn's Worked-for group; the standalone workspace_receipt row kind is deleted — before any turn exists the receipt instead hosts via hostsWorkspaceReceipt on the last pending/outbox prompt row (composer-dock-receipt placement fix); goal-event + completion-receipt row interleaving helpers extracted to transcript-interleave-rows.ts (bgwork r6 round 2), shrinking this file below its prior ratchet"
 
 [[max_lines]]
 path = "apps/packages/product-client/src/domain/sessions/activity.test.ts"
@@ -197,6 +197,11 @@ reason = "terminal/feed stream registry (+open/close/error records woven into th
 path = "apps/packages/product-client/src/components/workspace/chat/transcript/VirtualizedTranscriptRowList.tsx"
 max_lines = 405
 reason = "Background Work R2: reports the stick-to-bottom engine's own isPinnedToBottom state upward via a new onIsPinnedToBottomChange callback prop, so the background-work transcript row can hide itself when the user scrolls away from bottom instead of floating over mid-transcript content; split deferred. Bumped 403->405 by the current-main merge: the chat-scroll refold's single-writer / frame-pipeline landing (PRO-187) plus r2's pin-state wiring net two more lines in this host."
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/workspace/chat/transcript/MessageList.tsx"
+max_lines = 442
+reason = "Background Work R6: in-scroll background_work + completion_receipt row orchestration (interleave placement, receipt hosting, pane wiring) grew the transcript list host past 400; extraction pending"
 
 # FE-CHATSCROLL-1 sanctioned scroll-position writers, read by
 # scripts/check_transcript_scroll_writer.py. File-level allowlist: any non-test

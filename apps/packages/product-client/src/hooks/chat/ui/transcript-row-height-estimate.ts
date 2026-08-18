@@ -49,6 +49,9 @@ import type { TranscriptRenderableRow } from "#product/hooks/chat/ui/transcript-
 const ESTIMATED_TURN_HEIGHT_PX = 360;
 const ESTIMATED_HISTORY_LOADING_ROW_HEIGHT_PX = 32;
 const ESTIMATED_GOAL_EVENT_ROW_HEIGHT_PX = 28;
+// Background-work rows (a completion receipt, or the running-count footer) are
+// likewise single-line quiet rows, not turn content (bgwork r6 round 2).
+const ESTIMATED_BACKGROUND_WORK_ROW_HEIGHT_PX = 32;
 
 const ESTIMATED_SINGLE_BLOCK_TURN_HEIGHT_PX = 120;
 const ESTIMATED_SHORT_MULTI_BLOCK_TURN_HEIGHT_PX = 220;
@@ -142,6 +145,9 @@ export function estimateRenderableRowHeight(
   }
   if (row.row.kind === "goal_event") {
     return ESTIMATED_GOAL_EVENT_ROW_HEIGHT_PX;
+  }
+  if (row.row.kind === "completion_receipt" || row.row.kind === "background_work") {
+    return ESTIMATED_BACKGROUND_WORK_ROW_HEIGHT_PX;
   }
   if (row.row.kind === "turn") {
     return estimateTurnRowHeight(row.row.blockKey, row.row.renderPresentation.displayBlocks);
@@ -248,6 +254,11 @@ export function getRowCompositionToken(
   }
   if (row.row.kind === "outbox_prompt") {
     return `outbox:${row.row.clientPromptId}:${row.row.hostsWorkspaceReceipt ?? false}`;
+  }
+  if (row.row.kind === "completion_receipt" || row.row.kind === "background_work") {
+    // Single-line quiet rows (bgwork r6): no composition variants that change
+    // their height shape, so the kind itself is a stable token.
+    return row.row.kind;
   }
   return `pending:${row.row.hostsWorkspaceReceipt ?? false}`;
 }
