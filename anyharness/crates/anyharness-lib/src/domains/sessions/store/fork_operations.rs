@@ -86,7 +86,7 @@ pub(super) const FORK_OP_COLUMNS: &str = "id, idempotency_key, request_digest, \
      parent_session_id, child_session_id, phase, anchor_turn_id, anchor_item_id, \
      provider_anchor_kind, provider_anchor_value, provider_anchor_inclusive, \
      prefix_terminal_seq, prefix_digest, adapter_version, native_version, \
-     native_child_session_id, created_at, updated_at";
+     native_child_session_id, checkpoint_id, created_at, updated_at";
 
 pub(super) fn insert_fork_operation_row(
     conn: &rusqlite::Connection,
@@ -98,9 +98,9 @@ pub(super) fn insert_fork_operation_row(
             phase, anchor_turn_id, anchor_item_id, provider_anchor_kind,
             provider_anchor_value, provider_anchor_inclusive, prefix_terminal_seq,
             prefix_digest, adapter_version, native_version, native_child_session_id,
-            created_at, updated_at
+            checkpoint_id, created_at, updated_at
          ) VALUES (
-            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19
          )",
         params![
             record.id,
@@ -119,6 +119,7 @@ pub(super) fn insert_fork_operation_row(
             record.adapter_version,
             record.native_version,
             record.native_child_session_id,
+            record.checkpoint_id,
             record.created_at,
             record.updated_at,
         ],
@@ -193,7 +194,8 @@ pub(super) fn map_fork_operation(
         adapter_version: row.get(13)?,
         native_version: row.get(14)?,
         native_child_session_id: row.get(15)?,
-        created_at: row.get(16)?,
-        updated_at: row.get(17)?,
+        checkpoint_id: row.get(16)?,
+        created_at: row.get(17)?,
+        updated_at: row.get(18)?,
     })
 }
