@@ -459,12 +459,15 @@ async fn retention_culls_to_n_with_the_age_cap_and_exemptions() {
         &timestamp_days_ago(30),
         false,
     );
-    // A row that would be culled by N, but a revert claims it → survives.
+    // A row that would be culled by BOTH the age cap AND the N-cut, but a revert
+    // claims it → survives. Dated past the 14-day cap so ONLY the in-flight claim
+    // can explain its survival (remove the `is_claimed` check in `should_retain`
+    // and this test fails).
     harness.make_checkpoint(
         "ws-1",
         "claimed",
         CheckpointOrigin::TurnStart,
-        &timestamp_days_ago((n + 10) as i64 % 13 + 1),
+        &timestamp_days_ago(40),
         false,
     );
     let _claim = service.inflight_reverts().claim("claimed");
@@ -472,7 +475,10 @@ async fn retention_culls_to_n_with_the_age_cap_and_exemptions() {
     service.sweep_retention().await;
 
     let surviving = harness.checkpoint_ref_ids("ws-1");
-    assert!(surviving.contains("claimed"), "an in-flight-claimed checkpoint survives");
+    assert!(
+        surviving.contains("claimed"),
+        "an in-flight-claimed checkpoint survives even past both the N-cut and the age cap"
+    );
     assert!(
         surviving.contains("safety-old"),
         "the newest safety row is exempt from the N-cull"

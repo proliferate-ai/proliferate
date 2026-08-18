@@ -400,11 +400,12 @@ its bytes.
 Retention runs as a fifth duty of the archive sweep, only while the flag is on
 (flag-off freezes existing checkpoints until purge). It keeps the newest
 `RETENTION_KEEP_N` (20) per workspace within `RETENTION_MAX_AGE` (14 days) — both
-observation-period implementation constants, not product promises — with three
+observation-period implementation constants, not product promises — with two
 exemptions: a checkpoint an in-flight revert claims is never culled; the newest
-`safety` row is exempt from the N-cull (but not the age cap). The same pass runs
-an orphan reap that deletes any checkpoint ref whose row is absent or expired,
-converging both the crash-between-steps and crash-before-insert leftovers. Purge
+`safety` row is exempt from the N-cull (but not the age cap). It never touches
+anything outside `refs/proliferate/checkpoints/`. The same pass runs an orphan
+reap that deletes any checkpoint ref whose row is absent or expired, converging
+both the crash-between-steps and crash-before-insert leftovers. Purge
 deletes the checkpoint rows then every checkpoint ref for the workspace, beside
 its existing archive-refs deletion. Fork rows reference the boundary checkpoint
 via `fork_operations.checkpoint_id`, looked up (never captured) at the fork's

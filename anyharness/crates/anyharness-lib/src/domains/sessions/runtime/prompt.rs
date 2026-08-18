@@ -187,15 +187,30 @@ impl SessionRuntime {
         );
 
         // Turn-start checkpoint (Lane H), just before dispatch. A capture failure
-        // under the abort policy returns here and the turn never starts.
-        let checkpoint_id = self
+        // under the abort policy returns here and the turn never starts. Unlike
+        // the two text-prompt sites (which carry no attachments), this site has
+        // already persisted `prepared`'s attachments, so an abort must clean them
+        // up first — same discipline as the EnqueueFailed / ProductContextUnavailable
+        // arms below (cleanup error ignored, exactly as they do).
+        let checkpoint_id = match self
             .capture_turn_start_checkpoint(
                 &record.workspace_id,
                 session_id,
                 &handle,
                 prompt_id_for_trace.as_deref(),
             )
-            .await?;
+            .await
+        {
+            Ok(checkpoint_id) => checkpoint_id,
+            Err(error) => {
+                let _ = prepared.cleanup_attachments(
+                    self.session_service.store(),
+                    self.session_service.attachment_storage(),
+                    session_id,
+                );
+                return Err(error);
+            }
+        };
 
         // Invariant 1/2: the actor is the sole writer of `busy` and the queue.
         // The runtime no longer precaptures `busy`; it just forwards the command
