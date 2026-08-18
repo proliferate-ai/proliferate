@@ -5,6 +5,7 @@ import { createWorkspaceUiActivityActions } from "#product/stores/preferences/wo
 import { createWorkspaceUiChatTabActions } from "#product/stores/preferences/workspace-ui-chat-tab-actions";
 import { createWorkspaceUiDismissalActions } from "#product/stores/preferences/workspace-ui-dismissal-actions";
 import { createWorkspaceUiGitStatusActions } from "#product/stores/preferences/workspace-ui-git-status-actions";
+import { createWorkspaceUiPinIntentActions } from "#product/stores/preferences/workspace-ui-pin-intent-actions";
 import { createWorkspaceUiRightPanelActions } from "#product/stores/preferences/workspace-ui-right-panel-actions";
 import { createWorkspaceUiShellActions } from "#product/stores/preferences/workspace-ui-shell-actions";
 import { createWorkspaceUiSidebarActions } from "#product/stores/preferences/workspace-ui-sidebar-actions";
@@ -15,9 +16,11 @@ export type { ShellIntentResult, WorkspaceUiState } from "#product/stores/prefer
 export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
   ...WORKSPACE_UI_DEFAULTS,
   _hydrated: false,
+  workspacePinHistoryObservationById: {},
   shellActivationEpochByWorkspace: {},
   pendingChatActivationByWorkspace: {},
   pendingBackgroundSubagentSelectionByWorkspace: {},
+  pendingBackgroundProcessSelectionByWorkspace: {},
   backgroundWorkLastViewedAtBySession: {},
   backgroundWorkLastFinishedSubagentBySession: {},
   urgentHighlightedChatSessionByWorkspace: {},
@@ -27,10 +30,12 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
     set({
       ...state,
       _hydrated: true,
+      workspacePinHistoryObservationById: {},
     });
   },
 
   ...createWorkspaceUiSidebarActions(set, get),
+  ...createWorkspaceUiPinIntentActions(set),
   ...createWorkspaceUiRightPanelActions(set),
   ...createWorkspaceUiShellActions(set, get),
   ...createWorkspaceUiActivityActions(set, get),

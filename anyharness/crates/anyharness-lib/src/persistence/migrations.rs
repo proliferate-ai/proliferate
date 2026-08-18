@@ -240,6 +240,18 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0071_session_adapter_markers",
         include_str!("sql/0071_session_adapter_markers.sql"),
     ),
+    (
+        "0072_completion_wake_removal_intents",
+        include_str!("sql/0072_completion_wake_removal_intents.sql"),
+    ),
+    (
+        "0073_pending_prompt_cursor_backfill",
+        include_str!("sql/0073_pending_prompt_cursor_backfill.sql"),
+    ),
+    (
+        "0074_opencode_message_ids",
+        include_str!("sql/0074_opencode_message_ids.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

@@ -64,6 +64,15 @@ export interface TranscriptFrameWriter {
    * active compensation anchor).
    */
   shouldContinueGlue: () => boolean;
+  /**
+   * PRO-168 (rung 12, Q16): true while the pluggable motion writer (the eased
+   * follow policy) has written a step that has not yet reached its target.
+   * Absent, or false, for the default instant writer. When true after a pass,
+   * the pipeline schedules exactly one more frame purely to let that same
+   * writer keep converging — still this one pipeline's own scheduling, never
+   * a second competing rAF loop (FR-1).
+   */
+  hasPendingMotion?: () => boolean;
 }
 
 type RafFn = (cb: () => void) => number;
@@ -114,6 +123,10 @@ export class TranscriptFramePipeline {
   private glueStartedAt = 0;
   private glueLastHeight = -1;
   private glueQuietFrames = 0;
+  // PRO-168 (rung 12): the motion writer's own continuation handle, separate
+  // from frameHandle/glueHandle so it never contends with either's guard
+  // bookkeeping. Only ever armed when the writer reports pending motion.
+  private motionHandle: number | null = null;
 
   constructor(
     private readonly raf: RafFn = defaultRaf,
@@ -171,6 +184,41 @@ export class TranscriptFramePipeline {
     // Record the height the snap just settled against so a later same-frame
     // notify re-runs only on further growth (a scrollTop write leaves it equal).
     this.framePassHeight = writer.measureContentHeight();
+    // PRO-168 (rung 12): the instant writer never reports pending motion, so
+    // this is a no-op for v1. An eased writer still mid-step keeps this
+    // pipeline (and only this pipeline) ticking until it converges.
+    this.continueMotionIfPending();
+  }
+
+  /**
+   * PRO-168 (rung 12): while the writer's motion policy has not yet converged
+   * (`hasPendingMotion` true), keep scheduling exactly one frame at a time so
+   * the SAME writer can finish its catch-up — a self-perpetuating chain owned
+   * by this pipeline, not a second animator. Idempotent: a handle already
+   * armed is left alone.
+   */
+  private continueMotionIfPending(): void {
+    const writer = this.writer;
+    if (writer?.hasPendingMotion?.() !== true) {
+      return;
+    }
+    if (this.motionHandle != null) {
+      return;
+    }
+    this.motionHandle = this.raf(() => {
+      this.motionHandle = null;
+      const current = this.writer;
+      // Re-check pending AT FIRE TIME, not just when this frame was armed: the
+      // pass that ran since (glue, or an earlier motion tick) may have already
+      // converged the writer, and re-running would waste a frame on a motion
+      // step nobody needs. Mirrors glueTick's shouldContinueGlue gate, checked
+      // before running rather than only after.
+      if (current == null || current.hasPendingMotion?.() !== true) {
+        return;
+      }
+      current.runFramePass();
+      this.continueMotionIfPending();
+    });
   }
 
   /**
@@ -183,6 +231,13 @@ export class TranscriptFramePipeline {
   beginGlue(): void {
     if (this.writer == null) {
       return;
+    }
+    // Fold any pending motion continuation into the glue window: the glue
+    // loop below runs every frame regardless, so a separately-scheduled
+    // motion tick would double the same writer's pass in one frame.
+    if (this.motionHandle != null) {
+      this.caf(this.motionHandle);
+      this.motionHandle = null;
     }
     // Fold the pending guard-reset frame into the window and re-arm from scratch.
     if (this.frameHandle != null) {
@@ -205,6 +260,11 @@ export class TranscriptFramePipeline {
     const writer = this.writer;
     if (writer == null || !writer.shouldContinueGlue()) {
       this.glueActive = false;
+      // PRO-168 (rung 12): the glue window ending mid-motion (the user
+      // reclaimed control, or the viewport vanished) still hands off to the
+      // motion continuation below when the writer itself still has motion
+      // pending; when the writer is gone that check is a safe no-op.
+      this.continueMotionIfPending();
       return;
     }
     writer.runFramePass();
@@ -220,6 +280,14 @@ export class TranscriptFramePipeline {
     const capElapsed = this.now() - this.glueStartedAt >= TRANSCRIPT_GLUE_MAX_MS;
     if (this.glueQuietFrames >= GLUE_SETTLE_QUIET_FRAMES || capElapsed) {
       this.glueActive = false;
+      // PRO-168 (rung 12): the height-quiet/hard-cap glue terminator is about
+      // CONTENT settling, not the motion writer's own catch-up distance — an
+      // eased follower can still be short of its target on the very frame
+      // glue stops (e.g. a burst that settles height quickly but leaves scroll
+      // position trailing). Hand off to the motion continuation so it keeps
+      // converging without turning glue's window into a second countdown for
+      // the same thing.
+      this.continueMotionIfPending();
       return;
     }
     this.glueHandle = this.raf(this.glueTick);
@@ -243,6 +311,10 @@ export class TranscriptFramePipeline {
     }
     this.glueActive = false;
     this.glueHandle = null;
+    if (this.motionHandle != null) {
+      this.caf(this.motionHandle);
+    }
+    this.motionHandle = null;
   }
 
   /** Whether a forced-glue window is currently running (for tests/diagnostics). */

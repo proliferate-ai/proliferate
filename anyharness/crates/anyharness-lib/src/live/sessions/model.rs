@@ -46,12 +46,13 @@ use crate::domains::sessions::extensions::{
 use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::domains::sessions::model::{
     PendingConfigChangeRecord, PendingPromptRecord, PendingPromptReorderOutcome,
-    PromptAttachmentRecord, PromptAttachmentState, SessionBackgroundWorkRecord,
-    SessionBackgroundWorkState, SessionEventRecord, SessionLiveConfigSnapshotRecord, SessionRecord,
+    SessionBackgroundWorkRecord, SessionBackgroundWorkState, SessionEventRecord,
+    SessionLiveConfigSnapshotRecord, SessionRecord,
 };
-use crate::domains::sessions::prompt::{PromptPayload, PromptValidationError, ResolvedParts};
+use crate::domains::sessions::prompt::PromptPayload;
 use crate::live::sessions::actor::command::{Resolution, ResolveInteractionCommandError};
 use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
+use crate::live::sessions::model_attachments::AttachmentSource;
 use crate::live::sessions::product_context::AgentProductContextResolver;
 use crate::live::sessions::queue_durable::{
     PendingPromptDeleteOutcome, PendingPromptUpdateOutcome,
@@ -140,7 +141,6 @@ pub struct SessionLaunch {
 }
 
 /// Durable event-ledger persistence as the live actor needs it.
-///
 /// Signatures mirror `SessionStore` 1:1 so the domain impl is pure delegation.
 pub trait EventPersist: Send + Sync {
     fn append_event(&self, event: &SessionEventRecord) -> anyhow::Result<()>;
@@ -160,6 +160,7 @@ pub trait EventPersist: Send + Sync {
     fn next_event_seq(&self, session_id: &str) -> anyhow::Result<i64>;
     fn last_event_seq(&self, session_id: &str) -> anyhow::Result<i64>;
     fn has_turn_started_event(&self, session_id: &str) -> anyhow::Result<bool>;
+    fn has_prompt_added_event(&self, prompt: &PendingPromptRecord) -> anyhow::Result<bool>;
     fn append_raw_notification(
         &self,
         session_id: &str,
@@ -310,38 +311,16 @@ pub trait SessionStateDurable: Send + Sync {
     fn delete_pending_config_change(&self, session_id: &str, config_id: &str)
         -> anyhow::Result<()>;
     fn repair_unclosed_turns(&self, session_id: &str) -> anyhow::Result<u32>;
-}
-
-/// Prompt-attachment loading and hygiene as the actor's turn machinery needs
-/// it. `load` is the IO half of the prompt pipeline; the pure render half is
-/// `domains::sessions::prompt::render::render`, which the actor calls itself.
-pub trait AttachmentSource: Send + Sync {
-    /// Load every attachment the payload references: store rows plus stored
-    /// bytes (including the legacy-content fallback). No ACP shapes here —
-    /// rendering them is pure and stays out of the capability.
-    fn load(
+    /// record the vendor OpenCode message id observed for a
+    /// runtime `(turn_id, item_id)` user-message identity (first-writer-wins).
+    fn insert_opencode_message_id(
         &self,
         session_id: &str,
-        payload: &PromptPayload,
-    ) -> Result<ResolvedParts, PromptValidationError>;
-    fn mark_prompt_attachments_state(
-        &self,
-        session_id: &str,
-        attachment_ids: &[String],
-        state: PromptAttachmentState,
+        turn_id: &str,
+        item_id: &str,
+        vendor_message_id: &str,
+        now: &str,
     ) -> anyhow::Result<()>;
-    fn find_prompt_attachment(
-        &self,
-        session_id: &str,
-        attachment_id: &str,
-    ) -> anyhow::Result<Option<PromptAttachmentRecord>>;
-    fn delete_prompt_attachments(
-        &self,
-        session_id: &str,
-        attachment_ids: &[&str],
-    ) -> anyhow::Result<()>;
-    /// Delete the stored attachment file for a (pending) record.
-    fn delete_record(&self, record: &PromptAttachmentRecord) -> anyhow::Result<()>;
 }
 
 /// The never-varies capability set the actor runs against; wired once at

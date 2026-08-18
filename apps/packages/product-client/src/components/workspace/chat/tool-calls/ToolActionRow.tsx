@@ -14,6 +14,14 @@ interface ToolActionRowProps {
   onExpandedChange?: (next: boolean) => void;
   expandable?: boolean;
   className?: string;
+  /**
+   * When set, a click (or Enter/Space) on the row calls this instead of
+   * toggling the inline details disclosure — the row never expands in place
+   * (bgwork r8: a background command's row opens the Background work pane's
+   * terminal detail rather than showing its output inline). Leave unset to
+   * keep the ordinary expand/collapse behavior.
+   */
+  onOpen?: () => void;
 }
 
 export function ToolActionRow({
@@ -28,10 +36,11 @@ export function ToolActionRow({
   onExpandedChange,
   expandable = true,
   className = "",
+  onOpen,
 }: ToolActionRowProps) {
   const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
-  const expanded = controlledExpanded ?? internalExpanded;
-  const hasDetails = expandable && !!children;
+  const expanded = onOpen ? false : (controlledExpanded ?? internalExpanded);
+  const hasDetails = expandable && (!!children || !!onOpen);
 
   const setExpanded = (next: boolean) => {
     if (controlledExpanded === undefined) {
@@ -39,13 +48,20 @@ export function ToolActionRow({
     }
     onExpandedChange?.(next);
   };
+  const activate = () => {
+    if (onOpen) {
+      onOpen();
+      return;
+    }
+    setExpanded(!expanded);
+  };
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (
       event.target === event.currentTarget
       && (event.key === "Enter" || event.key === " ")
     ) {
       event.preventDefault();
-      setExpanded(!expanded);
+      activate();
     }
   };
 
@@ -63,7 +79,7 @@ export function ToolActionRow({
               ? "text-destructive/80 hover:text-destructive"
               : "text-muted-foreground hover:text-foreground"
           }`}
-          onClick={() => setExpanded(!expanded)}
+          onClick={activate}
           onKeyDown={handleKeyDown}
         >
           <ToolActionRowContent

@@ -7,6 +7,7 @@ use super::persisted_payloads::sanitize_session_event_for_sqlite;
 use super::SessionStore;
 use crate::domains::sessions::model::SessionEventRecord;
 
+mod pending_prompts;
 mod repair;
 
 impl SessionStore {
@@ -92,6 +93,8 @@ impl SessionStore {
             )?;
             let timestamp = chrono::Utc::now().to_rfc3339();
             let event_type = event.event_type().to_string();
+            // Persist a sanitized copy while returning the original event.
+            let persisted_event = sanitize_session_event_for_sqlite(&event);
             let envelope = anyharness_contract::v1::SessionEventEnvelope {
                 session_id: session_id.to_string(),
                 seq,
@@ -100,14 +103,22 @@ impl SessionStore {
                 item_id: None,
                 event,
             };
-            let persisted_event = sanitize_session_event_for_sqlite(&envelope.event);
             let payload_json = serde_json::to_string(&persisted_event)
                 .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
+            let removal_key = completion_wake_removal_key_from_payload(session_id, &payload_json)?;
             conn.execute(
                 "INSERT INTO session_events (
-                    session_id, seq, timestamp, event_type, turn_id, item_id, payload_json
-                 ) VALUES (?1, ?2, ?3, ?4, NULL, NULL, ?5)",
-                params![session_id, seq, timestamp, event_type, payload_json],
+                    session_id, seq, timestamp, event_type, turn_id, item_id, payload_json,
+                    completion_wake_removal_key
+                 ) VALUES (?1, ?2, ?3, ?4, NULL, NULL, ?5, ?6)",
+                params![
+                    session_id,
+                    seq,
+                    timestamp,
+                    event_type,
+                    payload_json,
+                    removal_key
+                ],
             )?;
             if touch_session_activity {
                 conn.execute(
@@ -494,10 +505,17 @@ pub(super) fn insert_event_row(
     conn: &rusqlite::Connection,
     record: &SessionEventRecord,
 ) -> rusqlite::Result<()> {
-    let payload_json = sanitize_session_event_payload_json(&record.payload_json)?;
+    let (payload_json, parsed_event) = sanitize_session_event_payload_json(&record.payload_json)?;
+    let removal_key = if parsed_event {
+        completion_wake_removal_key_from_payload(&record.session_id, &payload_json)?
+    } else {
+        None
+    };
     conn.execute(
-        "INSERT INTO session_events (session_id, seq, timestamp, event_type, turn_id, item_id, payload_json)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO session_events (
+            session_id, seq, timestamp, event_type, turn_id, item_id, payload_json,
+            completion_wake_removal_key
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             record.session_id,
             record.seq,
@@ -506,17 +524,59 @@ pub(super) fn insert_event_row(
             record.turn_id,
             record.item_id,
             payload_json,
+            removal_key,
         ],
     )?;
     Ok(())
 }
 
-fn sanitize_session_event_payload_json(payload_json: &str) -> rusqlite::Result<String> {
+fn completion_wake_removal_key_from_payload(
+    session_id: &str,
+    payload_json: &str,
+) -> rusqlite::Result<Option<String>> {
+    let Ok(payload) = serde_json::from_str::<serde_json::Value>(payload_json) else {
+        return Ok(None);
+    };
+    if payload.get("type").and_then(serde_json::Value::as_str) != Some("pending_prompt_removed")
+        || payload.get("reason").and_then(serde_json::Value::as_str) != Some("deleted")
+    {
+        return Ok(None);
+    }
+    let Some(prompt_seq) = payload.get("seq").and_then(serde_json::Value::as_i64) else {
+        return Ok(None);
+    };
+    let prompt_id = match payload.get("promptId") {
+        Some(serde_json::Value::String(prompt_id)) => Some(prompt_id.as_str()),
+        Some(serde_json::Value::Null) | None => None,
+        Some(_) => return Ok(None),
+    };
+    let Some(prompt_id) = prompt_id.filter(|prompt_id| {
+        prompt_id
+            .strip_prefix(crate::domains::sessions::prompt::SUBAGENT_COMPLETION_PROMPT_ID_PREFIX)
+            .is_some_and(|delivery_id| !delivery_id.is_empty())
+    }) else {
+        return Ok(None);
+    };
+    completion_wake_removal_key_for_identity(session_id, prompt_seq, Some(prompt_id)).map(Some)
+}
+
+pub(super) fn completion_wake_removal_key_for_identity(
+    session_id: &str,
+    prompt_seq: i64,
+    prompt_id: Option<&str>,
+) -> rusqlite::Result<String> {
+    serde_json::to_string(&(session_id, prompt_seq, prompt_id))
+        .map(|identity| format!("completion_wake_removal:{identity}"))
+        .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))
+}
+
+fn sanitize_session_event_payload_json(payload_json: &str) -> rusqlite::Result<(String, bool)> {
     let Ok(event) = serde_json::from_str::<anyharness_contract::v1::SessionEvent>(payload_json)
     else {
-        return Ok(payload_json.to_string());
+        return Ok((payload_json.to_string(), false));
     };
     let sanitized = sanitize_session_event_for_sqlite(&event);
     serde_json::to_string(&sanitized)
+        .map(|payload_json| (payload_json, true))
         .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))
 }

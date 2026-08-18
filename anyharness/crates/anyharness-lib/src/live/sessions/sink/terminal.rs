@@ -100,7 +100,7 @@ impl SessionEventSink {
     /// terminal batch is frozen, that batch owns the next event sequence until
     /// it commits or startup repair retires it.
     pub(in crate::live::sessions) fn event_mutations_admitted(&self) -> bool {
-        self.staged_terminal.is_none()
+        self.event_sequence_owned && self.staged_terminal.is_none()
     }
 
     pub(in crate::live::sessions) fn staged_terminal_is_engine_initiated(&self) -> Option<bool> {
@@ -117,6 +117,9 @@ impl SessionEventSink {
         outcome: TerminalTurnOutcome,
         terminal: PromptTerminalEvent,
     ) -> anyhow::Result<()> {
+        if !self.event_sequence_owned {
+            anyhow::bail!("event sequence ownership has been relinquished");
+        }
         if self.staged_terminal.is_some() {
             anyhow::bail!("a terminal turn is already staged");
         }
@@ -214,6 +217,9 @@ impl SessionEventSink {
     pub(in crate::live::sessions) fn commit_staged_prompt_terminal(
         &mut self,
     ) -> anyhow::Result<TerminalTurnCommit> {
+        if !self.event_sequence_owned {
+            anyhow::bail!("event sequence ownership has been relinquished");
+        }
         let input = self
             .staged_terminal
             .as_ref()

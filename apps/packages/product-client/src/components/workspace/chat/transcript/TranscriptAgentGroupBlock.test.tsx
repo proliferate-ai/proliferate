@@ -266,13 +266,20 @@ describe("TranscriptAgentGroupBlock onOpenSubagent (native routing)", () => {
     };
   }
 
-  it("calls onOpenSubagent with the correct subagent id when the header is clicked", () => {
+  // Founder critique (2026-08-17), rung R7: once a durable subagentId is on
+  // the wire, this block no longer renders the generic
+  // "Creating subagent … · 1 tool call" header — it renders the same
+  // identity treatment as `SubagentCreationGroupBlock`'s creation-run anatomy
+  // (`AgentIdentityChip` + a clickable verb), built from
+  // `buildDelegatedAgentIdentity` off the same subagentId the pane roster row
+  // and detail header already use (rung R4), so all three surfaces agree.
+  it("renders the identity chip and verb instead of the generic header, both opening the pane", () => {
     const transcript = createTranscriptState("session-1");
     const item = backgroundWorkItem("agent-42");
     transcript.itemsById[item.itemId] = item;
     const onOpenSubagent = vi.fn();
 
-    const { getByText } = render(
+    const { container, getByText, queryByText } = render(
       createElement(TranscriptAgentGroupBlock, {
         item,
         childIds: [],
@@ -283,10 +290,43 @@ describe("TranscriptAgentGroupBlock onOpenSubagent (native routing)", () => {
       }),
     );
 
-    fireEvent.click(getByText("Creating subagent"));
+    expect(queryByText("Creating subagent")).toBeNull();
+    expect(container.querySelector("[data-subagent-creation-run]")).not.toBeNull();
+    expect(container.querySelector("[data-agent-identity-chip]")).not.toBeNull();
 
+    fireEvent.click(container.querySelector("[data-agent-identity-chip]") as HTMLElement);
     expect(onOpenSubagent).toHaveBeenCalledTimes(1);
     expect(onOpenSubagent).toHaveBeenCalledWith("agent-42");
+
+    fireEvent.click(getByText("starting"));
+    expect(onOpenSubagent).toHaveBeenCalledTimes(2);
+    expect(onOpenSubagent).toHaveBeenCalledWith("agent-42");
+  });
+
+  it("shows 'started working' once the launch is no longer running", () => {
+    const transcript = createTranscriptState("session-1");
+    const item: ToolCallItem = {
+      ...backgroundWorkItem("agent-42"),
+      status: "completed",
+      rawOutput: {
+        agentId: "agent-42",
+        _anyharness: { backgroundWork: { trackerKind: "claude_async_agent", state: "completed" } },
+      },
+    };
+    transcript.itemsById[item.itemId] = item;
+
+    const { getByText } = render(
+      createElement(TranscriptAgentGroupBlock, {
+        item,
+        childIds: [],
+        transcript,
+        childrenByParentId: new Map(),
+        renderChild: () => null,
+        onOpenSubagent: vi.fn(),
+      }),
+    );
+
+    expect(getByText("started working")).not.toBeNull();
   });
 
   it("still allows expand/collapse via the chevron when onOpenSubagent is wired", () => {
@@ -308,108 +348,13 @@ describe("TranscriptAgentGroupBlock onOpenSubagent (native routing)", () => {
       }),
     );
 
-    // The header itself now opens the pane, not the disclosure — expanding
-    // must go through the dedicated chevron control instead.
+    // The chip/verb open the pane, not the disclosure — expanding must go
+    // through the dedicated chevron control instead.
     expect(queryByText("Launch failed")).toBeNull();
     fireEvent.click(getByRole("button", { name: "Expand subagent details" }));
 
     expect(onOpenSubagent).not.toHaveBeenCalled();
     expect(getByRole("button", { name: "Collapse subagent details" })).not.toBeNull();
-  });
-
-  it("calls onOpenSubagent with the correct subagent id when Enter is pressed on the header", () => {
-    const transcript = createTranscriptState("session-1");
-    const item = backgroundWorkItem("agent-42");
-    transcript.itemsById[item.itemId] = item;
-    const onOpenSubagent = vi.fn();
-
-    const { getByText } = render(
-      createElement(TranscriptAgentGroupBlock, {
-        item,
-        childIds: [],
-        transcript,
-        childrenByParentId: new Map(),
-        renderChild: () => null,
-        onOpenSubagent,
-      }),
-    );
-
-    // Keyboard activation targets the header `[role="button"]` itself, not
-    // the inner text span — that's the element that actually receives focus
-    // (and thus the keydown) when a user tabs to it.
-    fireEvent.keyDown(headerButtonFor(getByText("Creating subagent")), { key: "Enter" });
-
-    expect(onOpenSubagent).toHaveBeenCalledTimes(1);
-    expect(onOpenSubagent).toHaveBeenCalledWith("agent-42");
-  });
-
-  it("calls onOpenSubagent with the correct subagent id when Space is pressed on the header", () => {
-    const transcript = createTranscriptState("session-1");
-    const item = backgroundWorkItem("agent-42");
-    transcript.itemsById[item.itemId] = item;
-    const onOpenSubagent = vi.fn();
-
-    const { getByText } = render(
-      createElement(TranscriptAgentGroupBlock, {
-        item,
-        childIds: [],
-        transcript,
-        childrenByParentId: new Map(),
-        renderChild: () => null,
-        onOpenSubagent,
-      }),
-    );
-
-    fireEvent.keyDown(headerButtonFor(getByText("Creating subagent")), { key: " " });
-
-    expect(onOpenSubagent).toHaveBeenCalledTimes(1);
-    expect(onOpenSubagent).toHaveBeenCalledWith("agent-42");
-  });
-
-  it("exposes the header as a keyboard-focusable button when it opens a subagent", () => {
-    const transcript = createTranscriptState("session-1");
-    const item = backgroundWorkItem("agent-42");
-    transcript.itemsById[item.itemId] = item;
-
-    const { getByText } = render(
-      createElement(TranscriptAgentGroupBlock, {
-        item,
-        childIds: [],
-        transcript,
-        childrenByParentId: new Map(),
-        renderChild: () => null,
-        onOpenSubagent: vi.fn(),
-      }),
-    );
-
-    const header = getByText("Creating subagent").closest('[role="button"]');
-    expect(header).not.toBeNull();
-    expect(header?.getAttribute("tabindex")).toBe("0");
-    expect(header?.getAttribute("aria-label")).toBe("Open subagent detail");
-  });
-
-  it("does not re-trigger the header's action when Enter is pressed on the nested chevron button", () => {
-    const transcript = createTranscriptState("session-1");
-    const item = backgroundWorkItem("agent-7");
-    const childItem: ToolCallItem = toolItem("child-tool", "turn-1", 2, "other", "completed");
-    transcript.itemsById[item.itemId] = item;
-    transcript.itemsById[childItem.itemId] = childItem;
-    const onOpenSubagent = vi.fn();
-
-    const { getByRole } = render(
-      createElement(TranscriptAgentGroupBlock, {
-        item,
-        childIds: [childItem.itemId],
-        transcript,
-        childrenByParentId: new Map([[item.itemId, [childItem.itemId]]]),
-        renderChild: () => null,
-        onOpenSubagent,
-      }),
-    );
-
-    fireEvent.keyDown(getByRole("button", { name: "Expand subagent details" }), { key: "Enter" });
-
-    expect(onOpenSubagent).not.toHaveBeenCalled();
   });
 
   it("does not get the pane-opening affordance when rawOutput has no background metadata", () => {

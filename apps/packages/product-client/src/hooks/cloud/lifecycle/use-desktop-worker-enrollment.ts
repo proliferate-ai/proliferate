@@ -146,6 +146,19 @@ export function useDesktopWorkerEnrollment(
         if (cancelled || enrolledIdentityKey !== nextIdentityKey) {
           return;
         }
+        // Defense-in-depth at the toast's source. A worker failure raised
+        // while the native transport isn't even present (Desktop web build
+        // without the Tauri shell, intent tests) is an expected environment
+        // shape, not a user-actionable "Integrations unavailable" condition.
+        // ensureDesktopWorker already skips these silently at entry, so this
+        // path is unreachable for that case today; re-asserting it here means
+        // the toast source no longer relies solely on that single entry guard
+        // — any future caller that reaches onFailure without a supported
+        // transport still gets the same silent skip instead of a sticky,
+        // pointer-blocking toast (the #1997 tier-2 failure mode).
+        if (!worker.isSupported()) {
+          return;
+        }
         const notice = desktopWorkerStartupFailureNotice(error);
         if (
           sameFailure(

@@ -8,17 +8,23 @@ use crate::domains::sessions::links::service::SessionLinkService;
 use crate::domains::sessions::model::{
     parse_action_capabilities, ForkOperationPhase, ForkOperationRecord, SessionRecord,
 };
-use crate::domains::sessions::runtime::fork_boundary::{
-    self, ForkTargetError,
-};
+use crate::domains::sessions::runtime::fork_boundary;
 use crate::domains::sessions::store::fork_operations::ForkOperationChildResult;
 use crate::live::sessions::SessionStartupStrategy;
-use crate::live::sessions::{ForkSessionCommandError, LiveSessionCommandError};
+use crate::live::sessions::{ForkSessionCommandResult, LiveSessionCommandError};
+
+use self::errors::{
+    map_fork_target_error, map_live_fork_command_error, map_start_error_to_fork,
+};
+use self::sidedoor::map_live_sidedoor_fork_error;
 
 use super::startup_errors::map_start_session_error_to_anyhow;
 use super::{
     ForkSessionError, ForkSessionOutcome, SessionLifecycleError, SessionRuntime, StartSessionError,
 };
+
+mod errors;
+mod sidedoor;
 
 impl SessionRuntime {
     pub async fn fork_session(
@@ -144,15 +150,23 @@ impl SessionRuntime {
             return Err(ForkSessionError::Busy);
         }
 
-        // Rung 3 target: this is the seam a targeted native dispatch plugs into.
-        // Until a bridge advertises `targeted_fork` the gate above rejects it, so
-        // reaching here with a targeted anchor means a capability was advertised
-        // without a dispatch implementation.
-        if target.is_some() {
-            return Err(ForkSessionError::Unsupported(
-                "targeted fork native dispatch is not wired yet (rung 3)".to_string(),
-            ));
-        }
+        // Rung 3 dispatch: resolve a side-door vendor anchor for a targeted
+        // fork on an adapter that advertises `targeted_fork` (see
+        // `sidedoor::resolve_sidedoor_message_id`); every other targeted case
+        // still errors as unwired.
+        let sidedoor_message_id: Option<String> = self.resolve_sidedoor_message_id(
+            session_id,
+            target.is_some(),
+            &parent,
+            capabilities.targeted_fork,
+            &anchor_turn_id,
+            &anchor_item_id,
+        )?;
+        // The resolved vendor version for side-door provenance (never
+        // hardcoded): the exact `(adapter, native)` pin this session was
+        // stamped under.
+        let sidedoor_native_version =
+            self.resolve_sidedoor_native_version(session_id, &sidedoor_message_id);
 
         // --- Persist the durable operation in `prepared` before any native call ---
         let now = chrono::Utc::now().to_rfc3339();
@@ -201,7 +215,21 @@ impl SessionRuntime {
         // Phase marked before dispatch (ADR 4.4): a lost native outcome parks the
         // record at `native_outcome_unknown` and blocks blind redispatch.
         self.mark_fork_phase(&operation.id, ForkOperationPhase::NativeCallInFlight, &now);
-        let forked = if child_actor_forks {
+        let forked = if let Some(message_id) = sidedoor_message_id.clone() {
+            // Side-door targeted fork: validated + POSTed on the parent actor.
+            // The vendor fork response id becomes the child's durable native
+            // session id; the child starts via the existing load_session path.
+            match handle.sidedoor_targeted_fork(message_id).await {
+                Ok(result) => Some(ForkSessionCommandResult {
+                    native_session_id: result.native_session_id,
+                    supports_close: result.supports_close,
+                }),
+                Err(error) => {
+                    self.mark_fork_sidedoor_failure(&operation.id, &error, &now);
+                    return Err(map_live_sidedoor_fork_error(error));
+                }
+            }
+        } else if child_actor_forks {
             match handle.verify_fork_ready().await {
                 Ok(()) => None,
                 Err(error) => {
@@ -274,14 +302,36 @@ impl SessionRuntime {
         };
         // Provenance resolved once the native call returns; applied atomically
         // with the child + link, advancing the operation to `child_persisted`.
+        // A side-door targeted fork records the vendor message-id anchor
+        // (exclusive: the fork EXCLUDES the target message) and the resolved
+        // vendor version, not the generic tip/targeted native-id anchor.
+        let (
+            resolved_provider_anchor_kind,
+            resolved_provider_anchor_value,
+            resolved_provider_anchor_inclusive,
+            resolved_native_version,
+        ) = match &sidedoor_message_id {
+            Some(message_id) => (
+                "opencode_message_id".to_string(),
+                message_id.clone(),
+                Some(false),
+                sidedoor_native_version.clone(),
+            ),
+            None => (
+                provider_anchor_kind.to_string(),
+                parent_native_session_id.clone(),
+                None,
+                None,
+            ),
+        };
         let child_result = ForkOperationChildResult {
-            provider_anchor_kind: Some(provider_anchor_kind.to_string()),
-            provider_anchor_value: Some(parent_native_session_id.clone()),
-            provider_anchor_inclusive: None,
+            provider_anchor_kind: Some(resolved_provider_anchor_kind),
+            provider_anchor_value: Some(resolved_provider_anchor_value),
+            provider_anchor_inclusive: resolved_provider_anchor_inclusive,
             prefix_terminal_seq: Some(prefix_terminal_seq),
             prefix_digest: Some(prefix_digest.clone()),
             adapter_version: None,
-            native_version: None,
+            native_version: resolved_native_version,
             native_child_session_id: forked
                 .as_ref()
                 .map(|forked| forked.native_session_id.clone()),
@@ -403,25 +453,6 @@ impl SessionRuntime {
         }
     }
 
-    /// Classify a native fork dispatch error. A dropped response / unavailable
-    /// actor is an unknown outcome that BLOCKS blind redispatch (ADR 4.4); a
-    /// definite rejection is a terminal failure.
-    fn mark_fork_native_failure(
-        &self,
-        operation_id: &str,
-        error: &LiveSessionCommandError<ForkSessionCommandError>,
-        now: &str,
-    ) {
-        let phase = match error {
-            LiveSessionCommandError::ResponseDropped
-            | LiveSessionCommandError::ActorUnavailable => {
-                ForkOperationPhase::NativeOutcomeUnknown
-            }
-            LiveSessionCommandError::Rejected(_) => ForkOperationPhase::Failed,
-        };
-        self.mark_fork_phase(operation_id, phase, now);
-    }
-
     /// Reconcile a fork operation that already exists under this idempotency
     /// key: a different canonical payload is an `IDEMPOTENCY_CONFLICT`; the same
     /// payload resumes. Shared by the initial lookup and the insert-time
@@ -510,16 +541,6 @@ pub(crate) fn canonical_fork_request_digest(
     format!("{:x}", hasher.finalize())
 }
 
-fn map_fork_target_error(error: ForkTargetError) -> ForkSessionError {
-    match error {
-        ForkTargetError::ItemIdRequired => {
-            ForkSessionError::InvalidForkTarget("fork target requires item_id".to_string())
-        }
-        ForkTargetError::TargetNotFound => ForkSessionError::TargetNotFound,
-        ForkTargetError::BoundaryNotCommitted => ForkSessionError::BoundaryNotCommitted,
-    }
-}
-
 impl SessionRuntime {
     /// Pre-flight the parent workspace's local checkout before forking. Reuses
     /// the shared `workspace_checkout_missing_path` admission (same predicate as
@@ -561,62 +582,4 @@ pub(super) fn validate_fork_parent(
         ));
     }
     Ok(())
-}
-
-fn map_start_error_to_fork(error: StartSessionError) -> ForkSessionError {
-    match error {
-        StartSessionError::WorkspaceNotFound => {
-            ForkSessionError::Internal(anyhow::anyhow!("workspace not found for session"))
-        }
-        StartSessionError::WorkspaceDirectoryMissing { path } => {
-            ForkSessionError::WorkspaceDirectoryMissing { path }
-        }
-        StartSessionError::AgentDescriptorNotFound(agent_kind) => {
-            ForkSessionError::Internal(anyhow::anyhow!("agent descriptor not found: {agent_kind}"))
-        }
-        StartSessionError::Closed => ForkSessionError::Invalid("session is closed".to_string()),
-        StartSessionError::MissingDataKey => ForkSessionError::MissingDataKey,
-        StartSessionError::RestartRequired(detail) => ForkSessionError::Invalid(detail),
-        StartSessionError::WorkspaceMcpAttachmentFailed(error) => {
-            ForkSessionError::Internal(anyhow::Error::new(error))
-        }
-        StartSessionError::RouteAuth(error) => ForkSessionError::Invalid(error.to_string()),
-        StartSessionError::AgentNotReady {
-            agent_kind,
-            status,
-            detail,
-        } => ForkSessionError::AgentNotReady {
-            agent_kind,
-            status,
-            detail,
-        },
-        StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
-            ForkSessionError::Internal(error)
-        }
-    }
-}
-
-fn map_fork_command_error(error: ForkSessionCommandError) -> ForkSessionError {
-    match error {
-        ForkSessionCommandError::Busy => ForkSessionError::Busy,
-        ForkSessionCommandError::Unsupported(detail) => ForkSessionError::Unsupported(detail),
-        ForkSessionCommandError::Failed(detail) => {
-            ForkSessionError::Internal(anyhow::anyhow!(detail))
-        }
-    }
-}
-
-fn map_live_fork_command_error(
-    error: LiveSessionCommandError<ForkSessionCommandError>,
-    response_dropped_detail: &str,
-) -> ForkSessionError {
-    match error {
-        LiveSessionCommandError::ActorUnavailable => {
-            ForkSessionError::Internal(anyhow::anyhow!("session actor channel closed"))
-        }
-        LiveSessionCommandError::ResponseDropped => {
-            ForkSessionError::Internal(anyhow::anyhow!(response_dropped_detail.to_string()))
-        }
-        LiveSessionCommandError::Rejected(error) => map_fork_command_error(error),
-    }
 }

@@ -32,11 +32,9 @@ impl LiveSessionManager {
         }
 
         let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4096);
-        let live_sessions = self.live_sessions.clone();
         let exit_session_id = session_id.clone();
         let exit_store = self.caps.state.clone();
         let on_exit: Box<dyn FnOnce(bool) + Send + 'static> = Box::new(move |errored| {
-            live_sessions.blocking_write().remove(&exit_session_id);
             if errored {
                 let now = chrono::Utc::now().to_rfc3339();
                 let _ = exit_store.update_status(&exit_session_id, "errored", &now);
@@ -54,7 +52,8 @@ impl LiveSessionManager {
             on_exit: Some(on_exit),
         };
         let (handle, ready) = spawn_replay_actor(config)?;
-        sessions.insert(session_id, handle.clone());
+        sessions.insert(session_id.clone(), handle.clone());
+        self.retire_generation_after_actor_finish(session_id, handle.clone());
         Ok((handle, ready))
     }
 }

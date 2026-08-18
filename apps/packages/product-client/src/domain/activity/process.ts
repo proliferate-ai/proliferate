@@ -149,6 +149,44 @@ export function processElapsedLabel(process: ActivityProcessWire, nowMs: number)
   return relativeTimeLabel(startedAtMs, endedAtMs);
 }
 
+/**
+ * Trailing status text for a background command's transcript row (bgwork
+ * r8) — "running · 4m 12s" / "exited 0 · 2m 45s" (Design Handoff — "Chat -
+ * Background Work Indicator", the "Running command" row's trailing muted
+ * slot). Deliberately distinct from `processStatusLabel` (capitalized,
+ * roster-row phrasing) and `processElapsedLabel` (coarse `relativeTimeLabel`
+ * buckets like "4m", built for the roster list): this slot wants the exact
+ * minutes+seconds shape the design mock shows.
+ */
+export function processTrailingStatusLabel(
+  process: Pick<ActivityProcessWire, "status" | "startedAt" | "endedAt">,
+  nowMs: number,
+): string {
+  const statusPart = process.status.status === "running"
+    ? "running"
+    : process.status.exitCode === null
+      ? "exited"
+      : `exited ${process.status.exitCode}`;
+  return `${statusPart} · ${processFineDurationLabel(process, nowMs)}`;
+}
+
+function processFineDurationLabel(
+  process: Pick<ActivityProcessWire, "status" | "startedAt" | "endedAt">,
+  nowMs: number,
+): string {
+  const startedAtMs = Date.parse(process.startedAt) || 0;
+  const endMs = process.status.status === "running"
+    ? nowMs
+    : (process.endedAt ? Date.parse(process.endedAt) || nowMs : nowMs);
+  const totalSeconds = Math.max(0, Math.round((endMs - startedAtMs) / 1000));
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
+}
+
 /** Running processes first (most-recently-started first), then exited (most-recent first). */
 export function sortProcessesForDisplay(
   processes: readonly ActivityProcessWire[],

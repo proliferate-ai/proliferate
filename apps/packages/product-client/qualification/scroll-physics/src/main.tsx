@@ -78,11 +78,18 @@ const qualificationHost: ProductHost = {
 // composer inset takes.
 const VIEWPORT_HEIGHT_PX = 520;
 const VIEWPORT_WIDTH_PX = 760;
-const DOCK_HEIGHT_PX = 120;
 
 function ScrollPhysicsFixture() {
   const snapshot = useSyncExternalStore(hostStore.subscribe, hostStore.getSnapshot);
   const sessionViewState: SessionViewState = snapshot.sessionBusy ? "working" : "idle";
+  // Rung 7 (Q6): the dock inset model split, driven by the host. bottomInsetPx
+  // is the TOTAL inset (resolveTranscriptBottomInsets splits it back into
+  // structural + non-displacing); the fake dock's own height tracks the
+  // structural inset so the transcript's client height changes exactly as it
+  // does when the real composer grows/collapses.
+  const structuralInsetPx = snapshot.structuralInsetPx;
+  const nonDisplacingInsetPx = snapshot.nonDisplacingInsetPx;
+  const totalBottomInsetPx = structuralInsetPx + nonDisplacingInsetPx;
 
   return (
     <div
@@ -105,14 +112,16 @@ function ScrollPhysicsFixture() {
         sessionViewState={sessionViewState}
         hasOlderHistory={snapshot.hasOlderHistory}
         olderHistoryCursor={snapshot.olderHistoryCursor}
-        bottomInsetPx={DOCK_HEIGHT_PX}
-        nonDisplacingBottomInsetPx={0}
+        bottomInsetPx={totalBottomInsetPx}
+        nonDisplacingBottomInsetPx={nonDisplacingInsetPx}
         onLoadOlderHistory={() => scrollPhysicsDriver.prependOlderHistory()}
       />
-      {/* Fake dock: reserves composer height, never scrolls. */}
+      {/* Fake dock: reserves composer height, never scrolls. Its height tracks
+          the structural inset so a composer grow/collapse changes the
+          transcript's client height, as it does in the real app. */}
       <div
         data-scroll-physics-dock="true"
-        style={{ height: DOCK_HEIGHT_PX, flex: "0 0 auto" }}
+        style={{ height: structuralInsetPx, flex: "0 0 auto" }}
       />
     </div>
   );

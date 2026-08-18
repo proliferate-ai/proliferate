@@ -18,6 +18,7 @@ import {
 import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import type { TurnDisplayBlock } from "#product/domain/chats/transcript/transcript-presentation";
 import type { GoalTranscriptEvent } from "#product/domain/activity/goal-transcript-events";
+import type { BackgroundCompletionReceipt } from "#product/domain/activity/background-completion-receipt";
 import type {
   ChatTranscriptPendingStatusInput,
   ChatTranscriptTurnStatusInput,
@@ -32,6 +33,7 @@ import { latestCompletedTurn } from "#product/domain/chats/transcript/last-turn-
 const noop = () => {};
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
 const EMPTY_GOAL_EVENTS: readonly GoalTranscriptEvent[] = [];
+const EMPTY_COMPLETION_RECEIPTS: readonly BackgroundCompletionReceipt[] = [];
 
 export interface ChatTranscriptViewModel {
   activeSessionId: string;
@@ -79,6 +81,8 @@ export function useChatTranscriptViewModel({
     layout,
     goalEvents = EMPTY_GOAL_EVENTS,
     workspaceReceiptKey = null,
+    completionReceipts = EMPTY_COMPLETION_RECEIPTS,
+    backgroundWorkRunningCount = 0,
   } = state;
   const hasOlderHistory = history?.hasOlderHistory ?? false;
   const isLoadingOlderHistory = history?.isLoadingOlderHistory ?? false;
@@ -158,6 +162,8 @@ export function useChatTranscriptViewModel({
     // remain unloaded the top of the loaded window isn't the top of the
     // transcript, so the row must not render there.
     workspaceReceiptKey: hasOlderHistory ? null : workspaceReceiptKey,
+    completionReceipts,
+    backgroundWorkRunningCount,
   });
   const visibleTurnIds = useMemo(
     () => collectVisibleTurnIds(virtualRows),

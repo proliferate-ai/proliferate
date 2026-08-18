@@ -35,6 +35,7 @@ import {
   safeRendererErrorMessage,
   safeRendererErrorName,
 } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
+import { dispatchLiveWorkspacePinIntentEnvelopes } from "#product/hooks/sessions/lifecycle/workspace-pin-intent-dispatch";
 
 export function useSessionRuntimeActions() {
   const host = useProductHost();
@@ -194,6 +195,7 @@ export function useSessionRuntimeActions() {
     persistReconciledControlPreferences,
     refreshSessionSlotMeta,
     rehydrateSessionSlotFromHistory,
+    reconcileWorkspacePinIntents: dispatchLiveWorkspacePinIntentEnvelopes,
     showToast,
   });
 

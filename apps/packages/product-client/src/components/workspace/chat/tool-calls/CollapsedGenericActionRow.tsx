@@ -46,6 +46,7 @@ export function GenericActionRow({ item }: { item: ToolCallItem }) {
             <AutoHideScrollArea
               viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
               allowHorizontal
+              chainVerticalWheel
             >
               <pre className="m-0 whitespace-pre-wrap p-2 font-mono text-readable-code text-muted-foreground">
                 <code>{output}</code>

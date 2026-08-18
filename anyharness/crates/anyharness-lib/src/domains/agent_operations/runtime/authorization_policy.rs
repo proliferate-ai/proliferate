@@ -143,6 +143,8 @@ fn is_mutation(capability: AgentCapability) -> bool {
     matches!(
         capability,
         AgentCapability::CreateWorkspace
+            | AgentCapability::PinWorkspace
+            | AgentCapability::UnpinWorkspace
             | AgentCapability::CreateAgent
             | AgentCapability::ConfigureAgent
             | AgentCapability::ResumeAgent

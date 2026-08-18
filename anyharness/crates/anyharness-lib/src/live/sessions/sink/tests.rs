@@ -1,11 +1,11 @@
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use serde_json::json;
 use tokio::sync::broadcast;
 
 mod native_subagents;
 mod product_context;
+mod sequence_fence;
 mod support;
 
 use super::{AcpChunkPayload, SessionEventSink};

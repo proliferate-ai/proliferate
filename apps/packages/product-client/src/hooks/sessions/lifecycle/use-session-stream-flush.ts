@@ -16,6 +16,7 @@ export function useSessionStreamFlushControllerFactory({
   persistReconciledControlPreferences,
   refreshSessionSlotMeta,
   rehydrateSessionSlotFromHistory,
+  reconcileWorkspacePinIntents,
   showToast,
   scheduler = animationFrameSessionStreamFlushScheduler,
 }: SessionStreamFlushFactoryDeps) {
@@ -27,6 +28,7 @@ export function useSessionStreamFlushControllerFactory({
       persistReconciledControlPreferences,
       refreshSessionSlotMeta,
       rehydrateSessionSlotFromHistory,
+      reconcileWorkspacePinIntents,
       showToast,
       scheduler,
     }), [
@@ -34,6 +36,7 @@ export function useSessionStreamFlushControllerFactory({
     persistReconciledControlPreferences,
     refreshSessionSlotMeta,
     rehydrateSessionSlotFromHistory,
+    reconcileWorkspacePinIntents,
     scheduler,
     sessionStreamCache,
     showToast,

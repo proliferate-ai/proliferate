@@ -33,7 +33,9 @@ use crate::live::sessions::actor::command::{PromptAcceptance, SessionCommand};
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
 use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
 use crate::live::sessions::actor::state::{SessionActor, SessionStartupState};
-use crate::live::sessions::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
+use crate::live::sessions::background_work::{
+    BackgroundWorkOptions, BackgroundWorkRegistry, BackgroundWorkUpdate,
+};
 use crate::live::sessions::driver::inbound::InboundDoor;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::{SessionHooks, SystemPromptAppends};
@@ -269,7 +271,7 @@ async fn spawn_actor_with_real_child(agent_script: &str) -> RealChildActorHarnes
     )));
 
     let (background_tx, _background_work_rx_unused) =
-        mpsc::unbounded_channel::<crate::live::sessions::background_work::BackgroundWorkUpdate>();
+        mpsc::unbounded_channel::<BackgroundWorkUpdate>();
     let background_work_registry = BackgroundWorkRegistry::new(
         SESSION_ID.to_string(),
         "claude".to_string(),
@@ -334,6 +336,7 @@ async fn spawn_actor_with_real_child(agent_script: &str) -> RealChildActorHarnes
         native_session_id: NATIVE_SESSION_ID.to_string(),
         action_capabilities: SessionActionCapabilities::default(),
         supports_native_close: false,
+        sidedoor: None,
         conn,
         caps,
         hooks: SessionHooks::default(),
@@ -383,9 +386,8 @@ async fn stop_and_await_kills_the_real_process_group_including_a_git_grandchild(
             let agent_pid = actor.child.id().expect("agent pid") as i32;
             let (notification_tx, notification_rx) =
                 mpsc::unbounded_channel::<acp::schema::SessionNotification>();
-            let (background_tx, background_work_rx) = mpsc::unbounded_channel::<
-                crate::live::sessions::background_work::BackgroundWorkUpdate,
-            >();
+            let (background_tx, background_work_rx) =
+                mpsc::unbounded_channel::<BackgroundWorkUpdate>();
             // Swap in fresh receivers wired to nothing but the loop itself -
             // the harness's own unused senders above are dropped, which is
             // fine: the idle loop only needs receivers that never yield
@@ -500,9 +502,8 @@ async fn stop_and_await_kill_escalation_can_leave_the_agents_own_output_torn_mid
 
             let (notification_tx, notification_rx) =
                 mpsc::unbounded_channel::<acp::schema::SessionNotification>();
-            let (background_tx, background_work_rx) = mpsc::unbounded_channel::<
-                crate::live::sessions::background_work::BackgroundWorkUpdate,
-            >();
+            let (background_tx, background_work_rx) =
+                mpsc::unbounded_channel::<BackgroundWorkUpdate>();
             let _ = (notification_tx, background_tx);
 
             // Wait for the third, deliberately-unclosed record to land
@@ -626,9 +627,8 @@ async fn stop_and_await_bounds_an_active_turn_whose_agent_ignores_the_cancel() {
 
             let (notification_tx, notification_rx) =
                 mpsc::unbounded_channel::<acp::schema::SessionNotification>();
-            let (background_tx, background_work_rx) = mpsc::unbounded_channel::<
-                crate::live::sessions::background_work::BackgroundWorkUpdate,
-            >();
+            let (background_tx, background_work_rx) =
+                mpsc::unbounded_channel::<BackgroundWorkUpdate>();
             let _ = (notification_tx, background_tx);
 
             let actor_task = tokio::task::spawn_local(async move {
@@ -768,9 +768,8 @@ async fn a_dropped_stop_future_leaves_the_session_answerable() {
             );
             let (notification_tx, notification_rx) =
                 mpsc::unbounded_channel::<acp::schema::SessionNotification>();
-            let (background_tx, background_work_rx) = mpsc::unbounded_channel::<
-                crate::live::sessions::background_work::BackgroundWorkUpdate,
-            >();
+            let (background_tx, background_work_rx) =
+                mpsc::unbounded_channel::<BackgroundWorkUpdate>();
             let _ = (notification_tx, background_tx);
             assert!(pid_is_alive(agent_pid), "dummy agent must be running");
 

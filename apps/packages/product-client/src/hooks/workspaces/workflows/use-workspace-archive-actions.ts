@@ -3,13 +3,19 @@ import {
   type WorkspaceArchiveNoticeKind,
   type WorkspaceUnarchiveScenarioBody,
 } from "@anyharness/sdk";
-import { useCallback, useMemo, useRef, useState } from "react";
-import { motion } from "@proliferate/design/motion";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useArchivedWorkspacesInvalidation } from "#product/hooks/workspaces/cache/use-archived-workspaces-invalidation";
 import { useWorkspaceCollectionsInvalidation } from "#product/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { useWorkspaceSidebarActions } from "#product/hooks/workspaces/workflows/use-workspace-sidebar-actions";
+import { useWorkspaceArchiveVisibility } from "#product/hooks/workspaces/workflows/use-workspace-archive-visibility";
+import {
+  ARCHIVE_TIMEOUT,
+  readGitLockedFile,
+  readUnarchiveScenario,
+  waitForArchiveSettlement,
+} from "#product/hooks/workspaces/workflows/workspace-archive-request-settlement";
 import {
   archiveNoticeDescription,
   unarchiveNoticeDescription,
@@ -30,14 +36,6 @@ import { useRepoPreferencesStore } from "#product/stores/preferences/repo-prefer
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { showToast } from "#product/primitives/utils/show-toast";
 
-/**
- * A settled POST is a definite outcome (success or a typed/generic failure). Past
- * this bound the outcome is genuinely unknown — a huge untracked payload can push
- * a real snapshot past any fixed timeout — so the row stays hidden and the pending
- * reconciler (`use-archive-pending-reconciler`) becomes the decider, not a false failure toast.
- */
-const ARCHIVE_SETTLE_TIMEOUT_MS = motion.delay.optimisticSettleTimeoutMs;
-
 /** T7 ("busy") auto-dismisses; every other failure toast here is persistent
  * (via `isError`) because it is one. */
 const BUSY_TOAST_DURATION_MS = 6_000;
@@ -56,45 +54,6 @@ export interface UnarchiveScenarioState {
   strategies: WorkspaceUnarchiveScenarioBody["strategies"];
 }
 
-const TIMEOUT_SENTINEL = Symbol("archive-request-timeout");
-
-async function raceSettleTimeout<T>(promise: Promise<T>): Promise<T | typeof TIMEOUT_SENTINEL> {
-  // A rejection that arrives after the timeout already "won" the race must
-  // not become an unhandled rejection: past that bound the pending
-  // reconciler is the decider, not this promise.
-  promise.catch(() => {});
-  let timer: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<typeof TIMEOUT_SENTINEL>((resolve) => {
-    timer = setTimeout(() => resolve(TIMEOUT_SENTINEL), ARCHIVE_SETTLE_TIMEOUT_MS);
-  });
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    clearTimeout(timer!);
-  }
-}
-
-function readUnarchiveScenario(error: unknown): WorkspaceUnarchiveScenarioBody | null {
-  if (!(error instanceof AnyHarnessError) || error.problem.code !== "WORKSPACE_UNARCHIVE_SCENARIO") {
-    return null;
-  }
-  const extra = error.problem.extra;
-  if (!extra || typeof extra !== "object") {
-    return null;
-  }
-  return extra as WorkspaceUnarchiveScenarioBody;
-}
-
-function readGitLockedFile(error: unknown): string {
-  if (error instanceof AnyHarnessError && error.problem.extra && typeof error.problem.extra === "object") {
-    const file = (error.problem.extra as { file?: unknown }).file;
-    if (typeof file === "string" && file.trim()) {
-      return file;
-    }
-  }
-  return "a lock file";
-}
-
 /**
  * The archive/unarchive workflow hook: owns the optimistic-hide set, knob
  * resolution at click time, the toast raises, the scenario-409 capture, and
@@ -108,10 +67,17 @@ export function useWorkspaceArchiveActions() {
   const { data: collections } = useWorkspaces();
   const { handleSelectWorkspace } = useWorkspaceSidebarActions();
   const navigate = useNavigate();
+  const invalidateBoth = useCallback(async () => {
+    await Promise.all([invalidateActiveCollections(), invalidateArchived()]);
+  }, [invalidateActiveCollections, invalidateArchived]);
 
-  const [optimisticallyArchivedIds, setOptimisticallyArchivedIds] = useState<
-    ReadonlySet<string>
-  >(new Set());
+  const {
+    addOptimistic,
+    optimisticallyArchivedIds,
+    pendingDecisionIds,
+    releaseHiddenAfterListsSettle,
+    removeOptimistic,
+  } = useWorkspaceArchiveVisibility(invalidateBoth);
   const [scenario, setScenario] = useState<UnarchiveScenarioState | null>(null);
   // Per-pending-id metadata the reconciler needs once the POST has already
   // settled from this hook's own point of view: the name for a late T1, and
@@ -132,56 +98,12 @@ export function useWorkspaceArchiveActions() {
     (workspaceId: string, name: string, answer?: UnarchiveScenarioAnswer) => void
   >(() => {});
 
-  const addOptimistic = useCallback((workspaceId: string) => {
-    setOptimisticallyArchivedIds((current) => {
-      const next = new Set(current);
-      next.add(workspaceId);
-      return next;
-    });
-  }, []);
-  const removeOptimistic = useCallback((workspaceId: string) => {
-    setOptimisticallyArchivedIds((current) => {
-      if (!current.has(workspaceId)) {
-        return current;
-      }
-      const next = new Set(current);
-      next.delete(workspaceId);
-      return next;
-    });
-  }, []);
-
-  const invalidateBoth = useCallback(async () => {
-    await Promise.all([invalidateActiveCollections(), invalidateArchived()]);
-  }, [invalidateActiveCollections, invalidateArchived]);
-
   // Ids whose archive already SETTLED as success but whose list refetch has
   // not landed yet. Un-hiding at settle time would render the row back out
   // of the stale cached list for the refetch window (a visible flash right
   // as T1 pops), so these stay hidden — but they must leave the reconciler's
   // pending set at settle, or a poll tick inside that window would confirm
   // the same archive twice and raise a duplicate T1.
-  const [settlingHiddenIds, setSettlingHiddenIds] = useState<ReadonlySet<string>>(
-    new Set(),
-  );
-  const releaseHiddenAfterListsSettle = useCallback((workspaceId: string) => {
-    setSettlingHiddenIds((current) => {
-      const next = new Set(current);
-      next.add(workspaceId);
-      return next;
-    });
-    removeOptimistic(workspaceId);
-    void invalidateBoth().finally(() => {
-      setSettlingHiddenIds((current) => {
-        if (!current.has(workspaceId)) {
-          return current;
-        }
-        const next = new Set(current);
-        next.delete(workspaceId);
-        return next;
-      });
-    });
-  }, [invalidateBoth, removeOptimistic]);
-
   const raiseArchiveFailureToast = useCallback((workspaceId: string, name: string, error: unknown) => {
     const code = error instanceof AnyHarnessError ? error.problem.code : undefined;
     switch (code) {
@@ -312,10 +234,10 @@ export function useWorkspaceArchiveActions() {
       deleteBranchOnArchive: useUserPreferencesStore.getState().deleteBranchOnArchive,
     });
     const connection = { runtimeUrl };
-    const outcome = await raceSettleTimeout(
+    const outcome = await waitForArchiveSettlement(
       archiveWorkspaceRequest(connection, workspaceId, request),
     );
-    if (outcome === TIMEOUT_SENTINEL) {
+    if (outcome === ARCHIVE_TIMEOUT) {
       // Unknown outcome: leave the row hidden, raise no toast. The pending
       // reconciler decides — it either prunes this id (firing T1 late) or
       // re-adds the row if the server still reports it active.
@@ -448,21 +370,11 @@ export function useWorkspaceArchiveActions() {
 
   const dismissScenario = useCallback(() => setScenario(null), []);
 
-  // The UI-facing hide set: rows with an undecided POST in flight PLUS rows
-  // whose settled archive is waiting out its list refetch. The reconciler
-  // gets only the undecided half (`pendingDecisionIds`).
-  const hiddenWorkspaceIds = useMemo<ReadonlySet<string>>(() => {
-    if (settlingHiddenIds.size === 0) {
-      return optimisticallyArchivedIds;
-    }
-    return new Set([...optimisticallyArchivedIds, ...settlingHiddenIds]);
-  }, [optimisticallyArchivedIds, settlingHiddenIds]);
-
   return {
     archive,
     unarchive,
-    optimisticallyArchivedIds: hiddenWorkspaceIds,
-    pendingDecisionIds: optimisticallyArchivedIds,
+    optimisticallyArchivedIds,
+    pendingDecisionIds,
     confirmArchived,
     reinstateOptimistic,
     scenario,

@@ -25,7 +25,7 @@ fn draft_catalog_parses_with_expected_shape() {
     assert_eq!(claude.kind, "claude");
     assert_eq!(
         claude.harness.agent_process.version,
-        "0.59.0-proliferate.1"
+        "0.66.0-proliferate.2"
     );
     assert_eq!(
         claude
@@ -33,7 +33,7 @@ fn draft_catalog_parses_with_expected_shape() {
             .native
             .as_ref()
             .map(|pin| pin.version.as_str()),
-        Some("2.1.212")
+        Some("2.1.234")
     );
     assert_eq!(
         claude

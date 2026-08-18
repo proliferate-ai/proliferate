@@ -65,6 +65,32 @@ pub enum ForkSessionCommandError {
     Failed(String),
 }
 
+/// Result/errors for the OpenCode side-door targeted-fork actor
+/// operation. The parent actor owns the side-door state, validates the vendor
+/// message id (never dispatching unvalidated — the vendor silently full-copies
+/// unknown ids), and POSTs the fork. The child native session id is the vendor
+/// fork response `.id`.
+#[derive(Debug)]
+pub struct SidedoorForkCommandResult {
+    pub native_session_id: String,
+    pub supports_close: bool,
+}
+
+#[derive(Debug)]
+pub enum SidedoorForkCommandError {
+    /// The side-door was not `Ready` at dispatch time — a hard error, never a
+    /// silent tip fork.
+    NotReady(String),
+    /// Pre-validation: the vendor message id is absent, unknown, or not a user
+    /// message. Maps to the `TARGET_NOT_FOUND` family.
+    TargetNotFound,
+    /// Pre-validation: the id resolved but the listing/role contract did not
+    /// hold. Maps to the `INVALID_FORK_TARGET` family.
+    InvalidForkTarget(String),
+    Busy,
+    Failed(String),
+}
+
 #[derive(Clone, PartialEq)]
 pub enum Resolution {
     Selected {
@@ -203,6 +229,14 @@ pub(in crate::live::sessions) enum SessionCommand {
     Fork {
         respond_to: oneshot::Sender<Result<ForkSessionCommandResult, ForkSessionCommandError>>,
     },
+    /// OpenCode side-door targeted fork. Validated and dispatched
+    /// on the parent actor because the side-door (port + password + readiness)
+    /// is process-local actor state.
+    SidedoorTargetedFork {
+        vendor_message_id: String,
+        respond_to:
+            oneshot::Sender<Result<SidedoorForkCommandResult, SidedoorForkCommandError>>,
+    },
     CloseNativeSession {
         native_session_id: String,
         respond_to: oneshot::Sender<anyhow::Result<()>>,
@@ -250,7 +284,10 @@ impl SessionCommand {
     pub(in crate::live::sessions::actor) fn is_fork_lifecycle_command(&self) -> bool {
         matches!(
             self,
-            Self::VerifyForkReady { .. } | Self::Fork { .. } | Self::CloseNativeSession { .. }
+            Self::VerifyForkReady { .. }
+                | Self::Fork { .. }
+                | Self::SidedoorTargetedFork { .. }
+                | Self::CloseNativeSession { .. }
         )
     }
 }

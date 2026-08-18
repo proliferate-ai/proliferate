@@ -58,12 +58,30 @@ artifacts, and the complete included session-link graph. Raw provider
 notifications are included only behind their existing environment gate.
 Subagent links carry the optional `subagentClosedAt` operability marker; older
 archives without that field import the relationship as Open.
+New archives carry each session's authoritative pending-prompt sequence cursor.
+Install restores the maximum of that cursor and every archived queue identity,
+including pending rows, scalar and reordered queue events, completion
+projections, and delivery-held active or retired prompts. Older archives without
+the cursor field use the same durable identities as a conservative fallback, so
+an empty imported queue cannot reuse an identity that a later event may target.
+The authoritative cursor and every fallback identity must remain below
+`i64::MAX`. That ceiling is reserved as non-allocatable so cursor increments
+cannot overflow SQLite integer storage; the greatest accepted identity is a
+clean exhausted state rather than a value the allocator increments again.
+Install rejects cross-session events and event columns whose type disagrees with
+their payload tag before writing session state.
 
-Pending and enqueued subagent-completion deliveries are archived by parent
-session id, independently of whether the child or relationship still exists.
-Their stable delivery identity and attributed pending-prompt provenance survive
-install, while in-flight worker leases do not. Older archives without delivery
-or prompt-provenance fields import with empty/default values.
+Pending and enqueued subagent-completion deliveries, plus delivered rows with
+an unacknowledged completion-wake removal intent, are archived by parent
+session id independently of whether the child or relationship still exists.
+Their stable delivery and retired queue identities survive install, while
+in-flight worker leases do not. A destination worker therefore finishes a
+removal that was interrupted before export. An executable retired-wake intent
+must match the state produced by completed-wake retirement: paired retired
+identity fields on a delivered successful completion, cleared active prompt and
+turn references, the delivery's canonical prompt id, and no active parent queue
+row at the retired sequence. Older archives without delivery, retired-queue, or
+prompt-provenance fields import with empty/default values.
 
 Export clears workspace-local MCP binding ciphertext but may retain binding
 summaries. Installation clears both ciphertext and summaries, resets imported

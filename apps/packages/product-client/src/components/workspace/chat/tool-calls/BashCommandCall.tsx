@@ -10,6 +10,13 @@ interface BashCommandCallProps {
   output?: string;
   status: "running" | "completed" | "failed";
   duration?: string;
+  /**
+   * Set when this command was backgrounded and its `ActivityProcess.id`
+   * correlated from the tool result text (bgwork r8). Clicking the row then
+   * opens the Background work pane's terminal detail instead of toggling the
+   * inline output disclosure.
+   */
+  onOpenBackgroundTerminal?: () => void;
 }
 
 export function BashCommandCall({
@@ -18,6 +25,7 @@ export function BashCommandCall({
   output,
   status,
   duration,
+  onOpenBackgroundTerminal,
 }: BashCommandCallProps) {
   const label = description
     ?? (status === "failed" ? "Command" : "Running command");
@@ -29,6 +37,7 @@ export function BashCommandCall({
       hint={command}
       status={status}
       duration={duration}
+      onOpen={onOpenBackgroundTerminal}
     >
       {output && (
         <ToolActionDetailsPanel>

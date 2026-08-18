@@ -73,12 +73,6 @@ function upsertPendingPrompt(
     return [...entries, nextEntry];
   }
   return entries.map((entry, entryIndex) =>
-    entryIndex === index
-      ? {
-        ...entry,
-        ...nextEntry,
-        promptId: nextEntry.promptId ?? entry.promptId,
-      }
-      : entry
+    entryIndex === index ? nextEntry : entry
   );
 }

@@ -41,6 +41,18 @@ export const SESSION_HISTORY_APPLY_MAX_DURATION_MS = 30_000;
 
 type FetchSessionHistoryArgs = Parameters<typeof fetchSessionHistory>[1];
 
+export interface SessionHistoryHydrationOptions {
+  afterSeq?: number;
+  beforeSeq?: number;
+  limit?: number;
+  turnLimit?: number;
+  replace?: boolean;
+  requestHeaders?: HeadersInit;
+  measurementOperationId?: MeasurementOperationId | null;
+  timeoutMs?: number;
+  isCurrent?: () => boolean;
+}
+
 /**
  * Assembles the `fetchSessionHistory` request options. Only the fields the
  * caller actually supplied are included so a bare open still sends just the

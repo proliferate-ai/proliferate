@@ -9,16 +9,31 @@ import {
 import {
   SIDEBAR_REPO_GROUP_ITEM_LIMIT,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
-import { visibleSidebarShortcutTargetIds } from "#product/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
+import {
+  filterOptimisticallyArchivedSidebarGroups,
+} from "#product/lib/domain/workspaces/sidebar/sidebar-visible-items";
+import {
+  numberedSidebarShortcutTargetIds,
+  visibleSidebarShortcutTargetIds,
+} from "#product/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useWorkspaceSidebarShowMoreStore } from "#product/stores/workspaces/workspace-sidebar-show-more-store";
+import { useWorkspaceArchiveVisibilityStore } from "#product/stores/workspaces/workspace-archive-visibility-store";
 
 const EMPTY_WORKSPACE_ACTIVITIES = {};
 const EMPTY_PENDING_PROMPT_COUNTS = {};
 const EMPTY_LAST_VIEWED_AT = {};
 
-export function useSidebarShortcutTargets(): string[] {
+export interface SidebarShortcutTargets {
+  digitTargetIds: string[];
+  traversalTargetIds: string[];
+}
+
+export function useSidebarShortcutTargets(): SidebarShortcutTargets {
+  const optimisticallyArchivedIds = useWorkspaceArchiveVisibilityStore(
+    (state) => state.optimisticallyArchivedIds,
+  );
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
@@ -27,13 +42,17 @@ export function useSidebarShortcutTargets(): string[] {
   const { repoRoots } = useStandardRepoProjection();
   const { cloudComputeEnabled } = useAppCapabilities();
   const {
+    pinnedWorkspaceIds,
     hiddenRepoRootIds,
     collapsedRepoGroups,
+    repositoriesCollapsed,
     workspaceTypes,
     workspaceLastInteracted,
   } = useWorkspaceUiStore(useShallow((state) => ({
+    pinnedWorkspaceIds: state.pinnedWorkspaceIds,
     hiddenRepoRootIds: state.hiddenRepoRootIds,
     collapsedRepoGroups: state.collapsedRepoGroups,
+    repositoriesCollapsed: state.repositoriesCollapsed,
     workspaceTypes: state.workspaceTypes,
     workspaceLastInteracted: state.workspaceLastInteracted,
   })));
@@ -44,6 +63,10 @@ export function useSidebarShortcutTargets(): string[] {
   const hiddenRepoRootSet = useMemo(
     () => new Set(hiddenRepoRootIds),
     [hiddenRepoRootIds],
+  );
+  const pinnedSet = useMemo(
+    () => new Set(pinnedWorkspaceIds),
+    [pinnedWorkspaceIds],
   );
   const collapsedRepoGroupKeys = useMemo(
     () => new Set(collapsedRepoGroups),
@@ -59,6 +82,7 @@ export function useSidebarShortcutTargets(): string[] {
     logicalWorkspaces,
     showArchived: false,
     workspaceTypes,
+    pinnedSet,
     hiddenRepoRootIds: hiddenRepoRootSet,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
@@ -73,21 +97,39 @@ export function useSidebarShortcutTargets(): string[] {
     cloudComputeEnabled,
     hiddenRepoRootSet,
     logicalWorkspaces,
+    pinnedSet,
     repoRoots,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
     workspaceLastInteracted,
     workspaceTypes,
   ]);
-
-  return useMemo(() => visibleSidebarShortcutTargetIds({
+  const shortcutGroups = useMemo(() => filterOptimisticallyArchivedSidebarGroups(
     groups,
-    collapsedRepoGroupKeys,
-    repoGroupsShownMore: repoGroupsShownMoreKeys,
-    itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+    optimisticallyArchivedIds,
+  ), [groups, optimisticallyArchivedIds]);
+
+  return useMemo(() => ({
+    digitTargetIds: numberedSidebarShortcutTargetIds({
+      groups: shortcutGroups,
+      pinnedWorkspaceIds,
+      collapsedRepoGroupKeys,
+      repoGroupsShownMore: repoGroupsShownMoreKeys,
+      itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+      repositoriesCollapsed,
+    }),
+    traversalTargetIds: visibleSidebarShortcutTargetIds({
+      groups: shortcutGroups,
+      collapsedRepoGroupKeys,
+      repoGroupsShownMore: repoGroupsShownMoreKeys,
+      itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+      repositoriesCollapsed,
+    }),
   }), [
     collapsedRepoGroupKeys,
-    groups,
+    pinnedWorkspaceIds,
     repoGroupsShownMoreKeys,
+    repositoriesCollapsed,
+    shortcutGroups,
   ]);
 }

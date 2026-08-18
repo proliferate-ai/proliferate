@@ -2,6 +2,7 @@ import type { WorkflowDefinitionV2 } from "@proliferate/cloud-sdk";
 import {
   DOC_SLUG_PATTERN,
   INPUT_NAME_PATTERN,
+  definitionHeadId,
   validateDefinitionV2,
   type DefinitionV2Issue,
   type DefinitionV2IssueCode,
@@ -26,7 +27,12 @@ export type WorkflowBuilderIssueCode =
   /** A declared input name outside `INPUT_NAME_PATTERN`. */
   | "invalid_input_name"
   /** A declared doc slug outside `DOC_SLUG_PATTERN`. */
-  | "invalid_doc_slug";
+  | "invalid_doc_slug"
+  /** A step with no title; the runtime refuses one outright. */
+  | "empty_node_title"
+  /** A step with no prompt; the wire model refuses an empty one. */
+  | "empty_node_prompt"
+  | "input_not_connected";
 
 /**
  * Same shape as `DefinitionV2Issue` over a wider code union, so the validator's
@@ -39,8 +45,52 @@ export interface WorkflowBuilderIssue extends Omit<DefinitionV2Issue, "code"> {
 /** Every rule the builder gates a save on. Empty array = savable definition. */
 export function workflowBuilderIssues(
   definition: WorkflowDefinitionV2,
+  inputConnectedTo?: string | null,
 ): WorkflowBuilderIssue[] {
-  return [...validateDefinitionV2(definition), ...declarationGrammarIssues(definition)];
+  const issues: WorkflowBuilderIssue[] = [
+    ...validateDefinitionV2(definition),
+    ...nodeFieldIssues(definition),
+    ...declarationGrammarIssues(definition),
+  ];
+  if (inputConnectedTo !== undefined) {
+    const head = definitionHeadId(definition);
+    if (head === null || inputConnectedTo !== head) {
+      issues.push({
+        code: "input_not_connected",
+        message: "Connect Input to the first node in the workflow path.",
+        ref: inputConnectedTo ?? undefined,
+      });
+    }
+  }
+  return issues;
+}
+
+/**
+ * The per-step fields every plane requires and the shared validator does not
+ * look at: the control plane's wire model refuses an empty `title`/`prompt`
+ * with `min_length`, and the runtime refuses an untitled node outright. A step
+ * is minted blank, so without these a just-added step would pass every local
+ * check and be refused by the server the moment Save is pressed.
+ */
+function nodeFieldIssues(definition: WorkflowDefinitionV2): WorkflowBuilderIssue[] {
+  const issues: WorkflowBuilderIssue[] = [];
+  definition.nodes.forEach((node, index) => {
+    if (node.title.trim().length === 0) {
+      issues.push({
+        code: "empty_node_title",
+        message: `Step ${index + 1} needs a title.`,
+        nodeId: node.id,
+      });
+    }
+    if (node.prompt.trim().length === 0) {
+      issues.push({
+        code: "empty_node_prompt",
+        message: `Step ${index + 1} needs a prompt.`,
+        nodeId: node.id,
+      });
+    }
+  });
+  return issues;
 }
 
 /**

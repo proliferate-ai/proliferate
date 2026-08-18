@@ -53,8 +53,8 @@ reason = "relocated existing oversized domain test; +workspace-creation-receipt 
 
 [[max_lines]]
 path = "apps/packages/product-client/src/domain/chats/transcript/transcript-row-model.ts"
-max_lines = 1017
-reason = "relocated existing oversized domain source; receipt folded into first turn's Worked-for group; the standalone workspace_receipt row kind is deleted — before any turn exists the receipt instead hosts via hostsWorkspaceReceipt on the last pending/outbox prompt row (composer-dock-receipt placement fix)"
+max_lines = 856
+reason = "relocated existing oversized domain source; receipt folded into first turn's Worked-for group; the standalone workspace_receipt row kind is deleted — before any turn exists the receipt instead hosts via hostsWorkspaceReceipt on the last pending/outbox prompt row (composer-dock-receipt placement fix); goal-event + completion-receipt row interleaving helpers extracted to transcript-interleave-rows.ts (bgwork r6 round 2), shrinking this file below its prior ratchet"
 
 [[max_lines]]
 path = "apps/packages/product-client/src/domain/sessions/activity.test.ts"
@@ -184,19 +184,19 @@ max_lines = 404
 reason = "PRO-230's full launch-outcome/attemptId machinery merged with main's attachmentSnapshots plumbing threaded through every target-kind branch; split on next growth"
 
 [[frontend_structure]]
-path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-workspace-archive-actions.ts"
-max_lines = 471
-reason = "R7 lifecycle archive/unarchive orchestrator: verb posts, undo toasts, 409 scenario flow, optimistic-hide set with pending reconciliation; grew past 400 with the flicker-regression rider; PRO-257 adds the success-toast dwell"
-
-[[frontend_structure]]
 path = "apps/packages/product-client/src/lib/infra/terminals/terminal-stream-registry.ts"
 max_lines = 417
 reason = "terminal/feed stream registry (+open/close/error records woven into the existing callbacks; no seam short of splitting the registry itself)"
 
 [[frontend_structure]]
 path = "apps/packages/product-client/src/components/workspace/chat/transcript/VirtualizedTranscriptRowList.tsx"
-max_lines = 405
-reason = "Background Work R2: reports the stick-to-bottom engine's own isPinnedToBottom state upward via a new onIsPinnedToBottomChange callback prop, so the background-work transcript row can hide itself when the user scrolls away from bottom instead of floating over mid-transcript content; split deferred. Bumped 403->405 by the current-main merge: the chat-scroll refold's single-writer / frame-pipeline landing (PRO-187) plus r2's pin-state wiring net two more lines in this host."
+max_lines = 407
+reason = "Background Work R2: reports the stick-to-bottom engine's own isPinnedToBottom state upward via a new onIsPinnedToBottomChange callback prop, so the background-work transcript row can hide itself when the user scrolls away from bottom instead of floating over mid-transcript content; split deferred. Bumped 403->405 by the current-main merge: the chat-scroll refold's single-writer / frame-pipeline landing (PRO-187) plus r2's pin-state wiring net two more lines in this host. Re-trued 405->407 by the r9 refold composition (PRO-187): the byte-identical r9 diff composed to 400 lines on its old base but 407 on post-r8 main; r10-r12 compose to 406 under this ceiling."
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/components/workspace/chat/transcript/MessageList.tsx"
+max_lines = 443
+reason = "Background Work R6+R8: r6 row orchestration grew the transcript list host past 400 (extraction pending); r8 adds 3 lines of background-command click-in wiring, and the refold base carries main's one-line hydration amendment (439->440), so the reviewed-at-442 content lands at 443"
 
 # FE-CHATSCROLL-1 sanctioned scroll-position writers, read by
 # scripts/check_transcript_scroll_writer.py. File-level allowlist: any non-test
@@ -213,6 +213,10 @@ reason = "rung 4 frame-pipeline refactor: the stick-to-bottom engine's own follo
 [[transcript_scroll_writer]]
 path = "apps/packages/product-client/src/hooks/chat/ui/use-transcript-frame-pipeline-lifecycle.ts"
 reason = "rung 4 frame-pipeline refactor: session re-entry / submit re-pin / tab-resume anchor restore, now driven through TranscriptFramePipeline instead of N independent rAF loops"
+
+[[transcript_scroll_writer]]
+path = "apps/packages/product-client/src/hooks/chat/ui/use-transcript-stick-to-bottom.ts"
+reason = "rung 10: NON-cancelable above-change compensation floor — never drops scrollTop below the live compensation anchor during a history prepend, restoring a direct write alongside the frame-pipeline's own writer"
 
 [[transcript_scroll_writer]]
 path = "apps/packages/product-client/src/components/workspace/chat/transcript/FullTranscriptRowList.tsx"

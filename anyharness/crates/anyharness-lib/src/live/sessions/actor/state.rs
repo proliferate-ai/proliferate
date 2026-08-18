@@ -55,6 +55,12 @@ pub(in crate::live::sessions::actor) struct SessionActor {
     pub(in crate::live::sessions::actor) native_session_id: String,
     pub(in crate::live::sessions::actor) action_capabilities: SessionActionCapabilities,
     pub(in crate::live::sessions::actor) supports_native_close: bool,
+    /// Process-local OpenCode side-door state (port + redacted
+    /// password + fail-closed readiness). `None` for every non-OpenCode kind
+    /// and when the side-door could not be provisioned. Never persisted,
+    /// never logged.
+    pub(in crate::live::sessions::actor) sidedoor:
+        Option<crate::live::sessions::driver::opencode_sidedoor::SidedoorRuntime>,
 
     // ── wiring (set at spawn/startup, never reassigned) ──
     pub(in crate::live::sessions::actor) conn: acp::ConnectionTo<acp::Agent>,

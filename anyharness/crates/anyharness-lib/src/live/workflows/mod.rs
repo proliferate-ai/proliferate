@@ -6,6 +6,8 @@
 
 mod actor;
 #[cfg(test)]
+mod launch_tests;
+#[cfg(test)]
 mod lifecycle_tests;
 
 use std::collections::HashMap;

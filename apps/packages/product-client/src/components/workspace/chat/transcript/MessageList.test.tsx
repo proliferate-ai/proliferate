@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { useLayoutEffect, type ReactNode } from "react";
+import { useLayoutEffect, type ReactElement, type ReactNode } from "react";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import type { TranscriptState } from "@anyharness/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   scrollToRowKey: vi.fn(),
   parseMatchId: vi.fn(() => ({ rowUnitId: "turn:turn-1:block:content" })),
   jumpToMatch: vi.fn(() => true),
+  openBackgroundTerminalDetail: vi.fn(),
   searchState: {
     open: true,
     surface: "chat",
@@ -98,6 +99,7 @@ vi.mock("#product/hooks/cowork/workflows/use-open-cowork-artifact", () => ({
 
 vi.mock("#product/hooks/activity/workflows/use-open-background-work-pane", () => ({
   useOpenBackgroundWorkPane: () => vi.fn(),
+  useOpenBackgroundTerminalDetail: () => mocks.openBackgroundTerminalDetail,
 }));
 
 vi.mock("#product/hooks/ui/debug/use-debug-render-count", () => ({
@@ -181,5 +183,31 @@ describe("MessageList embedded content search", () => {
     expect(mocks.jumpToMatch).toHaveBeenCalledWith({
       rowUnitId: "turn:turn-1:block:content",
     });
+  });
+});
+
+describe("MessageList background-terminal click-in wiring (bgwork r8)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("wires a turn row's onOpenBackgroundTerminal to useOpenBackgroundTerminalDetail with the active session", () => {
+    renderMessageList();
+
+    const latestProps = mocks.chatView.mock.calls.at(-1)?.[0] as {
+      renderTurnRow: (input: unknown) => ReactElement;
+    };
+    const element = latestProps.renderTurnRow({ row: { hostsWorkspaceReceipt: false } });
+    const onOpenBackgroundTerminal = (
+      element.props as { onOpenBackgroundTerminal: (processId: string) => void }
+    ).onOpenBackgroundTerminal;
+
+    onOpenBackgroundTerminal("proc-42");
+
+    expect(mocks.openBackgroundTerminalDetail).toHaveBeenCalledWith("proc-42", "session-child");
   });
 });

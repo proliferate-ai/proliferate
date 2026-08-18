@@ -10,6 +10,7 @@ impl SessionService {
         &self,
         workspace_id: &str,
         session: &SessionRecord,
+        pending_prompt_seq_cursor: i64,
         live_config_snapshot: Option<&SessionLiveConfigSnapshotRecord>,
         pending_config_changes: &[PendingConfigChangeRecord],
         pending_prompts: &[PendingPromptRecord],
@@ -36,6 +37,7 @@ impl SessionService {
         }
         let result = self.session_store.import_bundle(
             session,
+            pending_prompt_seq_cursor,
             live_config_snapshot,
             pending_config_changes,
             pending_prompts,

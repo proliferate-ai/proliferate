@@ -242,4 +242,113 @@ describe("TranscriptFramePipeline", () => {
     pipeline.requestFrame();
     expect(frames.pending).toBe(1);
   });
+
+  // PRO-168 (rung 12, Q16): the eased-follow motion writer's continuation seam.
+  // The instant writer never implements `hasPendingMotion`, so these prove the
+  // seam is additive: absent it, existing behavior above is untouched (asserted
+  // by every prior test in this file, none of which define it).
+  describe("hasPendingMotion continuation (PRO-168, rung 12)", () => {
+    it("requestFrame schedules ONE more frame per pass while motion is pending, then stops", () => {
+      const { frames, pipeline } = makePipeline();
+      let passes = 0;
+      let pending = true;
+      pipeline.setWriter({
+        runFramePass: () => {
+          passes += 1;
+        },
+        measureContentHeight: () => 0,
+        shouldContinueGlue: () => true,
+        hasPendingMotion: () => pending,
+      });
+
+      pipeline.requestFrame();
+      expect(passes).toBe(1);
+      // The guard-reset frame plus the motion continuation are both pending.
+      expect(frames.pending).toBe(2);
+
+      frames.flushFrame();
+      // The motion continuation ran another pass and re-armed itself.
+      expect(passes).toBe(2);
+
+      pending = false;
+      frames.flushFrame();
+      // Converged: no further continuation is scheduled.
+      expect(passes).toBe(2);
+      expect(frames.pending).toBe(0);
+    });
+
+    it("a writer that never reports pending motion never gets a continuation frame", () => {
+      const { frames, pipeline } = makePipeline();
+      let passes = 0;
+      pipeline.setWriter({
+        runFramePass: () => {
+          passes += 1;
+        },
+        measureContentHeight: () => 0,
+        shouldContinueGlue: () => true,
+        // hasPendingMotion omitted entirely — the default (instant) writer shape.
+      });
+
+      pipeline.requestFrame();
+      expect(passes).toBe(1);
+      // Only the guard-reset frame, no motion continuation.
+      expect(frames.pending).toBe(1);
+    });
+
+    it("glue ending mid-motion hands off to the motion continuation instead of stranding it", () => {
+      const { frames, pipeline } = makePipeline();
+      let passes = 0;
+      let pending = true;
+      // Height goes quiet immediately so glue's own window closes after the
+      // first quiet frame, well before motion has converged.
+      pipeline.setWriter({
+        runFramePass: () => {
+          passes += 1;
+        },
+        measureContentHeight: () => 500,
+        shouldContinueGlue: () => true,
+        hasPendingMotion: () => pending,
+      });
+
+      pipeline.beginGlue();
+      frames.flushFrame(); // first pass, height 500 becomes the baseline
+      frames.flushFrame(); // quiet frame: glue window closes here
+      expect(pipeline.isGluing).toBe(false);
+      const passesAtGlueEnd = passes;
+
+      // Glue is done, but motion is still pending: the continuation must have
+      // taken over rather than leaving the writer stuck short of its target.
+      expect(frames.pending).toBe(1);
+      frames.flushFrame();
+      expect(passes).toBe(passesAtGlueEnd + 1);
+
+      pending = false;
+      frames.flushFrame();
+      expect(passes).toBe(passesAtGlueEnd + 1); // converged, no further ticks
+    });
+
+    it("beginGlue folds a pending motion continuation into the glue window (no double pass)", () => {
+      const { frames, pipeline } = makePipeline();
+      let passes = 0;
+      pipeline.setWriter({
+        runFramePass: () => {
+          passes += 1;
+        },
+        measureContentHeight: () => 0,
+        shouldContinueGlue: () => true,
+        hasPendingMotion: () => true,
+      });
+
+      pipeline.requestFrame();
+      expect(passes).toBe(1);
+      expect(frames.pending).toBe(2); // guard-reset + motion continuation
+
+      // A fresh glue window starts (e.g. session re-entry) before the motion
+      // continuation's frame fires; it must fold in rather than stacking a
+      // second pass in the same frame.
+      pipeline.beginGlue();
+      frames.flushFrame();
+      expect(passes).toBe(2); // exactly one more pass this frame, not two
+    });
+  });
 });

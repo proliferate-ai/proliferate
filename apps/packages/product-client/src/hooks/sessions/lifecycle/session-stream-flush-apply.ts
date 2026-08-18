@@ -209,6 +209,7 @@ export function applySessionStreamFlushBatch(
       result.duplicateEnvelopes,
       slotState.transcript,
     );
+    input.reconcileWorkspacePinIntents(result.duplicateEnvelopes);
     useSessionIngestStore.getState().applyStreamProgress(input.sessionId, {
       lastAppliedSeq: slotState.transcript.lastSeq,
       lastObservedSeq,
@@ -335,6 +336,12 @@ export function applySessionStreamFlushBatch(
     lastObservedSeq,
     gapAfterSeq: result.gapEnvelope ? result.state.transcript.lastSeq : null,
   });
+
+  input.reconcileWorkspacePinIntents(
+    [...result.duplicateEnvelopes, ...result.appliedEnvelopes].sort(
+      (left, right) => left.seq - right.seq,
+    ),
+  );
 
   applyBatchedStreamSideEffects({
     ...input,

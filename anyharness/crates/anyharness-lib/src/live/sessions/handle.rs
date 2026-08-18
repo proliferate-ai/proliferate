@@ -5,12 +5,12 @@ use anyharness_contract::v1::{
     ConfigApplyState, PendingInteractionSummary, SessionEventEnvelope, SessionExecutionPhase,
     SessionExecutionSummary,
 };
-use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
+use tokio::sync::{broadcast, mpsc, oneshot, Notify, RwLock};
 
 pub use crate::live::sessions::actor::command::{
     ConditionalCancelOutcome, ForkSessionCommandError, ForkSessionCommandResult, PromptAcceptError,
     PromptAcceptance, QueueMutationError, Resolution, ResolveInteractionCommandError,
-    SetConfigOptionCommandError,
+    SetConfigOptionCommandError, SidedoorForkCommandError, SidedoorForkCommandResult,
 };
 
 use crate::domains::sessions::prompt::PromptPayload;
@@ -18,7 +18,7 @@ use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionError, RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
 use crate::live::sessions::actor::command::SessionCommand;
-
+mod sidedoor;
 #[derive(Debug)]
 pub enum LiveSessionCommandError<E> {
     ActorUnavailable,
@@ -90,6 +90,45 @@ pub struct LiveSessionHandle {
     pub(in crate::live::sessions) busy: Arc<AtomicBool>,
     pub(in crate::live::sessions) execution: Arc<RwLock<LiveSessionExecutionSnapshot>>,
     pub(in crate::live::sessions) native_session_id: Arc<std::sync::RwLock<Option<String>>>,
+    event_sequence: Arc<ActorLifecycleSignal>,
+    actor_finished: Arc<ActorLifecycleSignal>,
+}
+
+#[derive(Default)]
+struct ActorLifecycleSignal {
+    completed: AtomicBool,
+    notify: Notify,
+}
+
+impl ActorLifecycleSignal {
+    fn complete(&self) {
+        if !self.completed.swap(true, Ordering::AcqRel) {
+            self.notify.notify_waiters();
+        }
+    }
+
+    async fn wait(&self) {
+        loop {
+            if self.completed.load(Ordering::Acquire) {
+                return;
+            }
+            let notified = self.notify.notified();
+            if self.completed.load(Ordering::Acquire) {
+                return;
+            }
+            notified.await;
+        }
+    }
+}
+
+pub(in crate::live::sessions) struct ActorLifecycleReleaser {
+    signal: Arc<ActorLifecycleSignal>,
+}
+
+impl Drop for ActorLifecycleReleaser {
+    fn drop(&mut self) {
+        self.signal.complete();
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -133,7 +172,33 @@ impl LiveSessionHandle {
             busy: Arc::new(AtomicBool::new(false)),
             execution: Arc::new(RwLock::new(LiveSessionExecutionSnapshot::new(phase))),
             native_session_id: Arc::new(std::sync::RwLock::new(native_session_id)),
+            event_sequence: Arc::new(ActorLifecycleSignal::default()),
+            actor_finished: Arc::new(ActorLifecycleSignal::default()),
         }
+    }
+
+    pub(in crate::live::sessions) fn event_sequence_releaser(&self) -> ActorLifecycleReleaser {
+        ActorLifecycleReleaser {
+            signal: self.event_sequence.clone(),
+        }
+    }
+
+    pub(in crate::live::sessions) fn actor_finished_releaser(&self) -> ActorLifecycleReleaser {
+        ActorLifecycleReleaser {
+            signal: self.actor_finished.clone(),
+        }
+    }
+
+    pub(in crate::live::sessions) fn relinquish_event_sequence(&self) {
+        self.event_sequence.complete();
+    }
+
+    pub(in crate::live::sessions) async fn wait_for_event_sequence_relinquishment(&self) {
+        self.event_sequence.wait().await;
+    }
+
+    pub(in crate::live::sessions) async fn wait_until_actor_finished(&self) {
+        self.actor_finished.wait().await;
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<SessionEventEnvelope> {
@@ -483,7 +548,10 @@ impl LiveSessionHandle {
         native_session_id: Option<String>,
         phase: SessionExecutionPhase,
     ) -> Self {
-        Self::new(session_id, command_tx, event_tx, native_session_id, phase)
+        let handle = Self::new(session_id, command_tx, event_tx, native_session_id, phase);
+        handle.relinquish_event_sequence();
+        handle.actor_finished.complete();
+        handle
     }
 }
 

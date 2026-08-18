@@ -133,6 +133,32 @@ pub(in crate::live::sessions::actor) async fn apply_actor_update(
             let mut sink = event_sink.lock().await;
             sink.session_info_update(payload);
         }
+        ActorBoundUpdate::OpencodeUserMessageId {
+            turn_id,
+            item_id,
+            vendor_message_id,
+        } => {
+            // Persist the vendor message-id binding only for
+            // opencode — the sink emits the binding meaning-blind for any kind,
+            // the actor (which knows the kind) is the gate. First-writer-wins:
+            // a replayed/duplicate echo is a no-op (ON CONFLICT DO NOTHING).
+            if source_agent_kind == crate::domains::agents::model::AgentKind::OpenCode.as_str() {
+                let now = chrono::Utc::now().to_rfc3339();
+                if let Err(error) = session_store.insert_opencode_message_id(
+                    session_id,
+                    &turn_id,
+                    &item_id,
+                    &vendor_message_id,
+                    &now,
+                ) {
+                    tracing::warn!(
+                        session_id = %session_id,
+                        error = %error,
+                        "failed to persist opencode message-id binding"
+                    );
+                }
+            }
+        }
     }
 }
 

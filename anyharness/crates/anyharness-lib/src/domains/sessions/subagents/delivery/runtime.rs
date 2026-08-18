@@ -5,8 +5,12 @@ use tokio::sync::mpsc;
 
 use super::{CompletionDeliveryRecord, CompletionDeliveryState, CompletionDeliveryStore};
 use crate::domains::sessions::runtime::SessionRuntime;
-use crate::domains::sessions::runtime_event::{RuntimeInjectedSessionEvent, SubagentTurnCompletion};
-use crate::domains::sessions::store::completion_deliveries::enqueue::ClaimedDeliveryEnqueueOutcome;
+use crate::domains::sessions::runtime_event::{
+    RuntimeInjectedSessionEvent, SubagentTurnCompletion,
+};
+use crate::domains::sessions::store::completion_deliveries::enqueue::{
+    ClaimedDeliveryEnqueueOutcome, RetiredCompletionWake,
+};
 
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 const LEASE_DURATION_SECONDS: i64 = 30;
@@ -51,6 +55,9 @@ impl CompletionDeliveryWorker {
     }
 
     async fn process_available(&self) {
+        if let Err(error) = self.repair_pending_wake_removals().await {
+            log_wake_removal_repair_failure(&error);
+        }
         if let Err(error) = self.repair_retired_subagent_turns().await {
             tracing::warn!(
                 result_class = "subagent_turn_repair_failed",
@@ -164,16 +171,24 @@ impl CompletionDeliveryWorker {
                 );
                 return Ok(());
             }
-            ClaimedDeliveryEnqueueOutcome::Suppressed { delivery } => {
-                // The delivery is terminal without a parent prompt. The
-                // injected completion event is the only parent-transcript
-                // record, so it stays best effort with the same guarantees as
-                // the enqueue-path injection: the suppression is committed and
-                // never re-runs.
+            ClaimedDeliveryEnqueueOutcome::Suppressed {
+                delivery,
+                reason,
+                retired_wakes,
+            } => {
+                // Removal intents survive this terminal delivery transition
+                // and retry until their queue-projection events are durable.
+                // Completion metadata keeps its existing best-effort contract.
+                if let Err(error) = self.repair_pending_wake_removals().await {
+                    log_wake_removal_repair_failure(&error);
+                }
                 if let Some(session_runtime) = self.session_runtime.upgrade() {
                     inject_completion_event(&session_runtime, &delivery).await;
                 }
-                log_wake_withheld(&delivery, &delivery.delivery_id, "redundant_child_message");
+                for retired_wake in retired_wakes {
+                    log_wake_withheld(&delivery, &retired_wake.delivery_id, "coalesced");
+                }
+                log_wake_withheld(&delivery, &delivery.delivery_id, reason.as_str());
                 return Ok(());
             }
             ClaimedDeliveryEnqueueOutcome::Stale => {
@@ -204,10 +219,103 @@ impl CompletionDeliveryWorker {
             .await;
         Ok(())
     }
+
+    async fn repair_pending_wake_removals(&self) -> anyhow::Result<u32> {
+        let Some(session_runtime) = self.session_runtime.upgrade() else {
+            anyhow::bail!("session_runtime_unavailable");
+        };
+        let mut repaired = 0;
+        let mut first_error = None;
+        for _ in 0..MAX_DELIVERIES_PER_PASS {
+            let now = chrono::Utc::now();
+            let lease_expires = now + chrono::Duration::seconds(LEASE_DURATION_SECONDS);
+            let lease_token = uuid::Uuid::new_v4().to_string();
+            let Some(intent) = self.delivery_store.claim_next_pending_wake_removal(
+                &now.to_rfc3339(),
+                &lease_expires.to_rfc3339(),
+                &lease_token,
+            )?
+            else {
+                break;
+            };
+            match persist_retired_wake_removal(
+                &session_runtime,
+                &self.delivery_store,
+                &intent,
+                &lease_token,
+            )
+            .await
+            {
+                Ok(()) => repaired += 1,
+                Err(error) => {
+                    let failed_at = chrono::Utc::now();
+                    let retry_at = failed_at + chrono::Duration::seconds(1);
+                    let _ = self.delivery_store.release_wake_removal_claim(
+                        &intent,
+                        &lease_token,
+                        &failed_at.to_rfc3339(),
+                        &retry_at.to_rfc3339(),
+                    );
+                    first_error.get_or_insert(error);
+                }
+            }
+        }
+        match first_error {
+            Some(error) => Err(error),
+            None => Ok(repaired),
+        }
+    }
 }
 
 fn dead_letter_threshold_reached(attempt_count: i64) -> bool {
     attempt_count >= MAX_DELIVERY_ATTEMPTS
+}
+
+async fn persist_retired_wake_removal(
+    session_runtime: &SessionRuntime,
+    delivery_store: &CompletionDeliveryStore,
+    intent: &RetiredCompletionWake,
+    lease_token: &str,
+) -> anyhow::Result<()> {
+    let parent_event_seq = if delivery_store.has_wake_removal_event(intent)? {
+        None
+    } else {
+        Some(
+            session_runtime
+                .emit_runtime_event(
+                    &intent.parent_session_id,
+                    RuntimeInjectedSessionEvent::pending_prompt_removed(
+                        intent.parent_prompt_seq,
+                        intent.prompt_id.clone(),
+                    ),
+                )
+                .await?
+                .seq,
+        )
+    };
+    let persisted_at = chrono::Utc::now().to_rfc3339();
+    if !delivery_store.acknowledge_wake_removal(intent, lease_token, &persisted_at)? {
+        anyhow::bail!("retired completion wake removal intent changed before acknowledgement");
+    }
+    tracing::info!(
+        target: "anyharness.subagent.delivery_suppressed",
+        delivery_id = %intent.delivery_id,
+        parent_session_id = %intent.parent_session_id,
+        parent_prompt_seq = intent.parent_prompt_seq,
+        parent_event_seq = ?parent_event_seq,
+        reason = "coalesced",
+        "subagent: retired completion wake removed from parent queue projection"
+    );
+    Ok(())
+}
+
+fn log_wake_removal_repair_failure(error: &anyhow::Error) {
+    tracing::warn!(
+        target: "anyharness.subagent.delivery_suppression_event_failed",
+        result_class = "pending_prompt_removal_repair_failed",
+        error_class = error_chain_class(error),
+        "retired completion wake removal repair deferred"
+    );
 }
 
 /// Publish the completion metadata the parent transcript indexes for wake

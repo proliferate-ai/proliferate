@@ -3,6 +3,7 @@ use rusqlite::{params, OptionalExtension};
 use crate::domains::sessions::extensions::SessionTurnOutcome;
 use crate::domains::sessions::model::PendingPromptRecord;
 use crate::domains::sessions::prompt::PromptPayload;
+use crate::domains::sessions::store::pending_prompts::allocate_pending_prompt_seq;
 use crate::persistence::Db;
 
 #[derive(Debug, thiserror::Error)]
@@ -113,17 +114,7 @@ impl LinkCompletionStore {
                 }));
             }
 
-            tx.execute(
-                "UPDATE sessions
-                 SET pending_prompt_seq_cursor = pending_prompt_seq_cursor + 1
-                 WHERE id = ?1",
-                [parent_session_id],
-            )?;
-            let next_seq: i64 = tx.query_row(
-                "SELECT pending_prompt_seq_cursor FROM sessions WHERE id = ?1",
-                [parent_session_id],
-                |row| row.get(0),
-            )?;
+            let next_seq = allocate_pending_prompt_seq(tx, parent_session_id)?;
             let next_position: i64 = tx.query_row(
                 "SELECT COALESCE(MAX(queue_position), 0) + 1
                  FROM session_pending_prompts WHERE session_id = ?1",

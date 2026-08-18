@@ -546,4 +546,49 @@ describe("above-change compensation cancels on upward user intent (PRO-187, r4)"
     // still live and this correction lands at 1000 + (2800 - 2000) = 1800.
     expect(viewport.scrollTop).toBe(1400);
   });
+
+  // Regression for the CI webkit bimodal "prepend anchoring: older-history
+  // prepend keeps the reading row fixed" strand (PRO-187, r10). Trace evidence
+  // across four separate failing runs (#1980/#1992/#1993, byte-identical
+  // numbers each time) showed content height reaching its final measured value
+  // (scrollHeight plateaus) well inside the compensation deadline while
+  // scrollTop had already been driven all the way to 0 by that point. The
+  // frame pipeline's compensation write only re-runs on a content-growth-driven
+  // pass (a glue tick or a resize-triggered requestFrame) — nothing reacts to
+  // the scroll EVENT itself. A real wheelToTop gesture keeps firing native
+  // scroll events that lower scrollTop directly between those passes; once the
+  // content plateaus (as it does quickly once the composition-derived estimate
+  // is close), no further pass is scheduled to counter it, so the gesture wins
+  // outright and strands the reader at 0. This is NON-cancelable (prepend)
+  // compensation specifically: the reader asked for this by scrolling up, so
+  // it must hold regardless of continued upward scrolling — unlike the
+  // cancelable completed-turn-split case exercised above.
+  it("clamps a non-cancelable compensation forward against a native scroll event that would erode it below the anchor floor", () => {
+    const handle = renderHarness();
+    const { viewport, api } = handle.current;
+    setContentHeight(viewport, 5_552);
+    viewport.scrollTop = 464;
+
+    act(() => {
+      api.setPinned(false);
+      api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 5_552, scrollTop: 464 }, false);
+    });
+    act(() => { flushRafRound(); });
+    act(() => { flushRafRound(); });
+
+    // Content has already settled at its final measured height (no further
+    // growth event will ever fire) while a still-in-flight wheelToTop gesture
+    // keeps writing scrollTop down natively, event by event, toward 0.
+    setContentHeight(viewport, 6_908);
+    for (const nativeScrollTop of [300, 120, 40, 0]) {
+      viewport.scrollTop = nativeScrollTop;
+      act(() => { api.onViewportScroll(viewport); });
+    }
+
+    // NEGATIVE CONTROL: remove the forward-clamp guard in onViewportScroll
+    // (use-transcript-stick-to-bottom.ts) and this regresses to 0 — the exact
+    // CI failure (`expect(after.scrollTop).toBeGreaterThan(150)` receiving 0).
+    expect(viewport.scrollTop).toBe(464);
+    expect(viewport.scrollTop).toBeGreaterThan(150);
+  });
 });

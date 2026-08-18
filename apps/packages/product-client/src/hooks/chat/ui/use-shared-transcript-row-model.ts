@@ -10,6 +10,7 @@ import {
 } from "#product/domain/chats/transcript/transcript-row-model";
 import type { TranscriptVirtualRow } from "#product/domain/chats/transcript/transcript-virtual-rows";
 import type { GoalTranscriptEvent } from "#product/domain/activity/goal-transcript-events";
+import type { BackgroundCompletionReceipt } from "#product/domain/activity/background-completion-receipt";
 
 export function useSharedTranscriptRowModel(input: {
   activeSessionId: string;
@@ -20,6 +21,8 @@ export function useSharedTranscriptRowModel(input: {
   latestTurnHasAssistantRenderableContent: boolean;
   goalEvents?: readonly GoalTranscriptEvent[];
   workspaceReceiptKey?: string | null;
+  completionReceipts?: readonly BackgroundCompletionReceipt[];
+  backgroundWorkRunningCount?: number;
 }): readonly TranscriptVirtualRow[] {
   const cacheRef = useRef(createTranscriptRowModelCache());
 
@@ -34,6 +37,8 @@ export function useSharedTranscriptRowModel(input: {
       input.visibleOutboxEntries,
       input.goalEvents,
       input.workspaceReceiptKey,
+      input.completionReceipts,
+      input.backgroundWorkRunningCount,
     ],
   );
 }

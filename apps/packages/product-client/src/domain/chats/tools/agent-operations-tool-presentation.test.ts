@@ -238,6 +238,39 @@ describe("deriveAgentOperationsReceiptPresentation", () => {
     });
   });
 
+  it.each([
+    ["pin_workspace", true, "Requested pin"],
+    ["unpin_workspace", false, "Requested unpin"],
+  ] as const)("reads %s from its requested workspace envelope", (action, pinned, actionLabel) => {
+    expect(deriveAgentOperationsReceiptPresentation(item(action, {
+      rawInput: { workspaceId: "workspace-2" },
+      rawOutput: {
+        requestId: "11111111-1111-4111-8111-111111111111",
+        workspace: {
+          identity: { runtimeId: "runtime-1", workspaceId: "workspace-2" },
+          repositoryId: "repo-1",
+          kind: "local",
+          surface: "standard",
+          path: "/tmp/workspace-2",
+          displayName: "Pin target",
+          lifecycleState: "active",
+          createdAt: "2026-08-10T00:00:00Z",
+          updatedAt: "2026-08-10T00:00:01Z",
+        },
+        pinned,
+        status: "requested",
+      },
+    }))).toMatchObject({
+      action,
+      actionLabel,
+      workspace: {
+        runtimeId: "runtime-1",
+        workspaceId: "workspace-2",
+        displayName: "Pin target",
+      },
+    });
+  });
+
   it("unwraps production-shaped Codex arguments and structured output", () => {
     const ordinaryAgent = {
       ...AGENT_VIEW,
@@ -437,6 +470,8 @@ describe("deriveAgentOperationsReceiptPresentation", () => {
 
   it.each([
     ["create_workspace", "Failed to create workspace"],
+    ["pin_workspace", "Failed to pin workspace"],
+    ["unpin_workspace", "Failed to unpin workspace"],
     ["create_agent", "Failed to create agent"],
     ["configure_agent", "Failed to configure agent"],
     ["resume_agent", "Failed to resume agent"],

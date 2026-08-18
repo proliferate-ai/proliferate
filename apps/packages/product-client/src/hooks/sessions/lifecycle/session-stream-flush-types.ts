@@ -4,6 +4,7 @@ import type { PendingSessionConfigChange } from "#product/domain/sessions/pendin
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import type { ReconciledStreamConfigIntent } from "#product/lib/domain/sessions/stream/stream-side-effect-plan";
 import type { SessionStreamCache } from "#product/hooks/sessions/cache/use-session-stream-cache";
+import type { WorkspacePinIntentEnvelopeDispatcher } from "#product/hooks/sessions/lifecycle/workspace-pin-intent-dispatch";
 
 export interface SessionStreamFlushController {
   enqueue(envelope: import("@anyharness/sdk").SessionEventEnvelope): void;
@@ -47,6 +48,7 @@ export interface SessionStreamFlushFactoryDeps {
     },
   ) => Promise<boolean>;
   showToast: (message: string, type?: "error" | "info") => void;
+  reconcileWorkspacePinIntents: WorkspacePinIntentEnvelopeDispatcher;
   scheduler?: SessionStreamFlushScheduler;
 }
 

@@ -5,6 +5,7 @@ use crate::live::sessions::actor::command::{ConditionalCancelOutcome, Resolution
 use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
 use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::actor::turn::active::ActivePromptRequest;
+use crate::live::sessions::actor::turn::queue::PrequeuedPromptVisibility;
 use crate::live::sessions::background_work::BackgroundWorkUpdate;
 use crate::live::sessions::AgentExtMethodError;
 
@@ -87,6 +88,15 @@ impl SessionActor {
         drop(command_rx);
         self.background_work_registry.shutdown();
         self.finalize_exit(exit_reason).await;
+        // Finalization is the actor's last event-producing phase. Taking the
+        // sink lock drains any direct writer admitted before shutdown; the
+        // permanent fence rejects detached ACP/background writers that arrive
+        // while the process is still being reaped.
+        self.event_sink.lock().await.seal_event_sequence();
+        // Release the generation's sequence ownership before the potentially
+        // long process reap so a replacement can start without racing stale
+        // final events.
+        self.handle.relinquish_event_sequence();
         self.handle.finish_prompt();
         if let Some(respond_to) = self.pending_stop_response.take() {
             let kills = self.kill_process_group_and_reap().await;
@@ -194,8 +204,29 @@ impl SessionActor {
                 }
                 IdleWork::DrainQueuedPrompt => {
                     startup_drain_grace = false;
-                    let (payload, prompt_id, seq) =
+                    let (_staged_payload, _staged_prompt_id, seq) =
                         queued_prompt.expect("guarded queued prompt must exist");
+                    let current = match self.ensure_prequeued_pending_prompt_added(seq).await {
+                        Ok(PrequeuedPromptVisibility::Present(record)) => record,
+                        Ok(PrequeuedPromptVisibility::Missing) => {
+                            // An external durable mutation can retire the row
+                            // after the idle loop peeks it. Discard the staged
+                            // payload and re-peek instead of executing stale
+                            // content or unloading with another row stranded.
+                            continue;
+                        }
+                        Err(error) => {
+                            tracing::warn!(
+                                session_id = %self.session_id,
+                                seq,
+                                error = ?error,
+                                "queued prompt drain halted before durable visibility event"
+                            );
+                            return ActorExitDisposition::Unload;
+                        }
+                    };
+                    let payload = current.prompt_payload();
+                    let prompt_id = current.prompt_id;
                     let (respond_to, _response_rx) = oneshot::channel();
                     if let Some(exit) = self
                         .run_turn(

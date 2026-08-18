@@ -31,19 +31,44 @@ import { CHAT_VISIBLE_FILE_CHANGE_LIMIT } from "#product/lib/domain/workspaces/c
 import { ToolKindIcon } from "#product/components/workspace/chat/transcript/TranscriptToolKindIcon";
 import { AgentIdentityGlyph } from "#product/components/patterns/AgentIdentityGlyph";
 import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
+import { useBackgroundCommandStatus } from "#product/hooks/activity/derived/use-background-command-status";
+import { useTranscriptSessionId } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 
 export function TranscriptToolCallItemBlock({
   item,
   workspaceId,
   onOpenArtifact,
+  onOpenBackgroundTerminal,
 }: {
   item: ToolCallItem;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
+  /**
+   * Deep-opens the Background work pane's terminal detail for a background
+   * command's `ActivityProcess.id` (bgwork r8). Optional: absent in surfaces
+   * that don't host the pane (e.g. the playground preview).
+   */
+  onOpenBackgroundTerminal?: (processId: string) => void;
 }) {
   const openCodingSession = useOpenCoworkCodingSession();
   const { selectWorkspace } = useWorkspaceSelection();
   const [showAllFileChanges, setShowAllFileChanges] = useState(false);
+  // Computed ahead of the early returns below so the roster lookup hook
+  // (shared with CollapsedActionRows' CommandActionRow/ParsedCommandRows,
+  // bgwork r8 round 3) is called unconditionally on every render path.
+  const toolResultText = item.contentParts
+    .filter((part): part is ToolResultTextContentPart => part.type === "tool_result_text")
+    .map((part) => part.text)
+    .join("\n\n");
+  const normalizedResultText = normalizeToolResultText(toolResultText);
+  // bgwork r8: a Bash tool result carrying the literal "Command running in
+  // background with ID: {taskId}" sentence correlates this row to a roster
+  // `ActivityProcess` — client-side only, there is no wire tool_call_id link.
+  // A row whose result text doesn't parse to an id (foreground commands, or
+  // any unrecognized shape) falls through to the ordinary inline-disclosure
+  // BashCommandCall below, unchanged.
+  const { processId: backgroundProcessId, trailingStatus: backgroundTrailingStatus } =
+    useBackgroundCommandStatus(normalizedResultText, useTranscriptSessionId());
 
   if (
     item.semanticKind === "cowork_artifact_create"
@@ -85,15 +110,13 @@ export function TranscriptToolCallItemBlock({
   const toolCallPart = item.contentParts.find(
     (part): part is ToolCallContentPart => part.type === "tool_call",
   );
-  const toolResultText = item.contentParts
-    .filter((part): part is ToolResultTextContentPart => part.type === "tool_result_text")
-    .map((part) => part.text)
-    .join("\n\n");
-  const normalizedResultText = normalizeToolResultText(toolResultText);
   const toolName = toolCallPart?.title ?? item.title ?? item.nativeToolName ?? "Tool call";
   const rawInput = isRecord(item.rawInput);
   const bashDescription = readString(rawInput?.description) ?? undefined;
   const bashCommand = readString(rawInput?.command) ?? toolName;
+  const openBackgroundTerminal = backgroundProcessId && onOpenBackgroundTerminal
+    ? () => onOpenBackgroundTerminal(backgroundProcessId)
+    : undefined;
   const fallbackDisplay = describeToolCallDisplay(item, toolName);
   const rows: React.ReactNode[] = [];
   const status = mapStatus(item.status);
@@ -185,7 +208,8 @@ export function TranscriptToolCallItemBlock({
         description={bashDescription}
         output={output || (typeof item.rawOutput === "string" ? item.rawOutput : undefined)}
         status={status}
-        duration={formatToolDuration(item)}
+        duration={backgroundProcessId ? backgroundTrailingStatus : formatToolDuration(item)}
+        onOpenBackgroundTerminal={openBackgroundTerminal}
       />,
     );
   }
@@ -199,7 +223,8 @@ export function TranscriptToolCallItemBlock({
           description={bashDescription}
           output={normalizedResultText}
           status={status}
-          duration={formatToolDuration(item)}
+          duration={backgroundProcessId ? backgroundTrailingStatus : formatToolDuration(item)}
+          onOpenBackgroundTerminal={openBackgroundTerminal}
         />,
       );
     } else if (item.nativeToolName === "Read" || item.toolKind === "read") {

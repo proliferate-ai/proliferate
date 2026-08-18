@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SIDEBAR_REPO_GROUP_ITEM_LIMIT } from "#product/lib/domain/workspaces/sidebar/sidebar-model";
 import {
+  numberedSidebarShortcutTargetIds,
   resolveAdjacentSidebarShortcutTarget,
   resolveSidebarShortcutDigitTarget,
   visibleSidebarShortcutTargetIds,
@@ -10,6 +11,9 @@ import {
   makeCloudLogicalWorkspace,
   makeLocalLogicalWorkspace,
 } from "#product/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
+import {
+  filterOptimisticallyArchivedSidebarGroups,
+} from "#product/lib/domain/workspaces/sidebar/sidebar-visible-items";
 
 describe("visibleSidebarShortcutTargetIds", () => {
   it("returns visible repository rows in sidebar group and item order", () => {
@@ -49,6 +53,7 @@ describe("visibleSidebarShortcutTargetIds", () => {
       collapsedRepoGroupKeys: new Set(),
       repoGroupsShownMore: new Set(),
       itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+      repositoriesCollapsed: false,
     })).toEqual([
       "repo-b-latest",
       "repo-a-older-record-newer-work",
@@ -79,6 +84,7 @@ describe("visibleSidebarShortcutTargetIds", () => {
       collapsedRepoGroupKeys: new Set(),
       repoGroupsShownMore: new Set(),
       itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+      repositoriesCollapsed: false,
     })).toEqual(["local-visible", "cloud-selected"]);
   });
 
@@ -105,6 +111,7 @@ describe("visibleSidebarShortcutTargetIds", () => {
       collapsedRepoGroupKeys: new Set(),
       repoGroupsShownMore: new Set(),
       itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+      repositoriesCollapsed: false,
     })).toEqual(["local-visible"]);
   });
 
@@ -132,6 +139,7 @@ describe("visibleSidebarShortcutTargetIds", () => {
       collapsedRepoGroupKeys: new Set(["/tmp/repo-b"]),
       repoGroupsShownMore: new Set(),
       itemLimit: 6,
+      repositoriesCollapsed: false,
     })).toEqual([
       "repo-a-1",
       "repo-a-2",
@@ -146,6 +154,7 @@ describe("visibleSidebarShortcutTargetIds", () => {
       collapsedRepoGroupKeys: new Set(["/tmp/repo-b"]),
       repoGroupsShownMore: new Set(["/tmp/repo-a"]),
       itemLimit: 6,
+      repositoriesCollapsed: false,
     })).toEqual([
       "repo-a-1",
       "repo-a-2",
@@ -178,6 +187,7 @@ describe("visibleSidebarShortcutTargetIds", () => {
       collapsedRepoGroupKeys: new Set(),
       repoGroupsShownMore: new Set(),
       itemLimit: 6,
+      repositoriesCollapsed: false,
     })).toEqual([
       "repo-a-1",
       "repo-a-2",
@@ -222,9 +232,134 @@ describe("visibleSidebarShortcutTargetIds", () => {
       collapsedRepoGroupKeys: new Set(),
       repoGroupsShownMore: new Set(),
       itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+      repositoriesCollapsed: false,
     });
 
     expect(readTargets(visualGroups)).toEqual(readTargets(baseGroups));
+  });
+
+  it("puts pinned workspaces first in persisted pin order", () => {
+    const pinnedWorkspaceIds = ["repo-b-pinned", "repo-a-pinned"];
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "repo-a-visible",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+        }),
+        makeLocalLogicalWorkspace({
+          id: "repo-a-pinned",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+        }),
+        makeLocalLogicalWorkspace({
+          id: "repo-b-pinned",
+          repoKey: "/tmp/repo-b",
+          repoName: "repo-b",
+        }),
+      ],
+      pinnedIds: pinnedWorkspaceIds,
+    });
+
+    expect(numberedSidebarShortcutTargetIds({
+      groups,
+      pinnedWorkspaceIds,
+      collapsedRepoGroupKeys: new Set(["/tmp/repo-b"]),
+      repoGroupsShownMore: new Set(),
+      itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+      repositoriesCollapsed: false,
+    })).toEqual([
+      "repo-b-pinned",
+      "repo-a-pinned",
+      "repo-a-visible",
+    ]);
+
+    expect(visibleSidebarShortcutTargetIds({
+      groups,
+      collapsedRepoGroupKeys: new Set(["/tmp/repo-b"]),
+      repoGroupsShownMore: new Set(),
+      itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+      repositoriesCollapsed: false,
+    })).toEqual([
+      "repo-a-visible",
+      "repo-a-pinned",
+    ]);
+  });
+
+  it("exposes only pinned numbered targets when the repositories section is collapsed", () => {
+    const pinnedWorkspaceIds = ["workspace-pinned"];
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "workspace-visible",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+        }),
+        makeLocalLogicalWorkspace({
+          id: "workspace-pinned",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+        }),
+      ],
+      pinnedIds: pinnedWorkspaceIds,
+    });
+    const shared = {
+      groups,
+      collapsedRepoGroupKeys: new Set<string>(),
+      repoGroupsShownMore: new Set<string>(),
+      itemLimit: SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+      repositoriesCollapsed: true,
+    };
+
+    expect(numberedSidebarShortcutTargetIds({
+      ...shared,
+      pinnedWorkspaceIds,
+    })).toEqual(["workspace-pinned"]);
+    expect(visibleSidebarShortcutTargetIds(shared)).toEqual([]);
+  });
+
+  it("filters in-flight archives before pinned projection and row limits", () => {
+    const pinnedWorkspaceIds = ["archiving-pinned"];
+    const groups = filterOptimisticallyArchivedSidebarGroups(buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "archiving-pinned",
+          workspaceId: "runtime-pinned",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+        }),
+        makeLocalLogicalWorkspace({
+          id: "archiving-row",
+          workspaceId: "runtime-row",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+        }),
+        makeLocalLogicalWorkspace({
+          id: "visible-row",
+          workspaceId: "runtime-visible",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+        }),
+      ],
+      pinnedIds: pinnedWorkspaceIds,
+    }), new Set(["runtime-pinned", "runtime-row"]));
+    const shared = {
+      groups,
+      collapsedRepoGroupKeys: new Set<string>(),
+      repoGroupsShownMore: new Set<string>(),
+      itemLimit: 1,
+      repositoriesCollapsed: false,
+    };
+
+    expect(numberedSidebarShortcutTargetIds({
+      ...shared,
+      pinnedWorkspaceIds,
+    })).toEqual(["visible-row"]);
+    expect(visibleSidebarShortcutTargetIds(shared)).toEqual(["visible-row"]);
   });
 });
 

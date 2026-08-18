@@ -245,7 +245,10 @@ const AGENT_SUPPORTS_GOALS = {
 // its advertised model matrix. Interactive launches keep their own defaults.
 const AGENT_UNATTENDED_MODE_IDS = {
   claude: "bypassPermissions",
-  codex: "full-access",
+  // codex-acp 1.1.14 renamed the bypass-capable mode `full-access` ->
+  // `agent-full-access` (probe-attested vocabulary: read-only/agent/
+  // agent-full-access). Forks ADR rung-1 catalog flip.
+  codex: "agent-full-access",
 };
 
 // Display-name curation: probe snapshots carry pretty names for some models
@@ -654,7 +657,24 @@ function applyBundledCuration(agent) {
     if (!previousModel.availability?.anyOf?.includes("gateway")) continue;
     const currentModel = agent.session.models.find((model) => model.id === previousModel.id);
     if (!currentModel) {
-      agent.session.models.push(structuredClone(previousModel));
+      // A gateway-only model absent from this probe run is carried over from the
+      // bundled lockfile verbatim — but its per-model `mode` matrix must NOT be
+      // cloned. `mode` is an adapter-GLOBAL vocabulary, not a per-model
+      // capability: `modesBlockMatrix` stamps every freshly-probed model with an
+      // identical copy of the harness `modes` block. A frozen clone silently
+      // goes stale the moment the adapter renames a mode (codex-acp 1.1.14:
+      // full-access -> agent-full-access, auto -> agent), after which the stale
+      // copy fails the unattended-mode validator ("unattendedModeId ... is not
+      // supported by model ..."). Drop the redundant `mode` so the model
+      // inherits the freshly-probed agent-level vocabulary — the validator's
+      // documented inheritance path — making the rename migration structural
+      // rather than another frozen copy. Genuine per-model controls
+      // (reasoning_effort, etc.) are preserved.
+      const carried = structuredClone(previousModel);
+      if (carried.controls && "mode" in carried.controls) {
+        delete carried.controls.mode;
+      }
+      agent.session.models.push(carried);
       continue;
     }
     if (!currentModel.availability.anyOf.includes("gateway")) {

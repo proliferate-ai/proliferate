@@ -131,6 +131,7 @@ const CONTENT_PART_CONTRACTS: Readonly<Record<string, PrimitiveContract>> = {
 };
 
 const EVENT_CONTRACTS: Readonly<Record<string, PrimitiveContract>> = {
+  workspace_pin_intent: { booleans: new Set(["pinned"]) },
   subagent_turn_completed: { numbers: new Set(["childLastEventSeq"]) },
   session_link_turn_completed: { numbers: new Set(["childLastEventSeq"]) },
   review_run_updated: {

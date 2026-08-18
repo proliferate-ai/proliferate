@@ -12,6 +12,7 @@ import {
   type TurnDisplayBlock,
   type TurnPresentation,
 } from "./transcript-presentation";
+import { resolveTurnAssistantFooterMode } from "./turn-row-presentation";
 import type { PromptOutboxEntry } from "../../sessions/intents/session-intent-model";
 
 const EMPTY_OUTBOX_STARTED_AT_BY_PROMPT_ID = new Map<string, string>();
@@ -78,6 +79,76 @@ export function getAssistantProseContent(
   }
   const item = transcript.itemsById[itemId];
   return item?.kind === "assistant_prose" && item.text ? item.text : null;
+}
+
+/**
+ * Resolve the assistant copy/timestamp footer mode for one turn row, sourcing
+ * "is this turn done?" from stream/session liveness and the tail assistant
+ * MESSAGE rather than only the turn envelope's completion stamp.
+ *
+ * A runtime-injected wake turn (the background-work finish signal, e.g.
+ * "Terminal … finished — exit code 0") never receives the completion tail: the
+ * runtime drops both `item_completed` and `turn_ended`, so `TurnRecord`'s
+ * `completedAt` stays null AND the tail assistant message item stays status
+ * "in_progress" (isStreaming true) forever in the durable record. The bare
+ * `!!turn.completedAt` gate — and a tail-item-status gate — therefore leave
+ * that final message stuck on the empty "reserved" footer: no copy button, no
+ * timestamp, durable across reload. Interleaved `completion_receipt` /
+ * `background_work` rows are transparent to this: the affordance belongs to the
+ * last real MESSAGE row of a turn regardless of the activity rows the row model
+ * places before or after it.
+ *
+ * Two OR'd completion signals:
+ *   1. `turn.completedAt` — a real `turn_ended` stamp (normal turns; the left
+ *      branch always wins when present).
+ *   2. `messageSettledOffLiveStream` — there is copyable tail prose and this
+ *      turn is NOT the session's actively-streaming turn. This is the signal
+ *      that survives the dropped completion tail: on reload there is no live
+ *      stream, and once the agent stops the session leaves the "working" view
+ *      state, so a message whose item is stuck "in_progress" is nonetheless
+ *      copyable. An interrupted turn matches too — desired for the affordance.
+ *
+ * Completion is deliberately NOT sourced from the tail item's own status: the
+ * runtime drops `item_completed` for wake turns, so the item stays
+ * "in_progress" forever, and a per-item-settle gate also flashes `copy` in the
+ * mid-turn gap between a prose block finishing and the next tool_call arriving
+ * (a still-live turn indistinguishable from a settled one). Keying on
+ * `turnIsActivelyStreaming` (isLatestTurn AND the session view state is
+ * "working") instead keeps that gap — and every genuinely live turn — in
+ * "reserved", with the reveal guard (`assistantRevealComplete`) holding the
+ * empty footer through the reveal.
+ */
+export function resolveTurnAssistantFooterModeForRow({
+  rowIsLastTurnRow,
+  turn,
+  transcript,
+  presentation,
+  assistantRevealComplete,
+  turnIsActivelyStreaming,
+}: {
+  rowIsLastTurnRow: boolean;
+  turn: TurnRecord;
+  transcript: TranscriptState;
+  presentation: TurnPresentation;
+  assistantRevealComplete: boolean;
+  turnIsActivelyStreaming: boolean;
+}): "none" | "reserved" | "copy" {
+  const tailAssistantProseRootId = findTailAssistantProseRootId(
+    presentation,
+    transcript,
+  );
+  const tailAssistantProseContent = getAssistantProseContent(
+    tailAssistantProseRootId,
+    transcript,
+  );
+  const messageSettledOffLiveStream = !!tailAssistantProseContent
+    && !turnIsActivelyStreaming;
+  return resolveTurnAssistantFooterMode({
+    rowIsLastTurnRow,
+    turnCompleted: !!turn.completedAt || messageSettledOffLiveStream,
+    hasAssistantCopyContent: !!tailAssistantProseContent,
+    assistantRevealComplete,
+  });
 }
 
 export function collectToolCallIdsWithProposedPlan(

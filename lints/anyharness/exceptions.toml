@@ -541,9 +541,9 @@ reason = "1 wire type import below the mapper boundary; target = sessions domain
 
 [[exception]]
 rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/fork.rs"
+path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/fork/mod.rs"
 site = "anyharness_contract::v1::ForkSessionTarget"
-reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x)"
+reason = "1 wire type import below the mapper boundary; target = sessions domain twins (grid plan PR 10.x). Carried forward from runtime/fork.rs when it split into fork/ for the rung-3 side-door dispatch"
 
 [[exception]]
 rule = "AH-CONTRACT-1"

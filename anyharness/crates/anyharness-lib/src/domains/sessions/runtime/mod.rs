@@ -30,6 +30,8 @@ mod config;
 mod creation;
 mod fork;
 pub(crate) mod fork_boundary;
+pub(crate) mod fork_qualification;
+pub(crate) mod opencode_sidedoor_client;
 #[cfg(test)]
 mod idempotent_creation_tests;
 mod interactions;

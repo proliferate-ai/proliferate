@@ -34,12 +34,30 @@ import { WORKSPACE_SIDEBAR_DEFAULT_WIDTH } from "#product/lib/domain/preferences
  * lifecycle filter (`lifecycle=archived`) is now the single source of
  * truth for which workspaces are archived, so a stale persisted id can no
  * longer resurrect a hidden row.
+ * v16: track a bounded set of the latest applied Workspace MCP pin receipts.
+ * v17: add bounded renderer-local pin ordering barriers so history and delayed
+ *      live observations cannot overwrite a later device-local choice.
  */
-export const WORKSPACE_UI_MIGRATION_VERSION = 15;
+export const WORKSPACE_UI_MIGRATION_VERSION = 17;
+export const WORKSPACE_PIN_INTENT_RECEIPT_LIMIT = 256;
+export const WORKSPACE_PIN_LOCAL_BARRIER_LIMIT = 256;
+export const WORKSPACE_PIN_HISTORY_OBSERVATION_LIMIT = 256;
+
+export interface WorkspacePinIntentReceipt {
+  requestId: string;
+  seq: number;
+}
+
+export interface WorkspacePinLocalOrder {
+  rendererEpoch: string;
+  sequence: number;
+}
 
 export interface PersistedWorkspaceUiState {
   migrationVersion?: number;
   pinnedWorkspaceIds: string[];
+  workspacePinIntentReceiptByTarget: Record<string, WorkspacePinIntentReceipt>;
+  workspacePinLocalBarrierById: Record<string, WorkspacePinLocalOrder>;
   hiddenRepoRootIds: string[];
   collapsedRepoGroups: string[];
   showArchived: boolean;
@@ -67,6 +85,7 @@ export interface PersistedWorkspaceUiState {
 }
 
 export interface WorkspaceUiChangeTrackedState extends PersistedWorkspaceUiState {
+  workspacePinHistoryObservationById: Record<string, WorkspacePinLocalOrder>;
   archivingChatSessionIdsByWorkspace: Record<string, string[]>;
   shellActivationEpochByWorkspace: Record<string, number>;
   pendingChatActivationByWorkspace: Record<string, unknown>;
@@ -75,6 +94,8 @@ export interface WorkspaceUiChangeTrackedState extends PersistedWorkspaceUiState
 
 export const WORKSPACE_UI_DEFAULTS: PersistedWorkspaceUiState = {
   pinnedWorkspaceIds: [],
+  workspacePinIntentReceiptByTarget: {},
+  workspacePinLocalBarrierById: {},
   hiddenRepoRootIds: [],
   collapsedRepoGroups: [],
   showArchived: false,

@@ -25,6 +25,8 @@ export function selectPersistedWorkspaceUiState(
   return {
     migrationVersion: WORKSPACE_UI_MIGRATION_VERSION,
     pinnedWorkspaceIds: state.pinnedWorkspaceIds,
+    workspacePinIntentReceiptByTarget: state.workspacePinIntentReceiptByTarget,
+    workspacePinLocalBarrierById: state.workspacePinLocalBarrierById,
     hiddenRepoRootIds: state.hiddenRepoRootIds,
     collapsedRepoGroups: state.collapsedRepoGroups,
     showArchived: state.showArchived,
@@ -76,6 +78,9 @@ export function getChangedWorkspaceUiStateKeys(
 ): string[] {
   return [
     "pinnedWorkspaceIds",
+    "workspacePinIntentReceiptByTarget",
+    "workspacePinLocalBarrierById",
+    "workspacePinHistoryObservationById",
     "hiddenRepoRootIds",
     "collapsedRepoGroups",
     "showArchived",
@@ -114,5 +119,6 @@ export function isNonPersistedWorkspaceUiStateKey(key: string): boolean {
   return key === "archivingChatSessionIdsByWorkspace"
     || key === "pendingChatActivationByWorkspace"
     || key === "shellActivationEpochByWorkspace"
-    || key === "urgentHighlightedChatSessionByWorkspace";
+    || key === "urgentHighlightedChatSessionByWorkspace"
+    || key === "workspacePinHistoryObservationById";
 }

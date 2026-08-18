@@ -8564,6 +8564,8 @@
           "list_workspaces",
           "list_workspace_options",
           "create_workspace",
+          "pin_workspace",
+          "unpin_workspace",
           "list_agents",
           "get_agent",
           "list_subagents",
@@ -13898,6 +13900,19 @@
               "null"
             ]
           },
+          "retiredPromptId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retiredPromptSeq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
           "sessionLinkId": {
             "type": "string"
           },
@@ -18062,6 +18077,27 @@
           {
             "allOf": [
               {
+                "$ref": "#/components/schemas/WorkspacePinIntentPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "workspace_pin_intent"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/SubagentTurnCompletedPayload"
               },
               {
@@ -21220,6 +21256,13 @@
               "$ref": "#/components/schemas/MobilityPendingConfigChangeRecord"
             }
           },
+          "pendingPromptSeqCursor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
           "pendingPrompts": {
             "type": "array",
             "items": {
@@ -21271,6 +21314,33 @@
           },
           "supported": {
             "type": "boolean"
+          }
+        }
+      },
+      "WorkspacePinIntentPayload": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "runtimeId",
+          "sourceSessionId",
+          "workspaceId",
+          "pinned"
+        ],
+        "properties": {
+          "pinned": {
+            "type": "boolean"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "runtimeId": {
+            "type": "string"
+          },
+          "sourceSessionId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
           }
         }
       },

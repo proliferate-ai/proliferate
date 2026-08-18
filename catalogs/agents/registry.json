@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "registryVersion": "2026-08-16.1",
+  "registryVersion": "2026-08-17.1",
   "generatedAt": "2026-07-17T03:08:00Z",
   "agents": [
     {
@@ -26,7 +26,7 @@
       "agentProcess": {
         "install": {
           "kind": "managed_npm_package",
-          "package": "git+https://github.com/proliferate-ai/claude-agent-acp.git#26f9ee7a0049507bff5476ce390695515ce92840",
+          "package": "git+https://github.com/proliferate-ai/claude-agent-acp.git#65f6205329daea4a521ee0f0c042722b0feb306a",
           "packageSubdir": null,
           "sourceBuildBinaryName": null,
           "executableRelpath": "node_modules/.bin/claude-agent-acp"
@@ -175,7 +175,7 @@
       "agentProcess": {
         "install": {
           "kind": "managed_npm_package",
-          "package": "@proliferate-ai/codex-acp@0.18.3-proliferate.1",
+          "package": "git+https://github.com/proliferate-ai/codex-acp.git#219738c9dd4205d3c70ab950f5f22cc3b28103c4",
           "packageSubdir": null,
           "sourceBuildBinaryName": null,
           "executableRelpath": "node_modules/.bin/codex-acp"
@@ -276,7 +276,7 @@
             "AZURE_OPENAI_API_KEY"
           ],
           "pending": true,
-          "pendingReason": "config.toml injection built, live-unverified: nobody has exercised codex against real Azure OpenAI yet (D3 brief \u00a75/\u00a76 Gate 4), and the registry only declares AZURE_OPENAI_API_KEY today \u2014 not yet the endpoint/deployment vars the render arm also needs."
+          "pendingReason": "config.toml injection built, live-unverified: nobody has exercised codex against real Azure OpenAI yet (D3 brief §5/§6 Gate 4), and the registry only declares AZURE_OPENAI_API_KEY today — not yet the endpoint/deployment vars the render arm also needs."
         }
       ],
       "selfUpdateNeutralization": {

@@ -32,7 +32,7 @@ use crate::persistence::Db;
 
 const WORKSPACE_ID: &str = "wf-workspace";
 
-fn agent_node(id: &str, prompt: &str) -> DefinitionNode {
+pub(super) fn agent_node(id: &str, prompt: &str) -> DefinitionNode {
     DefinitionNode {
         id: id.into(),
         node_type: WorkflowNodeType::Agent,
@@ -51,7 +51,7 @@ fn hitl_node(id: &str, prompt: &str) -> DefinitionNode {
 
 /// A linear chain: consecutive edges, no inputs, no docs (tests that need
 /// them build the definition by hand).
-fn chain(nodes: Vec<DefinitionNode>) -> WorkflowDefinition {
+pub(super) fn chain(nodes: Vec<DefinitionNode>) -> WorkflowDefinition {
     let edges = nodes
         .windows(2)
         .map(|pair| DefinitionEdge {
@@ -68,8 +68,8 @@ fn chain(nodes: Vec<DefinitionNode>) -> WorkflowDefinition {
     }
 }
 
-struct WorkflowFixture {
-    state: AppState,
+pub(super) struct WorkflowFixture {
+    pub(super) state: AppState,
     script: ScriptedAgent,
     workspace_root: PathBuf,
     runtime_home: PathBuf,
@@ -117,7 +117,7 @@ fn boot_fixture(label: &str, prepare: impl FnOnce(&Db, &PathBuf)) -> WorkflowFix
     }
 }
 
-fn fixture(label: &str) -> WorkflowFixture {
+pub(super) fn fixture(label: &str) -> WorkflowFixture {
     boot_fixture(label, |_, _| {})
 }
 
@@ -166,7 +166,7 @@ fn create_run_rows(
 }
 
 impl WorkflowFixture {
-    fn start(&self, run_id: &str, definition: WorkflowDefinition) -> CreatedRun {
+    pub(super) fn start(&self, run_id: &str, definition: WorkflowDefinition) -> CreatedRun {
         self.start_with_arguments(run_id, definition, serde_json::Map::new())
     }
 
@@ -197,7 +197,7 @@ impl WorkflowFixture {
             .expect("workflow command");
     }
 
-    async fn wait_for(
+    pub(super) async fn wait_for(
         &self,
         run_id: &str,
         what: &str,
@@ -250,7 +250,7 @@ impl WorkflowFixture {
     }
 }
 
-fn node_by_def<'a>(state: &'a RunState, definition_node_id: &str) -> &'a crate::domains::workflows::model::WorkflowRunNodeRecord {
+pub(super) fn node_by_def<'a>(state: &'a RunState, definition_node_id: &str) -> &'a crate::domains::workflows::model::WorkflowRunNodeRecord {
     state
         .nodes
         .iter()

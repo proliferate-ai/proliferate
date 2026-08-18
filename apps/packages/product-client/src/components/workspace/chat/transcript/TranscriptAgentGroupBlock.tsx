@@ -14,6 +14,8 @@ import { ChevronRight } from "#product/primitives/icons/core";
 import { Robot } from "#product/primitives/icons/product";
 import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
+import { AgentIdentityChip } from "#product/components/patterns/AgentIdentityChip";
+import { buildDelegatedAgentIdentity } from "#product/lib/domain/delegated-work/identity";
 import { SubagentLaunchLedger } from "#product/components/workspace/chat/transcript/SubagentLaunchLedger";
 import { TurnSeparator } from "#product/components/workspace/chat/transcript/TurnSeparator";
 import {
@@ -41,13 +43,17 @@ export function TranscriptAgentGroupBlock({
   transcript,
   childrenByParentId,
   renderChild,
+  workspaceId = null,
   onOpenSubagent,
+  onOpenBackgroundTerminal,
 }: {
   item: ToolCallItem;
   childIds: string[];
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
   renderChild: (childId: string) => ReactNode;
+  /** Feeds the generated identity's `openTarget`; absent for embedded/read-only transcripts. */
+  workspaceId?: string | null;
   /**
    * Opens this native subagent's `BackgroundWorkPane` detail
    * (`BackgroundSubagentView`) — the spec's "native routing" intent,
@@ -56,6 +62,14 @@ export function TranscriptAgentGroupBlock({
    * Absent for embedded/read-only transcripts that have no pane to open.
    */
   onOpenSubagent?: (subagentId: string) => void;
+  /**
+   * bgwork r8 round 3: a background command run inside this native
+   * subagent's own nested transcript (rendered by `renderScopedWork` below)
+   * needs the same click-in as the top-level transcript — threaded straight
+   * through to `ScopedTranscriptBlocks`, the same path `onOpenSubagent`
+   * already establishes one level up in `TranscriptToolCallGroupBlock`.
+   */
+  onOpenBackgroundTerminal?: (processId: string) => void;
 }) {
   const executionState = resolveSubagentExecutionState(item);
   const isRunning = isSubagentExecutionStateRunning(executionState);
@@ -118,6 +132,7 @@ export function TranscriptAgentGroupBlock({
       transcript={transcript}
       autoFollowCollapsedActionBlockId={null}
       renderItem={renderChild}
+      onOpenBackgroundTerminal={onOpenBackgroundTerminal}
     />
   );
   const headerVerb = executionState === "failed"
@@ -141,6 +156,26 @@ export function TranscriptAgentGroupBlock({
   // today's byte-identical expand/collapse-on-click header.
   const subagentId = resolveSubagentIdForItem(item);
   const canOpenSubagent = Boolean(onOpenSubagent && subagentId);
+  // Founder critique (2026-08-17): a native launch used to fall back to this
+  // same generic "Creating subagent … · 1 tool call" header. Once the wire
+  // carries a durable subagentId, the design artifact's identity treatment
+  // (`AgentIdentityChip` + a "started working"-style verb, matching
+  // `SubagentCreationGroupBlock`'s creation-run anatomy) replaces it so this
+  // block agrees with the pane roster row and detail header, which already
+  // build the same generated identity from the same id (rung R4).
+  const nativeIdentity = canOpenSubagent && subagentId
+    ? buildDelegatedAgentIdentity({
+      id: subagentId,
+      title: subagentDisplay.title,
+      workspaceId,
+      sessionId: subagentId,
+    })
+    : null;
+  const nativeCreationVerb = executionState === "failed"
+    ? "failed to start"
+    : isRunning
+      ? "starting"
+      : "started working";
   const headerClickable = canOpenSubagent || headerExpandable;
   // Keyboard access (review round 3): the header used to be a pure
   // expand/collapse toggle, where losing keyboard access was a pre-existing
@@ -172,74 +207,96 @@ export function TranscriptAgentGroupBlock({
 
   return (
     <div className="py-0.5">
-      <div
-        {...(headerClickable
-          ? {
-              "data-chat-transcript-ignore": true,
-              role: "button" as const,
-              tabIndex: 0,
-              "aria-label": headerAriaLabel,
-            }
-          : {})}
-        onClick={activateHeader}
-        onKeyDown={(event) => {
-          // Ignore keydown bubbling up from the nested chevron `Button`
-          // below — it's a real, independently-focusable `<button>`, and
-          // its own Enter/Space activation must not also re-trigger this
-          // header's action.
-          if (!headerClickable || event.target !== event.currentTarget) {
-            return;
-          }
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            activateHeader();
-          }
-        }}
-        className={`group/tool-action-row inline-flex items-center gap-1 rounded-md pl-0.5 pr-1.5 py-1 text-chat transition-colors ${
-          headerClickable
-            ? "cursor-pointer text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-            : "cursor-default text-muted-foreground"
-        }`}
-      >
-        <Robot
-          aria-hidden="true"
-          className={`icon-compact shrink-0 transition-colors ${
-            expanded
-              ? "text-foreground/70"
-              : headerClickable
-                ? "text-faint group-hover/tool-action-row:text-muted-foreground"
-                : "text-muted-foreground"
-          }`}
-        />
-        <span className="text-inherit">{headerVerb}</span>
-        {shouldShowDescription && (
-          <span className="min-w-0 truncate text-inherit">{description}</span>
-        )}
-        {!expanded && collapsedSummary && (
-          <span className="ml-1 text-chat text-muted-foreground">
-            · {collapsedSummary}
-          </span>
-        )}
-        {canOpenSubagent && hasBodyContent && (
+      {nativeIdentity && subagentId ? (
+        <div
+          data-subagent-creation-run
+          className="flex min-h-8 min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-chat leading-8"
+        >
+          <AgentIdentityChip
+            identity={nativeIdentity}
+            onOpen={() => onOpenSubagent?.(subagentId)}
+          />
           <Button
             type="button"
             variant="unstyled"
+            size="unstyled"
             data-chat-transcript-ignore
-            aria-expanded={expanded}
-            aria-label={expanded ? "Collapse subagent details" : "Expand subagent details"}
-            onClick={(event) => {
-              event.stopPropagation();
-              setExpanded(!expanded);
-            }}
-            className="ml-1 flex shrink-0 items-center justify-center rounded p-0.5 text-faint hover:bg-muted/40 hover:text-foreground"
+            onClick={() => onOpenSubagent?.(subagentId)}
+            className={`relative top-px inline-block cursor-pointer align-middle hover:underline focus-visible:underline ${
+              executionState === "failed" ? "text-destructive/80" : "text-foreground/90"
+            }`}
           >
-            <ChevronRight
-              aria-hidden="true"
-              className={`icon-compact shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
-            />
+            {nativeCreationVerb}
           </Button>
-        )}
-      </div>
+          {hasBodyContent && (
+            <Button
+              type="button"
+              variant="unstyled"
+              size="unstyled"
+              data-chat-transcript-ignore
+              aria-expanded={expanded}
+              aria-label={expanded ? "Collapse subagent details" : "Expand subagent details"}
+              onClick={() => setExpanded(!expanded)}
+              className="flex shrink-0 items-center justify-center rounded p-0.5 text-faint hover:bg-muted/40 hover:text-foreground"
+            >
+              <ChevronRight
+                aria-hidden="true"
+                className={`icon-compact shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+              />
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div
+          {...(headerClickable
+            ? {
+                "data-chat-transcript-ignore": true,
+                role: "button" as const,
+                tabIndex: 0,
+                "aria-label": headerAriaLabel,
+              }
+            : {})}
+          onClick={activateHeader}
+          onKeyDown={(event) => {
+            // Ignore keydown bubbling up from the nested chevron `Button`
+            // below — it's a real, independently-focusable `<button>`, and
+            // its own Enter/Space activation must not also re-trigger this
+            // header's action.
+            if (!headerClickable || event.target !== event.currentTarget) {
+              return;
+            }
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              activateHeader();
+            }
+          }}
+          className={`group/tool-action-row inline-flex items-center gap-1 rounded-md pl-0.5 pr-1.5 py-1 text-chat transition-colors ${
+            headerClickable
+              ? "cursor-pointer text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+              : "cursor-default text-muted-foreground"
+          }`}
+        >
+          <Robot
+            aria-hidden="true"
+            className={`icon-compact shrink-0 transition-colors ${
+              expanded
+                ? "text-foreground/70"
+                : headerClickable
+                  ? "text-faint group-hover/tool-action-row:text-muted-foreground"
+                  : "text-muted-foreground"
+            }`}
+          />
+          <span className="text-inherit">{headerVerb}</span>
+          {shouldShowDescription && (
+            <span className="min-w-0 truncate text-inherit">{description}</span>
+          )}
+          {!expanded && collapsedSummary && (
+            <span className="ml-1 text-chat text-muted-foreground">
+              · {collapsedSummary}
+            </span>
+          )}
+        </div>
+      )}
 
       {expanded && hasBodyContent && <div className="ml-1 border-l border-border/70 pl-2">
         {hasLaunchLedger && (

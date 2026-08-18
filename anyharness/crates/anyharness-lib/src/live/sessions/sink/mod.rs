@@ -49,10 +49,19 @@ pub struct SessionEventSink {
     source_agent_kind: String,
     workspace_root: PathBuf,
     next_seq: i64,
+    event_sequence_owned: bool,
+    inbound_event_mutations_open: bool,
     event_tx: broadcast::Sender<SessionEventEnvelope>,
     store: Arc<dyn EventPersist>,
 
     current_turn_id: Option<String>,
+    /// The `item_id` of the current prompt turn's user-message item, set by
+    /// `begin_turn` and cleared at `turn_ended`. Only a prompt-begun turn has a
+    /// known user item; engine-initiated turns leave this `None`. the OpenCode side-door bridge
+    /// uses it to bind a vendor OpenCode `messageId` echo to the right runtime
+    /// `(turn_id, item_id)` identity, and only ever while a turn is open — a
+    /// replayed history echo (no open turn) is never misattributed.
+    current_user_item_id: Option<String>,
     /// True while the open turn was synthesized for engine-initiated activity
     /// (goal continuation/evaluation) rather than begun by a prompt. Only
     /// such turns may be auto-closed by terminal goal events.
@@ -70,8 +79,7 @@ pub struct SessionEventSink {
     staged_terminal: Option<StagedTerminalTurn>,
     engine_terminal_outcome: Option<TerminalTurnOutcome>,
     transcript_phase_debug: TranscriptPhaseDebugState,
-    on_interaction_requested:
-        Option<Arc<dyn Fn(SessionInteractionRequestedContext) + Send + Sync>>,
+    on_interaction_requested: Option<Arc<dyn Fn(SessionInteractionRequestedContext) + Send + Sync>>,
     on_interaction_resolved: Option<Arc<dyn Fn(SessionInteractionResolvedContext) + Send + Sync>>,
 }
 
@@ -88,9 +96,12 @@ impl SessionEventSink {
             source_agent_kind,
             workspace_root,
             next_seq: 1,
+            event_sequence_owned: true,
+            inbound_event_mutations_open: true,
             event_tx,
             store,
             current_turn_id: None,
+            current_user_item_id: None,
             engine_initiated_turn: false,
             engine_turn_has_events: false,
             open_assistant_item: None,
@@ -119,9 +130,12 @@ impl SessionEventSink {
             source_agent_kind,
             workspace_root,
             next_seq: last_seq + 1,
+            event_sequence_owned: true,
+            inbound_event_mutations_open: true,
             event_tx,
             store,
             current_turn_id: None,
+            current_user_item_id: None,
             engine_initiated_turn: false,
             engine_turn_has_events: false,
             open_assistant_item: None,
@@ -141,8 +155,36 @@ impl SessionEventSink {
         self.next_seq
     }
 
+    pub(in crate::live::sessions) fn inbound_event_mutations_admitted(&self) -> bool {
+        self.inbound_event_mutations_open && self.event_mutations_admitted()
+    }
+
+    pub(in crate::live::sessions) fn close_inbound_event_mutations(&mut self) {
+        self.inbound_event_mutations_open = false;
+    }
+
+    /// Permanently close this actor generation's event sequence. The caller
+    /// must hold the shared sink mutex until this flag changes so every writer
+    /// admitted before the fence has completed before ownership is released.
+    pub(in crate::live::sessions) fn seal_event_sequence(&mut self) {
+        self.event_sequence_owned = false;
+        self.inbound_event_mutations_open = false;
+    }
+
     pub fn current_turn_id(&self) -> Option<String> {
         self.current_turn_id.clone()
+    }
+
+    /// The open prompt turn's `(turn_id, item_id)` user-message identity, or
+    /// `None` when no prompt turn is open (engine-initiated turn, or between
+    /// turns). The side-door fork binds a vendor OpenCode `messageId` echo to this.
+    pub(in crate::live::sessions) fn current_user_message_identity(
+        &self,
+    ) -> Option<(String, String)> {
+        match (&self.current_turn_id, &self.current_user_item_id) {
+            (Some(turn_id), Some(item_id)) => Some((turn_id.clone(), item_id.clone())),
+            _ => None,
+        }
     }
 
     pub fn close_open_transcript_items(&mut self) {
@@ -150,6 +192,14 @@ impl SessionEventSink {
     }
 
     pub fn publish_persisted_events(&mut self, envelopes: Vec<SessionEventEnvelope>) {
+        if !self.event_sequence_owned {
+            tracing::error!(
+                session_id = %self.session_id,
+                failure_code = "event_sequence_relinquished",
+                "persisted events rejected after event sequence relinquishment"
+            );
+            return;
+        }
         // Observer-persisted goal events flow back through here after being
         // attributed to the current turn, so this is the one spot that sees a
         // goal reach quiescence AFTER its event already carries the right

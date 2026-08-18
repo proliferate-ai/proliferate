@@ -55,6 +55,21 @@ impl From<BrokerResolveInteractionError> for RevealMcpElicitationUrlError {
 }
 
 impl LiveSessionManager {
+    pub(super) fn retire_generation_after_actor_finish(
+        &self,
+        session_id: String,
+        handle: Arc<LiveSessionHandle>,
+    ) {
+        let live_sessions = self.live_sessions.clone();
+        tokio::spawn(async move {
+            handle.wait_until_actor_finished().await;
+            let mut sessions = live_sessions.write().await;
+            if matches!(sessions.get(&session_id), Some(current) if Arc::ptr_eq(current, &handle)) {
+                sessions.remove(&session_id);
+            }
+        });
+    }
+
     #[cfg(test)]
     pub(crate) async fn register_handle_for_test(&self, handle: Arc<LiveSessionHandle>) {
         self.live_sessions

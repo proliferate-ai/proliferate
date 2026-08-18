@@ -162,6 +162,7 @@ impl MobilityService {
             let agent_artifacts = collect_agent_artifacts(&session, workspace_path, runtime_home)?;
             sessions.push(WorkspaceMobilitySessionBundleData {
                 session,
+                pending_prompt_seq_cursor: Some(bundle.pending_prompt_seq_cursor),
                 live_config_snapshot: bundle.live_config_snapshot,
                 pending_config_changes: bundle.pending_config_changes,
                 pending_prompts: bundle.pending_prompts,

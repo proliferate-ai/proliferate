@@ -3,6 +3,8 @@ import { migrateWorkspaceUiState } from "#product/lib/domain/preferences/workspa
 import {
   WORKSPACE_UI_DEFAULTS,
   WORKSPACE_UI_MIGRATION_VERSION,
+  WORKSPACE_PIN_INTENT_RECEIPT_LIMIT,
+  WORKSPACE_PIN_LOCAL_BARRIER_LIMIT,
   type PersistedWorkspaceUiState,
 } from "#product/lib/domain/preferences/workspace-ui/model";
 import { WORKSPACE_SIDEBAR_MAX_WIDTH } from "#product/lib/domain/preferences/workspace-ui/sidebar";
@@ -109,6 +111,77 @@ describe("workspace UI state migration", () => {
     expect(didMigrate).toBe(true);
     expect(state.migrationVersion).toBe(WORKSPACE_UI_MIGRATION_VERSION);
     expect(state.lastViewedSessionErrorAtBySession).toEqual({});
+  });
+
+  it("defaults and sanitizes Workspace MCP pin receipt records", () => {
+    const { state, didMigrate } = migrateWorkspaceUiState({
+      ...WORKSPACE_UI_DEFAULTS,
+      migrationVersion: 15,
+      workspacePinIntentReceiptByTarget: {
+        valid: { requestId: "request-1", seq: 12 },
+        missingOperation: { seq: 10 } as never,
+        negative: { requestId: "request-2", seq: -1 },
+        fractional: { requestId: "request-3", seq: 2.5 },
+        invalid: "3" as never,
+      },
+    });
+
+    expect(didMigrate).toBe(true);
+    expect(state.workspacePinIntentReceiptByTarget).toEqual({
+      valid: { requestId: "request-1", seq: 12 },
+    });
+  });
+
+  it("keeps only the newest bounded Workspace MCP pin receipt records", () => {
+    const receipts = Object.fromEntries(
+      Array.from({ length: WORKSPACE_PIN_INTENT_RECEIPT_LIMIT + 2 }, (_, index) => [
+        `target-${index}`,
+        { requestId: `request-${index}`, seq: index + 1 },
+      ]),
+    );
+    const { state, didMigrate } = migrateWorkspaceUiState({
+      ...WORKSPACE_UI_DEFAULTS,
+      migrationVersion: WORKSPACE_UI_MIGRATION_VERSION,
+      workspacePinIntentReceiptByTarget: receipts,
+    });
+
+    expect(didMigrate).toBe(true);
+    expect(Object.keys(state.workspacePinIntentReceiptByTarget))
+      .toHaveLength(WORKSPACE_PIN_INTENT_RECEIPT_LIMIT);
+    expect(state.workspacePinIntentReceiptByTarget["target-0"]).toBeUndefined();
+    expect(state.workspacePinIntentReceiptByTarget["target-257"])
+      .toEqual({ requestId: "request-257", seq: 258 });
+  });
+
+  it("defaults, sanitizes, and bounds local workspace pin barriers", () => {
+    const barriers = Object.fromEntries(
+      Array.from({ length: WORKSPACE_PIN_LOCAL_BARRIER_LIMIT + 2 }, (_, index) => [
+        `workspace-${index}`,
+        { rendererEpoch: "renderer-old", sequence: index + 1 },
+      ]),
+    );
+    const { state, didMigrate } = migrateWorkspaceUiState({
+      ...WORKSPACE_UI_DEFAULTS,
+      migrationVersion: 16,
+      workspacePinLocalBarrierById: {
+        invalidEmpty: { rendererEpoch: "renderer-old", sequence: 0 },
+        invalidFractional: { rendererEpoch: "renderer-old", sequence: 1.5 },
+        invalidShape: 1 as never,
+        ...barriers,
+      },
+    });
+
+    expect(didMigrate).toBe(true);
+    expect(Object.keys(state.workspacePinLocalBarrierById))
+      .toHaveLength(WORKSPACE_PIN_LOCAL_BARRIER_LIMIT);
+    expect(state.workspacePinLocalBarrierById["workspace-0"]).toBeUndefined();
+    expect(state.workspacePinLocalBarrierById["workspace-257"]).toEqual({
+      rendererEpoch: "renderer-old",
+      sequence: 258,
+    });
+    expect(state.workspacePinLocalBarrierById.invalidEmpty).toBeUndefined();
+    expect(state.workspacePinLocalBarrierById.invalidFractional).toBeUndefined();
+    expect(state.workspacePinLocalBarrierById.invalidShape).toBeUndefined();
   });
 
   it("sanitizes malformed manual chat groups during migration", () => {

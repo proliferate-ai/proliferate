@@ -8,6 +8,7 @@ import {
 import { WORKFLOW_RUN_VIEW_COPY } from "#product/copy/workflows/workflow-run-view-copy";
 import { selectNewestWorkflowRun } from "#product/domain/workflows/run-selection";
 import { detectWorkflowAutoAdvance } from "#product/domain/workflows/run-view-model";
+import { useWorkflowNodeSessionRoster } from "#product/hooks/workflows/lifecycle/use-workflow-node-session-roster";
 import { useWorkflowRunCommand } from "#product/hooks/workflows/workflows/use-workflow-run-command";
 import { isWorkflowsV2Enabled } from "#product/lib/domain/capabilities/workflows-v2";
 import { showToast } from "#product/primitives/utils/show-toast";
@@ -65,11 +66,20 @@ export function useWorkflowAutoAdvanceWatch({
     void runCommand(() => mutations.undoAdvance.mutateAsync(undefined));
   }, [mutations, runCommand]);
 
+  // Whatever the disabled query still holds is not this workspace's run.
+  const projection = watching && runId ? runQuery.data : undefined;
+
   useWorkflowAutoAdvanceToast({
-    // Whatever the disabled query still holds is not this workspace's run.
-    projection: watching && runId ? runQuery.data : undefined,
+    projection,
     runId,
     onUndo: undoAdvance,
+  });
+  // Same reason this watcher is panel-independent: the node the run advanced
+  // into has to reach the workspace's tab strip whether or not the workflow
+  // pane is the visible tool.
+  useWorkflowNodeSessionRoster({
+    workspaceId: watching ? workspaceId : null,
+    projection,
   });
 }
 

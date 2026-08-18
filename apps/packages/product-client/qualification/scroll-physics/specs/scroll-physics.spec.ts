@@ -15,6 +15,33 @@ const REPIN_BAND_PX = 24;
 // bound is the "still following" ceiling: comfortably above that resting gap,
 // far below the unbounded growth a lost follow would produce.
 const PIN_FOLLOW_MAX_DISTANCE_PX = 120;
+// Frame-to-frame backward-bounce ceiling for the Q13 interleave trace below,
+// for phases where NO new row mounts (thought start/delta/stop, prose
+// growth on an already-mounted row). This is a DIFFERENT quantity from
+// PIN_FOLLOW_MAX_DISTANCE_PX (steady-state bottomDistance while pinned): it
+// bounds how far scrollTop may snap backward between two consecutive trace
+// samples with no legitimate cause to move backward at all. The reserved
+// live-turn slot (ASSISTANT_ACTION_SLOT_HEIGHT, TranscriptTurnChrome.tsx,
+// h-6 = 24px) is the invariant Q13 exists to police, so this ceiling stays
+// strictly below 24px: a phantom reserved-slot height briefly appearing and
+// collapsing during a lifecycle-only transition would otherwise pass
+// silently through a bound reused from an unrelated quantity (see PR #1980
+// review finding 1).
+const INTERLEAVE_MAX_BACKWARD_BOUNCE_PX = 20;
+// Separate, wider ceiling for the ONE phase where a genuinely new row
+// mounts: `streamToolCall`. Unlike the thought/prose phases above, a new
+// tool-call row is a real virtualizer estimate
+// (transcript-row-height-estimate.ts: ESTIMATED_SINGLE_BLOCK_TURN_HEIGHT_PX
+// = 120) that corrects down once TanStack measures the real (smaller,
+// ESTIMATED_INLINE_TOOL_BLOCK_HEIGHT_PX = 56) row — a rung-5 estimate-churn
+// concern, not a rung-10 lifecycle-height violation. CI measured this
+// convergence deterministically at ~61px on both chromium and webkit
+// (PR #1980, round 2), consistent with the ~64px gap between those two
+// estimate constants. This ceiling exists ONLY to bound that specific,
+// already-quantified phenomenon to "still a single bounded correction, not
+// an unbounded runaway" — it must not be reused for the thought/prose
+// phases above, which have no such legitimate source of backward motion.
+const TOOL_ROW_ESTIMATE_CONVERGENCE_MAX_PX = 80;
 
 const VIEWPORT = "div.overflow-y-auto:has([data-transcript-virtualization-mode])";
 
@@ -728,43 +755,47 @@ test.describe("transcript scroll physics", () => {
     expect(scrollTopDelta).toBeLessThan(addedAbove * 1.4);
   });
 
-  // EXPECTED TO FAIL today (PRO-258). A wheel gesture over a long code block /
-  // command output is captured by that inner overflow region; once the inner
-  // region hits its end the gesture does NOT chain to the transcript viewport,
-  // so the outer scroll stalls. Rung 8 restores nested-scroll chaining;
-  // unfixme there.
-  test.fixme(
-    "nested-scroll chaining: wheel past a long code block continues transcript scroll",
-    async ({ page }) => {
-      await ready(page);
-      await drive(page, "reset");
-      await drive(page, "seedFinalizedConversation", 2);
-      await drive(page, "appendCodeBlockTurn");
-      await waitForViewport(page);
-      await settle(page);
+  // Rung 8 (PRO-187, PRO-258): a wheel gesture over a long code block used to
+  // be captured by that inner overflow region; once the inner region hit its
+  // end the gesture did not chain to the transcript viewport, so the outer
+  // scroll stalled. `chainVerticalWheel` is now default-on for the nested
+  // code-block scroller (CodeBlock.tsx / MarkdownCodeBlock.tsx), so a wheel
+  // gesture that exhausts the inner scroller continues the outer transcript
+  // scroll. `page.mouse.wheel` is not portable to WebKit for this exact
+  // gesture (engine-specific wheel-physics scaling and edge-detection timing
+  // differ), so this drives the inner scroller directly to ITS OWN bottom
+  // edge (the state a real user's prior scroll would leave it in) and
+  // dispatches one real WheelEvent, mirroring `gestureScrollToBottomDistance`
+  // elsewhere in this fixture (a direct scrollTop write establishes ground
+  // truth; the dispatched event is what the product's own onWheel handler
+  // reacts to, engine-portable because no engine-specific wheel-physics
+  // scaling is involved on either side of the chain).
+  test("nested-scroll chaining: wheel past a long code block continues transcript scroll", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 2);
+    await drive(page, "appendCodeBlockTurn");
+    await waitForViewport(page);
+    await settle(page);
 
-      // Park the viewport so the tall code block is under the pointer.
-      await wheelOverViewport(page, -1200);
-      await settle(page);
-      const before = await metrics(page);
+    // Park the viewport so the tall code block is on screen and unpin so the
+    // chained delta is observable against a stable baseline (a pinned
+    // transcript's own snap pass would otherwise mask a small chained delta).
+    await wheelOverViewport(page, -1200);
+    await settle(page);
 
-      // Point at the inner code block region and wheel down hard: this should
-      // exhaust the inner scroller and then chain to the transcript.
-      const code = page.locator("pre, code").last();
-      const box = await code.boundingBox();
-      if (box) {
-        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-        for (let i = 0; i < 12; i += 1) {
-          await page.mouse.wheel(0, 400);
-          await page.waitForTimeout(20);
-        }
-      }
-      await settle(page);
-      const after = await metrics(page);
-      // Chaining means the OUTER transcript advanced despite the inner region.
-      expect(after.scrollTop).toBeGreaterThan(before.scrollTop + 20);
-    },
-  );
+    const result = await drive<{ before: number; after: number } | null>(
+      page,
+      "chainWheelPastNestedCodeBlock",
+      400,
+    );
+    expect(result, "the nested code-block viewport should be mounted").not.toBeNull();
+    // Chaining means the OUTER transcript advanced despite the inner region
+    // already being at its own scroll edge.
+    expect(result!.after).toBeGreaterThan(result!.before + 20);
+  });
 
   // Rung 5 (PRO-187): composition-derived virtualizer estimates +
   // per-row-key measured-height persistence + per-session per-bucket
@@ -819,5 +850,370 @@ test.describe("transcript scroll physics", () => {
 
     const estimateError = Math.abs(estimated.scrollHeight - real.scrollHeight);
     expect(estimateError).toBeLessThan(1400);
+  });
+
+  // Rung 7 (PRO-187, Q6): a DISPLACING (structural) dock inset that
+  // appears/disappears (composer growth/collapse, status bar) must not fight a
+  // pinned reader. The pinned follow re-lands in one cut (never a crawl or an
+  // oscillation) and the clamp a shrink queues is never misread as a user
+  // upward scroll. Negative control: route the structural inset out of the
+  // consumed-inset machine (or drop the structural-shrink clamp mark in
+  // use-transcript-auto-follow-bottom.ts) and the collapse clamp is reclassified
+  // as a user scroll, so the follow drops and the subsequent stream runs away.
+  test("displacing-inset transition while pinned: composer collapse/grow follows in one cut, no fight", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 6);
+    await waitForViewport(page);
+    await settle(page);
+    await wheelToBottom(page);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+
+    // Composer collapses (structural 120 -> 40): scrollHeight shrinks and the
+    // client height grows, so the pinned viewport re-lands at the new bottom.
+    await drive(page, "startScrollTrace");
+    await drive(page, "setComposerInset", 40);
+    await settle(page, 500);
+    const collapseTrace = (await drive<number[]>(page, "stopScrollTrace")).filter((v) =>
+      Number.isFinite(v),
+    );
+
+    // Still pinned, glued to the new bottom.
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+    expect((await metricsAfterFrame(page)).bottomDistance).toBeLessThanOrEqual(
+      PIN_FOLLOW_MAX_DISTANCE_PX,
+    );
+    // One cut: only a couple of distinct positions, then landed-and-held (the
+    // final value, once reached, is never left again). A fight would oscillate.
+    expect(collapseTrace.length).toBeGreaterThan(0);
+    expect(new Set(collapseTrace).size).toBeLessThanOrEqual(3);
+    const collapseSettled = collapseTrace[collapseTrace.length - 1];
+    const collapseSettledIdx = collapseTrace.indexOf(collapseSettled);
+    expect(collapseTrace.slice(collapseSettledIdx).every((v) => v === collapseSettled)).toBe(true);
+
+    // Composer grows (structural 40 -> 220): the follow keeps up with the taller
+    // document without fighting.
+    await drive(page, "setComposerInset", 220);
+    await settle(page, 500);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+    expect((await metricsAfterFrame(page)).bottomDistance).toBeLessThanOrEqual(
+      PIN_FOLLOW_MAX_DISTANCE_PX,
+    );
+
+    // Negative control bite: the transitions did not silently unpin. Streaming
+    // now still follows to the bottom; a collapse-induced false unpin would
+    // leave the stream running away outside the follow ceiling.
+    await drive(page, "beginStreamingTurn");
+    for (let batch = 0; batch < 6; batch += 1) {
+      await drive(page, "streamChunk");
+      await settle(page, 60);
+      expect((await metricsAfterFrame(page)).bottomDistance).toBeLessThanOrEqual(
+        PIN_FOLLOW_MAX_DISTANCE_PX,
+      );
+    }
+    await drive(page, "finalizeStreamingTurn");
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+  });
+
+  // Rung 7 (PRO-187, Q6): an UNPINNED reader is not displaced when a displacing
+  // inset appears/disappears below the fold. The row under the top edge and the
+  // absolute scrollTop hold across a composer collapse and a composer growth.
+  // Negative control: if a structural inset change wrote scrollTop while
+  // unpinned (e.g. the pinned-only guard in the dock-inset layout effect were
+  // dropped), the reading row under the top edge would shift.
+  test("displacing-inset transition while unpinned reading: no displacement", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 12);
+    await waitForViewport(page);
+    await settle(page);
+
+    // Read up and unpin.
+    await keyboardScrollUp(page, 3);
+    await settle(page, 500);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+    const savedTopRow = await drive<string | null>(page, "getTopVisibleText");
+    expect(savedTopRow, "a transcript row must be under the top edge").toBeTruthy();
+    const savedTop = (await metrics(page)).scrollTop;
+
+    // Composer collapses then grows below the fold while the reader stays put.
+    await drive(page, "startScrollTrace");
+    await drive(page, "setComposerInset", 40);
+    await settle(page, 300);
+    await drive(page, "setComposerInset", 220);
+    await settle(page, 300);
+    const trace = (await drive<number[]>(page, "stopScrollTrace")).filter((v) =>
+      Number.isFinite(v),
+    );
+
+    // The reading row under the top edge is unchanged, still unpinned, and the
+    // absolute scrollTop held (the change was entirely below the viewport).
+    expect(await drive<string | null>(page, "getTopVisibleText")).toBe(savedTopRow);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+    expect(Math.abs((await metrics(page)).scrollTop - savedTop)).toBeLessThanOrEqual(2);
+    // No engine-driven scroll motion: the trace tail is flat at the saved top.
+    if (trace.length > 0) {
+      expect(new Set(trace.slice(-6)).size).toBe(1);
+    }
+  });
+
+  // Rung 9 (PRO-187, Q18): the scroll-to-latest affordance derives visibility
+  // from the model (unpinned AND overflow) and its new-content variant from
+  // the model's own ResizeObserver-measured growth signal, never a separate
+  // scroll listener or DOM poll. This fixture asserts BOTH stay stable
+  // (visible, then accented) across a run of streaming growth while
+  // unpinned, matching the failure mode named in the ADR (section 5,
+  // "Scroll-to-latest visibility flicker").
+  test("scroll-to-latest: visibility and new-content indicator stay stable during unpinned streaming growth", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 8);
+    await waitForViewport(page);
+    await settle(page);
+    await wheelToBottom(page);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+
+    // Read up away from the bottom: unpins, button becomes visible, no new
+    // content has arrived yet so the accent is absent.
+    await keyboardScrollUp(page, 4);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+    expect(await drive<boolean>(page, "hasNewContentIndicator")).toBe(false);
+
+    await drive(page, "beginStreamingTurn");
+    await settle(page);
+    for (let batch = 0; batch < 15; batch += 1) {
+      await drive(page, "streamChunk");
+      await settle(page, 60);
+      // Visibility never flickers off mid-growth: still unpinned every batch.
+      await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+      // Once content has grown at least once, the accent stays ON for every
+      // remaining batch (no flicker), the failure mode this fixture guards.
+      if (batch > 0) {
+        expect(await drive<boolean>(page, "hasNewContentIndicator")).toBe(true);
+      }
+    }
+    await drive(page, "finalizeStreamingTurn");
+    await settle(page);
+    // Still reading, still unpinned, accent still on after the stream ends.
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+    expect(await drive<boolean>(page, "hasNewContentIndicator")).toBe(true);
+  });
+
+  // Rung 9 (PRO-187, Q18): clicking the affordance must route through the
+  // engine's single writer (FR-1) and land at the true bottom in one motion,
+  // not a visible crawl or a second corrective snap.
+  test("scroll-to-latest: click lands at the true bottom in one motion and re-pins", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 10);
+    await waitForViewport(page);
+    await settle(page);
+    await wheelToBottom(page);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+
+    await keyboardScrollUp(page, 6);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(false);
+    const beforeClick = await metrics(page);
+    expect(beforeClick.bottomDistance).toBeGreaterThan(REPIN_BAND_PX * 4);
+
+    await drive(page, "startScrollTrace");
+    await drive(page, "clickScrollToBottom");
+    await settle(page, 300);
+    const trace = (await drive<number[]>(page, "stopScrollTrace")).filter((v) =>
+      Number.isFinite(v),
+    );
+
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+    expect((await metrics(page)).bottomDistance).toBeLessThanOrEqual(2);
+    expect(await drive<boolean>(page, "hasNewContentIndicator")).toBe(false);
+    // One motion: the trace's scrollTop values are monotonically non-decreasing
+    // toward the bottom (a single cut or a smooth single sweep), never a snap
+    // past the target followed by a corrective bounce back.
+    for (let i = 1; i < trace.length; i += 1) {
+      expect(trace[i]).toBeGreaterThanOrEqual(trace[i - 1] - 1);
+    }
+  });
+
+  // Rung 10 (PRO-187, Q13): the reserved-slot invariant — "no live-turn slot
+  // may change height as a function of item lifecycle, only as a function of
+  // revealed content" — extended across a thought (start/delta/stop), a tool
+  // call, and prose resuming, all inside one streaming turn, while pinned.
+  // Every transition must cost zero displacement: a broken invariant shows up
+  // as either a scrollTop jump (a phantom row briefly occupying its own
+  // height) or a double-scroll (two corrective snaps for one content change).
+  test("Q13 thinking/tool interleave: transient block lifecycle never displaces the pinned reader", async ({
+    page,
+  }) => {
+    await ready(page);
+    await drive(page, "reset");
+    await drive(page, "seedFinalizedConversation", 6);
+    await waitForViewport(page);
+    await settle(page);
+    await wheelToBottom(page);
+    await settle(page);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+
+    await drive(page, "beginStreamingTurn");
+    await settle(page);
+    const baseline = await metricsAfterFrame(page);
+    expect(baseline.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
+
+    // Trace phases separately rather than as one continuous sweep: the
+    // tool-call phase has a legitimate, quantified source of backward
+    // scrollTop motion (new-row estimate convergence, see
+    // TOOL_ROW_ESTIMATE_CONVERGENCE_MAX_PX above) that the thought and prose
+    // phases do not. Bracketing per-phase lets each get the tolerance that
+    // actually matches its physics, instead of one bound loose enough to
+    // hide a lifecycle-height regression in the phases that have no
+    // legitimate reason to bounce at all.
+    // `leadingBouncePx`, when given, applies only to the FIRST inter-frame
+    // step of this trace (index 0 -> 1); every subsequent step still uses
+    // the tight `maxBouncePx`. CI (round 3) showed the tool row's
+    // estimate-to-measured correction is deferred past the tool-call
+    // bracket's own settle: it lands on the first remeasure pass that a
+    // subsequent content mutation triggers, i.e. the opening frame of the
+    // NEXT (prose) phase, not synchronously after `streamToolCall`. That's
+    // still the same already-quantified, already-legitimate convergence —
+    // just late — so it gets the wide budget on that one leading step only;
+    // a lifecycle-height regression anywhere else in the phase still fails
+    // at the tight bound.
+    //
+    // CI (round 4, PR #1980 bimodal followup) showed this convergence's
+    // deferred landing frame is not pinned to trace index 1 under runner
+    // load: on a slow attempt it can land one or more frames later, at a
+    // trace index that only carries the tight `maxBouncePx` budget, and the
+    // assertion trips on a step that is not a displacement at all.
+    //
+    // Round 5 tried asserting on bottomDistance (scrollHeight - clientHeight
+    // - scrollTop) instead of raw scrollTop, on the theory that it's the
+    // quantity the reader actually perceives. That broke on CI (round 6):
+    // the PROSE bracket streams real content every chunk, and ordinary
+    // per-chunk growth has scrollHeight grow one frame before the single
+    // writer's snap follows it (scrollTop flat that frame, catches up next)
+    // — a completely normal, already-bounded (PIN_FOLLOW_MAX_DISTANCE_PX)
+    // artifact of active streaming that has nothing to do with a backward
+    // bounce, since scrollTop itself never decreased. bottomDistance can't
+    // tell that apart from a real bounce, because it rises for BOTH reasons.
+    //
+    // The trace CI actually captured (job 95178602294, webkit): scrollTop
+    // [...,2562,2562,2584,...], scrollHeight [...,2962,2984,2984,...] — the
+    // 2562->2562 step is flat (no backward motion at all), while scrollHeight
+    // grew 22px (a chunk landing); bottomDistance briefly showed that 22px
+    // gap and then the very next frame closed it back to 0 in one cut. That
+    // is the expected steady-state catch-up, not a defect.
+    //
+    // The correct invariant checks scrollTop directly (a real bounce IS
+    // scrollTop dropping) but excuses a drop by however much scrollHeight
+    // shrank in the same step (the legitimate estimate-correction case,
+    // where the single writer follows a smaller bottom target and the
+    // reader sees nothing move). Growth-lag never trips this because
+    // scrollTop doesn't drop when content grows. A phantom reserved-slot
+    // bounce (the rung-10 defect class) still trips it because scrollTop
+    // drops with no matching scrollHeight shrink to explain it.
+    function assertNoBackwardBounce(
+      scrollTopTrace: number[],
+      scrollHeightTrace: number[],
+      maxBouncePx: number,
+      leadingBouncePx = maxBouncePx,
+    ): void {
+      expect(scrollTopTrace.length).toBe(scrollHeightTrace.length);
+      for (let i = 1; i < scrollTopTrace.length; i += 1) {
+        const bound = i === 1 ? leadingBouncePx : maxBouncePx;
+        const scrollTopDrop = scrollTopTrace[i - 1] - scrollTopTrace[i];
+        const scrollHeightShrink = scrollHeightTrace[i - 1] - scrollHeightTrace[i];
+        const unexplainedDrop = scrollTopDrop - Math.max(0, scrollHeightShrink);
+        expect(unexplainedDrop).toBeLessThanOrEqual(bound);
+      }
+    }
+
+    // Both traces are frame-aligned (same rAF ticks); filter NaN frames out
+    // in lockstep so indices stay paired, never independently.
+    async function pairedTraces(page: Page): Promise<{ scrollTop: number[]; scrollHeight: number[] }> {
+      const scrollTop = await drive<number[]>(page, "stopScrollTrace");
+      const scrollHeight = await drive<number[]>(page, "stopScrollHeightTrace");
+      const scrollTopOut: number[] = [];
+      const scrollHeightOut: number[] = [];
+      for (let i = 0; i < scrollTop.length; i += 1) {
+        if (Number.isFinite(scrollTop[i]) && Number.isFinite(scrollHeight[i])) {
+          scrollTopOut.push(scrollTop[i]);
+          scrollHeightOut.push(scrollHeight[i]);
+        }
+      }
+      return { scrollTop: scrollTopOut, scrollHeight: scrollHeightOut };
+    }
+
+    // Thought starts and streams a couple of deltas: private, reserved-slot
+    // only, must not move the pinned reader. No new row mounts here, so the
+    // tight lifecycle-only bound applies.
+    await drive(page, "startScrollTrace");
+    await drive(page, "streamThoughtStart");
+    await settle(page, 80);
+    const afterThoughtStart = await metricsAfterFrame(page);
+    expect(afterThoughtStart.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
+    {
+      const { scrollTop, scrollHeight } = await pairedTraces(page);
+      assertNoBackwardBounce(scrollTop, scrollHeight, INTERLEAVE_MAX_BACKWARD_BOUNCE_PX);
+    }
+
+    // Thought yields to a tool call mid-turn (thinking -> tool -> thinking is
+    // the exact class the ADR's Cell 6 names). A real new row mounts here,
+    // but CI (round 3) showed its estimate-to-measured correction does NOT
+    // land synchronously in this bracket even with a full 350ms settle — the
+    // virtualizer defers the remeasure pass to the next content mutation
+    // (see the prose bracket below), so THIS bracket's own trace is still
+    // governed by the tight lifecycle bound.
+    await drive(page, "startScrollTrace");
+    await drive(page, "streamThoughtStop");
+    await drive(page, "streamToolCall");
+    await settle(page);
+    const afterTool = await metricsAfterFrame(page);
+    expect(afterTool.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
+    {
+      const { scrollTop, scrollHeight } = await pairedTraces(page);
+      assertNoBackwardBounce(scrollTop, scrollHeight, INTERLEAVE_MAX_BACKWARD_BOUNCE_PX);
+    }
+
+    // Prose resumes and grows the turn for real; THIS is content growth (not
+    // lifecycle) on an already-mounted row. CI (rounds 2-3) showed the tool
+    // row's deferred estimate-to-measured correction (~61px, deterministic
+    // on both browsers) usually lands on the FIRST remeasure pass that
+    // streaming prose triggers, so the leading step gets the wider,
+    // quantified convergence bound. Every step (leading or not) still runs
+    // through the shrink-adjusted formula above, so ordinary per-chunk
+    // growth-lag (scrollTop flat, scrollHeight rising) never counts against
+    // either budget, and a real lifecycle regression still fails at the
+    // tight bound wherever it lands.
+    await drive(page, "startScrollTrace");
+    await drive(page, "streamChunks", 5);
+    await settle(page, 200);
+    const afterProse = await metricsAfterFrame(page);
+    expect(afterProse.bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
+    await expect.poll(() => isPinned(page), { timeout: 2000 }).toBe(true);
+    {
+      const { scrollTop, scrollHeight } = await pairedTraces(page);
+      assertNoBackwardBounce(
+        scrollTop,
+        scrollHeight,
+        INTERLEAVE_MAX_BACKWARD_BOUNCE_PX,
+        TOOL_ROW_ESTIMATE_CONVERGENCE_MAX_PX,
+      );
+    }
+
+    await drive(page, "finalizeStreamingTurn");
+    await settle(page);
+    expect((await metrics(page)).bottomDistance).toBeLessThanOrEqual(PIN_FOLLOW_MAX_DISTANCE_PX);
   });
 });

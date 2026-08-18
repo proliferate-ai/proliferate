@@ -2367,7 +2367,7 @@ export interface components {
             workspace: components["schemas"]["AgentOperationsWorkspaceIdentity"];
         };
         /** @enum {string} */
-        AgentOperationsCapability: "whoami" | "list_workspaces" | "list_workspace_options" | "create_workspace" | "list_agents" | "get_agent" | "list_subagents" | "list_agent_launch_options" | "list_agent_config_options" | "get_task_output" | "create_agent" | "configure_agent" | "resume_agent" | "send_message" | "interrupt_agent" | "close_subagent" | "open_subagent" | "promote_subagent";
+        AgentOperationsCapability: "whoami" | "list_workspaces" | "list_workspace_options" | "create_workspace" | "pin_workspace" | "unpin_workspace" | "list_agents" | "get_agent" | "list_subagents" | "list_agent_launch_options" | "list_agent_config_options" | "get_task_output" | "create_agent" | "configure_agent" | "resume_agent" | "send_message" | "interrupt_agent" | "close_subagent" | "open_subagent" | "promote_subagent";
         AgentOperationsConfiguration: {
             agentKind: string;
             modeId?: string | null;
@@ -3693,6 +3693,9 @@ export interface components {
             parentPromptSeq?: number | null;
             parentSessionId: string;
             parentTurnId?: string | null;
+            retiredPromptId?: string | null;
+            /** Format: int64 */
+            retiredPromptSeq?: number | null;
             sessionLinkId: string;
             state: string;
             subagentPublicId?: string | null;
@@ -4770,6 +4773,9 @@ export interface components {
         }) | (components["schemas"]["SessionInfoUpdatePayload"] & {
             /** @enum {string} */
             type: "session_info_update";
+        }) | (components["schemas"]["WorkspacePinIntentPayload"] & {
+            /** @enum {string} */
+            type: "workspace_pin_intent";
         }) | (components["schemas"]["SubagentTurnCompletedPayload"] & {
             /** @enum {string} */
             type: "subagent_turn_completed";
@@ -5540,6 +5546,8 @@ export interface components {
             events?: components["schemas"]["MobilitySessionEventRecord"][];
             liveConfigSnapshot?: null | components["schemas"]["MobilitySessionLiveConfigSnapshotRecord"];
             pendingConfigChanges?: components["schemas"]["MobilityPendingConfigChangeRecord"][];
+            /** Format: int64 */
+            pendingPromptSeqCursor?: number | null;
             pendingPrompts?: components["schemas"]["MobilityPendingPromptRecord"][];
             promptAttachments?: components["schemas"]["MobilityPromptAttachmentRecord"][];
             rawNotifications?: components["schemas"]["MobilitySessionRawNotificationRecord"][];
@@ -5551,6 +5559,13 @@ export interface components {
             reason?: string | null;
             sessionId: string;
             supported: boolean;
+        };
+        WorkspacePinIntentPayload: {
+            pinned: boolean;
+            requestId: string;
+            runtimeId: string;
+            sourceSessionId: string;
+            workspaceId: string;
         };
         /** @enum {string} */
         WorkspacePurgeOutcome: "deleted";

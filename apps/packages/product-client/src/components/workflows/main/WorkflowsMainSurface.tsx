@@ -83,7 +83,9 @@ export function WorkflowsMainSurface({
 
   const handleLaunched = (launch: WorkflowTriggerLaunch) => {
     setRunningId(null);
-    selectWorkspaceFromSurface(launch.workspaceId, "workflows-main-surface");
+    selectWorkspaceFromSurface(launch.workspaceId, "workflows-main-surface", {
+      knownWorkspace: launch.workspace,
+    });
   };
 
   const handleDeleteConfirm = () => {
@@ -165,10 +167,11 @@ export function WorkflowsMainSurface({
         <div className="flex items-center gap-2 border-b border-border px-2.5 py-[7px]">
           <Search className="icon-paired shrink-0 text-muted-foreground/75" />
           <Input
+            variant="unstyled"
             aria-label={WORKFLOW_MAIN_COPY.filterLabel}
             placeholder={WORKFLOW_MAIN_COPY.filterPlaceholder}
             value={filterText}
-            className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-ui shadow-none focus:ring-0"
+            className="h-auto min-w-0 flex-1 px-0 py-0 text-ui"
             onChange={(event) => setFilterText(event.target.value)}
           />
         </div>
@@ -217,7 +220,7 @@ export function WorkflowsMainSurface({
 
       {nothingMatches ? (
         <p className="px-1 text-ui-sm text-muted-foreground" role="status">
-          {WORKFLOW_MAIN_COPY.filterNoMatches}
+          {WORKFLOW_MAIN_COPY.filterNoMatches(filterText.trim())}
         </p>
       ) : null}
 

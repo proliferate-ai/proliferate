@@ -17,7 +17,7 @@ export interface WorkflowStarterTemplateV2 {
 
 const AGENT_ENGINEERING_PROCESS: WorkflowStarterTemplateV2 = {
   slug: "agent-engineering-process",
-  title: "Agent-engineering process",
+  title: "Agentic engineering",
   description:
     "Research, design behind a human gate, implement, review — the full engineering loop condensed into one chain.",
   definition: {
@@ -145,9 +145,9 @@ const AGENT_ENGINEERING_PROCESS: WorkflowStarterTemplateV2 = {
   },
 };
 
-const RESEARCH_AND_REVIEW: WorkflowStarterTemplateV2 = {
-  slug: "research-and-review",
-  title: "Research and review",
+const BUG_INVESTIGATION: WorkflowStarterTemplateV2 = {
+  slug: "bug-investigation",
+  title: "Bug investigation",
   description:
     "One agent researches a question and writes findings; a human reviews them before the run completes.",
   definition: {
@@ -193,7 +193,43 @@ const RESEARCH_AND_REVIEW: WorkflowStarterTemplateV2 = {
   },
 };
 
+const SUPPORT_TRIAGE: WorkflowStarterTemplateV2 = {
+  slug: "support-triage",
+  title: "Support triage",
+  description: "Classify a customer report, investigate the evidence, and review the proposed response.",
+  definition: {
+    schemaVersion: 2,
+    nodes: [
+      { id: "classify", type: "agent", title: "Classify the report", prompt: "Classify @input:report and write the initial assessment to @doc:triage." },
+      { id: "investigate", type: "agent", title: "Investigate", prompt: "Investigate the evidence in @doc:triage and update it with a supported diagnosis." },
+      { id: "review", type: "human_in_loop", title: "Review the response", prompt: "Review @doc:triage before the response is sent." },
+    ],
+    edges: [{ from: "classify", to: "investigate" }, { from: "investigate", to: "review" }],
+    inputs: [{ name: "report", description: "The customer report to triage.", required: true }],
+    docTemplates: [{ slug: "triage", producingNodeId: "investigate", body: "# Support triage\n\n## Classification\n\n## Evidence\n\n## Response\n" }],
+  },
+};
+
+const ON_CALL_RESPONSE: WorkflowStarterTemplateV2 = {
+  slug: "on-call-response",
+  title: "On-call response",
+  description: "Assess an incident, coordinate mitigation, and pause for a human recovery decision.",
+  definition: {
+    schemaVersion: 2,
+    nodes: [
+      { id: "assess", type: "agent", title: "Assess impact", prompt: "Assess @input:incident and record impact and evidence in @doc:incident." },
+      { id: "mitigate", type: "agent", title: "Plan mitigation", prompt: "Use @doc:incident to propose the safest mitigation and rollback." },
+      { id: "decision", type: "human_in_loop", title: "Approve mitigation", prompt: "Review @doc:incident and approve only when the mitigation is safe." },
+    ],
+    edges: [{ from: "assess", to: "mitigate" }, { from: "mitigate", to: "decision" }],
+    inputs: [{ name: "incident", description: "The incident summary or alert.", required: true }],
+    docTemplates: [{ slug: "incident", producingNodeId: "mitigate", body: "# Incident\n\n## Impact\n\n## Evidence\n\n## Mitigation\n\n## Rollback\n" }],
+  },
+};
+
 export const WORKFLOW_STARTER_TEMPLATES_V2: readonly WorkflowStarterTemplateV2[] = [
   AGENT_ENGINEERING_PROCESS,
-  RESEARCH_AND_REVIEW,
+  SUPPORT_TRIAGE,
+  ON_CALL_RESPONSE,
+  BUG_INVESTIGATION,
 ];

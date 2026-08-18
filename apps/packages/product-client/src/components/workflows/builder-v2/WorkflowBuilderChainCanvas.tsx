@@ -1,69 +1,135 @@
-import { useMemo, type ReactNode } from "react";
-import type { WorkflowNodeV2 } from "@proliferate/cloud-sdk";
-
 import {
-  layoutWorkflowChainGraph,
-  WORKFLOW_GRAPH_NODE_HEIGHT,
-  WORKFLOW_GRAPH_NODE_WIDTH,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
+import type { WorkflowEdgeV2, WorkflowNodeV2 } from "@proliferate/cloud-sdk";
+import {
+  layoutWorkflowBuilderGraph,
+  type WorkflowGraphNodePlacement,
 } from "#product/domain/workflows/graph-layout";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
-import { WORKFLOW_NODE_CARD_COPY } from "#product/copy/workflows/workflow-node-card-copy";
 import type { WorkflowBuilderHarnessOption } from "#product/lib/domain/workflows/workflow-builder-authoring";
-import { Button } from "#product/primitives/Button";
-import { CircleAlert } from "#product/primitives/icons/status";
-import { StatusDot } from "#product/primitives/StatusDot";
+import { WorkflowBuilderCanvasNode } from "#product/components/workflows/builder-v2/WorkflowBuilderCanvasNode";
+import { IconButton } from "#product/primitives/IconButton";
+import { X } from "#product/primitives/icons/core";
 import { WorkflowCanvas } from "#product/components/workflows/canvas/WorkflowCanvas";
 
-/**
- * The structural input card's layout key. Not a node id: the draft grammar
- * (`NODE_ID_PATTERN`) can never mint a leading dash, so this cannot collide
- * with a real step.
- */
-const INPUT_KEY = "-input-";
+export const WORKFLOW_INPUT_SENTINEL = "-input-";
 
 export interface WorkflowBuilderChainCanvasProps {
   nodes: readonly WorkflowNodeV2[];
-  /** Catalog vocabulary, for spelling a card's model line in display names. */
+  edges: readonly WorkflowEdgeV2[];
+  inputConnectedTo: string | null;
   harnesses: readonly WorkflowBuilderHarnessOption[];
   selectedNodeId: string | null;
-  /** The structural input card is selected (workflow details in the inspector). */
   inputSelected: boolean;
-  /** Nodes the validator currently has an issue on; marked, not explained — the inspector owns the message. */
   issueNodeIds: ReadonlySet<string>;
-  /** Bottom-left readout (step counts, validity). */
+  /** Cards the author has placed by hand, keyed by node id (or the Input sentinel). */
+  nodePlacements: Readonly<Record<string, WorkflowGraphNodePlacement>>;
   statusSlot?: ReactNode;
   onSelectNode(nodeId: string): void;
   onSelectInput(): void;
+  onConnectNodes(from: string, to: string): void;
+  onConnectInput(to: string): void;
+  onRemoveEdge(from: string, to: string): void;
+  onDisconnectInput(): void;
+  onMoveNode(key: string, placement: WorkflowGraphNodePlacement): void;
+  disabled?: boolean;
   className?: string;
 }
 
-/**
- * The draft chain drawn on the workflows canvas, headed by the structural
- * input card (the trigger payload every run starts from). Presentation of the
- * card order only: the chain IS the order `useWorkflowBuilder` keeps, so the
- * canvas draws the implied edges and offers no edge editing — selecting a
- * card opens it in the inspector, where every edit (including reordering)
- * lives.
- */
+/** The deterministic builder graph, with explicit port-to-port edge authoring. */
 export function WorkflowBuilderChainCanvas({
   nodes,
+  edges,
+  inputConnectedTo,
   harnesses,
   selectedNodeId,
   inputSelected,
   issueNodeIds,
+  nodePlacements,
   statusSlot,
   onSelectNode,
   onSelectInput,
+  onConnectNodes,
+  onConnectInput,
+  onRemoveEdge,
+  onDisconnectInput,
+  onMoveNode,
+  disabled = false,
   className,
 }: WorkflowBuilderChainCanvasProps) {
+  const visualEdges = useMemo(() => [
+    ...(inputConnectedTo ? [{ from: WORKFLOW_INPUT_SENTINEL, to: inputConnectedTo }] : []),
+    ...edges,
+  ], [edges, inputConnectedTo]);
   const layout = useMemo(
-    () => layoutWorkflowChainGraph([INPUT_KEY, ...nodes.map((node) => node.id)]),
-    [nodes],
+    () => layoutWorkflowBuilderGraph(
+      [WORKFLOW_INPUT_SENTINEL, ...nodes.map((node) => node.id)],
+      visualEdges,
+      nodePlacements,
+    ),
+    [nodePlacements, nodes, visualEdges],
   );
-  const nodesById = useMemo(
-    () => new Map(nodes.map((node) => [node.id, node])),
-    [nodes],
-  );
+  const nodesById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
+  const [dragFrom, setDragFrom] = useState<string | null>(null);
+  const pointerEndCleanupRef = useRef<(() => void) | null>(null);
+
+  const clearPointerEndListener = useCallback(() => {
+    pointerEndCleanupRef.current?.();
+    pointerEndCleanupRef.current = null;
+  }, []);
+
+  const cancelConnection = useCallback(() => {
+    clearPointerEndListener();
+    setDragFrom(null);
+  }, [clearPointerEndListener]);
+
+  useEffect(() => clearPointerEndListener, [clearPointerEndListener]);
+
+  const finishConnection = (to: string) => {
+    if (disabled) {
+      cancelConnection();
+      return;
+    }
+    if (dragFrom === WORKFLOW_INPUT_SENTINEL) onConnectInput(to);
+    else if (dragFrom) onConnectNodes(dragFrom, to);
+    cancelConnection();
+  };
+
+  const startConnection = (from: string) => {
+    if (!disabled) {
+      clearPointerEndListener();
+      setDragFrom(from);
+    }
+  };
+
+  const startPointerConnection = (
+    from: string,
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => {
+    if (disabled) return;
+    clearPointerEndListener();
+    const ownerWindow = event.currentTarget.ownerDocument.defaultView;
+    if (ownerWindow) {
+      const pointerId = event.pointerId;
+      const onPointerEnd = (ownerEvent: globalThis.PointerEvent) => {
+        if (ownerEvent.pointerId === pointerId) cancelConnection();
+      };
+      ownerWindow.addEventListener("pointerup", onPointerEnd);
+      ownerWindow.addEventListener("pointercancel", onPointerEnd);
+      pointerEndCleanupRef.current = () => {
+        ownerWindow.removeEventListener("pointerup", onPointerEnd);
+        ownerWindow.removeEventListener("pointercancel", onPointerEnd);
+      };
+    }
+    setDragFrom(from);
+  };
 
   return (
     <WorkflowCanvas
@@ -72,119 +138,53 @@ export function WorkflowBuilderChainCanvas({
       edges={layout.edges}
       ariaLabel={WORKFLOW_BUILDER_COPY.chainCanvasLabel}
       statusSlot={statusSlot}
+      onCancelInteraction={cancelConnection}
       className={className}
     >
+      {layout.edges.map((edge) => (
+        <IconButton
+          key={`remove:${edge.fromKey}->${edge.toKey}`}
+          size="sm"
+          disabled={disabled}
+          // No z-lift: cards are drawn after these and so outrank them. An
+          // edge control the author cannot see must not be the thing their
+          // click lands on.
+          className="absolute opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+          style={{ left: edge.control.x - 12, top: edge.control.y - 12 }}
+          aria-label={`Remove connection from ${edge.fromKey} to ${edge.toKey}`}
+          title="Remove connection"
+          onClick={() => edge.fromKey === WORKFLOW_INPUT_SENTINEL
+            ? onDisconnectInput()
+            : onRemoveEdge(edge.fromKey, edge.toKey)}
+        >
+          <X className="icon-compact" aria-hidden />
+        </IconButton>
+      ))}
       {layout.nodes.map((placed, index) => {
-        const cardStyle = {
-          left: placed.x,
-          top: placed.y,
-          width: WORKFLOW_GRAPH_NODE_WIDTH,
-          height: WORKFLOW_GRAPH_NODE_HEIGHT,
-        };
-        if (placed.key === INPUT_KEY) {
-          return (
-            <Button
-              key={placed.key}
-              type="button"
-              variant="unstyled"
-              size="unstyled"
-              aria-pressed={inputSelected}
-              onClick={onSelectInput}
-              className={cardClassName(inputSelected)}
-              style={cardStyle}
-            >
-              <span className="flex w-full min-w-0 items-center gap-1.5">
-                <StatusDot tone="muted" />
-                <span className="truncate font-mono text-ui-sm uppercase tracking-wide text-muted-foreground">
-                  {WORKFLOW_BUILDER_COPY.inputNodeKindLabel}
-                </span>
-              </span>
-              <span className="w-full truncate text-ui font-medium text-foreground">
-                {WORKFLOW_BUILDER_COPY.inputNodeTitle}
-              </span>
-              <span className="line-clamp-2 w-full text-ui-sm text-muted-foreground">
-                {WORKFLOW_BUILDER_COPY.inputNodeSubtitle}
-              </span>
-            </Button>
-          );
-        }
-
-        const node = nodesById.get(placed.key);
-        if (!node) {
-          return null;
-        }
-        const selected = placed.key === selectedNodeId;
-        const modelLine = nodeModelLine(node, harnesses);
+        const input = placed.key === WORKFLOW_INPUT_SENTINEL;
+        const node = input ? null : nodesById.get(placed.key) ?? null;
+        if (!input && !node) return null;
         return (
-          <Button
+          <WorkflowBuilderCanvasNode
             key={placed.key}
-            type="button"
-            variant="unstyled"
-            size="unstyled"
-            aria-pressed={selected}
-            onClick={() => onSelectNode(placed.key)}
-            className={cardClassName(selected)}
-            style={cardStyle}
-          >
-            <span className="flex w-full min-w-0 items-center gap-1.5">
-              <span className="font-mono text-ui-sm text-muted-foreground">
-                {WORKFLOW_NODE_CARD_COPY.nodeIndexLabel(index - 1)}
-              </span>
-              <StatusDot tone={node.type === "human_in_loop" ? "warning" : "info"} />
-              <span className="truncate font-mono text-ui-sm uppercase tracking-wide text-muted-foreground">
-                {WORKFLOW_NODE_CARD_COPY.kindLine(node.type, "defined")}
-              </span>
-              {issueNodeIds.has(node.id) ? (
-                <CircleAlert
-                  className="icon-compact ml-auto shrink-0 text-destructive"
-                  aria-label={WORKFLOW_BUILDER_COPY.canvasIssueMarkLabel}
-                />
-              ) : null}
-            </span>
-            <span className="w-full truncate text-ui font-medium text-foreground">
-              {node.title.trim() || WORKFLOW_BUILDER_COPY.canvasUntitledStep}
-            </span>
-            {modelLine ? (
-              <span className="w-full truncate font-mono text-ui-sm text-muted-foreground">
-                {modelLine}
-              </span>
-            ) : node.prompt.trim().length > 0 ? (
-              <span className="line-clamp-2 w-full text-ui-sm text-muted-foreground">
-                {node.prompt}
-              </span>
-            ) : null}
-          </Button>
+            placed={placed}
+            node={node}
+            chainIndex={input ? null : index - 1}
+            harnesses={harnesses}
+            selected={input ? inputSelected : placed.key === selectedNodeId}
+            hasIssue={issueNodeIds.has(placed.key)}
+            connecting={dragFrom !== null}
+            connectingFrom={dragFrom === placed.key}
+            disabled={disabled}
+            onSelect={input ? onSelectInput : () => onSelectNode(placed.key)}
+            onFinishConnection={() => finishConnection(placed.key)}
+            onStartConnection={() => startConnection(placed.key)}
+            onStartPointerConnection={(event) => startPointerConnection(placed.key, event)}
+            onCancelConnection={cancelConnection}
+            onMove={(placement) => onMoveNode(placed.key, placement)}
+          />
         );
       })}
     </WorkflowCanvas>
   );
-}
-
-function cardClassName(selected: boolean): string {
-  return [
-    "absolute flex flex-col items-start justify-start gap-1 overflow-hidden rounded-lg border bg-surface-elevated p-2.5 text-left shadow-subtle transition-colors",
-    selected ? "border-info ring-2 ring-info/30" : "border-border hover:border-border-heavy",
-  ].join(" ");
-}
-
-/**
- * "Claude · Sonnet" — the card's model line in catalog display names, or the
- * raw ids while the catalog has no word for them. `null` when the node rides
- * the run's default, so the prompt preview takes the line instead.
- */
-function nodeModelLine(
-  node: WorkflowNodeV2,
-  harnesses: readonly WorkflowBuilderHarnessOption[],
-): string | null {
-  if (!node.model) {
-    return null;
-  }
-  const harness = harnesses.find((option) => option.agentKind === node.model?.agentKind);
-  const harnessLabel = harness?.label ?? node.model.agentKind;
-  if (!node.model.modelId) {
-    return harnessLabel;
-  }
-  const modelLabel = harness?.models.find((model) => model.id === node.model?.modelId)?.label
-    ?? node.model.modelId;
-  return `${harnessLabel} · ${modelLabel}`;
 }

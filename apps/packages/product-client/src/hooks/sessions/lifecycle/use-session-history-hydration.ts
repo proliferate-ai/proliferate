@@ -30,6 +30,7 @@ import {
   resolveHistoryApplyOperationKind,
   SESSION_APPLY_MEASUREMENT_SURFACES,
   SESSION_HISTORY_APPLY_MAX_DURATION_MS,
+  type SessionHistoryHydrationOptions,
 } from "#product/hooks/sessions/lifecycle/session-history-hydration-helpers";
 import { useSessionHistorySubagentAuthority } from "#product/hooks/sessions/lifecycle/use-session-history-subagent-authority";
 import { dedupeSessionOpenHydration } from "#product/hooks/sessions/lifecycle/session-history-hydration-dedupe";
@@ -46,18 +47,7 @@ import {
   buildSessionOpenShellCommittedParams,
   markSessionOpenFlowAbandoned,
 } from "#product/hooks/sessions/lifecycle/session-open-flow-marks";
-
-export interface SessionHistoryHydrationOptions {
-  afterSeq?: number;
-  beforeSeq?: number;
-  limit?: number;
-  turnLimit?: number;
-  replace?: boolean;
-  requestHeaders?: HeadersInit;
-  measurementOperationId?: MeasurementOperationId | null;
-  timeoutMs?: number;
-  isCurrent?: () => boolean;
-}
+import { dispatchWorkspacePinIntentEnvelopes } from "#product/hooks/sessions/lifecycle/workspace-pin-intent-dispatch";
 
 /**
  * Owns fetching, replaying, and applying historical session events.
@@ -173,6 +163,7 @@ export function useSessionHistoryHydration() {
         });
 
         if (!nextState.applied) {
+          dispatchWorkspacePinIntentEnvelopes(events, "history");
           const mountStartedAt = performance.now();
           if (!await reconcileHydratedSubagents({
             sessionId,
@@ -206,6 +197,7 @@ export function useSessionHistoryHydration() {
           transcript: nextState.state.transcript,
           reconcileEnvelopes: events,
         });
+        dispatchWorkspacePinIntentEnvelopes(events, "history");
         recordHistoryApplyStepMetrics(historyApplyOperationIds, {
           phase: "store",
           startedAt: storeStartedAt,
@@ -264,6 +256,7 @@ export function useSessionHistoryHydration() {
           transcript: nextState.transcript,
           reconcileEnvelopes: events,
         });
+        dispatchWorkspacePinIntentEnvelopes(events, "history");
         recordHistoryApplyStepMetrics(historyApplyOperationIds, {
           phase: "store",
           startedAt: storeStartedAt,
@@ -320,6 +313,7 @@ export function useSessionHistoryHydration() {
         transcript: nextState.transcript,
         reconcileEnvelopes: replacementEvents,
       });
+      dispatchWorkspacePinIntentEnvelopes(replacementEvents, "history");
       recordHistoryApplyStepMetrics(historyApplyOperationIds, {
         phase: "store",
         startedAt: storeStartedAt,

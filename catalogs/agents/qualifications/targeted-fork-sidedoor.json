@@ -1,0 +1,8 @@
+[
+  {
+    "agentKind": "opencode",
+    "nativeVersion": "1.18.3",
+    "qualified": false,
+    "evidence": "Vendor tag v1.18.3 (commit 127bdb30784d508cc556c71a0f32b508a3061517) fork-hazard + side-door bridge wired 2026-08-17; qualified flips to true only when the live side-door qualification probe (two-boundary fork + off-host negative control) has passed for this exact vendor version."
+  }
+]

@@ -7,12 +7,12 @@ import type {
   WorkflowNodeV2,
 } from "@proliferate/cloud-sdk";
 import type { WorkflowStarterTemplateV2 } from "#product/config/workflows/starter-templates";
-import { orderedNodes } from "#product/domain/workflows/definition-v2";
+import { definitionHeadId, validateDefinitionV2 } from "#product/domain/workflows/definition-v2";
 import { normalizeDocSlugInput } from "#product/lib/domain/workflows/workflow-builder-validation";
 
 /**
  * The gen-2 builder's draft shape and every pure operation on it: seeding,
- * reordering, edge derivation, and the dirty-comparison projection.
+ * display ordering, authored edges, and the dirty-comparison projection.
  *
  * Split out of `use-workflow-builder.ts` so the hook holds only React state,
  * the load/seed effect and the save mapping. Nothing here touches React or the
@@ -20,9 +20,9 @@ import { normalizeDocSlugInput } from "#product/lib/domain/workflows/workflow-bu
  */
 
 /**
- * The editable half of a definition. Edges are absent on purpose: the chain is
- * the card order, so an edge list in the draft would be a second source of
- * truth for the same fact. `linearEdges` derives it at read time.
+ * The editable half of a definition. The persisted graph and the structural
+ * Input sentinel are separate on purpose: `edges` contains only real-node
+ * edges, while `inputConnectedTo` is editor state and is never serialized.
  */
 export interface WorkflowBuilderDraft {
   title: string;
@@ -34,6 +34,8 @@ export interface WorkflowBuilderDraft {
    */
   defaultRepoConfigId: string;
   nodes: WorkflowNodeV2[];
+  edges: WorkflowEdgeV2[];
+  inputConnectedTo: string | null;
   inputs: WorkflowInputV2[];
   docTemplates: WorkflowDocTemplateV2[];
 }
@@ -47,39 +49,32 @@ export interface WorkflowBuilderActions {
   updateNode: (nodeId: string, patch: Partial<Omit<WorkflowNodeV2, "id">>) => void;
   moveNodeUp: (nodeId: string) => void;
   moveNodeDown: (nodeId: string) => void;
+  connectNodes: (from: string, to: string) => void;
+  removeEdge: (from: string, to: string) => void;
+  connectInput: (to: string) => void;
+  disconnectInput: () => void;
   addInput: () => void;
   removeInput: (index: number) => void;
   updateInput: (index: number, patch: Partial<WorkflowInputV2>) => void;
   addDocTemplate: () => void;
   removeDocTemplate: (index: number) => void;
   updateDocTemplate: (index: number, patch: Partial<WorkflowDocTemplateV2>) => void;
+  replaceDefinition: (definition: WorkflowDefinitionV2) => void;
 }
 
 /** Applies one draft-to-draft edit; the hook supplies the state writer. */
+export type WorkflowBuilderEditOptions = { coalesceKey?: string };
 export type WorkflowBuilderDraftEditor = (
   edit: (draft: WorkflowBuilderDraft) => WorkflowBuilderDraft,
+  options?: WorkflowBuilderEditOptions,
 ) => void;
 
-/**
- * Chain edges from card order — the builder's whole graph model. There is no
- * canvas and no edge editing, so "which node runs next" is always "the card
- * below", and `validateDefinitionV2`'s linearity rule is satisfied by
- * construction rather than by a check the UI has to re-implement.
- */
-export function linearEdges(nodes: readonly WorkflowNodeV2[]): WorkflowEdgeV2[] {
-  const edges: WorkflowEdgeV2[] = [];
-  for (let index = 1; index < nodes.length; index += 1) {
-    edges.push({ from: nodes[index - 1].id, to: nodes[index].id });
-  }
-  return edges;
-}
-
-/** The definition a save would send: the draft, with the chain rendered as edges. */
+/** The definition a save would send. The structural Input sentinel is omitted. */
 export function draftToDefinition(draft: WorkflowBuilderDraft): WorkflowDefinitionV2 {
   return {
     schemaVersion: 2,
     nodes: draft.nodes,
-    edges: linearEdges(draft.nodes),
+    edges: draft.edges,
     inputs: draft.inputs,
     docTemplates: draft.docTemplates,
   };
@@ -106,6 +101,8 @@ export function blankWorkflowBuilderDraft(): WorkflowBuilderDraft {
     description: "",
     defaultRepoConfigId: "",
     nodes: [{ id: "step-1", type: "agent", title: "", prompt: "" }],
+    edges: [],
+    inputConnectedTo: "step-1",
     inputs: [],
     docTemplates: [],
   };
@@ -158,6 +155,8 @@ export function serializeDraft(draft: WorkflowBuilderDraft): string {
       node.model?.modelId ?? null,
       node.model?.modeId ?? null,
     ]),
+    edges: draft.edges.map((edge) => [edge.from, edge.to]),
+    inputConnectedTo: draft.inputConnectedTo,
     inputs: draft.inputs.map((input) => [input.name, input.description, input.required]),
     docTemplates: draft.docTemplates.map((doc) => [doc.slug, doc.producingNodeId, doc.body]),
   });
@@ -168,8 +167,11 @@ export function workflowBuilderActions(
   editDraft: WorkflowBuilderDraftEditor,
 ): WorkflowBuilderActions {
   return {
-    setTitle: (title) => editDraft((draft) => ({ ...draft, title })),
-    setDescription: (description) => editDraft((draft) => ({ ...draft, description })),
+    setTitle: (title) => editDraft((draft) => ({ ...draft, title }), { coalesceKey: "title" }),
+    setDescription: (description) => editDraft(
+      (draft) => ({ ...draft, description }),
+      { coalesceKey: "description" },
+    ),
     setDefaultRepoConfigId: (defaultRepoConfigId) =>
       editDraft((draft) => ({ ...draft, defaultRepoConfigId })),
     addNode: (type = "agent") => editDraft((draft) => ({
@@ -187,11 +189,15 @@ export function workflowBuilderActions(
     removeNode: (nodeId) => editDraft((draft) => ({
       ...draft,
       nodes: draft.nodes.filter((node) => node.id !== nodeId),
+      edges: draft.edges.filter((edge) => edge.from !== nodeId && edge.to !== nodeId),
+      inputConnectedTo: draft.inputConnectedTo === nodeId ? null : draft.inputConnectedTo,
     })),
     updateNode: (nodeId, patch) => editDraft((draft) => ({
       ...draft,
       nodes: draft.nodes.map((node) => node.id === nodeId ? { ...node, ...patch } : node),
-    })),
+    }), typeof patch.title === "string" || typeof patch.prompt === "string"
+      ? { coalesceKey: `node:${nodeId}:${typeof patch.prompt === "string" ? "prompt" : "title"}` }
+      : undefined),
     moveNodeUp: (nodeId) => editDraft((draft) => ({
       ...draft,
       nodes: moveNode(draft.nodes, nodeId, -1),
@@ -200,6 +206,22 @@ export function workflowBuilderActions(
       ...draft,
       nodes: moveNode(draft.nodes, nodeId, 1),
     })),
+    connectNodes: (from, to) => editDraft((draft) => {
+      if (from === to || !draft.nodes.some((node) => node.id === from)
+        || !draft.nodes.some((node) => node.id === to)
+        || draft.edges.some((edge) => edge.from === from && edge.to === to)) {
+        return draft;
+      }
+      return { ...draft, edges: [...draft.edges, { from, to }] };
+    }),
+    removeEdge: (from, to) => editDraft((draft) => ({
+      ...draft,
+      edges: draft.edges.filter((edge) => edge.from !== from || edge.to !== to),
+    })),
+    connectInput: (to) => editDraft((draft) => draft.nodes.some((node) => node.id === to)
+      ? { ...draft, inputConnectedTo: to }
+      : draft),
+    disconnectInput: () => editDraft((draft) => ({ ...draft, inputConnectedTo: null })),
     addInput: () => editDraft((draft) => ({
       ...draft,
       inputs: [...draft.inputs, { name: "", description: "", required: true }],
@@ -213,7 +235,9 @@ export function workflowBuilderActions(
       inputs: draft.inputs.map((input, candidate) =>
         candidate === index ? { ...input, ...patch } : input
       ),
-    })),
+    }), typeof patch.name === "string" || typeof patch.description === "string"
+      ? { coalesceKey: `input:${index}:${typeof patch.name === "string" ? "name" : "description"}` }
+      : undefined),
     addDocTemplate: () => editDraft((draft) => ({
       ...draft,
       docTemplates: [...draft.docTemplates, {
@@ -231,7 +255,13 @@ export function workflowBuilderActions(
       docTemplates: draft.docTemplates.map((doc, candidate) =>
         candidate === index ? { ...doc, ...normalizeDocTemplatePatch(patch) } : doc
       ),
-    })),
+    }), typeof patch.slug === "string" || typeof patch.body === "string"
+      ? { coalesceKey: `doc:${index}:${typeof patch.body === "string" ? "body" : "slug"}` }
+      : undefined),
+    replaceDefinition: (definition) => editDraft((draft) => ({
+      ...draft,
+      ...draftPartsFromDefinition(definition),
+    }), { coalesceKey: "json-definition" }),
   };
 }
 
@@ -264,25 +294,27 @@ function moveNode(
 }
 
 /**
- * Cards are seeded in CHAIN order, not array order: a stored definition may
- * list its nodes in any order and express the chain purely in its edges (see
- * `orderedNodes`), and the builder's whole model is that the card order *is*
- * the chain. `orderedNodes` answers `[]` for any definition that does not
- * validate, in which case array order is kept so the invalid document can be
- * opened and repaired rather than emptied.
+ * Preserve authored node and edge ordering exactly. For a valid definition,
+ * synthesize the editor-only Input connection to its unique head. Invalid
+ * stored graphs get no guessed Input connection and remain repairable.
  */
 function draftPartsFromDefinition(definition: WorkflowDefinitionV2): {
   nodes: WorkflowNodeV2[];
+  edges: WorkflowEdgeV2[];
+  inputConnectedTo: string | null;
   inputs: WorkflowInputV2[];
   docTemplates: WorkflowDocTemplateV2[];
 } {
-  const chain = orderedNodes(definition);
-  const nodes = chain.length > 0 ? chain : definition.nodes;
+  const nodes = definition.nodes;
   return {
     nodes: nodes.map((node) => ({
       ...node,
       ...(node.model ? { model: { ...node.model } } : {}),
     })),
+    edges: definition.edges.map((edge) => ({ ...edge })),
+    inputConnectedTo: validateDefinitionV2(definition).length === 0
+      ? definitionHeadId(definition)
+      : null,
     inputs: (definition.inputs ?? []).map((input) => ({ ...input })),
     docTemplates: (definition.docTemplates ?? []).map((doc) => ({ ...doc })),
   };

@@ -21,6 +21,7 @@ export function TranscriptToolCallGroupBlock({
   workspaceId,
   onOpenArtifact,
   onOpenSubagent,
+  onOpenBackgroundTerminal,
   renderChild,
 }: {
   item: ToolCallItem;
@@ -30,6 +31,7 @@ export function TranscriptToolCallGroupBlock({
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onOpenSubagent?: (subagentId: string) => void;
+  onOpenBackgroundTerminal?: (processId: string) => void;
   renderChild: (childId: string) => ReactNode;
 }) {
   if (isSubagentItem(item)) {
@@ -40,7 +42,9 @@ export function TranscriptToolCallGroupBlock({
         transcript={transcript}
         childrenByParentId={childrenByParentId}
         renderChild={renderChild}
+        workspaceId={workspaceId}
         onOpenSubagent={onOpenSubagent}
+        onOpenBackgroundTerminal={onOpenBackgroundTerminal}
       />
     );
   }
@@ -72,6 +76,7 @@ export function TranscriptToolCallGroupBlock({
               item={item}
               workspaceId={workspaceId}
               onOpenArtifact={onOpenArtifact}
+              onOpenBackgroundTerminal={onOpenBackgroundTerminal}
             />
           )}
           <div className="ml-1 space-y-1">

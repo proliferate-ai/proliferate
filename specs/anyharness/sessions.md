@@ -250,7 +250,7 @@ It owns only the remaining session-domain mechanics:
 Workspace Agent Operations owns agent discovery, creation, configuration,
 messaging, interruption, Close, Open, Promote, and request-time relationship
 authorization. Its MCP implementation lives under
-`domains/agent_operations/mcp/**`; the exact 18-tool contract lives in
+`domains/agent_operations/mcp/**`; the exact 20-tool contract lives in
 [Workspace Product MCP](../codebase/platforms/product/agent-features/definitions/workspace.md).
 
 Workspace attaches to Standard sessions unless their binding policy is
@@ -274,12 +274,43 @@ enqueue time, in the same transaction that would have inserted the wake:
   unconsumed. Its queue row is rewritten in place (same seq and queue
   position) to carry the newest delivery's canonical prompt, and the older
   delivery is retired, so the parent drains at most one wake per child and
-  always sees the newest completion output.
+  always sees the newest terminal result. Durable child event sequence, rather
+  than worker claim order, decides which result is newest: if restart or retry
+  processes an older completed delivery after a newer completed, failed, or
+  cancelled result, that stale completed delivery retires without adding a
+  second wake. The newer failed or cancelled result itself always keeps its
+  actionable wake.
 - `redundant_child_message` — the child's own `agent_session` message for the
   completed terminal turn already reached the parent (still queued since the
-  child turn started, or already executed as a parent transcript item), so the
-  message is the wake and a second turn would be redundant. This never applies
-  to failed or cancelled turns; those always materialize a wake turn.
+  child turn started, or correlated after execution through its durable queue
+  identity and original `queued_at`), so the message is the wake and a second
+  turn would be redundant. The same transaction also retires an older queued
+  completed wake that the message supersedes. The same transaction retains a
+  durable removal intent with that exact queue identity. The worker persists
+  exactly one `pending_prompt_removed` through a durable event key,
+  acknowledges the intent only after strict event persistence, and retries
+  leased unacknowledged intents after failure, restart, or mobility handoff.
+  That key is reserved for canonical completion-wake prompt ids; ordinary
+  prompt deletions remain unkeyed so reused identities in legacy histories stay
+  importable.
+  Failed attempts are deferred so a poisoned parent cannot starve later
+  removals. This makes live and replayed queue projections converge. This never
+  applies to failed or cancelled turns; those always materialize a wake turn.
+
+Every automatic durable-queue drain first ensures that the row's
+`pending_prompt_added` event is persisted. Detached activation and startup
+replay therefore preserve the original queue identity and `queued_at` before
+the row can become an executed transcript item, including across a crash
+between queue commit and activation. The visibility check matches sequence,
+immutable `queued_at`, and the current prompt projection (`prompt_id`, text,
+content parts, and prompt provenance), so neither a legacy reused numeric
+sequence nor an earlier projection of an in-place completion-wake rewrite can
+impersonate the current row. A rewritten row receives a replacement
+`pending_prompt_added` before execution. If a staged row is removed before this
+check, the drain discards its staged payload and re-peeks the durable queue.
+Database migration backfill raises existing cursors from pending rows, scalar
+and reordered queue events, completion projections, and delivery-held prompt
+identities or review-feedback receipts before new prompts are allocated.
 
 Neither applies to a delivery that ever reached the parent queue
 (recreate/retry reconciliation keeps its legacy exactly-once path). A retired
@@ -325,7 +356,12 @@ Fork invariants:
 - raw ACP notifications are not copied into fork children
 - generic ACP fork support (`action_capabilities.fork`) means tip fork only;
   targeted fork requires the separate `action_capabilities.targeted_fork`
-  capability, absent on every adapter until the per-harness bridges land
+  capability. The OpenCode side-door bridge derives `targeted_fork` from the
+  runtime-owned qualification registry (an exact vendor version pin) AND a
+  loopback-only, fail-closed side-door readiness check; it stays off unless the
+  registry qualifies the resolved vendor version and the side-door proves
+  loopback-authenticated and off-host-unreachable. Every other adapter remains
+  absent until its own per-harness bridge lands
 
 ### Fork boundary and the durable operation record
 

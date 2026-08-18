@@ -332,6 +332,9 @@ impl SessionActor {
                             Some(SessionCommand::Fork { respond_to }) => {
                                 let _ = respond_to.send(Err(ForkSessionCommandError::Busy));
                             }
+                            Some(SessionCommand::SidedoorTargetedFork { respond_to, .. }) => {
+                                let _ = respond_to.send(Err(crate::live::sessions::SidedoorForkCommandError::Busy));
+                            }
                             Some(SessionCommand::CloseNativeSession { respond_to, .. }) => {
                                 reject_busy_close_native_child_session(respond_to);
                             }

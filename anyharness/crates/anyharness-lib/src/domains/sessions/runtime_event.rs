@@ -1,6 +1,6 @@
 use anyharness_contract::v1::{
-    ReviewRunUpdatedPayload, SessionEvent, SessionEventEnvelope, SessionInfoUpdatePayload,
-    SessionLinkTurnCompletedPayload, SubagentTurnCompletedPayload, SubagentTurnOutcome,
+    ReviewRunUpdatedPayload, SessionEventEnvelope, SessionLinkTurnCompletedPayload,
+    SubagentTurnCompletedPayload, SubagentTurnOutcome,
 };
 
 use crate::domains::sessions::extensions::SessionTurnOutcome;
@@ -35,12 +35,27 @@ pub(crate) enum RuntimeInjectedSessionEvent {
         title: Option<String>,
         updated_at: Option<String>,
     },
+    WorkspacePinIntent {
+        request_id: String,
+        runtime_id: String,
+        source_session_id: String,
+        workspace_id: String,
+        pinned: bool,
+    },
+    PendingPromptRemoved {
+        seq: i64,
+        prompt_id: Option<String>,
+    },
     SubagentTurnCompleted(SubagentTurnCompletedPayload),
     SessionLinkTurnCompleted(SessionLinkTurnCompletedPayload),
     ReviewRunUpdated(ReviewRunUpdatedPayload),
 }
 
 impl RuntimeInjectedSessionEvent {
+    pub(crate) fn pending_prompt_removed(seq: i64, prompt_id: Option<String>) -> Self {
+        Self::PendingPromptRemoved { seq, prompt_id }
+    }
+
     pub(crate) fn subagent_turn_completed(completion: SubagentTurnCompletion) -> Self {
         Self::SubagentTurnCompleted(SubagentTurnCompletedPayload {
             completion_id: completion.completion_id,
@@ -65,19 +80,6 @@ impl RuntimeInjectedSessionEvent {
                 | Self::SessionLinkTurnCompleted(_)
                 | Self::ReviewRunUpdated(_)
         )
-    }
-
-    pub(crate) fn into_session_event(self) -> SessionEvent {
-        match self {
-            Self::SessionInfoUpdate { title, updated_at } => {
-                SessionEvent::SessionInfoUpdate(SessionInfoUpdatePayload { title, updated_at })
-            }
-            Self::SubagentTurnCompleted(payload) => SessionEvent::SubagentTurnCompleted(payload),
-            Self::SessionLinkTurnCompleted(payload) => {
-                SessionEvent::SessionLinkTurnCompleted(payload)
-            }
-            Self::ReviewRunUpdated(payload) => SessionEvent::ReviewRunUpdated(payload),
-        }
     }
 }
 

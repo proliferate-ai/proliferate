@@ -32,6 +32,11 @@ export function WorkflowMainNewMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[240px]">
+        {/*
+          * No shortcut badge beside this item: ⌘N is already bound app-wide to
+          * `workspace.new-default` (open new chat), so a badge here would name
+          * a keystroke that does something else.
+          */}
         <DropdownMenuItem onSelect={() => onNew(null)}>
           {WORKFLOW_MAIN_COPY.newBlankLabel}
         </DropdownMenuItem>

@@ -19,8 +19,8 @@ use crate::{
 };
 
 mod archive;
-pub(super) use archive::archive_estimated_size_bytes;
 use archive::validate_completion_deliveries;
+pub(super) use archive::{archive_estimated_size_bytes, session_pending_prompt_cursor_lower_bound};
 mod export;
 
 #[derive(Debug, thiserror::Error)]
@@ -452,6 +452,14 @@ pub(super) fn validate_delegated_archive_graph(
         .iter()
         .map(|bundle| bundle.session.id.as_str())
         .collect::<HashSet<_>>();
+    if session_ids.len() != archive.sessions.len() {
+        return Err(MobilityError::Invalid(
+            "archive contains duplicate session ids".to_string(),
+        ));
+    }
+    for bundle in &archive.sessions {
+        session_pending_prompt_cursor_lower_bound(archive, bundle)?;
+    }
     let mut link_relations = std::collections::HashMap::new();
 
     for link in &archive.session_links {

@@ -19,7 +19,6 @@ import { useRepoPreferencesLifecycle } from "#product/hooks/preferences/lifecycl
 import { useUserPreferencesLifecycle } from "#product/hooks/preferences/lifecycle/use-user-preferences-lifecycle"
 import { useWorkspaceUiLifecycle } from "#product/hooks/preferences/lifecycle/use-workspace-ui-lifecycle"
 import { useProductStoragePersistenceLifecycle } from "#product/hooks/persistence/lifecycle/use-product-storage-persistence-lifecycle"
-import { useSessionIntentDispatcher } from "#product/hooks/sessions/lifecycle/use-session-intent-dispatcher"
 import { useSessionSelectionLifecycle } from "#product/hooks/sessions/lifecycle/use-session-selection-lifecycle"
 import { useShortcutDispatcher } from "#product/hooks/shortcuts/lifecycle/use-shortcut-dispatcher"
 import { useCrashRecoverySupportAction } from "#product/hooks/support/workflows/use-crash-recovery-support-action"
@@ -75,15 +74,32 @@ const AuthenticatedLaunchLifecycles = lazy(() =>
   })),
 )
 
-// Local automation execution both no-ops signed-out, so the owner is
-// authenticated-only + lazy for the same reason: the login shell never
-// fetches or parses the local-automation module (login runtime JS budget).
+// Session dispatch, runtime-to-client reconciliation, and local automation
+// all require an authenticated product session, so their owners are
+// authenticated-only + lazy: the login shell never fetches or parses those
+// runtime graphs (login runtime JS budget).
 // Deferred home-launch resumption is owned by AuthenticatedLaunchLifecycles
 // above (it shares that component's launch-registry lifetime), so it is not
 // duplicated here.
 const AuthenticatedBackgroundLifecycles = lazy(() =>
   import("#product/providers/AuthenticatedBackgroundLifecycles").then((m) => ({
     default: m.AuthenticatedBackgroundLifecycles,
+  })),
+)
+
+// The workspace-switch shortcuts (Cmd+1..9, Cmd+Opt+Arrow) were the only
+// unconditional (pre-auth) callers of useSidebarShortcutTargets and the
+// held-key traversal cursor controller/store. Same treatment as the owners
+// above: authenticated-only + lazy, so the login first-load chunk never
+// parses the sidebar-shortcut-target projection or the cursor machinery
+// (login runtime JS budget). The shortcuts were already no-ops signed out (no
+// workspace to select). This does NOT gate useWorkspaceNavigationWorkflow's
+// workspace-selection / agent-catalog / session-creation graph, which remains
+// reachable from /login via useAppNavigationCommandActions and
+// useAppNewWorkspaceCommandActions (see use-app-shortcuts.ts).
+const AuthenticatedWorkspaceSwitchShortcuts = lazy(() =>
+  import("#product/providers/AuthenticatedWorkspaceSwitchShortcuts").then((m) => ({
+    default: m.AuthenticatedWorkspaceSwitchShortcuts,
   })),
 )
 
@@ -209,9 +225,6 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
   recordBootDiagnosticOnce("app_runtime.render.before.use_workspace_git_status_persistence")
   useWorkspaceGitStatusPersistence()
   recordBootDiagnosticOnce("app_runtime.render.after.use_workspace_git_status_persistence")
-  recordBootDiagnosticOnce("app_runtime.render.before.use_session_intent_dispatcher")
-  useSessionIntentDispatcher()
-  recordBootDiagnosticOnce("app_runtime.render.after.use_session_intent_dispatcher")
   recordBootDiagnosticOnce("app_runtime.render.before.use_session_selection_lifecycle")
   useSessionSelectionLifecycle()
   recordBootDiagnosticOnce("app_runtime.render.after.use_session_selection_lifecycle")
@@ -274,6 +287,11 @@ function ProductLifecycles({ children }: { children: ReactNode }) {
       {authStatus === "authenticated" && (
         <Suspense fallback={null}>
           <AuthenticatedBackgroundLifecycles />
+        </Suspense>
+      )}
+      {authStatus === "authenticated" && (
+        <Suspense fallback={null}>
+          <AuthenticatedWorkspaceSwitchShortcuts />
         </Suspense>
       )}
       {children}

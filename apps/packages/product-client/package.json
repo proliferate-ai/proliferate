@@ -55,6 +55,9 @@
     "typecheck": "node scripts/copy-product-client-assets.mjs && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk build && tsc -p tsconfig.domain.json && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "build:scroll-physics-fixture": "vite build --config qualification/scroll-physics/vite.config.ts",
+    "build:workflow-canvas-fixture": "vite build --config qualification/workflow-canvas/vite.config.ts",
+    "typecheck:workflow-canvas": "tsc --noEmit -p qualification/workflow-canvas/tsconfig.json",
+    "test:workflow-canvas": "pnpm run build:workflow-canvas-fixture && playwright test --config qualification/workflow-canvas/playwright.config.ts",
     "typecheck:scroll-physics": "tsc --noEmit -p qualification/scroll-physics/tsconfig.json",
     "test:scroll-physics": "pnpm run build:scroll-physics-fixture && playwright test --config qualification/scroll-physics/playwright.config.ts"
   },

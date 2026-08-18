@@ -29,7 +29,7 @@ def test_agent_catalog_endpoint_returns_typed_catalog_with_etag() -> None:
     assert payload["agents"]
     sessions_by_kind = {agent["kind"]: agent["session"] for agent in payload["agents"]}
     assert sessions_by_kind["claude"]["unattendedModeId"] == "bypassPermissions"
-    assert sessions_by_kind["codex"]["unattendedModeId"] == "full-access"
+    assert sessions_by_kind["codex"]["unattendedModeId"] == "agent-full-access"
     assert sessions_by_kind["cursor"]["unattendedModeId"] is None
 
     not_modified = client.get(

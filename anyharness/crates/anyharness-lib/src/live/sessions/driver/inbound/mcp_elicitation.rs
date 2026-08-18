@@ -4,7 +4,7 @@ use anyharness_contract::v1::{
     PendingInteractionPayloadSummary, PendingInteractionSource, PendingInteractionSummary,
 };
 
-use super::{raw_ext_response, terminal_mutation_rejected, InboundDoor};
+use super::{raw_ext_response, InboundDoor};
 use crate::live::sessions::rendezvous::mcp_elicitation::{
     claude_ext_response_from_outcome, normalize_claude_mcp_elicitation,
     normalize_standard_mcp_elicitation, standard_elicitation_response_from_outcome,
@@ -35,10 +35,7 @@ impl InboundDoor {
         };
 
         let pending_wait = {
-            let mut sink = self.event_sink.lock().await;
-            if !sink.event_mutations_admitted() {
-                return Err(terminal_mutation_rejected());
-            }
+            let mut sink = self.lock_for_inbound_mutation().await?;
             let pending_wait = self
                 .interaction_broker
                 .register_mcp_elicitation(&self.session_id, &request_id, normalized.pending)
@@ -102,10 +99,7 @@ impl InboundDoor {
         };
 
         let pending_wait = {
-            let mut sink = self.event_sink.lock().await;
-            if !sink.event_mutations_admitted() {
-                return Err(terminal_mutation_rejected());
-            }
+            let mut sink = self.lock_for_inbound_mutation().await?;
             let pending_wait = self
                 .interaction_broker
                 .register_mcp_elicitation(&self.session_id, &request_id, normalized.pending)

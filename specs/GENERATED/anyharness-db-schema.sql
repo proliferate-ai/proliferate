@@ -215,6 +215,16 @@ CREATE TABLE mobility_archive_installs (
     PRIMARY KEY (workspace_id, operation_id)
 );
 
+-- table: opencode_message_ids
+CREATE TABLE opencode_message_ids (
+    session_id TEXT NOT NULL,
+    turn_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    vendor_message_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, turn_id, item_id)
+);
+
 -- table: plan_handoffs
 CREATE TABLE plan_handoffs (
     id TEXT PRIMARY KEY,
@@ -494,7 +504,7 @@ CREATE TABLE session_events (
     event_type TEXT NOT NULL,
     turn_id TEXT,
     payload_json TEXT NOT NULL
-, item_id TEXT);
+, item_id TEXT, completion_wake_removal_key TEXT);
 
 -- table: session_link_completion_deliveries
 CREATE TABLE session_link_completion_deliveries (
@@ -521,7 +531,7 @@ CREATE TABLE session_link_completion_deliveries (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     enqueued_at TEXT,
-    delivered_at TEXT,
+    delivered_at TEXT, retired_prompt_seq INTEGER, retired_prompt_id TEXT, removal_event_persisted_at TEXT,
     UNIQUE(child_session_id, child_turn_id)
 );
 
@@ -768,6 +778,16 @@ CREATE INDEX idx_completion_deliveries_due
 CREATE INDEX idx_completion_deliveries_parent_state
     ON session_link_completion_deliveries(parent_session_id, state);
 
+-- index: idx_completion_deliveries_pending_removal
+CREATE INDEX idx_completion_deliveries_pending_removal
+    ON session_link_completion_deliveries(
+        removal_event_persisted_at,
+        next_attempt_at,
+        lease_expires_at
+    )
+    WHERE retired_prompt_seq IS NOT NULL
+      AND removal_event_persisted_at IS NULL;
+
 -- index: idx_cowork_managed_workspaces_open_parent
 CREATE INDEX idx_cowork_managed_workspaces_open_parent
     ON cowork_managed_workspaces(parent_session_id, closed_at);
@@ -875,6 +895,11 @@ ON review_runs(parent_session_id, status);
 -- index: idx_session_background_work_pending
 CREATE INDEX idx_session_background_work_pending
     ON session_background_work(session_id, state, launched_at);
+
+-- index: idx_session_events_completion_wake_removal
+CREATE UNIQUE INDEX idx_session_events_completion_wake_removal
+    ON session_events(completion_wake_removal_key)
+    WHERE completion_wake_removal_key IS NOT NULL;
 
 -- index: idx_session_events_session_seq
 CREATE UNIQUE INDEX idx_session_events_session_seq
