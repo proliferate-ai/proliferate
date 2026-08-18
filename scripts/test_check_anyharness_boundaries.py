@@ -1353,7 +1353,8 @@ class ShippedLedgerTest(unittest.TestCase):
             # in-memory health snapshot), but the shape is what the rule watches.
             ("AH-API-2", "api/http/health.rs", 37, "AppState store field"),
             # An inline contract path with no use statement to declare it.
-            ("AH-CONTRACT-1", "domains/sessions/store/events.rs", 75,
+            # Carried 75 -> 98 when prompt-visibility lookup moved it down.
+            ("AH-CONTRACT-1", "domains/sessions/store/events.rs", 98,
              "inline contract path"),
             # AH-POLICY-1's real-repo anchor (gen-1's store-holding
             # workflows/control/policy.rs) was deleted with the gen-1 domain
