@@ -152,18 +152,18 @@ export function useWorkflowTriggerActions({
       let workspace = await readBackLaunchedWorkspace(runtimeUrl, result.workspaceId);
       // Selection takes its collections snapshot when it is called, so a
       // refreshed cache resolves the workspace even with no hint at all. That
-      // is the fallback for a read-back that never answered — wait for it in
-      // that case only; otherwise the hint has already answered and the
-      // refresh can settle behind the navigation.
+      // is the fallback for a read-back that never answered: wait for it, then
+      // read once more however it settled. A refusal and a snapshot that
+      // simply does not carry the new workspace yet leave selection with the
+      // same nothing, and by then the runtime has had the whole refresh
+      // attempt to answer for a row it has already committed. With a hint in
+      // hand none of that is needed and the refresh settles behind the
+      // navigation.
       const collectionsRefreshed = invalidateWorkspaceCollectionsForRuntime(runtimeUrl);
       if (workspace) {
         collectionsRefreshed.catch(() => {});
-      } else if (!(await collectionsRefreshed.then(() => true, () => false))) {
-        // A refused refresh leaves the same stale snapshot selection would
-        // search, so with no hint either the launch is heading for "Workspace
-        // not found". One last direct read is the only thing left that can
-        // answer, and by now the runtime has had the whole refresh attempt to
-        // settle.
+      } else {
+        await collectionsRefreshed.catch(() => {});
         workspace = await readBackLaunchedWorkspace(runtimeUrl, result.workspaceId);
       }
       onLaunched?.({ runId: result.runId, workspaceId: result.workspaceId, workspace });

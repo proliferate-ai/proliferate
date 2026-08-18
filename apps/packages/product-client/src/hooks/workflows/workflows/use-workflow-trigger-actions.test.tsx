@@ -264,16 +264,21 @@ describe("useWorkflowTriggerActions placed workspace", () => {
     );
   });
 
-  it("reads the workspace once more when the refresh it fell back to refused", async () => {
+  it.each([
+    ["refused", () => planes.invalidateCollections.mockRejectedValue(new Error("refresh failed"))],
+    ["answered", () => planes.invalidateCollections.mockResolvedValue(undefined)],
+  ])("reads the workspace once more when the refresh it fell back to %s", async (_settled, arrange) => {
     // The two resolvers are the hint and the refreshed collections snapshot.
-    // A rejected refresh leaves selection the same stale snapshot it already
-    // held, so handing it no hint on top of that is a launch heading straight
-    // for "Workspace not found." — one last read is what is left to try.
+    // Neither a refused refresh nor a snapshot that does not carry the new
+    // workspace yet gives selection anything to resolve, so handing it no hint
+    // on top of either is a launch heading straight for "Workspace not
+    // found." — one last read is what is left to try, however the refresh
+    // settled.
     planes.getWorkspace
       .mockRejectedValueOnce(new Error("offline"))
       .mockRejectedValueOnce(new Error("offline"))
       .mockRejectedValueOnce(new Error("offline"));
-    planes.invalidateCollections.mockRejectedValue(new Error("refresh failed"));
+    arrange();
     const onLaunched = vi.fn();
     const { result } = renderTriggerActions(createQueryClient(), onLaunched);
 
@@ -296,9 +301,11 @@ describe("useWorkflowTriggerActions placed workspace", () => {
       await result.current.triggerRun(INPUT);
     });
 
-    // Bounded: the run exists and the projection is written, so the launch is
-    // reported either way — the surface's own error toast owns what follows.
-    expect(planes.getWorkspace).toHaveBeenCalledTimes(3);
+    // Bounded on both passes: the first read-back, then the one the refresh
+    // fallback takes. The run exists and the projection is written, so the
+    // launch is reported either way — the surface's own error toast owns what
+    // follows.
+    expect(planes.getWorkspace).toHaveBeenCalledTimes(6);
     expect(onLaunched).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: "workspace-1", workspace: null }),
     );
