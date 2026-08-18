@@ -250,7 +250,7 @@ describe("WorkflowsMainSurface", () => {
     expect(onEdit).toHaveBeenCalledWith("wf-1");
   });
 
-  it("shows all four starter templates and a start-blank path in the empty state", () => {
+  it("shows every starter template and a start-blank path in the empty state", () => {
     mocks.listQuery.data = { workflows: [] };
     const onNew = vi.fn();
 
