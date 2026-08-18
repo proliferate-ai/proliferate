@@ -10,7 +10,8 @@ use super::model::{
     WorkflowRunRecord, WorkflowRunStatus,
 };
 use super::transition::{
-    next, Decision, RunState, Transition, TurnFinished, TurnStopReason, WorkflowEvent,
+    next, Decision, RunState, Transition, TurnFinished, TurnStopReason, WorkflowCommand,
+    WorkflowEvent,
 };
 
 const T0: &str = "2026-08-14T00:00:00+00:00";
@@ -237,6 +238,116 @@ fn arrival_order_does_not_change_the_outcome() {
     assert!(matches!(
         a_last,
         Decision::Transition(Transition::AdvanceToNext { .. })
+    ));
+}
+
+// ---- Per-leg redo (rung 6, ruling F2 reversed) -------------------------------
+
+/// A run parked at a failed parallel node `n1` (two legs), with the given
+/// ledger slice; `n2` stays pending. The whole-node redo legality wall accepts
+/// a failed node, so this is the canonical per-leg redo entry state.
+fn failed_parallel_state(legs: Vec<WorkflowRunNodeSessionRecord>) -> RunState {
+    let mut run = run();
+    run.status = WorkflowRunStatus::Failed;
+    let mut n1 = node("n1", 0, WorkflowNodeStatus::Failed);
+    n1.failure_code = Some(WorkflowNodeFailureCode::TurnError);
+    RunState {
+        run,
+        nodes: vec![n1, node("n2", 1, WorkflowNodeStatus::Pending)],
+        node_legs: legs,
+    }
+}
+
+fn redo_leg(node_row_id: &str, leg_index: Option<i64>) -> WorkflowEvent {
+    WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
+        node_row_id: node_row_id.into(),
+        prompt: None,
+        leg_index,
+    })
+}
+
+#[test]
+fn per_leg_redo_of_a_failed_leg_produces_redo_leg_without_a_dispose() {
+    let state = failed_parallel_state(vec![
+        leg("sess-a", 0, WorkflowLegStatus::Done),
+        leg("sess-b", 1, WorkflowLegStatus::Failed(WorkflowNodeFailureCode::TurnError)),
+    ]);
+    let decision = next(&state, &redo_leg("n1", Some(1)));
+    assert_eq!(
+        decision,
+        Decision::Transition(Transition::RedoLeg {
+            node_row_id: "n1".into(),
+            leg_index: 1,
+            // A leg that already failed holds no live turn to kill.
+            disposed_session_id: None,
+        })
+    );
+    // Negative control: the whole-node redo (no leg index) still mints a
+    // replacement (Transition::Redo), never a RedoLeg.
+    assert!(matches!(
+        next(&state, &redo_leg("n1", None)),
+        Decision::Transition(Transition::Redo { .. })
+    ));
+}
+
+#[test]
+fn per_leg_redo_of_a_running_leg_disposes_that_legs_session() {
+    // A running parallel node (Ruling L's per-leg twin): leg b is wedged.
+    let mut run = run();
+    run.status = WorkflowRunStatus::Running;
+    let state = RunState {
+        run,
+        nodes: vec![
+            node("n1", 0, WorkflowNodeStatus::Running),
+            node("n2", 1, WorkflowNodeStatus::Pending),
+        ],
+        node_legs: vec![
+            leg("sess-a", 0, WorkflowLegStatus::Running),
+            leg("sess-b", 1, WorkflowLegStatus::Running),
+        ],
+    };
+    assert_eq!(
+        next(&state, &redo_leg("n1", Some(1))),
+        Decision::Transition(Transition::RedoLeg {
+            node_row_id: "n1".into(),
+            leg_index: 1,
+            disposed_session_id: Some("sess-b".into()),
+        })
+    );
+}
+
+#[test]
+fn per_leg_redo_rejects_an_out_of_range_or_negative_index() {
+    let state = failed_parallel_state(vec![
+        leg("sess-a", 0, WorkflowLegStatus::Done),
+        leg("sess-b", 1, WorkflowLegStatus::Failed(WorkflowNodeFailureCode::TurnError)),
+    ]);
+    assert!(matches!(
+        next(&state, &redo_leg("n1", Some(2))),
+        Decision::Illegal(_)
+    ));
+    assert!(matches!(
+        next(&state, &redo_leg("n1", Some(-1))),
+        Decision::Illegal(_)
+    ));
+}
+
+#[test]
+fn per_leg_redo_on_a_one_leg_node_is_illegal() {
+    // One ledger row: the degenerate node takes a whole-node redo only.
+    let state = failed_parallel_state(vec![leg(
+        "sess-a",
+        0,
+        WorkflowLegStatus::Failed(WorkflowNodeFailureCode::TurnError),
+    )]);
+    assert!(matches!(
+        next(&state, &redo_leg("n1", Some(0))),
+        Decision::Illegal(_)
+    ));
+    // The same node still accepts a whole-node redo.
+    assert!(matches!(
+        next(&state, &redo_leg("n1", None)),
+        Decision::Transition(Transition::Redo { .. })
     ));
 }
 

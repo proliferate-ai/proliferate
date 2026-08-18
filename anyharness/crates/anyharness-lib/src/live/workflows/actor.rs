@@ -6,24 +6,15 @@
 //! Persist first, side effects inline after the commit, ordering by
 //! construction: a per-run actor is single-threaded on purpose.
 
-use std::path::Path;
 use std::sync::Arc;
 
 use tokio::sync::{mpsc, oneshot};
 
-use crate::domains::sessions::model::SessionRecord;
-use crate::domains::sessions::runtime::{
-    InternalSessionCreateInput, SessionRuntime, TextPromptDispatchError,
-};
+use crate::domains::sessions::runtime::{InternalSessionCreateInput, SessionRuntime};
 use crate::domains::sessions::store::SessionStore;
-use crate::domains::workflows::definition::{ResolveMode, WorkflowDefinition};
-use crate::domains::workflows::model::{
-    RenderedEnvelope, WorkflowNodeKind, WorkflowRunNodeRecord,
-};
+use crate::domains::workflows::definition::WorkflowDefinition;
+use crate::domains::workflows::model::{WorkflowNodeKind, WorkflowRunNodeRecord};
 use crate::domains::workflows::projection::RunProjection;
-use crate::domains::workflows::render::{
-    node_session_title, render_envelope, run_context_dir_relative, RenderInputs,
-};
 use crate::domains::workflows::store::{emit_decision_events, ResolvedSideEffect, WorkflowStore};
 use super::launch::{launch_legs, launch_model};
 use crate::domains::workflows::transition::{
@@ -176,47 +167,100 @@ impl WorkflowActor {
                     self.dispose_session(&session_id).await;
                     effect = ResolvedSideEffect::StartNode { node_row_id };
                 }
+                ResolvedSideEffect::DisposeSessionsThenStartLegs {
+                    session_ids,
+                    node_row_id,
+                } => {
+                    // Whole-node redo of a parallel node: dispose every live leg
+                    // of the old node, then re-fan-out the replacement's legs.
+                    for session_id in &session_ids {
+                        self.dispose_session(session_id).await;
+                    }
+                    effect = ResolvedSideEffect::StartNodeLegs { node_row_id };
+                }
+                ResolvedSideEffect::DisposeSessionThenStartLeg {
+                    session_id,
+                    node_row_id,
+                    leg_index,
+                } => {
+                    // Per-leg redo of a running leg: kill the wedged session,
+                    // then relaunch that one leg.
+                    self.dispose_session(&session_id).await;
+                    effect = ResolvedSideEffect::StartLeg {
+                        node_row_id,
+                        leg_index,
+                    };
+                }
                 // Both share `launch_node`, which fans out (F5) or single-launches
                 // by leg count; a one-leg node behaves exactly as before.
                 ResolvedSideEffect::StartNode { node_row_id }
                 | ResolvedSideEffect::StartNodeLegs { node_row_id } => {
                     match self.launch_node(state, &node_row_id).await {
                         Ok(()) => break,
-                        Err(error) => {
-                            tracing::warn!(
-                                run_id = %self.run_id,
-                                node_row_id = %node_row_id,
-                                error = %error,
-                                "workflow node launch failed",
-                            );
-                            let event = WorkflowEvent::NodeLaunchFailed {
-                                node_row_id: node_row_id.clone(),
-                            };
-                            let transition = match next(state, &event) {
-                                Decision::Transition(transition) => transition,
-                                Decision::Hold | Decision::Illegal(_) => break,
-                            };
-                            match self
-                                .deps
-                                .store
-                                .apply_transition(&self.run_id, &transition, &event)
-                            {
-                                Ok(applied) => {
-                                    *state = applied.state.clone();
-                                    effect = applied.side_effect;
-                                }
-                                Err(persist_error) => {
-                                    tracing::error!(
-                                        run_id = %self.run_id,
-                                        error = %persist_error,
-                                        "workflow launch-failure persist failed; the fence resolves the row",
-                                    );
-                                    break;
-                                }
-                            }
-                        }
+                        Err(error) => match self.feed_launch_failure(state, &node_row_id, error) {
+                            Some(next_effect) => effect = next_effect,
+                            None => break,
+                        },
                     }
                 }
+                ResolvedSideEffect::StartLeg {
+                    node_row_id,
+                    leg_index,
+                } => match super::launch::relaunch_leg(&self.deps, &self.run_id, state, &node_row_id, leg_index).await {
+                    Ok(fresh) => {
+                        if let Some(fresh) = fresh {
+                            *state = fresh;
+                        }
+                        break;
+                    }
+                    Err(error) => match self.feed_launch_failure(state, &node_row_id, error) {
+                        Some(next_effect) => effect = next_effect,
+                        None => break,
+                    },
+                },
+            }
+        }
+    }
+
+    /// Feed a failed launch back through the table as `NodeLaunchFailed` and
+    /// return the next side effect to perform (the failure transition's own
+    /// effect is always terminal, so this loop terminates by construction).
+    /// `None` means stop — the fence resolves the row.
+    fn feed_launch_failure(
+        &self,
+        state: &mut RunState,
+        node_row_id: &str,
+        error: anyhow::Error,
+    ) -> Option<ResolvedSideEffect> {
+        tracing::warn!(
+            run_id = %self.run_id,
+            node_row_id = %node_row_id,
+            error = %error,
+            "workflow node launch failed",
+        );
+        let event = WorkflowEvent::NodeLaunchFailed {
+            node_row_id: node_row_id.to_string(),
+        };
+        let transition = match next(state, &event) {
+            Decision::Transition(transition) => transition,
+            Decision::Hold | Decision::Illegal(_) => return None,
+        };
+        match self
+            .deps
+            .store
+            .apply_transition(&self.run_id, &transition, &event)
+        {
+            Ok(applied) => {
+                *state = applied.state.clone();
+                Some(applied.side_effect)
+            }
+            Err(persist_error) => {
+                tracing::error!(
+                    run_id = %self.run_id,
+                    error = %persist_error,
+                    "workflow launch-failure persist failed; the fence resolves the row",
+                );
+                None
             }
         }
     }
@@ -289,7 +333,8 @@ impl WorkflowActor {
         let envelope = match &node.rendered_envelope {
             Some(envelope) => envelope.clone(),
             None => {
-                let envelope = self.render_node_envelope(state, &node)?;
+                let envelope =
+                    super::launch::render_node_envelope(&self.deps, &self.run_id, state, &node)?;
                 self.deps.store.store_rendered_envelope(&node.id, &envelope)?;
                 envelope
             }
@@ -315,9 +360,15 @@ impl WorkflowActor {
             .map_err(|error| anyhow::anyhow!("session create failed: {error:?}"))?
         };
 
-        if let Err(error) = self
-            .link_start_and_dispatch(&node, &session, &envelope, &agent_kind)
-            .await
+        if let Err(error) = super::launch::link_start_and_dispatch(
+            &self.deps,
+            &self.run_id,
+            &node,
+            &session,
+            &envelope,
+            &agent_kind,
+        )
+        .await
         {
             // The session row exists but never became a working node session:
             // close and delete it before the failure feeds NodeLaunchFailed.
@@ -347,88 +398,6 @@ impl WorkflowActor {
         Ok(())
     }
 
-    /// The fallible tail of a launch, split out so `launch_node` can
-    /// compensate the freshly created session on ANY failure in here.
-    async fn link_start_and_dispatch(
-        &self,
-        node: &WorkflowRunNodeRecord,
-        session: &SessionRecord,
-        envelope: &RenderedEnvelope,
-        agent_kind: &str,
-    ) -> anyhow::Result<()> {
-        // Link and stamp BEFORE start: the launch extras resolve the envelope
-        // through the sessions columns, and the extension matches turn reports
-        // through them.
-        let prompt_id = format!("wf2-{}", node.id);
-        self.deps
-            .session_store
-            .link_workflow_columns(&session.id, &self.run_id, &node.id)?;
-        self.title_node_session(node, &session.id);
-        self.deps
-            .store
-            .stamp_session(&node.id, &session.id, Some(&prompt_id), Some(agent_kind))?;
-
-        self.deps
-            .session_runtime
-            .start_persisted_session(session)
-            .await
-            .map_err(|error| anyhow::anyhow!("session start failed: {error:?}"))?;
-
-        // Ruling D: the wrapped instruction blocks ride IN-BAND as leading
-        // text blocks of the first prompt — identical for every harness — and
-        // the node's first message is always the LAST block.
-        let mut texts = envelope.instruction_blocks.clone();
-        texts.push(envelope.first_message.clone());
-        match self
-            .deps
-            .session_runtime
-            .send_text_blocks_prompt_with_id(&session.id, texts, prompt_id)
-            .await
-        {
-            Ok(_running_or_queued) => Ok(()),
-            Err(TextPromptDispatchError::AcknowledgementLost) => {
-                // The ambiguity rule: a lost acknowledgement is never a failure
-                // claim — the turn may be running. The extension or the fence
-                // resolves the row. No compensation: the session may be live.
-                tracing::warn!(
-                    run_id = %self.run_id,
-                    node_row_id = %node.id,
-                    session_id = %session.id,
-                    "workflow envelope acknowledgement lost; leaving the node running",
-                );
-                Ok(())
-            }
-            Err(TextPromptDispatchError::Dispatch(error)) => {
-                Err(anyhow::anyhow!("envelope dispatch failed: {error:?}"))
-            }
-        }
-    }
-
-    /// Name the node's session after the node, before the stamp that first
-    /// makes that session findable from the projection: a client raising a tab
-    /// for it never has to show the harness's own guess (which echoes the
-    /// first message, preamble and all) or the bare agent name.
-    ///
-    /// Written unconditionally, and it stays: the two writers that can follow
-    /// — the harness info update and the prompt-derived fallback — are both
-    /// if-absent, so only a deliberate rename replaces it.
-    ///
-    /// Cosmetic, so a failure is logged and the launch continues: an untitled
-    /// node session is still a working one.
-    fn title_node_session(&self, node: &WorkflowRunNodeRecord, session_id: &str) {
-        let title = node_session_title(node.chain_index, &node.title);
-        let now = chrono::Utc::now().to_rfc3339();
-        if let Err(error) = self.deps.session_store.update_title(session_id, &title, &now) {
-            tracing::warn!(
-                run_id = %self.run_id,
-                node_row_id = %node.id,
-                session_id = %session_id,
-                error = %error,
-                "workflow node session title write failed; leaving the session untitled",
-            );
-        }
-    }
-
     /// Stamp Ruling J's undo-window close and refresh the cache so the very
     /// next decision sees it. Failures keep the stale cache and log — the
     /// report itself must still be processed.
@@ -451,41 +420,6 @@ impl WorkflowActor {
                 "post-stamp state reload failed; proceeding on the cached state",
             ),
         }
-    }
-
-    fn render_node_envelope(
-        &self,
-        state: &RunState,
-        node: &WorkflowRunNodeRecord,
-    ) -> anyhow::Result<RenderedEnvelope> {
-        let workspace = self
-            .deps
-            .workspace_store
-            .find_by_id(&state.run.workspace_id)?
-            .ok_or_else(|| {
-                anyhow::anyhow!("workspace {} not found for render", state.run.workspace_id)
-            })?;
-        let arguments: serde_json::Map<String, serde_json::Value> =
-            serde_json::from_str(&state.run.arguments_json)?;
-        let docs = self.deps.store.list_docs(&self.run_id)?;
-        let context_dir = Path::new(&workspace.path).join(run_context_dir_relative(&self.run_id));
-        render_envelope(&RenderInputs {
-            node_type: node.node_type,
-            prompt: &node.prompt,
-            // Ruling E: definition prompts were validated before the snapshot
-            // froze and render strict; redo-edited and ad hoc prompts are
-            // user-typed and render lenient (unresolvable refs pass through
-            // as the literal text the user typed).
-            mode: if node.kind == WorkflowNodeKind::Defined {
-                ResolveMode::Strict
-            } else {
-                ResolveMode::Lenient
-            },
-            arguments: &arguments,
-            docs: &docs,
-            context_dir: &context_dir,
-        })
-        .map_err(|error| anyhow::anyhow!("envelope render failed: {error}"))
     }
 
     /// Undo-advance and redo-from-running: close and dismiss the session,

@@ -453,6 +453,7 @@ fn fail_and_redo_from_failed_creates_replacement() {
         &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
             node_row_id: "n2".into(),
             prompt: None,
+            leg_index: None,
         }),
     ));
     let Transition::Redo {
@@ -486,6 +487,7 @@ fn fail_and_redo_with_edited_prompt_drops_stored_envelope() {
         &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
             node_row_id: "n2".into(),
             prompt: Some("try again differently".into()),
+            leg_index: None,
         }),
     ));
     let Transition::Redo { replacement, .. } = transition else {
@@ -517,6 +519,7 @@ fn fail_and_redo_applies_at_every_pause_state() {
                     &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
                         node_row_id: "n2".into(),
                         prompt: None,
+                        leg_index: None,
                     })
                 ),
                 Decision::Transition(Transition::Redo { .. })
@@ -537,6 +540,7 @@ fn fail_and_redo_on_running_chain_node_disposes_the_live_session() {
         &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
             node_row_id: "n2".into(),
             prompt: None,
+            leg_index: None,
         }),
     ));
     let Transition::Redo {
@@ -563,6 +567,7 @@ fn fail_and_redo_on_running_adhoc_is_illegal() {
             &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
                 node_row_id: "a1".into(),
                 prompt: None,
+                leg_index: None,
             })
         ),
         Decision::Illegal(_)
@@ -589,6 +594,7 @@ fn fail_and_redo_on_superseded_node_is_illegal() {
             &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
                 node_row_id: "n2".into(),
                 prompt: None,
+                leg_index: None,
             })
         ),
         Decision::Illegal(_)
@@ -980,6 +986,7 @@ fn fail_and_redo_on_paused_adhoc_mints_an_adhoc_replacement() {
             &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
                 node_row_id: "a1".into(),
                 prompt: None,
+                leg_index: None,
             }),
         ));
         let Transition::Redo {
@@ -1013,6 +1020,7 @@ fn fail_and_redo_on_awaiting_human_adhoc_is_illegal() {
             &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
                 node_row_id: "a1".into(),
                 prompt: None,
+                leg_index: None,
             })
         ),
         Decision::Illegal(_)

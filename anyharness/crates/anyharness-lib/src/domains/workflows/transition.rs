@@ -100,6 +100,11 @@ pub enum WorkflowCommand {
     FailAndRedo {
         node_row_id: String,
         prompt: Option<String>,
+        /// Rung 6 (ruling F2 reversed): an optional leg index scopes the redo to
+        /// ONE leg of a parallel node. Absent = whole-node redo (today's
+        /// behavior). Present = per-leg redo: the addressed leg alone relaunches,
+        /// siblings untouched.
+        leg_index: Option<i64>,
     },
     FlipType {
         node_row_id: String,
@@ -261,6 +266,17 @@ pub enum Transition {
         replacement: NewNodeSpec,
         disposed_session_id: Option<String>,
     },
+    /// Per-leg redo (rung 6, ruling F2 reversed): relaunch ONE leg of a parallel
+    /// node in place. No replacement row is minted — the node's ledger row at
+    /// `leg_index` resets to running and the node returns to Running; sibling
+    /// legs keep their terminal status. `disposed_session_id` is the leg's live
+    /// session when the redone leg was still running (the liveness escape,
+    /// mirroring `Redo`); a leg that already failed holds no live turn to kill.
+    RedoLeg {
+        node_row_id: String,
+        leg_index: i64,
+        disposed_session_id: Option<String>,
+    },
     /// Undo an advance: the just-started node returns to pending unlinked, the
     /// completed node parks as a retroactive gate.
     UndoAdvance {
@@ -313,6 +329,7 @@ impl Transition {
             Self::InterruptNode { .. } => "interrupt_node",
             Self::FlipNodeType { .. } => "flip_node_type",
             Self::Redo { .. } => "fail_and_redo",
+            Self::RedoLeg { .. } => "redo_leg",
             Self::UndoAdvance { .. } => "undo_advance",
             Self::Fence { .. } => "boot_fence",
             Self::ResumeNode { .. } => "resume",
@@ -504,6 +521,7 @@ fn on_command(state: &RunState, command: &WorkflowCommand) -> Decision {
         WorkflowCommand::FailAndRedo {
             node_row_id,
             prompt,
+            leg_index,
         } => {
             let Some(node) = state.node(node_row_id) else {
                 return illegal(state, command.as_str(), None, "unknown node row");
@@ -517,27 +535,12 @@ fn on_command(state: &RunState, command: &WorkflowCommand) -> Decision {
                 );
             }
             let adhoc = node.kind == WorkflowNodeKind::Adhoc;
-            // Adhoc rows never gate, so awaiting_human is not a legal pause
-            // for them; the fence and turn failures are their recovery entry
-            // points (Ruling K). A RUNNING chain node may also be redone
-            // (Ruling L) — the liveness escape for a wedged node whose turn
-            // will never end; its live session is disposed in the same
-            // committed step. Adhoc rows keep the pause-only rule (K.1).
-            let legal_pause = if adhoc {
-                matches!(
-                    node.status,
-                    WorkflowNodeStatus::Failed | WorkflowNodeStatus::NeedsAttention
-                )
-            } else {
-                matches!(
-                    node.status,
-                    WorkflowNodeStatus::Failed
-                        | WorkflowNodeStatus::NeedsAttention
-                        | WorkflowNodeStatus::AwaitingHuman
-                        | WorkflowNodeStatus::Running
-                )
-            };
-            if !legal_pause {
+            // Per-leg redo (rung 6) branches off here before the whole-node
+            // replacement path; it shares the same legality wall below.
+            if let Some(leg_index) = leg_index {
+                return on_redo_leg(state, command.as_str(), node, adhoc, *leg_index);
+            }
+            if !fail_redo_legal_pause(node, adhoc) {
                 return illegal(
                     state,
                     command.as_str(),
@@ -717,6 +720,85 @@ fn on_command(state: &RunState, command: &WorkflowCommand) -> Decision {
             })
         }
     }
+}
+
+/// The fail-and-redo legality wall (shared by whole-node and per-leg redo).
+/// Adhoc rows never gate, so awaiting_human is not a legal pause for them; the
+/// fence and turn failures are their recovery entry points (Ruling K). A RUNNING
+/// chain node may also be redone (Ruling L) — the liveness escape for a wedged
+/// node whose turn will never end; its live session is disposed in the same
+/// committed step. Adhoc rows keep the pause-only rule (K.1).
+fn fail_redo_legal_pause(node: &WorkflowRunNodeRecord, adhoc: bool) -> bool {
+    if adhoc {
+        matches!(
+            node.status,
+            WorkflowNodeStatus::Failed | WorkflowNodeStatus::NeedsAttention
+        )
+    } else {
+        matches!(
+            node.status,
+            WorkflowNodeStatus::Failed
+                | WorkflowNodeStatus::NeedsAttention
+                | WorkflowNodeStatus::AwaitingHuman
+                | WorkflowNodeStatus::Running
+        )
+    }
+}
+
+/// Per-leg redo (rung 6, ruling F2 reversed): relaunch exactly one leg of a
+/// parallel node. The node's leg count is the number of ledger rows it carries
+/// (a launched parallel node has one row per authored leg). A one-leg node has
+/// no per-leg semantics — the whole-node redo is the only redo it takes — so a
+/// per-leg redo aimed at it is rejected as illegal (keeps the two verbs from
+/// aliasing on the degenerate node). Out-of-range and negative indices are
+/// rejected the same way; the node itself must clear the same legality wall a
+/// whole-node redo does.
+fn on_redo_leg(
+    state: &RunState,
+    command: &str,
+    node: &WorkflowRunNodeRecord,
+    adhoc: bool,
+    leg_index: i64,
+) -> Decision {
+    let legs = state.legs_of(&node.id);
+    let leg_count = legs.len() as i64;
+    if leg_count <= 1 {
+        return illegal(
+            state,
+            command,
+            Some(node),
+            "a one-leg node takes a whole-node redo, not a per-leg redo",
+        );
+    }
+    if leg_index < 0 || leg_index >= leg_count {
+        return illegal(
+            state,
+            command,
+            Some(node),
+            "leg_index is out of range for this node's legs",
+        );
+    }
+    if !fail_redo_legal_pause(node, adhoc) {
+        return illegal(
+            state,
+            command,
+            Some(node),
+            "fail-and-redo applies at a pause (failed, needs_attention, awaiting_human) \
+             or to a running chain node",
+        );
+    }
+    // The leg's live session is disposed only when that leg is still running
+    // (Ruling L's per-leg twin); a leg that already reached a terminal status
+    // holds no live turn to kill.
+    let disposed_session_id = legs
+        .iter()
+        .find(|leg| leg.leg_index == leg_index && leg.status == WorkflowLegStatus::Running)
+        .and_then(|leg| leg.session_id.clone());
+    Decision::Transition(Transition::RedoLeg {
+        node_row_id: node.id.clone(),
+        leg_index,
+        disposed_session_id,
+    })
 }
 
 fn adhoc_title(prompt: &str) -> String {

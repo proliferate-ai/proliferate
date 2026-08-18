@@ -332,6 +332,28 @@ describe("useWorkflowPane", () => {
     });
   });
 
+  it("threads an optional leg index through fail-redo (rung 6 plumbing)", async () => {
+    const { result } = render();
+    await act(async () => {
+      result.current.actions.failRedo("a", "try again", 2);
+    });
+    expect(mocks.mutations.failRedo.mutateAsync).toHaveBeenCalledWith({
+      nodeRowId: "a",
+      request: { prompt: "try again", legIndex: 2 },
+    });
+  });
+
+  it("sends a leg index with no prompt when only a leg is redone", async () => {
+    const { result } = render();
+    await act(async () => {
+      result.current.actions.failRedo("a", undefined, 1);
+    });
+    expect(mocks.mutations.failRedo.mutateAsync).toHaveBeenCalledWith({
+      nodeRowId: "a",
+      request: { legIndex: 1 },
+    });
+  });
+
   it("turns a 409 illegal transition into a toast and refetch, never a rejection", async () => {
     mocks.mutations.approve.mutateAsync = vi.fn(async () => {
       throw transitionIllegal();

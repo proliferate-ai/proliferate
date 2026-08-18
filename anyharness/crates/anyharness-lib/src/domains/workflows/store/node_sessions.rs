@@ -62,6 +62,23 @@ pub(super) fn upsert_leg_at_tx(
     Ok(())
 }
 
+/// Reset ONE leg's ledger row to running (rung 6, per-leg redo): the addressed
+/// row goes back to 'running' with its completion cleared, keeping its current
+/// session_id until the relaunch re-stamps a fresh one. Sibling rows are
+/// untouched, so the fan-in gate treats only this leg as outstanding again.
+pub(super) fn reset_leg_running_tx(
+    tx: &Connection,
+    node_row_id: &str,
+    leg_index: i64,
+) -> rusqlite::Result<()> {
+    tx.execute(
+        "UPDATE workflow_run_node_sessions SET status = 'running', completed_at = NULL
+         WHERE node_row_id = ?1 AND leg_index = ?2",
+        params![node_row_id, leg_index],
+    )?;
+    Ok(())
+}
+
 /// Truncate every ledger row of a node (ruling F6): boot-fence resume
 /// re-fans-out ALL legs from the definition on a fresh generation, so the old
 /// rows are cleared before the relaunch re-inserts leg 0..N. A one-leg node has

@@ -14,9 +14,9 @@ use uuid::Uuid;
 
 use super::definition::{InvocationSnapshot, WorkflowDefinition};
 use super::model::{
-    RenderedEnvelope, WorkflowNodeFailureCode, WorkflowNodeKind, WorkflowNodeStatus,
-    WorkflowNodeType, WorkflowRunDocRecord, WorkflowRunNodeRecord, WorkflowRunRecord,
-    WorkflowRunStatus,
+    RenderedEnvelope, WorkflowLegStatus, WorkflowNodeFailureCode, WorkflowNodeKind,
+    WorkflowNodeStatus, WorkflowNodeType, WorkflowRunDocRecord, WorkflowRunNodeRecord,
+    WorkflowRunRecord, WorkflowRunStatus,
 };
 use super::projection::{project, RunProjection};
 use super::store_rows::{map_doc, map_node, map_run};
@@ -90,6 +90,30 @@ pub enum ResolvedSideEffect {
     /// plus any concurrently running adhoc rows) is disposed; nothing starts
     /// after, since the run is terminal.
     DisposeSessions { session_ids: Vec<String> },
+    /// Per-leg redo (rung 6): relaunch ONE leg of a parallel node in place.
+    /// The addressed ledger row was reset to running in the commit; the actor
+    /// mints one fresh session for `leg_index` and re-stamps the row.
+    StartLeg {
+        node_row_id: String,
+        leg_index: i64,
+    },
+    /// Per-leg redo of a RUNNING leg: dispose the wedged session the leg was
+    /// taking over from, then relaunch that one leg (falls through to `StartLeg`
+    /// in the actor, mirroring `DisposeThenStart` → `StartNode`).
+    DisposeSessionThenStartLeg {
+        session_id: String,
+        node_row_id: String,
+        leg_index: i64,
+    },
+    /// Whole-node redo of a PARALLEL node (rung 6): dispose every live leg
+    /// session of the old node, then re-fan-out the replacement's legs (falls
+    /// through to `StartNodeLegs`). `session_ids` may be empty (a failed node's
+    /// legs are already terminal), in which case nothing is disposed and the
+    /// replacement simply fans out.
+    DisposeSessionsThenStartLegs {
+        session_ids: Vec<String>,
+        node_row_id: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -482,18 +506,83 @@ impl WorkflowStore {
                             },
                         )?;
                     }
-                    side_effect = match disposed_session_id {
-                        // Ruling L: a redo-from-running kills the wedged
-                        // session before the replacement launches.
-                        Some(session_id) => ResolvedSideEffect::DisposeThenStart {
-                            session_id: session_id.clone(),
+                    // A parallel node's whole-node redo disposes EVERY live leg
+                    // of the old node (not just the representative) and
+                    // re-fans-out the replacement's legs; a one-leg / adhoc
+                    // node keeps the byte-identical single-session path.
+                    let parallel = replacement.kind != WorkflowNodeKind::Adhoc
+                        && node_leg_count(&state, failed_node_row_id) > 1;
+                    side_effect = if parallel {
+                        let session_ids: Vec<String> = state
+                            .legs_of(failed_node_row_id)
+                            .iter()
+                            .filter(|leg| leg.status == WorkflowLegStatus::Running)
+                            .filter_map(|leg| leg.session_id.clone())
+                            .collect();
+                        ResolvedSideEffect::DisposeSessionsThenStartLegs {
+                            session_ids,
                             node_row_id: new_id.clone(),
-                        },
-                        None => ResolvedSideEffect::StartNode {
-                            node_row_id: new_id.clone(),
-                        },
+                        }
+                    } else {
+                        match disposed_session_id {
+                            // Ruling L: a redo-from-running kills the wedged
+                            // session before the replacement launches.
+                            Some(session_id) => ResolvedSideEffect::DisposeThenStart {
+                                session_id: session_id.clone(),
+                                node_row_id: new_id.clone(),
+                            },
+                            None => ResolvedSideEffect::StartNode {
+                                node_row_id: new_id.clone(),
+                            },
+                        }
                     };
                     created_node_row_id = Some(new_id);
+                }
+                Transition::RedoLeg {
+                    node_row_id,
+                    leg_index,
+                    disposed_session_id,
+                } => {
+                    // In-place per-leg relaunch: no replacement row is minted.
+                    // The node returns to running and the run clears its
+                    // terminal/interruption marks (a per-leg redo of a failed
+                    // parallel node revives it), exactly as the whole-node chain
+                    // redo does — but the sibling legs' ledger rows are left
+                    // untouched. The addressed leg's ledger row resets to
+                    // 'running' now so the fan-in gate immediately treats it as
+                    // outstanding; the relaunch re-stamps it with a fresh
+                    // session after commit.
+                    tx.execute(
+                        "UPDATE workflow_run_nodes
+                         SET status = 'running', failure_code = NULL,
+                             first_turn_finished_at = NULL, started_at = ?2
+                         WHERE id = ?1",
+                        params![node_row_id, timestamp],
+                    )?;
+                    node_sessions::reset_leg_running_tx(tx, node_row_id, *leg_index)?;
+                    update_run(
+                        tx,
+                        run_id,
+                        &timestamp,
+                        RunUpdate {
+                            status: Some(WorkflowRunStatus::Running),
+                            current_node_row_id: Some(Some(node_row_id.clone())),
+                            failure_code: Some(None),
+                            interruption_code: Some(None),
+                            completed_at: Some(None),
+                        },
+                    )?;
+                    side_effect = match disposed_session_id {
+                        Some(session_id) => ResolvedSideEffect::DisposeSessionThenStartLeg {
+                            session_id: session_id.clone(),
+                            node_row_id: node_row_id.clone(),
+                            leg_index: *leg_index,
+                        },
+                        None => ResolvedSideEffect::StartLeg {
+                            node_row_id: node_row_id.clone(),
+                            leg_index: *leg_index,
+                        },
+                    };
                 }
                 Transition::UndoAdvance {
                     undone_node_row_id,
@@ -800,6 +889,46 @@ impl WorkflowStore {
             chain_index = chain_index.unwrap_or(-1),
             legs = legs.len(),
             "workflow parallel node launched",
+        );
+        Ok(())
+    }
+
+    /// Per-leg redo relaunch (rung 6): re-stamp ONE leg's ledger row with its
+    /// freshly minted session, resetting it to running. Leg 0 is the node's
+    /// representative, so relaunching it also refreshes the node's scalar
+    /// session/prompt columns; a sibling leg (index > 0) leaves those untouched.
+    pub fn stamp_leg_relaunch(
+        &self,
+        node_row_id: &str,
+        leg_index: i64,
+        session_id: &str,
+        prompt_id: Option<&str>,
+        agent_kind: Option<&str>,
+    ) -> anyhow::Result<()> {
+        let (run_id, chain_index) = self.db.with_tx_anyhow(|tx| {
+            if leg_index == 0 {
+                tx.execute(
+                    "UPDATE workflow_run_nodes SET session_id = ?2, prompt_id = ?3 WHERE id = ?1",
+                    params![node_row_id, session_id, prompt_id],
+                )?;
+            }
+            node_sessions::upsert_leg_at_tx(tx, node_row_id, leg_index, session_id)?;
+            let (run_id, chain_index): (String, Option<i64>) = tx.query_row(
+                "SELECT run_id, chain_index FROM workflow_run_nodes WHERE id = ?1",
+                params![node_row_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )?;
+            Ok((run_id, chain_index))
+        })?;
+        tracing::info!(
+            target: WORKFLOW_NODE_LAUNCHED_TRACING_TARGET,
+            run_id = %run_id,
+            node_row_id = %node_row_id,
+            session_id = %session_id,
+            agent_kind = agent_kind.unwrap_or("unknown"),
+            chain_index = chain_index.unwrap_or(-1),
+            leg_index,
+            "workflow parallel node leg relaunched",
         );
         Ok(())
     }
@@ -1400,6 +1529,7 @@ fn transition_node_row_id<'a>(
             ..
         } => Some(completed_node_row_id),
         Transition::RecordLegThenHold { node_row_id, .. }
+        | Transition::RedoLeg { node_row_id, .. }
         | Transition::GateNode { node_row_id }
         | Transition::FailNode { node_row_id, .. }
         | Transition::InterruptNode { node_row_id, .. }
