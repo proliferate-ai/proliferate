@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   estimateRenderableRowHeight,
   getRowCompositionToken,
+  getRowEstimateBucketKey,
 } from "#product/hooks/chat/ui/transcript-row-height-estimate";
 import type { TurnPresentation } from "#product/domain/chats/transcript/transcript-presentation";
 import type { TranscriptRenderableRow } from "#product/hooks/chat/ui/transcript-row-list-model";
@@ -155,5 +156,41 @@ describe("getRowCompositionToken — invalidation identity", () => {
   it("gives the history-loader row a stable constant token", () => {
     const row: TranscriptRenderableRow = { kind: "history_loader", key: HISTORY_LOADING_ROW_KEY };
     expect(getRowCompositionToken(row)).toBe(getRowCompositionToken({ ...row }));
+  });
+});
+
+describe("getRowEstimateBucketKey — calibration pooling", () => {
+  it("does NOT calibrate the fixed-height quiet background rows (they must not pool into the prompt bucket)", () => {
+    const completionReceipt: TranscriptRenderableRow = {
+      kind: "transcript",
+      key: "completion-receipt:r1",
+      rowIndex: 0,
+      row: {
+        kind: "completion_receipt",
+        key: "completion-receipt:r1",
+        receipt: { anchorTurnId: "t1" } as never,
+      },
+    };
+    const backgroundWork: TranscriptRenderableRow = {
+      kind: "transcript",
+      key: "background-work",
+      rowIndex: 0,
+      row: { kind: "background_work", key: "background-work", runningCount: 2 },
+    };
+
+    // Aligned with the goal-event sibling: a small fixed constant, not worth
+    // calibrating — so null, never the composer-shaped "prompt" bucket.
+    expect(getRowEstimateBucketKey(completionReceipt)).toBeNull();
+    expect(getRowEstimateBucketKey(backgroundWork)).toBeNull();
+  });
+
+  it("still buckets a real composer-shaped prompt row under \"prompt\" (positive control)", () => {
+    const pendingPrompt: TranscriptRenderableRow = {
+      kind: "transcript",
+      key: "pending-prompt:p1",
+      rowIndex: 0,
+      row: { kind: "pending_prompt", key: "pending-prompt:p1" },
+    };
+    expect(getRowEstimateBucketKey(pendingPrompt)).toBe("prompt");
   });
 });

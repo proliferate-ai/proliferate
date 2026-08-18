@@ -204,7 +204,8 @@ function turnRowBucketKey(
  * are estimated identically before measurement, so the per-session calibration
  * (transcript-row-height-calibration.ts) can pool their real measured heights.
  * Returns null for rows whose height is a small fixed constant not worth
- * calibrating (history loader, goal event) or for the out-of-range probe.
+ * calibrating (history loader, goal event, and the quiet completion-receipt /
+ * background-work footer rows) or for the out-of-range probe.
  */
 export function getRowEstimateBucketKey(
   row: TranscriptRenderableRow | undefined,
@@ -216,6 +217,13 @@ export function getRowEstimateBucketKey(
     return null;
   }
   if (row.row.kind === "goal_event") {
+    return null;
+  }
+  if (row.row.kind === "completion_receipt" || row.row.kind === "background_work") {
+    // Fixed-height quiet rows (bgwork r6): `estimateRenderableRowHeight` gives
+    // them a constant `ESTIMATED_BACKGROUND_WORK_ROW_HEIGHT_PX`, so — like the
+    // goal-event row above — they are not worth calibrating and must not pool
+    // their measured heights into the composer-shaped `"prompt"` bucket.
     return null;
   }
   if (row.row.kind === "turn") {
