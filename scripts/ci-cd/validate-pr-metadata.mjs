@@ -94,6 +94,14 @@ function substantiveSection(value) {
   return !visible.split(/\r?\n/).some((line) => PLACEHOLDER_SENTINEL.test(line));
 }
 
+function hasUnreasonedNoImpactState(value) {
+  return visibleMarkdown(value)
+    .split(/\r?\n/)
+    .some(
+      (line) => NO_IMPACT_STATE.test(line) && !NO_IMPACT_REASON.test(line),
+    );
+}
+
 function isSafeRepositoryPath(rawValue) {
   let value = rawValue
     .trim()
@@ -165,8 +173,7 @@ export function validatePullRequestBody({ body, headSha }) {
   }
 
   const testing = sections.get(normalizedHeading("Testing / Verification"))?.[0] || "";
-  const evidenceMatch = testing
-    .replace(HTML_COMMENT, "")
+  const evidenceMatch = visibleMarkdown(testing)
     .match(/^\s*Evidence state:\s*([a-z-]+)\s*$/im);
   if (!evidenceMatch || !EVIDENCE_STATES.has(evidenceMatch[1].toLowerCase())) {
     errors.push(
@@ -187,18 +194,15 @@ export function validatePullRequestBody({ body, headSha }) {
   }
 
   const observability = sections.get(normalizedHeading("Observability"))?.[0] || "";
-  const visibleObservability = visibleMarkdown(observability).trim();
   if (
     substantiveSection(observability) &&
-    NO_IMPACT_STATE.test(visibleObservability) &&
-    !NO_IMPACT_REASON.test(visibleObservability)
+    hasUnreasonedNoImpactState(observability)
   ) {
     errors.push("Observability must use none/not-applicable plus a reason.");
   }
 
   const receipt = sections.get(normalizedHeading("Delivery receipt"))?.[0] || "";
-  const receiptHead = receipt
-    .replace(HTML_COMMENT, "")
+  const receiptHead = visibleMarkdown(receipt)
     .match(/^\s*Current head:\s*([0-9a-f]+)\s*$/im)?.[1];
   if (!headSha) {
     errors.push("Current PR head SHA is required for ready-PR receipt validation.");

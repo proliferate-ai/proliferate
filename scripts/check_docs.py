@@ -75,6 +75,7 @@ class Finding:
 HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 SETEXT_HEADING = re.compile(r"^\s{0,3}(?:=+|-+)\s*$")
 FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
+HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 INLINE_CODE = re.compile(r"(`+)(.+?)\1")
 REFERENCE_DEFINITION = re.compile(r"^\s{0,3}\[[^\]]+\]:\s*(.+?)\s*$")
 HTML_ANCHOR = re.compile(r"<(?:a|[A-Za-z][^>]*)\s+(?:[^>]*?\s)?(?:id|name)=[\"']([^\"']+)[\"']")
@@ -209,12 +210,20 @@ def tracked_paths(*patterns: str) -> list[Path]:
     ]
 
 
+def blank_except_newlines(value: str) -> str:
+    """Mask content while preserving line breaks and character offsets."""
+    return "".join(char if char in "\r\n" else " " for char in value)
+
+
 def visible_markdown_lines(text: str):
-    """Yield non-fenced Markdown lines with one-based line numbers."""
+    """Yield Markdown outside fenced code and HTML comments with line numbers."""
     fence: str | None = None
     minimum_length = 0
+    without_comments = HTML_COMMENT.sub(
+        lambda match: blank_except_newlines(match.group(0)), text
+    )
 
-    for line_number, line in enumerate(text.splitlines(), start=1):
+    for line_number, line in enumerate(without_comments.splitlines(), start=1):
         match = FENCE.match(line)
         if match:
             marker = match.group(1)
@@ -358,7 +367,10 @@ def exposes_current_gaps(text: str) -> bool:
             re.IGNORECASE,
         ):
             return True
-    return bool(re.search(r"\[Current gaps?\]\([^)]*\)", text, re.IGNORECASE))
+    visible_text = "\n".join(line for _, line in visible_markdown_lines(text))
+    return bool(
+        re.search(r"\[Current gaps?\]\([^)]*\)", visible_text, re.IGNORECASE)
+    )
 
 
 def check_canonical_routes() -> list[Finding]:

@@ -293,21 +293,56 @@ test("rejects unsafe documentation paths", () => {
 });
 
 test("requires a reason for a no-impact Observability state", () => {
-  const errors = validatePullRequestBody({
-    body: readyBody({ observability: "- none" }),
-    headSha,
-  });
-
-  assert.match(errors.join("\n"), /Observability.*plus a reason/);
-  assert.deepEqual(
-    validatePullRequestBody({
-      body: readyBody({
-        observability: "- none — documentation-only change.",
-      }),
+  for (const observability of ["- none", "Impact:\n- none"]) {
+    const errors = validatePullRequestBody({
+      body: readyBody({ observability }),
       headSha,
-    }),
-    [],
-  );
+    });
+    assert.match(errors.join("\n"), /Observability.*plus a reason/);
+  }
+
+  for (const observability of [
+    "- none — documentation-only change.",
+    "Impact:\n- none — documentation-only change.",
+  ]) {
+    assert.deepEqual(
+      validatePullRequestBody({
+        body: readyBody({ observability }),
+        headSha,
+      }),
+      [],
+    );
+  }
+});
+
+test("ignores evidence-state and current-head fields inside fenced code", () => {
+  const body = readyBody()
+    .replace(
+      "Evidence state: run",
+      "Verification details follow.\n\n```text\nEvidence state: run\n```",
+    )
+    .replace(
+      `Current head: ${headSha}`,
+      `Receipt details follow.\n\n~~~text\nCurrent head: ${headSha}\n~~~`,
+    );
+  const errors = validatePullRequestBody({ body, headSha });
+
+  assert.match(errors.join("\n"), /Testing \/ Verification must contain Evidence state/);
+  assert.match(errors.join("\n"), /Delivery receipt must contain Current head/);
+});
+
+test("accepts visible evidence-state and current-head fields beside fenced examples", () => {
+  const body = readyBody()
+    .replace(
+      "Evidence state: run",
+      "```text\nEvidence state: invalid\n```\nEvidence state: run",
+    )
+    .replace(
+      `Current head: ${headSha}`,
+      `~~~text\nCurrent head: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n~~~\nCurrent head: ${headSha}`,
+    );
+
+  assert.deepEqual(validatePullRequestBody({ body, headSha }), []);
 });
 
 test("rejects an unrecognized evidence state", () => {

@@ -175,6 +175,41 @@ class DocumentationIntegrityTest(unittest.TestCase):
             ],
         )
 
+    def test_visible_markdown_masks_comments_and_preserves_line_numbers(self) -> None:
+        lines = list(
+            check_docs.visible_markdown_lines(
+                "visible\n<!-- hidden\nstill hidden -->\nafter <!-- secret --> text\n"
+            )
+        )
+
+        self.assertEqual([line_number for line_number, _ in lines], [1, 2, 3, 4])
+        self.assertEqual(lines[0][1], "visible")
+        self.assertEqual(lines[1][1].strip(), "")
+        self.assertEqual(lines[2][1].strip(), "")
+        self.assertEqual(lines[3][1].split(), ["after", "text"])
+
+    def test_router_targets_ignore_commented_tables(self) -> None:
+        targets = check_docs.router_targets(
+            """# Repository
+
+<!--
+## Source router
+
+| Source area | Start here |
+| --- | --- |
+| `src/**` | [Owner](specs/owner.md) |
+
+## Cross-plane systems
+
+| System | Touching | Read |
+| --- | --- | --- |
+| System | concern | [Owner](specs/system.md) |
+-->
+"""
+        )
+
+        self.assertEqual(targets, [])
+
     def test_directory_router_target_resolves_to_readme(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -229,6 +264,16 @@ class DocumentationIntegrityTest(unittest.TestCase):
         self.assertTrue(
             check_docs.exposes_current_gaps(
                 "# Target\n\nStatus: target.\n\n## Current gaps\n\n- Missing.\n"
+            )
+        )
+        self.assertTrue(
+            check_docs.exposes_current_gaps(
+                "# Target\n\nStatus: target.\n\n[Current gaps](gaps.md)\n"
+            )
+        )
+        self.assertFalse(
+            check_docs.exposes_current_gaps(
+                "# Target\n\nStatus: target.\n\n<!-- [Current gaps](gaps.md) -->\n"
             )
         )
 
@@ -382,6 +427,19 @@ class DocumentationIntegrityTest(unittest.TestCase):
 
     def test_entry_pages_defer_to_agents_without_competing_map(self) -> None:
         self.assertEqual(self.entry_page_findings(), [])
+
+    def test_commented_agents_link_does_not_satisfy_entry_page_deference(self) -> None:
+        errors = self.entry_page_findings(
+            {
+                "README.md": (
+                    "# Product\n\nUse the repository instructions.\n\n"
+                    "<!-- [Route](AGENTS.md) -->\n"
+                )
+            }
+        )
+
+        self.assertEqual([error.rule_id for error in errors], ["PROD-DOCS-11"])
+        self.assertIn("does not link to AGENTS.md", errors[0].format())
 
     def test_competing_entry_page_source_map_fails(self) -> None:
         errors = self.entry_page_findings(
