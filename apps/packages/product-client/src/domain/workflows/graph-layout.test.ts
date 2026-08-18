@@ -131,4 +131,36 @@ describe("layoutWorkflowBuilderGraph", () => {
     expect(moved.width).toBe(420 + WORKFLOW_GRAPH_NODE_WIDTH);
     expect(moved.height).toBe(30 + WORKFLOW_GRAPH_NODE_HEIGHT);
   });
+
+  // The tier-2 lifecycle shape: display order is [input, step-2, step-1] while
+  // the authored edge still runs input -> step-1, so the wire passes behind the
+  // card between them. Its midpoint lands on that card's centre — which is
+  // exactly where a click meant for the card goes.
+  it("keeps an edge control off a card the edge runs behind", () => {
+    const layout = layoutWorkflowBuilderGraph(
+      ["-input-", "step-2", "step-1"],
+      [{ from: "-input-", to: "step-1" }],
+    );
+    const covered = layout.nodes[1];
+    const [edge] = layout.edges;
+
+    expect(edge.midpoint).toEqual({
+      x: covered.x + WORKFLOW_GRAPH_NODE_WIDTH / 2,
+      y: covered.y + WORKFLOW_GRAPH_NODE_HEIGHT / 2,
+    });
+    const insideCoveredCard = edge.control.x > covered.x
+      && edge.control.x < covered.x + WORKFLOW_GRAPH_NODE_WIDTH
+      && edge.control.y > covered.y
+      && edge.control.y < covered.y + WORKFLOW_GRAPH_NODE_HEIGHT;
+    expect(insideCoveredCard).toBe(false);
+  });
+
+  it("leaves the control on the midpoint when the wire is clear", () => {
+    const layout = layoutWorkflowBuilderGraph(
+      ["one", "two"],
+      [{ from: "one", to: "two" }],
+    );
+
+    expect(layout.edges[0].control).toEqual(layout.edges[0].midpoint);
+  });
 });

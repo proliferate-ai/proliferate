@@ -146,8 +146,11 @@ export function WorkflowBuilderChainCanvas({
           key={`remove:${edge.fromKey}->${edge.toKey}`}
           size="sm"
           disabled={disabled}
-          className="absolute z-raised opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100"
-          style={{ left: edge.midpoint.x - 10, top: edge.midpoint.y - 10 }}
+          // No z-lift: cards are drawn after these and so outrank them. An
+          // edge control the author cannot see must not be the thing their
+          // click lands on.
+          className="absolute opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+          style={{ left: edge.control.x - 12, top: edge.control.y - 12 }}
           aria-label={`Remove connection from ${edge.fromKey} to ${edge.toKey}`}
           title="Remove connection"
           onClick={() => edge.fromKey === WORKFLOW_INPUT_SENTINEL

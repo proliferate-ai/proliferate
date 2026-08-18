@@ -33,6 +33,11 @@ export interface WorkflowGraphEdgeLayout {
   /** SVG path in content coordinates, ready for a `<path d>` attribute. */
   path: string;
   midpoint: { x: number; y: number };
+  /**
+   * Where a control belonging to this edge (the remove affordance) sits: open
+   * wire, never on top of a card. See `edgeControl`.
+   */
+  control: { x: number; y: number };
 }
 
 export interface WorkflowGraphLayout {
@@ -60,6 +65,83 @@ function topPort(node: WorkflowGraphPlacedNode): { x: number; y: number } {
   return { x: node.x + WORKFLOW_GRAPH_NODE_WIDTH / 2, y: node.y };
 }
 
+/** Points along an edge tried when looking for wire no card covers. */
+const EDGE_CONTROL_SAMPLES = 41;
+
+/** Strictly inside the card: a port sits on the border and is not covered. */
+function cardCovers(node: WorkflowGraphPlacedNode, x: number, y: number): boolean {
+  return x > node.x
+    && x < node.x + WORKFLOW_GRAPH_NODE_WIDTH
+    && y > node.y
+    && y < node.y + WORKFLOW_GRAPH_NODE_HEIGHT;
+}
+
+/**
+ * The middle of the longest stretch of an edge that no card covers.
+ *
+ * An authored graph may wire two cards that are not neighbours on screen, and
+ * that edge runs behind whatever sits between them. A control pinned to the
+ * geometric midpoint then lands on another card — invisible there, but still
+ * first in line for the pointer, which is how a card in the middle of a chain
+ * stopped being clickable. Anchoring to open wire keeps the control both
+ * visible and off cards it has nothing to do with.
+ *
+ * An edge with no open stretch at all keeps its midpoint: there is no better
+ * point, and the canvas draws cards above edge controls, so the click still
+ * reaches the card.
+ */
+function edgeControl(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  nodes: readonly WorkflowGraphPlacedNode[],
+): { x: number; y: number } {
+  let bestStart = -1;
+  let bestEnd = -1;
+  let runStart = -1;
+  for (let sample = 0; sample < EDGE_CONTROL_SAMPLES; sample += 1) {
+    const ratio = sample / (EDGE_CONTROL_SAMPLES - 1);
+    const x = from.x + (to.x - from.x) * ratio;
+    const y = from.y + (to.y - from.y) * ratio;
+    if (nodes.some((node) => cardCovers(node, x, y))) {
+      runStart = -1;
+      continue;
+    }
+    if (runStart === -1) {
+      runStart = sample;
+    }
+    if (sample - runStart >= bestEnd - bestStart) {
+      bestStart = runStart;
+      bestEnd = sample;
+    }
+  }
+  if (bestStart === -1) {
+    return { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+  }
+  const ratio = ((bestStart + bestEnd) / 2) / (EDGE_CONTROL_SAMPLES - 1);
+  return { x: from.x + (to.x - from.x) * ratio, y: from.y + (to.y - from.y) * ratio };
+}
+
+/**
+ * Resolves every edge's control against the finished placement — the cards an
+ * edge has to dodge include ones laid out after it was drawn.
+ */
+function withEdgeControls(
+  nodes: readonly WorkflowGraphPlacedNode[],
+  edges: readonly Omit<WorkflowGraphEdgeLayout, "control">[],
+): WorkflowGraphEdgeLayout[] {
+  const byKey = new Map(nodes.map((node) => [node.key, node]));
+  return edges.map((edge) => {
+    const fromNode = byKey.get(edge.fromKey);
+    const toNode = byKey.get(edge.toKey);
+    return {
+      ...edge,
+      control: fromNode && toNode
+        ? edgeControl(bottomPort(fromNode), topPort(toNode), nodes)
+        : edge.midpoint,
+    };
+  });
+}
+
 /**
  * Lays out a run's slots as the design's graph: one rank per chain slot,
  * attempts side by side within their rank (a retry is the same chain
@@ -74,7 +156,7 @@ function topPort(node: WorkflowGraphPlacedNode): { x: number; y: number } {
  */
 export function layoutWorkflowRunGraph(slots: readonly WorkflowGraphSlotVM[]): WorkflowGraphLayout {
   const nodes: WorkflowGraphPlacedNode[] = [];
-  const edges: WorkflowGraphEdgeLayout[] = [];
+  const edges: Omit<WorkflowGraphEdgeLayout, "control">[] = [];
   const placedByKey = new Map<string, WorkflowGraphPlacedNode>();
   let cursorY = 0;
   let previousRankLatest: WorkflowGraphPlacedNode | null = null;
@@ -149,7 +231,7 @@ export function layoutWorkflowRunGraph(slots: readonly WorkflowGraphSlotVM[]): W
 
   return {
     nodes,
-    edges,
+    edges: withEdgeControls(nodes, edges),
     width: nodes.reduce((max, node) => Math.max(max, node.x + WORKFLOW_GRAPH_NODE_WIDTH), 0),
     height: nodes.reduce((max, node) => Math.max(max, node.y + WORKFLOW_GRAPH_NODE_HEIGHT), 0),
   };
@@ -187,7 +269,7 @@ export function layoutWorkflowBuilderGraph(
     };
   });
   const byKey = new Map(nodes.map((node) => [node.key, node]));
-  const laidOutEdges = edges.flatMap((edge): WorkflowGraphEdgeLayout[] => {
+  const laidOutEdges = edges.flatMap((edge): Omit<WorkflowGraphEdgeLayout, "control">[] => {
     const fromNode = byKey.get(edge.from);
     const toNode = byKey.get(edge.to);
     if (!fromNode || !toNode) return [];
@@ -203,7 +285,7 @@ export function layoutWorkflowBuilderGraph(
   });
   return {
     nodes,
-    edges: laidOutEdges,
+    edges: withEdgeControls(nodes, laidOutEdges),
     // Measured from the placements rather than from the chain's length: a card
     // dragged right or down has to grow the content the canvas pans and fits.
     width: nodes.reduce((max, node) => Math.max(max, node.x + WORKFLOW_GRAPH_NODE_WIDTH), 0),
