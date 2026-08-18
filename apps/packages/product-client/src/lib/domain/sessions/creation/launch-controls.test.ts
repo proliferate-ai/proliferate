@@ -26,6 +26,12 @@ describe("pickLiveDefaultLaunchControls", () => {
     expect(pickLiveDefaultLaunchControls({ fast: "on" })).toEqual({ fast_mode: "on" });
   });
 
+  it("normalizes codex's raw `reasoning_effort` id onto effort", () => {
+    expect(pickLiveDefaultLaunchControls({ reasoning_effort: "high" })).toEqual({
+      effort: "high",
+    });
+  });
+
   it("returns an empty object for missing values", () => {
     expect(pickLiveDefaultLaunchControls(undefined)).toEqual({});
   });

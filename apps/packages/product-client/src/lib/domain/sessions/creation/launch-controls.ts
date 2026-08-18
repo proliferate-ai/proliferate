@@ -9,11 +9,12 @@ export type LiveDefaultLaunchControls = Partial<Record<LiveDefaultLaunchControlI
 export type LiveDefaultLaunchControlsByAgent = Record<string, LiveDefaultLaunchControls>;
 
 // Launch-control values arrive keyed by RAW config id (what the harness calls
-// the option), which is the canonical id for every control except claude's
-// fast mode: claude names it `fast` where codex names it `fast_mode`.
+// the option), which can differ from the canonical live-default id. Claude
+// calls fast mode `fast`, while Codex calls effort `reasoning_effort`.
 const LIVE_DEFAULT_LAUNCH_CONTROL_ID_BY_RAW_ID: Record<string, LiveDefaultLaunchControlId> = {
   collaboration_mode: "collaboration_mode",
   reasoning: "reasoning",
+  reasoning_effort: "effort",
   effort: "effort",
   fast_mode: "fast_mode",
   fast: "fast_mode",
