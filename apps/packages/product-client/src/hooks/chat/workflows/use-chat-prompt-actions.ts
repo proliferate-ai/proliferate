@@ -21,7 +21,7 @@ import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-co
 import { resolveAvailableLaunchSelection } from "#product/lib/domain/chat/models/launch-selection-defaults";
 import {
   EMPTY_CHAT_DRAFT,
-  serializeChatDraftToPrompt,
+  serializeChatDraftToOutgoingPrompt,
 } from "#product/lib/domain/chat/composer/file-mention-draft-model";
 import {
   createEmptySessionRecord,
@@ -140,7 +140,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     const currentDraft = draftKey
       ? useChatInputStore.getState().draftByWorkspaceId[draftKey] ?? EMPTY_CHAT_DRAFT
       : EMPTY_CHAT_DRAFT;
-    const text = input?.text.trim() ?? serializeChatDraftToPrompt(currentDraft).trim();
+    const text = input?.text.trim() ?? serializeChatDraftToOutgoingPrompt(currentDraft).trim();
     const blocks = input?.blocks ?? [{ type: "text" as const, text }];
     const attachmentSnapshots = input?.attachmentSnapshots ?? [];
     const preserveDraft = input?.preserveDraft ?? false;

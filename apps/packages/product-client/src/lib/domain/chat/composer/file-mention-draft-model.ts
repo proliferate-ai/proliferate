@@ -4,6 +4,7 @@ import {
   normalizeWorkspaceRelativePath,
   workspaceFileBasename,
 } from "#product/lib/domain/chat/composer/file-mention-links";
+import { resolveContextDocMentionTokens } from "#product/lib/domain/chat/composer/context-doc-mention";
 
 export interface ChatComposerDraft {
   nodes: ChatComposerDraftNode[];
@@ -143,6 +144,17 @@ export function serializeChatDraftToPrompt(draft: ChatComposerDraft): string {
     }
     return formatMarkdownFileLink(node.name || workspaceFileBasename(node.path), node.path);
   }).join("");
+}
+
+/**
+ * The prompt actually sent to the agent. `serializeChatDraftToPrompt` is the
+ * draft's own markdown and keeps context-doc mention tokens intact so the
+ * editor round-trips them back into chips; the outgoing form is where those
+ * tokens resolve to the concrete workspace path the agent can read. Send
+ * sites call this, everything that feeds text back into the editor must not.
+ */
+export function serializeChatDraftToOutgoingPrompt(draft: ChatComposerDraft): string {
+  return resolveContextDocMentionTokens(serializeChatDraftToPrompt(draft));
 }
 
 export function cloneChatDraftNode(node: ChatComposerDraftNode): ChatComposerDraftNode {

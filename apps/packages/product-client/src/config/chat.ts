@@ -19,6 +19,15 @@ export const HOME_CHAT_COMPOSER_INPUT = {
  */
 export const CHAT_FILE_MENTION_SEARCH_LIMIT = 200;
 
+/**
+ * How many of the workspace's workflow runs the `@` mention menu reads context
+ * docs from, newest-first with active runs prioritized. Bounded because each
+ * run costs one projection fetch when the menu opens; four mirrors the ruled
+ * visible-run cap on the workspace's run rails, so the menu and the pane agree
+ * about which runs are "current".
+ */
+export const CHAT_CONTEXT_DOC_MENTION_RUN_LIMIT = 4;
+
 /** File-picker accept list for the composer's attach (+) button, shared by the
  * chat and home composers. Mirrors the upload kinds prompts accept (images and
  * text-like context files). */

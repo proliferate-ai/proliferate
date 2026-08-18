@@ -1,14 +1,17 @@
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import {
+  ComposerInlineMenuGroupLabel,
   ComposerInlineMenuPanel,
   ComposerInlineMenuRow,
 } from "#product/components/workspace/chat/input/ComposerInlineMenu";
 import { PickerEmptyRow } from "#product/primitives/patterns/PickerPopoverContent";
+import { FileText } from "#product/primitives/icons/workspace";
 import { FileTreeEntryIcon } from "#product/components/workspace/files/file-icons";
-import type { FileMentionResult } from "#product/lib/domain/chat/composer/file-mention-search";
+import type { ChatMentionMenuItem } from "#product/lib/domain/chat/composer/chat-mention-items";
+import { contextDocMentionWorkspacePath } from "#product/lib/domain/chat/composer/context-doc-mention";
 
 interface ComposerFileMentionSearchProps {
-  results: readonly FileMentionResult[];
+  items: readonly ChatMentionMenuItem[];
   highlightedIndex: number;
   listRef: RefObject<HTMLDivElement | null>;
   query: string;
@@ -16,7 +19,7 @@ interface ComposerFileMentionSearchProps {
   isError: boolean;
   isPending: boolean;
   runtimeReady: boolean;
-  onSelect: (result: FileMentionResult) => void;
+  onSelect: (item: ChatMentionMenuItem) => void;
   onRowMouseEnter: (index: number) => void;
   setRowRef: (index: number, element: HTMLButtonElement | null) => void;
   getRowId: (index: number) => string;
@@ -24,7 +27,7 @@ interface ComposerFileMentionSearchProps {
 }
 
 export function ComposerFileMentionSearch({
-  results,
+  items,
   highlightedIndex,
   listRef,
   query,
@@ -38,33 +41,43 @@ export function ComposerFileMentionSearch({
   getRowId,
   className,
 }: ComposerFileMentionSearchProps) {
+  // Group labels appear only when both sources contribute rows; the common
+  // file-only menu (context-doc source disabled or empty) stays label-free and
+  // renders exactly as it did before docs existed.
+  const docCount = items.filter((item) => item.kind === "contextDoc").length;
+  const grouped = docCount > 0;
   return (
     <ComposerInlineMenuPanel listRef={listRef} label="File mentions" className={className}>
-      {results.length > 0 ? (
-        results.map((result, index) => (
-          <ComposerInlineMenuRow
-            key={result.path}
-            id={getRowId(index)}
-            index={index}
-            selected={index === highlightedIndex}
-            title={result.path}
-            leading={(
-              <FileTreeEntryIcon
-                name={result.name}
-                path={result.path}
-                kind="file"
-                className="icon-paired shrink-0"
-              />
-            )}
-            primary={<span className="font-control">{result.name}</span>}
-            // The directory is the disambiguator between same-named files, so
-            // it takes the remaining width and truncates rather than the name.
-            secondary={result.parent}
-            onSelect={() => onSelect(result)}
-            onRowMouseEnter={onRowMouseEnter}
-            setRowRef={setRowRef}
-          />
-        ))
+      {items.length > 0 ? (
+        items.map((item, index) => {
+          const row = (
+            <ComposerInlineMenuRow
+              key={mentionItemKey(item)}
+              id={getRowId(index)}
+              index={index}
+              selected={index === highlightedIndex}
+              {...mentionRowContent(item)}
+              onSelect={() => onSelect(item)}
+              onRowMouseEnter={onRowMouseEnter}
+              setRowRef={setRowRef}
+            />
+          );
+          if (!grouped) {
+            return row;
+          }
+          // The merged list is docs-first, so the group boundaries are index 0
+          // and the first file index (= docCount).
+          const heading = index === 0
+            ? "Context docs"
+            : index === docCount
+              ? "Files"
+              : null;
+          return heading ? (
+            <MentionGroup key={`group:${mentionItemKey(item)}`} heading={heading}>
+              {row}
+            </MentionGroup>
+          ) : row;
+        })
       ) : (
         <PickerEmptyRow
           label={mentionStatusMessage({ query, isLoading, isError, isPending, runtimeReady })}
@@ -72,6 +85,50 @@ export function ComposerFileMentionSearch({
       )}
     </ComposerInlineMenuPanel>
   );
+}
+
+function MentionGroup({ heading, children }: { heading: string; children: ReactNode }) {
+  return (
+    <>
+      <ComposerInlineMenuGroupLabel>{heading}</ComposerInlineMenuGroupLabel>
+      {children}
+    </>
+  );
+}
+
+function mentionRowContent(item: ChatMentionMenuItem): {
+  title: string;
+  leading: ReactNode;
+  primary: ReactNode;
+  secondary: ReactNode;
+} {
+  if (item.kind === "contextDoc") {
+    return {
+      title: contextDocMentionWorkspacePath(item.doc),
+      leading: <FileText className="icon-paired shrink-0" />,
+      primary: <span className="font-control">{item.doc.filename}</span>,
+      secondary: item.doc.runLabel ?? "Workflow run",
+    };
+  }
+  return {
+    title: item.file.path,
+    leading: (
+      <FileTreeEntryIcon
+        name={item.file.name}
+        path={item.file.path}
+        kind="file"
+        className="icon-paired shrink-0"
+      />
+    ),
+    primary: <span className="font-control">{item.file.name}</span>,
+    // The directory is the disambiguator between same-named files, so it takes
+    // the remaining width and truncates rather than the name.
+    secondary: item.file.parent,
+  };
+}
+
+function mentionItemKey(item: ChatMentionMenuItem): string {
+  return item.kind === "contextDoc" ? `doc:${item.doc.docId}` : `file:${item.file.path}`;
 }
 
 function mentionStatusMessage({
