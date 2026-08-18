@@ -278,6 +278,12 @@ pub(super) fn map_send_prompt_error(error: SendPromptError) -> ApiError {
                 &incident_id,
             )
         }
+        // Checkpoints (Lane H): a turn-start capture failed under the abort
+        // policy, so the turn never started. 409, retryable.
+        SendPromptError::CheckpointCaptureFailed { reason } => ApiError::conflict(
+            format!("failed to capture a checkpoint before the turn: {reason}"),
+            "CHECKPOINT_CAPTURE_FAILED",
+        ),
         // {error:#} keeps the anyhow cause chain; to_string() would drop it.
         SendPromptError::Internal(error) => {
             let telemetry_safe_detail = format!("{error:#}");

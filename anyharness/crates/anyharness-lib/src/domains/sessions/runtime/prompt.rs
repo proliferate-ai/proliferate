@@ -186,6 +186,17 @@ impl SessionRuntime {
             "[workspace-latency] session.runtime.prompt.live_handle_ready"
         );
 
+        // Turn-start checkpoint (Lane H), just before dispatch. A capture failure
+        // under the abort policy returns here and the turn never starts.
+        let checkpoint_id = self
+            .capture_turn_start_checkpoint(
+                &record.workspace_id,
+                session_id,
+                &handle,
+                prompt_id_for_trace.as_deref(),
+            )
+            .await?;
+
         // Invariant 1/2: the actor is the sole writer of `busy` and the queue.
         // The runtime no longer precaptures `busy`; it just forwards the command
         // and awaits the actor's decision (Started vs Queued).
@@ -231,6 +242,9 @@ impl SessionRuntime {
             prompt_id = prompt_id_for_trace.as_deref(),
             "[workspace-latency] session.runtime.prompt.actor_accepted"
         );
+
+        self.finalize_turn_start_checkpoint(checkpoint_id, &acceptance)
+            .await;
 
         let session = self
             .session_service
@@ -339,10 +353,23 @@ impl SessionRuntime {
             .ensure_live_session_handle(&record, None)
             .await
             .map_err(|error| TextPromptDispatchError::Dispatch(map_start_error_to_prompt(error)))?;
+        // Turn-start checkpoint (Lane H). A capture failure under the abort
+        // policy maps into a failed dispatch here, exactly like a start failure.
+        let checkpoint_id = self
+            .capture_turn_start_checkpoint(
+                &record.workspace_id,
+                session_id,
+                &handle,
+                Some(prompt_id.as_str()),
+            )
+            .await
+            .map_err(TextPromptDispatchError::Dispatch)?;
         let acceptance = handle
             .send_prompt(payload, Some(prompt_id))
             .await
             .map_err(classify_text_prompt_command_error)?;
+        self.finalize_turn_start_checkpoint(checkpoint_id, &acceptance)
+            .await;
         // The prompt is accepted at this point; the re-read only refreshes the
         // returned snapshot. A failure here must not become a dispatch error
         // (the caller would terminalize a prompt that is actually running), so
@@ -380,6 +407,10 @@ impl SessionRuntime {
             .ensure_live_session_handle(&record, None)
             .await
             .map_err(map_start_error_to_prompt)?;
+        // Turn-start checkpoint (Lane H) before dispatch.
+        let checkpoint_id = self
+            .capture_turn_start_checkpoint(&record.workspace_id, session_id, &handle, None)
+            .await?;
         let payload =
             crate::domains::sessions::prompt::PromptPayload::text(text).with_provenance(provenance);
         let acceptance = handle
@@ -399,6 +430,8 @@ impl SessionRuntime {
                     PromptAcceptError::ProductContextUnavailable { incident_id, error },
                 ) => SendPromptError::ProductContextUnavailable { incident_id, error },
             })?;
+        self.finalize_turn_start_checkpoint(checkpoint_id, &acceptance)
+            .await;
         let session = self
             .session_service
             .get_session(session_id)
@@ -410,6 +443,103 @@ impl SessionRuntime {
             }
             PromptAcceptance::Queued { seq } => SendPromptOutcome::Queued { session, seq },
         })
+    }
+
+    /// Turn-start checkpoint capture (Lane H), called at every prompt dispatch
+    /// seam just before `handle.send_prompt`. Returns the captured checkpoint id
+    /// (to be finalized after dispatch), or `None` when nothing was captured.
+    ///
+    /// Flag-off is zero work: no store reads, no git. A busy handle means the
+    /// prompt will queue mid-turn, and a snapshot labelled as THIS boundary would
+    /// be dishonest, so capture is skipped. On a capture failure the selected
+    /// [`TURN_START_CAPTURE_FAILURE_POLICY`] decides: `Abort` returns a typed
+    /// error (the turn never starts), `Degrade` warns and proceeds without a
+    /// checkpoint.
+    ///
+    /// Known gap: turns started by the actor draining its own queue get no
+    /// checkpoint in this PR — the hook lives at the runtime dispatch seam, not
+    /// inside the actor's queue-replay loop.
+    async fn capture_turn_start_checkpoint(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+        handle: &crate::live::sessions::LiveSessionHandle,
+        prompt_id: Option<&str>,
+    ) -> Result<Option<String>, SendPromptError> {
+        use crate::domains::workspaces::checkpoints::flags::{
+            checkpoint_capture_enabled, CaptureFailurePolicy, TURN_START_CAPTURE_FAILURE_POLICY,
+        };
+        use crate::domains::workspaces::checkpoints::CheckpointOrigin;
+
+        if !checkpoint_capture_enabled() {
+            return Ok(None);
+        }
+        if handle.is_busy() {
+            tracing::debug!(
+                session_id = %session_id,
+                "checkpoint capture skipped: the session is busy and this prompt will queue"
+            );
+            return Ok(None);
+        }
+        match self
+            .checkpoint_service
+            .capture(
+                workspace_id,
+                CheckpointOrigin::TurnStart,
+                Some(session_id.to_string()),
+                prompt_id.map(str::to_string),
+            )
+            .await
+        {
+            Ok(record) => Ok(Some(record.id)),
+            Err(error) => match TURN_START_CAPTURE_FAILURE_POLICY {
+                CaptureFailurePolicy::Abort => Err(SendPromptError::CheckpointCaptureFailed {
+                    reason: error.to_string(),
+                }),
+                CaptureFailurePolicy::Degrade => {
+                    tracing::warn!(
+                        session_id = %session_id,
+                        error = %error,
+                        "checkpoint capture failed; proceeding without a checkpoint (degrade policy)"
+                    );
+                    Ok(None)
+                }
+            },
+        }
+    }
+
+    /// Post-dispatch bookkeeping for a turn-start checkpoint. `Started` backfills
+    /// the real `turn_id`; `Queued` means the race was lost, so the checkpoint is
+    /// expired and its refs deleted. Non-fatal: a bookkeeping error is logged, it
+    /// never fails a prompt whose command was already accepted.
+    async fn finalize_turn_start_checkpoint(
+        &self,
+        checkpoint_id: Option<String>,
+        acceptance: &PromptAcceptance,
+    ) {
+        let Some(checkpoint_id) = checkpoint_id else {
+            return;
+        };
+        match acceptance {
+            PromptAcceptance::Started { turn_id } => {
+                if let Err(error) = self.checkpoint_service.set_turn_id(&checkpoint_id, turn_id) {
+                    tracing::warn!(
+                        checkpoint_id = %checkpoint_id,
+                        error = %error,
+                        "could not backfill a checkpoint's turn_id after dispatch"
+                    );
+                }
+            }
+            PromptAcceptance::Queued { .. } => {
+                if let Err(error) = self.checkpoint_service.expire_and_delete(&checkpoint_id).await {
+                    tracing::warn!(
+                        checkpoint_id = %checkpoint_id,
+                        error = %error,
+                        "could not expire a checkpoint whose turn queued"
+                    );
+                }
+            }
+        }
     }
 }
 

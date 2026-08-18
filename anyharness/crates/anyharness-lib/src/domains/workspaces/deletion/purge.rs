@@ -298,6 +298,27 @@ impl WorkspacePurgeService {
                 .map_err(|error| WorkspacePurgeError::Failed(error.to_string()))?;
         }
 
+        // Checkpoints (Lane H, ADR 5.3): delete the checkpoint ROWS first, then
+        // every checkpoint ref under this workspace id. Called directly through
+        // the store and the sole-writer `checkpoints::refs` — no service handle
+        // is needed, and the existing deferred-gc handoff below reclaims the
+        // bytes. Row-then-refs matches the retention deletion order.
+        self.store
+            .delete_checkpoints_for_workspace(workspace_id)
+            .map_err(|error| WorkspacePurgeError::Failed(error.to_string()))?;
+        {
+            let target = repo_root.clone();
+            let id = workspace_id.to_string();
+            tokio::task::spawn_blocking(move || {
+                crate::domains::workspaces::checkpoints::refs::delete_all_for(&target, &id)
+            })
+            .await
+            .map_err(|error| {
+                WorkspacePurgeError::Failed(format!("checkpoint ref delete task failed: {error}"))
+            })?
+            .map_err(|error| WorkspacePurgeError::Failed(error.to_string()))?;
+        }
+
         // The detached, guarded, non-fatal gc: repo-global by nature, so
         // skipped outright while any archive/unarchive is in flight on this
         // repo root (the enqueue below covers it either way), and never

@@ -1149,6 +1149,7 @@ async fn same_key_different_payload_is_idempotency_conflict() {
         adapter_version: None,
         native_version: None,
         native_child_session_id: None,
+        checkpoint_id: None,
         created_at: "2026-03-25T00:00:00Z".to_string(),
         updated_at: "2026-03-25T00:00:00Z".to_string(),
     };
@@ -1194,6 +1195,7 @@ async fn unknown_native_outcome_blocks_redispatch_on_the_same_key() {
         adapter_version: None,
         native_version: None,
         native_child_session_id: None,
+        checkpoint_id: None,
         created_at: "2026-03-25T00:00:00Z".to_string(),
         updated_at: "2026-03-25T00:00:00Z".to_string(),
     };
@@ -1255,6 +1257,7 @@ async fn same_key_same_payload_resumes_the_existing_child() {
         adapter_version: None,
         native_version: None,
         native_child_session_id: None,
+        checkpoint_id: None,
         created_at: "2026-03-25T00:00:00Z".to_string(),
         updated_at: "2026-03-25T00:00:00Z".to_string(),
     };

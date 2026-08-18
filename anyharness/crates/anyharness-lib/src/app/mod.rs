@@ -75,6 +75,7 @@ use crate::domains::terminals::store::TerminalStore;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::archive::quiesce::QuiescePlanes;
 use crate::domains::workspaces::archive::WorkspaceArchiveService;
+use crate::domains::workspaces::checkpoints::WorkspaceCheckpointService;
 use crate::domains::workspaces::checkout_gate::CheckoutDeletionGate;
 use crate::domains::workspaces::deletion::purge::WorkspacePurgeService;
 use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
@@ -166,6 +167,7 @@ pub struct AppState {
     pub checkout_deletion_gate: Arc<CheckoutDeletionGate>,
     pub workspace_purge_service: Arc<WorkspacePurgeService>,
     pub workspace_archive_service: Arc<WorkspaceArchiveService>,
+    pub workspace_checkpoint_service: Arc<WorkspaceCheckpointService>,
     pub worktree_inventory_service: Arc<WorktreeInventoryService>,
     pub mobility_runtime: Arc<MobilityRuntime>,
     pub materialization_runtime: Arc<MaterializationRuntime>,
@@ -452,6 +454,15 @@ impl AppState {
             activity_session_hooks,
             workflow_session_extension.clone(),
         ];
+        // Checkpoints (Lane H): constructed BEFORE session_runtime (the prompt
+        // hook needs it) and reused by the archive service (retention duty) and
+        // purge. Depends only on the two stores and the operation gate, all of
+        // which exist above — no cycle with the runtime/archive pair below.
+        let workspace_checkpoint_service = Arc::new(WorkspaceCheckpointService::new(
+            WorkspaceStore::new(db.clone()),
+            RepoRootStore::new(db.clone()),
+            workspace_operation_gate.clone(),
+        ));
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
             session_link_service.clone(),
@@ -468,6 +479,7 @@ impl AppState {
             goal_service.clone(),
             loop_service.clone(),
             activity_service.clone(),
+            workspace_checkpoint_service.clone(),
         ));
         completion_delivery_wiring.spawn(&session_runtime);
         // Workflows gen-2, in this order: fence first (no actor may accept a
@@ -496,6 +508,7 @@ impl AppState {
             },
             session_service.clone(),
             runtime_home.clone(),
+            workspace_checkpoint_service.clone(),
         ));
         let workspace_purge_service = Arc::new(WorkspacePurgeService::new(
             WorkspaceStore::new(db.clone()),
@@ -647,6 +660,7 @@ impl AppState {
             checkout_deletion_gate,
             workspace_purge_service,
             workspace_archive_service,
+            workspace_checkpoint_service,
             worktree_inventory_service,
             mobility_runtime,
             materialization_runtime,

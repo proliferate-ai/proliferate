@@ -22,6 +22,7 @@ use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::route_auth::{GatewayModelResolve, RouteAuthError};
 use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
+use crate::domains::workspaces::checkpoints::WorkspaceCheckpointService;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::sessions::LiveSessionManager;
 
@@ -82,6 +83,10 @@ pub struct SessionRuntime {
     active_goal_resolver: Arc<dyn ActiveGoalResolver>,
     loops_resolver: Arc<dyn LoopsResolver>,
     activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
+    /// Checkpoints (Lane H): the turn-start capture hook lives at the prompt
+    /// dispatch seam (`prompt.rs`), and fork linkage reads the boundary
+    /// checkpoint through this handle. Behind `ANYHARNESS_CHECKPOINT_CAPTURE`.
+    checkpoint_service: Arc<WorkspaceCheckpointService>,
 }
 
 impl SessionRuntime {
@@ -201,6 +206,13 @@ pub enum SendPromptError {
     ProductContextUnavailable {
         incident_id: String,
         error: crate::live::sessions::product_context::AgentProductContextResolutionError,
+    },
+    /// Checkpoints (Lane H, Q-H1 abort policy): a turn-start checkpoint capture
+    /// failed and [`TURN_START_CAPTURE_FAILURE_POLICY`](crate::domains::workspaces::checkpoints::flags::TURN_START_CAPTURE_FAILURE_POLICY)
+    /// is `Abort`, so the prompt is refused rather than run uncheckpointed. The
+    /// turn never started; the caller may retry.
+    CheckpointCaptureFailed {
+        reason: String,
     },
     Internal(anyhow::Error),
 }
@@ -429,6 +441,7 @@ impl SessionRuntime {
         active_goal_resolver: Arc<dyn ActiveGoalResolver>,
         loops_resolver: Arc<dyn LoopsResolver>,
         activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
+        checkpoint_service: Arc<WorkspaceCheckpointService>,
     ) -> Self {
         Self {
             session_service,
@@ -446,6 +459,7 @@ impl SessionRuntime {
             active_goal_resolver,
             loops_resolver,
             activity_roster_resolver,
+            checkpoint_service,
         }
     }
 

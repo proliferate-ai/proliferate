@@ -244,6 +244,14 @@ pub fn list_for_repo(repo_root: &Path) -> anyhow::Result<Vec<ArchiveRefEntry>> {
         if rest.starts_with("rescue/") {
             continue;
         }
+        // The checkpoints namespace (`checkpoints/<ws>/<id>/<family>`) is owned
+        // by `checkpoints/refs.rs` and enumerated through ITS own
+        // `list_for_workspace`. Left in, the archive sweep's duty 3 would parse
+        // `family="checkpoints"` and a garbage `workspace_id="<ws>/<id>/<family>"`
+        // tail, then churn a lease on that non-existent workspace every tick.
+        if rest.starts_with("checkpoints/") {
+            continue;
+        }
         let Some((family, workspace_id)) = rest.split_once('/') else {
             continue;
         };

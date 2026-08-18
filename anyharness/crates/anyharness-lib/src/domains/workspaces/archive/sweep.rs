@@ -67,7 +67,7 @@ impl WorkspaceArchiveService {
         });
     }
 
-    /// One full pass: the primary cleanup, then the four secondary duties.
+    /// One full pass: the primary cleanup, then the five secondary duties.
     ///
     /// Takes `&Arc<Self>` rather than `&self` because the convergence helper the
     /// primary cleanup shares with the request-driven re-POST path needs an
@@ -108,6 +108,11 @@ impl WorkspaceArchiveService {
         self.sweep_staging_siblings(&archived).await;
         self.sweep_orphaned_refs().await;
         self.run_deferred_gcs().await;
+        // Duty 5 (Lane H): checkpoint retention. A no-op while
+        // `ANYHARNESS_CHECKPOINT_CAPTURE` is off; it enumerates its own candidate
+        // workspaces from the `workspace_checkpoints` table, so it does not lean
+        // on the `archived` list above.
+        self.checkpoints.sweep_retention().await;
     }
 
     /// The primary cleanup, plus duty 2 (a stale registration for an archived row
