@@ -31,6 +31,7 @@ from proliferate.integrations.integration_oauth.models import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integrations import api as integrations_api
+from proliferate.server.cloud.integrations import service as integrations_service
 from proliferate.server.cloud.integrations.config import (
     IntegrationConfig,
     StaticUrl,
@@ -140,11 +141,22 @@ class TestAuthenticateIntegration:
 
     @pytest.mark.asyncio
     async def test_authenticate_api_key_stores_credential(
-        self, client: AsyncClient, db_session: AsyncSession
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         auth = await _authed_user(client, db_session, prefix="int-key")
         await _seed_definitions(db_session)
         definition_id = await _definition_id(db_session, "context7")
+
+        observed: dict[str, object] = {}
+
+        async def _validate_candidate(**kwargs: object) -> list[dict[str, object]]:
+            observed.update(kwargs)
+            return []
+
+        monkeypatch.setattr(integrations_service, "list_remote_tools", _validate_candidate)
 
         response = await client.post(
             "/v1/cloud/integrations/authentications",
@@ -170,6 +182,8 @@ class TestAuthenticateIntegration:
         assert stored.credential_ciphertext is not None
         decoded = decrypt_json(stored.credential_ciphertext, secret=settings.cloud_secret_key)
         assert decoded["secretFields"]["api_key"] == "ctx7sk-secret-value"
+        assert observed["url"] == "https://mcp.context7.com/mcp"
+        assert observed["headers"] == {"Authorization": "Bearer ctx7sk-secret-value"}
 
     @pytest.mark.asyncio
     async def test_authenticate_api_key_requires_key(
@@ -255,7 +269,9 @@ class TestAuthenticateIntegration:
         )
         assert response.status_code == 200, response.text
         body = response.json()
-        assert body["account"]["status"] == "setup_required"
+        assert body["account"] is None
+        assert body["attemptId"]
+        assert body["attemptGeneration"] == 1
         assert body["oauthFlowId"]
         assert body["authorizationUrl"].startswith("https://auth.example.com/authorize")
         assert body["expiresAt"]

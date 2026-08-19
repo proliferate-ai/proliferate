@@ -48,7 +48,7 @@ class IntegrationAccountRecord:
     updated_at: datetime
 
 
-def _record(account: CloudIntegrationAccount) -> IntegrationAccountRecord:
+def record_from_row(account: CloudIntegrationAccount) -> IntegrationAccountRecord:
     return IntegrationAccountRecord(
         id=account.id,
         definition_id=account.definition_id,
@@ -72,6 +72,9 @@ def _record(account: CloudIntegrationAccount) -> IntegrationAccountRecord:
         created_at=account.created_at,
         updated_at=account.updated_at,
     )
+
+
+_record = record_from_row
 
 
 async def get_account(

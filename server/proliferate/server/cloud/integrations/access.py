@@ -25,7 +25,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.db import session_ops
 from proliferate.db.store.integrations.accounts import set_account_credentials
-from proliferate.db.store.integrations.oauth_clients import get_oauth_client
+from proliferate.db.store.integrations.oauth_clients import (
+    get_oauth_client,
+    get_oauth_client_by_id,
+)
 from proliferate.integrations.integration_oauth.tokens import refresh_token
 from proliferate.lib.infra.encryption.fernet import decrypt_text
 from proliferate.lib.infra.encryption.json import decrypt_json, encrypt_json
@@ -64,6 +67,21 @@ class ProviderAccess:
     headers: dict[str, str]
     query: dict[str, str]
     token_expires_at: datetime | None
+
+
+def render_candidate_api_key_launch(
+    cfg: IntegrationConfig,
+    *,
+    secret_fields: dict[str, str],
+    settings: dict[str, object],
+) -> tuple[str, dict[str, str], dict[str, str]]:
+    """Render validation-only request material for staged API-key credentials."""
+
+    return (
+        render_mcp_url(cfg, settings),
+        _render_headers(cfg.headers, secrets=secret_fields, settings=settings),
+        _render_query(cfg.query, secrets=secret_fields, settings=settings),
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -263,10 +281,25 @@ async def _refresh_oauth_bundle(
         # Read (and close) before the network call so the connection is back
         # in the pool while we wait on the provider.
         async with session_ops.open_async_session() as read_db:
-            oauth_client = await get_oauth_client(
-                read_db, str(issuer), str(redirect_uri), account.definition_id
+            oauth_client = (
+                await get_oauth_client_by_id(read_db, account.provider_client_id)
+                if account.provider_client_id is not None
+                else await get_oauth_client(
+                    read_db,
+                    str(issuer),
+                    str(redirect_uri),
+                    account.definition_id,
+                )
             )
         if oauth_client is not None:
+            if (
+                oauth_client.definition_id != account.definition_id
+                or oauth_client.issuer != str(issuer)
+                or oauth_client.redirect_uri != str(redirect_uri)
+                or (oauth_client.resource or "") != str(bundle.get("resource") or "")
+                or oauth_client.client_id != str(bundle.get("clientId", ""))
+            ):
+                raise _scope_policy_reauth()
             token_endpoint_auth_method = oauth_client.token_endpoint_auth_method
             if oauth_client.client_secret_ciphertext:
                 client_secret = decrypt_text(

@@ -53,7 +53,9 @@ class IntegrationAccountResponse(_CamelModel):
 
 
 class AuthenticateIntegrationResponse(_CamelModel):
-    account: IntegrationAccountResponse
+    account: IntegrationAccountResponse | None = None
+    attempt_id: UUID | None = None
+    attempt_generation: int | None = None
     oauth_flow_id: str | None = None
     authorization_url: str | None = None
     expires_at: datetime | None = None
@@ -199,6 +201,10 @@ class IntegrationManagementItem(TypedDict):
 
 class IntegrationManagementResponse(TypedDict):
     items: list[IntegrationManagementItem]
+
+
+class CancelIntegrationAuthorizationAttemptResponse(TypedDict):
+    attempt: IntegrationAuthorizationAttemptSummary
 
 
 # --------------------------------------------------------------------------- #
