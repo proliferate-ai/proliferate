@@ -12,6 +12,7 @@ from proliferate.integrations.integration_oauth.models import (
     RegisteredOAuthClient,
     TokenResponse,
 )
+from proliferate.integrations.integration_oauth.revocation import revoke_token
 from proliferate.integrations.integration_oauth.tokens import exchange_token, refresh_token
 from proliferate.integrations.integration_oauth.urls import (
     build_authorization_url,
@@ -35,4 +36,5 @@ __all__ = [
     "random_urlsafe",
     "refresh_token",
     "register_client",
+    "revoke_token",
 ]

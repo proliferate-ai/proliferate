@@ -151,7 +151,7 @@ async def test_management_projection_is_authoritative_reloadable_and_secret_free
     await upsert_tool_cache(
         db_session,
         account_id=ready.id,
-        auth_version=ready.auth_version,
+        grant_version=ready.grant_version,
         tools_json=json.dumps([{"name": "one"}, {"name": "two"}, {"name": "three"}]),
         content_hash=None,
         status="ready",

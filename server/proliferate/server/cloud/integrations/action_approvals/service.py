@@ -85,7 +85,7 @@ async def _account_revision_matches(
     *,
     grant: IntegrationGatewayGrant,
     integration_account_id: UUID,
-    integration_account_auth_version: int,
+    integration_account_grant_version: int,
     verdict: ToolCallRequiresApproval,
 ) -> bool:
     account = await accounts_store.get_ready_account_identity_for_provider(
@@ -99,7 +99,7 @@ async def _account_revision_matches(
     if (
         account is None
         or account.owner_user_id != grant.owner_user_id
-        or account.auth_version != integration_account_auth_version
+        or account.grant_version != integration_account_grant_version
     ):
         return False
     if grant.organization_id is not None:
@@ -125,7 +125,7 @@ async def request_action_approval(
     workspace_id: str,
     anyharness_session_id: str,
     integration_account_id: UUID,
-    integration_account_auth_version: int,
+    integration_account_grant_version: int,
     verdict: ToolCallRequiresApproval,
     arguments: dict[str, object],
     account_label: str,
@@ -136,7 +136,7 @@ async def request_action_approval(
         db,
         grant=grant,
         integration_account_id=integration_account_id,
-        integration_account_auth_version=integration_account_auth_version,
+        integration_account_grant_version=integration_account_grant_version,
         verdict=verdict,
     ):
         raise ActionApprovalAccountRevisionMismatch
@@ -144,7 +144,7 @@ async def request_action_approval(
         owner_user_id=grant.owner_user_id,
         organization_id=grant.organization_id,
         integration_account_id=integration_account_id,
-        integration_account_auth_version=integration_account_auth_version,
+        integration_account_grant_version=integration_account_grant_version,
         runtime_worker_id=grant.runtime_worker_id,
         gateway_session_id=gateway_session_id,
         workspace_id=workspace_id,
@@ -159,7 +159,7 @@ async def request_action_approval(
         owner_user_id=binding.owner_user_id,
         organization_id=binding.organization_id,
         integration_account_id=binding.integration_account_id,
-        integration_account_auth_version=binding.integration_account_auth_version,
+        integration_account_grant_version=binding.integration_account_grant_version,
         runtime_worker_id=binding.runtime_worker_id,
         gateway_session_id=binding.gateway_session_id,
         workspace_id=binding.workspace_id,
@@ -189,7 +189,7 @@ async def request_action_approval(
                 owner_user_id=binding.owner_user_id,
                 organization_id=binding.organization_id,
                 integration_account_id=binding.integration_account_id,
-                integration_account_auth_version=binding.integration_account_auth_version,
+                integration_account_grant_version=binding.integration_account_grant_version,
                 runtime_worker_id=binding.runtime_worker_id,
                 gateway_session_id=binding.gateway_session_id,
                 workspace_id=binding.workspace_id,
@@ -321,7 +321,7 @@ def _matches_binding(
         approval.owner_user_id == binding.owner_user_id
         and approval.organization_id == binding.organization_id
         and approval.integration_account_id == binding.integration_account_id
-        and approval.integration_account_auth_version == binding.integration_account_auth_version
+        and approval.integration_account_grant_version == binding.integration_account_grant_version
         and approval.runtime_worker_id == binding.runtime_worker_id
         and approval.gateway_session_id == binding.gateway_session_id
         and approval.workspace_id == binding.workspace_id
@@ -342,7 +342,7 @@ async def consume_action_for_execution(
     workspace_id: str,
     anyharness_session_id: str,
     integration_account_id: UUID,
-    integration_account_auth_version: int,
+    integration_account_grant_version: int,
     verdict: ToolCallRequiresApproval,
     arguments: dict[str, object],
 ) -> ExecutionAdmission:
@@ -357,7 +357,7 @@ async def consume_action_for_execution(
         db,
         grant=grant,
         integration_account_id=integration_account_id,
-        integration_account_auth_version=integration_account_auth_version,
+        integration_account_grant_version=integration_account_grant_version,
         verdict=verdict,
     ):
         return ExecutionAdmission(result="mismatch", approval=None)
@@ -368,7 +368,7 @@ async def consume_action_for_execution(
         owner_user_id=grant.owner_user_id,
         organization_id=grant.organization_id,
         integration_account_id=integration_account_id,
-        integration_account_auth_version=integration_account_auth_version,
+        integration_account_grant_version=integration_account_grant_version,
         runtime_worker_id=grant.runtime_worker_id,
         gateway_session_id=gateway_session_id,
         workspace_id=workspace_id,
@@ -387,7 +387,7 @@ async def consume_action_for_execution(
         owner_user_id=binding.owner_user_id,
         organization_id=binding.organization_id,
         integration_account_id=binding.integration_account_id,
-        integration_account_auth_version=binding.integration_account_auth_version,
+        integration_account_grant_version=binding.integration_account_grant_version,
         runtime_worker_id=binding.runtime_worker_id,
         gateway_session_id=binding.gateway_session_id,
         workspace_id=binding.workspace_id,

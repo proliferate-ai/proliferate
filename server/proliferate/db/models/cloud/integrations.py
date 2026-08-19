@@ -283,6 +283,7 @@ class CloudIntegrationOAuthFlow(Base):
     resource: Mapped[str | None] = mapped_column(Text, nullable=True)
     client_id: Mapped[str] = mapped_column(String(512))
     token_endpoint: Mapped[str | None] = mapped_column(Text, nullable=True)
+    revocation_endpoint: Mapped[str | None] = mapped_column(Text, nullable=True)
     requested_scopes: Mapped[str] = mapped_column(Text, default="[]")
     redirect_uri: Mapped[str] = mapped_column(Text)
     authorization_url: Mapped[str] = mapped_column(Text)
@@ -313,13 +314,15 @@ class CloudIntegrationToolSchemaCache(Base):
         ForeignKey("cloud_integration_account.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    # Snapshot of the account's auth_version the cache was fetched under; a
+    # Snapshot of the account's grant_version the cache was fetched under; a
     # mismatch means the cache is stale and must be refreshed.
-    auth_version: Mapped[int] = mapped_column(Integer, default=0)
+    # The physical PR2 name remains the rolling-deploy compatibility seam.
+    # PR3 code exposes only grant semantics; N-1 tasks keep using this column.
+    grant_version: Mapped[int] = mapped_column("auth_version", Integer, default=0)
     tools_json: Mapped[str] = mapped_column(Text, default="[]")
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # Always supplied at insert by the upsert; staleness is derived from the
-    # auth_version snapshot + fetched_at age, never stored as a status.
+    # grant_version snapshot + fetched_at age, never stored as a status.
     status: Mapped[str] = mapped_column(String(32))
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)

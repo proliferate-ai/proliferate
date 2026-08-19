@@ -16,6 +16,7 @@ from proliferate.background.celery_app import celery_app
 from proliferate.background.config import (
     BACKGROUND_PUBLISH_TS_HEADER,
     HEALTH_NOOP_TASK,
+    INTEGRATION_REVOCATION_PROCESS_TASK,
     WORKFLOW_CANCEL_TASK,
     WORKFLOW_DELIVER_TASK,
     WORKFLOW_OBSERVE_TASK,
@@ -41,6 +42,7 @@ from proliferate.db.store.workflow_managed_observability import (
 SUPPORTED_OUTBOX_TASKS = frozenset(
     {
         HEALTH_NOOP_TASK,
+        INTEGRATION_REVOCATION_PROCESS_TASK,
         WORKFLOW_DELIVER_TASK,
         WORKFLOW_OBSERVE_TASK,
         WORKFLOW_CANCEL_TASK,

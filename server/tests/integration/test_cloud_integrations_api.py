@@ -541,7 +541,7 @@ class TestIntegrationForeignKeys:
         await upsert_tool_cache(
             db_session,
             account_id=account.id,
-            auth_version=account.auth_version,
+            grant_version=account.grant_version,
             tools_json="[]",
             content_hash=None,
             status="ready",

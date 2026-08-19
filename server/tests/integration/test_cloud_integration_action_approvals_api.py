@@ -67,7 +67,7 @@ class ActionContext:
     user_id: uuid.UUID
     organization_id: uuid.UUID | None
     account_id: uuid.UUID
-    account_auth_version: int
+    account_grant_version: int
 
     @property
     def grant(self) -> IntegrationGatewayGrant:
@@ -178,7 +178,7 @@ async def _setup_context(
         user_id=user_id,
         organization_id=worker.organization_id,
         account_id=account.id,
-        account_auth_version=account.auth_version,
+        account_grant_version=account.grant_version,
     )
 
 
@@ -220,7 +220,7 @@ async def _consume(
     workspace_id: str | None = None,
     anyharness_session_id: str | None = None,
     integration_account_id: uuid.UUID | None = None,
-    integration_account_auth_version: int | None = None,
+    integration_account_grant_version: int | None = None,
     verdict: ToolCallRequiresApproval | None = None,
 ):
     return await consume_action_for_execution_committed(
@@ -230,10 +230,10 @@ async def _consume(
         workspace_id=workspace_id or context.workspace_id,
         anyharness_session_id=anyharness_session_id or context.anyharness_session_id,
         integration_account_id=integration_account_id or context.account_id,
-        integration_account_auth_version=(
-            context.account_auth_version
-            if integration_account_auth_version is None
-            else integration_account_auth_version
+        integration_account_grant_version=(
+            context.account_grant_version
+            if integration_account_grant_version is None
+            else integration_account_grant_version
         ),
         verdict=verdict or _approval_verdict(),
         arguments=arguments,
@@ -341,7 +341,8 @@ async def test_gateway_requires_trusted_session_then_persists_one_safe_bound_ret
     assert first["status"] == retry["status"] == "pending"
     assert first["payloadDigest"] == canonical_payload_digest(arguments)
     assert first["integrationAccountId"] == str(context.account_id)
-    assert first["integrationAccountAuthVersion"] == context.account_auth_version
+    assert first["integrationAccountGrantVersion"] == context.account_grant_version
+    assert first["integrationAccountAuthVersion"] == context.account_grant_version
     assert first["executionSessionId"] == str(context.gateway_session_id)
     assert first["workspaceId"] == context.workspace_id
     assert first["anyharnessSessionId"] == context.anyharness_session_id
@@ -361,7 +362,7 @@ async def test_gateway_requires_trusted_session_then_persists_one_safe_bound_ret
     assert approval.owner_user_id == context.user_id
     assert approval.organization_id == context.organization_id
     assert approval.integration_account_id == context.account_id
-    assert approval.integration_account_auth_version == context.account_auth_version
+    assert approval.integration_account_grant_version == context.account_grant_version
     assert approval.runtime_worker_id == context.worker_id
     assert approval.gateway_session_id == context.gateway_session_id
     assert approval.workspace_id == context.workspace_id
@@ -465,7 +466,7 @@ async def test_exact_binding_mismatches_then_committed_consumption_and_replay(
         {"workspace_id": "workspace-other"},
         {"anyharness_session_id": "session-other"},
         {"integration_account_id": uuid.uuid4()},
-        {"integration_account_auth_version": context.account_auth_version + 1},
+        {"integration_account_grant_version": context.account_grant_version + 1},
         {"verdict": ToolCallRequiresApproval(provider="slack", tool="slack_edit_message")},
         {"arguments": {"channel_id": "C1", "message": "different"}},
     )
@@ -556,7 +557,7 @@ async def test_account_credential_rotation_invalidates_prior_approval(
         credential_format="oauth-bundle-v1",
         auth_status="ready",
         token_expires_at=None,
-        expected_auth_version=context.account_auth_version,
+        expected_auth_version=context.account_grant_version,
     )
     assert rotated is not None
     assert rotated.grant_version == rotated.auth_version
@@ -568,10 +569,10 @@ async def test_account_credential_rotation_invalidates_prior_approval(
         context,
         approval_id=approval_id,
         arguments=arguments,
-        integration_account_auth_version=rotated.auth_version,
+        integration_account_grant_version=rotated.grant_version,
     )
     assert old_revision.result == new_revision.result == "mismatch"
 
     replacement = await _request_action(client, context, arguments=arguments)
     assert replacement["id"] != approval_id
-    assert replacement["integrationAccountAuthVersion"] == rotated.auth_version
+    assert replacement["integrationAccountGrantVersion"] == rotated.grant_version

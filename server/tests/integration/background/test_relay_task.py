@@ -59,6 +59,7 @@ async def test_relay_task_publishes_committed_health_noop(
     assert metrics["relay_heartbeat"] == 1
     assert metrics["supported_pending_by_family"] == {
         "background_health_noop": 0,
+        "integrations_revocation_process": 0,
         "workflows_deliver": 0,
         "workflows_observe": 0,
         "workflows_cancel": 0,

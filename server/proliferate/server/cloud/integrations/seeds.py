@@ -296,6 +296,7 @@ SEED_DEFINITIONS: tuple[SeedDefinition, ...] = (
             ),
             oauth_scopes_required=True,
             oauth_scope_policy="exact",
+            oauth_revocation_endpoint="https://slack.com/api/auth.revoke",
             headers=(_oauth_bearer_header(),),
         ),
     ),

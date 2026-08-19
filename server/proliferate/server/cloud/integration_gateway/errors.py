@@ -54,7 +54,9 @@ class IntegrationToolApprovalRequired(IntegrationToolPolicyError):
                 "payloadDigest": approval.payload_digest,
                 "actionSummary": approval.safe_summary,
                 "integrationAccountId": str(approval.integration_account_id),
-                "integrationAccountAuthVersion": approval.integration_account_auth_version,
+                "integrationAccountGrantVersion": approval.integration_account_grant_version,
+                # Deprecated N-1 client alias during the additive rollout.
+                "integrationAccountAuthVersion": approval.integration_account_grant_version,
                 "organizationId": (
                     str(approval.organization_id) if approval.organization_id is not None else None
                 ),
