@@ -22,12 +22,13 @@ import { useUserPreferencesStore } from "#product/stores/preferences/user-prefer
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
 import {
-  readPersistedStringValue,
+  readPersistedString,
   writePersistedString,
 } from "#product/lib/infra/persistence/product-storage";
 
 const HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY =
   "proliferate.home.modelProbeCardDismissed";
+type HomeModelProbeDismissalState = "loading" | "visible" | "dismissed";
 
 // Owns the Home screen facade consumed by the component. Does not own Home Next launch flow.
 export function useHomeScreen() {
@@ -40,24 +41,28 @@ export function useHomeScreen() {
     isLoading: agentsLoading,
     isReconciling,
   } = useAgentCatalog();
-  const [modelProbeDismissed, setModelProbeDismissed] = useState<boolean>(false);
+  const [modelProbeDismissalState, setModelProbeDismissalState] =
+    useState<HomeModelProbeDismissalState>("loading");
   useEffect(() => {
     let cancelled = false;
     // Bare "1" sentinel string (never JSON): read raw to preserve the existing
     // dismissal with zero migration. A late read after unmount is discarded.
-    void readPersistedStringValue(storage, HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY).then(
-      (value) => {
-        if (!cancelled && value === "1") {
-          setModelProbeDismissed(true);
-        }
-      },
-    );
+    void readPersistedString(storage, HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY, {
+      isStale: () => cancelled,
+    }).then((result) => {
+      if (result.status === "settled") {
+        const hydratedState = result.value === "1" ? "dismissed" : "visible";
+        setModelProbeDismissalState((current) =>
+          current === "loading" ? hydratedState : current
+        );
+      }
+    });
     return () => {
       cancelled = true;
     };
   }, [storage]);
   const dismissModelProbeCard = useCallback(() => {
-    setModelProbeDismissed(true);
+    setModelProbeDismissalState("dismissed");
     void writePersistedString(storage, HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY, "1");
   }, [storage]);
   const { cloudActive } = useCloudAvailabilityState();
@@ -162,12 +167,14 @@ export function useHomeScreen() {
     // Model-probe card inputs (UX spec §10). The model count itself lives with
     // the home model-selection state, so the screen combines these with its
     // model groups via resolveHomeModelProbeCardState.
-    modelProbeInputs: {
-      dismissed: modelProbeDismissed,
-      agentsLoading,
-      isReconciling,
-      harnessKinds: readyHarnessKinds,
-    },
+    modelProbeInputs: modelProbeDismissalState === "loading"
+      ? undefined
+      : {
+        dismissed: modelProbeDismissalState === "dismissed",
+        agentsLoading,
+        isReconciling,
+        harnessKinds: readyHarnessKinds,
+      },
     dismissModelProbeCard,
   };
 }

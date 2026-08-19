@@ -503,6 +503,17 @@ the newest editable queued prompt. Steering promotes the selected prompt to the
 head and interrupts the active turn so normal durable queue drain executes it
 next.
 
+Plain queued-message rows keep Steer and Delete as direct actions. The former
+Edit slot is a keyboard-native action menu, ordered Edit message, Move up, then
+Move down. The menu renders when the row's Edit slot is visible or the plain
+runtime row is reorder-eligible. A pre-ack Edit item remains visible with its
+current disabled reason; boundary Move items also remain visible and disabled.
+Move commands target the nearest eligible plain runtime row and disable while a
+queue mutation is in flight, so local optimistic, agent-update, and review rows
+never acquire no-op reorder actions. Menu dismissal returns focus to its
+trigger. Selecting Edit enters the existing queued-edit workflow, and the
+explicit composer edit banner remains the pointer/touch Cancel path.
+
 ### The todo progress pill (`floatingSlot`)
 
 `TodoProgressPill.tsx` replaced the persistent `TodoTrackerPanel`/`TodoTrackerStrip`

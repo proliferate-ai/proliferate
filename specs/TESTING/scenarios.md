@@ -761,7 +761,7 @@ Assert: the PUT materializes a workspace and starts node 1; the research
 node's underlying session prompt carries the runtime's wrapped preamble
 around the raw node prompt (assert the wrapper's presence, not its exact
 text); the findings doc materializes as a real file under
-`.proliferate/context/` in the workspace; the run parks at
+`.proliferate/context/<run_id>/` in the workspace; the run parks at
 `run.status=awaiting_human` with the gate node `awaiting_human` and HOLDS —
 no auto-advance; approving the gate advances the run to `completed`; every
 command (PUT, GET, approve) returns the full projection

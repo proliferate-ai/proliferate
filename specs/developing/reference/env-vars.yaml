@@ -660,7 +660,13 @@
 - name: CLOUD_MCP_SLACK_ENABLED
   secret: false
   default: "false"
-  description: Shows the Slack MCP connector when static Slack OAuth config is also present
+  description: Allows Slack MCP OAuth only when static config and the independent distribution-qualification gate are also present
+  tags: [local-dev, self-hosted, production]
+
+- name: CLOUD_MCP_SLACK_DISTRIBUTION_READY
+  secret: false
+  default: "false"
+  description: Operator qualification that the exact configured Slack app is Marketplace-eligible and has passed its release canary; credentials alone never set this
   tags: [local-dev, self-hosted, production]
 
 - name: CLOUD_MCP_SLACK_CLIENT_ID

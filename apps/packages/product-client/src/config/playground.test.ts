@@ -212,27 +212,31 @@ describe("playground scenarios", () => {
     expect(html).toContain("1 update");
     expect(html).not.toContain("Child session:");
     expect(html).not.toContain('aria-label="Delete queued message"');
-    expect(html).not.toContain('aria-label="Edit queued message"');
+    expect(html).not.toContain('aria-label="More queued-message actions"');
     expect(html).not.toContain('aria-label="Reorder queued message"');
   });
 
-  it("keeps queued rows compact and exposes steer, reorder, and edit actions", () => {
+  it("keeps queued rows compact and exposes direct controls plus the action menu", () => {
     const plainHtml = renderToStaticMarkup(renderOutboundSlot("pending-prompts-multi"));
     expect(plainHtml).toContain("line-clamp-2");
     expect(plainHtml).toContain("min-w-0");
     expect(plainHtml).toContain("whitespace-pre-wrap");
     // Head-of-queue entry is dispatching: it shows the shared "Thinking" shimmer
-    // state hint and drops the edit affordance while in flight.
+    // state hint and drops queued-message actions while in flight.
     expect(plainHtml).toContain("Thinking");
-    expect(plainHtml.match(/aria-label="Edit queued message"/g)).toHaveLength(2);
+    expect(plainHtml.match(/aria-label="More queued-message actions"/g)).toHaveLength(2);
     expect(plainHtml.match(/aria-label="Send next — interrupts the current turn"/g))
       .toHaveLength(2);
+    expect(plainHtml.match(/aria-label="Delete queued message"/g)).toHaveLength(2);
     expect(plainHtml.match(/aria-label="Reorder queued message"/g)).toHaveLength(2);
 
     const editingHtml = renderToStaticMarkup(renderOutboundSlot("pending-prompts-editing"));
     expect(editingHtml).toContain("Editing…");
-    expect(editingHtml.match(/aria-label="Edit queued message"/g)).toHaveLength(1);
+    expect(editingHtml.match(/aria-label="More queued-message actions"/g)).toHaveLength(2);
+    expect(editingHtml.match(/aria-label="Send next — interrupts the current turn"/g))
+      .toHaveLength(1);
     expect(editingHtml.match(/aria-label="Delete queued message"/g)).toHaveLength(2);
+    expect(editingHtml.match(/aria-label="Reorder queued message"/g)).toHaveLength(2);
   });
 
   it("keeps queued prompts before active questions and permission approvals", () => {

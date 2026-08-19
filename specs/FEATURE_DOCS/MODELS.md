@@ -100,6 +100,25 @@ They may not union or intersect executable membership with catalog data.
 Settings presents the observed list read-only. Model visibility overrides and
 server-side add/remove patches do not exist.
 
+### Home probe-card dismissal
+
+Home persists dismissal of its launch-options probe card under the raw-string
+key `proliferate.home.modelProbeCardDismissed`, with exact value `"1"` as the
+only dismissed sentinel. The facade owns an explicit per-mount hydration state:
+`loading`, `visible`, or `dismissed`. While it is `loading`, the facade omits
+the probe inputs entirely, so cached agent and launch-options data cannot mount
+the card before the persisted choice is known. An exact sentinel settles to
+`dismissed`; a missing value, any other raw value, or a captured read failure
+settles to `visible`.
+
+Hydration may transition only a still-loading state. A current user dismissal
+moves the state synchronously to `dismissed` before the existing best-effort
+sentinel write, and a late read cannot overwrite it. Reads use the mounted
+host's storage context and its staleness guard, so an unmounted result is
+ignored. Read and write failures retain the persistence layer's existing
+captured, non-blocking behavior: a failed read still settles to visible, and a
+failed write never rolls the in-memory dismissal back.
+
 ## Cloud copy
 
 The Worker uploads changed runtime state and evidence verbatim. The server

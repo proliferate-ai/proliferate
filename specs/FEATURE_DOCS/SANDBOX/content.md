@@ -66,8 +66,9 @@ store.
 - **User work is never silently destroyed.** Clone refresh fails closed on
   dirty/ahead state; reclaim refuses paths outside the managed root;
   retention skips live sessions and workflow worktrees.
-- **Every create has a paired reclaim.** Deletes retire their worktree or
-  clone; retention is the backstop for missed reclaims, not the mechanism.
+- **Cloud row lifecycle does not imply disk deletion.** Archive, restore, and
+  delete mutate only the Cloud product row. AnyHarness owns explicit archive,
+  unarchive, and purge of its runtime workspace and checkout.
 - **Commits attribute to the human.** An agent writing on the user's behalf
   writes as the user.
 - **The VM is disposable; pushed work is not.** GitHub is the durable store;
@@ -158,13 +159,15 @@ AnyHarness fetches then requires that exact commit
 ([operations/worktrees.rs](../../../anyharness/crates/anyharness-lib/src/adapters/git/operations/worktrees.rs),
 `create_worktree_at_ref`). Client-supplied state never names a base.
 
-### Retire
+### Archive and delete ownership
 
-`retire_worktree_materialization`
-([materialization.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/materialization.rs))
-refuses any path outside the canonical managed root, then
-`git worktree remove --force`. It runs paired only: workspace delete removes
-the worktree after the row write commits, best-effort.
+Cloud workspace archive, restore, and delete mutate only the Cloud product
+row; they do not call into the runtime or mutate an AnyHarness workspace or
+checkout
+([workspace-provisioning.md](../../codebase/platforms/product/workspace-provisioning.md)).
+AnyHarness owns its separate user-requested archive, unarchive, and purge
+operations. Cloud provider loss is also separate: it marks affected product
+rows lost rather than pretending their runtime content can be restored.
 
 There is no longer a backstop retention pass. Automatic pruning was the
 retire lifecycle's sweeper, and both left together when `retired` was
@@ -355,13 +358,12 @@ platform ever treats sandbox disk as the only copy of anything.
 3. Thursday: workspace B — based on Thursday's head, while A still sits
    exactly where Monday plus the user's own work left it. Born fresh, then
    owned.
-4. Friday: delete A. The row delete commits, then the runtime retires A's
-   worktree. If the VM were paused at that moment, the retire would miss
-   and the next retention pass would collect A instead.
+4. Friday: archive A. The Cloud row leaves active product lists, while its
+   AnyHarness workspace and checkout are unchanged; restoring the row does
+   not need to reconstruct runtime state.
 5. Weeks later, experiments accumulate: runtime-status shows disk pressure
-   rising, the client offers the worktree list for deletion, retention
-   holds the per-repo count at the cap — the disk stays observable and
-   bounded instead of silently filling until every materialization fails.
+   rising and the runtime's explicit workspace actions let the user choose
+   what to purge. Cloud row deletion remains independent of that disk action.
 
 ## Code map
 
@@ -425,10 +427,9 @@ apps/packages/product-client/src/
 - Create fails after the worktree exists: an orphan worktree with no
   committed row; retention collects it, correlated through the runtime's
   workspace record.
-- Paired retire misses (VM paused, request died): orphan until the next
-  retention pass; the miss is logged.
-- Retire asked for a path outside the managed root: refused — the fence
-  working, indicating a placement bug upstream.
+- Cloud row archive/delete never reaches the runtime: runtime unavailability
+  cannot turn the row write into a cleanup failure, and the checkout remains
+  runtime-owned.
 - Out of disk: typed disk-exhaustion receipt with a delete-content remedy;
   pressure was visible before the failure.
 - Identity resolution finds no email: typed `git_identity_required`; no
@@ -447,8 +448,8 @@ apps/packages/product-client/src/
 - Purge fencing:
   [purge_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/tests/purge_tests.rs),
   [deletion/tests/mod.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/tests/mod.rs).
-- Paired workspace-retire proof:
-  [test_cloud_workspace_retire_after_commit.py](../../../server/tests/unit/test_cloud_workspace_retire_after_commit.py).
+- Cloud row-only lifecycle proof:
+  [test_cloud_workspace_row_lifecycle.py](../../../server/tests/unit/test_cloud_workspace_row_lifecycle.py).
 - Pending, landing with the remaining gap PRs: fetch-on-create
   classification tests; repository-environment delete reclaim; a live disk
   axis reading end to end.
@@ -476,9 +477,8 @@ Deltas between this document and `main`, each struck by its follow-up PR:
 
 - [ ] Repository-environment delete reclaims nothing and no clone-delete
       primitive exists anywhere in AnyHarness (no route, no store method).
-      Build the clone-delete primitive under the same fence discipline as
-      retire, then pair repository-environment deletion with an after-commit
-      reclaim.
+      Build the clone-delete primitive under the managed-root fence, then pair
+      repository-environment deletion with an after-commit reclaim.
 - [ ] The inventory row carries no last-activity timestamp
       ([inventory.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs)),
       so the disk-pressure surface cannot suggest *stale* worktrees to

@@ -6,7 +6,10 @@ import { fileViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-t
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
 
-/** Workflow run context docs are real files the runtime writes under this workspace-relative directory. */
+/**
+ * Workflow run context docs are real files the runtime writes under this
+ * workspace-relative directory, one subfolder per run (`<dir>/<runId>/`).
+ */
 const WORKFLOW_CONTEXT_DOCS_DIRECTORY = ".proliferate/context";
 
 /**
@@ -36,7 +39,7 @@ export function useWorkflowDocOpen(workspaceId: string): (doc: WorkflowRunDocV2)
   );
 
   return useCallback((doc: WorkflowRunDocV2) => {
-    const path = `${WORKFLOW_CONTEXT_DOCS_DIRECTORY}/${doc.filename}`;
+    const path = `${WORKFLOW_CONTEXT_DOCS_DIRECTORY}/${doc.runId}/${doc.filename}`;
     const target = fileViewerTarget(path);
     openTarget(target);
 

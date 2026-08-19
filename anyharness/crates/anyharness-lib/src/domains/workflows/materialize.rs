@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use super::definition::{DocTemplate, InvocationSnapshot};
 use super::model::WorkflowRunDocRecord;
-use super::render::CONTEXT_DIR_RELATIVE;
+use super::render::run_context_dir_relative;
 use super::store::doc_filename;
 use crate::domains::workspaces::exclude::{ensure_proliferate_excluded, ExcludeOutcome};
 
@@ -46,12 +46,13 @@ pub fn plan_context_docs(snapshot: &InvocationSnapshot, chain: &[String]) -> Vec
 }
 
 /// Materialize the context folder for one run from its registry rows: create
-/// `<workspace>/.proliferate/context/`, seed each row's file from its
-/// template body, and ensure the clone's shared `/.proliferate/` exclude
+/// `<workspace>/.proliferate/context/<run_id>/`, seed each row's file from
+/// its template body, and ensure the clone's shared `/.proliferate/` exclude
 /// entry. Idempotent, and run-local edits win: an existing file is never
 /// overwritten.
 pub fn materialize_context(
     workspace_root: &Path,
+    run_id: &str,
     docs: &[WorkflowRunDocRecord],
     templates: &[DocTemplate],
 ) -> anyhow::Result<PathBuf> {
@@ -62,17 +63,18 @@ pub fn materialize_context(
             filename: doc.filename.clone(),
         })
         .collect();
-    materialize_planned_context(workspace_root, &planned, templates)
+    materialize_planned_context(workspace_root, run_id, &planned, templates)
 }
 
 /// The record-free half of [`materialize_context`], for the PUT path's
 /// disk-before-rows ordering.
 pub fn materialize_planned_context(
     workspace_root: &Path,
+    run_id: &str,
     docs: &[PlannedContextDoc],
     templates: &[DocTemplate],
 ) -> anyhow::Result<PathBuf> {
-    let context_dir = workspace_root.join(CONTEXT_DIR_RELATIVE);
+    let context_dir = workspace_root.join(run_context_dir_relative(run_id));
     std::fs::create_dir_all(&context_dir)
         .map_err(|error| anyhow::anyhow!("create {}: {error}", context_dir.display()))?;
 
