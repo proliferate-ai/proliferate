@@ -28,6 +28,12 @@ const mocks = vi.hoisted(() => {
     mutations,
     runsQuery: { data: undefined as unknown, isError: false },
     runQuery: { data: undefined as unknown, isError: false, refetch: vi.fn(async () => ({})) },
+    // Per-run overrides, keyed by run id: a concurrent-run test needs two
+    // slots polling two independent projections, which the single shared
+    // `runQuery` above cannot express (every slot would see the same data).
+    // Unset for a run id, the shared `runQuery` still answers it, so every
+    // single-run test above is untouched.
+    runQueryById: {} as Record<string, unknown>,
     runsQueryCalls: [] as unknown[][],
     runQueryCalls: [] as unknown[][],
     useWorkflowRunsQuery: vi.fn((...args: unknown[]) => {
@@ -36,6 +42,14 @@ const mocks = vi.hoisted(() => {
     }),
     useWorkflowRunQuery: vi.fn((...args: unknown[]) => {
       mocks.runQueryCalls.push(args);
+      const runId = args[0] as string;
+      if (runId in mocks.runQueryById) {
+        return {
+          data: mocks.runQueryById[runId],
+          isError: false,
+          refetch: mocks.runQuery.refetch,
+        };
+      }
       return mocks.runQuery;
     }),
     useWorkflowRunMutations: vi.fn(() => mocks.mutations),
@@ -181,6 +195,7 @@ beforeEach(() => {
   mocks.runQuery.data = undefined;
   mocks.runQuery.isError = false;
   mocks.runQuery.refetch = vi.fn(async () => ({}));
+  mocks.runQueryById = {};
   mocks.runsQueryCalls.length = 0;
   mocks.runQueryCalls.length = 0;
   mocks.workflowsV2Enabled = true;
@@ -220,8 +235,8 @@ describe("useWorkflowAutoAdvanceWatch", () => {
   it("watches the workspace's newest run without the pane being mounted", () => {
     mocks.runsQuery.data = {
       runs: [
-        run({ id: "older", createdAt: "2026-08-13T00:00:00Z" }),
-        run({ id: "newest", createdAt: "2026-08-14T00:00:00Z" }),
+        run({ id: "older", status: "completed", createdAt: "2026-08-13T00:00:00Z" }),
+        run({ id: "newest", status: "running", createdAt: "2026-08-14T00:00:00Z" }),
       ],
     };
 
@@ -231,7 +246,60 @@ describe("useWorkflowAutoAdvanceWatch", () => {
       WORKSPACE_ID,
       { enabled: true, watchActiveRuns: true },
     ]);
-    expect(mocks.runQueryCalls.at(-1)).toEqual(["newest", { enabled: true }]);
+    // "older" already finished, so only "newest" is visible and takes the
+    // one occupied slot; the fixed extra slots stay disabled.
+    const enabledCalls = mocks.runQueryCalls
+      .filter((call) => (call[1] as { enabled?: boolean } | undefined)?.enabled);
+    expect(enabledCalls).toEqual([["newest", { enabled: true }]]);
+  });
+
+  it("watches two concurrent runs, each in its own slot", () => {
+    mocks.runsQuery.data = {
+      runs: [
+        run({ id: "older", status: "running", createdAt: "2026-08-13T00:00:00Z" }),
+        run({ id: "newer", status: "awaiting_human", createdAt: "2026-08-14T00:00:00Z" }),
+      ],
+    };
+
+    render();
+
+    expect(mocks.runQueryCalls).toContainEqual(["older", { enabled: true }]);
+    expect(mocks.runQueryCalls).toContainEqual(["newer", { enabled: true }]);
+  });
+
+  it("offers Undo on the second run's own advance while the first run is untouched", async () => {
+    // Two concurrent runs (`existing_workspace` placement), each parked
+    // before its own advance.
+    mocks.runsQuery.data = {
+      runs: [
+        run({ id: "run-a", status: "running", createdAt: "2026-08-13T00:00:00Z" }),
+        run({ id: "run-b", status: "running", createdAt: "2026-08-14T00:00:00Z" }),
+      ],
+    };
+    mocks.runQueryById = {
+      "run-a": beforeAdvance(),
+      "run-b": beforeAdvance(),
+    };
+    const { rerender } = render();
+    expect(mocks.showToast).not.toHaveBeenCalled();
+
+    // Only run-b advances; run-a stays parked on its first step.
+    mocks.runQueryById = {
+      "run-a": beforeAdvance(),
+      "run-b": afterAdvance("2026-08-14T01:00:00Z"),
+    };
+    await act(async () => {
+      rerender({ enabled: true });
+    });
+
+    // Negative control: were the watcher still collapsed onto one run (the
+    // pre-concurrency behavior), it would watch only whichever run sorts
+    // newest and this toast would never fire for the other one.
+    expect(mocks.showToast).toHaveBeenCalledTimes(1);
+    expect(mocks.showToast.mock.calls[0]![0]).toMatchObject({
+      id: "workflow-auto-advance:run-1",
+      title: "1. Draft done, 2. Review started",
+    });
   });
 
   it("offers Undo on an auto-advance while the panel shows another tool", async () => {
