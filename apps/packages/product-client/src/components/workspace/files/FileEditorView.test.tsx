@@ -10,7 +10,7 @@ import {
 } from "#product/lib/domain/workspaces/viewer/viewer-target";
 import { useContentSearchStore } from "#product/stores/search/content-search-store";
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
-import { useFileTreeStore } from "#product/stores/editor/file-tree-store";
+import { resetFileTreeStoreForTests } from "#product/stores/editor/file-tree-store";
 import { FileEditorView } from "#product/components/workspace/files/FileEditorView";
 import { ContentSearchPill } from "#product/components/workspace/search/ContentSearchPill";
 
@@ -158,10 +158,7 @@ describe("FileEditorView", () => {
       isLoading: false,
     });
     useWorkspaceViewerTabsStore.getState().reset();
-    useFileTreeStore.setState({
-      width: 400,
-      expandedPaths: new Set(),
-    });
+    resetFileTreeStoreForTests();
     useContentSearchStore.setState({
       open: false,
       query: "",
@@ -283,106 +280,6 @@ describe("FileEditorView", () => {
 
     expect(screen.getByText("unique first line")).toBeTruthy();
     expect(container.querySelectorAll("[data-source-line]").length).toBeLessThan(lines.length);
-  });
-
-  it("overlays the file browser without replacing the source view", () => {
-    const target = fileViewerTarget("package.json");
-    const targetKey = viewerTargetKey(target);
-    useWorkspaceViewerTabsStore.setState({
-      materializedWorkspaceId: "workspace-1",
-    });
-    useWorkspaceViewerTabsStore.getState().openTarget(target);
-    readWorkspaceFileQuery.mockReturnValue({
-      data: {
-        content: "{\"ok\":true}",
-        isText: true,
-        path: "package.json",
-        sizeBytes: 11,
-        tooLarge: false,
-        versionToken: "v1",
-      },
-      error: null,
-      isLoading: false,
-    });
-
-    const { container } = render(createElement(FileEditorView, {
-      filePath: "package.json",
-      targetKey,
-    }));
-
-    // Closed by default
-    expect(container.querySelector("[data-file-tree-overlay]")).toBeNull();
-
-    fireEvent.click(screen.getByLabelText("Show files"));
-
-    expect(screen.getByRole("dialog", { name: "Browse files" })).toBeTruthy();
-    expect(container.querySelector("[data-file-tree-overlay]")).toBeTruthy();
-    // Code viewer stays mounted behind the overlay
-    expect(screen.getByText("{\"ok\":true}")).toBeTruthy();
-    expect(screen.getByText("README.md")).toBeTruthy();
-    expect(screen.getByPlaceholderText("Filter files…")).toBeTruthy();
-    expect(workspaceFilesQuery).toHaveBeenCalledWith({
-      workspaceId: "workspace-1",
-      path: "",
-      enabled: true,
-    });
-
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(container.querySelector("[data-file-tree-overlay]")).toBeNull();
-  });
-
-  it("groups filter matches by parent directory as a tree", () => {
-    const target = fileViewerTarget("package.json");
-    const targetKey = viewerTargetKey(target);
-    useWorkspaceViewerTabsStore.setState({
-      materializedWorkspaceId: "workspace-1",
-    });
-    useWorkspaceViewerTabsStore.getState().openTarget(target);
-    readWorkspaceFileQuery.mockReturnValue({
-      data: {
-        content: "{\"ok\":true}",
-        isText: true,
-        path: "package.json",
-        sizeBytes: 11,
-        tooLarge: false,
-        versionToken: "v1",
-      },
-      error: null,
-      isLoading: false,
-    });
-    searchWorkspaceFilesQuery.mockReturnValue({
-      data: {
-        results: [
-          { name: "Button.tsx", path: "src/components/Button.tsx" },
-          { name: "Badge.tsx", path: "src/components/Badge.tsx" },
-          { name: "button.css", path: "src/styles/button.css" },
-        ],
-      },
-      isLoading: false,
-    });
-
-    render(createElement(FileEditorView, {
-      filePath: "package.json",
-      targetKey,
-    }));
-
-    fireEvent.click(screen.getByLabelText("Show files"));
-    fireEvent.change(screen.getByPlaceholderText("Filter files…"), {
-      target: { value: "b" },
-    });
-
-    // Directory group rows
-    const componentsGroup = screen.getByRole("treeitem", { name: /src\/components/ });
-    expect(componentsGroup.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByRole("treeitem", { name: /src\/styles/ })).toBeTruthy();
-    // Nested matched files
-    expect(screen.getByText("Button.tsx")).toBeTruthy();
-    expect(screen.getByText("button.css")).toBeTruthy();
-
-    // Collapsing the group hides its files
-    fireEvent.click(componentsGroup);
-    expect(screen.queryByText("Button.tsx")).toBeNull();
-    expect(screen.getByText("button.css")).toBeTruthy();
   });
 
   it("opens pane-local content search from the file viewer toolbar", () => {

@@ -29,8 +29,10 @@ import {
   useFileViewerNativeMenu,
   type FileViewerNativeMenuActions,
 } from "#product/hooks/workspaces/ui/files/use-file-viewer-native-menu";
-import { useWorkspacePath } from "#product/providers/WorkspacePathProvider";
 import { useContentSearchStore } from "#product/stores/search/content-search-store";
+
+const FILES_UNAVAILABLE_HELP = "Files are unavailable for this workspace";
+const FILES_GEOMETRY_HIDDEN_HELP = "Widen the window to show files";
 
 export function FileViewerFrame({
   rootRef,
@@ -47,9 +49,11 @@ export function FileViewerFrame({
   onOpenExternal,
   canOpenExternal,
   onOpenContentSearch,
-  browserOpen,
-  onToggleBrowser,
-  onBrowsePath,
+  filesAvailable,
+  filesRequestedOpen,
+  onToggleFiles,
+  onRevealFilesPath,
+  fileTreeDock,
   children,
 }: {
   rootRef?: Ref<HTMLDivElement>;
@@ -66,9 +70,11 @@ export function FileViewerFrame({
   onCopyPath: () => void;
   onOpenExternal: () => void;
   onOpenContentSearch: () => void;
-  browserOpen: boolean;
-  onToggleBrowser: () => void;
-  onBrowsePath: (path: string) => void;
+  filesAvailable: boolean;
+  filesRequestedOpen: boolean;
+  onToggleFiles: () => void;
+  onRevealFilesPath: (path: string) => void;
+  fileTreeDock: ReactNode | null;
   children: ReactNode;
 }) {
   const setSurfaceAvailability = useContentSearchStore((state) => state.setSurfaceAvailability);
@@ -77,18 +83,34 @@ export function FileViewerFrame({
     return () => setSurfaceAvailability("file", false);
   }, [setSurfaceAvailability]);
 
+  // Unavailable dominates any stale requested value: a workspace that lost
+  // file-context availability while a dock was requested open must not show
+  // a pressed/enabled toggle for a dock it can no longer serve.
+  const effectiveRequestedOpen = filesAvailable && filesRequestedOpen;
+  const geometryHidden = effectiveRequestedOpen && fileTreeDock === null;
+  const toggleLabel = effectiveRequestedOpen ? "Hide files" : "Show files";
+  const toggleHelp = !filesAvailable
+    ? FILES_UNAVAILABLE_HELP
+    : geometryHidden ? FILES_GEOMETRY_HIDDEN_HELP : undefined;
+
   return (
+    // `w-full`: without it the body measures max-content (380 + dock) and the
+    // responsive auto-collapse threshold can never be crossed.
     <div
       ref={rootRef}
       tabIndex={-1}
-      className="relative flex h-full min-w-0 flex-col overflow-hidden bg-background outline-none"
+      className="relative flex h-full w-full min-w-0 flex-col overflow-hidden bg-background outline-none"
       data-file-viewer-frame
     >
       <div
         className="z-20 flex h-9 min-h-9 shrink-0 select-none items-center gap-1 border-b border-border bg-background px-2 text-foreground"
         data-file-viewer-toolbar
       >
-        <FileBreadcrumbs filePath={filePath} onBrowsePath={onBrowsePath} />
+        <FileBreadcrumbs
+          filePath={filePath}
+          filesAvailable={filesAvailable}
+          onRevealFilesPath={onRevealFilesPath}
+        />
         <div className="flex shrink-0 items-center gap-1">
           <FileViewerOptionsMenu
             canRenderRichPreview={canRenderRichPreview}
@@ -116,26 +138,34 @@ export function FileViewerFrame({
             </FileViewerToolbarButton>
           )}
           <FileViewerToolbarButton
-            label={browserOpen ? "Hide files" : "Show files"}
-            active={browserOpen}
-            onClick={onToggleBrowser}
+            label={toggleLabel}
+            active={effectiveRequestedOpen}
+            disabled={!filesAvailable}
+            help={toggleHelp}
+            pressed={effectiveRequestedOpen}
+            onClick={onToggleFiles}
           >
             <FolderTree className="icon-paired" />
           </FileViewerToolbarButton>
         </div>
       </div>
-      <FileViewerContentContextMenu
-        canRenderRichPreview={canRenderRichPreview}
-        richPreviewEnabled={richPreviewEnabled}
-        wordWrap={wordWrap}
-        canCopyContent={canCopyContent}
-        onToggleWordWrap={onToggleWordWrap}
-        onToggleRichPreview={onToggleRichPreview}
-        onCopyContent={onCopyContent}
-        onCopyPath={onCopyPath}
-      >
-        {children}
-      </FileViewerContentContextMenu>
+      <div className="flex min-h-0 flex-1 overflow-hidden" data-file-viewer-body>
+        {fileTreeDock}
+        <div className="flex min-h-0 min-w-[380px] flex-1 flex-col overflow-hidden" data-file-viewer-content>
+          <FileViewerContentContextMenu
+            canRenderRichPreview={canRenderRichPreview}
+            richPreviewEnabled={richPreviewEnabled}
+            wordWrap={wordWrap}
+            canCopyContent={canCopyContent}
+            onToggleWordWrap={onToggleWordWrap}
+            onToggleRichPreview={onToggleRichPreview}
+            onCopyContent={onCopyContent}
+            onCopyPath={onCopyPath}
+          >
+            {children}
+          </FileViewerContentContextMenu>
+        </div>
+      </div>
     </div>
   );
 }
@@ -179,18 +209,17 @@ const FILE_VIEWER_TOOLBAR_BUTTON_CLASS =
 
 function FileBreadcrumbs({
   filePath,
-  onBrowsePath,
+  filesAvailable,
+  onRevealFilesPath,
 }: {
   filePath: string;
-  onBrowsePath: (path: string) => void;
+  filesAvailable: boolean;
+  onRevealFilesPath: (path: string) => void;
 }) {
-  const { workspaceRoot } = useWorkspacePath();
-  const workspaceName = workspaceRoot.status === "settled"
-    ? workspaceRoot.path.split("/").filter(Boolean).pop() ?? null
-    : null;
   const parts = filePath.split("/").filter(Boolean);
-  const crumbs = workspaceName ? [workspaceName, ...parts] : parts;
-  const workspaceOffset = workspaceName ? 1 : 0;
+  // The leading crumb is always the literal "Files" — it never derives from
+  // the workspace/runtime root. `onRevealFilesPath("")` is its reveal target.
+  const crumbs = ["Files", ...parts];
 
   return (
     <nav
@@ -204,11 +233,8 @@ function FileBreadcrumbs({
       <ol className="flex min-w-max flex-1 items-center gap-1 text-ui text-muted-foreground">
         {crumbs.map((part, index) => {
           const isLast = index === crumbs.length - 1;
-          const isWorkspaceCrumb = workspaceName && index === 0;
-          const browsable = !isLast;
-          const browsePath = isWorkspaceCrumb
-            ? ""
-            : parts.slice(0, Math.max(0, index - workspaceOffset + 1)).join("/");
+          const browsable = filesAvailable && !isLast;
+          const browsePath = index === 0 ? "" : parts.slice(0, index).join("/");
           return (
             <li key={`${part}-${index}`} className="flex min-w-0 items-center gap-1">
               {index > 0 && <ChevronRight className="icon-compact shrink-0 text-muted-foreground/50" />}
@@ -217,7 +243,7 @@ function FileBreadcrumbs({
                   type="button"
                   variant="unstyled"
                   size="unstyled"
-                  onClick={() => onBrowsePath(browsePath)}
+                  onClick={() => onRevealFilesPath(browsePath)}
                   className="whitespace-nowrap rounded px-0.5 text-muted-foreground hover:text-foreground"
                 >
                   {part}
@@ -241,12 +267,16 @@ function FileViewerToolbarButton({
   label,
   active = false,
   disabled = false,
+  help,
+  pressed,
   onClick,
   children,
 }: {
   label: string;
   active?: boolean;
   disabled?: boolean;
+  help?: string;
+  pressed?: boolean;
   onClick: () => void;
   children: ReactNode;
 }) {
@@ -256,6 +286,8 @@ function FileViewerToolbarButton({
       variant="ghost"
       size="icon-sm"
       aria-label={label}
+      aria-pressed={pressed}
+      title={help}
       disabled={disabled}
       className={`${FILE_VIEWER_TOOLBAR_BUTTON_CLASS} ${
         active ? "bg-hover text-foreground" : ""

@@ -8,8 +8,9 @@ all-changes review surfaces.
 Files is filesystem navigation from file-viewing surfaces:
 
 - open file viewer targets from chat links, command-palette results, git rows,
-  the file viewer browser overlay, and the file viewer search modal
-- browse directories from the overlay attached to file/diff viewing surfaces
+  the docked file tree, and the file viewer search modal
+- browse directories from the non-modal docked file tree attached to
+  file/diff viewing surfaces (see Docked File Tree below)
 - search workspace files from the command palette or the file-viewer-local
   search modal
 
@@ -223,20 +224,100 @@ Markdown/code renderers; the editable Scratch editor is not syntax-highlighted.
 edit mode. User mode choices persist for the open target until that target is
 closed.
 
-The file viewer frame owns the path header, copy path, save/reload actions,
-dirty/conflict states, and binary/too-large placeholders. Cmd/Ctrl+S saves the
-active file target only.
+The rendered file surface is **read-only**: existing source, rendered
+Markdown, binary/too-large, error, and diff rendering are unchanged, and there
+is no Save action or `Cmd/Ctrl+S` binding on the supported path. The
+`workspace-file-buffers-store.ts` buffer/save/dirty-close scaffolding and its
+pinning tests are dormant legacy residue that the rendered viewer does not
+consume; they are neither wired nor deleted here, and removing them requires a
+separately scoped constitution review because it crosses tab-close/right-panel
+owners and pinning tests. Do not read that scaffolding as evidence the viewer
+is editable.
+
+The file viewer frame (`FileViewerFrame`) owns the path header and
+binary/too-large placeholders. Its header exposes a minimal `Files`
+toggle/breadcrumb control (below) alongside the existing options menu.
 
 The viewer's action menu (copy content, copy path, word wrap, rich preview) is
 OS-native in Desktop: the toolbar options button and a right-click in the
 content area both open the host context menu via the shared native-menu bridge,
 with the DOM popover kept as the browser/test fallback. Native menus carry no
-checkmark state, so toggles read as "Enable/Disable …" verbs.
+checkmark state, so toggles read as "Enable/Disable …" verbs. That context-menu
+trigger wraps only the viewer-content slot (`[data-file-viewer-content]`),
+never the docked file tree.
 
 The file viewer may open a palette-style file search modal scoped to the
 current viewer tab. It reuses the workspace file search API and command-palette
 input/list primitives; global shortcut ownership remains with the workspace
-command palette unless a dedicated binding is introduced later.
+command palette unless a dedicated binding is introduced later. Content search
+inside the file tree itself is out of scope here (see the successor slice).
+
+## Docked File Tree
+
+Beneath the right rail's 46px tab strip, `FileEditorView` (the single dock
+controller for `file`/`fileDiff` right-panel targets) can show a non-modal
+file-tree pane docked to the left of viewer content, inside
+`[data-file-viewer-body]`. This is not a center-pane viewer and not a durable
+right-panel Files tab; switching to another right-panel target (chat,
+terminal, review, Scratch, …) removes the dock from layout but preserves the
+workspace's requested visibility, and returning to a file target restores it
+when geometry permits.
+
+There is no floating overlay, click-catcher, or `role="dialog"` shell — the
+prior `FileTreeOverlay` and the unused `PaneFileTree` are deleted. The dock
+reuses the existing `FileTreeDirectory`, `FileTreeRow`, `FileSearchResultsTree`,
+runtime list/search/stat queries, glyphs, and changed-path derivation; it does
+not add a second filesystem index.
+
+`FileViewerFrame` defines the exact caller seam: `filesAvailable`,
+`filesRequestedOpen`, `onToggleFiles`, `onRevealFilesPath`, a `fileTreeDock`
+slot, and viewer-content `children`. `FileEditorView` alone derives
+`filesAvailable` from the complete `WorkspaceFileContext`
+(`materializedWorkspaceId !== null && treeStateKey !== null`); no dock, row,
+or breadcrumb re-derives availability by importing `useWorkspaceFileContext`,
+`WorkspacePathProvider`, or the file-tree store directly. The header has three
+states: unavailable (disabled `Show files` toggle, inert crumbs, no dock),
+available-and-closed (enabled `Show files`, active crumbs, no dock), and
+requested-but-geometry-hidden (enabled `Hide files`, `aria-pressed=true`,
+bounded "Widen the window to show files" help, no dock). The leading
+breadcrumb is the literal `Files` crumb — it never derives from the workspace
+root basename — and reveals the tree root; directory crumbs reveal that
+directory; the trailing filename crumb is inert.
+
+Tree rows activate files through the existing canonical
+`useWorkspaceFileTargetActions(fileContext).openFile` action — never
+`useFileReferenceActions` or fuzzy path recovery.
+
+### Geometry
+
+- Viewer-content floor: 380px (`RIGHT_PANEL_MIN_WIDTH`).
+- Tree minimum: 280px, including its own visible separator allocation.
+- A requested dock is effectively visible only once measured
+  `[data-file-viewer-body]` `clientWidth` reaches 660px; below that the dock
+  stays unmounted (`fileTreeDock` is `null`) while requested visibility is
+  retained, and it restores automatically once width recovers.
+- Desired tree width defaults to 400px; effective width is
+  `clamp(desiredWidth, 280, bodyWidth - 380)`.
+- `WorkspaceShellRightRail`'s absolute left divider is a paint-only overlay
+  with no layout width; `RightPanelFrame`'s `border-l` is the sole 1px layout
+  cost inside the rail's border box. Opening the dock calls the shell action
+  `ensureRightPanelWidth(minRailWidth)` (`WorkspaceShellActions`), implemented
+  only as `layout.setRightPanelWidth(current => Math.max(current, minRailWidth))` —
+  it never writes the workspace UI store directly, and it never shrinks an
+  existing wider preference. The shell still enforces its 440px main-pane
+  floor.
+
+### State ownership
+
+Durable dock state (`proliferate.fileTreeDock.v1`: global desired width plus
+per-logical-workspace requested visibility) and its ProductStorage
+hydration/migration/retry lifecycle are owned by a dedicated persistence
+coordinator, keyed only by the injected `ProductStorage` capability object's
+identity — never by `ProductHost`, `ProductStorageContext`, or a telemetry
+object. `file-tree-store.ts` remains a synchronous Zustand UI store with no
+persistence I/O of its own. Session-only expansion state and the first
+claimed `treeStateKey` per materialized workspace are never persisted, and
+`clearWorkspaceRuntimeState` prunes them on workspace disposal.
 
 ## Diff Viewing
 

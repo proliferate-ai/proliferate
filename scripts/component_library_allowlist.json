@@ -21,10 +21,6 @@
       "count": 1,
       "justification": "Pre-existing: the PRO-120 tool-call row must not paint Button's pressed rectangle; the quiet-row state trade is recorded on the row and its replacement waits on a suppressible interactive primitive."
     },
-    "apps/packages/product-client/src/components/workspace/files/tree/FileTreeOverlay.tsx": {
-      "count": 1,
-      "justification": "Pre-existing: an inline, non-modal file browser panel. ModalShell is focus-trapping and portalled, which would break the overlay's click-through-to-editor behaviour; one of the deferred overlay shells named in Current Gaps."
-    },
     "apps/packages/product-client/src/components/workspace/shell/tabs/DelegatedAgentHoverCard.tsx": {
       "count": 1,
       "justification": "Pre-existing: a hover card positioned from measured tab geometry, not from Tooltip's popper. Deferred overlay shell named in Current Gaps."

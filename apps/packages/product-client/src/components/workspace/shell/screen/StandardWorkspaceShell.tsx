@@ -139,6 +139,12 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   const workspaceRemoteAccessActions = useWorkspaceRemoteAccessActions();
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const runtimeBlockedReason = getWorkspaceRuntimeBlockReason(selectedWorkspaceId);
+  const ensureRightPanelWidth = useCallback(
+    (minRailWidth: number) => {
+      layout.setRightPanelWidth((current) => Math.max(current, minRailWidth));
+    },
+    [layout.setRightPanelWidth],
+  );
   const shellActions = useMemo(() => ({
     openTerminalPanel: actions.openTerminalPanel,
     openRightPanelTool: actions.onSetRightPanelTool,
@@ -148,6 +154,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
       : actions.handlePrOpen,
     workspaceWebActions,
     workspaceRemoteAccessActions,
+    ensureRightPanelWidth,
   }), [
     actions.handlePrOpen,
     actions.handleViewPr,
@@ -155,6 +162,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     actions.openPublishDialog,
     actions.openTerminalPanel,
     data.existingPr,
+    ensureRightPanelWidth,
     workspaceRemoteAccessActions,
     workspaceWebActions,
   ]);

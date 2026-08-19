@@ -20,6 +20,7 @@ import { ProductWorkspaceConnectionProvider } from "#product/providers/ProductWo
 import { WorkspacePathProvider } from "#product/providers/WorkspacePathProvider";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
+import { createFileTreeFixture } from "./file-tree-fixture";
 
 type FixtureHost = "desktop" | "web";
 type FixtureOrigin = "local" | "remote";
@@ -220,6 +221,8 @@ const workspace: Workspace = {
   updatedAt: FIXED_TIME,
 };
 
+const fileTreeFixture = createFileTreeFixture(FIXTURE_RUNTIME_WORKSPACE_ID);
+
 const fixtureFetch: typeof globalThis.fetch = async (input) => {
   const rawUrl = typeof input === "string"
     ? input
@@ -233,6 +236,24 @@ const fixtureFetch: typeof globalThis.fetch = async (input) => {
 
   if (url.pathname.endsWith(`/v1/workspaces/${FIXTURE_RUNTIME_WORKSPACE_ID}`)) {
     return jsonResponse(workspace);
+  }
+  if (url.pathname.endsWith("/terminals")) {
+    return jsonResponse([]);
+  }
+  if (url.pathname.endsWith("/workflow-runs")) {
+    return jsonResponse({ runs: [] });
+  }
+  if (url.pathname.endsWith("/files/entries")) {
+    const scriptedEntries = fileTreeFixture.respond(url);
+    if (scriptedEntries) {
+      return scriptedEntries;
+    }
+  }
+  const scriptedStatOrSearch = url.pathname.endsWith("/files/search") || url.pathname.endsWith("/files/stat")
+    ? fileTreeFixture.respond(url)
+    : null;
+  if (scriptedStatOrSearch) {
+    return scriptedStatOrSearch;
   }
   if (url.pathname.endsWith("/files/stat")) {
     const path = url.searchParams.get("path") ?? "";

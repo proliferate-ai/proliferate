@@ -12,7 +12,9 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: 0,
   timeout: 60_000,
-  expect: { timeout: 10_000 },
+  // The dock focuses its filter input on open, so every dock screenshot would
+  // otherwise race the blinking text caret.
+  expect: { timeout: 10_000, toHaveScreenshot: { caret: "hide" } },
   reporter: process.env.CI ? [["list"], ["github"]] : [["list"]],
   use: {
     baseURL: "http://127.0.0.1:5180",

@@ -1,7 +1,7 @@
 import { getFileVisual, type FileVisualKind } from "#product/lib/domain/files/file-visuals";
 
 /**
- * Reference-style per-filetype icon tints for the file tree overlay.
+ * Reference-style per-filetype icon tints for the docked file tree.
  * Reuses the vendored Material Icon Theme glyphs from FileTreeEntryIcon and
  * tints them with existing theme color tokens (no new palette entries).
  * Kinds not listed fall back to the default monochrome file-icon tones.

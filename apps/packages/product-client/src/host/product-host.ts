@@ -234,6 +234,18 @@ export interface ProductAuthHost {
  * Non-secret, device-local product state (appearance, drafts, recent
  * selections). Must never hold login credentials, provider API keys, SSH
  * credentials, or PKCE secrets.
+ *
+ * Identity contract: this capability object's identity — not the enclosing
+ * {@link ProductHost}, the derived `ProductStorageContext`, or any telemetry
+ * object — is the persistence authority. A host must reuse the *same*
+ * `ProductStorage` object across every immutable host snapshot refresh (auth,
+ * deployment, cloud, telemetry, …) that keeps the same backing store, and a
+ * different object identity contractually means a disjoint backing storage
+ * authority. Persistence owners that need ordering (the docked file tree's
+ * required reads, one-time migration, and serialized writer) key their
+ * authority, dirty state, and in-flight lane on this identity, so replacing the
+ * object mid-session isolates them from the previous authority. This documents
+ * an existing host obligation; it broadens no generic persistence behavior.
  */
 export interface ProductStorage {
   getItem(key: string): Promise<string | null>;
