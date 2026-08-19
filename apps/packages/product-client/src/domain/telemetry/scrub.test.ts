@@ -193,18 +193,25 @@ describe("scrubTelemetryData", () => {
     ).toBe("[redacted-token] [redacted-path]");
   });
 
-  it("can preserve PostHog internal envelope keys while scrubbing user data", () => {
+  it("preserves PostHog envelope identifiers while redacting exact identity keys", () => {
     expect(
       scrubTelemetryData(
         {
           token: "posthog-project-token",
           distinct_id: "user-123",
+          uuid: "event-123",
+          $lib: "web",
           properties: {
             api_key: "secret",
             path: "/home/pablo/project",
           },
           $set: {
             email: "person@example.com",
+            display_name: "Private Person",
+            "display-name": "Private Person",
+            displayName: "Private Person",
+            DISPLAYNAME: "Private Person",
+            name: "Allowed generic name",
           },
         },
         { preservePostHogInternalKeys: true },
@@ -212,12 +219,41 @@ describe("scrubTelemetryData", () => {
     ).toEqual({
       token: "posthog-project-token",
       distinct_id: "user-123",
+      uuid: "event-123",
+      $lib: "web",
       properties: {
         api_key: "[redacted]",
         path: "[redacted]",
       },
       $set: {
-        email: "person@example.com",
+        email: "[redacted]",
+        display_name: "[redacted]",
+        "display-name": "[redacted]",
+        displayName: "[redacted]",
+        DISPLAYNAME: "[redacted]",
+        name: "Allowed generic name",
+      },
+    });
+  });
+
+  it("redacts exact identity keys in ordinary nested objects", () => {
+    expect(
+      scrubTelemetryData({
+        identity: {
+          email: "person@example.com",
+          display_name: "Private Person",
+          "display-name": "Private Person",
+          displayName: "Private Person",
+          name: "Allowed generic name",
+        },
+      }),
+    ).toEqual({
+      identity: {
+        email: "[redacted]",
+        display_name: "[redacted]",
+        "display-name": "[redacted]",
+        displayName: "[redacted]",
+        name: "Allowed generic name",
       },
     });
   });

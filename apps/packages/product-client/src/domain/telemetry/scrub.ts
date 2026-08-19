@@ -24,6 +24,12 @@ const UNINSPECTABLE_VALUE_MARKER = "[redacted]";
 const MAX_SCRUB_DEPTH = 10;
 const MAX_SCRUB_ARRAY_ITEMS = 100;
 const MAX_SCRUB_OBJECT_PROPERTIES = 100;
+const SENSITIVE_IDENTITY_KEYS = new Set([
+  "email",
+  "display_name",
+  "display-name",
+  "displayname",
+]);
 
 export type Scrubbable =
   | string
@@ -79,6 +85,9 @@ function isPostHogInternalKey(key: string): boolean {
 }
 
 function shouldScrubKey(key: string, options: ScrubTelemetryOptions): boolean {
+  if (SENSITIVE_IDENTITY_KEYS.has(key.toLowerCase())) {
+    return true;
+  }
   if (options.preservePostHogInternalKeys && isPostHogInternalKey(key)) {
     return false;
   }
