@@ -294,7 +294,7 @@ Failure mode: Self-updating the supervisor would require it to restart itself wh
 | Separate catalog document push | Would break catalog immutability — pins could change mid-session. Would also require reasoning about two versions (runtime + catalog) and handling their divergence/rollback independently. Binary-only transport eliminated the problem. | Before 2026-07 (agent-distribution design) |
 | Automatic re-enrollment on credential failure | Security risk: a compromised worker could re-authenticate indefinitely. Enrollment is one-time bootstrap; revocation must stick. | Ruled in worker identity design |
 | Random/UUID mailbox request IDs | Would queue unbounded duplicates for a stuck heartbeat. Deterministic IDs (hash of component + version) make replays idempotent. | Mailbox protocol design (2026-07) |
-| Gateway model names in catalog | Made the catalog mutable (model lists change independently of harness versions). Gateway models now discovered live via `GET /v1/models` with the harness key; the catalog is purely per-pin facts. | Ongoing gap (see below) |
+| Gateway model names in catalog | Made the catalog mutable (model lists change independently of harness versions). Gateway models are discovered live with the harness key only to materialize the route needed for an override-free harness probe; Product sees the resulting target observation. The catalog is purely distribution and presentation. | Removed in the target-observed launch-options cutover |
 
 ## Gaps
 
@@ -304,13 +304,7 @@ Failure mode: Self-updating the supervisor would require it to restart itself wh
 
 **Issue:** Follow-up after supervisor fleet convergence is verified.
 
-### G2: Catalog still carries gateway model names
-
-`catalog.json` still carries gateway model names in `session.gatewayPolicy` (`seedModels` pre-probe fallback, `roles`) and gateway entries in `session.defaults`. These leave the catalog once gateway model discovery is a live `GET /v1/models` with the harness key; role choices move gateway-side.
-
-**Issue:** Blocked on live gateway model discovery.
-
-### G3: Binary swaps don't wait for live sessions
+### G2: Binary swaps don't wait for live sessions
 
 The supervisor kills and restarts the runtime even mid-conversation. Desktop updates happen at app startup when no sessions exist, and in cloud the disruption window is one process restart on a fleet that updates at most daily. Deferring swaps around long-running work is a known UX gap to revisit, not an accident.
 

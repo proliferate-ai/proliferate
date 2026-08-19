@@ -70,7 +70,7 @@ Durable session business logic:
 - update title
 - list/get sessions
 - get persisted live config snapshot
-- build launch catalog
+- project the current target `HarnessLaunchOptions`
 - summarize durable session/workspace state
 
 It does not talk to a live ACP actor.

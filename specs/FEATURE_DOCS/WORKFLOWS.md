@@ -41,8 +41,9 @@ sentinel connects to the unique head and is never serialized. New nodes start
 detached, removing a node removes only incident edges, and moving a node changes
 display order without rewiring. Save requires a workflow title, a title and a
 prompt on every step, one linear path covering every node, and an
-Input-to-head connection, in addition to the definition, reference, catalog,
-and repository rules — the same set the control plane and the runtime enforce,
+Input-to-head connection, in addition to the definition, reference,
+launch-intent, and repository rules — the same set the control plane and the
+runtime enforce,
 so a savable draft is one every plane accepts. Every gate that holds Save down
 is stated on the surface: definition issues against the step that owns them,
 and the workflow title and unapplyable JSON as their own banners. Canvas

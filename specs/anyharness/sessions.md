@@ -55,11 +55,14 @@ It includes:
 - `workspace_id`
 - `agent_kind`
 - `native_session_id`
-- requested / current model and mode fields
+- legacy requested/current model and mode compatibility projections
 - status
 - timestamps
 
-This is the durable identity surface for a session.
+This is the durable identity surface for a session, not the launch-config
+authority. The complete explicit selection lives in the session's atomic
+`ResolvedLaunchIntent`; current executable options and values live in its
+`SessionLiveConfigSnapshot`.
 
 ### `SessionEventRecord` (`anyharness/crates/anyharness-lib/src/domains/sessions/model.rs`)
 
@@ -125,7 +128,8 @@ boundary.
 There are two durable config-related record types:
 
 - `SessionLiveConfigSnapshotRecord`
-  - the last normalized ACP-exposed config surface
+  - the latest complete ACP-exposed models, generic controls, allowed values,
+    current values, and monotonic source sequence
 - `PendingConfigChangeRecord`
   - config changes requested while a session was busy
 
@@ -484,14 +488,19 @@ It:
 3. verifies the workspace exists
 4. verifies the requested agent kind exists in the built-in registry
 5. resolves the agent and requires it to be ready
-6. validates the requested model id against the curated provider catalog
-7. atomically creates the durable `SessionRecord` in `starting` state, or
-   returns the concurrently inserted row for the same idempotent request
+6. reloads the selected harness's current matching-basis
+   `HarnessLaunchOptions`
+7. exact-validates the optional `modelId` and every generic
+   `controlValues` key/value without aliasing, filtering, or fallback
+8. atomically creates the durable `SessionRecord` in `starting` state together
+   with its complete `ResolvedLaunchIntent`, or returns the concurrently
+   inserted row and its immutable intent for the same idempotent request
 
-This path does not start ACP directly. It only produces a valid durable session
-record. Omitting `sessionId` preserves ordinary server-minted identity. Internal
-preselected ids remain strict fresh-create inputs unless their caller explicitly
-uses the idempotent public create seam.
+This path does not start ACP directly. It commits the valid durable session and
+the exact launch promise the actor must later apply and confirm. Omitting
+`sessionId` preserves ordinary server-minted identity. Internal preselected ids
+remain strict fresh-create inputs unless their caller explicitly uses the
+idempotent public create seam.
 
 ### Read and History
 
@@ -585,19 +594,21 @@ The session domain owns:
 
 - the durable live-config snapshot
 - the queue of pending config changes
-- normalized control metadata exposed back to clients
+- the exact models, generic controls, allowed values, and complete current
+  values exposed back to clients
 
 `live_config/**`
 (`anyharness/crates/anyharness-lib/src/domains/sessions/live_config/**`)
-is the normalization layer from ACP config options into the runtime-owned
-`SessionLiveConfigSnapshot` shape.
+maps the native handshake into the runtime-owned
+`SessionLiveConfigSnapshot` shape without dropping unknown identifiers.
 
 It:
 
-- flattens ACP select options into raw config options
-- groups known controls into normalized buckets such as model, mode, reasoning,
-  effort, and fast mode
-- preserves everything else as extras
+- preserves exact ordered model and control rows plus all allowed values
+- records the complete current model and control-value map
+- advances a monotonic source sequence and replaces the prior full snapshot
+- may expose compatibility presentation groupings, but never uses them as the
+  validation or mutation authority
 
 ### What the ACP runtime owns
 
@@ -609,25 +620,27 @@ The ACP runtime owns:
 
 ### End-to-end config flow
 
-1. client requests a config change
-2. `SessionRuntime` ensures the actor is live
-3. the actor tries to apply the change through ACP
-4. if the session is busy, the change is queued durably
-5. ACP config updates rebuild the normalized snapshot
-6. the snapshot is persisted durably
-7. queued changes are replayed when the actor becomes idle
+1. the client sends an exact model or control key/value from the current full
+   snapshot
+2. `SessionRuntime` ensures the actor is live and validates against the latest
+   snapshot
+3. the actor applies the raw value through the harness's supported ACP surface
+4. if the session is busy, the exact change is queued durably
+5. success requires positive exact-value confirmation from the live harness
+6. the next complete `SessionLiveConfigSnapshot` is persisted and published
+7. queued changes are revalidated against the latest snapshot before idle replay
 
 ### Model selection specifics
 
-Model changes have extra logic because agents expose models in different ways.
+Model changes have protocol-specific transport because harnesses may expose a
+raw model config control or a direct ACP model setter. The selected ID itself is
+never rewritten: it must be an exact member of the current live snapshot and
+must be read back exactly after application. A legacy direct setter is usable
+only when the canonical snapshot advertises that model and the setter can
+positively confirm the response-carried current value. There is no catalog alias
+or optimistic acknowledgement path.
 
-The runtime tries:
-
-1. direct ACP model APIs
-2. curated Claude alias handling when needed
-3. generic config-option setters as a fallback
-
-That is why model configuration spans both:
+Model configuration spans both:
 
 - `anyharness/crates/anyharness-lib/src/domains/sessions/live_config/**`
 - `anyharness/crates/anyharness-lib/src/live/sessions/actor/config/**`

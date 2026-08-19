@@ -101,7 +101,7 @@ src/
 ├── integration_gateway.rs
 ├── self_update.rs
 ├── anyharness_update.rs
-├── model_snapshot_sync.rs
+├── launch_options_sync.rs
 ├── supervisor_bridge.rs
 ├── cloud_client/
 │   ├── mod.rs
@@ -136,7 +136,7 @@ inventory, or materialization subsystems.
 | `self_update.rs` | Verify, preflight, swap, and exec the Worker binary on a **legacy** (non-supervisor-owned) target; deprecated, scheduled for deletion after the bridge window | AnyHarness or Supervisor updates, any behavior on a supervisor-owned target | [Lifecycle](#worker-lifecycle-and-convergence) |
 | `anyharness_update.rs` | Verify, stop, swap, relaunch, health-gate, and roll back AnyHarness on a **legacy** target; deprecated, scheduled for deletion after the bridge window | General runtime lifecycle, any behavior on a supervisor-owned target | [Lifecycle](#worker-lifecycle-and-convergence) |
 | `supervisor_bridge.rs` | Write one durable mailbox update request per diverging heartbeat on a supervisor-owned target; the one-time D5 bridge that hands an already-provisioned legacy target to Proliferate Supervisor | Update download, verification, activation, health-gating, or rollback (Supervisor owns all of that) | [Lifecycle](#worker-lifecycle-and-convergence) |
-| `model_snapshot_sync.rs` | Consume the server's `modelSnapshotUploadAllowed` verdict as the single admission gate; when allowed, read local snapshot documents and upload changed ones; latch off after an unexpected 403 | Deciding eligibility (the server's Agent Models rule owns it), snapshot content, or the ingest contract | [Lifecycle](#worker-lifecycle-and-convergence) |
+| `launch_options_sync.rs` | Consume the server's `launchOptionsUploadAllowed` verdict; when allowed, read each runtime harness's exact launch-option state and upload only a higher source revision | Deciding eligibility, interpreting options/defaults/evidence, or rebuilding the copied statement | [Lifecycle](#worker-lifecycle-and-convergence) |
 | `integration_gateway.rs` | Write the private gateway credential file returned by enrollment and repair it after an authenticated heartbeat when a predecessor overwrote it | Credential issuance or re-enrollment | [Identity](#worker-identity) |
 | `cloud_client/**` | Raw Cloud HTTP and wire shapes | Convergence decisions or local persistence | [Clients](#worker-http-clients) |
 | `store/**` | Durable Worker identity and AnyHarness update state in local SQLite | Cloud or AnyHarness product truth | [Store](#worker-store) |
@@ -369,7 +369,7 @@ inside the runtime binary, so there is no catalog version on the wire.
 POST /v1/cloud/worker/heartbeat
   request: status=online, Worker version, current AnyHarness version
   response: acknowledgement + optional desiredVersions
-            + required modelSnapshotUploadAllowed (not desired state)
+            + required launchOptionsUploadAllowed (not desired state)
 ```
 
 The interval is `heartbeat_interval_seconds` from local configuration with a
@@ -388,43 +388,26 @@ reasserting a revoked gateway token. A success returned immediately before
 revocation can race one final stale write, which the active successor repairs
 on its next successful heartbeat.
 
-## Model-Snapshot Sync (server-gated, no convergence)
+## Harness Launch-Option Sync (server-gated, no convergence)
 
-Snapshot sync is not convergence — there is no desired state to reach — but it
-runs on the same tick, before the bridge and the binary swaps, because a Worker
-self-update ends by exec'ing and never returns.
+Launch-option sync is copied observation, not desired-state convergence. It
+runs on the same tick before bridge and binary-swap work because Worker
+self-update ends by `exec` and never returns.
 
-**Eligibility is heartbeat-gated and server-owned.** The 200 ack carries a
-required `modelSnapshotUploadAllowed` boolean, decided by one pure Agent Models
-rule that the cloud ingest route also enforces; the Worker consumes it as
-admission and never re-derives it from its own configuration, runtime kind, or
-Supervisor topology. `HeartbeatResponse.model_snapshot_upload_allowed` is
-`#[serde(default)]`, so a server too old to state a verdict decodes as `false`:
-an old server cannot promise the upload is legal, and compatibility must fail
-closed before side effects.
+The successful heartbeat acknowledgement carries
+`launchOptionsUploadAllowed`. Absent decodes to `false`; on `false`,
+`launch_options_sync::maybe_sync` returns before resolving the runtime bearer,
+listing harnesses, reading launch options, or uploading anything. The Worker
+does not re-derive eligibility.
 
-`model_snapshot_sync::maybe_sync(upload_allowed, …)` is the single executable
-admission gate. On `false` it returns **before** runtime bearer resolution, HTTP
-client construction, the local `GET /v1/agents`, per-harness status reads, and any
-cloud upload, changing no state and logging nothing — expected ineligibility is
-silent beyond the ordinary acknowledgement, which carries the verdict as a typed
-boolean field. **Desktop therefore skips before any read**, rather than reading
-every document and collecting one 403 per changed harness on every heartbeat.
-
-**An unexpected 403 is process-latched.** A refusal after the ack said `true`
-contradicts the server's own statement, so retrying on the heartbeat timer would
-only slow the request storm down. The first such 403 atomically trips a
-process-local `disabled_after_forbidden` fuse (allocated once in `runtime::run`),
-stops the remaining harnesses in that tick, suppresses all later ticks even if the
-server advertises `true` again, leaves `last_pushed` unadvanced, and emits exactly
-one bounded `WARN` for the process:
-`model snapshot sync disabled after server denied advertised eligibility`, with
-only `reason="unexpected_forbidden"`, numeric `http_status=403`, and the harness
-kind. The response body, URL, bearer, local path, and snapshot content are never
-logged on that branch, and there is no `?error` Debug field. The fuse is not
-persisted, timed, or resettable; a Worker restart is the one recovery boundary.
-Network failures and every non-403 status keep their existing retry behavior and
-never trip it.
+On `true`, the Worker lists runtime harness kinds, reads
+`GET /v1/agents/{kind}/launch-options`, serializes that response verbatim except
+for runtime-only readiness decoration, and uploads it to
+`/v1/cloud/harness-launch-options/{kind}`. In-memory state tracks the highest
+successfully copied source revision per harness. Equal/older revisions are
+skipped; a read, encoding, network, or ingest failure leaves the revision
+unadvanced for a later tick. The Worker never interprets model/control IDs,
+defaults, basis state, or probe evidence.
 
 See [MODELS.md "Cloud copy"](FEATURE_DOCS/MODELS.md#cloud-copy)
 for the server half of this contract.
@@ -667,7 +650,7 @@ acquire the process lock beside the Worker database
   -> build CloudClient
   -> load durable identity or enroll once
   -> after a fresh enrollment, write integration-gateway credentials
-  -> create in-memory catalog-sync state
+  -> create in-memory launch-option sync state
   -> heartbeat, repair that fresh gateway credential if needed, and converge once
   -> if --once: return
   -> otherwise: sleep for the configured interval and repeat
@@ -683,18 +666,17 @@ POST heartbeat
   -> on failure: log and retry next tick
   -> if this process freshly enrolled and the shared gateway file differs,
      restore its credential now that heartbeat authenticated it
-  -> catalog convergence (non-fatal; deletion-pending — the catalog ships
-     inside the runtime binary, see the Lifecycle guide)
+  -> copy changed harness launch-option state when this heartbeat permits it
   -> AnyHarness binary convergence (non-fatal; optional)
   -> Worker binary convergence (non-fatal; optional)
 ```
 
 The order matters. A successful Worker self-update ends by replacing the
-current process image with `exec`, so catalog and AnyHarness convergence run
-first.
+current process image with `exec`, so launch-option copy and AnyHarness
+convergence run first.
 
-`--once` sends one heartbeat and can synchronize the catalog, but it reports
-pending binary updates without applying either binary swap.
+`--once` sends one heartbeat and may copy changed launch-option state, but it
+reports pending binary updates without applying either binary swap.
 
 ## Failure Boundary
 

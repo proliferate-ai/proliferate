@@ -179,8 +179,8 @@ The one carve-out:
   cloud-uninstallable for a different reason: its *native* login lives in the
   macOS Keychain, which no headless Linux sandbox has and which no cloud
   surface can interactively seed. For the same keychain reason it is
-  excluded from unattended model probing and refreshed only on request
-  (model-catalog.md's probe engine).
+  excluded from unattended launch-option probing and refreshed only on request
+  ([MODELS.md](../../../FEATURE_DOCS/MODELS.md)'s probe engine).
 
 When a managed copy lands alongside a harness the user already had on
 PATH, the settings pane (`HarnessPane.tsx`) shows a one-time, dismissible
@@ -405,13 +405,12 @@ convergence dashboard. There is no field in either direction that acts on
 this value — the catalog sync/push channel 796ff1f08 deleted stays
 deleted; this is observation only.
 
-**`agent_catalog_override` stays**, unchanged in behavior and now
-documented as the sanctioned per-tenant lever: a server-side model-overlay
-applied at snapshot read, never touching the signed artifact or the
-bundled floor. It is the one way to differ a tenant's effective catalog
-without a new publish or a new runtime release, and it is orthogonal to
-both transports above — it acts after either one already decided the
-active document.
+There is no per-tenant executable catalog overlay. Legacy
+`agent_catalog_override` storage is not read by launch-option projection and
+cannot add, remove, hide, alias, or default a model or control. A tenant differs
+only when its selected execution target reports different
+`HarnessLaunchOptions`; Cloud copies that target state verbatim by sandbox and
+harness.
 
 ### Runtime binary convergence (cloud)
 

@@ -410,13 +410,17 @@ queued cleanup drains immediately in the background.
 
 Empty-session creation also has a small durable pre-acknowledgement phase. The
 client persists the projected `client-session:*` id, a caller-selected runtime
-UUID, workspace, resolved mode (including no mode), frozen live defaults,
-subagent preference, launch selection, and replacement target before sending
-`POST /v1/sessions`. This seam is enabled only for the bundled local runtime,
+UUID, workspace, exact optional `modelId`, complete generic `controlValues`,
+subagent preference, and replacement target before sending `POST /v1/sessions`.
+The ledger stores intent, not availability or frozen defaults. This seam is
+enabled only for the bundled local runtime,
 which deploys in lockstep with ProductClient; cloud and SSH runtimes can lag and
 retain the pre-existing server-minted create behavior until they advertise an
-equivalent capability. A successful create response strictly acknowledges and
-removes the entry before launch defaults run. If acknowledgement storage fails,
+equivalent capability. Session create reloads current target launch options,
+exact-validates the selection, and atomically stores `ResolvedLaunchIntent`;
+the actor applies and confirms every explicit value before readiness. A
+successful create response strictly acknowledges and removes the entry. There
+is no post-create defaults loop. If acknowledgement storage fails,
 the materializer retires the created runtime or retains it honestly rather than
 publishing an unowned replay entry. If a reload interrupts the request before
 the response is observed, workspace bootstrap resumes the entry with both
@@ -481,7 +485,7 @@ When the real workspace id is known:
 
 2. Select the real workspace with `preservePending: true`, if the attempt is
    attended. Selection should keep the pending shell active while the real
-   logical workspace, sessions, file tree, and launch catalog load. An
+   logical workspace, sessions, file tree, and target launch options load. An
    unattended attempt skips this step entirely: it must not pull the user out
    of the workspace they are looking at.
 
@@ -552,18 +556,15 @@ projection path.
   state match or it would stay stuck. Optimism is therefore held through intent
   `accepted` (so a real switch never reverts to the not-yet-updated value
   mid-flight) and dropped the moment the authoritative value equals it.
-- Session creation snapshots queued pre-materialization config-intent
-  generations before applying launch defaults. The final authoritative live
-  config settles only those exact generations before the session is published:
-  the latest confirmed value reconciles, superseded values become stale,
-  unsupported values become stale, and an applicable unconfirmed latest value
-  fails silently. If creation returns no live-config snapshot, authority is not
-  yet available: captured intents remain queued and dispatch after binding.
-  Pending-shell inputs retain their raw harness IDs. Authenticated creation
-  resolves the semantic launch key from the agent catalog before applying
-  defaults, and settlement can still resolve by raw identity against
-  authoritative live config. A newer intent outside the snapshot remains a
-  normal ordered live change.
+- Session creation snapshots the exact latest pre-materialization model/control
+  intent and submits it as `modelId` plus generic `controlValues`. Create
+  validates it against the target's current `HarnessLaunchOptions`; the actor
+  applies and confirms those same raw values before publishing ready. The first
+  `SessionLiveConfigSnapshot` settles only generations whose exact current value
+  matches. Unsupported, rejected, or unconfirmed values fail creation rather
+  than being silently dropped or deferred. A newer intent outside the captured
+  selection remains a normal ordered live change after binding, validated
+  against the session's latest live snapshot.
 - If the projected session has no materialized runtime yet, display labels must
   still use the same label mapping as the final session.
 - Do not mix raw ids and presentation labels. For example, a reasoning setting
@@ -786,7 +787,7 @@ Known hard latency sources:
 - workspace creation or worktree creation
 - workspace selection and connection resolution
 - session creation/materialization
-- launch catalog/default launch resolution
+- target launch-option read and exact launch-intent validation
 - transcript/history hydration
 - prompt/config/interaction API acknowledgement
 - stream startup and first flush

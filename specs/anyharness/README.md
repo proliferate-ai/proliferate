@@ -261,9 +261,9 @@ Specs:
   `live/sessions/actor` state-machine split, actor-owned state, command
   handling, turn loop, config, notifications, interactions, and shutdown.
 - [../codebase/platforms/product/agent-distribution.md](../codebase/platforms/product/agent-distribution.md) for
-  the agents catalog/readiness model: single catalog input, trusted
-  descriptor/model projection, install/readiness topology, seed artifacts, and
-  launch resolution.
+  distribution pins, install/readiness topology, and seed artifacts; executable
+  model/control observation and launch resolution belong to
+  [MODELS.md](../FEATURE_DOCS/MODELS.md).
 - [../codebase/platforms/product/mcp-runtime.md](../codebase/platforms/product/mcp-runtime.md) for user MCP bindings, product MCP servers,
   session extensions, capability tokens, and MCP elicitation.
 - [../codebase/platforms/product/agent-features/servers.md](../codebase/platforms/product/agent-features/servers.md) for the repeatable product

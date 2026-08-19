@@ -505,7 +505,7 @@ seeded Claude install.
   sha-verified — ACP-registry resolution is probe-time, see "ACP Registry Flow")
 - readiness computation
 - the final resolved launch surface handed to ACP
-- curated provider/model catalogs used by sessions
+- target-observed `HarnessLaunchOptions` used for exact pre-launch validation
 
 ### Agents Does Not Own
 
@@ -518,20 +518,19 @@ seeded Claude install.
 
 ## Important Distinctions
 
-### Registry vs Catalog
+### Distribution vs Launch Options
 
 These are different:
 
-- the agent registry answers “how does this agent install, authenticate, and
-  launch?”
-- the provider catalog answers “what model IDs can the session domain validate
-  and default, and which optional mode may unattended product flows select?”
+- the registry and distribution catalog answer how the harness installs,
+  authenticates, and launches;
+- the target's `HarnessLaunchOptions` answer which exact `modelId` and generic
+  `controlValues` session create may accept now.
 
-For a product flow explicitly marked unattended, a caller-selected mode wins.
-Otherwise the product may use the selected target's projected
-`unattendedModeId` when the selected model supports it. If either the curation or
-support is absent, session creation omits `mode_id` and leaves the agent's normal
-default intact. This does not change ordinary interactive session creation.
+Interactive and unattended callers both preserve their complete opaque
+selection. Session create reloads the target observation, exact-validates it,
+and atomically stores `ResolvedLaunchIntent`. Omitted values stay omitted; no
+catalog default, unattended-mode table, alias, or first option fills them.
 
 ### Native CLI vs Agent Process
 
@@ -569,7 +568,7 @@ Add behavior here when it changes agent availability, for example:
 - a new credential-discovery mechanism
 - a new managed install strategy
 - a new resolved-pin source kind (binary/archive/npm/git) + its probe resolver
-- a new provider/model catalog surface
+- a new launch-probe observation path or presentation-only model decoration
 
 Do not add behavior here when it belongs to:
 

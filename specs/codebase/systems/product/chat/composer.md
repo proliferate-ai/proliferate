@@ -202,13 +202,14 @@ restore.
 
 ## 1.1 Model Selector Semantics
 
-The composer model selector presents the model-catalog contract from
-`specs/FEATURE_DOCS/MODELS.md`. It must not infer identity from
-display labels or from one provider's raw runtime id shape.
+Before launch, the composer model selector presents the selected target's exact
+`HarnessLaunchOptions` contract from `specs/FEATURE_DOCS/MODELS.md`. After
+launch, it presents the active session's `SessionLiveConfigSnapshot`. Identity
+is the raw observed ID, never a display label or inferred provider shape.
 
 Rules:
 
-- The model pill opens the searchable grouped catalog popover
+- The model pill opens the searchable grouped observed-model popover
   (`ComposerModelPickerPopover`) and owns model/harness selection only. Under
   the ruled composer input grammar (owner rev #1851, superseding the earlier
   combined `Model · Effort` pill), reasoning effort, `fast_mode`, and the
@@ -222,22 +223,26 @@ Rules:
   selection returns focus to the active composer editor without changing its
   draft or caret. Pointer dismissal and model selectors outside an active
   composer keep their own focus behavior.
-- Preserve authored catalog effort labels (`Extra High`, `Max`, `Ultra`, and
+- Preserve observed effort labels (`Extra High`, `Max`, `Ultra`, and
   so on) wherever effort values render, including the effort stepper chip; do
   not rewrite distinct values to internal spellings such as `Xhigh`.
 - The current composer chip uses the active session's effective runtime model
   once AnyHarness reports one. Pending launches may show requested model intent.
-- Picker selected state, dedupe, visibility, and display labels use canonical
-  catalog identity after alias/normalization resolution.
-- Runtime live config values are preserved for update calls, but they are not
-  the rendered product name when a catalog match exists.
+- Picker selected state uses exact observed identity. Presentation may label,
+  order, group, or search rows, but it may not alias, deduplicate, hide, add, or
+  remove executable membership. An unknown ID renders with its observed label
+  or raw ID.
+- Runtime live config values are preserved exactly for update calls. A
+  presentation label may decorate the row without changing the submitted ID.
 - After AnyHarness confirms a user-selected model, working mode, reasoning,
   effort, or speed value in a standard workspace, ProductClient persists that
   value as the per-agent launch default. New chats in the current workspace and
-  newly created workspaces use those persisted controls; catalog defaults
-  remain the fallback until the user selects a value. Cowork working-mode and
-  tuning changes do not update standard-workspace launch defaults.
-- [Model Catalog](../../../../FEATURE_DOCS/MODELS.md) owns whether a
+  newly created workspaces may reuse those exact IDs as saved intent. Every
+  execution revalidates them against the selected target; invalid saved intent
+  is shown for repair and is never aliased or replaced. With no saved intent,
+  only defaults reported by `HarnessLaunchOptions` apply. Cowork working-mode
+  and tuning changes do not update standard-workspace saved intent.
+- [Models and harness launch options](../../../../FEATURE_DOCS/MODELS.md) owns whether a
   selection is current, `update_current_chat`, or `open_new_chat`; Composer
   presents that action and does not derive it from live setter availability.
 - [Chat Lifecycle](lifecycle.md) owns the visible create, preserve, and replace
@@ -257,15 +262,14 @@ feeds it launch-time descriptors instead of live-session ones):
 2. the Fast toggle, when the harness exposes `fast_mode`
 3. the reasoning-effort stepper, when the harness exposes an effort ladder
 4. the primary working mode badge
-5. the goal button (live sessions only) and urgent-only integrations
+5. independent execution access, when present
+6. every other observed control through the standard generic control renderer
+7. the goal button (live sessions only) and urgent-only integrations
 
-`buildComposerSessionControlGroups` owns the partition: it promotes the mode,
-effort, and `fast_mode` descriptors to their dedicated chips. Controls it does
-not promote (the permission/access `mode` while `collaboration_mode` is
-primary, and any other unclaimed configuration control) do not render in the
-composer row at all — there is no overflow or three-dot configuration menu;
-harness configuration surfaces (`SessionConfigControls`, the full-menu
-`SessionModeControl`) remain their home in settings.
+`buildComposerSessionControlGroups` owns presentation partitioning only. It
+promotes working mode, independent access, effort, and `fast_mode` descriptors
+to dedicated chips. `SessionConfigControls` renders every remaining observed
+axis in the same standard row. Promotion never removes an executable control.
 
 The two cycling chips share one interaction contract:
 
@@ -287,20 +291,19 @@ Visible controls use one consistent inter-item rhythm. Compact controls must
 not reserve a trailing pending-state slot when no pending state exists; that
 empty flex child shifts icon-only controls and creates uneven visual gaps.
 
-`collaboration_mode` is the primary working mode whenever it exposes a choice.
-Otherwise a legacy fused `mode` control is primary only when its choices carry
-working-mode semantics such as plan, agent, ask, build, bypass, or chat. This
-keeps Codex's collaboration mode independent from its read-only/auto/full-access
-permissions while preserving harnesses such as Claude, Cursor, and OpenCode
-whose working and access behavior still share one mode control.
+`collaboration_mode` is the primary working mode whenever it is observed.
+Otherwise a legacy fused `mode` control is presented as working mode only when
+its observed choices carry working-mode semantics such as plan, agent, ask,
+build, bypass, or chat. This is presentation classification, not value mapping.
+Codex's `collaboration_mode` (**Mode**) and `mode` (**Access**) render
+simultaneously; observed access values include `read-only`, `agent`, and
+`agent-full-access`. First-party code never emits obsolete `full-access`.
 
 A reasoning-effort ladder with two or more ordered values keeps its chip
 visible when the runtime reports it as non-settable, but the chip is disabled
-— it still reads the level. Cowork hides the permission/access `mode` because
-its access policy is product-defined
-(`filterComposerSessionControlsForSurface`), but retains independent
-working-mode controls such as `collaboration_mode` together with the tuning
-chips.
+— it still reads the level. Cowork, plan handoff, Home, and standard chat retain
+the same exact observed axes; a surface may change layout but cannot filter an
+executable control.
 
 ### Compact control tier (narrow composers)
 
