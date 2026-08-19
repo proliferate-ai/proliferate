@@ -16,8 +16,8 @@ anonymous telemetry and is not initialized by the Server API.
 | Privacy and replay | Autocapture and automatic page views are off. Payload scrubbers remove sensitive values. Desktop, Web, and Mobile recording are source-disabled and absent. |
 | Known gap | No client PostHog recording gap remains: Desktop, Web, and Mobile cannot record, so none can expose route ids through recorded page URLs. |
 
-Re-enabling recording on any surface is a separate reviewed source change that
-must first satisfy the synthetic privacy qualification in
+Re-enabling recording on any surface is a separate founder-approved source
+change that must first satisfy the synthetic privacy qualification in
 [`specs/frontend/telemetry.md`](../../../../frontend/telemetry.md).
 
 ## Desktop
