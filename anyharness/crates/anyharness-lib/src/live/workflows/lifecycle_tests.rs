@@ -878,6 +878,11 @@ async fn a_failed_launch_fails_the_run_and_compensates_the_half_born_session() {
     std::fs::write(&dud, "#!/bin/sh\nexit 0\n").expect("write dud agent");
     make_executable(&dud).expect("make dud agent executable");
     std::env::set_var("ANYHARNESS_CLAUDE_AGENT_PROGRAM", &dud);
+    // The program swap changed the spawn spec, so the boot-time observation is
+    // basis-stale and admission would refuse the create BEFORE the row exists.
+    // Re-observe at the dud basis: this test's failure must land AFTER the
+    // stamp, in the compensation window.
+    test_support::seed_observed_launch_options(&fixture.state.launch_options_service, "claude");
     let definition = chain(vec![agent_node("solo", "never launches")]);
     fixture.start("run-launchfail", definition);
 

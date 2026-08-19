@@ -52,10 +52,13 @@ pub(crate) fn seed_observed_launch_options(
     service: &HarnessLaunchOptionsService,
     harness_kind: &str,
 ) {
+    // Re-seed when the stored observation is basis-stale (`options: None`,
+    // e.g. after a test swaps the agent program): admission needs a
+    // current-basis observation, not just any row.
     if service
         .read(harness_kind)
         .expect("read launch options")
-        .is_some()
+        .is_some_and(|response| response.options.is_some())
     {
         return;
     }
