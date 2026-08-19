@@ -18,4 +18,5 @@ export * from "./hooks/workspaces.js";
 export * from "./hooks/workflows.js";
 export * from "./hooks/workflows-v2.js";
 export * from "./lib/query-keys.js";
+export * from "./lib/query-keys-harness-launch-options.js";
 export * from "./lib/query-keys-workflows-v2.js";

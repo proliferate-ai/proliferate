@@ -21,6 +21,9 @@ use super::driver::process::spawn_agent_process;
 use super::driver::session_lifecycle::{initialize_connection, start_new_session};
 use super::driver::SessionMcpServer;
 
+mod config_options;
+use config_options::{current_model_from_config_options, model_entries_from_config_options};
+
 const PROBE_SESSION_ID: &str = "catalog-probe";
 const PROBE_WORKSPACE_ID: &str = "catalog-probe";
 
@@ -496,21 +499,6 @@ async fn run_enumeration(
     })
 }
 
-fn current_model_from_config_options(
-    config_options: &[acp::schema::SessionConfigOption],
-) -> Option<String> {
-    let option = config_options.iter().find(|option| {
-        matches!(
-            option.category,
-            Some(acp::schema::SessionConfigOptionCategory::Model)
-        ) || option.id.to_string() == "model"
-    })?;
-    match &option.kind {
-        acp::schema::SessionConfigKind::Select(select) => Some(select.current_value.to_string()),
-        _ => None,
-    }
-}
-
 fn drain_pending(notification_rx: &mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>) {
     while notification_rx.try_recv().is_ok() {}
 }
@@ -534,49 +522,6 @@ fn elided(mut config_options: serde_json::Value) -> serde_json::Value {
         }
     }
     config_options
-}
-
-/// Extract (config_id, [(model_id, name, description)]) from a `model`
-/// config option, when the harness reports models that way.
-fn model_entries_from_config_options(
-    config_options: &[acp::schema::SessionConfigOption],
-) -> Option<(String, Vec<(String, String, Option<String>)>)> {
-    let option = config_options.iter().find(|option| {
-        matches!(
-            option.category,
-            Some(acp::schema::SessionConfigOptionCategory::Model)
-        ) || option.id.to_string() == "model"
-    })?;
-    #[allow(unreachable_patterns)]
-    let select = match &option.kind {
-        acp::schema::SessionConfigKind::Select(select) => select,
-        _ => return None,
-    };
-    let entries: Vec<(String, String, Option<String>)> = match &select.options {
-        acp::schema::SessionConfigSelectOptions::Ungrouped(values) => values
-            .iter()
-            .map(|value| {
-                (
-                    value.value.to_string(),
-                    value.name.clone(),
-                    value.description.clone(),
-                )
-            })
-            .collect(),
-        acp::schema::SessionConfigSelectOptions::Grouped(groups) => groups
-            .iter()
-            .flat_map(|group| group.options.iter())
-            .map(|value| {
-                (
-                    value.value.to_string(),
-                    value.name.clone(),
-                    value.description.clone(),
-                )
-            })
-            .collect(),
-        _ => return None,
-    };
-    Some((option.id.to_string(), entries))
 }
 
 /// Some harnesses (e.g. Grok) advertise their model menu only via the

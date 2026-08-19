@@ -1,3 +1,4 @@
+mod agent_launch;
 mod agent_operations;
 mod config;
 mod materialization;
@@ -19,13 +20,11 @@ use crate::domains::activity::service::ActivityService;
 use crate::domains::activity::store::ActivityStore;
 use crate::domains::agent_operations::mcp::auth::WorkspaceMcpAuth;
 use crate::domains::agent_operations::runtime::AgentOperations;
-use crate::domains::agents::catalog::gateway_plan::GatewayModelPlanner;
 use crate::domains::agents::catalog::service::AgentCatalogService;
 use crate::domains::agents::catalog::sync::CatalogSyncService;
 use crate::domains::agents::installer::reconcile::execution::AgentReconcileService;
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::launch_options::HarnessLaunchOptionsService;
-use crate::domains::agents::launch_probe::targets::RuntimeProbeTargets;
 use crate::domains::agents::launch_probe::LaunchProbeService;
 use crate::domains::agents::runtime::AgentRuntime;
 use crate::domains::artifacts::protection::ArtifactProtectionService;
@@ -231,35 +230,8 @@ impl AppState {
             // would put a process-global read inside the reconcile loop.
             crate::domains::agents::runtime::RuntimeSurface::from_env(),
         );
-        // The RENDER plane's plan producer: catalog gatewayPolicy plus a memoized
-        // live `GET /v1/models`. It replaces the resolver on the render path
-        // because the resolver read its model list from the revision-keyed
-        // `gateway_model_probe` rows — which the machine snapshot replaces, and
-        // which would make an opencode gateway probe observe only the seed ids its
-        // own config was written with.
-        let gateway_model_planner = Arc::new(GatewayModelPlanner::new(
-            catalog_sync_service.clone(),
-            runtime_home.clone(),
-        ));
-        // The machine launch-options probe. Constructed here so exactly ONE engine
-        // exists per process: every poke site below holds this same handle, and its
-        // single-flight gate is per-instance, so a second engine would mean two
-        // independent probe schedulers over one document.
-        //
-        // Its lock decides ownership at construction: a second RUNTIME over the same
-        // home comes up read-only and reports so on the status surface.
-        let launch_options_service = Arc::new(HarnessLaunchOptionsService::new(
-            db.clone(),
-            runtime_home.clone(),
-        ));
-        let launch_probe_service = Arc::new(
-            LaunchProbeService::new(
-                runtime_home.clone(),
-                gateway_model_planner.clone(),
-                Arc::new(RuntimeProbeTargets::new(runtime_home.clone())),
-            )
-            .with_launch_options(launch_options_service.clone()),
-        );
+        let (launch_options_service, launch_probe_service) =
+            agent_launch::build_services(&db, &runtime_home, catalog_sync_service.clone());
         // The one handle every AUTOMATIC poke site takes. See `AppState`'s field for
         // why it is separate; every one of the six sites reads THIS, so the
         // suppression is a property of the wiring rather than of which sites happened

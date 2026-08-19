@@ -18,18 +18,6 @@ export function cloudAgentCatalogKey() {
   return [...cloudRootKey(), "agent-catalog", "v1"] as const;
 }
 
-export function cloudHarnessLaunchOptionsKey(
-  cloudSandboxId: string | null | undefined,
-  harnessKind: string | null | undefined,
-) {
-  return [
-    ...cloudRootKey(),
-    "harness-launch-options",
-    cloudSandboxId ?? null,
-    harnessKind ?? null,
-  ] as const;
-}
-
 export function agentGatewayRootKey() {
   return [...cloudRootKey(), "agent-gateway"] as const;
 }

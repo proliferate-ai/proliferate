@@ -76,24 +76,6 @@ const state = vi.hoisted(() => ({
     data: undefined as Record<string, unknown> | undefined,
     isLoading: false,
   },
-  launchOptions: {
-    data: undefined as
-      | {
-        agents: Array<{
-          kind: string;
-          displayName: string;
-          defaultModelId: string | null;
-          models: Array<{
-            id: string;
-            displayName: string;
-            aliases?: string[];
-            isDefault: boolean;
-          }>;
-        }>;
-      }
-      | undefined,
-    isLoading: false,
-  },
 }));
 const putMutate = vi.hoisted(() => vi.fn());
 const createKeyMutate = vi.hoisted(() => vi.fn());
@@ -147,12 +129,8 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
 // SDK hooks standing in for that runtime call.
 vi.mock("@anyharness/sdk-react", () => ({
   useAnyHarnessRuntimeContext: () => ({ runtimeUrl: "http://127.0.0.1:8457" }),
-  // Pre-first-observation seed: the runtime's resolved launch catalog (the
-  // session model picker's data source) — mock stands in for that runtime read.
   useAgentLaunchOptionsQuery: ({ harnessKind }: { harnessKind: string }) => {
-    const sourceModels = state.modelSnapshotStatus.data?.models
-      ?? state.launchOptions.data?.agents?.find((agent) => agent.kind === harnessKind)?.models
-      ?? null;
+    const sourceModels = state.modelSnapshotStatus.data?.models ?? null;
     return {
       data: sourceModels ? {
         harnessKind,
@@ -418,8 +396,6 @@ afterEach(() => {
   state.loginSessions = {};
   state.modelSnapshotStatus.data = undefined;
   state.modelSnapshotStatus.isLoading = false;
-  state.launchOptions.data = undefined;
-  state.launchOptions.isLoading = false;
 });
 
 describe("HarnessPane authentication", () => {
@@ -1210,7 +1186,6 @@ describe("HarnessPane all models (local composed observation)", () => {
 
   it("does not seed model choices before the first observation", () => {
     state.modelSnapshotStatus.data = undefined;
-    state.launchOptions.data = undefined;
     renderPane("claude");
 
     expect(screen.queryByText("0 models")).not.toBeNull();

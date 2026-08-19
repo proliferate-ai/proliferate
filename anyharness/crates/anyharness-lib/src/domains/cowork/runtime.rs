@@ -1324,8 +1324,7 @@ impl CoworkRuntime {
                         .or_else(|| session.current_model_id.clone())
                         .or_else(|| session.requested_model_id.clone());
                     let control_values = live_config
-                        .map(|snapshot| snapshot.current.control_values)
-                        .unwrap_or_default();
+                        .map_or_else(Default::default, |snapshot| snapshot.current.control_values);
                     let status = normalized_session_status(&session.status).to_string();
                     let latest_completion = self
                         .delegation_service

@@ -4,7 +4,7 @@ import {
   type CloudHarnessLaunchOptionsResponse,
 } from "@proliferate/cloud-sdk";
 import { useCloudClient } from "../context/CloudClientProvider.js";
-import { cloudHarnessLaunchOptionsKey } from "../lib/query-keys.js";
+import { cloudHarnessLaunchOptionsKey } from "../lib/query-keys-harness-launch-options.js";
 
 export function useCloudHarnessLaunchOptions({
   cloudSandboxId,
