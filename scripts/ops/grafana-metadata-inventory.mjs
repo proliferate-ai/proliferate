@@ -22,7 +22,8 @@ const STATIC_PATHS = [
 const HTTP_CHECKPOINT = Object.freeze({
   FETCH_START: "fetch-start", FETCH_SETTLED: "fetch-settled", CONTENT_LENGTH: "content-length",
   DECLARED_BYTES: "declared-bytes", STREAM_READ: "stream-read", EMPTY_BODY: "empty-body",
-  DECODE: "decode", JSON: "json", FINAL_OUTPUT: "final-output",
+  DECODE: "decode", JSON: "json", HEALTH_STATE: "health-state",
+  HEALTH_PROJECT: "health-project", FINAL_OUTPUT: "final-output",
 });
 const WHOLE_DEADLINE = Symbol("whole-deadline");
 const REQUEST_DEADLINE = Symbol("request-deadline");
@@ -46,6 +47,19 @@ function guardDeadline(aborted, runtime, deadline, expire, kind) {
     expire();
     throw deadlineError(kind);
   }
+}
+
+// A deadline checkpoint is one atomic observation of the monotonic clock. A
+// per-request checkpoint therefore compares that single reading against the
+// whole-inventory deadline first and its own derived deadline second; two
+// separate readings would let the clock advance inside one checkpoint and let a
+// deadline pre-empt a synchronous classification the spec makes atomic.
+function guardRequestDeadline(whole, controller, runtime, deadline, expire) {
+  if (whole.signal.aborted) { whole.expire(); throw deadlineError(WHOLE_DEADLINE); }
+  if (controller.signal.aborted) { expire(); throw deadlineError(REQUEST_DEADLINE); }
+  const now = runtime.monotonicNow();
+  if (now >= whole.deadline) { whole.expire(); throw deadlineError(WHOLE_DEADLINE); }
+  if (now >= deadline) { expire(); throw deadlineError(REQUEST_DEADLINE); }
 }
 
 function raceSignal(promise, signal) {
@@ -75,18 +89,15 @@ function createWhole(runtime) {
 function createRequest(runtime, whole) {
   whole.guard();
   const controller = new AbortController();
-  const deadline = Math.min(whole.deadline,
-    runtime.monotonicNow() + METADATA_LIMITS.requestTimeoutMs);
+  const startedAt = runtime.monotonicNow();
+  const deadline = Math.min(whole.deadline, startedAt + METADATA_LIMITS.requestTimeoutMs);
   const expire = () => {
     if (!controller.signal.aborted) controller.abort(deadlineError(REQUEST_DEADLINE));
   };
   const onWhole = () => controller.abort(deadlineError(WHOLE_DEADLINE));
   whole.signal.addEventListener("abort", onWhole, { once: true });
-  const timer = runtime.setTimer(expire, Math.max(0, deadline - runtime.monotonicNow()));
-  const guard = () => {
-    guardDeadline(whole.signal.aborted, runtime, whole.deadline, whole.expire, WHOLE_DEADLINE);
-    guardDeadline(controller.signal.aborted, runtime, deadline, expire, REQUEST_DEADLINE);
-  };
+  const timer = runtime.setTimer(expire, Math.max(0, deadline - startedAt));
+  const guard = () => guardRequestDeadline(whole, controller, runtime, deadline, expire);
   const close = () => {
     runtime.clearTimer(timer);
     whole.signal.removeEventListener("abort", onWhole);
@@ -345,6 +356,13 @@ async function datasourceHealth(result, context) {
     catch (error) { return stopNormalizationDeadline(result, "datasourceHealth", error); }
     items.push(healthChild(datasource.uid, normalized));
   }
+  // The outer health surface is assembled here rather than by a normalizer, so
+  // it owns the two remaining numbered precedence rows for its own enumeration:
+  // one checkpoint before the child-state row and one before projection.
+  try {
+    checkpoint(context.whole.guard, HTTP_CHECKPOINT.HEALTH_STATE);
+    checkpoint(context.whole.guard, HTTP_CHECKPOINT.HEALTH_PROJECT);
+  } catch (error) { return stopNormalizationDeadline(result, "datasourceHealth", error); }
   result.surfaces.datasourceHealth = completedMetadataItems(items);
   return false;
 }
