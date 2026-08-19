@@ -20,6 +20,7 @@ import {
 } from "#product/lib/domain/settings/navigation";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
+import { useAuthSetupOnboardingStore } from "#product/stores/agents/auth-setup-onboarding-store";
 import { useProductStorageContext } from "#product/hooks/persistence/facade/use-product-storage-context";
 import {
   readPersistedString,
@@ -65,7 +66,7 @@ export function useHomeScreen() {
     setModelProbeDismissalState("dismissed");
     void writePersistedString(storage, HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY, "1");
   }, [storage]);
-  const { cloudActive } = useCloudAvailabilityState();
+  const { cloudActive, cloudSignInChecking } = useCloudAvailabilityState();
   const {
     data: repoConfigs,
     isPending: repoConfigsPending,
@@ -78,6 +79,9 @@ export function useHomeScreen() {
   const defaultChatAgentKind =
     useUserPreferencesStore((state) => state.defaultChatAgentKind);
   const hiddenRepoRootIds = useWorkspaceUiStore((s) => s.hiddenRepoRootIds);
+  const adoptedHarnessKinds = useAuthSetupOnboardingStore(
+    (state) => state.adoptedHarnessKinds,
+  );
 
   const repositories = useMemo(() => {
     const hiddenRepoRootIdSet = new Set(hiddenRepoRootIds);
@@ -162,6 +166,14 @@ export function useHomeScreen() {
     onboardingCards,
     authSetupStep,
     authSetupEvidence,
+    repositoriesLoading,
+    agentsLoading,
+    isReconciling,
+    cloudRepoConfigsLoading,
+    cloudSignInChecking,
+    cloudActive,
+    adoptedHarnessKinds,
+    modelProbeDismissalState,
     isAddingRepo,
     handleHomeAction,
     // Model-probe card inputs (UX spec §10). The model count itself lives with

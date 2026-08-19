@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { HOME_CHAT_COMPOSER_INPUT } from "#product/config/chat";
 import { CHAT_COMPOSER_LABELS } from "#product/copy/chat/chat-copy";
 import { ChatComposerActions } from "#product/components/workspace/chat/input/ChatComposerActions";
@@ -7,7 +15,10 @@ import { ChatComposerSurface } from "#product/components/workspace/chat/composer
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { DraftAttachmentPreviewList } from "#product/components/workspace/chat/content/PromptContentRenderer";
 import { HomeComposerCommandEditor } from "#product/components/home/screen/HomeComposerCommandEditor";
-import { focusChatInputOnActivation } from "#product/lib/domain/focus-zone";
+import {
+  focusChatInput,
+  focusChatInputOnActivation,
+} from "#product/lib/domain/focus-zone";
 import type { PromptAttachmentController } from "#product/hooks/chat/ui/use-chat-prompt-attachments";
 import { useChatInputPaste } from "#product/hooks/chat/ui/use-chat-input-paste";
 import { useHomeAvailableSlashCommands } from "#product/hooks/home/derived/use-home-available-slash-commands";
@@ -80,7 +91,14 @@ interface HomeComposerFormProps {
   submitDisabledReasonCtaSlot: ReactNode;
 }
 
-export function HomeComposerForm({
+export interface HomeComposerFormHandle {
+  replaceDraftAndFocus: (text: string) => void;
+}
+
+export const HomeComposerForm = forwardRef<
+  HomeComposerFormHandle,
+  HomeComposerFormProps
+>(function HomeComposerForm({
   targetDisabledReason,
   modelAvailabilityState,
   canLaunchTarget,
@@ -94,7 +112,7 @@ export function HomeComposerForm({
   targetPickerSlot,
   modelAvailabilityNoticeSlot,
   submitDisabledReasonCtaSlot,
-}: HomeComposerFormProps) {
+}, ref) {
   const composer = useHomeNextComposerState({
     targetDisabledReason,
     modelAvailabilityState,
@@ -118,6 +136,15 @@ export function HomeComposerForm({
   // session of the harness this composer will launch (PRO-228).
   const availableCommands = useHomeAvailableSlashCommands(modelSelection?.kind ?? null);
   const [composerOverlayHost, setComposerOverlayHost] = useState<HTMLDivElement | null>(null);
+  const editorCommandRef = useRef<{ placeCaretAtEnd: () => void } | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    replaceDraftAndFocus(text: string) {
+      composer.setDraft(text);
+      focusChatInput();
+      editorCommandRef.current?.placeCaretAtEnd();
+    },
+  }), [composer.setDraft]);
 
   // Measure home-composer typing latency + per-surface commit attribution
   // (no-op unless VITE_PROLIFERATE_DEBUG_MAIN_THREAD is enabled).
@@ -209,6 +236,7 @@ export function HomeComposerForm({
                 }}
               >
                 <HomeComposerCommandEditor
+                  ref={editorCommandRef}
                   value={composer.draft}
                   snapshot={composer.editorSnapshot}
                   onChange={handleDraftChange}
@@ -253,4 +281,4 @@ export function HomeComposerForm({
       ) : null}
     </>
   );
-}
+});

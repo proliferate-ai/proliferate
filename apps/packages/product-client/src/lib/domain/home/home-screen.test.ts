@@ -4,6 +4,7 @@ import {
   buildHomeOnboardingCards,
   findHomeUnconfiguredGitHubRepository,
   resolveHomeModelProbeCardState,
+  shouldShowHomeSuggestions,
 } from "#product/lib/domain/home/home-screen";
 
 const githubRepository = {
@@ -178,5 +179,99 @@ describe("resolveHomeModelProbeCardState", () => {
       modelCount: 0,
       agentSetupCardVisible: true,
     })).toEqual({ kind: "hidden" });
+  });
+});
+
+describe("shouldShowHomeSuggestions", () => {
+  const eligible = {
+    repositoriesLoading: false,
+    agentsLoading: false,
+    isReconciling: false,
+    cloudRepoConfigsLoading: false,
+    cloudSignInChecking: false,
+    cloudActive: false,
+    adoptedHarnessKinds: null,
+    onboardingCards: [],
+    authSetupStep: "hidden" as const,
+    authSetupEvidence: null,
+    modelProbeDismissalState: "dismissed" as const,
+    modelProbeCardState: { kind: "hidden" } as const,
+    modelAvailabilityState: "launchable" as const,
+  };
+
+  it("allows suggestions once every readiness source is settled", () => {
+    expect(shouldShowHomeSuggestions(eligible)).toBe(true);
+    expect(shouldShowHomeSuggestions({
+      ...eligible,
+      cloudActive: true,
+      adoptedHarnessKinds: [],
+      authSetupStep: "applied",
+    })).toBe(true);
+    expect(shouldShowHomeSuggestions({
+      ...eligible,
+      cloudActive: true,
+      adoptedHarnessKinds: ["codex"],
+      authSetupStep: "advanced",
+    })).toBe(true);
+  });
+
+  it.each([
+    ["repository inventory", { repositoriesLoading: true }],
+    ["agent catalog", { agentsLoading: true }],
+    ["agent reconciliation", { isReconciling: true }],
+    ["cloud repository configuration", { cloudRepoConfigsLoading: true }],
+    ["cloud sign-in", { cloudSignInChecking: true }],
+    ["cloud adoption decision", { cloudActive: true, adoptedHarnessKinds: null }],
+    ["ordinary onboarding", {
+      onboardingCards: [{
+        id: "add-repository" as const,
+        title: "Add a GitHub repo",
+        description: "Connect a repository to start working with agents.",
+        icon: "github" as const,
+      }],
+    }],
+    ["auth timer step", { authSetupStep: "settingUp" as const }],
+    ["auth evidence", {
+      authSetupEvidence: { badges: [], done: false },
+    }],
+    ["persisted probe dismissal hydration", {
+      modelProbeDismissalState: "loading" as const,
+    }],
+    ["visible persisted probe", {
+      modelProbeDismissalState: "visible" as const,
+    }],
+    ["model probe", {
+      modelProbeCardState: { kind: "probing" as const, harnessKinds: ["codex"] },
+    }],
+    ["model availability loading", { modelAvailabilityState: "loading" as const }],
+    ["model availability error", { modelAvailabilityState: "load_error" as const }],
+    ["no launchable model", { modelAvailabilityState: "no_launchable_model" as const }],
+  ])("blocks while %s is unresolved or actionable", (_label, overrides) => {
+    expect(shouldShowHomeSuggestions({ ...eligible, ...overrides })).toBe(false);
+  });
+
+  it.each(["probing", "done", "none"] as const)(
+    "does not infer readiness from a %s probe state",
+    (kind) => {
+      const modelProbeCardState = kind === "probing"
+        ? { kind, harnessKinds: ["codex"] }
+        : kind === "done"
+          ? { kind, modelCount: 1, harnessKinds: ["codex"] }
+          : { kind };
+      expect(shouldShowHomeSuggestions({
+        ...eligible,
+        modelProbeCardState,
+      })).toBe(false);
+    },
+  );
+
+  it("fails closed when compatibility mocks omit any required input", () => {
+    for (const key of Object.keys(eligible) as Array<keyof typeof eligible>) {
+      const incomplete = { ...eligible } as Record<string, unknown>;
+      delete incomplete[key];
+      expect(shouldShowHomeSuggestions(
+        incomplete as Parameters<typeof shouldShowHomeSuggestions>[0],
+      ), key).toBe(false);
+    }
   });
 });

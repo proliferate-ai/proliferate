@@ -37,6 +37,7 @@ import { TABS_KIT_ENTRIES } from "./tabs";
 // Demos with more than a one-liner's worth of fixture live in `entries/` so
 // several authors can add vocabulary without editing this file.
 import { ACTION_ROW_ENTRY } from "./entries/action-row";
+import { ACTION_CARD_ENTRY } from "./entries/action-card";
 import { CARD_ENTRY } from "./entries/Card";
 import { DISCLOSURE_LIBRARY_ENTRY } from "./entries/disclosure";
 import { NOTICE_BANNER_ENTRY } from "./entries/NoticeBanner";
@@ -296,6 +297,7 @@ function ToastHostDemo() {
 }
 
 export const PATTERNS_ENTRIES: LibraryEntry[] = [
+  ACTION_CARD_ENTRY,
   ACTION_ROW_ENTRY,
   { name: "AutoHideScrollArea", subpath: "#product/primitives/patterns/AutoHideScrollArea", render: AutoHideScrollAreaDemo },
   CARD_ENTRY,

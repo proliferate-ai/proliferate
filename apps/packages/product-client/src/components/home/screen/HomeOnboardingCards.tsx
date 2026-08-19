@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
-import { Button } from "#product/primitives/Button";
 import { RowActionIconButton } from "#product/primitives/RowActionIconButton";
 import { GitHub } from "#product/primitives/icons/platform";
 import { Settings, SlidersHorizontal, X } from "#product/primitives/icons/core";
 import { Spinner } from "#product/primitives/Spinner";
 import { ProviderIcon } from "#product/primitives/icons/provider-icons";
 import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
+import { ActionCard } from "#product/primitives/patterns/ActionCard";
 import { HOME_SCREEN_LABELS } from "#product/copy/home/home-screen-copy";
 import type {
   HomeModelProbeCardState,
@@ -28,49 +28,26 @@ function resolveOnboardingIcon(icon: HomeOnboardingIcon) {
 }
 
 /**
- * Onboarding card (UX spec §10, owner rev 2026-07-01: cards, not rows):
- * side-by-side tile — page-tone surface, 20px radius, hairline frame,
- * icon row on top with trailing accessories + hover dismiss, then
- * title 13/500 and description 12px muted below. The ring utilities are
- * the Web rendering of the frame; on desktop the unlayered
- * zoom-stable-hairline-frame rule (desktop.css) repaints it at exactly
- * one physical device pixel (--proliferate-device-px), because WKWebView
- * drops sub-device-pixel hairlines to zero on individual edges depending
- * on window zoom, display density, and subpixel position (PRO-117).
+ * Noninteractive onboarding status tile. It retains the actionable cards'
+ * established frame and content anatomy, while `ActionCard` owns primary and
+ * dismiss controls. The ring utilities are the Web frame; on desktop the
+ * unlayered zoom-stable-hairline-frame rule repaints it at exactly one physical
+ * device pixel because WKWebView can drop sub-device-pixel edges (PRO-117).
  */
-function OnboardingCard({
+function OnboardingStatusCard({
   icon,
   title,
   description,
   trailing,
-  loading = false,
-  onSelect,
-  onDismiss,
-  selectLabel,
 }: {
   icon: ReactNode;
   title: ReactNode;
   description?: ReactNode;
   trailing?: ReactNode;
-  loading?: boolean;
-  onSelect?: () => void;
-  onDismiss?: () => void;
-  selectLabel: string;
 }) {
   return (
-    <div className="group relative flex min-h-26 min-w-0 flex-col rounded-composer bg-background px-4 py-3 text-left shadow-subtle ring-[0.5px] ring-border-heavy zoom-stable-hairline-frame transition-colors hover:bg-hover active:bg-active">
-      {onSelect ? (
-        <Button
-          type="button"
-          variant="unstyled"
-          size="unstyled"
-          loading={loading}
-          aria-label={selectLabel}
-          onClick={onSelect}
-          className="absolute inset-0 z-0 rounded-composer"
-        />
-      ) : null}
-      <span className={`pointer-events-none z-10 flex items-center gap-1.5 ${onDismiss ? "pr-9" : ""}`}>
+    <div className="relative flex min-h-26 min-w-0 flex-col rounded-composer bg-background px-4 py-3 text-left shadow-subtle ring-[0.5px] ring-border-heavy zoom-stable-hairline-frame transition-colors hover:bg-hover active:bg-active">
+      <span className="pointer-events-none z-raised flex items-center gap-1.5">
         <span className="flex size-6 shrink-0 items-center justify-center text-muted-foreground [&_svg]:icon-control">
           {icon}
         </span>
@@ -78,20 +55,7 @@ function OnboardingCard({
           {trailing}
         </span>
       </span>
-      {onDismiss ? (
-        // Out of flow (absolute) so it fades in place, and transform-gpu +
-        // will-change keep it on a persistent compositing layer — otherwise
-        // WKWebView promotes/demotes the layer around the opacity transition
-        // and the glyph re-snaps to the pixel grid (subtle down-right drift).
-        <RowActionIconButton
-          label={`Dismiss: ${selectLabel}`}
-          onClick={onDismiss}
-          className="absolute right-2 top-2 z-20 rounded-full transform-gpu will-change-[opacity]"
-        >
-          <X />
-        </RowActionIconButton>
-      ) : null}
-      <span className="pointer-events-none z-10 mt-auto flex min-h-10 min-w-0 flex-col justify-end gap-0.5">
+      <span className="pointer-events-none z-raised mt-auto flex min-h-10 min-w-0 flex-col justify-end gap-0.5">
         <span className="truncate text-body font-medium text-foreground">
           {title}
         </span>
@@ -117,7 +81,7 @@ function AuthSetupCard({ state }: { state: AuthSetupStepState }) {
     return null;
   }
   return (
-    <OnboardingCard
+    <OnboardingStatusCard
       icon={<Settings className="icon-paired" />}
       title={(
         <ThinkingText
@@ -127,7 +91,6 @@ function AuthSetupCard({ state }: { state: AuthSetupStepState }) {
       )}
       description={HOME_SCREEN_LABELS.authSetupDescription}
       trailing={<Spinner className="icon-paired text-muted-foreground" />}
-      selectLabel={HOME_SCREEN_LABELS.authSetupTitle}
     />
   );
 }
@@ -147,7 +110,7 @@ function ModelProbeCard({
 
   if (state.kind === "probing") {
     return (
-      <OnboardingCard
+      <OnboardingStatusCard
         icon={
           state.harnessKinds[0]
             ? <ProviderIcon kind={state.harnessKinds[0]} className="icon-paired" />
@@ -160,7 +123,6 @@ function ModelProbeCard({
           />
         )}
         trailing={<Spinner className="icon-paired text-muted-foreground" />}
-        selectLabel={HOME_SCREEN_LABELS.modelProbeProbingTitle}
       />
     );
   }
@@ -170,8 +132,8 @@ function ModelProbeCard({
       ? "1 model available"
       : `${state.modelCount} models available`;
     return (
-      <OnboardingCard
-        icon={
+      <ActionCard
+        leading={
           state.harnessKinds[0]
             ? <ProviderIcon kind={state.harnessKinds[0]} className="icon-paired" />
             : <Settings className="icon-paired" />
@@ -187,21 +149,37 @@ function ModelProbeCard({
             </span>
           ) : null
         }
-        onSelect={onOpenAgents}
-        onDismiss={onDismiss}
-        selectLabel={title}
+        onAction={onOpenAgents}
+        secondaryAction={(
+          <RowActionIconButton
+            label={`Dismiss: ${title}`}
+            onClick={onDismiss}
+            className="rounded-full transform-gpu will-change-[opacity]"
+          >
+            <X />
+          </RowActionIconButton>
+        )}
+        actionLabel={title}
       />
     );
   }
 
   return (
-    <OnboardingCard
-      icon={<Settings className="icon-paired" />}
+    <ActionCard
+      leading={<Settings className="icon-paired" />}
       title={HOME_SCREEN_LABELS.modelProbeNoneTitle}
       description={HOME_SCREEN_LABELS.modelProbeNoneDescription}
-      onSelect={onOpenAgents}
-      onDismiss={onDismiss}
-      selectLabel={HOME_SCREEN_LABELS.modelProbeNoneTitle}
+      onAction={onOpenAgents}
+      secondaryAction={(
+        <RowActionIconButton
+          label={`Dismiss: ${HOME_SCREEN_LABELS.modelProbeNoneTitle}`}
+          onClick={onDismiss}
+          className="rounded-full transform-gpu will-change-[opacity]"
+        >
+          <X />
+        </RowActionIconButton>
+      )}
+      actionLabel={HOME_SCREEN_LABELS.modelProbeNoneTitle}
     />
   );
 }
@@ -251,14 +229,14 @@ export function HomeOnboardingCards({
       ) : null}
       {hasAuthSetupCard && authSetup ? <AuthSetupCard state={authSetup} /> : null}
       {visibleCards.map((card) => (
-        <OnboardingCard
+        <ActionCard
           key={card.id}
-          icon={resolveOnboardingIcon(card.icon)}
+          leading={resolveOnboardingIcon(card.icon)}
           title={card.title}
           description={card.description}
           loading={card.id === "add-repository" && isAddingRepo}
-          onSelect={() => onSelect(card)}
-          selectLabel={card.title}
+          onAction={() => onSelect(card)}
+          actionLabel={card.title}
         />
       ))}
       {hasProbeCard && modelProbe && onOpenAgents && onDismissModelProbe ? (
