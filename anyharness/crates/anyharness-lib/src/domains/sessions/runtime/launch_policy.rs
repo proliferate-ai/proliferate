@@ -14,6 +14,7 @@ use crate::domains::agents::model::{AgentKind, ResolvedAgent};
 use crate::domains::agents::route_auth::RenderedRouteAuth;
 use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::domains::sessions::model::SessionRecord;
+use crate::domains::sessions::runtime::fork_anchor::ProviderForkAnchor;
 use crate::live::sessions::model::{LaunchEnv, SessionLaunch, SystemPromptAppends};
 use crate::live::sessions::SessionStartupStrategy;
 
@@ -31,6 +32,14 @@ pub(super) struct SessionStartupFacts {
     pub agent_kind: String,
     pub has_last_prompt_at: bool,
     pub has_turn_started_event: bool,
+    /// The recorded fork operation's provider anchor, when this session is a
+    /// fork child and the operation persisted one. `None` for a tip fork or
+    /// when no fork operation row was found.
+    pub fork_provider_anchor: Option<ProviderForkAnchor>,
+    /// Whether the fork operation that created this child targeted a specific
+    /// boundary (vs a tip fork). Gathered from `anchor_turn_id.is_some()` on
+    /// the child's fork operation row.
+    pub fork_target_was_targeted: bool,
 }
 
 /// Pure startup-strategy matrix: gathered facts in, a `SessionStartupStrategy`
@@ -120,9 +129,7 @@ fn choose_fork_child_strategy(
         // the parent; otherwise fall back to the child's own native id rather
         // than failing the launch.
         if let Some(parent_native_session_id) = resolved_parent_native_session_id(facts) {
-            return Ok(SessionStartupStrategy::ForkFromNative {
-                parent_native_session_id,
-            });
+            return fork_from_native_strategy(facts, parent_native_session_id);
         }
         return Ok(SessionStartupStrategy::LoadNativeNoFallback(
             native_session_id,
@@ -136,8 +143,31 @@ fn choose_fork_child_strategy(
             None => anyhow::anyhow!("fork child is missing its parent link"),
         }
     })?;
+    fork_from_native_strategy(facts, parent_native_session_id)
+}
+
+/// Builds the `ForkFromNative` strategy, threading the recorded provider
+/// anchor for a targeted fork child. A targeted child NEVER re-forks at the
+/// parent tip (frozen ADR 5, silent tip downgrade) — a missing recorded
+/// anchor is a launch error, not a silent fallback.
+fn fork_from_native_strategy(
+    facts: &SessionStartupFacts,
+    parent_native_session_id: String,
+) -> anyhow::Result<SessionStartupStrategy> {
+    if facts.fork_target_was_targeted {
+        let provider_anchor = facts.fork_provider_anchor.clone().ok_or_else(|| {
+            anyhow::anyhow!(
+                "targeted fork child cannot be re-forked without its recorded provider anchor"
+            )
+        })?;
+        return Ok(SessionStartupStrategy::ForkFromNative {
+            parent_native_session_id,
+            provider_anchor: Some(provider_anchor),
+        });
+    }
     Ok(SessionStartupStrategy::ForkFromNative {
         parent_native_session_id,
+        provider_anchor: None,
     })
 }
 
@@ -227,6 +257,8 @@ mod tests {
             agent_kind: "claude".to_string(),
             has_last_prompt_at: false,
             has_turn_started_event: false,
+            fork_provider_anchor: None,
+            fork_target_was_targeted: false,
         }
     }
 
@@ -328,7 +360,8 @@ mod tests {
         assert_eq!(
             strategy,
             SessionStartupStrategy::ForkFromNative {
-                parent_native_session_id: "parent-native".to_string()
+                parent_native_session_id: "parent-native".to_string(),
+                provider_anchor: None,
             }
         );
     }
@@ -348,6 +381,42 @@ mod tests {
         assert_eq!(
             strategy,
             SessionStartupStrategy::LoadNativeNoFallback("fork-native".to_string())
+        );
+    }
+
+    #[test]
+    fn targeted_fork_child_restarts_into_fork_from_native_with_its_recorded_anchor() {
+        let mut facts = facts();
+        facts.is_fork_child = true;
+        facts.fork_parent_native_session_id = Some(Some("parent-native".to_string()));
+        facts.fork_target_was_targeted = true;
+        facts.fork_provider_anchor = Some(ProviderForkAnchor::UpToMessageId("msg-1".to_string()));
+
+        let strategy = choose_startup_strategy(&facts).expect("strategy");
+        assert_eq!(
+            strategy,
+            SessionStartupStrategy::ForkFromNative {
+                parent_native_session_id: "parent-native".to_string(),
+                provider_anchor: Some(ProviderForkAnchor::UpToMessageId("msg-1".to_string())),
+            }
+        );
+    }
+
+    #[test]
+    fn targeted_fork_child_without_a_recorded_anchor_errors_instead_of_silently_tip_forking() {
+        // Negative control: same facts as the previous test, but with the
+        // anchor missing — a targeted child must never silently re-fork at
+        // the parent tip (frozen ADR 5).
+        let mut facts = facts();
+        facts.is_fork_child = true;
+        facts.fork_parent_native_session_id = Some(Some("parent-native".to_string()));
+        facts.fork_target_was_targeted = true;
+        facts.fork_provider_anchor = None;
+
+        let error = choose_startup_strategy(&facts).expect_err("missing recorded anchor");
+        assert_eq!(
+            error.to_string(),
+            "targeted fork child cannot be re-forked without its recorded provider anchor"
         );
     }
 
@@ -379,7 +448,8 @@ mod tests {
         assert_eq!(
             strategy,
             SessionStartupStrategy::ForkFromNative {
-                parent_native_session_id: "parent-native".to_string()
+                parent_native_session_id: "parent-native".to_string(),
+                provider_anchor: None,
             }
         );
     }

@@ -13,7 +13,6 @@ use crate::domains::sessions::extensions::{
     SessionInteractionRequestedContext, SessionInteractionResolvedContext, SessionStartedContext,
     SessionTurnFinishedContext,
 };
-use crate::domains::sessions::links::model::SessionLinkRelation;
 use crate::domains::sessions::mcp_bindings::assembly::{
     assemble_session_mcp_launch, SessionMcpLaunchAssemblyError,
 };
@@ -21,56 +20,20 @@ use crate::domains::sessions::mcp_bindings::crypto::encrypt_bindings;
 use crate::domains::sessions::mcp_bindings::summaries::serialize_binding_summaries;
 use crate::domains::sessions::mcp_bindings::workspace_attachment::WorkspaceMcpAttachmentError;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
-use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::SessionHooks;
 use crate::live::sessions::SessionStartupStrategy;
 
-use super::launch_policy::{
-    assemble_session_launch, choose_startup_strategy, session_is_closed, SessionLaunchContext,
-    SessionStartupFacts,
-};
+use super::launch_policy::{assemble_session_launch, session_is_closed, SessionLaunchContext};
 use super::startup_errors::{
     map_encrypt_bindings_error_to_start, map_mcp_launch_assembly_error_to_start,
     map_mcp_summary_error_to_start, map_start_session_error_to_create,
 };
+use super::startup_facts::choose_session_startup_strategy;
 use super::{
     launch_env::build_session_launch_env, CreateAndStartSessionError, EnsureLiveSessionError,
     SessionLifecycleError, SessionMcpRefresh, SessionRuntime, StartSessionError,
 };
-
-/// Resolve steps only — gather the durable facts, then let the pure policy in
-/// `launch_policy` pick the strategy. The parent lookup is gated to fork
-/// children that have not yet run their own turn (`last_prompt_at` unset): the
-/// policy may need the parent native id to re-fork — either because the child
-/// never had a native id, or because its eagerly-recorded one is process-local
-/// and may be dead after a cold restart-before-first-prompt. This intentionally
-/// over-fetches for durable-fork (non-Claude) zero-turn children, where the
-/// policy ignores the parent id; that is a single harmless row read kept here so
-/// the resolve gate doesn't have to duplicate the adapter distinction. A fork
-/// child that has already run keeps its durable native id and skips the lookup.
-pub(super) fn choose_session_startup_strategy(
-    record: &SessionRecord,
-    session_store: &SessionStore,
-) -> anyhow::Result<SessionStartupStrategy> {
-    let is_fork_child =
-        session_store.has_inbound_link_relation(&record.id, SessionLinkRelation::Fork)?;
-    let fork_parent_native_session_id = if is_fork_child && record.last_prompt_at.is_none() {
-        session_store
-            .find_parent_by_inbound_link_relation(&record.id, SessionLinkRelation::Fork)?
-            .map(|parent| parent.native_session_id)
-    } else {
-        None
-    };
-    choose_startup_strategy(&SessionStartupFacts {
-        is_fork_child,
-        native_session_id: record.native_session_id.clone(),
-        fork_parent_native_session_id,
-        agent_kind: record.agent_kind.clone(),
-        has_last_prompt_at: record.last_prompt_at.is_some(),
-        has_turn_started_event: session_store.has_turn_started_event(&record.id)?,
-    })
-}
 
 impl SessionRuntime {
     #[tracing::instrument(skip_all, fields(session_id = %record.id))]

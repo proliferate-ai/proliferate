@@ -1,11 +1,12 @@
 //! Lane H fork/checkpoint linkage suite, split out of `tests.rs` to stay
 //! under the repo line cap; the shared fork-state harness
-//! (`build_forkable_fork_state`) lives in `tests.rs`.
+//! (`build_forkable_fork_state`) lives in `fork_anchor_gate_tests.rs`.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use super::tests::{build_forkable_fork_state, link_record, session_record};
+use super::fork_anchor_gate_tests::build_forkable_fork_state;
+use super::tests::{link_record, session_record};
 use crate::app::AppState;
 use crate::domains::sessions::links::service::SessionLinkService;
 use crate::domains::sessions::links::store::SessionLinkStore;

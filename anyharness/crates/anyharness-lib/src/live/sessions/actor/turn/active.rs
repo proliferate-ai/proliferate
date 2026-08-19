@@ -329,7 +329,7 @@ impl SessionActor {
                             Some(SessionCommand::VerifyForkReady { respond_to }) => {
                                 let _ = respond_to.send(Err(ForkSessionCommandError::Busy));
                             }
-                            Some(SessionCommand::Fork { respond_to }) => {
+                            Some(SessionCommand::Fork { respond_to, .. }) => {
                                 let _ = respond_to.send(Err(ForkSessionCommandError::Busy));
                             }
                             Some(SessionCommand::SidedoorTargetedFork { respond_to, .. }) => {

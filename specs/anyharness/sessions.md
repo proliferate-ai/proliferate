@@ -356,12 +356,18 @@ Fork invariants:
 - raw ACP notifications are not copied into fork children
 - generic ACP fork support (`action_capabilities.fork`) means tip fork only;
   targeted fork requires the separate `action_capabilities.targeted_fork`
-  capability. The OpenCode side-door bridge derives `targeted_fork` from the
-  runtime-owned qualification registry (an exact vendor version pin) AND a
-  loopback-only, fail-closed side-door readiness check; it stays off unless the
-  registry qualifies the resolved vendor version and the side-door proves
-  loopback-authenticated and off-host-unreachable. Every other adapter remains
-  absent until its own per-harness bridge lands
+  capability, derived per adapter family. ACP-native schema parsing recognizes
+  the strict `message_id`/`turn_id`/`user_message_index` target vocabulary, but
+  syntax recognition is not dispatch readiness. The current native dispatch
+  matrix enables only Claude with `message_id`; Claude advertisements for the
+  other target kinds stay off, and Codex `turn_id` stays off until the bridge
+  provides native turn ids. Unknown, malformed, and legacy advertisements also
+  stay off. The OpenCode side-door bridge derives
+  `targeted_fork` from the runtime-owned qualification registry (an exact
+  vendor version pin) AND a loopback-only, fail-closed side-door readiness
+  check; it stays off unless the registry qualifies the resolved vendor version
+  and the side-door proves loopback-authenticated and off-host-unreachable.
+  Every other adapter remains absent until its own per-harness bridge lands
 
 ### Fork boundary and the durable operation record
 

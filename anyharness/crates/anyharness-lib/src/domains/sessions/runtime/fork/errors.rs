@@ -16,9 +16,7 @@ impl SessionRuntime {
     ) {
         let phase = match error {
             LiveSessionCommandError::ResponseDropped
-            | LiveSessionCommandError::ActorUnavailable => {
-                ForkOperationPhase::NativeOutcomeUnknown
-            }
+            | LiveSessionCommandError::ActorUnavailable => ForkOperationPhase::NativeOutcomeUnknown,
             LiveSessionCommandError::Rejected(_) => ForkOperationPhase::Failed,
         };
         self.mark_fork_phase(operation_id, phase, now);
