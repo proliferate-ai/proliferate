@@ -102,7 +102,7 @@ async fn explicit_child_prompt_provider_error_persists_a_fixed_terminal_without_
         "the durable terminal must carry the fixed protected message: {payload}"
     );
     assert_no_prompt_sentinels(&state, &parent_id, &child_id);
-    wait_for_child_status(&state, &child_id, "errored").await;
+    assert_failed_turn_left_child_resumable(&state, &child_id).await;
     assert_eq!(
         child_prompt_wire_count(&script.request_log),
         1,
@@ -169,7 +169,7 @@ async fn malformed_child_prompt_envelope_fails_closed_without_sentinels_or_provi
         "a malformed envelope must not be projected as an explicit provider error: {payload}"
     );
     assert_no_prompt_sentinels(&state, &parent_id, &child_id);
-    wait_for_child_status(&state, &child_id, "errored").await;
+    assert_failed_turn_left_child_resumable(&state, &child_id).await;
     assert_eq!(
         child_prompt_wire_count(&script.request_log),
         1,
@@ -208,20 +208,29 @@ async fn wait_for_child_error_event(state: &AppState, child_id: &str) -> String 
     panic!("timed out waiting for a durable error terminal on {child_id}");
 }
 
-async fn wait_for_child_status(state: &AppState, child_id: &str, expected: &str) {
+/// A failed protected turn tears the live actor down (the malformed envelope
+/// fails closed on the transport; the explicit error ends the turn) and unloads
+/// it, which by the actor's exit contract leaves the durable child row a plain
+/// resumable `idle` — the failure lives on the turn's error terminal, not on the
+/// session row. Bounded: teardown is asynchronous to the terminal commit.
+async fn assert_failed_turn_left_child_resumable(state: &AppState, child_id: &str) {
     for _ in 0..500 {
-        let status = state
-            .session_service
-            .get_session(child_id)
-            .expect("get child session")
-            .expect("child session exists")
-            .status;
-        if status == expected {
+        if state.acp_manager.get_handle(child_id).await.is_none() {
+            let status = state
+                .session_service
+                .get_session(child_id)
+                .expect("get child session")
+                .expect("child session exists")
+                .status;
+            assert_eq!(
+                status, "idle",
+                "an unloaded child must stay resumable after a failed protected turn"
+            );
             return;
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    panic!("timed out waiting for child status {expected} on {child_id}");
+    panic!("timed out waiting for the protected child actor teardown on {child_id}");
 }
 
 /// Sweep every durable surface a protected child prompt can reach: the child's
