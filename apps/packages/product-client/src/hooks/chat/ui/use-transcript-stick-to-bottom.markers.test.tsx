@@ -342,4 +342,74 @@ describe("useTranscriptStickToBottom ownership markers (PRO-187)", () => {
     dispatchScroll(handle);
     expect(handle.current.api.isPinnedToBottom).toBe(true);
   });
+
+  it("reconciles the settled prepend seat after a matching marker and trailing input cancellation", () => {
+    const handle = renderHarness();
+    const { viewport, api } = handle.current;
+    setMetrics(viewport, { scrollHeight: 5_552, clientHeight: 400, scrollTop: 475 });
+
+    let scrollTop = 475;
+    const scrollTopWrites: number[] = [];
+    Object.defineProperty(viewport, "scrollTop", {
+      configurable: true,
+      get: () => scrollTop,
+      set: (next: number) => {
+        scrollTop = next;
+        scrollTopWrites.push(next);
+      },
+    });
+
+    act(() => {
+      api.setPinned(false);
+      api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 5_552, scrollTop: 475 }, false);
+    });
+    setMetrics(viewport, { scrollHeight: 6_908, clientHeight: 400, scrollTop: 475 });
+    act(() => { flushRafRound(); });
+    expect(viewport.scrollTop).toBe(1_831);
+
+    // Deliver the zero-valued marker before its watchdog, then model the
+    // trailing input listener attempting to cancel the queued reconciliation.
+    act(() => {
+      api.notifyProgrammaticScroll(() => {
+        viewport.scrollTop = 0;
+      });
+    });
+    scrollTopWrites.length = 0;
+    act(() => {
+      api.onViewportScroll(viewport);
+      api.cancelFramePipeline();
+    });
+    act(() => { flushRafRound(); });
+
+    expect(viewport.scrollTop).toBe(1_831);
+    expect(handle.current.api.isPinnedToBottom).toBe(false);
+    expect(scrollTopWrites).toEqual([1_831]);
+  });
+
+  it("lets upward intent clear a cancelable anchor through the same marker sequence", () => {
+    const handle = renderHarness();
+    const { viewport, api } = handle.current;
+    setMetrics(viewport, { scrollHeight: 5_552, clientHeight: 400, scrollTop: 475 });
+
+    act(() => {
+      api.setPinned(false);
+      api.startAboveChangeCompensation({ rowCount: 5, scrollHeight: 5_552, scrollTop: 475 }, true);
+    });
+    setMetrics(viewport, { scrollHeight: 6_908, clientHeight: 400, scrollTop: 475 });
+    act(() => { flushRafRound(); });
+    expect(viewport.scrollTop).toBe(1_831);
+
+    act(() => {
+      api.notifyUserScrollIntent(-1);
+      api.notifyProgrammaticScroll(() => {
+        viewport.scrollTop = 0;
+      });
+      api.onViewportScroll(viewport);
+      api.cancelFramePipeline();
+    });
+    act(() => { flushRafRound(); });
+
+    expect(viewport.scrollTop).toBe(0);
+    expect(handle.current.api.isPinnedToBottom).toBe(false);
+  });
 });

@@ -2,7 +2,7 @@ use std::path::Path;
 
 use super::super::safety::resolve_safe_entry_path;
 use super::super::types::{FileServiceError, RenameWorkspaceFileEntryResult};
-use super::entry::{entry_for_path, map_metadata_not_found};
+use super::entry::entry_for_path;
 
 pub fn rename_entry(
     workspace_root: &Path,
@@ -20,25 +20,42 @@ pub fn rename_entry(
         ));
     }
 
-    let abs_from =
-        resolve_safe_entry_path(workspace_root, relative_path).map_err(FileServiceError::Safety)?;
+    let abs_from = resolve_safe_entry_path(workspace_root, relative_path)
+        .map_err(|error| FileServiceError::from_safety(error, relative_path))?;
     let source_metadata = std::fs::symlink_metadata(&abs_from)
-        .map_err(|e| map_metadata_not_found(e, relative_path))?;
+        .map_err(|error| FileServiceError::from_io(error, relative_path))?;
 
     let abs_to = resolve_safe_entry_path(workspace_root, new_relative_path)
-        .map_err(FileServiceError::Safety)?;
-    if std::fs::symlink_metadata(&abs_to).is_ok() {
-        return Err(FileServiceError::AlreadyExists(
-            new_relative_path.to_string(),
-        ));
-    }
+        .map_err(|error| FileServiceError::from_safety(error, new_relative_path))?;
     let parent = abs_to
         .parent()
         .ok_or_else(|| FileServiceError::NotADirectory(new_relative_path.to_string()))?;
-    if !parent.is_dir() {
+    let parent_metadata = match parent.metadata() {
+        Ok(metadata) => metadata,
+        Err(error) => match FileServiceError::from_io(error, new_relative_path) {
+            FileServiceError::NotFound(_) => {
+                return Err(FileServiceError::NotADirectory(
+                    new_relative_path.to_string(),
+                ));
+            }
+            error => return Err(error),
+        },
+    };
+    if !parent_metadata.is_dir() {
         return Err(FileServiceError::NotADirectory(
             new_relative_path.to_string(),
         ));
+    }
+    match std::fs::symlink_metadata(&abs_to) {
+        Ok(_) => {
+            return Err(FileServiceError::AlreadyExists(
+                new_relative_path.to_string(),
+            ));
+        }
+        Err(error) => match FileServiceError::from_io(error, new_relative_path) {
+            FileServiceError::NotFound(_) => {}
+            error => return Err(error),
+        },
     }
 
     if source_metadata.is_dir()
@@ -68,7 +85,6 @@ fn map_rename_io_error(
         std::io::ErrorKind::AlreadyExists => {
             FileServiceError::AlreadyExists(new_relative_path.to_string())
         }
-        std::io::ErrorKind::NotFound => FileServiceError::NotFound(relative_path.to_string()),
-        _ => FileServiceError::Io(error.to_string()),
+        _ => FileServiceError::from_io(error, relative_path),
     }
 }

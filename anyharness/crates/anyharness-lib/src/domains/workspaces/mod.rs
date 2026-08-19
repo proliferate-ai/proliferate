@@ -3,6 +3,7 @@ pub mod access_model;
 pub mod archive;
 pub mod branch_refresh;
 pub mod checkout_gate;
+pub mod checkpoints;
 pub mod creator_context;
 pub mod deletion;
 pub mod detector;

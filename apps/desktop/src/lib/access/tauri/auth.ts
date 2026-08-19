@@ -1,6 +1,10 @@
 import { invoke } from "@tauri-apps/api/core"
 
 import type { KeychainTelemetryOperation } from "@proliferate/product-client/internal/lib/domain/telemetry/events"
+import {
+  classifyTelemetryFailure,
+  type TelemetryFailureKind,
+} from "@proliferate/product-client/internal/lib/domain/telemetry/failures"
 
 export interface StoredAuthSession {
   access_token: string
@@ -37,12 +41,17 @@ function reportKeychainFailure(
 ): void {
   if (reportedKeychainFailures.has(operation)) return
   reportedKeychainFailures.add(operation)
-  const message = error instanceof Error ? error.message : String(error ?? "")
+  let failureKind: TelemetryFailureKind = "unknown_error"
+  try {
+    failureKind = classifyTelemetryFailure(error)
+  } catch {
+    // Classification is diagnostic only and cannot interrupt browser fallback.
+  }
   void import("@/lib/integrations/telemetry/client")
     .then(({ trackProductEvent }) => {
       trackProductEvent("desktop_keychain_access_failed", {
         operation,
-        error_message: message.slice(0, 300),
+        failure_kind: failureKind,
       })
     })
     .catch(() => {})

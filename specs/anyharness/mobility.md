@@ -121,7 +121,12 @@ merge, rebase, stash, or provide interactive recovery.
 ## Source Destruction
 
 `destroy-source` requires `remote_owned`. It closes active terminals, deletes
-source sessions and native agent artifacts, and destroys the old workspace
-materialization. The residual runtime has no cross-runtime proof that another
-destination is canonical; a future orchestrator must establish that authority
-before marking a source remote-owned.
+source sessions and native agent artifacts, deletes checkpoint refs and rows,
+then destroys the old workspace materialization and workspace row. The caller
+holds one exclusive workspace lease across that sequence. Checkpoint cleanup
+must finish while the workspace row still identifies its repository root; a
+cleanup failure aborts before materialization destruction so a moved source
+cannot strand private refs that no later sweep can attribute. The residual
+runtime has no cross-runtime proof that another destination is canonical; a
+future orchestrator must establish that authority before marking a source
+remote-owned.

@@ -62,7 +62,7 @@ pub async fn prompt_session(
             "[workspace-latency] session.http.prompt.request_received"
         );
 
-        let _lease = acquire_session_operation_lease(
+        let lease = acquire_session_operation_lease(
             &state,
             &session_id,
             WorkspaceOperationKind::SessionPrompt,
@@ -71,7 +71,12 @@ pub async fn prompt_session(
         let prompt_title = prompt_fallback_title(&req.blocks);
         let outcome = state
             .session_runtime
-            .send_prompt(&session_id, req.blocks, prompt_id)
+            .send_prompt_under_workspace_lease(
+                lease.workspace_id(),
+                &session_id,
+                req.blocks,
+                prompt_id,
+            )
             .await
             .map_err(map_send_prompt_error)?;
 

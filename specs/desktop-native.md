@@ -434,6 +434,25 @@ terminal to teardown fallback; remove the locator; close fallback. Windows'
 direct-exit updater command enters this same coordinator before installation,
 preserving its existing fail-closed Worker behavior.
 
+## Desktop Path Inspection
+
+`commands/shell.rs::inspect_path` is the native metadata boundary for a path
+that product code has already routed to Desktop. It accepts only a non-empty,
+NUL-free, platform-absolute path and intentionally uses `std::fs::metadata` so
+the final link is followed. Its serialized response is path-free:
+
+- regular file/link-to-file: `{"kind":"file"}`
+- directory/link-to-directory: `{"kind":"directory"}`
+- missing, `NotADirectory`, or dangling link: `{"kind":"missing"}`
+- invalid input, denied metadata, unsupported object type, or other I/O:
+  `{"kind":"unavailable","reason":"<bounded_reason>"}`
+
+The bounded reasons are `invalid_path`, `permission_denied`,
+`unsupported_type`, and `io_error`. Expected outcomes do not use a native
+string-error channel, and the command does not log the input, link target, or
+OS error. Inspection and the later OS open are separate operations; the
+same-user race between them is accepted.
+
 ## Failure Modes
 
 | Failure | Handling |

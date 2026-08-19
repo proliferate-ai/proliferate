@@ -132,6 +132,57 @@ describe("query telemetry failure classification", () => {
   });
 
   it.each([
+    ["INVALID_FILE_PATH", 400],
+    ["FILE_NOT_FOUND", 404],
+    ["FILE_PERMISSION_DENIED", 403],
+    ["NOT_A_DIRECTORY", 400],
+  ])("treats AnyHarness file response %s as expected query state", (code, status) => {
+    const error = new AnyHarnessError({
+      type: "about:blank",
+      title: "File request rejected",
+      status,
+      code,
+    });
+
+    expect(isExpectedQueryTelemetryError(error)).toBe(true);
+  });
+
+  it("recognizes a structural file permission code without a status", () => {
+    const error = Object.assign(new Error("File access rejected"), {
+      problem: { code: "FILE_PERMISSION_DENIED" },
+    });
+
+    expect(isExpectedQueryTelemetryError(error)).toBe(true);
+  });
+
+  it.each([
+    "INVALID_FILE_PATH",
+    "FILE_NOT_FOUND",
+    "FILE_PERMISSION_DENIED",
+    "NOT_A_DIRECTORY",
+  ])("does not let file code %s hide a 5xx request failure", (code) => {
+    const error = new AnyHarnessError({
+      type: "about:blank",
+      title: "File request failed",
+      status: 503,
+      code,
+    });
+
+    expect(isExpectedQueryTelemetryError(error)).toBe(false);
+  });
+
+  it("keeps an outside-workspace refusal reportable", () => {
+    const error = new AnyHarnessError({
+      type: "about:blank",
+      title: "Path is outside the workspace",
+      status: 400,
+      code: "PATH_OUTSIDE_WORKSPACE",
+    });
+
+    expect(isExpectedQueryTelemetryError(error)).toBe(false);
+  });
+
+  it.each([
     "HOSTING_PR_VIEW_FAILED",
     "HOSTING_PR_CREATE_FAILED",
   ])("keeps AnyHarness %s request errors reportable", (code) => {
@@ -182,6 +233,22 @@ describe("query telemetry failure classification", () => {
 });
 
 describe("mutation telemetry failure classification", () => {
+  it.each([
+    "INVALID_FILE_PATH",
+    "FILE_NOT_FOUND",
+    "FILE_PERMISSION_DENIED",
+    "NOT_A_DIRECTORY",
+  ])("keeps file code %s reportable for mutations", (code) => {
+    const error = new AnyHarnessError({
+      type: "about:blank",
+      title: "File mutation rejected",
+      status: 400,
+      code,
+    });
+
+    expect(isExpectedMutationTelemetryError(error)).toBe(false);
+  });
+
   it.each([
     "REPO_ROOT_NOT_GIT_REPO",
     "REPO_ROOT_WORKTREE_UNSUPPORTED",

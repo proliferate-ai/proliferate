@@ -25,7 +25,8 @@ pub async fn call_tool(
             let review_id = assignment.review_run_id.clone();
             let reviewer_id = assignment.id.clone();
             runtime
-                .submit_review_result(
+                .submit_review_result_under_workspace_lease(
+                    &ctx.workspace_id,
                     &ctx.session_id,
                     args.pass,
                     args.summary,
@@ -155,8 +156,137 @@ fn validate_tool_for_role(role: ReviewMcpRole, tool_name: &str) -> anyhow::Resul
 
 #[cfg(test)]
 mod tests {
-    use super::validate_tool_for_role;
-    use crate::domains::reviews::mcp::context::ReviewMcpRole;
+    use std::time::Duration;
+
+    use serde_json::json;
+
+    use super::{call_tool, validate_tool_for_role};
+    use crate::app::test_support;
+    use crate::domains::reviews::mcp::context::{self, ReviewMcpRole};
+    use crate::domains::reviews::mcp::definition;
+    use crate::domains::reviews::model::{ReviewKind, ReviewModeVerificationStatus};
+    use crate::domains::reviews::service::{ReviewPersonaInput, StartReviewInput};
+    use crate::domains::sessions::runtime::prompt_message_actor_tests::{
+        build_state, temp_runtime_home,
+    };
+    use crate::domains::workspaces::checkpoints::test_support::EnvGuard;
+    use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
+    use crate::integrations::mcp::product_server::ProductMcpRequestContext;
+    use crate::persistence::Db;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn reviewer_result_does_not_nest_a_prompt_lease_behind_a_queued_writer() {
+        let _capture = EnvGuard::off();
+        let _bearer = test_support::set_bearer_token_env(None);
+        let _data_key = test_support::set_data_key_env(None);
+        let runtime_home = temp_runtime_home("review-mcp-prompt-lease");
+        let state = build_state(
+            &runtime_home,
+            Db::open_in_memory().expect("open in-memory db"),
+            true,
+        );
+        test_support::insert_session_row(
+            state.session_service.store(),
+            "workspace-b",
+            "reviewer",
+            "idle",
+        );
+        let run = state
+            .review_service
+            .start_review(StartReviewInput {
+                workspace_id: "workspace-b".into(),
+                parent_session_id: "target".into(),
+                kind: ReviewKind::Code,
+                title: "Lease regression".into(),
+                target_plan: None,
+                target_code_manifest: None,
+                max_rounds: 1,
+                auto_iterate: false,
+                reviewers: vec![ReviewPersonaInput {
+                    persona_id: "lease-reviewer".into(),
+                    label: "Lease reviewer".into(),
+                    prompt: "Review the target.".into(),
+                    agent_kind: "claude".into(),
+                    model_id: None,
+                    mode_id: None,
+                }],
+            })
+            .expect("start review");
+        let assignment = state
+            .review_service
+            .store()
+            .list_assignments_for_run(&run.id)
+            .expect("list review assignments")
+            .pop()
+            .expect("review assignment");
+        state
+            .review_service
+            .link_reviewer_session(
+                &run.id,
+                &assignment.id,
+                "target",
+                "reviewer",
+                None,
+                None,
+                ReviewModeVerificationStatus::NotChecked,
+            )
+            .expect("link reviewer session");
+        state
+            .session_runtime
+            .acp_manager_for_test()
+            .insert_unavailable_session_for_test("target")
+            .await;
+        let request =
+            ProductMcpRequestContext::new("workspace-b", "reviewer", definition::DEFINITION.id);
+        let ctx = context::resolve_context(&state.review_runtime, &request)
+            .expect("resolve reviewer MCP context");
+
+        let outer_lease = state
+            .workspace_operation_gate
+            .acquire_shared("workspace-b", WorkspaceOperationKind::ReviewWrite)
+            .await;
+        let writer_gate = state.workspace_operation_gate.clone();
+        let (writer_started_tx, writer_started_rx) = tokio::sync::oneshot::channel();
+        let mut writer = tokio::spawn(async move {
+            let _ = writer_started_tx.send(());
+            writer_gate.acquire_exclusive("workspace-b").await
+        });
+        writer_started_rx.await.expect("writer task starts");
+        assert!(
+            tokio::time::timeout(Duration::from_millis(20), &mut writer)
+                .await
+                .is_err(),
+            "the exclusive writer must be queued behind ReviewWrite"
+        );
+
+        let response = tokio::time::timeout(
+            Duration::from_secs(1),
+            call_tool(
+                &state.review_runtime,
+                &ctx,
+                "submit_review_result",
+                Some(json!({
+                    "pass": true,
+                    "summary": "Looks good.",
+                    "critiqueMarkdown": "No findings."
+                })),
+            ),
+        )
+        .await
+        .expect("review result must not deadlock behind the queued writer")
+        .expect("submit review result");
+        assert_eq!(response["submitted"], true);
+        assert_eq!(response["feedbackJobCreated"], true);
+
+        drop(outer_lease);
+        let writer_lease = tokio::time::timeout(Duration::from_secs(1), writer)
+            .await
+            .expect("writer proceeds after ReviewWrite drops")
+            .expect("writer task joins");
+        drop(writer_lease);
+        drop(state);
+        std::fs::remove_dir_all(runtime_home).expect("remove runtime home");
+    }
 
     #[test]
     fn no_role_rejects_review_tool_calls() {

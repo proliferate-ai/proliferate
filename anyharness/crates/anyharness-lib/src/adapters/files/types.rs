@@ -1,4 +1,4 @@
-use super::safety::SafetyError;
+use super::safety::{classify_io_error, ClassifiedIoError, SafetyError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkspaceFileKind {
@@ -82,6 +82,7 @@ pub struct StatWorkspaceFileResult {
 pub enum FileServiceError {
     Safety(SafetyError),
     NotFound(String),
+    PermissionDenied,
     AlreadyExists(String),
     NotAFile(String),
     NotADirectory(String),
@@ -96,7 +97,28 @@ pub enum FileServiceError {
         expected: String,
         actual: String,
     },
-    Io(String),
+    Io,
+}
+
+impl FileServiceError {
+    pub fn from_io(error: std::io::Error, relative_path: &str) -> Self {
+        match classify_io_error(&error) {
+            ClassifiedIoError::NotFound => Self::NotFound(relative_path.to_string()),
+            ClassifiedIoError::NotADirectory => Self::NotADirectory(relative_path.to_string()),
+            ClassifiedIoError::PermissionDenied => Self::PermissionDenied,
+            ClassifiedIoError::Unexpected => Self::Io,
+        }
+    }
+
+    pub fn from_safety(error: SafetyError, relative_path: &str) -> Self {
+        match error {
+            SafetyError::NotFound => Self::NotFound(relative_path.to_string()),
+            SafetyError::NotADirectory => Self::NotADirectory(relative_path.to_string()),
+            SafetyError::PermissionDenied => Self::PermissionDenied,
+            SafetyError::IoError => Self::Io,
+            error => Self::Safety(error),
+        }
+    }
 }
 
 impl std::fmt::Display for FileServiceError {
@@ -104,6 +126,7 @@ impl std::fmt::Display for FileServiceError {
         match self {
             Self::Safety(e) => write!(f, "{e}"),
             Self::NotFound(p) => write!(f, "file not found: {p}"),
+            Self::PermissionDenied => write!(f, "file access denied"),
             Self::AlreadyExists(p) => write!(f, "file already exists: {p}"),
             Self::NotAFile(p) => write!(f, "not a file: {p}"),
             Self::NotADirectory(p) => write!(f, "not a directory: {p}"),
@@ -114,7 +137,7 @@ impl std::fmt::Display for FileServiceError {
             Self::InvalidRenameRequest(message) => write!(f, "{message}"),
             Self::InvalidDeleteRequest(message) => write!(f, "{message}"),
             Self::VersionMismatch { path, .. } => write!(f, "version mismatch for: {path}"),
-            Self::Io(e) => write!(f, "file I/O error: {e}"),
+            Self::Io => write!(f, "file operation failed"),
         }
     }
 }

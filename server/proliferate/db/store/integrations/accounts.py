@@ -35,6 +35,12 @@ class IntegrationAccountRecord:
     credential_ciphertext: str | None
     credential_format: str | None
     auth_version: int
+    grant_version: int
+    credential_version: int
+    definition_security_revision_id: UUID | None
+    provider_client_id: UUID | None
+    credential_audience: str | None
+    effective_scopes_json: str | None
     settings_json: str
     token_expires_at: datetime | None
     last_error_code: str | None
@@ -54,6 +60,12 @@ def _record(account: CloudIntegrationAccount) -> IntegrationAccountRecord:
         credential_ciphertext=account.credential_ciphertext,
         credential_format=account.credential_format,
         auth_version=account.auth_version,
+        grant_version=account.grant_version,
+        credential_version=account.credential_version,
+        definition_security_revision_id=account.definition_security_revision_id,
+        provider_client_id=account.provider_client_id,
+        credential_audience=account.credential_audience,
+        effective_scopes_json=account.effective_scopes_json,
         settings_json=account.settings_json,
         token_expires_at=account.token_expires_at,
         last_error_code=account.last_error_code,
@@ -349,6 +361,11 @@ async def set_account_credentials(
     account.status = auth_status
     account.token_expires_at = token_expires_at
     account.auth_version = account.auth_version + 1
+    # Until lifecycle writers adopt the split versions, preserve the exact
+    # legacy revision on both new counters. This prevents drift between the
+    # additive migration and the stage-and-swap cutover.
+    account.grant_version = account.auth_version
+    account.credential_version = account.auth_version
     account.last_error_code = None
     account.updated_at = now
     await db.flush()

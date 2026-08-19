@@ -73,6 +73,11 @@ pub struct ForkOperationRecord {
     pub adapter_version: Option<String>,
     pub native_version: Option<String>,
     pub native_child_session_id: Option<String>,
+    /// Checkpoints ADR (Q-H4): the boundary checkpoint this fork was taken at,
+    /// looked up by `(parent_session_id, anchor_turn_id)` when the operation is
+    /// prepared. `None` when checkpoint capture was off or no unexpired
+    /// checkpoint existed at the anchor.
+    pub checkpoint_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }

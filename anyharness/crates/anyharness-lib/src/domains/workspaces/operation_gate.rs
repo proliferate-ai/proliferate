@@ -78,6 +78,12 @@ pub struct WorkspaceExclusiveOperationLease {
     _guard: OwnedRwLockWriteGuard<()>,
 }
 
+impl WorkspaceOperationLease {
+    pub fn workspace_id(&self) -> &str {
+        &self.workspace_id
+    }
+}
+
 impl WorkspaceOperationGate {
     pub fn new() -> Self {
         Self::default()

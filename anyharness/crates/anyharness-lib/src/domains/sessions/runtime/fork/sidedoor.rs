@@ -39,7 +39,7 @@ impl SessionRuntime {
             Ok(Some(mapped))
         } else {
             Err(ForkSessionError::Unsupported(
-                "targeted fork native dispatch is not wired yet (rung 3)".to_string(),
+                "targeted fork native dispatch is not wired for this agent".to_string(),
             ))
         }
     }
@@ -72,9 +72,7 @@ impl SessionRuntime {
     ) {
         let phase = match error {
             LiveSessionCommandError::ResponseDropped
-            | LiveSessionCommandError::ActorUnavailable => {
-                ForkOperationPhase::NativeOutcomeUnknown
-            }
+            | LiveSessionCommandError::ActorUnavailable => ForkOperationPhase::NativeOutcomeUnknown,
             LiveSessionCommandError::Rejected(_) => ForkOperationPhase::Failed,
         };
         self.mark_fork_phase(operation_id, phase, now);

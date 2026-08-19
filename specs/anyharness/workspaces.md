@@ -283,11 +283,10 @@ The durable workspace rows are loaded and stored through:
 
 `domains/workspaces/archive/` is the archiving-workspaces feature's module, and
 `WorkspaceArchiveService` is its orchestrator — a service struct with injected
-dependencies, constructed directly in `app/mod.rs` alongside its sibling
-`WorkspacePurgeService` (`domains/workspaces/deletion/purge.rs`); there is no
-separate wiring family struct for this pair (R5). The ADR's `rt.` pseudocode is
-shorthand; there is no runtime god object and domains may not import
-`AppState`.
+dependencies. `app/workspaces.rs` composes it with its checkpoint and purge
+siblings because their construction order crosses `SessionRuntime`; the module
+is wiring only. The ADR's `rt.` pseudocode is shorthand; there is no runtime god
+object and domains may not import `AppState`.
 
 Three guarantees shape the whole module:
 
@@ -360,6 +359,112 @@ though the ADR's design places it in the domain: `adapters/**` may not import
 `repair_kill_debris` cannot consume a domain-owned type. `archive/quiesce.rs`
 constructs and re-exports the adapter's type rather than defining a second one.
 
+## Checkpoints
+
+`domains/workspaces/checkpoints/` is a sibling of `archive/`: it captures a
+workspace's git state at the start of a turn and bounds how many captures a
+workspace keeps. New capture and keep-N/age culling are gated behind
+`ANYHARNESS_CHECKPOINT_CAPTURE` (default off); the feature is a cost-observation
+rung, and flag-off means zero capture work at the prompt dispatch seam — no
+store reads, no git. Flag-independent cleanup still reconciles incomplete
+prior writes, as described below.
+
+`checkpoints/refs.rs` is a second sole-writer carve-out, on the exact model of
+`archive/refs.rs`: it is the only reader/writer of
+`refs/proliferate/checkpoints/<workspace_id>/<checkpoint_id>/{head,worktree,index}`,
+shelling `git update-ref` / `show-ref --verify` / `for-each-ref` directly. The
+shelling helpers are duplicated locally rather than shared with `archive/refs.rs`
+(whose copies stay private) so the sole-writer boundary between the two
+namespaces is not eroded. `archive/refs.rs::list_for_repo` explicitly skips the
+`checkpoints/` prefix, so the archive sweep's orphaned-refs duty never parses a
+checkpoint ref as an archive one.
+
+The capture cadence is turn-start: a private hook on `SessionRuntime` runs at
+every prompt dispatch seam (`runtime/prompt.rs`) just before the actor command.
+Each prompt flow owns exactly one shared `SessionPrompt` workspace-operation
+lease across resolve, capture, actor dispatch, and settlement. Ordinary runtime
+entrypoints acquire it once. A flow that already owns that lease uses
+`send_prompt_under_workspace_lease` or
+`send_text_prompt_with_id_and_provenance_under_workspace_lease` (session
+creation) or `send_text_prompt_with_provenance_under_workspace_lease` (review
+Product MCP feedback), and the
+checkpoint hook calls `capture_turn_start_under_workspace_lease`; none of those
+under-lease entrypoints reacquires it, and each prompt entrypoint verifies that
+the supplied lease key matches the session's workspace. This avoids a
+nested-read deadlock behind a queued exclusive writer and prevents retention,
+purge, archive, or mobility cleanup from observing the intentional
+refs-before-row interval. Capture does not quiesce or stop live work.
+
+A busy handle (the prompt will queue) skips capture, because a snapshot labelled
+as this boundary would be dishonest. A queue-drain turn start IS a turn start
+under the frozen 4.7 cadence, so those turns are a disclosed conformance
+shortfall of this dispatch-seam hook: the hook lives at the runtime dispatch
+seam, not in the actor's queue-replay loop, so a prompt that queues and later
+drains into a turn is not checkpointed. A normal dispatch that observes an
+already-busy handle emits `checkpoint.capture.skipped`
+(`reason="busy_will_queue"`), measuring that specific skip class. Durable queue
+insertion, startup replay, and actor-owned queue drain bypass this hook and are
+not yet counted, so the observation phase MUST treat their volume as an
+explicitly unmeasured part of the same disclosed conformance shortfall. On a
+capture failure the `TURN_START_CAPTURE_FAILURE_POLICY` policy point decides:
+the selected policy is `Abort` (the prompt is refused with a retryable, typed
+conflict), with `Degrade` (warn and proceed uncheckpointed) built as the
+alternative arm. Both arms convert the private capture error into a bounded
+`failure_class`; the public `CheckpointCaptureFailure` supplies stable codes
+and static details. Repository paths, Git stderr, and internal causes never
+enter telemetry or the wire response.
+
+After capture, the raw actor outcome settles the checkpoint before public error
+mapping. `Started` binds the actor's `turn_id`. `Queued`, `ActorUnavailable`, and
+`Rejected` prove that this boundary did not start, so settlement marks the row
+expired and deletes its refs. `ResponseDropped` is acknowledgement-ambiguous:
+the unexpired row and refs remain, `turn_id` stays NULL, and ordinary retention
+eventually ages them out. Any `prompt_id` on that unresolved row remains dispatch
+provenance only and is never a boundary join key.
+
+A checkpoint is a row/refs split, the same discipline as archive: the
+`workspace_checkpoints` row is the metadata truth (origin, the session/turn/prompt
+boundary keys, the peeled tree OIDs, retention state) and the three refs are the
+bytes truth. Capture orders itself refs-before-row (bytes durable and verified
+before metadata); a crash in between leaves orphaned refs the retention duty
+reaps by row-absence. Deletion runs the other way — the row is marked
+`expired_at` FIRST, then the refs are deleted — so an unexpired row never loses
+its bytes.
+
+Retention runs as a fifth duty of the archive sweep. Keep-N/age culling runs
+only while the flag is on (flag-off freezes live checkpoints until purge),
+while crash reconciliation remains active when the flag is off. Its one
+candidate-discovery pass unions checkpoint rows with the private ref family
+across registered repository roots and validates exact workspace/root ownership;
+ref-derived candidates make a rowless first capture discoverable after a
+refs-before-row crash. Reconciliation deletes only ref sets whose row is absent
+or expired. Policy culling keeps the newest
+`RETENTION_KEEP_N` (20) per workspace within `RETENTION_MAX_AGE` (14 days) — both
+observation-period implementation constants, not product promises — with two
+exemptions: a checkpoint an in-flight revert claims is never culled; the newest
+`safety` row is exempt from the N-cull (but not the age cap). It never touches
+anything outside `refs/proliferate/checkpoints/`. Purge expires the checkpoint
+rows, deletes every checkpoint ref for the workspace, then deletes the rows;
+retaining expired metadata until the ref step succeeds keeps failed purge
+cleanup discoverable by the periodic sweep. Fork rows reference the boundary
+checkpoint via `fork_operations.checkpoint_id`, looked up (never captured) at
+the fork's `(parent_session_id, anchor_turn_id)` boundary.
+
+If a local repository directory is already absent, its checkpoint refs and
+objects are absent by construction. Purge therefore treats that ref step as
+already complete, removes any remaining checkpoint metadata, and continues to
+the workspace row. A missing repository-root database record or an existing
+path that is not an operable repository still fails closed.
+
+The lookup key is the pair `(session_id, turn_id)` — turn ids are not unique
+across a fork lineage, so `session_id` is the required scoping — and `prompt_id`
+is dispatch provenance only, never a join key. A NULL `fork_operations.checkpoint_id`
+means no checkpoint sat at that boundary and MUST be disclosed by consumers as a
+no-checkpoint state, never treated silently (no such consumers exist in this rung;
+the rule binds the later revert/modal PRs). The fork path is lookup-only and has
+no fallback-capture cadence, so the abort-vs-degrade policy governs prompt
+dispatch capture only.
+
 ## Important Invariants
 
 - Local and worktree workspaces are different durable kinds.
@@ -390,7 +495,13 @@ constructs and re-exports the adapter's type rather than defining a second one.
 - There is no backstop retention pass. Automatic pruning was the retire
   lifecycle's sweeper, and both left together when `retired` was absorbed
   into `archived`; the runtime never deletes a checkout the user did not ask
-  it to delete.
+  it to delete. This protects USER-created checkouts (local and worktree
+  workspaces). It does NOT extend to checkpoints: a checkpoint is a
+  runtime-created capture artifact, not a checkout the user made, so checkpoint
+  retention (`checkpoints/retention.rs`) pruning its own capture refs is not a
+  violation of this rule — the rule is about never destroying the user's work,
+  and a checkpoint's bytes are a copy the runtime took, not the working tree
+  itself.
 - A workspace's recorded path stays reserved for its lifetime: creation
   refuses any path an archived row still claims, for every workspace kind,
   regardless of that row's cleanup state

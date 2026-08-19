@@ -141,6 +141,30 @@ server read cache; they exist only for local editing and conflict metadata.
 Scratch content belongs to Tauri app-data access hooks. It is a local external
 resource, not Zustand state and not an AnyHarness file resource.
 
+## Desktop-local Path Capabilities
+
+Values already routed to the Desktop filesystem pass through
+`DesktopFilesBridge.inspectPath`; inspection itself does not establish local
+provenance. Product state keeps `idle`, `pending`, `settled`, and `rejected`
+distinct for each candidate revision. The render effect and an imperative
+primary action share one attempt, a candidate change makes an older completion
+stale, and a settled refusal or rejected transport is terminal for that
+revision.
+
+Only a settled `file` or `directory` result establishes a path kind and enables
+matching open/reveal capabilities. Missing, invalid, denied, unsupported,
+unexpected-I/O, malformed-payload, idle, pending, and rejected states keep the
+kind null, expose no open targets, and cause every native handler to no-op after
+rechecking current state. Copy path remains available because it performs no
+filesystem operation. Target discovery takes `file | directory | null`; null
+does not default to file or start discovery, while an imperative open supplies
+the already-inspected kind explicitly.
+
+Inspection refusal does not advertise or perform a retry. A native open or
+reveal attempted after a settled file/directory may fail separately; only that
+operation failure keeps retry copy, and retrying it reuses the settled
+inspection.
+
 ## Right Panel Tools
 
 The durable Scratch tool id is `scratch`. New right-panel state defaults to

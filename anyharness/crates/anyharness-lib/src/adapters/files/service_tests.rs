@@ -1,7 +1,6 @@
-use std::path::{Path, PathBuf};
-
 use super::safety::SafetyError;
 use super::service::{FileServiceError, WorkspaceFilesService};
+use super::service_test_support::TestWorkspace;
 use super::types::{CreateWorkspaceFileEntryKind, WorkspaceFileKind};
 
 #[test]
@@ -71,6 +70,28 @@ fn create_entry_fails_when_parent_is_missing() {
     .expect_err("missing parent should fail");
 
     assert!(matches!(error, FileServiceError::NotADirectory(_)));
+}
+
+#[test]
+fn create_entry_fails_when_parent_is_a_file() {
+    let dir = TestWorkspace::new();
+    let workspace_root = dir.path().canonicalize().expect("canonical workspace root");
+    std::fs::write(workspace_root.join("parent-file"), "parent").expect("seed file parent");
+
+    for path in ["parent-file/child", "parent-file/missing/child"] {
+        let error = WorkspaceFilesService::create_entry(
+            &workspace_root,
+            path,
+            CreateWorkspaceFileEntryKind::File,
+            None,
+        )
+        .expect_err("file parent should fail as not a directory");
+
+        assert!(matches!(
+            error,
+            FileServiceError::NotADirectory(error_path) if error_path == path
+        ));
+    }
 }
 
 #[test]
@@ -171,6 +192,27 @@ fn rename_entry_fails_when_destination_parent_is_missing() {
 }
 
 #[test]
+fn rename_entry_fails_when_destination_parent_is_a_file() {
+    let dir = TestWorkspace::new();
+    std::fs::write(dir.path().join("source.txt"), "source").expect("seed source");
+    std::fs::write(dir.path().join("parent-file"), "parent").expect("seed file parent");
+
+    for path in ["parent-file/child", "parent-file/missing/child"] {
+        let error = WorkspaceFilesService::rename_entry(dir.path(), "source.txt", path)
+            .expect_err("file destination parent should fail as not a directory");
+
+        assert!(matches!(
+            error,
+            FileServiceError::NotADirectory(error_path) if error_path == path
+        ));
+    }
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("source.txt")).expect("source remains"),
+        "source"
+    );
+}
+
+#[test]
 fn rename_entry_rejects_git_paths() {
     let dir = TestWorkspace::new();
     std::fs::write(dir.path().join("a.txt"), "a").expect("seed source");
@@ -258,7 +300,7 @@ fn delete_entry_removes_symlink_without_deleting_target_file() {
 
 #[cfg(unix)]
 #[test]
-fn delete_entry_removes_directory_symlink_without_deleting_target_directory() {
+fn rename_and_delete_directory_symlink_preserve_target_directory() {
     let dir = TestWorkspace::new();
     std::fs::create_dir_all(dir.path().join("target-dir/nested")).expect("seed target dir");
     std::fs::write(dir.path().join("target-dir/nested/file.txt"), "target")
@@ -266,12 +308,28 @@ fn delete_entry_removes_directory_symlink_without_deleting_target_directory() {
     std::os::unix::fs::symlink("target-dir", dir.path().join("dir-link"))
         .expect("seed directory symlink");
 
-    let result =
-        WorkspaceFilesService::delete_entry(dir.path(), "dir-link").expect("delete symlink");
+    let renamed = WorkspaceFilesService::rename_entry(dir.path(), "dir-link", "renamed-dir-link")
+        .expect("rename directory symlink");
+    assert_eq!(renamed.entry.kind, WorkspaceFileKind::Symlink);
+    assert!(dir.path().join("dir-link").symlink_metadata().is_err());
+    assert!(dir
+        .path()
+        .join("renamed-dir-link")
+        .symlink_metadata()
+        .expect("renamed directory link")
+        .file_type()
+        .is_symlink());
 
-    assert_eq!(result.path, "dir-link");
+    let result = WorkspaceFilesService::delete_entry(dir.path(), "renamed-dir-link")
+        .expect("delete symlink");
+
+    assert_eq!(result.path, "renamed-dir-link");
     assert_eq!(result.kind, WorkspaceFileKind::Symlink);
-    assert!(!dir.path().join("dir-link").exists());
+    assert!(dir
+        .path()
+        .join("renamed-dir-link")
+        .symlink_metadata()
+        .is_err());
     assert_eq!(
         std::fs::read_to_string(dir.path().join("target-dir/nested/file.txt"))
             .expect("target directory remains"),
@@ -371,25 +429,82 @@ fn delete_entry_rejects_git_paths() {
     ));
 }
 
-struct TestWorkspace {
-    path: PathBuf,
+#[test]
+fn workspace_root_has_explicit_read_only_behavior() {
+    let dir = TestWorkspace::new();
+    std::fs::write(dir.path().join("README.md"), "hello").expect("seed file");
+
+    let stat = WorkspaceFilesService::stat_file(dir.path(), "").expect("stat root");
+    assert_eq!(stat.path, "");
+    assert_eq!(stat.kind, WorkspaceFileKind::Directory);
+
+    let listing = WorkspaceFilesService::list_entries(dir.path(), "").expect("list root");
+    assert_eq!(listing.directory_path, "");
+    assert_eq!(listing.entries.len(), 1);
+    assert_eq!(listing.entries[0].path, "README.md");
+
+    assert!(matches!(
+        WorkspaceFilesService::read_file(dir.path(), "").expect_err("root is not a file"),
+        FileServiceError::NotAFile(path) if path.is_empty()
+    ));
+    assert!(matches!(
+        WorkspaceFilesService::write_file(dir.path(), "", "new", "")
+            .expect_err("root is not writable as a file"),
+        FileServiceError::NotAFile(path) if path.is_empty()
+    ));
+    assert!(matches!(
+        WorkspaceFilesService::create_entry(
+            dir.path(),
+            "",
+            CreateWorkspaceFileEntryKind::File,
+            None,
+        )
+        .expect_err("root cannot be created"),
+        FileServiceError::InvalidCreateRequest(message) if message == "path is required"
+    ));
+    assert!(matches!(
+        WorkspaceFilesService::rename_entry(dir.path(), "", "renamed")
+            .expect_err("root cannot be renamed"),
+        FileServiceError::InvalidRenameRequest(_)
+    ));
+    assert!(matches!(
+        WorkspaceFilesService::delete_entry(dir.path(), "").expect_err("root cannot be deleted"),
+        FileServiceError::InvalidDeleteRequest(_)
+    ));
 }
 
-impl TestWorkspace {
-    fn new() -> Self {
-        let path =
-            std::env::temp_dir().join(format!("anyharness-files-test-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir(&path).expect("create temp workspace");
-        Self { path }
-    }
+#[test]
+fn ordinary_missing_paths_keep_operation_specific_behavior() {
+    let dir = TestWorkspace::new();
 
-    fn path(&self) -> &Path {
-        &self.path
-    }
-}
+    assert!(matches!(
+        WorkspaceFilesService::stat_file(dir.path(), "missing.txt").expect_err("missing stat"),
+        FileServiceError::NotFound(path) if path == "missing.txt"
+    ));
+    assert!(matches!(
+        WorkspaceFilesService::read_file(dir.path(), "missing.txt").expect_err("missing read"),
+        FileServiceError::NotFound(path) if path == "missing.txt"
+    ));
+    assert!(matches!(
+        WorkspaceFilesService::list_entries(dir.path(), "missing").expect_err("missing list"),
+        FileServiceError::NotFound(path) if path == "missing"
+    ));
+    assert!(matches!(
+        WorkspaceFilesService::rename_entry(dir.path(), "missing.txt", "renamed.txt")
+            .expect_err("missing rename"),
+        FileServiceError::NotFound(path) if path == "missing.txt"
+    ));
+    assert!(matches!(
+        WorkspaceFilesService::delete_entry(dir.path(), "missing.txt")
+            .expect_err("missing delete"),
+        FileServiceError::NotFound(path) if path == "missing.txt"
+    ));
 
-impl Drop for TestWorkspace {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.path);
-    }
+    let written = WorkspaceFilesService::write_file(dir.path(), "missing.txt", "created", "")
+        .expect("compatibility write creates a normal missing file");
+    assert_eq!(written.path, "missing.txt");
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("missing.txt")).expect("read upserted file"),
+        "created"
+    );
 }

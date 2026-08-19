@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   restartRuntime: vi.fn(),
   pickFolder: vi.fn(),
   getHomeDir: vi.fn(),
-  pathIsDirectory: vi.fn(),
+  inspectPath: vi.fn(),
   listAvailableEditors: vi.fn(),
   listOpenTargets: vi.fn(),
   openTarget: vi.fn(),
@@ -55,7 +55,7 @@ vi.mock("@/lib/access/tauri/runtime", () => ({
 vi.mock("@/lib/access/tauri/shell", () => ({
   pickFolder: mocks.pickFolder,
   getHomeDir: mocks.getHomeDir,
-  pathIsDirectory: mocks.pathIsDirectory,
+  inspectPath: mocks.inspectPath,
   listAvailableEditors: mocks.listAvailableEditors,
   listOpenTargets: mocks.listOpenTargets,
   openTarget: mocks.openTarget,
@@ -188,7 +188,7 @@ describe("files", () => {
   it("normalizes a selected directory and delegates the other shell wrappers", async () => {
     mocks.pickFolder.mockResolvedValue("/repo");
     mocks.getHomeDir.mockResolvedValue("/home/dev");
-    mocks.pathIsDirectory.mockResolvedValue(true);
+    mocks.inspectPath.mockResolvedValue({ kind: "directory" });
     mocks.revealInFinder.mockResolvedValue(undefined);
     mocks.openInTerminal.mockResolvedValue(undefined);
 
@@ -197,8 +197,10 @@ describe("files", () => {
       path: "/repo",
     });
     await expect(desktopBridge.files.getHomeDirectory()).resolves.toBe("/home/dev");
-    await expect(desktopBridge.files.isDirectory("/repo")).resolves.toBe(true);
-    expect(mocks.pathIsDirectory).toHaveBeenCalledWith("/repo");
+    await expect(desktopBridge.files.inspectPath("/repo")).resolves.toEqual({
+      kind: "directory",
+    });
+    expect(mocks.inspectPath).toHaveBeenCalledWith("/repo");
 
     await desktopBridge.files.reveal("/repo");
     expect(mocks.revealInFinder).toHaveBeenCalledWith("/repo");
@@ -244,6 +246,7 @@ describe("files", () => {
     await desktopBridge.files.openTarget("cursor", "/repo");
     expect(mocks.openTarget).toHaveBeenCalledWith("cursor", "/repo");
   });
+
 });
 
 describe("nativeUi", () => {

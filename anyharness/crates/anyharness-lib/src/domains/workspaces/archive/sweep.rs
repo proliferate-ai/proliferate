@@ -67,7 +67,7 @@ impl WorkspaceArchiveService {
         });
     }
 
-    /// One full pass: the primary cleanup, then the four secondary duties.
+    /// One full pass: the primary cleanup, then the five secondary duties.
     ///
     /// Takes `&Arc<Self>` rather than `&self` because the convergence helper the
     /// primary cleanup shares with the request-driven re-POST path needs an
@@ -86,6 +86,9 @@ impl WorkspaceArchiveService {
                     error = %error,
                     "the sweep could not list archived workspaces"
                 );
+                // Checkpoint cleanup is an independent duty: malformed archive
+                // metadata must not starve its retention bound indefinitely.
+                self.checkpoints.sweep_retention().await;
                 return;
             }
         };
@@ -108,6 +111,10 @@ impl WorkspaceArchiveService {
         self.sweep_staging_siblings(&archived).await;
         self.sweep_orphaned_refs().await;
         self.run_deferred_gcs().await;
+        // Duty 5 (Lane H): checkpoint retention. Flag-off freezes policy
+        // culling but still converges expired and rowless refs. It enumerates
+        // independent row + ref candidates and does not lean on `archived`.
+        self.checkpoints.sweep_retention().await;
     }
 
     /// The primary cleanup, plus duty 2 (a stale registration for an archived row

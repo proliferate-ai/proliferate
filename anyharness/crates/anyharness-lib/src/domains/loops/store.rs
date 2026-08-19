@@ -160,6 +160,37 @@ impl LoopStore {
         )?;
         Ok(())
     }
+
+    #[cfg(test)]
+    pub(crate) fn seed_emulated_for_test(
+        &self,
+        session_id: &str,
+        workspace_id: &str,
+        loop_id: &str,
+        prompt: &str,
+        next_fire_at_ms: i64,
+    ) -> anyhow::Result<()> {
+        let record = LoopRecord {
+            session_id: session_id.to_string(),
+            workspace_id: workspace_id.to_string(),
+            loop_id: loop_id.to_string(),
+            prompt: prompt.to_string(),
+            schedule_kind: LoopScheduleKind::Interval,
+            schedule_expr: "1m".to_string(),
+            recurring: true,
+            status: LoopStatus::Active,
+            native: false,
+            last_fired_at_ms: None,
+            fire_count: 0,
+            native_state_json: None,
+            max_fires: None,
+            next_fire_at_ms: Some(next_fire_at_ms),
+            created_at: "2026-08-19T00:00:00Z".to_string(),
+            updated_at_ms: 1,
+        };
+        self.db
+            .with_conn(|conn| Self::upsert_loop(conn, &record).map_err(Into::into))
+    }
 }
 
 pub fn status_to_db(status: LoopStatus) -> &'static str {
