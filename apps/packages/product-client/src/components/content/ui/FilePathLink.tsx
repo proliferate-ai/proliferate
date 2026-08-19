@@ -15,11 +15,9 @@ interface FilePathLinkProps {
  * Inline file-path link rendered in chat markdown and tool-call output.
  *
  * Behavior:
- *  - Click -> open workspace files in the right-sidebar viewer and external
- *    Desktop files in the configured external target.
- *  - Actionable references expose external targets, copy, and reveal through
- *    the context menu.
- *  - An unavailable path is plain text with no file-reference controls.
+ *  - Actionable references expose their authority-shaped primary and menu actions.
+ *  - A nonempty unavailable reference exposes Copy path only.
+ *  - An empty or whitespace reference exposes no controls.
  *
  * Style: local file/doc link in `text-link-foreground`, no pill,
  * no border, underline on hover only.

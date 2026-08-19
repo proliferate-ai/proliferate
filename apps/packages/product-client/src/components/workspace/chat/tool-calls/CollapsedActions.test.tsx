@@ -40,23 +40,36 @@ function openActions(button: HTMLElement) {
 
 vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
   useFileReferenceActions: (args: { rawPath: string; workspacePath?: string | null }) => {
+    const workspacePath = typeof args.workspacePath === "string"
+      ? args.workspacePath
+      : args.rawPath;
+    const locator = {
+      authority: "workspace" as const,
+      workspacePath,
+      localCompanionPath: `/repo/${workspacePath}`,
+    };
     return {
       reference: {
         rawPath: args.rawPath,
-        path: args.rawPath,
+        parsedPath: args.rawPath,
+        displayPath: args.rawPath,
         line: null,
         column: null,
-        absolutePath: `/repo/${args.rawPath}`,
-        workspacePath: args.rawPath,
+        locator,
       },
+      accessState: { status: "settled" as const, locator, kind: "file" as const },
+      nativePathKind: null,
       openTargets: [],
       defaultOpenTarget: null,
+      pathKind: "file" as const,
+      pathKindPending: false,
       canOpenPrimary: true,
       canOpenInSidebar: true,
-      canOpenExternal: true,
-      canReveal: true,
-      pathKind: "file",
-      copyPath: vi.fn(),
+      canOpenExternal: false,
+      canReveal: false,
+      primaryUnavailableReason: null,
+      copyPath: `/repo/${workspacePath}`,
+      copyCurrentPath: vi.fn(async () => undefined),
       openInSidebar: vi.fn(),
       openDefault: vi.fn(),
       openPrimary: vi.fn(),

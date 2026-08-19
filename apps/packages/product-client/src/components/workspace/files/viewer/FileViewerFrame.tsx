@@ -184,9 +184,9 @@ function FileBreadcrumbs({
   filePath: string;
   onBrowsePath: (path: string) => void;
 }) {
-  const { workspacePath } = useWorkspacePath();
-  const workspaceName = workspacePath
-    ? workspacePath.split("/").filter(Boolean).pop()
+  const { workspaceRoot } = useWorkspacePath();
+  const workspaceName = workspaceRoot.status === "settled"
+    ? workspaceRoot.path.split("/").filter(Boolean).pop() ?? null
     : null;
   const parts = filePath.split("/").filter(Boolean);
   const crumbs = workspaceName ? [workspaceName, ...parts] : parts;

@@ -52,17 +52,18 @@ explicit scrubber. Server structured logs go to the deployment log sink and
 can be queried through CloudWatch/Grafana in the hosted stack.
 
 Sentry is diagnostic telemetry, not session replay by default. Web and Mobile
-set both replay rates to zero. Desktop renderer sets normal session replay to
-zero and permits error replay only at its configured rate; its replay masks all
-text and inputs and honors telemetry mask/block selectors. Those controls do
-not establish that identifier-bearing route metadata is removed. The Desktop
-runtime telemetry disable setting disables vendor telemetry as well.
+set both replay rates to zero. Desktop renderer replay is source-disabled and
+absent; no build configuration can enable it. Re-enablement requires a
+separately reviewed synthetic privacy proof of the exact route/surface
+block-and-mask policy, metadata policy, provider arrival, and absence of
+prompt, transcript, terminal, file, repository, path, token, workspace,
+session, and workflow identifiers. The Desktop runtime telemetry disable
+setting disables vendor telemetry as well.
 
-Known current gaps:
+The sole listed source-code gap is:
 
 - the Desktop-native Rust adapter does not install the explicit before-send
-  scrubber used by the server, clients, AnyHarness, Worker, and Supervisor;
-- Desktop renderer error replay can retain identifier-bearing route metadata.
+  scrubber used by the server, clients, AnyHarness, Worker, and Supervisor.
 
-Do not add free-form user content or secrets to tracing events. Closing either
+Do not add free-form user content or secrets to tracing events. Closing this
 remaining source-code gap requires a separate implementation PR.

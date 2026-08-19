@@ -1,32 +1,30 @@
-import {
-  memo,
-  useState,
-  useCallback,
-  useEffect,
-} from "react";
-import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
-import { resolvePreferredOpenTarget } from "#product/lib/domain/chat/composer/preference-resolvers";
-import { HeaderTabs } from "#product/components/workspace/shell/topbar/HeaderTabs";
-import { WorkspaceActionsMenuContainer } from "#product/components/workspace/shell/topbar/WorkspaceActionsMenuContainer";
-import { Button } from "#product/primitives/Button";
+import { memo, useCallback, useMemo, useRef } from "react";
+import type { Workspace } from "@anyharness/sdk";
+import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
+import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { SplitButton } from "#product/components/workspace/open-target/SplitButton";
-import {
-  type OpenTarget,
-} from "@proliferate/product-client/host/desktop-bridge";
-import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
-import { FilePen } from "#product/primitives/icons/workspace";
-import { Play } from "#product/primitives/icons/core";
-import type { Workspace } from "@anyharness/sdk";
+import { HeaderTabs } from "#product/components/workspace/shell/topbar/HeaderTabs";
+import { WorkspaceActionsMenuContainer } from "#product/components/workspace/shell/topbar/WorkspaceActionsMenuContainer";
 import { useDebugRenderCount } from "#product/hooks/ui/debug/use-debug-render-count";
+import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
 import { workspaceHeaderTitle } from "#product/lib/domain/workspaces/display/workspace-display";
-import { useToastStore } from "#product/stores/toast/toast-store";
+import { Button } from "#product/primitives/Button";
+import { Play } from "#product/primitives/icons/core";
+import { FilePen } from "#product/primitives/icons/workspace";
+import { useWorkspacePath } from "#product/providers/WorkspacePathProvider";
 
 const HEADER_RUN_BUTTON_CLASS = "workspace-shell-action-button font-medium";
+const COPY_PATH_TARGET: OpenTarget = {
+  id: "copy-path",
+  label: "Copy path",
+  kind: "copy",
+};
 
 interface GlobalHeaderProps {
   selectedWorkspace: Workspace | undefined;
-  workspacePath?: string | null;
+  /** Inventory/pending path used only to derive the visible workspace title. */
+  displayWorkspacePath?: string | null;
   runDisabled?: boolean;
   runLoading?: boolean;
   runLabel?: string;
@@ -36,7 +34,7 @@ interface GlobalHeaderProps {
 
 export const GlobalHeader = memo(function GlobalHeader({
   selectedWorkspace,
-  workspacePath: workspacePathProp,
+  displayWorkspacePath,
   runDisabled = false,
   runLoading = false,
   runLabel = "Run",
@@ -44,56 +42,86 @@ export const GlobalHeader = memo(function GlobalHeader({
   onRun,
 }: GlobalHeaderProps) {
   useDebugRenderCount("global-header");
-  const [targets, setTargets] = useState<OpenTarget[]>([]);
   const host = useProductHost();
-  const files = host.desktop?.files ?? null;
-  const defaultOpenInTargetId = useUserPreferencesStore((s) => s.defaultOpenInTargetId);
-  const preferredTarget = resolvePreferredOpenTarget(targets, { defaultOpenInTargetId });
-  const workspacePath = workspacePathProp ?? selectedWorkspace?.path;
-  const title = workspaceHeaderTitle(selectedWorkspace, workspacePath);
-
-  useEffect(() => {
-    if (!files) {
-      setTargets([]);
-      return;
-    }
-    void files.listOpenTargets("directory").then(setTargets);
-  }, [files]);
-
-  const showToast = useToastStore((s) => s.show);
-
-  const openTarget = useCallback(
-    (targetId: string, label: string) => {
-      if (!workspacePath || !files) return;
-      // The Rust side re-resolves the app at click time, so an editor can
-      // vanish between listing and clicking — don't swallow that.
-      files.openTarget(targetId, workspacePath).catch(() => {
-        showToast(`Couldn't open workspace in ${label}`);
-      });
-    },
-    [files, showToast, workspacePath],
+  const workspacePathState = useWorkspacePath();
+  const rootActions = useFileReferenceActions({
+    rawPath: ".",
+    workspacePath: ".",
+    nativeCapabilityKind: "directory",
+  });
+  const rootLocator = rootActions.accessState.status === "settled"
+    && rootActions.accessState.locator.authority === "workspace"
+    ? rootActions.accessState.locator
+    : null;
+  const rootCapabilityAvailable = rootActions.accessState.status === "settled"
+    && rootActions.accessState.kind === "directory"
+    && rootLocator?.workspacePath === ""
+    && rootLocator.localCompanionPath !== null
+    && rootActions.nativePathKind === "directory";
+  const targets = useMemo(
+    () => rootCapabilityAvailable
+      ? [...rootActions.openTargets, COPY_PATH_TARGET]
+      : [],
+    [rootActions.openTargets, rootCapabilityAvailable],
   );
+  const preferredTarget = rootActions.defaultOpenTarget;
+
+  const capabilityRevision = useMemo(() => ({}), [
+    host.desktop?.files,
+    rootActions.nativePathKind,
+    rootActions.openDefault,
+    rootLocator?.localCompanionPath,
+    rootLocator?.workspacePath,
+    rootCapabilityAvailable,
+    workspacePathState.filesystemOrigin.origin,
+    workspacePathState.filesystemOrigin.status,
+    workspacePathState.materializedWorkspaceId,
+    workspacePathState.workspaceRoot.path,
+    workspacePathState.workspaceRoot.status,
+  ]);
+  const capabilityRef = useRef({
+    actions: rootActions,
+    available: rootCapabilityAvailable,
+    revision: capabilityRevision,
+    targets,
+    preferredTarget,
+  });
+  capabilityRef.current = {
+    actions: rootActions,
+    available: rootCapabilityAvailable,
+    revision: capabilityRevision,
+    targets,
+    preferredTarget,
+  };
 
   const handleDefaultOpen = useCallback(() => {
-    if (!workspacePath) return;
-    if (preferredTarget?.kind === "copy") {
-      void host.clipboard.writeText(workspacePath);
+    const current = capabilityRef.current;
+    if (!current.available || current.revision !== capabilityRevision) return;
+    if (current.preferredTarget) {
+      void current.actions.openDefault();
       return;
     }
-    openTarget(preferredTarget?.id ?? "finder", preferredTarget?.label ?? "Finder");
-  }, [host.clipboard, openTarget, workspacePath, preferredTarget]);
+    void current.actions.reveal();
+  }, [capabilityRevision]);
 
-  const handleTargetClick = useCallback(
-    (target: OpenTarget) => {
-      if (!workspacePath) return;
-      if (target.kind === "copy") {
-        void host.clipboard.writeText(workspacePath);
-        return;
-      }
-      openTarget(target.id, target.label);
-    },
-    [host.clipboard, openTarget, workspacePath],
-  );
+  const handleTargetClick = useCallback((target: OpenTarget) => {
+    const current = capabilityRef.current;
+    if (
+      !current.available
+      || current.revision !== capabilityRevision
+      || !current.targets.some((candidate) => candidate.id === target.id)
+    ) return;
+    if (target.kind === "copy") {
+      void current.actions.copyCurrentPath();
+      return;
+    }
+    void current.actions.openWithTarget(target.id);
+  }, [capabilityRevision]);
+
+  // This inventory-derived value is deliberately display-only. Filesystem
+  // actions above use the authority-proven runtime root capability instead.
+  const titlePath = displayWorkspacePath ?? selectedWorkspace?.path;
+  const title = workspaceHeaderTitle(selectedWorkspace, titlePath);
 
   return (
     <DebugProfiler id="global-header">
@@ -116,7 +144,6 @@ export const GlobalHeader = memo(function GlobalHeader({
         </div>
 
         <WorkspaceActionsMenuContainer />
-
         <div className="flex h-full min-w-0 flex-1 items-stretch overflow-hidden">
           <HeaderTabs />
         </div>
@@ -141,10 +168,10 @@ export const GlobalHeader = memo(function GlobalHeader({
               <Play className="icon-paired" />
               <span>{runLabel}</span>
             </Button>
-            {workspacePath && files && (
+            {rootCapabilityAvailable && (
               <SplitButton
                 icon={<FilePen className="icon-paired" />}
-                label={preferredTarget?.label ?? "Open"}
+                label={preferredTarget?.label ?? "Reveal in Finder"}
                 showLabel={false}
                 onClick={handleDefaultOpen}
                 targets={targets}

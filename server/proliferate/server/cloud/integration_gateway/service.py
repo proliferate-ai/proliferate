@@ -51,6 +51,7 @@ from proliferate.server.cloud.integrations.action_approvals.service import (
 from proliferate.server.cloud.integrations.action_approvals.transactions import (
     request_action_approval_committed,
 )
+from proliferate.server.cloud.integrations.admission import admit_provider_operation
 from proliferate.server.cloud.integrations.tools import get_or_refresh_tool_cache
 
 _PROTOCOL_VERSION = "2025-06-18"
@@ -180,10 +181,22 @@ async def list_tools_for_provider(
     grant: IntegrationGatewayGrant,
     provider: str,
 ) -> dict[str, object]:
-    pair = await account_for_provider(db, grant=grant, provider=provider)
-    tools = await get_or_refresh_tool_cache(
-        db, account_record=pair.account, definition_record=pair.definition
-    )
+    lease = await admit_provider_operation(db, grant=grant, provider=provider)
+    try:
+        tools = await get_or_refresh_tool_cache(
+            db,
+            account_record=lease.account,
+            definition_record=lease.definition,
+        )
+    except CloudApiError as error:
+        if error.code != "integration_grant_changed":
+            raise
+        lease = await admit_provider_operation(db, grant=grant, provider=provider)
+        tools = await get_or_refresh_tool_cache(
+            db,
+            account_record=lease.account,
+            definition_record=lease.definition,
+        )
     return {"provider": provider, "tools": tools}
 
 
@@ -226,7 +239,7 @@ async def call_provider_tool(
                     workspace_id=workspace_id,
                     anyharness_session_id=anyharness_session_id,
                     integration_account_id=account_identity.account_id,
-                    integration_account_auth_version=account_identity.auth_version,
+                    integration_account_grant_version=account_identity.grant_version,
                     verdict=decision,
                     arguments=arguments,
                     account_label=(
@@ -259,8 +272,38 @@ async def call_provider_tool(
             raise IntegrationToolNotAllowed(provider=provider, tool=tool)
         if not isinstance(decision, ToolCallAllowed):
             raise IntegrationToolNotAllowed(provider=provider, tool=tool)
-        pair = await account_for_provider(db, grant=grant, provider=provider)
-        url, headers, query = await resolve_launch(db, pair.account, pair.definition)
+        lease = await admit_provider_operation(
+            db,
+            grant=grant,
+            provider=provider,
+            workspace_id=(execution_session.workspace_id if execution_session else None),
+            anyharness_session_id=(
+                execution_session.anyharness_session_id if execution_session else None
+            ),
+        )
+        try:
+            url, headers, query = await resolve_launch(
+                db,
+                lease.account,
+                lease.definition,
+            )
+        except CloudApiError as error:
+            if error.code != "integration_grant_changed":
+                raise
+            lease = await admit_provider_operation(
+                db,
+                grant=grant,
+                provider=provider,
+                workspace_id=(execution_session.workspace_id if execution_session else None),
+                anyharness_session_id=(
+                    execution_session.anyharness_session_id if execution_session else None
+                ),
+            )
+            url, headers, query = await resolve_launch(
+                db,
+                lease.account,
+                lease.definition,
+            )
         result = await mcp_remote.call_tool(
             url=url,
             headers=headers,

@@ -44,7 +44,6 @@ export const MainScreen = memo(function MainScreen({ visible = true }: { visible
     return (
       <CoworkWorkspaceShell
         workspaceId={coworkWorkspace?.id ?? null}
-        workspacePath={coworkWorkspace?.path ?? null}
         visible={visible}
         fallbackTitle={pendingWorkspaceEntry?.source === "cowork-created"
           ? pendingWorkspaceEntry.displayName

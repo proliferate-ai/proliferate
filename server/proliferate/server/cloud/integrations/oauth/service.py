@@ -67,6 +67,9 @@ from proliferate.integrations.integration_oauth import (
     normalize_resource_url,
     random_urlsafe,
 )
+from proliferate.integrations.integration_oauth.revocation import (
+    validate_revocation_endpoint_origin,
+)
 from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
 from proliferate.lib.infra.encryption.json import encrypt_json
 from proliferate.server.cloud.errors import CloudApiError
@@ -187,6 +190,7 @@ def _build_oauth_bundle(
     expires_at: datetime | None,
     scopes: tuple[str, ...],
     token_endpoint: str | None,
+    revocation_endpoint: str | None,
     redirect_uri: str,
 ) -> dict[str, Any]:
     return {
@@ -198,6 +202,7 @@ def _build_oauth_bundle(
         "expiresAt": expires_at.isoformat() if expires_at else None,
         "scopes": list(scopes),
         "tokenEndpoint": token_endpoint,
+        "revocationEndpoint": revocation_endpoint,
         "redirectUri": redirect_uri,
     }
 
@@ -290,6 +295,16 @@ async def start_oauth_flow(
             resource=resource,
             scope=requested_scope,
         )
+        revocation_endpoint = config.oauth_revocation_endpoint or auth_metadata.revocation_endpoint
+        if revocation_endpoint is not None:
+            try:
+                validate_revocation_endpoint_origin(
+                    revocation_endpoint=revocation_endpoint,
+                    issuer=auth_metadata.issuer,
+                    token_endpoint=auth_metadata.token_endpoint,
+                )
+            except IntegrationOAuthProviderError:
+                revocation_endpoint = None
     except IntegrationOAuthProviderError as exc:
         raise CloudApiError(
             exc.code,
@@ -333,6 +348,7 @@ async def start_oauth_flow(
         resource=resource,
         client_id=client.client_id,
         token_endpoint=auth_metadata.token_endpoint,
+        revocation_endpoint=revocation_endpoint,
         requested_scopes=_requested_scopes_json(requested_scope),
         redirect_uri=redirect_uri,
         authorization_url=authorization_url,
@@ -524,6 +540,7 @@ async def _complete_legacy_oauth_callback(
                 expires_at=token.expires_at,
                 scopes=granted_scopes,
                 token_endpoint=flow.token_endpoint,
+                revocation_endpoint=flow.revocation_endpoint,
                 redirect_uri=flow.redirect_uri,
             ),
             secret=app_settings.cloud_secret_key,
@@ -736,6 +753,7 @@ async def complete_oauth_callback(
                 expires_at=token.expires_at,
                 scopes=granted_scopes,
                 token_endpoint=flow.token_endpoint,
+                revocation_endpoint=flow.revocation_endpoint,
                 redirect_uri=flow.redirect_uri,
             ),
             secret=app_settings.cloud_secret_key,

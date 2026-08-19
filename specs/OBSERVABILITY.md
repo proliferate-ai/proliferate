@@ -150,9 +150,13 @@ change sits on:
 - **Structural, not length, bounds:** client payload scrubbing bounds depth,
   array positions, and object properties (`[circular]`, `[truncated]`) but
   does not truncate strings by length — what you put in a string field ships.
-- **Replay:** Web and Mobile set both replay rates to zero. Desktop sets
-  normal session replay to zero; masked error replay can still retain
-  identifier-bearing route metadata (known gap). PostHog replay is off by
+- **Replay:** Web and Mobile set both replay rates to zero.
+  Desktop renderer replay is source-disabled and absent; no build configuration
+  can enable it.
+  Re-enablement requires a separately reviewed synthetic privacy proof of the
+  exact route/surface block-and-mask policy, metadata policy, provider arrival,
+  and absence of prompt, transcript, terminal, file, repository, path, token,
+  workspace, session, and workflow identifiers. PostHog replay is off by
   default; when explicitly enabled, recorded page metadata can contain route
   ids even though capture-event URL properties are stripped. A new surface
   that can display prompts, files, paths, or credentials gets

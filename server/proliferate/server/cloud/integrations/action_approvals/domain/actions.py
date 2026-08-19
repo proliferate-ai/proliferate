@@ -31,7 +31,7 @@ class ActionBinding:
     owner_user_id: UUID
     organization_id: UUID | None
     integration_account_id: UUID
-    integration_account_auth_version: int
+    integration_account_grant_version: int
     runtime_worker_id: UUID
     gateway_session_id: UUID
     workspace_id: str
@@ -87,7 +87,7 @@ def bind_action(
     owner_user_id: UUID,
     organization_id: UUID | None,
     integration_account_id: UUID,
-    integration_account_auth_version: int,
+    integration_account_grant_version: int,
     runtime_worker_id: UUID,
     gateway_session_id: UUID,
     workspace_id: str,
@@ -102,7 +102,7 @@ def bind_action(
     binding_digest = _digest(
         {
             "account": str(integration_account_id),
-            "accountAuthVersion": str(integration_account_auth_version),
+            "accountGrantVersion": str(integration_account_grant_version),
             "gatewaySession": str(gateway_session_id),
             "workspace": workspace_id,
             "anyharnessSession": anyharness_session_id,
@@ -139,7 +139,7 @@ def bind_action(
         owner_user_id=owner_user_id,
         organization_id=organization_id,
         integration_account_id=integration_account_id,
-        integration_account_auth_version=integration_account_auth_version,
+        integration_account_grant_version=integration_account_grant_version,
         runtime_worker_id=runtime_worker_id,
         gateway_session_id=gateway_session_id,
         workspace_id=workspace_id,

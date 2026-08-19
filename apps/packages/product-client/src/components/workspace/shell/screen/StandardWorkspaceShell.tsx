@@ -38,7 +38,6 @@ import { useWorkspaceActivityAcknowledgement } from "#product/hooks/workspaces/l
 import {
   resolveStandardWorkspaceChromeClasses,
 } from "#product/lib/domain/preferences/workspace-chrome";
-import { WorkspacePathProvider } from "#product/providers/WorkspacePathProvider";
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useAttendedPendingWorkspaceEntry } from "#product/hooks/workspaces/derived/use-pending-workspace-entries";
@@ -219,10 +218,9 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   return (
     <DebugProfiler id="workspace-shell">
       <WorkspaceShellActionsProvider value={shellActions}>
-        <WorkspacePathProvider workspacePath={selectedWorkspace?.path ?? pendingWorkspacePath}>
-          <WorkspaceHeaderTabsViewModelProvider
-            enabled={hasWorkspaceShell && !hasLaunchIntentOnlyShell}
-          >
+        <WorkspaceHeaderTabsViewModelProvider
+          enabled={hasWorkspaceShell && !hasLaunchIntentOnlyShell}
+        >
             {hasWorkspaceShell && !hasLaunchIntentOnlyShell ? (
               <WorkspaceShellShortcuts enabled={visible} />
             ) : null}
@@ -288,7 +286,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                         {hasWorkspaceShell && !hasLaunchIntentOnlyShell && (
                           <GlobalHeader
                             selectedWorkspace={selectedWorkspace}
-                            workspacePath={selectedWorkspace?.path ?? pendingWorkspacePath}
+                            displayWorkspacePath={selectedWorkspace?.path ?? pendingWorkspacePath}
                             runDisabled={!runCommand.canRun}
                             runLoading={runCommand.isLaunching}
                             runLabel={runCommand.runLabel}
@@ -379,8 +377,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
 
               {hasWorkspaceShell && !hasLaunchIntentOnlyShell ? <ContentSearchPill /> : null}
             </div>
-          </WorkspaceHeaderTabsViewModelProvider>
-        </WorkspacePathProvider>
+        </WorkspaceHeaderTabsViewModelProvider>
       </WorkspaceShellActionsProvider>
     </DebugProfiler>
   );

@@ -13,6 +13,40 @@ async function loadConfigModule() {
   return import("./config");
 }
 
+describe("getDesktopTelemetryConfig", () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it.each([
+    ["absent", undefined],
+    ["empty", ""],
+    ["zero", "0"],
+    ["fractional", "0.5"],
+    ["one", "1"],
+    ["negative", "-0.1"],
+    ["over one", "1.1"],
+    ["boolean-looking", "true"],
+    ["malformed", "not-a-number"],
+  ] as const)(
+    "ignores the retired replay setting when its legacy value is %s",
+    async (_label, value) => {
+      const baselineModule = await loadConfigModule();
+      const baseline = baselineModule.getDesktopTelemetryConfig();
+
+      if (value !== undefined) {
+        vi.stubEnv("VITE_PROLIFERATE_SENTRY_REPLAY_ON_ERROR_SAMPLE_RATE", value);
+      }
+
+      const config = await loadConfigModule();
+      const configured = config.getDesktopTelemetryConfig();
+
+      expect(configured).toEqual(baseline);
+      expect(configured.sentry).not.toHaveProperty("replaysOnErrorSampleRate");
+    },
+  );
+});
+
 describe("getAnonymousTelemetryEndpoint", () => {
   beforeEach(() => {
     mocks.buildProliferateApiUrlMock.mockClear();
