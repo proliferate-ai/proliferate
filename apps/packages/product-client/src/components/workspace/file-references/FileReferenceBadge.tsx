@@ -43,9 +43,14 @@ export function FileReferenceBadge({
 }: FileReferenceBadgeProps) {
   const actions = useFileReferenceActions({ rawPath, workspacePath });
   const { onContextMenuCapture } = useFileReferenceNativeContextMenu(actions);
+  const workspaceLocator = actions.reference.locator.authority === "workspace"
+    ? actions.reference.locator
+    : null;
   const resolvedBasename = basename
-    ?? fileReferenceBasename(actions.reference.workspacePath ?? actions.reference.path);
-  const iconPath = actions.reference.workspacePath ?? actions.reference.path;
+    ?? fileReferenceBasename(actions.reference.displayPath);
+  const iconPath = workspaceLocator && workspaceLocator.workspacePath !== ""
+    ? workspaceLocator.workspacePath
+    : actions.reference.displayPath;
   const displayLabel = label
     ?? (variant === "chip"
       ? resolvedBasename
@@ -61,8 +66,7 @@ export function FileReferenceBadge({
     && getFileVisual(resolvedBasename, iconPath, "file").kind !== "default";
   const useExternalInlineIcon =
     variant === "inline"
-    && !actions.reference.workspacePath
-    && Boolean(actions.reference.absolutePath)
+    && actions.reference.locator.authority === "desktop"
     && !hasFileTypeGlyph;
   const iconShellClassName = variant === "inline"
     ? "relative mr-[3px] inline-block h-[1lh] w-3.5 shrink-0 align-bottom"
@@ -110,7 +114,7 @@ export function FileReferenceBadge({
     </>
   );
   if (!actions.canOpenPrimary) {
-    return (
+    const unavailableTrigger = (
       <span
         data-chat-transcript-ignore
         data-file-reference-badge={variant}
@@ -118,10 +122,22 @@ export function FileReferenceBadge({
         data-path-kind={actions.pathKind ?? "unknown"}
         aria-busy={actions.pathKindPending || undefined}
         title={actions.primaryUnavailableReason ?? rawPath}
+        onContextMenuCapture={actions.copyPath === null ? undefined : onContextMenuCapture}
         className={resolveUnavailableBadgeClassName(variant, className)}
       >
         {contents}
       </span>
+    );
+    if (actions.copyPath === null) return unavailableTrigger;
+    return (
+      <PopoverButton
+        trigger={unavailableTrigger}
+        triggerMode="contextMenu"
+        stopPropagation={stopPropagation}
+        className={FILE_REFERENCE_MENU_CLASS}
+      >
+        {(close) => <FileReferenceMenuContent actions={actions} close={close} />}
+      </PopoverButton>
     );
   }
 

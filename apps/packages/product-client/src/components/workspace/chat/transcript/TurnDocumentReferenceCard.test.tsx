@@ -7,16 +7,21 @@ import { TurnDocumentReferenceCard } from "#product/components/workspace/chat/tr
 const fileActionMocks = vi.hoisted(() => ({
   canOpenPrimary: true,
   openPrimary: vi.fn(),
+  inputs: [] as Array<{ rawPath: string }>,
 }));
 
 vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
-  useFileReferenceActions: () => fileActionMocks,
+  useFileReferenceActions: (input: { rawPath: string }) => {
+    fileActionMocks.inputs.push(input);
+    return fileActionMocks;
+  },
 }));
 
 afterEach(() => {
   cleanup();
   fileActionMocks.canOpenPrimary = true;
   fileActionMocks.openPrimary.mockReset();
+  fileActionMocks.inputs.length = 0;
 });
 
 describe("TurnDocumentReferenceCard", () => {
@@ -40,6 +45,9 @@ describe("TurnDocumentReferenceCard", () => {
     expect(screen.getByText("decision.md")).toBeTruthy();
     expect(screen.getByText("Document · MD")).toBeTruthy();
     expect(screen.getByText("Open preview")).toBeTruthy();
+    expect(fileActionMocks.inputs).toContainEqual({
+      rawPath: "/repo/specs/decision.md:42",
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Open preview for decision.md" }));
     expect(fileActionMocks.openPrimary).toHaveBeenCalledOnce();

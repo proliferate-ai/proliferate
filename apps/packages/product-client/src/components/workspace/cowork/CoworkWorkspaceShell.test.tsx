@@ -117,10 +117,6 @@ vi.mock("#product/stores/sessions/session-selection-store", () => ({
     selector(sessionSelectionState),
 }));
 
-vi.mock("#product/providers/WorkspacePathProvider", () => ({
-  WorkspacePathProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
-}));
-
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -137,7 +133,6 @@ describe("CoworkWorkspaceShell", () => {
     const { rerender } = render(
       <CoworkWorkspaceShell
         workspaceId="workspace-cowork"
-        workspacePath="/tmp/workspace-cowork"
       />,
     );
 
@@ -147,7 +142,6 @@ describe("CoworkWorkspaceShell", () => {
     rerender(
       <CoworkWorkspaceShell
         workspaceId="workspace-cowork"
-        workspacePath="/tmp/workspace-cowork"
       />,
     );
     expect(document.getElementById("cowork-sidebar")?.className).not.toContain("border-r");
@@ -157,7 +151,6 @@ describe("CoworkWorkspaceShell", () => {
     render(
       <CoworkWorkspaceShell
         workspaceId="workspace-cowork"
-        workspacePath="/tmp/workspace-cowork"
       />,
     );
 
@@ -173,7 +166,6 @@ describe("CoworkWorkspaceShell", () => {
     const { container } = render(
       <CoworkWorkspaceShell
         workspaceId="workspace-cowork"
-        workspacePath="/tmp/workspace-cowork"
       />,
     );
 
@@ -198,7 +190,6 @@ describe("CoworkWorkspaceShell", () => {
       const { queryByTestId, unmount } = render(
         <CoworkWorkspaceShell
           workspaceId="workspace-cowork"
-          workspacePath="/tmp/workspace-cowork"
         />,
       );
 

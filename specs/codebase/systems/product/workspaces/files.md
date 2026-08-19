@@ -141,7 +141,42 @@ server read cache; they exist only for local editing and conflict metadata.
 Scratch content belongs to Tauri app-data access hooks. It is a local external
 resource, not Zustand state and not an AnyHarness file resource.
 
-## Desktop-local Path Capabilities
+## File Locator And Desktop-local Capabilities
+
+Every rendered file reference is classified once as a workspace locator, a
+Desktop locator, or an unavailable locator before any stat, search, home
+lookup, inspection, target discovery, open, or reveal operation. A locator
+never carries nullable workspace and absolute authorities at the same time.
+
+Workspace filesystem provenance comes from the resolved runtime target:
+`local` maps to `desktop-local`, while Cloud and SSH-target runtimes map to
+`remote`. A successfully fetched cached Cloud gateway is also authoritative
+remote evidence. Host surface, workspace-id spelling, inventory rows, and
+equal-looking roots are not provenance. Resolution pending and rejection stay
+explicit unknown states and never grant native access.
+
+The single `WorkspacePathProvider` under `AnyHarnessWorkspace` resolves both
+that provenance and the runtime-reported workspace root for the exact
+materialized workspace id. Only a normalized supported absolute runtime root
+is settled. Inventory and pending-entry paths may label the header, but they
+must not construct filesystem capabilities.
+
+Relative references and supplied valid workspace paths remain workspace
+locators while provenance/root are pending. Workspace root is represented by
+the empty runtime stat path and displayed/copied as `.` unless a proven local
+companion exists. Absolute paths project into the workspace only against a
+settled root. Paths outside it and home-relative paths become Desktop locators
+only with settled `desktop-local` provenance and a Desktop files bridge.
+Unsupported prefixes, NUL, and any `..` segment fail before all I/O. A supplied
+structured workspace-path string is authoritative even when empty or
+whitespace; only `null`/`undefined` permits raw-path classification.
+
+Workspace access begins with exact stat, including `""` for root. Only the
+typed AnyHarness `FILE_NOT_FOUND` for a non-root path offers one bounded fuzzy
+activation: one no-retry basename search, one corrected stat, and no repeated
+recovery after a terminal result. Exact/corrected directories do not become a
+primary browse action in this slice. Unexpected symlink kinds are refused;
+the runtime must report the safely resolved `file` or `directory` kind.
 
 Values already routed to the Desktop filesystem pass through
 `DesktopFilesBridge.inspectPath`; inspection itself does not establish local
@@ -155,8 +190,11 @@ Only a settled `file` or `directory` result establishes a path kind and enables
 matching open/reveal capabilities. Missing, invalid, denied, unsupported,
 unexpected-I/O, malformed-payload, idle, pending, and rejected states keep the
 kind null, expose no open targets, and cause every native handler to no-op after
-rechecking current state. Copy path remains available because it performs no
-filesystem operation. Target discovery takes `file | directory | null`; null
+rechecking current route, bridge, kind, and target membership. A nonempty
+unavailable reference exposes exactly Copy path; an empty/whitespace reference
+has no menu and no clipboard write. Copy handlers read the current locator at
+invocation so captured callbacks cannot copy a later empty reference. Target
+discovery takes `file | directory | null`; null
 does not default to file or start discovery, while an imperative open supplies
 the already-inspected kind explicitly.
 

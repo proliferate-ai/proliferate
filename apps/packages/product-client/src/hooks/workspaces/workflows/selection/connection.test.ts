@@ -75,8 +75,13 @@ describe("resolveSelectionConnection", () => {
     } satisfies DesktopRuntimeBridge;
     mocks.ensureRuntimeReady.mockResolvedValue("http://runtime.test");
     mocks.resolveWorkspaceConnection.mockResolvedValue({
-      runtimeUrl: "http://runtime.test",
-      anyharnessWorkspaceId: "workspace-runtime",
+      connection: {
+        runtimeUrl: "http://runtime.test",
+        anyharnessWorkspaceId: "workspace-runtime",
+        runtimeGeneration: 0,
+        runtimeAccessKind: "direct",
+      },
+      filesystemOrigin: "desktop-local",
     });
 
     const result = await resolveSelectionConnection(
@@ -93,6 +98,12 @@ describe("resolveSelectionConnection", () => {
       null,
     );
     expect(result.runtimeUrl).toBe("http://runtime.test");
+    expect(result.workspaceConnection).toEqual({
+      runtimeUrl: "http://runtime.test",
+      anyharnessWorkspaceId: "workspace-runtime",
+      runtimeGeneration: 0,
+      runtimeAccessKind: "direct",
+    });
   });
 
   it("does not discover a local runtime for an SSH target workspace", async () => {
@@ -103,11 +114,15 @@ describe("resolveSelectionConnection", () => {
       ensureTunnel: vi.fn(),
     } satisfies DesktopSshBridge;
     mocks.resolveWorkspaceConnection.mockResolvedValue({
-      runtimeUrl: "https://target.test",
-      anyharnessWorkspaceId: "workspace-runtime",
+      connection: {
+        runtimeUrl: "https://target.test",
+        anyharnessWorkspaceId: "workspace-runtime",
+        runtimeGeneration: 0,
+      },
+      filesystemOrigin: "remote",
     });
 
-    await resolveSelectionConnection(
+    const result = await resolveSelectionConnection(
       deps(null, vi.fn(), ssh),
       context("target:target-1:workspace-runtime"),
       { kind: "local" },
@@ -120,6 +135,11 @@ describe("resolveSelectionConnection", () => {
       ssh,
       null,
     );
+    expect(result.workspaceConnection).toEqual({
+      runtimeUrl: "https://target.test",
+      anyharnessWorkspaceId: "workspace-runtime",
+      runtimeGeneration: 0,
+    });
   });
 
   it("does not discover a local runtime for a Cloud workspace", async () => {
@@ -127,6 +147,8 @@ describe("resolveSelectionConnection", () => {
       runtimeUrl: "https://cloud.test",
       accessToken: "cloud-token",
       anyharnessWorkspaceId: "workspace-runtime",
+      runtimeGeneration: 8,
+      webSocketAuthTransport: "protocol",
     });
 
     const result = await resolveSelectionConnection(
@@ -141,6 +163,9 @@ describe("resolveSelectionConnection", () => {
       runtimeUrl: "https://cloud.test",
       authToken: "cloud-token",
       anyharnessWorkspaceId: "workspace-runtime",
+      runtimeGeneration: 8,
+      runtimeAccessKind: "proliferate-gateway",
+      webSocketAuthTransport: "protocol",
     });
   });
 });

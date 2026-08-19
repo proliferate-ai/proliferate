@@ -1,5 +1,6 @@
 import { FilePathContextMenuContent } from "#product/components/workspace/open-target/FilePathContextMenuContent";
 import { POPOVER_FRAME_CLASS } from "#product/primitives/PopoverButton";
+import { PopoverMenuItem } from "#product/primitives/PopoverMenuItem";
 import type { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
 
 type FileReferenceActions = ReturnType<typeof useFileReferenceActions>;
@@ -14,6 +15,23 @@ export function FileReferenceMenuContent({
   actions: FileReferenceActions;
   close: () => void;
 }) {
+  if (actions.accessState.status !== "settled") {
+    if (actions.copyPath === null) return null;
+    return (
+      <div className="relative flex flex-col gap-px">
+        <PopoverMenuItem
+          density="compact"
+          role="menuitem"
+          data-chat-transcript-ignore
+          label="Copy path"
+          onClick={() => {
+            void actions.copyCurrentPath();
+            close();
+          }}
+        />
+      </div>
+    );
+  }
   const openTargets = filterFileReferenceOpenTargets(actions.openTargets);
 
   return (
@@ -28,9 +46,10 @@ export function FileReferenceMenuContent({
       onOpenInViewer={() => void actions.openInSidebar()}
       onOpenDefault={() => void actions.openDefault()}
       onOpenTarget={(targetId) => void actions.openWithTarget(targetId)}
-      onCopyPath={() => void actions.copyPath()}
+      onCopyPath={() => void actions.copyCurrentPath()}
       onRevealInFinder={() => void actions.reveal()}
       ignoreChatTranscript
+      hideUnavailableActions
     />
   );
 }

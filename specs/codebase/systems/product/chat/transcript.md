@@ -140,6 +140,15 @@ Rules:
 
 - Detection happens at render time from raw markdown; do not store parsed file
   references in transcript items.
+- File-read and file-change callers keep raw wire paths separate from structured
+  workspace-path metadata. Any structured string, including empty or
+  whitespace, is supplied and authoritative; `null`/`undefined` alone permits
+  raw classification. Human-readable labels may fall back to a nonblank raw
+  path without changing that access decision.
+- Streaming file-change identity uses only the raw `path` and `newPath`
+  channels. A later supplied `workspacePath` or `newWorkspacePath` string is
+  merged verbatim, so structured refinement—including an invalid blank
+  value—updates one logical part instead of splitting it.
 - A leading `~/` is an external Desktop file reference, not a workspace-relative
   path. Resolve it through the Desktop host's home-directory bridge before
   classifying or opening it; Web keeps the reference unavailable. Hidden path
@@ -152,7 +161,9 @@ Rules:
   subtitle to `Open preview`. It remains completion chrome: never expose it
   while transport text is still buffered or its final opacity is settling. Its
   trigger consumes the file-reference action's `canOpenPrimary` capability and
-  stays disabled, with a guarded handler, until that capability is true.
+  stays disabled, with a guarded handler, until that capability is true. It
+  forwards the resource's raw path through the same canonical locator hook and
+  never opens an optimistic preview before exact access settles.
 - While prose is streaming, a trailing incomplete local-file link is closed
   only in the Markdown render copy so its file mention appears as soon as the
   destination begins. Never persist the synthetic delimiter or expose the raw

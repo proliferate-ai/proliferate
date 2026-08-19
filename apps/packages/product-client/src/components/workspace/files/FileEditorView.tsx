@@ -70,7 +70,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     void writeText(read?.content ?? "");
   };
   const copyPath = () => {
-    void fileActions.copyPath();
+    void fileActions.copyCurrentPath();
   };
   const openExternal = () => {
     void fileActions.openDefault();

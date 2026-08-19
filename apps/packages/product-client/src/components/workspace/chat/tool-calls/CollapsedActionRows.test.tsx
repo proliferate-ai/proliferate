@@ -40,15 +40,29 @@ const {
 vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
   useFileReferenceActions: (args: { rawPath: string; workspacePath?: string | null }) => {
     fileReferenceActionsCalls.push(args);
+    const resolvedWorkspacePath = typeof args.workspacePath === "string"
+      ? args.workspacePath
+      : args.rawPath;
+    const locator = resolvedWorkspacePath.trim()
+      ? {
+          authority: "workspace" as const,
+          workspacePath: resolvedWorkspacePath,
+          localCompanionPath: `/repo/${resolvedWorkspacePath}`,
+        }
+      : { authority: "unavailable" as const, reason: "invalid" as const };
     return {
       reference: {
         rawPath: args.rawPath,
-        path: args.rawPath,
+        parsedPath: args.rawPath,
+        displayPath: args.rawPath || "File",
         line: null,
         column: null,
-        absolutePath: `/repo/${args.rawPath}`,
-        workspacePath: args.rawPath,
+        locator,
       },
+      accessState: resolvedWorkspacePath.trim()
+        ? { status: "settled", locator, kind: "file" }
+        : { status: "unavailable", reason: "invalid" },
+      nativePathKind: null,
       openTargets: [],
       defaultOpenTarget: null,
       pathKind: "file",
@@ -58,7 +72,8 @@ vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", 
       canOpenPrimary: fileReferenceActionState.canOpenPrimary,
       canReveal: true,
       primaryUnavailableReason: null,
-      copyPath: vi.fn(),
+      copyPath: args.rawPath || null,
+      copyCurrentPath: vi.fn(),
       openInSidebar: vi.fn(),
       openDefault: vi.fn(),
       openPrimary: openPrimaryMock,
@@ -155,8 +170,7 @@ describe("CollapsedActionRows read rows", () => {
 
     const call = fileReferenceActionsCalls.find((entry) => entry.rawPath === "src/deep/notes.md");
     expect(call).toBeTruthy();
-    // undefined (not null) so the resolver may infer a workspace-relative path
-    // and the click can open the in-app viewer.
+    // The raw-input fallback has no structured channel.
     expect(call?.workspacePath).toBeUndefined();
 
     fireEvent.click(screen.getByText("notes.md"));
@@ -209,7 +223,7 @@ describe("CollapsedActionRows read rows", () => {
     const call = fileReferenceActionsCalls.find(
       (entry) => entry.rawPath === "src/legacy/read.ts",
     );
-    expect(call?.workspacePath).toBeUndefined();
+    expect(call?.workspacePath).toBeNull();
 
     fireEvent.click(screen.getByText("read.ts"));
     expect(openPrimaryMock).toHaveBeenCalledTimes(1);
@@ -236,6 +250,25 @@ describe("CollapsedActionRows read rows", () => {
 
     const call = fileReferenceActionsCalls.find((entry) => entry.rawPath === "/etc/hosts");
     expect(call).toBeTruthy();
-    expect(call?.workspacePath).toBeUndefined();
+    expect(call?.workspacePath).toBeNull();
+  });
+
+  it("preserves an explicitly blank structured path beside the raw wire path", () => {
+    const transcript = createTranscriptState("session-1");
+    const read = toolItem("read", "turn-1", 1, "file_read");
+    const part = read.contentParts[0];
+    if (part?.type === "file_read") {
+      part.path = "src/visible.ts";
+      part.basename = "visible.ts";
+      part.workspacePath = "";
+    }
+    transcript.itemsById = { read };
+    render(<CollapsedActions itemIds={["read"]} transcript={transcript} />);
+    fireEvent.click(screen.getByRole("button", { name: /Read/i }));
+
+    expect(fileReferenceActionsCalls).toContainEqual({
+      rawPath: "src/visible.ts",
+      workspacePath: "",
+    });
   });
 });

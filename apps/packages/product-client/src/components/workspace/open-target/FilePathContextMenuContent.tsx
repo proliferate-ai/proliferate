@@ -32,6 +32,7 @@ export function FilePathContextMenuContent({
   onCopyPath,
   onRevealInFinder,
   ignoreChatTranscript = false,
+  hideUnavailableActions = false,
 }: {
   pathKind: FileReferencePathKind | null;
   canOpenInViewer: boolean;
@@ -46,15 +47,27 @@ export function FilePathContextMenuContent({
   onCopyPath: () => void;
   onRevealInFinder: () => void;
   ignoreChatTranscript?: boolean;
+  /** Omit unavailable rows and separators for capability-shaped menus. */
+  hideUnavailableActions?: boolean;
 }) {
   const [openWithActive, setOpenWithActive] = useState(false);
   const transcriptProps = ignoreChatTranscript
     ? { "data-chat-transcript-ignore": true }
     : {};
+  const showViewer = pathKind !== "directory"
+    && (!hideUnavailableActions || canOpenInViewer);
+  const showExternal = !hideUnavailableActions || canOpenExternal;
+  const showTargets = targets.length > 0
+    && (!hideUnavailableActions || canOpenExternal);
+  const showReveal = !hideUnavailableActions || canReveal;
+  const showActionSeparator = !hideUnavailableActions
+    || showViewer
+    || showExternal
+    || showTargets;
 
   return (
     <div className="relative flex flex-col gap-px">
-      {pathKind !== "directory" && (
+      {showViewer && (
         <PopoverMenuItem
           {...FILE_PATH_MENU_ITEM_PROPS}
           {...transcriptProps}
@@ -67,18 +80,20 @@ export function FilePathContextMenuContent({
           }}
         />
       )}
-      <PopoverMenuItem
-        {...FILE_PATH_MENU_ITEM_PROPS}
-        {...transcriptProps}
-        icon={<OpenMenuTargetIcon target={defaultTarget ?? null} />}
-        label={defaultTarget ? `Open in ${defaultTarget.label}` : "Open externally"}
-        disabled={!canOpenExternal}
-        onClick={() => {
-          onOpenDefault();
-          close();
-        }}
-      />
-      {targets.length > 0 && (
+      {showExternal && (
+        <PopoverMenuItem
+          {...FILE_PATH_MENU_ITEM_PROPS}
+          {...transcriptProps}
+          icon={<OpenMenuTargetIcon target={defaultTarget ?? null} />}
+          label={defaultTarget ? `Open in ${defaultTarget.label}` : "Open externally"}
+          disabled={!canOpenExternal}
+          onClick={() => {
+            onOpenDefault();
+            close();
+          }}
+        />
+      )}
+      {showTargets && (
         <div
           className="relative"
           onMouseEnter={() => setOpenWithActive(true)}
@@ -118,7 +133,7 @@ export function FilePathContextMenuContent({
           )}
         </div>
       )}
-      <div className="my-1 h-px bg-border/70" />
+      {showActionSeparator && <div className="my-1 h-px bg-border/70" />}
       <PopoverMenuItem
         {...FILE_PATH_MENU_ITEM_PROPS}
         {...transcriptProps}
@@ -128,16 +143,18 @@ export function FilePathContextMenuContent({
           close();
         }}
       />
-      <PopoverMenuItem
-        {...FILE_PATH_MENU_ITEM_PROPS}
-        {...transcriptProps}
-        label={pathKind === "directory" ? "Reveal folder in Finder" : "Reveal in Finder"}
-        disabled={!canReveal}
-        onClick={() => {
-          onRevealInFinder();
-          close();
-        }}
-      />
+      {showReveal && (
+        <PopoverMenuItem
+          {...FILE_PATH_MENU_ITEM_PROPS}
+          {...transcriptProps}
+          label={pathKind === "directory" ? "Reveal folder in Finder" : "Reveal in Finder"}
+          disabled={!canReveal}
+          onClick={() => {
+            onRevealInFinder();
+            close();
+          }}
+        />
+      )}
     </div>
   );
 }
