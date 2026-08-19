@@ -44,6 +44,7 @@ describe("desktop sentry transport", () => {
     mocks.initMock.mockClear();
     mocks.withSentryReactRouterV7RoutingMock.mockClear();
     mocks.reactRouterIntegrationMock.mockClear();
+    mocks.replayIntegrationMock.mockClear();
     mocks.reactErrorHandlerMock.mockClear();
     mocks.setUserMock.mockClear();
     mocks.setTagMock.mockClear();
@@ -61,26 +62,80 @@ describe("desktop sentry transport", () => {
       sentry: {
         enabled: true,
         dsn: "https://sentry.example/123",
-        tracesSampleRate: 1,
+        tracesSampleRate: 0.25,
         enableLogs: true,
-        replaysOnErrorSampleRate: 1,
       },
       apiBaseUrl: "https://app.proliferate.com/api",
       telemetryMode: "hosted_product",
     });
 
     expect(mocks.initMock).toHaveBeenCalledOnce();
-    expect(mocks.initMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        initialScope: {
-          tags: {
-            surface: "desktop_renderer",
-            telemetry_mode: "hosted_product",
-          },
+    expect(mocks.reactRouterIntegrationMock).toHaveBeenCalledWith({
+      useEffect: expect.any(Function),
+      useLocation: expect.any(Function),
+      useNavigationType: expect.any(Function),
+      createRoutesFromChildren: expect.any(Function),
+      matchRoutes: expect.any(Function),
+    });
+    expect(mocks.replayIntegrationMock).not.toHaveBeenCalled();
+    expect(mocks.initMock).toHaveBeenCalledWith({
+      dsn: "https://sentry.example/123",
+      environment: "production",
+      release: "proliferate-desktop@test",
+      attachStacktrace: true,
+      maxBreadcrumbs: 100,
+      sendDefaultPii: false,
+      enableLogs: true,
+      tracesSampleRate: 0.25,
+      tracePropagationTargets: [
+        "localhost",
+        "127.0.0.1",
+        /^https?:\/\/localhost(?::\d+)?$/,
+        /^https?:\/\/127\.0\.0\.1(?::\d+)?$/,
+        "https://app.proliferate.com/api",
+      ],
+      integrations: ["react-router-integration"],
+      replaysSessionSampleRate: 0,
+      replaysOnErrorSampleRate: 0,
+      beforeSend: expect.any(Function),
+      beforeSendTransaction: expect.any(Function),
+      beforeSendSpan: expect.any(Function),
+      beforeBreadcrumb: expect.any(Function),
+      initialScope: {
+        tags: {
+          surface: "desktop_renderer",
+          telemetry_mode: "hosted_product",
         },
-      }),
-    );
+      },
+    });
   });
+
+  it.each([
+    ["disabled", false, "https://sentry.example/123"],
+    ["missing a DSN", true, null],
+  ] as const)(
+    "does not initialize renderer Sentry when it is %s",
+    async (_reason, enabled, dsn) => {
+      const sentry = await loadSentryModule();
+
+      sentry.initializeDesktopSentry({
+        environment: "production",
+        release: "proliferate-desktop@test",
+        sentry: {
+          enabled,
+          dsn,
+          tracesSampleRate: 1,
+          enableLogs: true,
+        },
+        apiBaseUrl: "https://app.proliferate.com/api",
+        telemetryMode: "hosted_product",
+      });
+
+      expect(mocks.initMock).not.toHaveBeenCalled();
+      expect(mocks.reactRouterIntegrationMock).not.toHaveBeenCalled();
+      expect(mocks.replayIntegrationMock).not.toHaveBeenCalled();
+    },
+  );
 
   it("preserves the top-level deployment environment through beforeSend scrubbing", async () => {
     const sentry = await loadSentryModule();
@@ -93,7 +148,6 @@ describe("desktop sentry transport", () => {
         dsn: "https://sentry.example/123",
         tracesSampleRate: 1,
         enableLogs: true,
-        replaysOnErrorSampleRate: 1,
       },
       apiBaseUrl: "https://app.proliferate.com/api",
       telemetryMode: "hosted_product",
@@ -123,7 +177,6 @@ describe("desktop sentry transport", () => {
         dsn: "https://sentry.example/123",
         tracesSampleRate: 1,
         enableLogs: true,
-        replaysOnErrorSampleRate: 1,
       },
       apiBaseUrl: "https://app.proliferate.com/api",
       telemetryMode: "hosted_product",

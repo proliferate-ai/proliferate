@@ -27,9 +27,14 @@ project selected by that DSN; otherwise capture is a no-op and logs remain
 available. Desktop-native and AnyHarness may send exceptions and traces but
 lack the explicit before-send scrubbers used by the other emitters, so inspect
 their event fields especially carefully and never add user content to tracing
-data. Web and Mobile replay are off. Desktop normal replay is off, while masked
-error replay uses its configured rate and can retain identifier-bearing route
-metadata.
+data. Web and Mobile replay are off. Desktop renderer replay is source-disabled
+and absent; no build configuration can enable it. Ordinary Desktop exceptions,
+traces, and breadcrumbs remain available when their normal gates permit.
+
+Re-enabling Desktop renderer replay requires a separately reviewed synthetic
+privacy proof of the exact route/surface block-and-mask policy, metadata policy,
+provider arrival, and absence of prompt, transcript, terminal, file,
+repository, path, token, workspace, session, and workflow identifiers.
 
 Never put a DSN containing credentials, auth token, cookie, session value, or
 other secret in a CLI argument, shell history, command output, screenshot,
@@ -76,8 +81,6 @@ name or upload workflow proves intended wiring, not current provider state.
 4. Inspect the payload for privacy regressions: no prompt/transcript text,
    request bodies, cookies, auth headers, tokens, file contents, raw local
    paths, email, or display name.
-   When Desktop error replay is present, also inspect recorded page metadata
-   for workflow, workspace, or chat route ids.
 5. Follow the correlation value to structured logs when server/runtime context
    is needed. Keep full private evidence in its source system.
 6. If the event should enter canonical issue tracking, verify that through the

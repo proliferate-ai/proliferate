@@ -10,7 +10,7 @@ provider state and are not repository law.
 | Source component | Applies when | Data and identity | No-op behavior |
 | --- | --- | --- | --- |
 | Server API and server background processes | `TELEMETRY_MODE=hosted_product`, the SDK is installed, and `SENTRY_DSN` is nonempty | Scrubbed exceptions, traces, log breadcrumbs, `proliferate-server` release, environment, `surface=cloud_api`, telemetry mode, user id, and allowlisted request/product correlation tags | Initialization and capture helpers return without sending when any gate is absent. |
-| Desktop renderer | The runtime resolves to `hosted_product`, build/runtime telemetry is not disabled, and `VITE_PROLIFERATE_SENTRY_DSN` is nonempty | Scrubbed React errors, traces, product breadcrumbs, id-only user, Desktop release/environment, surface and telemetry-mode tags, and error replay | Local-dev/self-managed/disabled routing or a missing DSN leaves the renderer SDK uninitialized. |
+| Desktop renderer | The runtime resolves to `hosted_product`, build/runtime telemetry is not disabled, and `VITE_PROLIFERATE_SENTRY_DSN` is nonempty | Scrubbed React errors, traces, product breadcrumbs, id-only user, Desktop release/environment, and surface and telemetry-mode tags | Local-dev/self-managed/disabled routing or a missing DSN leaves the renderer SDK uninitialized. |
 | Desktop native shell | Native telemetry mode is `hosted_product` and `PROLIFERATE_DESKTOP_SENTRY_DSN` is available at runtime or baked into the build | Native tracing failures and stack traces with Desktop-native release/environment and surface/runtime tags | Other modes or a missing DSN retain console/file logging without Sentry. |
 | Hosted Web | Telemetry is not disabled and `VITE_PROLIFERATE_SENTRY_DSN` is nonempty | Scrubbed React errors, traces, breadcrumbs, id-only user, Web release/environment, and `surface=web` | The SDK remains uninitialized when disabled or unconfigured. |
 | Hosted Mobile | Telemetry is not disabled and `EXPO_PUBLIC_PROLIFERATE_SENTRY_DSN` is nonempty | Scrubbed React Native errors, native crashes, traces, breadcrumbs, id-only user, Mobile release/environment, and `surface=mobile` | The SDK remains uninitialized when disabled or unconfigured. |
@@ -115,22 +115,22 @@ Outside the bounded handled-incident contract above, nothing beyond user ID,
 sandbox ID, target ID, bounded runtime environment, deployment environment,
 release version, and source revision is added to any event.
 
-Replay defaults are deliberately narrow:
+Replay behavior is deliberately narrow:
 
 - Web and Mobile set normal and error replay rates to zero. Mobile also
   disables screenshot and view-hierarchy attachment.
-- Desktop renderer sets normal session replay to zero. Error replay uses
-  `VITE_PROLIFERATE_SENTRY_REPLAY_ON_ERROR_SAMPLE_RATE` (default `1.0`) only
-  when hosted vendor telemetry is enabled; all text and inputs are masked and
-  `[data-telemetry-block]` / `[data-telemetry-mask]` are honored.
+- Desktop renderer replay is source-disabled and absent; no build or runtime
+  configuration can enable it. Re-enablement requires a separately reviewed
+  synthetic privacy proof of the exact route/surface block-and-mask policy,
+  metadata policy, provider arrival, and absence of prompt, transcript,
+  terminal, file, repository, path, token, workspace, session, and workflow
+  identifiers.
 - Server and Rust runtime components do not initialize a replay integration.
 
-Known current privacy gaps: Desktop-native attaches stack traces but does not
-install an explicit before-send event/breadcrumb scrubber, and Desktop renderer
-error replay can retain identifier-bearing route metadata despite text/input
-masking. Callers must keep user content and secrets out of tracing fields.
-AnyHarness, Worker, and Supervisor do have explicit event, breadcrumb, and log
-scrubbers.
+The known current privacy gap is that Desktop-native attaches stack traces but
+does not install an explicit before-send event/breadcrumb scrubber. Callers
+must keep user content and secrets out of tracing fields. AnyHarness, Worker,
+and Supervisor do have explicit event, breadcrumb, and log scrubbers.
 
 ## Correlation
 
