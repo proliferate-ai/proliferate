@@ -13,6 +13,9 @@ fn setup() -> (Db, SessionStore) {
     parent.id = "parent".to_string();
     parent.native_session_id = Some("native-parent".to_string());
     store.insert(&parent).expect("insert parent");
+    // A fork child inherits the parent's immutable launch intent, so the
+    // parent must own one before any child insert.
+    store.seed_empty_launch_intent(&parent.id);
     (db, store)
 }
 

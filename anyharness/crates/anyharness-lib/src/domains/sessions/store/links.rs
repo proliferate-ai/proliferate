@@ -138,6 +138,10 @@ impl SessionStore {
 
         self.db.with_tx_anyhow(|conn| {
             insert_session_row(conn, record)?;
+            // Same rule as the durable fork path above: a fork child inherits
+            // the parent's immutable launch intent in the same transaction as
+            // its row, so the child's own live start can validate it.
+            copy_launch_intent_row(conn, &link.parent_session_id, &record.id)?;
             insert_session_link_row(conn, link)?;
             let copied = conn.execute(
                 "INSERT INTO session_events (

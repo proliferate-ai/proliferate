@@ -274,6 +274,14 @@ pub(super) fn seed_parent(state: &AppState, caps_json: Option<&str>) -> String {
         .store()
         .insert(&parent)
         .expect("insert parent");
+    // The launch-options cutover requires every session that can start live to
+    // carry an immutable launch intent plus a current observation for its
+    // harness; these fixtures insert rows directly.
+    test_support::seed_observed_launch_options(&state.launch_options_service, &parent.agent_kind);
+    state
+        .session_service
+        .store()
+        .seed_empty_launch_intent(&parent.id);
     parent.id
 }
 
@@ -343,6 +351,11 @@ pub(super) fn seed_fork_child(state: &AppState, child_id: &str, anchor: ForkChil
         .store()
         .insert_session_with_link(&child, &link)
         .expect("insert child + link");
+    test_support::seed_observed_launch_options(&state.launch_options_service, &child.agent_kind);
+    state
+        .session_service
+        .store()
+        .seed_empty_launch_intent(child_id);
     let (kind, value, inclusive) = match anchor {
         ForkChildAnchor::Missing => (None, None, None),
         ForkChildAnchor::MessageId(id) => (
