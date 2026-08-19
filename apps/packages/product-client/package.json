@@ -19,6 +19,10 @@
       "types": "./dist/host/product-host.d.ts",
       "import": "./dist/host/product-host.js"
     },
+    "./host/product-host-entry": {
+      "types": "./dist/host/product-host-entry.d.ts",
+      "import": "./dist/host/product-host-entry.js"
+    },
     "./host/desktop-bridge": {
       "types": "./dist/host/desktop-bridge.d.ts",
       "import": "./dist/host/desktop-bridge.js"

@@ -28,6 +28,12 @@ export interface WorkspaceShellActions {
   openPullRequest: () => void;
   workspaceWebActions: WorkspaceWebActions;
   workspaceRemoteAccessActions: WorkspaceRemoteAccessActions;
+  /**
+   * Requests that the right-panel rail be at least `minRailWidth` wide,
+   * without shrinking a wider existing/durable preference. Implemented only
+   * as `layout.setRightPanelWidth(current => Math.max(current, minRailWidth))`.
+   */
+  ensureRightPanelWidth: (minRailWidth: number) => void;
 }
 
 export const WorkspaceShellActionsContext = createContext<WorkspaceShellActions | null>(null);

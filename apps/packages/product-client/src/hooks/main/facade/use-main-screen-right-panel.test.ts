@@ -107,6 +107,42 @@ describe("useMainScreenRightPanel drag wiring", () => {
     }
   });
 
+  // 02A `ensureRightPanelWidth` is implemented only as
+  // `layout.setRightPanelWidth(current => Math.max(current, minRailWidth))`;
+  // this is the canonical functional-setter path that action relies on. The
+  // 781/780 and 661/660 rendered `clientWidth` geometry proof itself belongs
+  // to the rendered frame/dock and qualification-browser suites, not here.
+  it("applies a functional setRightPanelWidth updater against the current width", () => {
+    const { result, rerender } = renderRightPanel();
+    act(() => {
+      result.current.setRightPanelWidth(500);
+    });
+    rerender();
+    expect(result.current.rightPanelWidth).toBe(500);
+
+    act(() => {
+      result.current.setRightPanelWidth((current) => Math.max(current, 781));
+    });
+    rerender();
+
+    expect(result.current.rightPanelWidth).toBe(781);
+  });
+
+  it("never shrinks a wider width when the functional updater's floor is lower", () => {
+    const { result, rerender } = renderRightPanel();
+    act(() => {
+      result.current.setRightPanelWidth(900);
+    });
+    rerender();
+
+    act(() => {
+      result.current.setRightPanelWidth((current) => Math.max(current, 660));
+    });
+    rerender();
+
+    expect(result.current.rightPanelWidth).toBe(900);
+  });
+
   it("lets a drag widen the panel past the legacy ceiling when the window affords it", () => {
     // A wide shell row: the drag's ceiling is the row minus the chat pane's
     // floor (2000 − 440 = 1560), not the legacy fixed 700.

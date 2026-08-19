@@ -4,7 +4,7 @@ import type {
   ProductLocationState,
   ProductQueryParams,
   ProductSettingsEntrySection,
-} from "@proliferate/product-client/host/product-host";
+} from "@proliferate/product-client/host/product-host-entry";
 
 /**
  * Location-state, query, and fragment primitives shared by the three public

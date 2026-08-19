@@ -6,13 +6,13 @@ import type {
   ProductAuthUser,
   ProductClipboard,
   ProductDeploymentHost,
-  ProductEntry,
   ProductLinks,
   ProductLoginOutcome,
   ProductLogoutOutcome,
   ProductRouteChange,
   ProductTelemetry,
 } from "@proliferate/product-client/host/product-host";
+import type { ProductEntry } from "@proliferate/product-client/host/product-host-entry";
 
 import type { AuthUser } from "@proliferate/product-client/internal/lib/domain/auth/auth-user";
 import type { AuthOrchestrationDeps } from "@/lib/integrations/auth/orchestration-effects";

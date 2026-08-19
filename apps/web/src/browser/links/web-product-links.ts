@@ -1,8 +1,8 @@
+import type { ProductLinks } from "@proliferate/product-client/host/product-host";
 import type {
   ProductEntry,
-  ProductLinks,
   ProductSettingsEntrySection,
-} from "@proliferate/product-client/host/product-host";
+} from "@proliferate/product-client/host/product-host-entry";
 import {
   buildIntegrationCallbackEntry,
   buildSettingsEntry,

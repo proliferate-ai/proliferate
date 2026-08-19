@@ -144,11 +144,6 @@ max_lines = 734
 reason = "product-owned measurement port barrel (R1 ruling) mirroring the retained measurement surface through a swappable no-op sink; split deferred"
 
 [[frontend_structure]]
-path = "apps/packages/product-client/src/host/product-host.ts"
-max_lines = 420
-reason = "WDU slice 04 (G2/G4): host contract grew from getAnonymousInstallId + getSandboxGatewayAccessToken and their doc contracts"
-
-[[frontend_structure]]
 path = "apps/packages/product-client/src/components/playground/WorkspaceStatusPlayground.tsx"
 max_lines = 450
 reason = "status-card playground fixtures pending scenario-module split (#1202 debt repair)"

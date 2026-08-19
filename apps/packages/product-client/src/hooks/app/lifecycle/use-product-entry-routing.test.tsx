@@ -5,10 +5,8 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type {
-  ProductEntry,
-  ProductHost,
-} from "@proliferate/product-client/host/product-host";
+import type { ProductEntry } from "@proliferate/product-client/host/product-host-entry";
+import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 
 import { decodeDesktopProductEntry } from "#product/lib/domain/auth/desktop-navigation";

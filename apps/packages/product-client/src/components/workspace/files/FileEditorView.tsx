@@ -1,19 +1,16 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { FileViewerContent } from "#product/components/workspace/files/FileViewerContent";
 import { LoadingState } from "#product/components/feedback/LoadingIllustration";
 import { useReadWorkspaceFileQuery } from "@anyharness/sdk-react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { CenterMessage } from "#product/components/workspace/files/viewer/CenterMessage";
 import { FileViewerFrame } from "#product/components/workspace/files/viewer/FileViewerFrame";
-import { FileTreeOverlay } from "#product/components/workspace/files/tree/FileTreeOverlay";
+import { DockedFileTree } from "#product/components/workspace/files/tree/DockedFileTree";
 import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
 import { useWorkspaceFileContext } from "#product/hooks/workspaces/derived/files/use-workspace-file-context";
 import { useWorkspaceFileTargetActions } from "#product/hooks/workspaces/workflows/files/use-workspace-file-target-actions";
+import { useWorkspaceShellActions } from "#product/hooks/workspaces/workflows/use-workspace-shell-actions";
 import { canPreviewAsRichFile } from "#product/lib/domain/files/document-preview";
 import type { FileDiffTarget } from "#product/lib/domain/workspaces/viewer/file-diff-options";
 import {
@@ -24,6 +21,9 @@ import {
 import { useContentSearchStore } from "#product/stores/search/content-search-store";
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
 import { useGitChangedPaths } from "#product/hooks/workspaces/derived/files/use-git-changed-paths";
+import { useFileEditorDockController } from "#product/hooks/workspaces/ui/files/use-file-editor-dock-controller";
+
+export { FILE_TREE_DOCK_MIN_BODY_WIDTH } from "#product/hooks/workspaces/ui/files/use-file-editor-dock-controller";
 
 interface FileEditorViewProps {
   filePath: string;
@@ -42,13 +42,13 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
   const diffLayout = useWorkspaceViewerTabsStore((s) => s.layoutByTargetKey[targetKey] ?? "unified");
   const openContentSearch = useContentSearchStore((s) => s.openSearch);
   const { openFile } = useWorkspaceFileTargetActions(fileContext);
+  const shellActions = useWorkspaceShellActions();
   const fileActions = useFileReferenceActions({
     rawPath: filePath,
     workspacePath: filePath,
   });
   const canOpenExternal = fileActions.canOpenExternal;
   const [wordWrap, setWordWrap] = useState(false);
-  const [browserOpen, setBrowserOpen] = useState(false);
   const changedPaths = useGitChangedPaths(materializedWorkspaceId);
   const activeDiffTarget = diffTarget ?? null;
   const effectiveMode = activeDiffTarget
@@ -64,6 +64,29 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     path: filePath,
     enabled: requiresFileRead,
   });
+
+  const {
+    rootRef,
+    filesAvailable,
+    requestedOpen,
+    setDesiredWidth,
+    expandedPaths,
+    setExpanded,
+    toggleExpanded,
+    openTreeFile,
+    filter,
+    setFilter,
+    pendingFocus,
+    clearPendingFocus,
+    bodyWidth,
+    dockVisible,
+    effectiveTreeWidth,
+    captureRequest,
+    isCurrent,
+    closeDock,
+    handleToggleFiles,
+    handleRevealFilesPath,
+  } = useFileEditorDockController({ fileContext, targetKey, shellActions, openFile });
 
   const read = readQuery.data;
   const copyContent = () => {
@@ -92,18 +115,6 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
       normalizedEffectiveMode === "rendered" ? "source" : "rendered",
     );
   };
-  const browsePath = (_path: string) => {
-    setBrowserOpen(true);
-  };
-  const toggleBrowser = () => {
-    setBrowserOpen((open) => !open);
-  };
-  const closeBrowser = () => {
-    setBrowserOpen(false);
-  };
-  const openBrowserFile = (path: string) => {
-    void openFile(path);
-  };
   const canFindInFile = !activeDiffTarget && Boolean(read?.isText && !read.tooLarge);
 
   // Marks only paint in source view, so entering file search must leave the
@@ -125,109 +136,94 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     }
   }, [fileSearchActive, canFindInFile, normalizedEffectiveMode, setTargetMode, targetKey]);
 
-  const renderPaneContent = (content: ReactNode) => (
-    <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {content}
+  const fileTreeDock = dockVisible ? (
+    <DockedFileTree
+      workspaceId={materializedWorkspaceId}
+      selectedPath={filePath}
+      changedPaths={changedPaths}
+      expandedPaths={expandedPaths}
+      setExpanded={setExpanded}
+      toggleExpanded={toggleExpanded}
+      onOpenFile={openTreeFile}
+      width={effectiveTreeWidth}
+      bodyWidth={bodyWidth}
+      onDesiredWidthChange={setDesiredWidth}
+      filter={filter}
+      onFilterChange={setFilter}
+      onRequestClose={closeDock}
+      captureRequest={captureRequest}
+      isCurrent={isCurrent}
+      pendingFilterFocus={pendingFocus?.kind === "filter"}
+      revealRequest={pendingFocus?.kind === "reveal"
+        ? { path: pendingFocus.path, token: pendingFocus.token }
+        : null}
+      onPendingFocusHandled={clearPendingFocus}
+    />
+  ) : null;
+
+  const frameProps = {
+    rootRef,
+    filePath,
+    canRenderRichPreview: canShowRichPreview,
+    wordWrap,
+    richPreviewEnabled: normalizedEffectiveMode === "rendered",
+    canOpenExternal,
+    onToggleWordWrap: () => setWordWrap((value) => !value),
+    onToggleRichPreview: toggleRichPreview,
+    onCopyContent: copyContent,
+    onCopyPath: copyPath,
+    onOpenExternal: openExternal,
+    onOpenContentSearch: openFindInDiffs,
+    filesAvailable,
+    filesRequestedOpen: requestedOpen,
+    onToggleFiles: handleToggleFiles,
+    onRevealFilesPath: handleRevealFilesPath,
+    fileTreeDock,
+  };
+
+  const renderFrame = (
+    overrides: { canCopyContent: boolean; canFindInFile: boolean },
+    content: ReactNode,
+  ) => (
+    <FileViewerFrame {...frameProps} {...overrides}>
+      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {content}
+        </div>
       </div>
-      <FileTreeOverlay
-        open={browserOpen}
-        workspaceId={materializedWorkspaceId}
-        selectedPath={filePath}
-        onOpenFile={openBrowserFile}
-        onClose={closeBrowser}
-        changedPaths={changedPaths}
-      />
-    </div>
+    </FileViewerFrame>
   );
 
   if (requiresFileRead && readQuery.error) {
-    return (
-      <FileViewerFrame
-        filePath={filePath}
-        canRenderRichPreview={canShowRichPreview}
-        wordWrap={wordWrap}
-        richPreviewEnabled={normalizedEffectiveMode === "rendered"}
-        canCopyContent={false}
-        canFindInFile={false}
-        canOpenExternal={canOpenExternal}
-        onToggleWordWrap={() => setWordWrap((value) => !value)}
-        onToggleRichPreview={toggleRichPreview}
-        onCopyContent={copyContent}
-        onCopyPath={copyPath}
-        onOpenExternal={openExternal}
-        onOpenContentSearch={openFindInDiffs}
-        browserOpen={browserOpen}
-        onToggleBrowser={toggleBrowser}
-        onBrowsePath={browsePath}
-      >
-        {renderPaneContent(
-          <CenterMessage message={`Error: ${readQuery.error instanceof Error ? readQuery.error.message : "Failed to load file"}`} />,
-        )}
-      </FileViewerFrame>
+    return renderFrame(
+      { canCopyContent: false, canFindInFile: false },
+      <CenterMessage message={`Error: ${readQuery.error instanceof Error ? readQuery.error.message : "Failed to load file"}`} />,
     );
   }
 
   if (requiresFileRead && (readQuery.isLoading || !read)) {
-    return (
-      <FileViewerFrame
-        filePath={filePath}
-        canRenderRichPreview={canShowRichPreview}
-        wordWrap={wordWrap}
-        richPreviewEnabled={normalizedEffectiveMode === "rendered"}
-        canCopyContent={false}
-        canFindInFile={false}
-        canOpenExternal={canOpenExternal}
-        onToggleWordWrap={() => setWordWrap((value) => !value)}
-        onToggleRichPreview={toggleRichPreview}
-        onCopyContent={copyContent}
-        onCopyPath={copyPath}
-        onOpenExternal={openExternal}
-        onOpenContentSearch={openFindInDiffs}
-        browserOpen={browserOpen}
-        onToggleBrowser={toggleBrowser}
-        onBrowsePath={browsePath}
-      >
-        {renderPaneContent(
-          <div className="flex h-full items-center justify-center">
-            <LoadingState message="Loading file" subtext={filePath.split("/").pop()} />
-          </div>,
-        )}
-      </FileViewerFrame>
+    return renderFrame(
+      { canCopyContent: false, canFindInFile: false },
+      <div className="flex h-full items-center justify-center">
+        <LoadingState message="Loading file" subtext={filePath.split("/").pop()} />
+      </div>,
     );
   }
 
-  return (
-    <FileViewerFrame
+  return renderFrame(
+    {
+      canCopyContent: Boolean(read?.isText && !read.tooLarge),
+      canFindInFile,
+    },
+    <FileViewerContent
       filePath={filePath}
-      canRenderRichPreview={canShowRichPreview}
+      workspaceId={materializedWorkspaceId}
+      effectiveMode={normalizedEffectiveMode}
+      read={read}
+      activeDiffTarget={activeDiffTarget}
+      diffLayout={diffLayout}
+      canShowRichPreview={canShowRichPreview}
       wordWrap={wordWrap}
-      richPreviewEnabled={normalizedEffectiveMode === "rendered"}
-      canCopyContent={Boolean(read?.isText && !read.tooLarge)}
-      canFindInFile={canFindInFile}
-      canOpenExternal={canOpenExternal}
-      onToggleWordWrap={() => setWordWrap((value) => !value)}
-      onToggleRichPreview={toggleRichPreview}
-      onCopyContent={copyContent}
-      onCopyPath={copyPath}
-      onOpenExternal={openExternal}
-      onOpenContentSearch={openFindInDiffs}
-      browserOpen={browserOpen}
-      onToggleBrowser={toggleBrowser}
-      onBrowsePath={browsePath}
-    >
-      {renderPaneContent(
-        <FileViewerContent
-          filePath={filePath}
-          workspaceId={materializedWorkspaceId}
-          effectiveMode={normalizedEffectiveMode}
-          read={read}
-          activeDiffTarget={activeDiffTarget}
-          diffLayout={diffLayout}
-          canShowRichPreview={canShowRichPreview}
-          wordWrap={wordWrap}
-        />,
-      )}
-    </FileViewerFrame>
+    />,
   );
 }

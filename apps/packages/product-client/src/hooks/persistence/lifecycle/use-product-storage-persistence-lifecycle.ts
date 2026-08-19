@@ -4,10 +4,7 @@ import {
   hydrateChatDiffPreferences,
   setChatDiffPreferencesStorageContext,
 } from "#product/stores/chat/chat-diff-preferences-store";
-import {
-  hydrateFileTreeStore,
-  setFileTreeStoreStorageContext,
-} from "#product/stores/editor/file-tree-store";
+import { useFileTreeDockPersistenceLifecycle } from "#product/hooks/workspaces/lifecycle/files/use-file-tree-dock-persistence-lifecycle";
 import {
   hydrateHomeNextTargetSelection,
   setHomeNextTargetSelectionStorageContext,
@@ -37,9 +34,16 @@ import { hydrateCommittedReplacedSessionTombstones } from "#product/hooks/sessio
  *
  * Hook-owned surfaces (model-probe dismissal, support-report queue,
  * organization-join target) take the context directly and are not wired here.
+ *
+ * The docked file tree is not a one-shot hydration read: its required-read gate,
+ * one-time legacy migration, serialized writer, and storage-authority
+ * coordinator live in `useFileTreeDockPersistenceLifecycle`, which this hook
+ * mounts instead of importing file-tree store I/O.
  */
 export function useProductStoragePersistenceLifecycle(): void {
   const storage = useProductStorageContext();
+
+  useFileTreeDockPersistenceLifecycle();
 
   useEffect(() => {
     let cancelled = false;
@@ -47,9 +51,6 @@ export function useProductStoragePersistenceLifecycle(): void {
 
     setChatDiffPreferencesStorageContext(storage);
     void hydrateChatDiffPreferences(storage, isStale);
-
-    setFileTreeStoreStorageContext(storage);
-    void hydrateFileTreeStore(storage, isStale);
 
     setHomeNextTargetSelectionStorageContext(storage);
     void hydrateHomeNextTargetSelection(storage, isStale);

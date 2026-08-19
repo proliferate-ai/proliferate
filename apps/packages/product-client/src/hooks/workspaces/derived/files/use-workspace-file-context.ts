@@ -1,8 +1,12 @@
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 import type { Workspace } from "@anyharness/sdk";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
 import { workspaceFileTreeStateKey } from "#product/lib/domain/workspaces/cloud/collections";
 import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import {
+  selectFileTreeStateKey,
+  useFileTreeStore,
+} from "#product/stores/editor/file-tree-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
@@ -13,11 +17,22 @@ export interface WorkspaceFileContext {
   treeStateKey: string | null;
 }
 
+/**
+ * Pure/read-only derivation of the file owner's context.
+ *
+ * `workspaceUiKey` owns logical-workspace preferences, `materializedWorkspaceId`
+ * owns runtime queries and cleanup, and `treeStateKey` is the stable
+ * per-materialization key that participates in the session-only expansion scope.
+ *
+ * This hook owns no ref registry, effect, layout effect, store action, or
+ * mutation. It derives the candidate key exactly as before and reads the
+ * session-level first-key registry through `selectFileTreeStateKey`, whose
+ * pre-claim fallback makes the first render usable. The sole dock controller
+ * (`FileEditorView`) claims that candidate in its layout lifecycle, so the
+ * chosen first key survives controller/hook unmount and later collection
+ * enrichment; a second hook instance can only read the claimed value.
+ */
 export function useWorkspaceFileContext(): WorkspaceFileContext {
-  const stableTreeStateKeyRef = useRef<{
-    materializedWorkspaceId: string;
-    treeStateKey: string;
-  } | null>(null);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
@@ -37,20 +52,8 @@ export function useWorkspaceFileContext(): WorkspaceFileContext {
     return workspace ? workspaceFileTreeStateKey(workspace) : materializedWorkspaceId;
   }, [materializedWorkspaceId, workspaces]);
 
-  // Keep the tree UI store key fixed for the current workspace. When
-  // collections finish loading, switching keys would orphan expanded state.
-  if (!materializedWorkspaceId || !candidateTreeStateKey) {
-    stableTreeStateKeyRef.current = null;
-  } else if (stableTreeStateKeyRef.current?.materializedWorkspaceId !== materializedWorkspaceId) {
-    stableTreeStateKeyRef.current = {
-      materializedWorkspaceId,
-      treeStateKey: candidateTreeStateKey,
-    };
-  }
+  const treeStateKey = useFileTreeStore((state) =>
+    selectFileTreeStateKey(state, { materializedWorkspaceId, candidateTreeStateKey }));
 
-  return {
-    workspaceUiKey,
-    materializedWorkspaceId,
-    treeStateKey: stableTreeStateKeyRef.current?.treeStateKey ?? null,
-  };
+  return { workspaceUiKey, materializedWorkspaceId, treeStateKey };
 }
