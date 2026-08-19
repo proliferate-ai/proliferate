@@ -21,14 +21,20 @@ from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integrations.health import list_integration_health
+from proliferate.server.cloud.integrations.management import (
+    cancel_authorization_attempt,
+    list_integration_management,
+)
 from proliferate.server.cloud.integrations.models import (
     AdminIntegrationDefinitionResponse,
     AuthenticateIntegrationRequest,
     AuthenticateIntegrationResponse,
+    CancelIntegrationAuthorizationAttemptResponse,
     CreateAdminIntegrationDefinitionRequest,
     IntegrationCatalogResponse,
     IntegrationHealthItem,
     IntegrationHealthResponse,
+    IntegrationManagementResponse,
     IntegrationOAuthFlowStatusResponse,
     SetIntegrationEnabledRequest,
 )
@@ -93,6 +99,20 @@ async def list_integration_health_endpoint(
     )
 
 
+@router.get("/management", response_model=IntegrationManagementResponse)
+async def list_integration_management_endpoint(
+    organization_id: UUID | None = Query(default=None, alias="organizationId"),
+    user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> IntegrationManagementResponse:
+    items = await list_integration_management(
+        db,
+        user_id=user.id,
+        organization_id=organization_id,
+    )
+    return IntegrationManagementResponse(items=items)
+
+
 @router.post("/authentications", response_model=AuthenticateIntegrationResponse)
 async def authenticate_integration_endpoint(
     body: AuthenticateIntegrationRequest,
@@ -140,6 +160,23 @@ async def cancel_integration_oauth_flow_endpoint(
 ) -> IntegrationOAuthFlowStatusResponse:
     status = await cancel_integration_oauth_flow(db, user_id=user.id, flow_id=flow_id)
     return _flow_status_response(status)
+
+
+@router.post(
+    "/authorization-attempts/{attempt_id}/cancel",
+    response_model=CancelIntegrationAuthorizationAttemptResponse,
+)
+async def cancel_integration_authorization_attempt_endpoint(
+    attempt_id: UUID,
+    user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> CancelIntegrationAuthorizationAttemptResponse:
+    attempt = await cancel_authorization_attempt(
+        db,
+        user_id=user.id,
+        attempt_id=attempt_id,
+    )
+    return CancelIntegrationAuthorizationAttemptResponse(attempt=attempt)
 
 
 @router.get(

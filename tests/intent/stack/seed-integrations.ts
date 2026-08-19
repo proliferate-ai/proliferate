@@ -27,7 +27,7 @@ interface ApiResult<T> {
  * Resolve a real seed integration definition's id by namespace, direct from
  * `cloud_integration_definition` (source='seed'). `context7` is `api_key`-kind
  * per SEED_DEFINITIONS and is what this suite uses as its real,
- * no-stub-provider connect target.
+ * no-stub-provider catalog target.
  */
 export async function getSeedIntegrationDefinitionId(namespace: string): Promise<string> {
   const client = new Client({ connectionString: toPostgresDriverUrl(databaseUrl()) });
@@ -47,37 +47,6 @@ export async function getSeedIntegrationDefinitionId(namespace: string): Promise
   } finally {
     await client.end();
   }
-}
-
-export interface IntegrationAccountResult {
-  account: {
-    accountId: string;
-    definitionId: string;
-    namespace: string;
-    displayName: string;
-    authKind: string;
-    status: string;
-    enabled: boolean;
-  };
-  oauthFlowId: string | null;
-  authorizationUrl: string | null;
-  expiresAt: string | null;
-}
-
-/** `POST /v1/integrations/authentications` (authKind api_key). Placeholder
- * key value — this path never validates it against the provider (ruled
- * 2026-07-08, scenarios.md: "no stub/fake integration provider", real
- * definition + placeholder credential, no outbound call in tier 2). */
-export async function authenticateApiKeyIntegration(
-  token: string,
-  definitionId: string,
-  apiKey: string,
-): Promise<ApiResult<IntegrationAccountResult>> {
-  return apiRequest<IntegrationAccountResult>("/v1/cloud/integrations/authentications", {
-    method: "POST",
-    token,
-    body: { definitionId, authKind: "api_key", apiKey },
-  });
 }
 
 export interface IntegrationCatalogItemResult {

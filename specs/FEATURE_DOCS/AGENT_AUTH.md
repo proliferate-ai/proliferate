@@ -375,14 +375,23 @@ pushes into its embedded runtime
   auth-state query. Sync requires only sign-in and a healthy local
   runtime — a self-hosted user with no cloud compute still gets gateway
   and BYOK routes locally.
+- **First-run adoption settles once.** Local auth adoption applies only to
+  Desktop. Web records a normal not-applicable empty decision without enabling
+  the adoption Cloud queries, refetching the local catalog, loading the planner,
+  or writing a selection. Desktop waits for the startup reconciliation job to
+  complete, reads one fresh post-reconcile agent catalog, and then adopts the
+  gateway for harnesses without native logins. A terminal runtime, query,
+  reconcile, catalog, or planner failure records an empty decision before a
+  bounded diagnostic; it has no user-facing error or automatic retry in that
+  app run. Settings remains the authoritative place to manage auth.
 - **Onboarding shows a card, never a block.** Account creation never
   waits on LiteLLM (enrollment is fire-and-forget at signup). The desktop
-  first-run flow — auto-install, then first-run adoption defaulting the
-  gateway for harnesses without native logins, then this sync loop — is
-  what delivers the first `state.json`, and a home-screen onboarding card
-  ("Setting up your agents…") awaits the runtime's ack with a short grace
-  window (~20s) before auto-advancing, degrading to a visible pending
-  badge and letting the user proceed. It never blocks.
+  first-run flow — auto-install, the settled adoption decision above, then this
+  sync loop — is what delivers the first `state.json`, and a home-screen
+  onboarding card ("Setting up your agents…") awaits the runtime's ack with a
+  short grace window (~20s) before auto-advancing, degrading to a visible
+  pending badge and letting the user proceed. It never blocks. An empty
+  adoption decision hides the card.
 - **Under `agentAuthEvidencePanes` the card is state-bound, not timed.**
   With the same flag that drives the evidence panes ON, the timer card is
   replaced by per-agent badges bound to the REAL states each adopted agent
