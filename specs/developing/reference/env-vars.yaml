@@ -1298,7 +1298,7 @@
 - name: ANYHARNESS_WORKTREES_ROOT
   secret: false
   default: ""
-  description: Absolute path override for the AnyHarness-managed worktree root used by inventory, orphan pruning, and automatic checkout retention
+  description: Absolute path override for runtime-chosen worktree placement, managed classification, and the orphan-discovery/prune fence; registered worktrees outside it remain visible as unmanaged
   tags: [local-dev, self-hosted]
 
 # ═══════════════════════════════════════════════════════════════════════

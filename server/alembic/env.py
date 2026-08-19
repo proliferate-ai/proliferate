@@ -6,6 +6,7 @@ from logging.config import fileConfig
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.schema import SchemaItem
 
 import proliferate.db.models.analytics  # noqa: F401
 import proliferate.db.models.anonymous_telemetry  # noqa: F401
@@ -30,10 +31,28 @@ target_metadata = Base.metadata
 database_url = config.attributes.get("proliferate_database_url", settings.database_url)
 
 
+def include_object(
+    _object: SchemaItem,
+    name: str | None,
+    type_: str,
+    reflected: bool,
+    compare_to: SchemaItem | None,
+) -> bool:
+    # Remove this exact comparison exclusion only with the later,
+    # release-separated forward migration that drops the rollback table.
+    return not (
+        type_ == "table"
+        and name == "cloud_worktree_retention_policy"
+        and reflected
+        and compare_to is None
+    )
+
+
 def run_migrations_offline() -> None:
     context.configure(
         url=database_url,
         target_metadata=target_metadata,
+        include_object=include_object,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -42,7 +61,11 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_object=include_object,
+    )
     with context.begin_transaction():
         context.run_migrations()
 

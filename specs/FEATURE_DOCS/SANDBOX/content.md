@@ -31,7 +31,7 @@ Fences, one owner per concern:
   owns *identity*: who the commit says it is by.
 - Workflow-run placement has its own contract
   ([WORKFLOWS.md](../WORKFLOWS.md));
-  workflow worktrees are deliberately invisible to retention here.
+  workflow worktrees remain runtime-owned and outside the Cloud product list.
 - Disk is bounded and observable, never billed; billing math stays in
   [specs/FEATURE_DOCS/BILLING.md](../BILLING.md).
 
@@ -52,10 +52,13 @@ The worktrees root is AnyHarness's managed root
 ([managed_root.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/managed_root.rs)),
 declared by `ANYHARNESS_WORKTREES_ROOT` in the sandbox launch env
 ([bootstrap.py](../../../server/proliferate/server/cloud/runtime/bootstrap.py))
-exactly as local dev profiles already declare it — one fence, every
-environment. The clone is per-repository-environment, not per-workspace: ten
-workspaces on one repo cost one clone plus ten worktrees sharing its object
-store.
+exactly as local dev profiles already declare it — one placement and ownership
+fence in every environment. AnyHarness chooses new worktree paths beneath it,
+classifies discovered paths beneath it as managed, and confines orphan
+discovery and destructive pruning to it. Registered worktrees elsewhere still
+appear in inventory as unmanaged; the root is not an inventory boundary. The
+clone is per-repository-environment, not per-workspace: ten workspaces on one
+repo cost one clone plus ten worktrees sharing its object store.
 
 ## The content laws
 
@@ -64,11 +67,13 @@ store.
   remote-tracking ref. After creation the worktree is the user's: nothing
   ever fetches, rebases, or resets it behind them.
 - **User work is never silently destroyed.** Clone refresh fails closed on
-  dirty/ahead state; reclaim refuses paths outside the managed root;
-  retention skips live sessions and workflow worktrees.
+  dirty/ahead state; explicit reclaim and orphan pruning refuse paths outside
+  the managed root; no automatic retention policy selects an unrequested
+  checkout for deletion.
 - **Cloud row lifecycle does not imply disk deletion.** Archive, restore, and
   delete mutate only the Cloud product row. AnyHarness owns explicit archive,
-  unarchive, and purge of its runtime workspace and checkout.
+  unarchive, and purge of its runtime workspace and checkout, including the
+  convergence sweep that completes cleanup already requested by the user.
 - **Commits attribute to the human.** An agent writing on the user's behalf
   writes as the user.
 - **The VM is disposable; pushed work is not.** GitHub is the durable store;
@@ -119,7 +124,8 @@ Deleting a repository environment is refused (409
 so a successful delete proves no worktree depends on the clone. The delete
 soft-deletes the row, then reclaims the clone directory from the VM after
 commit, best-effort — the same commit-then-reclaim pattern lifecycle uses
-for VM destruction, with retention as the backstop for a miss.
+for VM destruction. A missed reclaim remains visible; there is no broader
+automatic cleanup pass to delete it later.
 
 ## Worktrees
 
@@ -134,7 +140,8 @@ root, the way workflow placement already does
 (`<managed root>/workflows/<run_id>`,
 [workflow_placement.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/workflow_placement.rs));
 placement is the runtime's concern, identical local and cloud, which is what
-makes retire and retention able to operate on everything they should.
+lets inventory classify ownership and keeps explicit orphan pruning inside one
+destructive-action fence.
 
 Creation performs the born-fresh fetch itself, environment-neutrally:
 
@@ -169,7 +176,7 @@ AnyHarness owns its separate user-requested archive, unarchive, and purge
 operations. Cloud provider loss is also separate: it marks affected product
 rows lost rather than pretending their runtime content can be restored.
 
-There is no longer a backstop retention pass. Automatic pruning was the
+There is no longer a backstop checkout/worktree-retention pass. Automatic pruning was the
 retire lifecycle's sweeper, and both left together when `retired` was
 absorbed into `archived` — the runtime no longer deletes a checkout the user
 did not ask it to delete. A workspace's recorded path stays reserved for its
@@ -228,9 +235,10 @@ and the runtime record is the only record. The asymmetry is the point:
 
 Worktrees born inside the runtime with no product row — workflow placements,
 anything created straight through the runtime API — are runtime-plane only:
-invisible to the cloud workspace list by design, retention's to collect,
-never the product's to display. There is no reconciliation job scanning the
-runtime for them, and none is planned; the product plane records what the
+invisible to the cloud workspace list by design and never the product's to
+display. They remain runtime-owned until an explicit owning lifecycle action;
+there is no automatic collection pass. There is no reconciliation job scanning
+the runtime for them, and none is planned; the product plane records what the
 product created, not everything the runtime holds.
 
 ## Git identity
@@ -382,8 +390,7 @@ server/proliferate/
 ├── server/workflows/worker/delivery.py   frozen-base materialization for workflow runs
 ├── db/store/cloud_workspaces.py          archive/delete row writes
 └── integrations/anyharness/
-    ├── workspaces.py                     worktree create + exact-ref clients
-    └── worktrees.py                      retention run + policy clients
+    └── workspaces.py                     worktree create + exact-ref clients
 anyharness/crates/anyharness-lib/src/
 ├── adapters/git/
 │   ├── executor.rs                       bounded-timeout git subprocess wrapper
@@ -397,14 +404,12 @@ anyharness/crates/anyharness-lib/src/
 │   ├── runtime/
 │   │   ├── worktrees.rs                  create flow: placement, fetch, conflict policy
 │   │   ├── workflow_placement.rs         runtime-chosen deterministic placement
-│   │   └── materialization.rs            retire_worktree_materialization
+│   │   └── materialization.rs            explicit source-materialization cleanup
 │   ├── inventory.rs                      per-worktree storage + git status + actions
-│   ├── retention.rs                      the retention pass (caps, exclusions, fencing)
-│   ├── retention_policy.rs               per-repo cap: default 20, bounds 10–100
 │   └── purge.rs                          session-admitted workspace purge
 └── api/http/
     ├── workspaces_worktrees.rs           POST /v1/workspaces/worktrees
-    └── worktrees.rs                      inventory + retention run/policy routes
+    └── worktrees.rs                      inventory + explicit orphan-prune routes
 apps/packages/product-client/src/
 ├── components/workspace/chat/input/EnvironmentStatusCard.tsx   composer resource card
 ├── hooks/workspaces/facade/use-worktree-settings-targets.ts    local + cloud target discovery
@@ -424,9 +429,9 @@ apps/packages/product-client/src/
 - Runtime create fails after the product row commits: the optimistic row
   survives with no runtime id stamped and renders as unhydrated rather than
   pretending to be a workspace; nothing was fabricated on the runtime side.
-- Create fails after the worktree exists: an orphan worktree with no
-  committed row; retention collects it, correlated through the runtime's
-  workspace record.
+- Create fails after the checkout exists but before its runtime row commits:
+  inventory exposes the orphan checkout and the user may explicitly prune it;
+  no automatic retention policy selects that unrequested checkout for deletion.
 - Cloud row archive/delete never reaches the runtime: runtime unavailability
   cannot turn the row write into a cleanup failure, and the checkout remains
   runtime-owned.
@@ -450,9 +455,13 @@ apps/packages/product-client/src/
   [deletion/tests/mod.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/deletion/tests/mod.rs).
 - Cloud row-only lifecycle proof:
   [test_cloud_workspace_row_lifecycle.py](../../../server/tests/unit/test_cloud_workspace_row_lifecycle.py).
-- Pending, landing with the remaining gap PRs: fetch-on-create
-  classification tests; repository-environment delete reclaim; a live disk
-  axis reading end to end.
+- Fetch-on-create classification proof:
+  [worktree_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/worktree_tests.rs)
+  covers fetched, no-remote, and failed-fetch outcomes, while
+  [exact_ref_tests.rs](../../../anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/exact_ref_tests.rs)
+  pins the exact-ref no-remote outcome.
+- Pending, landing with the remaining gap PRs: repository-environment delete
+  reclaim and a live disk axis reading end to end.
 
 Corridor H — content reclaim and the disk story's tail. Named, binary
 assertions; the corridor is done when they are green. IDs are stable —

@@ -65,15 +65,17 @@ and applies migrations. An explicit invocation-level `DATABASE_URL` bypasses
 the profile database for that invocation. Keep a profile with its branch for
 the lifetime of any one-way Postgres or AnyHarness SQLite migration.
 
-Automatic AnyHarness checkouts default to:
+Runtime-placed AnyHarness worktrees default to:
 
 ```text
 ~/.proliferate-local/worktrees/
 ```
 
 The launcher writes that path into the profile as
-`ANYHARNESS_WORKTREES_ROOT`. Checkouts elsewhere can still be used explicitly,
-but are outside automatic retention and orphan pruning.
+`ANYHARNESS_WORKTREES_ROOT`. The runtime uses it for chosen placement, managed
+classification, and the orphan-discovery/prune fence. Registered worktrees
+elsewhere remain visible in inventory as unmanaged; no automatic retention pass
+deletes them.
 
 ## Environment Composition
 
