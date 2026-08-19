@@ -136,6 +136,7 @@ jobs:
       - name: Install Playwright chromium
         run: |
           npm install --no-save playwright@1.61.0
+          sudo "$(command -v node)" "$GITHUB_WORKSPACE/scripts/ci-cd/configure-playwright-apt.mjs"
           npx playwright install --with-deps chromium
 
       - name: Set up Docker Buildx
