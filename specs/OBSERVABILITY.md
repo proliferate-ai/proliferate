@@ -44,8 +44,9 @@ Four signal surfaces, deliberately separate:
 
 Sentry and logs correlate through release and request/product identifiers —
 never by copying evidence bodies between systems. Server request telemetry
-binds a generated request id, sanitized route, id-only user, and allowlisted
-correlation fields, and clears the Sentry user at request teardown. The
+binds a generated request id, id-only user, and allowlisted correlation
+fields, and clears the Sentry user at request teardown. No route string —
+sanitized or otherwise — survives onto a Server Sentry event. The
 logical cloud sandbox is `target_id`; the provider sandbox is `sandbox_id`;
 the two must remain distinct.
 
@@ -112,8 +113,8 @@ anomaly that fires constantly trains everyone to ignore the fatal ones.
 
 | Signal | Where it goes | How it's named | What enforces it |
 | --- | --- | --- | --- |
-| Server operation genuinely failed | Let the exception propagate; auto-captured as a `proliferate-server` Sentry issue | Release/environment/surface tags attached by the SDK init | Scrubber in `server/proliferate/integrations/sentry.py` |
-| Anomaly the user didn't feel (latency budget exceeded, invariant violated, unexpected-but-recovered branch) | `capture_server_sentry_exception(..., level="warning", fingerprint=[...])` — request still succeeds; emit on threshold, not per call (the budget lives in code, not in an alert rule) | Stable `fingerprint` is the dedup key — one issue accrues occurrences instead of spawning thousands; tags `anomaly=<slug>`, `surface=<area>`; bounded scalars in `extras` | Review |
+| Server operation genuinely failed | Let the exception propagate; auto-captured as a `proliferate-server` Sentry issue | Release/environment/surface tags attached by the SDK init | Closed-catalog projection in `server/proliferate/integrations/sentry/**` |
+| Anomaly the user didn't feel (latency budget exceeded, invariant violated, unexpected-but-recovered branch) | `capture_server_sentry_exception(..., level="warning", tags={"domain": ..., "action": ...})` — request still succeeds; emit on threshold, not per call (the budget lives in code, not in an alert rule) | Grouping comes from the exception type plus the catalog tags; callers cannot set `fingerprint`, and `anomaly`, `elapsed_ms`, and `budget_ms` are not catalog keys. Adding a new tag or extra means adding a validated row to the closed catalog in `sentry/privacy.py` | Closed catalog + `tests/unit/test_sentry_transport_privacy.py` |
 | Page-worthy "must never happen" invariant | `report_critical(...)` — fatal Sentry event tagged `critical_failure=true` **and** the `CRITICAL_FAILURE` structured-log marker | The marker is the exact log identity | Grafana rule `bfrmh7e7x2k8wd` alerts on the marker in `/ecs/proliferate-prod` |
 | Rust runtime diagnostics | One `#[tracing::instrument]` span per use-case entry; phase timings are span events, not hand-rolled `Instant::now()` pairs; log where an error is *handled*, not at every hop | Fields (`flow_id`/`flow_kind`/`prompt_id`) declared once on the span; observability context never appears in a function signature | Review (span doctrine); `tracing_error_reaches_the_sentry_client` tests guard Sentry delivery |
 | Frontend product analytics | Typed catalog `apps/packages/product-client/src/lib/domain/telemetry/events.ts` → `trackProductEvent(...)` fanout (vendor, anonymous, or both) | Stable event names; payloads are enums, booleans, counts, versions, provider kinds — never arbitrary string bags | Typed event map; hosted PostHog events are explicitly permitted, others become at most Sentry breadcrumbs |
@@ -143,10 +144,34 @@ change sits on:
   all install explicit before-send scrubbers. **Desktop-native does not** —
   it transmits stack traces without an explicit scrubber (known gap, needs a
   separate implementation PR).
-- **Deliberately preserved through scrubbing:** the top-level Sentry
-  `environment` field (snapshot, scrub, restore) and the `runtime_env` tag on
-  Worker/Supervisor events whose only allowed live value is `e2b`. Every
-  other env-like key stays redacted; raw environment maps never pass.
+- **The Server is a closed catalog, not a scrubber:** `sentry/privacy.py`
+  builds a new event from an allowlist rather than deleting from the SDK's
+  event, so an unlisted key is structurally absent instead of merely redacted.
+  Validation runs twice: pre-SDK public ingress in `sentry/client.py` sees the
+  original Python objects, and the shared `before_send` /
+  `before_send_transaction` projector sees only the SDK's already-serialized
+  JSON representation and cannot recover erased provenance. Attachments are
+  cleared in the callback (`hint["attachments"] = []`, read back and proved, or
+  the event is dropped). The only emitted fingerprint is the adapter-synthesized
+  `["billing", "stripe_webhook_drop", <drop_reason>]`. Init installs exactly
+  eight integrations with `default_integrations=False` and
+  `auto_enabling_integrations=False`, and disables ambient trace propagation,
+  Spotlight, client reports, sessions, logs, metrics, profiles, gen-AI span
+  streaming, and DB/HTTP source context. Middleware spans are off; the only
+  five span ops produced are `http.server`, `websocket.server`,
+  `queue.task.celery`, `queue.process`, and `queue.publish` — notably **not**
+  `queue.submit.celery`. `environment` is a closed four-value catalog
+  (`trusted-beta`, `staging`, `production`, `Production`). Release and
+  environment are passed as exact empty strings when unresolvable, which is
+  the pinned SDK's no-discovery sentinel (`None` would trigger ambient
+  `SENTRY_RELEASE` / `SENTRY_ENVIRONMENT` discovery and a `production`
+  default); both callbacks then remove the sentinel.
+- **Deliberately preserved:** the top-level Sentry `environment` field and the
+  `runtime_env` tag on Worker/Supervisor events whose only allowed live value
+  is `e2b`. The Server keeps `environment` only when it matches its closed
+  four-value catalog; the client wrappers still use the snapshot/scrub/restore
+  mechanic for it. Every other env-like key stays redacted; raw environment
+  maps never pass.
 - **Structural, not length, bounds:** client payload scrubbing bounds depth,
   array positions, and object properties (`[circular]`, `[truncated]`) but
   does not truncate strings by length — what you put in a string field ships.

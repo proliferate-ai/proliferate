@@ -669,16 +669,13 @@ async fn an_adhoc_node_runs_beside_the_chain_and_never_moves_it() {
         adhoc.model.as_ref().and_then(|model| model.model_id.as_deref()),
         Some("haiku")
     );
-    let adhoc_session = fixture
-        .state
-        .session_service
-        .get_session(adhoc.session_id.as_deref().expect("adhoc session"))
-        .expect("load adhoc session")
-        .expect("adhoc session exists");
-    assert_eq!(
-        adhoc_session.requested_model_id.as_deref(),
-        Some("haiku")
-    );
+    // Creation records the validated pick on the immutable launch intent.
+    let store = fixture.state.session_service.store();
+    let adhoc_intent = store
+        .find_launch_intent(adhoc.session_id.as_deref().expect("adhoc session"))
+        .expect("load adhoc launch intent")
+        .expect("adhoc session owns a launch intent");
+    assert_eq!(adhoc_intent.model_id.as_deref(), Some("haiku"));
 
     fixture.touch_control("release-turn");
     let state = fixture
@@ -878,6 +875,9 @@ async fn a_failed_launch_fails_the_run_and_compensates_the_half_born_session() {
     std::fs::write(&dud, "#!/bin/sh\nexit 0\n").expect("write dud agent");
     make_executable(&dud).expect("make dud agent executable");
     std::env::set_var("ANYHARNESS_CLAUDE_AGENT_PROGRAM", &dud);
+    // The swap moves the harness basis, so re-observe: admission must pass on
+    // target-observed options and the launch must fail at spawn instead.
+    test_support::seed_scripted_claude_launch_options(&fixture.state.launch_options_service);
     let definition = chain(vec![agent_node("solo", "never launches")]);
     fixture.start("run-launchfail", definition);
 
