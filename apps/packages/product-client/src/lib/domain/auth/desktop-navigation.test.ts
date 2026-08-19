@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ProductEntry } from "@proliferate/product-client/host/product-host";
+import type { ProductEntry } from "@proliferate/product-client/host/product-host-entry";
 import {
   decodeDesktopProductEntry,
   encodeDesktopReturnUrl,

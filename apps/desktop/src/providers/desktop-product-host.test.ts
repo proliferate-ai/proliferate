@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AuthOrchestrationDeps } from "@/lib/integrations/auth/orchestration-effects";
-import type { ProductEntry } from "@proliferate/product-client/host/product-host";
+import type { ProductEntry } from "@proliferate/product-client/host/product-host-entry";
 
 const mocks = vi.hoisted(() => ({
   getProliferateApiBaseUrl: vi.fn(),

@@ -4,11 +4,8 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
 import type { DesktopBridge } from "./desktop-bridge";
-import type {
-  ProductEntry,
-  ProductHost,
-  ProductQueryParams,
-} from "./product-host";
+import type { ProductEntry, ProductQueryParams } from "./product-host-entry";
+import type { ProductHost } from "./product-host";
 import { ProductHostProvider, useProductHost } from "./ProductHostProvider";
 
 function makeHost(overrides: Partial<ProductHost> = {}): ProductHost {

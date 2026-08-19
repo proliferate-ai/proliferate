@@ -2,6 +2,7 @@ import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type { AuthMethod } from "#product/domain/auth/model";
 
 import type { DesktopBridge } from "./desktop-bridge";
+import type { ProductEntry } from "./product-host-entry";
 
 /**
  * The one host contract. Desktop and Web each construct a single ProductHost
@@ -235,104 +236,18 @@ export interface ProductAuthHost {
  * selections). Must never hold login credentials, provider API keys, SSH
  * credentials, or PKCE secrets.
  *
- * Identity contract: this capability object's identity — not the enclosing
- * {@link ProductHost}, the derived `ProductStorageContext`, or any telemetry
- * object — is the persistence authority. A host must reuse the *same*
- * `ProductStorage` object across every immutable host snapshot refresh (auth,
- * deployment, cloud, telemetry, …) that keeps the same backing store, and a
- * different object identity contractually means a disjoint backing storage
- * authority. Persistence owners that need ordering (the docked file tree's
- * required reads, one-time migration, and serialized writer) key their
- * authority, dirty state, and in-flight lane on this identity, so replacing the
- * object mid-session isolates them from the previous authority. This documents
- * an existing host obligation; it broadens no generic persistence behavior.
+ * Identity contract: this object's identity — not {@link ProductHost}, the
+ * derived `ProductStorageContext`, or any telemetry object — is the
+ * persistence authority. Same object across a host snapshot refresh means
+ * same backing store; a different object means a disjoint one. Reuse the same
+ * object across snapshot refreshes that keep the same store; ordered
+ * persistence owners (e.g. the docked file tree) key their authority on it.
  */
 export interface ProductStorage {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
   removeItem(key: string): Promise<void>;
 }
-
-/**
- * Ordered query parameters as decoded key/value pairs. This is deliberately not
- * a `Record`, `Map`, or object: it preserves the exact order of the incoming
- * query string and keeps every duplicate key (`x=1&x=2` decodes to two pairs).
- * Decoders build it with `Array.from(url.searchParams.entries())`; encoders
- * append every pair in order. Implementations must never route these through
- * `Object.fromEntries`, `URLSearchParams.set`, or any conversion that collapses
- * repeated keys. Exact percent-encoding bytes need not survive, but decoded
- * values, their order, and duplicates must.
- */
-export type ProductQueryParams = readonly (readonly [
-  key: string,
-  value: string,
-])[];
-
-/**
- * Lossless location state carried by every {@link ProductEntry}. Empty fields
- * are omitted rather than stored as empty values. The fragment is stored
- * without its leading `#` and encoded with exactly one `#` on output.
- */
-export interface ProductLocationState {
-  /** Ordered, duplicate-preserving query pairs. Omitted when empty. */
-  query?: ProductQueryParams;
-  /** URL fragment without the leading `#`. Omitted when absent. */
-  fragment?: string;
-}
-
-export type ProductSettingsEntrySection =
-  | "account"
-  | "billing"
-  | "environments"
-  | "general"
-  | "integrations"
-  | "organization";
-
-/**
- * The destination discriminant of a normalized inbound entry, independent of
- * its query/fragment location state. Compose with {@link ProductLocationState}
- * to form a {@link ProductEntry}.
- */
-export type ProductEntryDestination =
-  | {
-      kind: "workspace";
-      workspaceId: string;
-    }
-  | { kind: "workflow"; workflowId: string }
-  | { kind: "invitation"; token: string }
-  | {
-      kind: "organization-join";
-      organizationId: string;
-      /**
-       * Optional issuing deployment. The host must validate and normalize this
-       * origin before constructing the entry (HTTPS, with HTTP allowed only for
-       * loopback development, and never embedded credentials).
-       */
-      serverOrigin?: string;
-    }
-  | {
-      kind: "integration-callback";
-      source: "integration_oauth_callback" | "mcp_oauth_callback";
-      status?: "completed" | "failed";
-      flowId?: string;
-      failureCode?: string;
-    }
-  | {
-      kind: "billing-return";
-      status: "success" | "cancel" | "done";
-    }
-  | {
-      kind: "settings";
-      section: ProductSettingsEntrySection;
-      source?: "github_app_callback";
-    };
-
-/**
- * A normalized inbound destination. Each host decodes its raw URL
- * (`https://...` on Web, `proliferate://...` on Desktop) into this shape, always
- * carrying lossless query/fragment location state.
- */
-export type ProductEntry = ProductEntryDestination & ProductLocationState;
 
 /**
  * External-link, Desktop-handoff, and inbound-deep-link transport. Internal
