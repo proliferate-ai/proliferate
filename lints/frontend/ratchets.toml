@@ -94,11 +94,6 @@ reason = "product-owned measurement port barrel (R1 ruling) mirroring the retain
 # Same shrink-only contract as [[max_lines]]: growth fails, and so does an entry
 # whose file dropped back under the soft threshold or is gone.
 
-[[frontend_structure]]
-path = "apps/packages/product-client/src/components/workspace/chat/transcript/MarkdownBody.tsx"
-max_lines = 525
-reason = "existing markdown transcript renderer pending split"
-
 # Relocated from apps/desktop/src by the Desktop-product move into product-client
 # (web-desktop-unification slice 04). Same files, same counts/reasons — relocation,
 # not gate-weakening; product-client/src is a structure-report scan root. Counts
