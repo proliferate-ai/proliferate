@@ -66,7 +66,7 @@ applicable owner.
 | UI: components, styling, tokens, theme | [`specs/DESIGN_SYSTEM.md`](specs/DESIGN_SYSTEM.md) |
 | User-facing copy, naming, product feel | [`specs/PRODUCT_SENSE.md`](specs/PRODUCT_SENSE.md) |
 | `tests/intent/**`, `tests/release/**`, `anyharness/tests/**`, `fixtures/contracts/**`, `scripts/agent-gateway-smoke/**` | [`specs/TESTING.md`](specs/TESTING.md) |
-| Telemetry and scrubber sources in any area (`**/telemetry/**`, `**/telemetry.rs`, `server/proliferate/integrations/sentry.py`, `server/proliferate/middleware/logging.py`), `server/infra/observability/**` | [`specs/OBSERVABILITY.md`](specs/OBSERVABILITY.md) |
+| Telemetry and scrubber sources in any area (`**/telemetry/**`, `**/telemetry.rs`, `server/proliferate/integrations/sentry/**`, `server/proliferate/middleware/logging.py`), `server/infra/observability/**` | [`specs/OBSERVABILITY.md`](specs/OBSERVABILITY.md) |
 | `scripts/check_*`, checker allowlists | Constitution — see [Repository-wide rules](#repository-wide-rules) |
 | `adrs/**` — writing or reviewing a decision record | [`guides/process/adrs.md`](guides/process/adrs.md) |
 | `AGENTS.md`, `CONTRIBUTING.md`, `.github/pull_request_template.md` | [`guides/process/README.md`](guides/process/README.md) |
