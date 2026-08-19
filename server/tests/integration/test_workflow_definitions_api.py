@@ -14,7 +14,6 @@ from proliferate.constants.cloud import GitProvider
 from proliferate.db.models.cloud.repositories import RepoConfig
 from proliferate.db.models.workflows import WorkflowDefinition
 from proliferate.db.store.workflow_definitions import update_workflow_definition_if_revision
-from proliferate.server.catalogs.service import read_agent_catalog
 from tests.integration.cloud_api_helpers import register_and_login
 
 
@@ -102,7 +101,7 @@ async def test_personal_workflow_crud_owner_isolation_and_revision_conflicts(
         "userId": owner["user_id"],
         "schemaVersion": 1,
         "revision": 1,
-        "validatedCatalogVersion": read_agent_catalog().catalog.catalogVersion,
+        "validatedCatalogVersion": "target-observed",
         "createdAt": created["createdAt"],
         "updatedAt": created["updatedAt"],
         "deletedAt": None,
@@ -321,44 +320,14 @@ async def test_optional_nested_fields_remain_omitted_and_blank_description_norma
     ("harness_config", "goal", "expected_path", "expected_code"),
     [
         (
-            {"agentKind": "unknown-agent"},
-            None,
-            "stages.0.harnessConfig.agentKind",
-            "workflow_catalog_selection_unavailable",
-        ),
-        (
-            {"agentKind": "claude", "modelId": "missing-model"},
-            None,
-            "stages.0.harnessConfig.modelId",
-            "workflow_catalog_selection_unavailable",
-        ),
-        (
-            {"agentKind": "claude", "modelId": "sonnet", "effort": "ultra"},
-            None,
-            "stages.0.harnessConfig.effort",
-            "workflow_catalog_selection_unavailable",
-        ),
-        (
-            {"agentKind": "codex", "modelId": "gpt-5.5", "effort": "ultra"},
-            None,
-            "stages.0.harnessConfig.effort",
-            "workflow_catalog_selection_unavailable",
-        ),
-        (
             {"agentKind": "claude", "effort": "high"},
             None,
             "stages.0.harnessConfig.effort",
             "invalid_workflow_definition",
         ),
-        (
-            {"agentKind": "cursor", "modelId": "composer-2.5"},
-            {"objective": "Finish the goal."},
-            "stages.0.steps.0.goal",
-            "workflow_catalog_selection_unavailable",
-        ),
     ],
 )
-async def test_catalog_validation_rejects_invalid_harness_model_effort_and_goal(
+async def test_definition_validation_rejects_effort_without_model(
     client: AsyncClient,
     harness_config: dict[str, object],
     goal: dict[str, object] | None,

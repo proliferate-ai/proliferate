@@ -51,6 +51,15 @@ def validate_definition_document(
         input_names.add(name)
 
     for stage_index, stage in enumerate(normalized_stages):
+        harness = cast(dict[str, object], stage["harnessConfig"])
+        model_id = harness.get("modelId")
+        effort = harness.get("effort")
+        if effort is not None and model_id is None:
+            return DefinitionIssue(
+                path=f"stages.{stage_index}.harnessConfig.effort",
+                message="Choose a specific model before setting reasoning effort.",
+            )
+
         steps = cast(list[dict[str, object]], stage["steps"])
         for step_index, step in enumerate(steps):
             for field_name, text in _step_template_fields(step):
