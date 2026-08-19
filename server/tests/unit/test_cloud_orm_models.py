@@ -10,7 +10,6 @@ def test_cloud_orm_package_registers_all_cloud_tables() -> None:
         "cloud_sandbox",
         "cloud_sandbox_secret_materialization",
         "cloud_repo_environment_materialization",
-        "cloud_worktree_retention_policy",
         "cloud_runtime_worker",
         "cloud_runtime_worker_enrollment",
         "cloud_integration_gateway_token",
@@ -28,6 +27,10 @@ def test_cloud_orm_package_registers_all_cloud_tables() -> None:
     }
 
     assert expected_tables <= set(Base.metadata.tables)
+
+
+def test_removed_cloud_worktree_retention_policy_is_not_registered() -> None:
+    assert "cloud_worktree_retention_policy" not in Base.metadata.tables
 
 
 def test_cloud_workspace_uses_active_branch_unique_index() -> None:

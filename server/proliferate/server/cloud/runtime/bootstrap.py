@@ -14,9 +14,6 @@ from proliferate.server.release import sanitize_component_release_override
 from proliferate.server.version import runtime_version_pin
 
 _ANYHARNESS_WORKTREES_ROOT_ENV = "ANYHARNESS_WORKTREES_ROOT"
-_ANYHARNESS_ENABLE_AUTOMATIC_WORKTREE_RETENTION_ENV = (
-    "ANYHARNESS_ENABLE_AUTOMATIC_WORKTREE_RETENTION"
-)
 _CLOUD_MANAGED_WORKTREES_ROOT = "/home/user/workspace/worktrees"
 # Consumed by `RuntimeSurface::from_env` (anyharness-lib domains/agents/runtime.rs).
 _ANYHARNESS_RUNTIME_SURFACE_ENV = "ANYHARNESS_RUNTIME_SURFACE"
@@ -109,10 +106,9 @@ def build_runtime_env(
 ) -> dict[str, str]:
     env: dict[str, str] = {
         "ANYHARNESS_DEV_CORS": "1",
-        # Keep cloud worktrees under the user workspace so the retention fence and
-        # inventory see them.
+        # Give the runtime one ownership fence for managed placement and pruning.
+        # Registered worktrees outside this root remain visible as unmanaged.
         _ANYHARNESS_WORKTREES_ROOT_ENV: _CLOUD_MANAGED_WORKTREES_ROOT,
-        _ANYHARNESS_ENABLE_AUTOMATIC_WORKTREE_RETENTION_ENV: "1",
         # Declare the surface so the runtime's auto-install startup pass can apply
         # the one surface-dependent carve-out: cursor never installs in cloud
         # (login-only, no headless credential path, so it could never reach

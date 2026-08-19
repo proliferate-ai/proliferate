@@ -1101,12 +1101,6 @@
       "count": 7
     },
     {
-      "path": "proliferate/server/cloud/worktree_policy/models.py",
-      "code": "explicit-any",
-      "message": "Explicit \"Any\" is not allowed",
-      "count": 2
-    },
-    {
       "path": "proliferate/server/devtools/models.py",
       "code": "explicit-any",
       "message": "Explicit \"Any\" is not allowed",

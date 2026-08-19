@@ -4,7 +4,6 @@ export {
   personalCloudOwnerKey,
   cloudBillingKey,
   cloudRepoBranchesKey,
-  cloudWorktreeRetentionPolicyKey,
   cloudMobilityWorkspacesKey,
   cloudWorkspaceConnectionKey,
   isCloudWorkspaceConnectionQueryKey,
