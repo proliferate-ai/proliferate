@@ -79,11 +79,16 @@ test("suggestions replace the real Home draft without submitting", async ({ page
 
   const editor = page.locator("[data-home-composer-editor]");
   await expect(editor).toBeFocused();
-  await editor.evaluate((element) => (element as HTMLElement).blur());
-  for (let index = 0; index < PROMPTS.length; index += 1) {
+  for (let index = PROMPTS.length - 1; index >= 0; index -= 1) {
+    await page.keyboard.press("Shift+Tab");
+    await expect(buttons.nth(index)).toBeFocused();
+  }
+  for (let index = 1; index < PROMPTS.length; index += 1) {
     await page.keyboard.press("Tab");
     await expect(buttons.nth(index)).toBeFocused();
   }
+  await page.keyboard.press("Tab");
+  await expect(editor).toBeFocused();
 
   await editor.fill("replace this draft");
   await buttons.nth(0).click();
