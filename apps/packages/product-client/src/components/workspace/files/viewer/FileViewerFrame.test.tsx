@@ -31,12 +31,17 @@ function renderFrame(overrides: Partial<Parameters<typeof FileViewerFrame>[0]> =
       richPreviewEnabled={false}
       canCopyContent
       canFindInFile={false}
-      canOpenExternal={false}
+      openInEligible={false}
+      openInDefaultTarget={null}
+      openInTargets={[]}
+      onOpenDefault={noop}
+      onOpenWithTarget={noop}
+      openInRevision={0}
+      openInFailed={false}
       onToggleWordWrap={noop}
       onToggleRichPreview={noop}
       onCopyContent={noop}
       onCopyPath={noop}
-      onOpenExternal={noop}
       onOpenContentSearch={noop}
       filesAvailable
       filesRequestedOpen={false}

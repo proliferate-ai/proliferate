@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
 import { FileViewerContent } from "#product/components/workspace/files/FileViewerContent";
 import { LoadingState } from "#product/components/feedback/LoadingIllustration";
 import { useReadWorkspaceFileQuery } from "@anyharness/sdk-react";
@@ -48,6 +49,53 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     workspacePath: filePath,
   });
   const canOpenExternal = fileActions.canOpenExternal;
+  const openInTargets = fileActions.openTargets;
+  const defaultOpenTarget = fileActions.defaultOpenTarget;
+  // Fail-closed: eligibility is expressed purely through 01D's resolved
+  // outputs, never re-derived from path syntax/platform/localhost.
+  const openInEligible = canOpenExternal
+    && fileActions.nativePathKind === "file"
+    && openInTargets.length > 0
+    && defaultOpenTarget !== null;
+
+  // Session-only monotonic revision: bumps whenever locator identity,
+  // nativePathKind, companion/absolute identity, the default target, or the
+  // eligible target set changes. Never rendered/logged — only the number is
+  // exposed downstream, keying the SplitButton subtree so an uncontrolled
+  // popover remounts closed on a capability change.
+  const openInLocator = fileActions.reference.locator;
+  const openInIdentityKey = JSON.stringify({
+    authority: openInLocator.authority,
+    workspacePath: openInLocator.authority === "workspace" ? openInLocator.workspacePath : null,
+    companionPath: openInLocator.authority === "workspace" ? openInLocator.localCompanionPath : null,
+    absolutePath: openInLocator.authority === "desktop" ? openInLocator.absolutePath : null,
+    nativePathKind: fileActions.nativePathKind,
+    defaultTargetId: defaultOpenTarget?.id ?? null,
+    targetIds: openInTargets.map((target) => target.id),
+  });
+  const openInIdentityRef = useRef(openInIdentityKey);
+  const [openInRevision, setOpenInRevision] = useState(0);
+  const [openInFailed, setOpenInFailed] = useState(false);
+  useEffect(() => {
+    if (openInIdentityRef.current === openInIdentityKey) return;
+    openInIdentityRef.current = openInIdentityKey;
+    setOpenInRevision((revision) => revision + 1);
+    setOpenInFailed(false);
+  }, [openInIdentityKey]);
+
+  const handleOpenDefault = useCallback(() => {
+    void fileActions.openDefault().then((opened) => {
+      setOpenInFailed(!opened);
+    });
+  }, [fileActions.openDefault]);
+
+  const handleOpenWithTarget = useCallback((target: OpenTarget) => {
+    void fileActions.openWithTarget(target.id).then(
+      () => setOpenInFailed(false),
+      () => setOpenInFailed(true),
+    );
+  }, [fileActions.openWithTarget]);
+
   const [wordWrap, setWordWrap] = useState(false);
   const changedPaths = useGitChangedPaths(materializedWorkspaceId);
   const activeDiffTarget = diffTarget ?? null;
@@ -94,9 +142,6 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
   };
   const copyPath = () => {
     void fileActions.copyCurrentPath();
-  };
-  const openExternal = () => {
-    void fileActions.openDefault();
   };
   const openFindInDiffs = () => {
     if (activeDiffTarget || !read?.isText || read.tooLarge) {
@@ -167,12 +212,17 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     canRenderRichPreview: canShowRichPreview,
     wordWrap,
     richPreviewEnabled: normalizedEffectiveMode === "rendered",
-    canOpenExternal,
+    openInEligible,
+    openInDefaultTarget: defaultOpenTarget,
+    openInTargets,
+    onOpenDefault: handleOpenDefault,
+    onOpenWithTarget: handleOpenWithTarget,
+    openInRevision,
+    openInFailed,
     onToggleWordWrap: () => setWordWrap((value) => !value),
     onToggleRichPreview: toggleRichPreview,
     onCopyContent: copyContent,
     onCopyPath: copyPath,
-    onOpenExternal: openExternal,
     onOpenContentSearch: openFindInDiffs,
     filesAvailable,
     filesRequestedOpen: requestedOpen,

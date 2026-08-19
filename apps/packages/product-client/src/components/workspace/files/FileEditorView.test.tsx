@@ -48,8 +48,11 @@ vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", 
       column: null,
       absolutePath: "/repo/package.json",
       workspacePath: "package.json",
+      locator: { authority: "workspace", workspacePath: "package.json", localCompanionPath: null },
     },
     openTargets: [],
+    defaultOpenTarget: null,
+    nativePathKind: null,
     canOpenInSidebar: true,
     canOpenExternal: true,
     copyPath: vi.fn(),
@@ -245,7 +248,7 @@ describe("FileEditorView", () => {
     expect(container.querySelector(".file-source-scroll")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("File viewer options"));
     // Native menu resolves unavailable async before the DOM fallback opens.
-    expect(await screen.findByText("Word wrap")).toBeTruthy();
+    expect(await screen.findByText("Enable word wrap")).toBeTruthy();
     fireEvent.click(screen.getByText("Copy content"));
     expect(writeTextMock).toHaveBeenCalledWith("{\"ok\":true}");
   });

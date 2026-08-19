@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode, type Ref } from "react";
 import { POPOVER_FRAME_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
+import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
 import {
   useFileViewerNativeContextMenu,
   type FileViewerNativeMenuActions,
@@ -22,8 +23,13 @@ export function FileViewerFrame({
   onToggleRichPreview,
   onCopyContent,
   onCopyPath,
-  onOpenExternal,
-  canOpenExternal,
+  openInEligible,
+  openInDefaultTarget,
+  openInTargets,
+  onOpenDefault,
+  onOpenWithTarget,
+  openInRevision,
+  openInFailed,
   onOpenContentSearch,
   filesAvailable,
   filesRequestedOpen,
@@ -39,12 +45,17 @@ export function FileViewerFrame({
   richPreviewEnabled: boolean;
   canCopyContent: boolean;
   canFindInFile: boolean;
-  canOpenExternal: boolean;
+  openInEligible: boolean;
+  openInDefaultTarget: OpenTarget | null;
+  openInTargets: OpenTarget[];
+  onOpenDefault: () => void;
+  onOpenWithTarget: (target: OpenTarget) => void;
+  openInRevision: number;
+  openInFailed: boolean;
   onToggleWordWrap: () => void;
   onToggleRichPreview: () => void;
   onCopyContent: () => void;
   onCopyPath: () => void;
-  onOpenExternal: () => void;
   onOpenContentSearch: () => void;
   filesAvailable: boolean;
   filesRequestedOpen: boolean;
@@ -91,8 +102,13 @@ export function FileViewerFrame({
         onToggleRichPreview={onToggleRichPreview}
         onCopyContent={onCopyContent}
         onCopyPath={onCopyPath}
-        onOpenExternal={onOpenExternal}
-        canOpenExternal={canOpenExternal}
+        openInEligible={openInEligible}
+        openInDefaultTarget={openInDefaultTarget}
+        openInTargets={openInTargets}
+        onOpenDefault={onOpenDefault}
+        onOpenWithTarget={onOpenWithTarget}
+        openInRevision={openInRevision}
+        openInFailed={openInFailed}
         onOpenContentSearch={onOpenContentSearch}
         toggleLabel={toggleLabel}
         toggleActive={effectiveRequestedOpen}

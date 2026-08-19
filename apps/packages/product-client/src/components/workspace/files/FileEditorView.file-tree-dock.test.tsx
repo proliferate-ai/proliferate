@@ -47,9 +47,14 @@ vi.mock("#product/hooks/ui/highlighting/use-highlighted-lines", () => ({
 
 vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
   useFileReferenceActions: () => ({
+    reference: { locator: { authority: "unavailable", reason: "runtime_unavailable" } },
+    nativePathKind: null,
+    openTargets: [],
+    defaultOpenTarget: null,
     canOpenExternal: false,
     copyCurrentPath: vi.fn(),
     openDefault: vi.fn(),
+    openWithTarget: vi.fn(),
   }),
 }));
 
