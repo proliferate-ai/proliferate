@@ -1,39 +1,12 @@
-import { useState } from "react";
-import { usePutCloudSecretEnvVar } from "@proliferate/cloud-sdk-react";
-import { Plus } from "#product/primitives/icons/core";
-import { Button } from "#product/primitives/Button";
 import { SecretManagementPanel } from "#product/components/patterns/secrets/SecretManagementPanel";
 import { PageHeader } from "#product/primitives/patterns/PageHeader";
 import { SettingsPageBody } from "#product/primitives/patterns/settings/SettingsPageBody";
-import { ApiKeyCreatorModal } from "#product/components/settings/panes/agent-auth/ApiKeyCreatorModal";
 import { useCloudSecretsPanel } from "#product/hooks/access/cloud/use-cloud-secrets-panel";
-import { useToastStore } from "#product/stores/toast/toast-store";
 
 const PERSONAL_SCOPE = { kind: "personal" } as const;
 
 export function PersonalSecretsPane() {
-  const [addKeyOpen, setAddKeyOpen] = useState(false);
-  const putEnvVar = usePutCloudSecretEnvVar();
-  const showToast = useToastStore((state) => state.show);
   const panel = useCloudSecretsPanel({ scope: PERSONAL_SCOPE });
-
-  function handleCreate(input: { value: string; envVarName: string }) {
-    // Secrets context: the env-var field maps to the secret NAME and we call the
-    // secrets putEnvVar path (create only, no agent binding). The shared modal
-    // shell is identical to the agent flow — only this submit differs.
-    putEnvVar.mutate(
-      { scope: PERSONAL_SCOPE, name: input.envVarName, value: input.value },
-      {
-        onSuccess: () => {
-          setAddKeyOpen(false);
-          showToast("Secret saved.", "info");
-        },
-        onError: (error) => {
-          showToast(error.message || "Could not save the secret.");
-        },
-      },
-    );
-  }
 
   return (
     <SettingsPageBody>
@@ -41,38 +14,9 @@ export function PersonalSecretsPane() {
         variant="flat"
         title="Personal secrets"
         description="Secrets available in your personal cloud sandbox"
-        action={
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setAddKeyOpen(true)}
-          >
-            <Plus className="icon-paired" />
-            Add API key
-          </Button>
-        }
       />
 
       <SecretManagementPanel {...panel} />
-
-      <ApiKeyCreatorModal
-        open={addKeyOpen}
-        onClose={() => setAddKeyOpen(false)}
-        heading="Add API key"
-        description="Save a secret env var into your personal cloud sandbox."
-        showTitleField={false}
-        envVarField={{
-          label: "Environment variable",
-          placeholder: "API_TOKEN",
-          helpText: "The name this secret is exposed as in your sandbox.",
-        }}
-        submitLabel="Save secret"
-        submitting={putEnvVar.isPending}
-        error={null}
-        onSubmit={handleCreate}
-      />
     </SettingsPageBody>
   );
 }

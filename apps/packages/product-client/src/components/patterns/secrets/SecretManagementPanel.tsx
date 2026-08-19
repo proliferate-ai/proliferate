@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus } from "#product/primitives/icons/core";
 
-import { Button } from "#product/primitives/Button";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { SettingsRow } from "#product/primitives/patterns/settings/SettingsRow";
 import type { CloudSecretsPanelModel } from "#product/hooks/access/cloud/use-cloud-secrets-panel";
@@ -106,20 +104,7 @@ export function SecretManagementPanel({
           label={title}
           description={<SecretScopeNotice description={description} />}
         >
-          <div className="flex items-center gap-2">
-            <span className="text-ui-sm text-muted-foreground">{statusLabel(status, loading)}</span>
-            {canManage ? (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => setEditorState({ mode: "create", kind: "env" })}
-              >
-                <Plus className="icon-paired" />
-                Add secret
-              </Button>
-            ) : null}
-          </div>
+          <span className="text-ui-sm text-muted-foreground">{statusLabel(status, loading)}</span>
         </SettingsRow>
 
         <SettingsRow
