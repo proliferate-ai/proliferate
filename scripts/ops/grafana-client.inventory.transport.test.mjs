@@ -113,12 +113,24 @@ test("HTTP status table is total, exact, body-free, and non-retrying", async (t)
   for (const [status, state, reason] of cases) {
     await t.test(String(status), async () => {
       let reads = 0;
-      const { result, trace } = await apiResponse(rawResponse({ status, body: "provider-prose-sentinel",
-        onRead: () => { reads += 1; } }));
+      const response = rawResponse({ status, body: "provider-prose-sentinel",
+        onRead: () => { reads += 1; } });
+      Object.defineProperty(response, "statusText", { get() {
+        throw new Error("hostile-status-text-sentinel");
+      } });
+      Object.defineProperty(response.headers, "Location", { get() {
+        throw new Error("hostile-location-property-sentinel");
+      } });
+      response.headers.get = (name) => {
+        throw new Error(name.toLowerCase() === "location"
+          ? "hostile-location-sentinel" : "unexpected-header-read");
+      };
+      const { result, trace } = await apiResponse(response);
       assert.deepEqual(result.surfaces.api, surfaceFailure(state, reason, status));
       assert.equal(reads, 0);
       assert.equal(trace.filter((entry) => entry.path === "/api/health").length, 1);
       assert.equal(JSON.stringify(result).includes("provider-prose-sentinel"), false);
+      assert.equal(JSON.stringify(result).includes("hostile-"), false);
     });
   }
 });

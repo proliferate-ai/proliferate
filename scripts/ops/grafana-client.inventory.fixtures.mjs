@@ -67,7 +67,13 @@ export function completePlan() {
   const plan = emptyPlan();
   plan.set("/api/datasources", [
     { uid: "z", name: "Zulu", type: "cloudwatch", access: "proxy", isDefault: false, readOnly: true,
-      url: "forbidden-url", secureJsonData: { token: "forbidden-token" } },
+      id: "forbidden-datasource-id", orgId: "forbidden-datasource-org",
+      user: "forbidden-datasource-user", database: "forbidden-datasource-database",
+      basicAuth: "forbidden-datasource-basic-auth", basicAuthUser: "forbidden-basic-auth-user",
+      password: "forbidden-datasource-password", url: "forbidden-url",
+      jsonData: { plain: "forbidden-json-data" },
+      secureJsonData: { token: "forbidden-token" },
+      secureJsonFields: { token: "forbidden-secure-field" } },
     { uid: "é", name: "Accent", type: "prometheus", access: "proxy", isDefault: true, readOnly: false },
   ]);
   plan.set("/api/search?type=dash-folder&limit=100&page=1", [
@@ -75,23 +81,31 @@ export function completePlan() {
     { uid: "f1", title: "First", type: "dash-folder" },
   ]);
   plan.set("/api/search?type=dash-db&limit=100&page=1", [
-    { uid: "d2", title: "Root", type: "dash-db", panels: ["forbidden-query"] },
+    { uid: "d2", title: "Root", type: "dash-db", panels: ["forbidden-query"],
+      tags: ["forbidden-dashboard-tags"], isStarred: "forbidden-dashboard-star",
+      body: "forbidden-dashboard-body", variables: ["forbidden-dashboard-variable"],
+      query: "forbidden-dashboard-query" },
     { uid: "d1", title: "Nested", type: "dash-db", folderUid: "f1" },
   ]);
   plan.set("/api/ruler/grafana/api/v1/rules", {
     folder: [{ rules: [{
-      labels: { severity: "forbidden-value", alpha: "also-forbidden" },
+      labels: { severity: "forbidden-value", alpha: "forbidden-label-alpha-value" },
       annotations: { runbook: "forbidden-annotation-value" },
       grafana_alert: { uid: "r1", title: "Rule", namespace_uid: "f1", rule_group: "g",
-        is_paused: false, no_data_state: "NoData", exec_err_state: "Error", data: ["forbidden-model"] },
+        is_paused: false, no_data_state: "NoData", exec_err_state: "Error",
+        condition: "forbidden-alert-condition",
+        data: [{ model: { expression: "forbidden-alert-expression" } }] },
     }] }],
   });
   plan.set("/api/v1/provisioning/contact-points", [{ uid: "c1", name: "Dark", type: "webhook",
     disableResolveMessage: false, settings: { beta: "forbidden-setting", alpha: "forbidden-secret" },
     secureSettings: { password: "forbidden-password" } }]);
-  plan.set("/api/v1/provisioning/policies", { receiver: "root", routes: [
+  plan.set("/api/v1/provisioning/policies", { receiver: "root",
+    group_wait: "forbidden-policy-group-wait", group_interval: "forbidden-policy-group-interval",
+    repeat_interval: "forbidden-policy-repeat-interval", routes: [
     { receiver: "child", matchers: [["customer", "=", "forbidden-matcher"]] },
-    { receiver: "root" },
+    { receiver: "root", mute_time_intervals: ["forbidden-policy-mute-time"],
+      active_time_intervals: ["forbidden-policy-active-time"] },
   ] });
   plan.set("/api/access-control/user/permissions", {
     "serviceaccounts:read": ["forbidden-scope"],
@@ -99,7 +113,9 @@ export function completePlan() {
     "datasources:write": ["ignored"],
   });
   plan.set("/api/serviceaccounts/search?perpage=100&page=1", { serviceAccounts: [
-    { id: 2, name: "B", role: "Viewer", isDisabled: false, tokens: 0, login: "forbidden-login" },
+    { id: 2, name: "B", role: "Viewer", isDisabled: false, tokens: 0,
+      login: "forbidden-login", orgId: "forbidden-service-org",
+      teams: ["forbidden-service-team"], accessControl: { read: "forbidden-service-access" } },
     { id: 1, name: "A", role: "Viewer", isDisabled: true, tokens: 1 },
   ], page: 1, perPage: 100, totalCount: 2 });
   plan.set("/api/datasources/uid/z/health", { status: "OK", message: "forbidden-plugin-message" });
@@ -221,7 +237,8 @@ export function controlledRuntime({ now = 0, wall = "2026-08-19T00:00:00.000Z" }
 }
 
 export function internalPrepare(fetchImpl) {
-  return async ({ signal, guard }) => {
+  return async ({ signal, guard, credentialBytes }) => {
+    assert.equal(credentialBytes, 8_192);
     guard();
     signal.throwIfAborted();
     return async (path, requestSignal) => {

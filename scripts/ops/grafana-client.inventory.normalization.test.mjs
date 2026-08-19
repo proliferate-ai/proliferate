@@ -137,9 +137,19 @@ test("two-page complete projection is exact, canonically ordered, and privacy-ne
   assert.ok(trace.some(({ path }) => path === "/api/serviceaccounts/search?perpage=100&page=2"));
   assert.equal(trace.some(({ path }) => path === "/api/serviceaccounts/search?perpage=100&page=3"), false);
   const serialized = JSON.stringify({ result, trace });
-  for (const forbidden of ["forbidden-url", "forbidden-token", "forbidden-query", "forbidden-value",
-    "forbidden-setting", "forbidden-secret", "forbidden-password", "forbidden-matcher",
-    "forbidden-scope", "forbidden-login", "forbidden-plugin-message", "forbidden-health-prose",
+  for (const forbidden of ["forbidden-datasource-id", "forbidden-datasource-org",
+    "forbidden-datasource-user", "forbidden-datasource-database", "forbidden-datasource-basic-auth",
+    "forbidden-basic-auth-user", "forbidden-datasource-password", "forbidden-url",
+    "forbidden-json-data", "forbidden-token", "forbidden-secure-field", "forbidden-folder-url",
+    "forbidden-query", "forbidden-dashboard-tags", "forbidden-dashboard-star",
+    "forbidden-dashboard-body", "forbidden-dashboard-variable", "forbidden-dashboard-query",
+    "forbidden-value", "forbidden-label-alpha-value", "forbidden-annotation-value",
+    "forbidden-alert-condition", "forbidden-alert-expression", "forbidden-setting",
+    "forbidden-secret", "forbidden-password", "forbidden-matcher", "forbidden-policy-group-wait",
+    "forbidden-policy-group-interval", "forbidden-policy-repeat-interval",
+    "forbidden-policy-mute-time", "forbidden-policy-active-time", "forbidden-scope",
+    "forbidden-login", "forbidden-service-org", "forbidden-service-team", "forbidden-service-access",
+    "forbidden-plugin-message", "forbidden-health-prose",
     "forbidden-folder-page-one", "forbidden-dashboard-query-page-one",
     "forbidden-service-account-page-one", "forbidden-service-account-avatar"] ) {
     assert.equal(serialized.includes(forbidden), false);
@@ -424,16 +434,18 @@ test("non-deadline defects propagate from direct, paged, service, and health nor
 
 test("Unicode, path, number, duplicate, and string limits fail closed before fan-out", async (t) => {
   const cases = [
-    ["lone high UID", datasource("\ud800")],
-    ["lone low name", datasource("ok", { name: "\udfff" })],
-    ["unsafe path", datasource("../bad")],
-    ["one-over string", datasource("ok", { name: "x".repeat(257) })],
+    ["lone high UID", datasource("\ud800"), "invalid_shape"],
+    ["lone low name", datasource("ok", { name: "\udfff" }), "invalid_shape"],
+    ["unsafe path", datasource("../bad"), "invalid_shape"],
+    ["C1 U+0080 UID", JSON.parse(JSON.stringify(datasource("c1-\u0080"))), "invalid_shape"],
+    ["C1 U+009F UID", JSON.parse(JSON.stringify(datasource("c1-\u009f"))), "invalid_shape"],
+    ["one-over string", datasource("ok", { name: "x".repeat(257) }), "string_limit"],
   ];
-  for (const [name, item] of cases) {
+  for (const [name, item, reason] of cases) {
     await t.test(name, async () => {
       const plan = emptyPlan(); plan.set("/api/datasources", [item]);
       const { result, trace } = await runPlan(plan);
-      assert.equal(result.surfaces.datasources.state, "malformed");
+      assert.deepEqual(result.surfaces.datasources, surfaceFailure("malformed", reason, 200));
       assert.equal(trace.some((entry) => entry.path.includes("/health")), false);
     });
   }
@@ -442,6 +454,64 @@ test("Unicode, path, number, duplicate, and string limits fail closed before fan
     const plan = emptyPlan(); setServicePages(plan, [{ serviceAccounts: [account], page: 1, perPage: 100, totalCount: 1 }]);
     assert.deepEqual((await runPlan(plan)).result.surfaces.serviceAccounts,
       surfaceFailure("malformed", "invalid_shape", 200));
+  }
+});
+
+async function runAtomicRuler(entries, expiresAtObservation) {
+  const runtime = controlledRuntime();
+  let armed = false;
+  let observations = 0;
+  runtime.dependencies.monotonicNow = () => {
+    if (!armed) return 0;
+    observations += 1;
+    return observations >= expiresAtObservation ? 30_000 : 0;
+  };
+  const plan = emptyPlan();
+  plan.set("/api/ruler/grafana/api/v1/rules", rawResponse({
+    body: Object.fromEntries(entries),
+    onRead(index) { if (index === 1) armed = true; },
+  }));
+  const { result, trace } = await runPlan(plan, runtime);
+  return { surface: result.surfaces.alertRules, trace, observations };
+}
+
+test("Ruler row 4 and row 6 are atomic, order-independent, and precede invalid keys", async (t) => {
+  const invalidNamespace = "\ud800";
+  // Six post-body observations plus one per parsed row place the next allowed
+  // observation at 11 after row 4 and 13 after row 6.
+  const cases = [
+    {
+      name: "row 4 item aggregate",
+      entries: [
+        ["bounded", [{ rules: Array.from({ length: 501 }, () => ({})) }]],
+        [invalidNamespace, []],
+      ],
+      expiresAt: 11,
+      expected: surfaceFailure("unknown", "item_limit", 200),
+    },
+    {
+      name: "row 6 key aggregate",
+      entries: [
+        ["bounded", [{ rules: [{
+          grafana_alert: { uid: "rule", title: "Rule" },
+          labels: Object.fromEntries(Array.from({ length: 65 }, (_, index) => [`k${index}`, index])),
+        }] }]],
+        [invalidNamespace, []],
+      ],
+      expiresAt: 13,
+      expected: surfaceFailure("unknown", "key_limit", 200),
+    },
+  ];
+  for (const fixture of cases) {
+    await t.test(fixture.name, async () => {
+      const forward = await runAtomicRuler(fixture.entries, fixture.expiresAt);
+      const reverse = await runAtomicRuler([...fixture.entries].reverse(), fixture.expiresAt);
+      assert.deepEqual(forward.surface, fixture.expected);
+      assert.deepEqual(reverse.surface, fixture.expected);
+      assert.deepEqual(forward.trace, reverse.trace);
+      assert.equal(forward.observations, fixture.expiresAt);
+      assert.equal(reverse.observations, fixture.expiresAt);
+    });
   }
 });
 
@@ -539,6 +609,12 @@ test("dynamic-key and health-string row 7/8 boundaries are exact", async () => {
     { message: "x".repeat(257) });
   assert.deepEqual((await runPlan(missing)).result.surfaces.datasourceHealth.items[0],
     { uid: "z", state: "malformed", reason: "invalid_shape", httpStatus: 200 });
+  const wrongType = completePlan(); wrongType.set("/api/datasources/uid/z/health",
+    { status: { private: "forbidden-wrong-health-status" } });
+  const wrongTypeResult = (await runPlan(wrongType)).result;
+  assert.deepEqual(wrongTypeResult.surfaces.datasourceHealth.items[0],
+    { uid: "z", state: "malformed", reason: "invalid_shape", httpStatus: 200 });
+  assert.equal(JSON.stringify(wrongTypeResult).includes("forbidden-wrong-health-status"), false);
   const oversized = completePlan(); oversized.set("/api/datasources/uid/z/health",
     { status: "x".repeat(257), message: "ignored" });
   assert.deepEqual((await runPlan(oversized)).result.surfaces.datasourceHealth.items[0],
