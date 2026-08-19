@@ -28,7 +28,6 @@ from proliferate.integrations.integration_oauth import (
 from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
 
 # Static-client auth methods this deployment can drive.
-# Static-client auth methods this deployment can drive.
 SUPPORTED_STATIC_OAUTH_TOKEN_ENDPOINT_AUTH_METHODS = {
     "none",
     "client_secret_post",
@@ -62,6 +61,33 @@ def _static_oauth_client_config(namespace: str) -> _StaticOAuthClientConfig | No
         client_secret=client_secret,
         token_endpoint_auth_method=auth_method,
     )
+
+
+def validate_oauth_provider_start_readiness(
+    definition: IntegrationDefinitionRecord,
+) -> None:
+    """Fail closed before discovery when a static provider is not qualified.
+
+    Slack Marketplace/distribution eligibility is independent of possessing a
+    client id and secret.  Keep the release qualification as a distinct,
+    default-off gate so a stale deployment secret can never advertise a usable
+    authorization path on its own.
+    """
+    if definition.oauth_client_mode != "static" or definition.namespace != "slack":
+        return
+    if (
+        not app_settings.cloud_mcp_slack_enabled
+        or not app_settings.cloud_mcp_slack_distribution_ready
+    ):
+        raise IntegrationOAuthProviderError(
+            "integration_provider_unavailable",
+            "Slack OAuth distribution is not qualified for this deployment.",
+        )
+    if _static_oauth_client_config(definition.namespace) is None:
+        raise IntegrationOAuthProviderError(
+            "missing_static_oauth_client",
+            "This deployment is missing static OAuth client configuration.",
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -122,6 +148,7 @@ async def _get_static_client(
     redirect_uri: str,
     resource: str,
 ) -> IntegrationOAuthClientRecord:
+    validate_oauth_provider_start_readiness(definition)
     config = _static_oauth_client_config(definition.namespace)
     if config is None:
         raise IntegrationOAuthProviderError(

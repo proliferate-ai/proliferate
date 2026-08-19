@@ -394,6 +394,9 @@ class Settings(BaseSettings):
     cloud_mcp_oauth_callback_base_url: str = ""
     cloud_mcp_oauth_callback_fallback_base_url: str = "http://localhost:8000"
     cloud_mcp_slack_enabled: bool = False
+    # Operator-owned release qualification for the exact static Slack app.
+    # Credentials alone never prove Marketplace distribution eligibility.
+    cloud_mcp_slack_distribution_ready: bool = False
     cloud_mcp_slack_client_id: str = ""
     cloud_mcp_slack_client_secret: str = ""
     cloud_mcp_slack_token_endpoint_auth_method: str = "client_secret_post"

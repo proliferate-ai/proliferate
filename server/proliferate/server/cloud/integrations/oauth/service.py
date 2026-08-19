@@ -58,7 +58,10 @@ from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
 from proliferate.lib.infra.encryption.json import encrypt_json
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integrations.config import parse_definition_config, render_mcp_url
-from proliferate.server.cloud.integrations.oauth.clients import resolve_oauth_client
+from proliferate.server.cloud.integrations.oauth.clients import (
+    resolve_oauth_client,
+    validate_oauth_provider_start_readiness,
+)
 from proliferate.server.cloud.integrations.oauth.scope_policy import (
     OAuthScopePolicyError,
     validate_callback_oauth_scopes,
@@ -302,6 +305,9 @@ async def start_oauth_flow(
         raise CloudApiError("invalid_payload", str(exc), status_code=400) from exc
 
     try:
+        # Static provider qualification is deployment state, not something
+        # provider discovery can infer. Refuse before any external request.
+        validate_oauth_provider_start_readiness(definition)
         protected = await discover_protected_resource_metadata(server_url)
         requested_scope = _resolve_requested_oauth_scope(
             challenged_scope=protected.challenged_scope,

@@ -55,6 +55,11 @@ async def _start_slack_flow(
     assert definition is not None
 
     monkeypatch.setattr(oauth_clients.app_settings, "cloud_mcp_slack_enabled", True)
+    monkeypatch.setattr(
+        oauth_clients.app_settings,
+        "cloud_mcp_slack_distribution_ready",
+        True,
+    )
     monkeypatch.setattr(oauth_clients.app_settings, "cloud_mcp_slack_client_id", "slack-client")
     monkeypatch.setattr(
         oauth_clients.app_settings,

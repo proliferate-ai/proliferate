@@ -292,6 +292,11 @@ class TestAuthenticateIntegration:
         monkeypatch.setattr(oauth_clients.app_settings, "cloud_mcp_slack_enabled", True)
         monkeypatch.setattr(
             oauth_clients.app_settings,
+            "cloud_mcp_slack_distribution_ready",
+            True,
+        )
+        monkeypatch.setattr(
+            oauth_clients.app_settings,
             "cloud_mcp_slack_client_id",
             "slack-client-id",
         )
@@ -369,6 +374,22 @@ class TestAuthenticateIntegration:
                 challenged_scope="search:read.public chat:write",
             )
 
+        monkeypatch.setattr(oauth_clients.app_settings, "cloud_mcp_slack_enabled", True)
+        monkeypatch.setattr(
+            oauth_clients.app_settings,
+            "cloud_mcp_slack_distribution_ready",
+            True,
+        )
+        monkeypatch.setattr(
+            oauth_clients.app_settings,
+            "cloud_mcp_slack_client_id",
+            "slack-client-id",
+        )
+        monkeypatch.setattr(
+            oauth_clients.app_settings,
+            "cloud_mcp_slack_client_secret",
+            "slack-client-secret",
+        )
         monkeypatch.setattr(oauth_service, "discover_protected_resource_metadata", _fake_protected)
 
         response = await client.post(
