@@ -12,6 +12,7 @@ import {
   resolveInspectionUnavailableCopy,
   useDesktopPathInspection,
 } from "#product/hooks/workspaces/workflows/files/use-desktop-path-inspection";
+import { useDesktopFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-desktop-file-reference-actions";
 import { useFuzzyFileResolver } from "#product/hooks/workspaces/workflows/files/use-fuzzy-file-resolver";
 import { useHomeRelativeFileReference } from "#product/hooks/workspaces/workflows/files/use-home-relative-file-reference";
 import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
@@ -20,7 +21,6 @@ import {
   resolveFileReference,
   resolveFileReferencePrimaryAction,
   resolveWorkspaceStatPathKind,
-  type FileReferencePathKind,
 } from "#product/lib/domain/files/path-references";
 import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import { fileViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
@@ -113,6 +113,15 @@ export function useFileReferenceActions({
     openInDefaultEditor,
     targets,
   } = useOpenInDefaultEditor(pathKind);
+  const { openDefault, openTargets, openWithTarget, reveal } = useDesktopFileReferenceActions({
+    files,
+    reference,
+    pathKind,
+    desktopInspectionState,
+    routeRevision,
+    targets,
+    openInDefaultEditor,
+  });
 
   const canOpenInSidebar = pathKind === "file" && Boolean(reference.workspacePath);
   const canOpenExternal = Boolean(files && reference.absolutePath && pathKind);
@@ -168,11 +177,6 @@ export function useFileReferenceActions({
                     : pathKind === null
                       ? "This path is unavailable."
                       : null);
-  const openTargets = useMemo(
-    () => targets.filter((target) => target.kind !== "copy"),
-    [targets],
-  );
-
   const copyPath = useCallback(async () => {
     await host.clipboard.writeText(reference.absolutePath ?? reference.path);
   }, [host.clipboard, reference.absolutePath, reference.path]);
@@ -225,58 +229,6 @@ export function useFileReferenceActions({
     const client = getAnyHarnessClient(resolved.connection);
     return client.files.stat(resolved.connection.anyharnessWorkspaceId, path);
   }, [anyHarnessWorkspace, materializedWorkspaceId]);
-
-  const currentNativePathKind = useCallback((
-    absolutePath: string,
-  ): FileReferencePathKind | null => {
-    if (
-      currentRouteRevisionRef.current !== routeRevision
-      || absolutePath !== reference.absolutePath
-      || !files
-      || pathKind === null
-    ) {
-      return null;
-    }
-    if (reference.workspacePath) {
-      return pathKind;
-    }
-    return desktopInspectionState.status === "settled"
-      && desktopInspectionState.inspection.kind === pathKind
-      ? pathKind
-      : null;
-  }, [
-    desktopInspectionState,
-    files,
-    pathKind,
-    reference.absolutePath,
-    reference.workspacePath,
-    routeRevision,
-  ]);
-
-  const openDefault = useCallback(async (
-    absolutePath: string | null = reference.absolutePath,
-  ) => {
-    if (!absolutePath) {
-      return false;
-    }
-    const imperativePathKind = currentNativePathKind(absolutePath);
-    if (!imperativePathKind) {
-      return false;
-    }
-    return openInDefaultEditor(absolutePath, imperativePathKind);
-  }, [currentNativePathKind, openInDefaultEditor, reference.absolutePath]);
-
-  const reveal = useCallback(async (
-    absolutePath: string | null = reference.absolutePath,
-  ) => {
-    if (!absolutePath || currentNativePathKind(absolutePath) !== "directory") {
-      return;
-    }
-    if (!files) {
-      return;
-    }
-    await files.reveal(absolutePath);
-  }, [currentNativePathKind, files, reference.absolutePath]);
 
   const openPrimary = useCallback(async () => {
     let resolvedPathKind = pathKind;
@@ -423,19 +375,6 @@ export function useFileReferenceActions({
     workspaceRoot,
     workspaceUiKey,
   ]);
-
-  const openWithTarget = useCallback(async (targetId: string) => {
-    if (
-      !reference.absolutePath
-      || currentNativePathKind(reference.absolutePath) === null
-    ) {
-      return;
-    }
-    if (!files) {
-      return;
-    }
-    await files.openTarget(targetId, reference.absolutePath);
-  }, [currentNativePathKind, files, reference.absolutePath]);
 
   return {
     reference,
