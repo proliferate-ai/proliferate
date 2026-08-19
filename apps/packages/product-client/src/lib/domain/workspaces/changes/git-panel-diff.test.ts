@@ -88,6 +88,9 @@ describe("git panel diff domain", () => {
           displayPath: "clean.md",
           operation: "edit",
           topLevel: true,
+          recordedAdditions: 4,
+          recordedDeletions: 2,
+          recordedPatch: "@@ -1 +1 @@\n-before\n+recorded",
         },
         {
           key: ":dirty.md:edit",
@@ -96,6 +99,9 @@ describe("git panel diff domain", () => {
           displayPath: "dirty.md",
           operation: "edit",
           topLevel: true,
+          recordedAdditions: 8,
+          recordedDeletions: 5,
+          recordedPatch: "@@ -1 +1 @@\n-old\n+transcript",
         },
       ],
       baseWorktreeFiles: [
@@ -116,6 +122,9 @@ describe("git panel diff domain", () => {
       touched: {
         path: "clean.md",
         operation: "edit",
+        recordedAdditions: 4,
+        recordedDeletions: 2,
+        recordedPatch: "@@ -1 +1 @@\n-before\n+recorded",
       },
     });
     expect(sections[0].files[1]).toMatchObject({
@@ -129,6 +138,9 @@ describe("git panel diff domain", () => {
       touched: {
         path: "dirty.md",
         operation: "edit",
+        recordedAdditions: 8,
+        recordedDeletions: 5,
+        recordedPatch: "@@ -1 +1 @@\n-old\n+transcript",
       },
     });
   });

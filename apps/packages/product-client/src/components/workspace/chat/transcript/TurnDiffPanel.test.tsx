@@ -261,7 +261,7 @@ describe("TurnDiffPanel", () => {
 
     expect(html).toContain("Edited 2 files");
     expect(html.match(/aria-label="4" class="diff-stat-rolling-number"/g)).toHaveLength(2);
-    expect(html.match(/aria-label="2" class="diff-stat-rolling-number"/g)).toHaveLength(2);
+    expect(html.match(/aria-label="3" class="diff-stat-rolling-number"/g)).toHaveLength(2);
     expect(html.match(/aria-label="1" class="diff-stat-rolling-number"/g)).toHaveLength(2);
   });
 
@@ -425,6 +425,9 @@ function currentFile(path: string, additions: number, deletions: number) {
       displayPath: path,
       operation: "edit",
       topLevel: true,
+      recordedAdditions: 0,
+      recordedDeletions: 0,
+      recordedPatch: null,
     },
   };
 }
@@ -443,6 +446,9 @@ function touchedFile(path: string) {
       displayPath: path,
       operation: "edit",
       topLevel: true,
+      recordedAdditions: 0,
+      recordedDeletions: 0,
+      recordedPatch: null,
     },
   };
 }

@@ -25,6 +25,7 @@ import {
   DIFF_ROW_VIRTUALIZATION_LINE_THRESHOLD,
   resolveDiffDisplayPolicy,
 } from "#product/lib/domain/workspaces/changes/diff-display-policy";
+import { resolveGitPanelReviewEvidence } from "#product/lib/domain/workspaces/changes/git-panel-review-model";
 import type {
   GitPanelReviewFile,
   GitPanelReviewScope,
@@ -129,7 +130,7 @@ export function GitReviewFileRow({
   const { fileLines, requestFileLines } = useLazyDiffFileLines({
     workspaceId,
     path: file.path,
-    enabled: gapExpansionScopeValid && isRuntimeReady,
+    enabled: gapExpansionScopeValid && Boolean(currentDiff) && isRuntimeReady,
   });
   const metadataPolicy = useMemo(
     () => currentDiff
@@ -155,10 +156,24 @@ export function GitReviewFileRow({
       && Boolean(metadataPolicy?.canFetchInline),
     ...(diffTimingOptions ?? {}),
   });
-  const diffErrorMessage = diffQuery.isError ? formatDiffErrorMessage(diffQuery.error) : null;
-  const additions = diffQuery.data?.additions ?? currentDiff?.additions ?? 0;
-  const deletions = diffQuery.data?.deletions ?? currentDiff?.deletions ?? 0;
-  const patch = diffQuery.data?.patch ?? null;
+  const evidence = resolveGitPanelReviewEvidence(file, diffQuery.data);
+  const diffErrorMessage = currentDiff && diffQuery.isError
+    ? formatDiffErrorMessage(diffQuery.error)
+    : null;
+  const { additions, deletions } = evidence;
+  const patch = evidence.source === "current" ? evidence.patch : null;
+  const recordedPatch = evidence.source === "recorded" ? evidence.patch : null;
+  const recordedPolicy = useMemo(
+    () => recordedPatch
+      ? resolveDiffDisplayPolicy({
+          path: file.path,
+          additions,
+          deletions,
+          patch: recordedPatch,
+        })
+      : null,
+    [additions, deletions, file.path, recordedPatch],
+  );
   const patchPolicy = useMemo(
     () => patch
       ? resolveDiffDisplayPolicy({
@@ -183,13 +198,14 @@ export function GitReviewFileRow({
   // [data-diff-row-virtualization] rule in design product.css): the diff
   // renders at full height in the outer panel scroll, so without it every
   // row of a multi-thousand-line patch stays painted while scrolling.
+  const renderedPatchPolicy = patchPolicy ?? recordedPolicy;
   const virtualizeDiffRows = Boolean(
-    patchPolicy
-    && patchPolicy.patchLineCount > DIFF_ROW_VIRTUALIZATION_LINE_THRESHOLD,
+    renderedPatchPolicy
+    && renderedPatchPolicy.patchLineCount > DIFF_ROW_VIRTUALIZATION_LINE_THRESHOLD,
   );
   const emptyDiffState = formatEmptyDiffState({
-    binary: Boolean(diffQuery.data?.binary || currentDiff?.binary),
-    truncated: Boolean(diffQuery.data?.truncated && !patch),
+    binary: evidence.binary,
+    truncated: evidence.truncated && !patch,
   });
 
   // Hunk-level actions: only for working-tree scopes (unstaged/staged) in
@@ -201,7 +217,7 @@ export function GitReviewFileRow({
     && !isBranchMode
     && !isLastTurnMode
     && layout === "unified"
-    && !diffQuery.data?.truncated
+    && !evidence.truncated
     && isHunkActionEligible(patch, file.oldPath)
     && isRuntimeReady,
   );
@@ -255,10 +271,10 @@ export function GitReviewFileRow({
     : null;
 
   useEffect(() => {
-    if (diffQuery.data || diffQuery.isError) {
+    if (currentDiff && (diffQuery.data || diffQuery.isError)) {
       onDiffFetchSettled();
     }
-  }, [diffQuery.data, diffQuery.isError, onDiffFetchSettled]);
+  }, [currentDiff, diffQuery.data, diffQuery.isError, onDiffFetchSettled]);
 
   if (
     currentDiff
@@ -292,19 +308,42 @@ export function GitReviewFileRow({
         file={file}
         additions={additions}
         deletions={deletions}
-        binary={Boolean(diffQuery.data?.binary || currentDiff?.binary)}
+        binary={evidence.binary}
         showStagedChip={showStagedChip}
         collapsed={collapsed}
         onToggleCollapsed={onToggleCollapsed}
         onOpenFile={() => void openFile(file.path)}
       >
         {!currentDiff ? (
-          <GitReviewInlineEmptyState
-            icon={<FileIcon className="icon-paired" />}
-            title="No current diff"
-            description="This file was touched, but there are no current changes to review against the selected base."
-            onOpenFile={() => void openFile(file.path)}
-          />
+          recordedPatch && recordedPolicy ? (
+            !recordedPolicy.canRenderInline ? (
+              <DiffDisplayPolicyPlaceholder
+                title={recordedPolicy.placeholderTitle}
+                description={recordedPolicy.placeholderDescription}
+                onOpenFile={() => void openFile(file.path)}
+              />
+            ) : (
+              <DiffViewer
+                patch={recordedPatch}
+                filePath={file.displayPath}
+                wrapLongLines={wrapLongLines}
+                layout={layout}
+                variant={layout === "unified" ? "chat" : "default"}
+                contentSearchUnitId={`review-diff:${id}`}
+                contentSearchSurface="review"
+                contentSearchOrderKey={contentSearchOrderKey}
+                overscrollBehaviorX="none"
+                overscrollBehaviorY="none"
+              />
+            )
+          ) : (
+            <GitReviewInlineEmptyState
+              icon={<FileIcon className="icon-paired" />}
+              title="No current diff"
+              description="This file was touched, but there are no current changes to review against the selected base."
+              onOpenFile={() => void openFile(file.path)}
+            />
+          )
         ) : !metadataPolicy?.canFetchInline ? (
           <DiffDisplayPolicyPlaceholder
             title={metadataPolicy?.placeholderTitle ?? "Too large to render inline"}
@@ -355,7 +394,7 @@ export function GitReviewFileRow({
                 onRequestFileLines={requestFileLines}
                 hunkActions={hunkActions}
               />
-              {diffQuery.data?.truncated ? (
+              {evidence.truncated ? (
                 <p className="px-3 py-2 text-center text-ui-sm text-sidebar-muted-foreground">
                   Diff truncated because it is too large
                 </p>
