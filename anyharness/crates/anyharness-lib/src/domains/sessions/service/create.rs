@@ -5,8 +5,9 @@ use std::time::Instant;
 use uuid::Uuid;
 
 use super::{CreateSessionError, CreateSessionOutcome, SessionService};
+use crate::domains::agents::launch_options::environment::find_capability_affecting_env_override;
 use crate::domains::agents::launch_options::{
-    LaunchSelection, LaunchSelectionUnsupported,
+    HarnessLaunchOptionStateRow, LaunchSelection, LaunchSelectionUnsupported,
 };
 use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::readiness::service::resolve_launch_agent;
@@ -16,8 +17,7 @@ use crate::domains::sessions::launch_intent::ResolvedLaunchIntent;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::store::idempotent_create::InsertSessionByIdOutcome;
 use crate::domains::workspaces::env::{
-    read_materialized_launch_env, read_materialized_session_env,
-    read_materialized_workspace_env,
+    read_materialized_launch_env, read_materialized_session_env, read_materialized_workspace_env,
 };
 use crate::domains::workspaces::model::WorkspaceSurface;
 use crate::origin::OriginContext;
@@ -54,10 +54,17 @@ impl SessionService {
             system_prompt_append,
             subagents_enabled,
             origin,
-            |record, intent| {
+            |record, intent, current_basis, selection| {
                 self.session_store
-                    .insert_with_launch_intent(record, intent)
-                    .map_err(CreateSessionError::Internal)
+                    .insert_with_launch_intent(record, intent, agent_kind, current_basis, selection)
+                    .map_err(|unsupported| {
+                        map_selection_unsupported(
+                            workspace_id,
+                            preselected_session_id,
+                            agent_kind,
+                            unsupported,
+                        )
+                    })
             },
         )
     }
@@ -84,7 +91,12 @@ impl SessionService {
         persist_new: F,
     ) -> Result<CreateSessionOutcome, CreateSessionError>
     where
-        F: FnOnce(&SessionRecord, &ResolvedLaunchIntent) -> Result<(), CreateSessionError>,
+        F: FnOnce(
+            &SessionRecord,
+            &ResolvedLaunchIntent,
+            &str,
+            &LaunchSelection,
+        ) -> Result<HarnessLaunchOptionStateRow, CreateSessionError>,
     {
         let started = Instant::now();
         tracing::info!(
@@ -98,19 +110,10 @@ impl SessionService {
         let preselected_session_id = preselected_session_id
             .map(|id| validate_preselected_session_id(id, reuse_existing))
             .transpose()?;
-        if reuse_existing {
-            let Some(session_id) = preselected_session_id.as_deref() else {
-                return Err(CreateSessionError::Internal(anyhow::anyhow!(
-                    "reusing an existing session requires a preselected session id"
-                )));
-            };
-            if let Some(existing) = self
-                .session_store
-                .find_by_id(session_id)
-                .map_err(CreateSessionError::Internal)?
-            {
-                return replay_existing_session(existing, workspace_id, agent_kind);
-            }
+        if reuse_existing && preselected_session_id.is_none() {
+            return Err(CreateSessionError::Internal(anyhow::anyhow!(
+                "reusing an existing session requires a preselected session id"
+            )));
         }
 
         let workspace_lookup_started = Instant::now();
@@ -133,10 +136,17 @@ impl SessionService {
                 .into_iter()
                 .next()
             {
-                return Err(CreateSessionError::WorkspaceSingleSession {
-                    workspace_id: workspace_id.to_string(),
-                    session_id: existing.id,
-                });
+                if reuse_existing && preselected_session_id.as_deref() == Some(existing.id.as_str())
+                {
+                    // The idempotent request still passes every current create
+                    // gate and the transactional request/intent comparison
+                    // below. It is not a second Cowork session.
+                } else {
+                    return Err(CreateSessionError::WorkspaceSingleSession {
+                        workspace_id: workspace_id.to_string(),
+                        session_id: existing.id,
+                    });
+                }
             }
         }
 
@@ -154,16 +164,10 @@ impl SessionService {
         let workspace_path = Path::new(&workspace.path);
         let workspace_env = read_materialized_workspace_env(workspace_path)
             .map_err(CreateSessionError::Internal)?;
-        let session_env = read_materialized_session_env(workspace_path)
-            .map_err(CreateSessionError::Internal)?;
-        if let Some(env_var_name) = descriptor
-            .auth
-            .expected_env_vars()
-            .into_iter()
-            .find(|name| {
-                workspace_env.contains_key(name.as_str())
-                    || session_env.contains_key(name.as_str())
-            })
+        let session_env =
+            read_materialized_session_env(workspace_path).map_err(CreateSessionError::Internal)?;
+        if let Some(env_var_name) =
+            find_capability_affecting_env_override(&descriptor, &workspace_env, &session_env)
         {
             return Err(CreateSessionError::AgentEnvOverrideUnsupported {
                 agent_kind: agent_kind.to_string(),
@@ -171,9 +175,8 @@ impl SessionService {
             });
         }
 
-        let readiness_env =
-            read_materialized_launch_env(&self.runtime_home, workspace_path)
-                .map_err(CreateSessionError::Internal)?;
+        let readiness_env = read_materialized_launch_env(&self.runtime_home, workspace_path)
+            .map_err(CreateSessionError::Internal)?;
         let agent_resolution_started = Instant::now();
         // Fail closed BEFORE the readiness gate, so an unsatisfiable selection is
         // reported as the auth problem it is. The readiness gate would also refuse
@@ -236,30 +239,7 @@ impl SessionService {
             model_id: model_id.map(str::to_string),
             control_values: control_values.clone(),
         };
-        let validated_state = self
-            .launch_options_service
-            .validate_selection(agent_kind, &selection)
-            .map_err(|unsupported| {
-                map_selection_unsupported(
-                    workspace_id,
-                    preselected_session_id.as_deref(),
-                    agent_kind,
-                    unsupported,
-                )
-            })?;
-        tracing::info!(
-            workspace_id = %workspace_id,
-            agent_kind = %agent_kind,
-            harness_basis_revision = %validated_state.basis_revision,
-            source_revision = validated_state.revision,
-            selected_model = selection.model_id.is_some(),
-            selected_control_count = selection.control_values.len(),
-            accepted = true,
-            result_code = "accepted",
-            event = "session.launch_selection.validated",
-            elapsed_ms = model_resolution_started.elapsed().as_millis(),
-            "[workspace-latency] session.create.model_resolved"
-        );
+        let current_basis = self.launch_options_service.basis_revision(agent_kind);
 
         let session_id = preselected_session_id
             .clone()
@@ -298,21 +278,49 @@ impl SessionService {
             origin: Some(origin),
         };
 
-        let outcome = if reuse_existing {
-            match self
+        let (outcome, validated_state) = if reuse_existing {
+            let (insert_outcome, validated_state) = self
                 .session_store
-                .insert_or_find_by_id(&record, &intent)
-                .map_err(CreateSessionError::Internal)?
-            {
+                .insert_or_find_by_id(&record, &intent, agent_kind, &current_basis, &selection)
+                .map_err(|unsupported| {
+                    map_selection_unsupported(
+                        workspace_id,
+                        preselected_session_id.as_deref(),
+                        agent_kind,
+                        unsupported,
+                    )
+                })?;
+            let outcome = match insert_outcome {
                 InsertSessionByIdOutcome::Inserted => CreateSessionOutcome::Created(record),
-                InsertSessionByIdOutcome::Existing(existing) => {
-                    replay_existing_session(existing, workspace_id, agent_kind)?
-                }
-            }
+                InsertSessionByIdOutcome::Existing {
+                    record: existing,
+                    intent: existing_intent,
+                } => replay_existing_session(
+                    existing,
+                    existing_intent,
+                    workspace_id,
+                    agent_kind,
+                    &selection,
+                )?,
+            };
+            (outcome, validated_state)
         } else {
-            persist_new(&record, &intent)?;
-            CreateSessionOutcome::Created(record)
+            let validated_state = persist_new(&record, &intent, &current_basis, &selection)?;
+            (CreateSessionOutcome::Created(record), validated_state)
         };
+        tracing::info!(
+            workspace_id = %workspace_id,
+            agent_kind = %agent_kind,
+            harness_basis_revision = %validated_state.basis_revision,
+            source_revision = validated_state.revision,
+            selected_model = selection.model_id.is_some(),
+            selected_control_count = selection.control_values.len(),
+            accepted = true,
+            result_code = "accepted",
+            event = "session.launch_selection.validated",
+            elapsed_ms = model_resolution_started.elapsed().as_millis(),
+            "[workspace-latency] session.create.model_resolved"
+        );
         let record = match &outcome {
             CreateSessionOutcome::Created(record) | CreateSessionOutcome::Existing(record) => {
                 record
@@ -330,7 +338,10 @@ impl SessionService {
         if let CreateSessionOutcome::Created(_) = &outcome {
             let marker = SessionAdapterMarker::new(
                 resolved.agent_process.version.clone(),
-                resolved.native.as_ref().and_then(|native| native.version.clone()),
+                resolved
+                    .native
+                    .as_ref()
+                    .and_then(|native| native.version.clone()),
             );
             if let Err(error) =
                 self.session_store
@@ -378,11 +389,16 @@ fn validate_preselected_session_id(
 
 fn replay_existing_session(
     existing: SessionRecord,
+    existing_intent: Option<ResolvedLaunchIntent>,
     workspace_id: &str,
     agent_kind: &str,
+    selection: &LaunchSelection,
 ) -> Result<CreateSessionOutcome, CreateSessionError> {
+    let request_matches_intent =
+        request_matches_persisted_intent(existing_intent.as_ref(), selection);
     if existing.workspace_id != workspace_id
         || existing.agent_kind != agent_kind
+        || !request_matches_intent
         || existing.closed_at.is_some()
         || existing.dismissed_at.is_some()
         || existing.status == "closed"
@@ -394,7 +410,16 @@ fn replay_existing_session(
     Ok(CreateSessionOutcome::Existing(existing))
 }
 
-fn map_selection_unsupported(
+fn request_matches_persisted_intent(
+    intent: Option<&ResolvedLaunchIntent>,
+    selection: &LaunchSelection,
+) -> bool {
+    intent.is_some_and(|intent| {
+        intent.model_id == selection.model_id && intent.control_values == selection.control_values
+    })
+}
+
+pub(crate) fn map_selection_unsupported(
     workspace_id: &str,
     attempted_session_id: Option<&str>,
     agent_kind: &str,
@@ -458,7 +483,11 @@ fn map_selection_unsupported(
                 state,
             }
         }
-        LaunchSelectionUnsupported::ControlValue { control_id, value, state } => {
+        LaunchSelectionUnsupported::ControlValue {
+            control_id,
+            value,
+            state,
+        } => {
             log_selection_rejected(
                 workspace_id,
                 attempted_session_id,
@@ -496,4 +525,41 @@ fn log_selection_rejected(
         event = "session.launch_selection.validated",
         "session launch selection rejected"
     );
+}
+
+#[cfg(test)]
+mod idempotent_intent_tests {
+    use super::*;
+
+    #[test]
+    fn replay_requires_exact_model_and_complete_control_equality() {
+        let intent = ResolvedLaunchIntent {
+            model_id: Some("model-a".to_string()),
+            control_values: BTreeMap::from([
+                ("collaboration_mode".to_string(), "plan".to_string()),
+                ("mode".to_string(), "agent-full-access".to_string()),
+            ]),
+            created_at: "2026-08-19T00:00:00Z".to_string(),
+        };
+        let exact = LaunchSelection {
+            model_id: intent.model_id.clone(),
+            control_values: intent.control_values.clone(),
+        };
+        assert!(request_matches_persisted_intent(Some(&intent), &exact));
+
+        let mut changed_model = exact.clone();
+        changed_model.model_id = Some("model-b".to_string());
+        assert!(!request_matches_persisted_intent(
+            Some(&intent),
+            &changed_model
+        ));
+
+        let mut omitted_control = exact;
+        omitted_control.control_values.remove("mode");
+        assert!(!request_matches_persisted_intent(
+            Some(&intent),
+            &omitted_control
+        ));
+        assert!(!request_matches_persisted_intent(None, &omitted_control));
+    }
 }

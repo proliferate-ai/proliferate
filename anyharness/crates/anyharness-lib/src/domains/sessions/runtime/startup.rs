@@ -2,6 +2,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::domains::agents::launch_options::environment::find_capability_affecting_env_override;
+use crate::domains::agents::launch_options::LaunchSelectionUnsupported;
 use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::readiness::service::resolve_launch_agent;
 use crate::domains::agents::registry;
@@ -19,6 +21,9 @@ use crate::domains::sessions::mcp_bindings::summaries::serialize_binding_summari
 use crate::domains::sessions::mcp_bindings::workspace_attachment::WorkspaceMcpAttachmentError;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::store::SessionStore;
+use crate::domains::workspaces::env::{
+    read_materialized_session_env, read_materialized_workspace_env,
+};
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::SessionHooks;
 use crate::live::sessions::SessionStartupStrategy;
@@ -163,6 +168,25 @@ impl SessionRuntime {
                         "agent descriptor not found: {agent_kind}"
                     ))
                 }
+                StartSessionError::LaunchOptionsUnavailable { agent_kind, state } => {
+                    EnsureLiveSessionError::Invalid(format!(
+                        "launch options are not available for agent '{agent_kind}' (state: {state:?})"
+                    ))
+                }
+                StartSessionError::LaunchValueUnsupported {
+                    agent_kind,
+                    key,
+                    value,
+                    state,
+                } => EnsureLiveSessionError::Invalid(format!(
+                    "launch value '{value}' for '{key}' is no longer supported for agent '{agent_kind}' (state: {state:?})"
+                )),
+                StartSessionError::AgentEnvOverrideUnsupported {
+                    agent_kind,
+                    env_var_name,
+                } => EnsureLiveSessionError::Invalid(format!(
+                    "workspace/session environment cannot override agent-owned key '{env_var_name}' for '{agent_kind}'"
+                )),
                 StartSessionError::Closed => EnsureLiveSessionError::SessionClosed,
                 StartSessionError::MissingDataKey => EnsureLiveSessionError::MissingDataKey,
                 StartSessionError::RestartRequired(detail) => {
@@ -286,6 +310,21 @@ impl SessionRuntime {
             "[workspace-latency] session.runtime.start_live_session.start"
         );
 
+        let validated_state = self
+            .session_service
+            .validate_persisted_launch_intent(record)
+            .map_err(|unsupported| {
+                map_launch_selection_unsupported(&record.agent_kind, unsupported)
+            })?;
+        tracing::info!(
+            session_id = %record.id,
+            agent_kind = %record.agent_kind,
+            harness_basis_revision = %validated_state.basis_revision,
+            source_revision = validated_state.revision,
+            event = "session.launch_selection.prevalidated",
+            "persisted launch intent validated before start preparation"
+        );
+
         let workspace_lookup_started = Instant::now();
         let workspace = self
             .workspace_runtime
@@ -320,6 +359,20 @@ impl SessionRuntime {
         );
 
         let workspace_path = PathBuf::from(&workspace.path);
+        let materialized_workspace_env = read_materialized_workspace_env(&workspace_path)
+            .map_err(StartSessionError::Internal)?;
+        let materialized_session_env =
+            read_materialized_session_env(&workspace_path).map_err(StartSessionError::Internal)?;
+        if let Some(env_var_name) = find_capability_affecting_env_override(
+            &descriptor,
+            &materialized_workspace_env,
+            &materialized_session_env,
+        ) {
+            return Err(StartSessionError::AgentEnvOverrideUnsupported {
+                agent_kind: record.agent_kind.clone(),
+                env_var_name,
+            });
+        }
         let workspace_env = self
             .workspace_runtime
             .workspace_env(&workspace)
@@ -528,6 +581,24 @@ impl SessionRuntime {
             })),
             on_exit: None,
         };
+        // Re-read the current basis and exact observed membership at the last
+        // common point before every ACP process start. The earlier validation
+        // avoids doing start preparation for a stale intent; this one closes
+        // the preparation window for create/replay/resume/prompt/fork/config.
+        let validated_state = self
+            .session_service
+            .validate_persisted_launch_intent(record)
+            .map_err(|unsupported| {
+                map_launch_selection_unsupported(&record.agent_kind, unsupported)
+            })?;
+        tracing::info!(
+            session_id = %record.id,
+            agent_kind = %record.agent_kind,
+            harness_basis_revision = %validated_state.basis_revision,
+            source_revision = validated_state.revision,
+            event = "session.launch_selection.revalidated",
+            "persisted launch intent revalidated immediately before real start"
+        );
         let (handle, ready) = self
             .acp_manager
             .start_session(launch, hooks)
@@ -551,5 +622,46 @@ impl SessionRuntime {
         }
 
         Ok((handle, ready.native_session_id))
+    }
+}
+
+fn map_launch_selection_unsupported(
+    agent_kind: &str,
+    unsupported: LaunchSelectionUnsupported,
+) -> StartSessionError {
+    match unsupported {
+        LaunchSelectionUnsupported::Internal(error) => StartSessionError::Internal(error),
+        LaunchSelectionUnsupported::ObservationUnavailable { state } => {
+            StartSessionError::LaunchOptionsUnavailable {
+                agent_kind: agent_kind.to_string(),
+                state,
+            }
+        }
+        LaunchSelectionUnsupported::Model { model_id, state } => {
+            StartSessionError::LaunchValueUnsupported {
+                agent_kind: agent_kind.to_string(),
+                key: "modelId".to_string(),
+                value: model_id,
+                state,
+            }
+        }
+        LaunchSelectionUnsupported::Control { control_id, state } => {
+            StartSessionError::LaunchValueUnsupported {
+                agent_kind: agent_kind.to_string(),
+                key: control_id,
+                value: "<unknown-control>".to_string(),
+                state,
+            }
+        }
+        LaunchSelectionUnsupported::ControlValue {
+            control_id,
+            value,
+            state,
+        } => StartSessionError::LaunchValueUnsupported {
+            agent_kind: agent_kind.to_string(),
+            key: control_id,
+            value,
+            state,
+        },
     }
 }

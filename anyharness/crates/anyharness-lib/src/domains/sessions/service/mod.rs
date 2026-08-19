@@ -11,7 +11,7 @@ use crate::domains::workspaces::store::WorkspaceStore;
 pub(crate) mod attachments;
 mod capability;
 mod config;
-mod create;
+pub(crate) mod create;
 #[cfg(test)]
 mod create_tests;
 mod history;
@@ -141,6 +141,36 @@ impl SessionService {
 
     pub fn store(&self) -> &SessionStore {
         &self.session_store
+    }
+
+    /// Revalidate the immutable intent immediately before a real process
+    /// start. Every create/replay/resume/prompt/fork/config path converges on
+    /// `SessionRuntime::start_live_session`, which calls this seam.
+    pub(crate) fn validate_persisted_launch_intent(
+        &self,
+        record: &SessionRecord,
+    ) -> Result<
+        crate::domains::agents::launch_options::HarnessLaunchOptionStateRow,
+        crate::domains::agents::launch_options::LaunchSelectionUnsupported,
+    > {
+        use crate::domains::agents::launch_options::{LaunchSelection, LaunchSelectionUnsupported};
+
+        let intent = self
+            .session_store
+            .find_launch_intent(&record.id)
+            .map_err(LaunchSelectionUnsupported::Internal)?
+            .ok_or_else(|| {
+                LaunchSelectionUnsupported::Internal(anyhow::anyhow!(
+                    "session is missing its immutable launch intent"
+                ))
+            })?;
+        self.launch_options_service.validate_selection(
+            &record.agent_kind,
+            &LaunchSelection {
+                model_id: intent.model_id,
+                control_values: intent.control_values,
+            },
+        )
     }
 
     pub fn attachment_storage(&self) -> &PromptAttachmentStorage {

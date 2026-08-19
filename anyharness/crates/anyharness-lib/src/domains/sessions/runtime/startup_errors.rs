@@ -13,6 +13,15 @@ pub(super) fn map_start_session_error_to_anyhow(error: StartSessionError) -> any
         StartSessionError::AgentDescriptorNotFound(agent_kind) => {
             anyhow::anyhow!("agent descriptor not found: {agent_kind}")
         }
+        StartSessionError::LaunchOptionsUnavailable { .. } => {
+            anyhow::anyhow!("launch options are unavailable for the persisted session intent")
+        }
+        StartSessionError::LaunchValueUnsupported { .. } => {
+            anyhow::anyhow!("the persisted session launch intent is no longer supported")
+        }
+        StartSessionError::AgentEnvOverrideUnsupported { .. } => {
+            anyhow::anyhow!("workspace/session environment overrides an agent-owned key")
+        }
         StartSessionError::Closed => anyhow::anyhow!("session is closed"),
         StartSessionError::MissingDataKey => {
             anyhow::anyhow!("{}", SessionMcpBindingsError::missing_data_key_detail())
@@ -82,6 +91,27 @@ pub(super) fn map_start_session_error_to_create(
                 "agent descriptor not found: {agent_kind}"
             ))
         }
+        StartSessionError::LaunchOptionsUnavailable { agent_kind, state } => {
+            CreateAndStartSessionError::LaunchOptionsUnavailable { agent_kind, state }
+        }
+        StartSessionError::LaunchValueUnsupported {
+            agent_kind,
+            key,
+            value,
+            state,
+        } => CreateAndStartSessionError::LaunchValueUnsupported {
+            agent_kind,
+            key,
+            value,
+            state,
+        },
+        StartSessionError::AgentEnvOverrideUnsupported {
+            agent_kind,
+            env_var_name,
+        } => CreateAndStartSessionError::AgentEnvOverrideUnsupported {
+            agent_kind,
+            env_var_name,
+        },
         StartSessionError::Closed => {
             CreateAndStartSessionError::Internal(anyhow::anyhow!("session is closed"))
         }

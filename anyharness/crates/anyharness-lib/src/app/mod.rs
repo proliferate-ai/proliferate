@@ -67,11 +67,11 @@ use crate::domains::sessions::mcp_bindings::product_registry::ProductMcpEndpoint
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::store::SessionStore;
-use crate::domains::workflows::session_extension::WorkflowSessionExtension;
-use crate::domains::workflows::store::WorkflowStore;
 use crate::domains::sessions::subagents::hooks::SubagentSessionHooks;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::terminals::store::TerminalStore;
+use crate::domains::workflows::session_extension::WorkflowSessionExtension;
+use crate::domains::workflows::store::WorkflowStore;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::archive::quiesce::QuiescePlanes;
 use crate::domains::workspaces::archive::WorkspaceArchiveService;
@@ -90,8 +90,8 @@ use crate::domains::workspaces::setup_runtime::WorkspaceSetupRuntime;
 use crate::domains::workspaces::store::{WorkspaceAccessStore, WorkspaceStore};
 use crate::domains::workspaces::worktree_runtime::WorkspaceWorktreeRuntime;
 use crate::live::sessions::LiveSessionManager;
-use crate::live::workflows::WorkflowManager;
 use crate::live::terminals::{AgentLoginTerminalService, TerminalService};
+use crate::live::workflows::WorkflowManager;
 use crate::persistence::Db;
 
 #[cfg(test)]
@@ -218,8 +218,9 @@ impl AppState {
             runtime_home.clone(),
         ));
         let agent_reconcile_service = Arc::new(AgentReconcileService::new());
-        let catalog_sync_service =
-            Arc::new(CatalogSyncService::from_bundled_and_staged_via_env(&runtime_home));
+        let catalog_sync_service = Arc::new(CatalogSyncService::from_bundled_and_staged_via_env(
+            &runtime_home,
+        ));
         let agent_runtime_without_probes = AgentRuntime::new(
             runtime_home.clone(),
             agent_reconcile_service.clone(),
@@ -230,7 +231,7 @@ impl AppState {
             // would put a process-global read inside the reconcile loop.
             crate::domains::agents::runtime::RuntimeSurface::from_env(),
         );
-        let (launch_options_service, launch_probe_service) =
+        let (launch_options_service, launch_probe_service, gateway_model_planner) =
             agent_launch::build_services(&db, &runtime_home, catalog_sync_service.clone());
         // The one handle every AUTOMATIC poke site takes. See `AppState`'s field for
         // why it is separate; the suppression is a property of the wiring rather

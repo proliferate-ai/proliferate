@@ -5,10 +5,14 @@ use super::model::{
     SubagentLinkCloseOutcome, SubagentLinkCloseResult, SubagentLinkOpenOutcome,
     SubagentLinkOpenResult,
 };
-use crate::domains::sessions::model::SessionRecord;
+use crate::domains::agents::launch_options::{
+    HarnessLaunchOptionStateRow, LaunchSelection, LaunchSelectionUnsupported,
+};
 use crate::domains::sessions::launch_intent::ResolvedLaunchIntent;
+use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::store::launch_intents::insert_launch_intent_row;
 use crate::domains::sessions::store::sessions::insert_session_row;
+use crate::domains::sessions::store::{with_launch_admission_tx, LaunchAdmissionTxError};
 use crate::persistence::Db;
 
 #[derive(Clone)]
@@ -20,6 +24,12 @@ pub struct SessionLinkStore {
 pub enum InsertSubagentLinkOutcome {
     Inserted,
     FanoutLimit,
+}
+
+#[derive(Debug)]
+pub enum InsertSubagentSessionError {
+    FanoutLimit,
+    LaunchSelection(LaunchSelectionUnsupported),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -110,12 +120,17 @@ impl SessionLinkStore {
         intent: &ResolvedLaunchIntent,
         record: &SessionLinkRecord,
         max_children: usize,
-    ) -> anyhow::Result<InsertSubagentLinkOutcome> {
-        let result = self.db.with_tx_anyhow(|conn| {
-            insert_session_row(conn, session)?;
-            insert_launch_intent_row(conn, &session.id, intent)?;
-            let inserted = conn.execute(
-                "INSERT INTO session_links (
+        harness_kind: &str,
+        current_basis: &str,
+        selection: &LaunchSelection,
+    ) -> Result<(InsertSubagentLinkOutcome, HarnessLaunchOptionStateRow), InsertSubagentSessionError>
+    {
+        let result =
+            with_launch_admission_tx(&self.db, harness_kind, current_basis, selection, |conn| {
+                insert_session_row(conn, session)?;
+                insert_launch_intent_row(conn, &session.id, intent)?;
+                let inserted = conn.execute(
+                    "INSERT INTO session_links (
                     id, public_id, relation, parent_session_id, child_session_id,
                     workspace_relation, label, created_by_turn_id,
                     created_by_tool_call_id, created_at, subagent_closed_at, closed_at
@@ -127,33 +142,37 @@ impl SessionLinkStore {
                     WHERE relation = 'subagent' AND parent_session_id = ?4
                       AND closed_at IS NULL
                  ) < ?13",
-                params![
-                    record.id,
-                    record.public_id,
-                    record.relation.as_str(),
-                    record.parent_session_id,
-                    record.child_session_id,
-                    record.workspace_relation.as_str(),
-                    record.label,
-                    record.created_by_turn_id,
-                    record.created_by_tool_call_id,
-                    record.created_at,
-                    record.subagent_closed_at,
-                    record.closed_at,
-                    max_children as i64,
-                ],
-            )?;
-            if inserted == 0 {
-                return Err(AtomicSubagentFanoutLimit.into());
-            }
-            Ok(())
-        });
+                    params![
+                        record.id,
+                        record.public_id,
+                        record.relation.as_str(),
+                        record.parent_session_id,
+                        record.child_session_id,
+                        record.workspace_relation.as_str(),
+                        record.label,
+                        record.created_by_turn_id,
+                        record.created_by_tool_call_id,
+                        record.created_at,
+                        record.subagent_closed_at,
+                        record.closed_at,
+                        max_children as i64,
+                    ],
+                )?;
+                if inserted == 0 {
+                    return Err(AtomicSubagentFanoutLimit.into());
+                }
+                Ok(())
+            });
         match result {
-            Ok(()) => Ok(InsertSubagentLinkOutcome::Inserted),
-            Err(error) if error.downcast_ref::<AtomicSubagentFanoutLimit>().is_some() => {
-                Ok(InsertSubagentLinkOutcome::FanoutLimit)
+            Ok(((), validated)) => Ok((InsertSubagentLinkOutcome::Inserted, validated)),
+            Err(LaunchAdmissionTxError::Store(error))
+                if error.downcast_ref::<AtomicSubagentFanoutLimit>().is_some() =>
+            {
+                Err(InsertSubagentSessionError::FanoutLimit)
             }
-            Err(error) => Err(error),
+            Err(error) => Err(InsertSubagentSessionError::LaunchSelection(
+                error.into_selection(),
+            )),
         }
     }
 

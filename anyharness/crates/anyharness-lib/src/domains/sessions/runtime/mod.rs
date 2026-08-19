@@ -31,7 +31,6 @@ mod creation;
 mod fork;
 pub(crate) mod fork_boundary;
 pub(crate) mod fork_qualification;
-pub(crate) mod opencode_sidedoor_client;
 #[cfg(test)]
 mod idempotent_creation_tests;
 mod interactions;
@@ -42,6 +41,7 @@ mod launch_policy;
 mod lifecycle;
 #[cfg(test)]
 mod lifecycle_tests;
+pub(crate) mod opencode_sidedoor_client;
 mod pending_prompts;
 mod prompt;
 #[cfg(test)]
@@ -393,6 +393,20 @@ pub(super) enum StartSessionError {
         path: String,
     },
     AgentDescriptorNotFound(String),
+    LaunchOptionsUnavailable {
+        agent_kind: String,
+        state: Option<crate::domains::agents::launch_options::HarnessLaunchOptionsState>,
+    },
+    LaunchValueUnsupported {
+        agent_kind: String,
+        key: String,
+        value: String,
+        state: crate::domains::agents::launch_options::HarnessLaunchOptionsState,
+    },
+    AgentEnvOverrideUnsupported {
+        agent_kind: String,
+        env_var_name: String,
+    },
     Closed,
     MissingDataKey,
     RestartRequired(String),

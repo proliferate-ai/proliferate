@@ -2,17 +2,21 @@ use rusqlite::{params, OptionalExtension};
 
 use super::attachments::insert_prompt_attachment_row;
 use super::events::insert_event_row;
-use super::live_config::{upsert_live_config_snapshot_row, upsert_pending_config_change_row};
 use super::launch_intents::insert_launch_intent_row;
+use super::live_config::{upsert_live_config_snapshot_row, upsert_pending_config_change_row};
 use super::notifications::insert_raw_notification_row;
 use super::pending_prompts::insert_pending_prompt_row;
+use super::with_launch_admission_tx;
 use super::SessionStore;
+use crate::domains::agents::launch_options::{
+    HarnessLaunchOptionStateRow, LaunchSelection, LaunchSelectionUnsupported,
+};
+use crate::domains::sessions::launch_intent::ResolvedLaunchIntent;
 use crate::domains::sessions::model::{
     PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentRecord, SessionEventRecord,
     SessionLiveConfigSnapshotRecord, SessionMcpBindingPolicy, SessionRawNotificationRecord,
     SessionRecord,
 };
-use crate::domains::sessions::launch_intent::ResolvedLaunchIntent;
 use crate::origin::{decode_origin_json, encode_origin_json};
 
 impl SessionStore {
@@ -27,12 +31,18 @@ impl SessionStore {
         &self,
         record: &SessionRecord,
         intent: &ResolvedLaunchIntent,
-    ) -> anyhow::Result<()> {
-        self.db.with_tx(|conn| {
-            insert_session_row(conn, record)?;
-            insert_launch_intent_row(conn, &record.id, intent)?;
-            Ok(())
-        })
+        harness_kind: &str,
+        current_basis: &str,
+        selection: &LaunchSelection,
+    ) -> Result<HarnessLaunchOptionStateRow, LaunchSelectionUnsupported> {
+        let ((), validated) =
+            with_launch_admission_tx(&self.db, harness_kind, current_basis, selection, |conn| {
+                insert_session_row(conn, record)?;
+                insert_launch_intent_row(conn, &record.id, intent)?;
+                Ok(())
+            })
+            .map_err(super::LaunchAdmissionTxError::into_selection)?;
+        Ok(validated)
     }
 
     /// Deletes only session-store-owned rows. Use the session delete workflow

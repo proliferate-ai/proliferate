@@ -1,12 +1,11 @@
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use super::basis::compute_harness_basis_revision;
 use super::store::HarnessLaunchOptionsStore;
 use super::types::{
-    HarnessLaunchControl, HarnessLaunchControlValue, HarnessLaunchDefaults,
-    HarnessLaunchModel, HarnessLaunchOptionStateRow, HarnessLaunchOptions,
-    HarnessLaunchOptionsResponse, HarnessLaunchOptionsState, LaunchSelection, ProbeState,
+    HarnessLaunchControl, HarnessLaunchControlValue, HarnessLaunchDefaults, HarnessLaunchModel,
+    HarnessLaunchOptionStateRow, HarnessLaunchOptions, HarnessLaunchOptionsResponse,
+    HarnessLaunchOptionsState, LaunchSelection, ProbeState,
 };
 use crate::persistence::Db;
 
@@ -21,13 +20,25 @@ pub enum LaunchSelectionUnsupported {
     #[error("launch-option state could not be read")]
     Internal(#[source] anyhow::Error),
     #[error("launch options are not available for the current harness basis")]
-    ObservationUnavailable { state: Option<HarnessLaunchOptionsState> },
+    ObservationUnavailable {
+        state: Option<HarnessLaunchOptionsState>,
+    },
     #[error("model '{model_id}' is absent from current launch options")]
-    Model { model_id: String, state: HarnessLaunchOptionsState },
+    Model {
+        model_id: String,
+        state: HarnessLaunchOptionsState,
+    },
     #[error("control '{control_id}' is absent from current launch options")]
-    Control { control_id: String, state: HarnessLaunchOptionsState },
+    Control {
+        control_id: String,
+        state: HarnessLaunchOptionsState,
+    },
     #[error("value '{value}' is absent from control '{control_id}'")]
-    ControlValue { control_id: String, value: String, state: HarnessLaunchOptionsState },
+    ControlValue {
+        control_id: String,
+        value: String,
+        state: HarnessLaunchOptionsState,
+    },
 }
 
 impl HarnessLaunchOptionsService {
@@ -44,24 +55,30 @@ impl HarnessLaunchOptionsService {
 
     pub fn read(&self, harness_kind: &str) -> anyhow::Result<Option<HarnessLaunchOptionsResponse>> {
         let current_basis = self.basis_revision(harness_kind);
-        self.store.read(harness_kind).map(|row| row.map(|row| {
-            if row.basis_revision != current_basis {
-                return HarnessLaunchOptionsResponse {
-                    harness_kind: row.harness_kind,
-                    basis_revision: current_basis,
-                    revision: row.revision.saturating_add(1),
-                    state: HarnessLaunchOptionsState::Detecting,
-                    options: None,
-                    observed_at: None,
-                    probe_attempted_at: row.probe_attempted_at,
-                    probe_failure_code: None,
-                };
-            }
-            project_response(row)
-        }))
+        self.store.read(harness_kind).map(|row| {
+            row.map(|row| {
+                if row.basis_revision != current_basis {
+                    return HarnessLaunchOptionsResponse {
+                        harness_kind: row.harness_kind,
+                        basis_revision: current_basis,
+                        revision: row.revision.saturating_add(1),
+                        state: HarnessLaunchOptionsState::Detecting,
+                        options: None,
+                        observed_at: None,
+                        probe_attempted_at: row.probe_attempted_at,
+                        probe_failure_code: None,
+                    };
+                }
+                project_response(row)
+            })
+        })
     }
 
-    pub fn begin_probe(&self, harness_kind: &str, attempted_at: &str) -> anyhow::Result<HarnessLaunchOptionStateRow> {
+    pub fn begin_probe(
+        &self,
+        harness_kind: &str,
+        attempted_at: &str,
+    ) -> anyhow::Result<HarnessLaunchOptionStateRow> {
         let basis = self.basis_revision(harness_kind);
         self.store.begin_probe(harness_kind, &basis, attempted_at)
     }
@@ -176,52 +193,8 @@ impl HarnessLaunchOptionsService {
             .store
             .read(harness_kind)
             .map_err(LaunchSelectionUnsupported::Internal)?;
-        let Some(row) = row else {
-            return Err(LaunchSelectionUnsupported::ObservationUnavailable { state: None });
-        };
-        let state = state_for(&row);
-        if row.basis_revision != self.basis_revision(harness_kind) {
-            return Err(LaunchSelectionUnsupported::ObservationUnavailable {
-                state: Some(state),
-            });
-        }
-        let Some(options) = row.options.as_ref() else {
-            return Err(LaunchSelectionUnsupported::ObservationUnavailable {
-                state: Some(state),
-            });
-        };
-        if let Some(model_id) = selection.model_id.as_deref() {
-            if !options.models.iter().any(|model| model.id == model_id) {
-                return Err(LaunchSelectionUnsupported::Model {
-                    model_id: model_id.to_string(),
-                    state,
-                });
-            }
-        }
-        let mut seen = BTreeSet::new();
-        for (control_id, value) in &selection.control_values {
-            if !seen.insert(control_id) {
-                return Err(LaunchSelectionUnsupported::Control {
-                    control_id: control_id.clone(),
-                    state,
-                });
-            }
-            let Some(control) = options.controls.iter().find(|control| &control.id == control_id)
-            else {
-                return Err(LaunchSelectionUnsupported::Control {
-                    control_id: control_id.clone(),
-                    state,
-                });
-            };
-            if !control.values.iter().any(|candidate| &candidate.value == value) {
-                return Err(LaunchSelectionUnsupported::ControlValue {
-                    control_id: control_id.clone(),
-                    value: value.clone(),
-                    state,
-                });
-            }
-        }
-        Ok(row)
+        let current_basis = self.basis_revision(harness_kind);
+        super::validation::validate_selection_row(row, &current_basis, selection)
     }
 
     pub fn runtime_home(&self) -> &Path {
@@ -265,10 +238,7 @@ fn controls_from_config_json(value: &serde_json::Value) -> Vec<HarnessLaunchCont
         .collect()
 }
 
-fn collect_values(
-    value: Option<&serde_json::Value>,
-    output: &mut Vec<HarnessLaunchControlValue>,
-) {
+fn collect_values(value: Option<&serde_json::Value>, output: &mut Vec<HarnessLaunchControlValue>) {
     match value {
         Some(serde_json::Value::Array(values)) => {
             for value in values {
@@ -326,7 +296,7 @@ fn project_response(row: HarnessLaunchOptionStateRow) -> HarnessLaunchOptionsRes
     }
 }
 
-fn state_for(row: &HarnessLaunchOptionStateRow) -> HarnessLaunchOptionsState {
+pub(super) fn state_for(row: &HarnessLaunchOptionStateRow) -> HarnessLaunchOptionsState {
     match (row.options.as_ref(), row.probe_state) {
         (None, ProbeState::Probing) => HarnessLaunchOptionsState::Detecting,
         (Some(_), ProbeState::Probing) => HarnessLaunchOptionsState::Refreshing,

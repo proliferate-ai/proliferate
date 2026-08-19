@@ -12,7 +12,11 @@ pub(super) fn build_services(
     db: &Db,
     runtime_home: &PathBuf,
     catalog_sync_service: Arc<CatalogSyncService>,
-) -> (Arc<HarnessLaunchOptionsService>, Arc<LaunchProbeService>) {
+) -> (
+    Arc<HarnessLaunchOptionsService>,
+    Arc<LaunchProbeService>,
+    Arc<GatewayModelPlanner>,
+) {
     // The render plan uses the catalog's gateway policy plus a memoized live
     // `GET /v1/models`, never the revision-keyed gateway probe rows.
     let gateway_model_planner = Arc::new(GatewayModelPlanner::new(
@@ -28,10 +32,14 @@ pub(super) fn build_services(
     let launch_probe_service = Arc::new(
         LaunchProbeService::new(
             runtime_home.clone(),
-            gateway_model_planner,
+            gateway_model_planner.clone(),
             Arc::new(RuntimeProbeTargets::new(runtime_home.clone())),
         )
         .with_launch_options(launch_options_service.clone()),
     );
-    (launch_options_service, launch_probe_service)
+    (
+        launch_options_service,
+        launch_probe_service,
+        gateway_model_planner,
+    )
 }

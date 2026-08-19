@@ -55,6 +55,25 @@ impl SessionRuntime {
                         "agent descriptor not found: {agent_kind}"
                     ))
                 }
+                StartSessionError::LaunchOptionsUnavailable { agent_kind, state } => {
+                    SetSessionConfigOptionError::Rejected(format!(
+                        "launch options are not available for agent '{agent_kind}' (state: {state:?})"
+                    ))
+                }
+                StartSessionError::LaunchValueUnsupported {
+                    agent_kind,
+                    key,
+                    value,
+                    state,
+                } => SetSessionConfigOptionError::Rejected(format!(
+                    "launch value '{value}' for '{key}' is no longer supported for agent '{agent_kind}' (state: {state:?})"
+                )),
+                StartSessionError::AgentEnvOverrideUnsupported {
+                    agent_kind,
+                    env_var_name,
+                } => SetSessionConfigOptionError::Rejected(format!(
+                    "workspace/session environment cannot override agent-owned key '{env_var_name}' for '{agent_kind}'"
+                )),
                 StartSessionError::Closed => {
                     SetSessionConfigOptionError::Rejected("session is closed".to_string())
                 }
