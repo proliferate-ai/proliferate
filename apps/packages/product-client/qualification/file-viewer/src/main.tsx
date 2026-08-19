@@ -20,7 +20,7 @@ import { ProductWorkspaceConnectionProvider } from "#product/providers/ProductWo
 import { WorkspacePathProvider } from "#product/providers/WorkspacePathProvider";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
-import { createFileTreeFixture } from "./file-tree-fixture";
+import { createFileTreeFixture, FIXTURE_FILE_CONTENTS } from "./file-tree-fixture";
 
 type FixtureHost = "desktop" | "web";
 type FixtureOrigin = "local" | "remote";
@@ -267,15 +267,16 @@ const fixtureFetch: typeof globalThis.fetch = async (input) => {
   }
   if (url.pathname.endsWith("/files/file")) {
     const path = url.searchParams.get("path") ?? "src/example.ts";
+    const scripted = FIXTURE_FILE_CONTENTS[path];
     return jsonResponse({
-      content: "export const fixture = 'file reference routing';\n",
+      content: scripted?.content ?? "export const fixture = 'file reference routing';\n",
       encoding: "utf-8",
-      isText: true,
+      isText: scripted?.isText ?? true,
       kind: "file",
       modifiedAt: FIXED_TIME,
       path,
-      sizeBytes: 49,
-      tooLarge: false,
+      sizeBytes: scripted?.content.length ?? 49,
+      tooLarge: scripted?.tooLarge ?? false,
       versionToken: "fixture-v1",
     });
   }
