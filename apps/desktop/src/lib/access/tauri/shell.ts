@@ -5,6 +5,10 @@ import type {
   OpenTarget,
   PathKind,
 } from "@proliferate/product-client/internal/lib/domain/open-targets/model";
+import type {
+  DesktopPathInspection,
+  DesktopPathInspectionUnavailableReason,
+} from "@proliferate/product-client/host/desktop-bridge";
 
 export type {
   EditorIconId,
@@ -34,17 +38,43 @@ export async function revealInFinder(path: string): Promise<void> {
   return invoke("reveal_in_finder", { path });
 }
 
-/**
- * True when the absolute path exists and is a directory. Returns false on
- * any failure (missing path, non-Tauri host) so callers can fall back to
- * file behavior.
- */
-export async function pathIsDirectory(path: string): Promise<boolean> {
-  try {
-    return await invoke<boolean>("path_is_directory", { path });
-  } catch {
+const INSPECT_PATH_PROTOCOL_ERROR = "Invalid inspect_path response.";
+const INSPECTION_UNAVAILABLE_REASONS = new Set<DesktopPathInspectionUnavailableReason>([
+  "invalid_path",
+  "permission_denied",
+  "unsupported_type",
+  "io_error",
+]);
+
+export async function inspectPath(path: string): Promise<DesktopPathInspection> {
+  const payload = await invoke<unknown>("inspect_path", { path });
+  if (!isDesktopPathInspection(payload)) {
+    throw new Error(INSPECT_PATH_PROTOCOL_ERROR);
+  }
+  return payload;
+}
+
+function isDesktopPathInspection(value: unknown): value is DesktopPathInspection {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
   }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (
+    (record.kind === "file" || record.kind === "directory" || record.kind === "missing")
+    && keys.length === 1
+    && keys[0] === "kind"
+  ) {
+    return true;
+  }
+  return record.kind === "unavailable"
+    && keys.length === 2
+    && keys.includes("kind")
+    && keys.includes("reason")
+    && typeof record.reason === "string"
+    && INSPECTION_UNAVAILABLE_REASONS.has(
+      record.reason as DesktopPathInspectionUnavailableReason,
+    );
 }
 
 export async function openInTerminal(path: string): Promise<void> {
@@ -196,11 +226,6 @@ let _cachedHome: string | null = null;
 
 export async function getHomeDir(): Promise<string> {
   if (_cachedHome) return _cachedHome;
-  try {
-    _cachedHome = await tauriHomeDir();
-    return _cachedHome;
-  } catch {
-    // Fallback outside Tauri (dev browser)
-    return "/tmp";
-  }
+  _cachedHome = await tauriHomeDir();
+  return _cachedHome;
 }

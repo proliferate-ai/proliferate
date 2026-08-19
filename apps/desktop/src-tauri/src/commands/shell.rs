@@ -1,5 +1,6 @@
 use crate::editors;
 use std::io::Write;
+use std::path::Path;
 use std::process::Command;
 use std::process::Stdio;
 
@@ -13,9 +14,56 @@ pub fn open_in_editor(path: String, editor: String) -> Result<(), String> {
     editors::open_path_in_editor(&path, &editor)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PathInspection {
+    File,
+    Directory,
+    Missing,
+    Unavailable {
+        reason: PathInspectionUnavailableReason,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PathInspectionUnavailableReason {
+    InvalidPath,
+    PermissionDenied,
+    UnsupportedType,
+    IoError,
+}
+
 #[tauri::command]
-pub fn path_is_directory(path: String) -> bool {
-    std::fs::metadata(&path).map(|m| m.is_dir()).unwrap_or(false)
+pub fn inspect_path(path: String) -> PathInspection {
+    if path.is_empty() || path.contains('\0') || !Path::new(&path).is_absolute() {
+        return PathInspection::Unavailable {
+            reason: PathInspectionUnavailableReason::InvalidPath,
+        };
+    }
+
+    match std::fs::metadata(path) {
+        Ok(metadata) if metadata.is_file() => PathInspection::File,
+        Ok(metadata) if metadata.is_dir() => PathInspection::Directory,
+        Ok(_) => PathInspection::Unavailable {
+            reason: PathInspectionUnavailableReason::UnsupportedType,
+        },
+        Err(error) => classify_path_inspection_error(error.kind()),
+    }
+}
+
+fn classify_path_inspection_error(kind: std::io::ErrorKind) -> PathInspection {
+    match kind {
+        std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory => {
+            PathInspection::Missing
+        }
+        std::io::ErrorKind::PermissionDenied => PathInspection::Unavailable {
+            reason: PathInspectionUnavailableReason::PermissionDenied,
+        },
+        _ => PathInspection::Unavailable {
+            reason: PathInspectionUnavailableReason::IoError,
+        },
+    }
 }
 
 #[tauri::command]
@@ -140,4 +188,188 @@ fn write_to_clipboard_command(program: &str, args: &[&str], value: &str) -> Resu
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod path_inspection_tests {
+    use super::{
+        classify_path_inspection_error, inspect_path, PathInspection,
+        PathInspectionUnavailableReason,
+    };
+    use serde_json::json;
+    use std::fs;
+    use std::io::ErrorKind;
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TEST_DIRECTORY: AtomicU64 = AtomicU64::new(0);
+
+    struct TestDirectory(PathBuf);
+
+    impl TestDirectory {
+        fn new(label: &str) -> Self {
+            let sequence = NEXT_TEST_DIRECTORY.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir().join(format!(
+                "proliferate-path-inspection-{}-{label}-{sequence}",
+                std::process::id()
+            ));
+            fs::create_dir(&path).expect("create path-inspection test directory");
+            Self(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn path_inspection_serializes_the_exact_tagged_union() {
+        let values = [
+            (PathInspection::File, json!({"kind": "file"})),
+            (
+                PathInspection::Directory,
+                json!({"kind": "directory"}),
+            ),
+            (PathInspection::Missing, json!({"kind": "missing"})),
+            (
+                PathInspection::Unavailable {
+                    reason: PathInspectionUnavailableReason::InvalidPath,
+                },
+                json!({"kind": "unavailable", "reason": "invalid_path"}),
+            ),
+            (
+                PathInspection::Unavailable {
+                    reason: PathInspectionUnavailableReason::PermissionDenied,
+                },
+                json!({"kind": "unavailable", "reason": "permission_denied"}),
+            ),
+            (
+                PathInspection::Unavailable {
+                    reason: PathInspectionUnavailableReason::UnsupportedType,
+                },
+                json!({"kind": "unavailable", "reason": "unsupported_type"}),
+            ),
+            (
+                PathInspection::Unavailable {
+                    reason: PathInspectionUnavailableReason::IoError,
+                },
+                json!({"kind": "unavailable", "reason": "io_error"}),
+            ),
+        ];
+
+        for (value, expected) in values {
+            assert_eq!(serde_json::to_value(value).expect("serialize inspection"), expected);
+        }
+    }
+
+    #[test]
+    fn path_inspection_rejects_empty_relative_and_nul_bearing_input() {
+        let expected = PathInspection::Unavailable {
+            reason: PathInspectionUnavailableReason::InvalidPath,
+        };
+        assert_eq!(inspect_path(String::new()), expected);
+        assert_eq!(inspect_path("relative/file.txt".to_string()), expected);
+        assert_eq!(inspect_path("/tmp/bad\0path".to_string()), expected);
+    }
+
+    #[test]
+    fn path_inspection_classifies_file_directory_missing_and_not_a_directory() {
+        let directory = TestDirectory::new("basic");
+        let file = directory.path().join("file.txt");
+        fs::write(&file, b"content").expect("write test file");
+
+        assert_eq!(
+            inspect_path(file.to_string_lossy().into_owned()),
+            PathInspection::File
+        );
+        assert_eq!(
+            inspect_path(directory.path().to_string_lossy().into_owned()),
+            PathInspection::Directory
+        );
+        assert_eq!(
+            inspect_path(
+                directory
+                    .path()
+                    .join("missing.txt")
+                    .to_string_lossy()
+                    .into_owned()
+            ),
+            PathInspection::Missing
+        );
+        assert_eq!(
+            inspect_path(file.join("child").to_string_lossy().into_owned()),
+            PathInspection::Missing
+        );
+    }
+
+    #[test]
+    fn path_inspection_classifies_permission_and_unexpected_io_errors() {
+        assert_eq!(
+            classify_path_inspection_error(ErrorKind::PermissionDenied),
+            PathInspection::Unavailable {
+                reason: PathInspectionUnavailableReason::PermissionDenied,
+            }
+        );
+        assert_eq!(
+            classify_path_inspection_error(ErrorKind::TimedOut),
+            PathInspection::Unavailable {
+                reason: PathInspectionUnavailableReason::IoError,
+            }
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn path_inspection_follows_file_and_directory_links_and_reports_dangling_links() {
+        use std::os::unix::fs::symlink;
+
+        let directory = TestDirectory::new("links");
+        let file = directory.path().join("file.txt");
+        let child_directory = directory.path().join("child");
+        fs::write(&file, b"content").expect("write link target");
+        fs::create_dir(&child_directory).expect("create directory link target");
+
+        let file_link = directory.path().join("file-link");
+        let directory_link = directory.path().join("directory-link");
+        let dangling_link = directory.path().join("dangling-link");
+        symlink(&file, &file_link).expect("create file link");
+        symlink(&child_directory, &directory_link).expect("create directory link");
+        symlink(directory.path().join("absent"), &dangling_link).expect("create dangling link");
+
+        assert_eq!(
+            inspect_path(file_link.to_string_lossy().into_owned()),
+            PathInspection::File
+        );
+        assert_eq!(
+            inspect_path(directory_link.to_string_lossy().into_owned()),
+            PathInspection::Directory
+        );
+        assert_eq!(
+            inspect_path(dangling_link.to_string_lossy().into_owned()),
+            PathInspection::Missing
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn path_inspection_rejects_unsupported_unix_objects() {
+        use std::os::unix::net::UnixListener;
+
+        let directory = TestDirectory::new("unsupported");
+        let socket_path = directory.path().join("socket");
+        let _listener = UnixListener::bind(&socket_path).expect("bind test socket");
+
+        assert_eq!(
+            inspect_path(socket_path.to_string_lossy().into_owned()),
+            PathInspection::Unavailable {
+                reason: PathInspectionUnavailableReason::UnsupportedType,
+            }
+        );
+    }
 }
