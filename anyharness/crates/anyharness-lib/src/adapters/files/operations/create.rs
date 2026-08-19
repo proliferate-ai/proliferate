@@ -40,14 +40,7 @@ pub fn create_entry(
         },
     };
     if !parent_metadata.is_dir() {
-        return Err(FileServiceError::NotADirectory(
-            parent
-                .strip_prefix(workspace_root)
-                .ok()
-                .and_then(|path| path.to_str())
-                .unwrap_or(relative_path)
-                .to_string(),
-        ));
+        return Err(FileServiceError::NotADirectory(relative_path.to_string()));
     }
     match abs.symlink_metadata() {
         Ok(metadata) if metadata.file_type().is_symlink() => {
