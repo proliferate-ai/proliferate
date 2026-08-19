@@ -13,54 +13,93 @@ import {
 
 const state = vi.hoisted(() => ({
   cloudActive: true,
+  isDesktop: true,
+  connectionState: "healthy" as "connecting" | "healthy" | "failed",
   capabilities: {
     data: { gatewayEnabled: true } as { gatewayEnabled: boolean } | undefined,
+    isError: false,
+    error: null as unknown,
   },
   selections: {
     data: [] as Array<Record<string, unknown>> | undefined,
+    isError: false,
+    error: null as unknown,
   },
-  agents: [] as AgentSummary[],
-  agentsLoading: false,
   reconcileSnapshot: {} as Record<string, unknown> | null,
   reconcileStatus: "completed" as string,
+  reconcileIsError: false,
+  reconcileError: null as unknown,
+  freshAgents: [] as AgentSummary[],
 }));
-const putMutate = vi.hoisted(() => vi.fn());
+
+const mocks = vi.hoisted(() => ({
+  capabilitiesEnabled: vi.fn(),
+  selectionsEnabled: vi.fn(),
+  refetchAgents: vi.fn(),
+  planner: vi.fn(),
+  putMutate: vi.fn(),
+}));
+
 let diagnostics: RendererDiagnosticInput[] = [];
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useAgentGatewayCapabilities: () => state.capabilities,
-  useAuthSelections: () => state.selections,
-  usePutAuthSelections: () => ({ mutate: putMutate, isPending: false }),
+  useAgentGatewayCapabilities: (enabled: boolean) => {
+    mocks.capabilitiesEnabled(enabled);
+    return state.capabilities;
+  },
+  useAuthSelections: (_surface: unknown, enabled: boolean) => {
+    mocks.selectionsEnabled(enabled);
+    return state.selections;
+  },
+  usePutAuthSelections: () => ({ mutate: mocks.putMutate, isPending: false }),
 }));
 
 vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({ cloudActive: state.cloudActive }),
 }));
 
+vi.mock("#product/host/ProductHostProvider", () => ({
+  useProductHost: () => ({ desktop: state.isDesktop ? {} : null }),
+}));
+
+vi.mock("#product/stores/sessions/harness-connection-store", () => ({
+  useHarnessConnectionStore: (
+    selector: (value: { connectionState: typeof state.connectionState }) => unknown,
+  ) => selector({ connectionState: state.connectionState }),
+}));
+
 vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
   useAgentCatalog: () => ({
-    agents: state.agents,
-    isLoading: state.agentsLoading,
+    refetch: mocks.refetchAgents,
     reconcileSnapshot: state.reconcileSnapshot,
     reconcileStatus: state.reconcileStatus,
+    reconcileIsError: state.reconcileIsError,
+    reconcileError: state.reconcileError,
   }),
+}));
+
+vi.mock("#product/lib/domain/agents/auth-onboarding", () => ({
+  planFirstRunAuthAdoption: mocks.planner,
 }));
 
 function agent(overrides: Partial<AgentSummary> = {}): AgentSummary {
   return {
     kind: "claude",
     displayName: "Claude Code",
-    credentialState: "ready",
+    credentialState: "login_required",
     installState: "installed",
-    readiness: "ready",
+    readiness: "credentials_required",
     supportsLogin: true,
     ...overrides,
   } as AgentSummary;
 }
 
-const GATEWAY_BODY = { sources: [{ sourceKind: "gateway", enabled: true }] };
+function diagnosticValues(input: RendererDiagnosticInput) {
+  return Object.fromEntries(
+    Object.entries(input.fields ?? {}).map(([key, field]) => [key, field.value]),
+  );
+}
 
-/** The planner is dynamically imported (login-chunk split); let it settle. */
 async function flushAdoption() {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -68,7 +107,6 @@ async function flushAdoption() {
   });
 }
 
-/** The decision ran (possibly adopting nothing) once the store has recorded it. */
 async function waitForDecision() {
   await waitFor(() => {
     expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).not.toBeNull();
@@ -78,177 +116,444 @@ async function waitForDecision() {
 beforeEach(() => {
   diagnostics = [];
   setRendererDiagnosticsSink({ emit: (input) => diagnostics.push(input) });
+  vi.spyOn(Date, "now").mockReturnValue(1_723_456_789);
+  mocks.refetchAgents.mockReset();
+  mocks.planner.mockReset();
+  mocks.putMutate.mockReset();
+
+  state.cloudActive = true;
+  state.isDesktop = true;
+  state.connectionState = "healthy";
+  state.capabilities.data = { gatewayEnabled: true };
+  state.capabilities.isError = false;
+  state.capabilities.error = null;
+  state.selections.data = [];
+  state.selections.isError = false;
+  state.selections.error = null;
+  state.reconcileSnapshot = {};
+  state.reconcileStatus = "completed";
+  state.reconcileIsError = false;
+  state.reconcileError = null;
+  state.freshAgents = [agent()];
+
+  mocks.refetchAgents.mockImplementation(async () => ({
+    data: state.freshAgents,
+    isError: false,
+    error: null,
+  }));
+  mocks.planner.mockImplementation((input: {
+    agents: AgentSummary[];
+    selectionCount: number;
+    gatewayEnabled: boolean;
+  }) => (
+    input.selectionCount === 0 && input.gatewayEnabled
+      ? input.agents.map((item) => ({ harnessKind: item.kind, surface: "local" }))
+      : []
+  ));
 });
 
 afterEach(() => {
   resetRendererDiagnosticsSinkForTest();
   cleanup();
+  vi.restoreAllMocks();
   vi.clearAllMocks();
   useAuthSetupOnboardingStore.getState().resetForTests();
-  state.cloudActive = true;
-  state.capabilities.data = { gatewayEnabled: true };
-  state.selections.data = [];
-  state.agents = [];
-  state.agentsLoading = false;
-  state.reconcileSnapshot = {};
-  state.reconcileStatus = "completed";
 });
 
 describe("useFirstRunAuthAdoption", () => {
-  it("writes nothing when native creds are detected (native is implicit)", async () => {
-    state.agents = [
-      agent({ kind: "claude" }),
-      agent({ kind: "codex", credentialState: "login_required" }),
-    ];
-
-    renderHook(() => useFirstRunAuthAdoption());
-    await waitForDecision();
-
-    expect(putMutate).not.toHaveBeenCalled();
-  });
-
-  it("is a no-op when selections already exist", async () => {
-    state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
-    state.selections.data = [
-      { harnessKind: "claude", surface: "local", sourceKind: "gateway", enabled: true },
-    ];
-
-    renderHook(() => useFirstRunAuthAdoption());
-    await waitForDecision();
-
-    expect(putMutate).not.toHaveBeenCalled();
-  });
-
-  it("preselects the gateway when nothing is detected and the gateway is enabled", async () => {
-    state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
-
-    renderHook(() => useFirstRunAuthAdoption());
-
-    await waitFor(() => expect(putMutate).toHaveBeenCalledTimes(1));
-    expect(putMutate).toHaveBeenCalledWith(
-      { harnessKind: "claude", surface: "local", body: GATEWAY_BODY },
-      expect.anything(),
-    );
-  });
-
-  it("records a failed first-run adoption through the renderer sink", async () => {
-    state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
-    renderHook(() => useFirstRunAuthAdoption());
-    await waitFor(() => expect(putMutate).toHaveBeenCalledTimes(1));
-
-    const options = putMutate.mock.calls[0]?.[1] as { onError(error: unknown): void };
-    options.onError(new TypeError("adoption failed"));
-
-    expect(diagnostics).toContainEqual(expect.objectContaining({
-      name: "renderer.agent_auth.first_run_adoption_failed",
-      errorClassification: "first_run_adoption_failed",
-    }));
-  });
-
-  it("does nothing when nothing is detected and the gateway is disabled", async () => {
-    state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
-    state.capabilities.data = { gatewayEnabled: false };
-
-    renderHook(() => useFirstRunAuthAdoption());
-    await waitForDecision();
-
-    expect(putMutate).not.toHaveBeenCalled();
-  });
-
-  it("waits for selections to load and then runs only once", async () => {
-    state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
-    state.selections.data = undefined;
+  it("settles active Web as a silent no-op with both Cloud queries disabled", async () => {
+    state.isDesktop = false;
+    state.connectionState = "failed";
 
     const { rerender } = renderHook(() => useFirstRunAuthAdoption());
+    await waitForDecision();
+
+    expect(mocks.capabilitiesEnabled).toHaveBeenLastCalledWith(false);
+    expect(mocks.selectionsEnabled).toHaveBeenLastCalledWith(false);
+    expect(useAuthSetupOnboardingStore.getState()).toMatchObject({
+      adoptedHarnessKinds: [],
+      adoptionStartedAt: 1_723_456_789,
+    });
+    expect(mocks.refetchAgents).not.toHaveBeenCalled();
+    expect(mocks.planner).not.toHaveBeenCalled();
+    expect(mocks.putMutate).not.toHaveBeenCalled();
+    expect(diagnostics).toEqual([]);
+
+    vi.mocked(Date.now).mockReturnValue(1_723_456_790);
+    rerender();
     await flushAdoption();
-    expect(putMutate).not.toHaveBeenCalled();
+    expect(useAuthSetupOnboardingStore.getState().adoptionStartedAt)
+      .toBe(1_723_456_789);
+  });
+
+  it("keeps inactive Cloud pending and can adopt after active Desktop transition", async () => {
+    state.cloudActive = false;
+    const { rerender } = renderHook(() => useFirstRunAuthAdoption());
+    await flushAdoption();
+
+    expect(mocks.capabilitiesEnabled).toHaveBeenLastCalledWith(false);
+    expect(mocks.selectionsEnabled).toHaveBeenLastCalledWith(false);
+    expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toBeNull();
+    expect(mocks.refetchAgents).not.toHaveBeenCalled();
+
+    state.cloudActive = true;
+    rerender();
+    await waitFor(() => expect(mocks.putMutate).toHaveBeenCalledTimes(1));
+
+    expect(mocks.capabilitiesEnabled).toHaveBeenLastCalledWith(true);
+    expect(mocks.selectionsEnabled).toHaveBeenLastCalledWith(true);
+  });
+
+  it("waits while the Desktop runtime is connecting", async () => {
+    state.connectionState = "connecting";
+    const { rerender } = renderHook(() => useFirstRunAuthAdoption());
+    await flushAdoption();
+
+    expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toBeNull();
+    expect(mocks.refetchAgents).not.toHaveBeenCalled();
+
+    state.connectionState = "healthy";
+    rerender();
+    await waitFor(() => expect(mocks.refetchAgents).toHaveBeenCalledTimes(1));
+  });
+
+  it("settles a failed Desktop runtime once and does not retry after recovery", async () => {
+    state.connectionState = "failed";
+    const { rerender } = renderHook(() => useFirstRunAuthAdoption());
+    await waitForDecision();
+
+    expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toEqual([]);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnosticValues(diagnostics[0]!)).toEqual({
+      failure_stage: "runtime_connection",
+    });
+
+    state.connectionState = "healthy";
+    rerender();
+    await flushAdoption();
+    expect(mocks.refetchAgents).not.toHaveBeenCalled();
+    expect(diagnostics).toHaveLength(1);
+  });
+
+  it.each([
+    [
+      "pending selections do not mask a capabilities failure",
+      () => {
+        state.selections.data = undefined;
+        state.capabilities.data = undefined;
+        state.capabilities.isError = true;
+        state.capabilities.error = new TypeError("capabilities payload");
+      },
+      "capabilities_query",
+    ],
+    [
+      "pending Cloud inputs do not mask a reconcile query failure",
+      () => {
+        state.selections.data = undefined;
+        state.capabilities.data = undefined;
+        state.reconcileIsError = true;
+        state.reconcileError = new TypeError("reconcile payload");
+      },
+      "reconcile_query",
+    ],
+    [
+      "pending capabilities do not mask a failed reconcile job",
+      () => {
+        state.capabilities.data = undefined;
+        state.reconcileStatus = "failed";
+      },
+      "reconcile_job",
+    ],
+  ] as const)("settles crossed state: %s", async (_name, configure, expectedStage) => {
+    configure();
+    renderHook(() => useFirstRunAuthAdoption());
+    await waitForDecision();
+
+    expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toEqual([]);
+    expect(diagnosticValues(diagnostics[0]!).failure_stage).toBe(expectedStage);
+    expect(mocks.refetchAgents).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "capabilities failure",
+      () => {
+        state.capabilities.data = undefined;
+        state.capabilities.isError = true;
+        state.capabilities.error = new TypeError("capabilities payload");
+      },
+      "capabilities_query",
+    ],
+    [
+      "reconcile failure",
+      () => {
+        state.reconcileIsError = true;
+        state.reconcileError = new TypeError("reconcile payload");
+      },
+      "reconcile_query",
+    ],
+    [
+      "failed reconcile job",
+      () => {
+        state.reconcileStatus = "failed";
+      },
+      "reconcile_job",
+    ],
+  ] as const)(
+    "keeps a connecting runtime pending despite %s, then settles once healthy",
+    async (_name, configure, expectedStage) => {
+      state.connectionState = "connecting";
+      configure();
+      const { rerender } = renderHook(() => useFirstRunAuthAdoption());
+      await flushAdoption();
+
+      expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toBeNull();
+      expect(diagnostics).toEqual([]);
+      expect(mocks.refetchAgents).not.toHaveBeenCalled();
+
+      state.connectionState = "healthy";
+      rerender();
+      await waitForDecision();
+
+      expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toEqual([]);
+      expect(diagnosticValues(diagnostics[0]!).failure_stage).toBe(expectedStage);
+      expect(diagnostics).toHaveLength(1);
+      expect(mocks.refetchAgents).not.toHaveBeenCalled();
+
+      rerender();
+      await flushAdoption();
+      expect(diagnostics).toHaveLength(1);
+    },
+  );
+
+  it("uses deterministic terminal precedence when several failures coexist", async () => {
+    state.connectionState = "failed";
+    state.selections.data = undefined;
+    state.selections.isError = true;
+    state.selections.error = new TypeError("selections payload");
+    state.capabilities.data = undefined;
+    state.capabilities.isError = true;
+    state.capabilities.error = new TypeError("capabilities payload");
+    state.reconcileIsError = true;
+    state.reconcileError = new TypeError("reconcile payload");
+    state.reconcileStatus = "failed";
+
+    renderHook(() => useFirstRunAuthAdoption());
+    await waitForDecision();
+
+    expect(diagnosticValues(diagnostics[0]!)).toEqual({
+      failure_stage: "runtime_connection",
+    });
+    expect(diagnostics).toHaveLength(1);
+  });
+
+  it.each([
+    [
+      "selections before capabilities and reconcile",
+      () => {
+        state.selections.data = undefined;
+        state.selections.isError = true;
+        state.selections.error = new TypeError("selections payload");
+        state.capabilities.data = undefined;
+        state.capabilities.isError = true;
+        state.capabilities.error = new TypeError("capabilities payload");
+        state.reconcileIsError = true;
+        state.reconcileError = new TypeError("reconcile payload");
+      },
+      "selections_query",
+    ],
+    [
+      "capabilities before reconcile when selections are usable",
+      () => {
+        state.selections.isError = true;
+        state.selections.error = new TypeError("background selections payload");
+        state.capabilities.data = undefined;
+        state.capabilities.isError = true;
+        state.capabilities.error = new TypeError("capabilities payload");
+        state.reconcileIsError = true;
+        state.reconcileError = new TypeError("reconcile payload");
+      },
+      "capabilities_query",
+    ],
+  ] as const)("orders terminal stages: %s", async (_name, configure, expectedStage) => {
+    configure();
+    renderHook(() => useFirstRunAuthAdoption());
+    await waitForDecision();
+
+    expect(diagnosticValues(diagnostics[0]!).failure_stage).toBe(expectedStage);
+    expect(diagnostics).toHaveLength(1);
+  });
+
+  it("does not retry after a crossed pending-plus-terminal state recovers", async () => {
+    state.selections.data = undefined;
+    state.reconcileStatus = "failed";
+    const { rerender } = renderHook(() => useFirstRunAuthAdoption());
+    await waitForDecision();
+
+    expect(diagnosticValues(diagnostics[0]!).failure_stage).toBe("reconcile_job");
 
     state.selections.data = [];
-    rerender();
-    await waitFor(() => expect(putMutate).toHaveBeenCalledTimes(1));
-
-    rerender();
-    await flushAdoption();
-    expect(putMutate).toHaveBeenCalledTimes(1);
-  });
-
-  it("waits for reconcile hydration to settle before deciding", async () => {
-    // Mid-hydration: the reconcile job is still running, so the one-shot
-    // decision must not fire off a stale snapshot.
-    state.reconcileStatus = "running";
-    state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
-
-    const { rerender } = renderHook(() => useFirstRunAuthAdoption());
-    await flushAdoption();
-    expect(putMutate).not.toHaveBeenCalled();
-
     state.reconcileStatus = "completed";
-    state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
     rerender();
+    await flushAdoption();
 
-    await waitFor(() => expect(putMutate).toHaveBeenCalledTimes(1));
-    expect(putMutate).toHaveBeenCalledWith(
-      { harnessKind: "claude", surface: "local", body: GATEWAY_BODY },
-      expect.anything(),
-    );
+    expect(mocks.refetchAgents).not.toHaveBeenCalled();
+    expect(mocks.putMutate).not.toHaveBeenCalled();
+    expect(diagnostics).toHaveLength(1);
   });
 
-  it("waits until a reconcile snapshot exists before deciding", async () => {
+  it.each([
+    ["selections", "selections_query"],
+    ["capabilities", "capabilities_query"],
+  ] as const)(
+    "waits for pending %s and settles a terminal no-data error",
+    async (queryName, expectedStage) => {
+      const query = state[queryName];
+      query.data = undefined;
+      const { rerender } = renderHook(() => useFirstRunAuthAdoption());
+      await flushAdoption();
+
+      expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toBeNull();
+      expect(mocks.refetchAgents).not.toHaveBeenCalled();
+
+      const error = new TypeError("private provider response");
+      query.isError = true;
+      query.error = error;
+      rerender();
+      await waitForDecision();
+
+      expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toEqual([]);
+      expect(diagnosticValues(diagnostics[0]!)).toEqual({
+        failure_stage: expectedStage,
+        error_name: "TypeError",
+      });
+      expect(JSON.stringify(diagnostics[0])).not.toContain("private provider response");
+    },
+  );
+
+  it("uses cached selections and capabilities despite background errors", async () => {
+    state.selections.isError = true;
+    state.selections.error = new Error("stale selections refresh failed");
+    state.capabilities.isError = true;
+    state.capabilities.error = new Error("stale capabilities refresh failed");
+
+    renderHook(() => useFirstRunAuthAdoption());
+    await waitFor(() => expect(mocks.refetchAgents).toHaveBeenCalledTimes(1));
+
+    expect(mocks.putMutate).toHaveBeenCalledTimes(1);
+    expect(diagnostics).toEqual([]);
+  });
+
+  it("keeps a missing reconcile snapshot pending", async () => {
     state.reconcileSnapshot = null;
-    state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
-
-    const { rerender } = renderHook(() => useFirstRunAuthAdoption());
-    await flushAdoption();
-    expect(putMutate).not.toHaveBeenCalled();
-
-    state.reconcileSnapshot = {};
-    rerender();
-    await waitFor(() => expect(putMutate).toHaveBeenCalledTimes(1));
-  });
-
-  it("does nothing while cloud is inactive", async () => {
-    state.cloudActive = false;
-    state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
-
-    renderHook(() => useFirstRunAuthAdoption());
-    await flushAdoption();
-
-    expect(putMutate).not.toHaveBeenCalled();
-  });
-
-  // Ack-gated onboarding step (agent-auth.md, Proof C7): the "setting up"
-  // step reads the adoption decision from the auth-setup store.
-  it("records the adopted harness kinds for the onboarding step", async () => {
-    state.agents = [
-      agent({ kind: "claude", credentialState: "login_required" }),
-      agent({ kind: "codex", credentialState: "login_required" }),
-    ];
-
-    renderHook(() => useFirstRunAuthAdoption());
-    await waitForDecision();
-
-    const store = useAuthSetupOnboardingStore.getState();
-    expect(store.adoptedHarnessKinds).toEqual(["claude", "codex"]);
-    expect(store.adoptionStartedAt).not.toBeNull();
-  });
-
-  it("records an empty adoption (native creds detected) so the step stays hidden", async () => {
-    state.agents = [agent({ kind: "claude" })];
-
-    renderHook(() => useFirstRunAuthAdoption());
-    await waitForDecision();
-
-    expect(putMutate).not.toHaveBeenCalled();
-    expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toEqual([]);
-  });
-
-  it("records nothing while the decision has not run (cloud inactive)", async () => {
-    state.cloudActive = false;
-    state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
-
     renderHook(() => useFirstRunAuthAdoption());
     await flushAdoption();
 
     expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toBeNull();
+    expect(mocks.refetchAgents).not.toHaveBeenCalled();
+  });
+
+  it.each(["idle", "queued", "running"])(
+    "keeps reconcile %s pending",
+    async (status) => {
+      state.reconcileStatus = status;
+      renderHook(() => useFirstRunAuthAdoption());
+      await flushAdoption();
+
+      expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toBeNull();
+      expect(mocks.refetchAgents).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    Object.assign(new Error("missing endpoint"), { name: "AnyHarnessError", status: 404 }),
+    Object.assign(new Error("transport response"), { name: "NetworkError" }),
+  ])("settles reconcile query errors without exposing their payload", async (error) => {
+    state.reconcileIsError = true;
+    state.reconcileError = error;
+    renderHook(() => useFirstRunAuthAdoption());
+    await waitForDecision();
+
+    expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toEqual([]);
+    expect(diagnosticValues(diagnostics[0]!)).toEqual({
+      failure_stage: "reconcile_query",
+      error_name: error.name,
+    });
+    expect(JSON.stringify(diagnostics[0])).not.toContain(error.message);
+    expect(mocks.refetchAgents).not.toHaveBeenCalled();
+  });
+
+  it("settles a failed reconcile job without copying job results", async () => {
+    state.reconcileStatus = "failed";
+    state.reconcileSnapshot = {
+      message: "private runtime path /Users/example/repo",
+      results: [{ detail: "provider payload" }],
+    };
+    renderHook(() => useFirstRunAuthAdoption());
+    await waitForDecision();
+
+    expect(diagnosticValues(diagnostics[0]!)).toEqual({
+      failure_stage: "reconcile_job",
+    });
+    expect(JSON.stringify(diagnostics[0])).not.toContain("private runtime path");
+    expect(JSON.stringify(diagnostics[0])).not.toContain("provider payload");
+  });
+
+  it("uses completed reconcile to refetch once and pass settled Cloud inputs", async () => {
+    state.selections.data = [{ harnessKind: "codex" }];
+    state.capabilities.data = { gatewayEnabled: false };
+    state.freshAgents = [agent({ kind: "codex" })];
+
+    const { rerender } = renderHook(() => useFirstRunAuthAdoption());
+    await waitForDecision();
+
+    expect(mocks.refetchAgents).toHaveBeenCalledTimes(1);
+    expect(mocks.refetchAgents).toHaveBeenCalledWith({ cancelRefetch: false });
+    expect(mocks.planner).toHaveBeenCalledWith({
+      agents: state.freshAgents,
+      selectionCount: 1,
+      gatewayEnabled: false,
+    });
+    expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toEqual([]);
+    expect(mocks.putMutate).not.toHaveBeenCalled();
+
+    rerender();
+    await flushAdoption();
+    expect(mocks.refetchAgents).toHaveBeenCalledTimes(1);
+  });
+
+  it("records adopted kinds and preserves planner write order", async () => {
+    state.freshAgents = [agent({ kind: "claude" }), agent({ kind: "codex" })];
+
+    renderHook(() => useFirstRunAuthAdoption());
+    await waitFor(() => expect(mocks.putMutate).toHaveBeenCalledTimes(2));
+
+    expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds)
+      .toEqual(["claude", "codex"]);
+    expect(mocks.putMutate.mock.calls.map(([input]) => input.harnessKind))
+      .toEqual(["claude", "codex"]);
+    expect(useAuthSetupOnboardingStore.getState().adoptionStartedAt)
+      .toBe(1_723_456_789);
+  });
+
+  it("keeps selection-write diagnostics bounded to stage, safe name, and harness", async () => {
+    renderHook(() => useFirstRunAuthAdoption());
+    await waitFor(() => expect(mocks.putMutate).toHaveBeenCalledTimes(1));
+
+    const options = mocks.putMutate.mock.calls[0]?.[1] as {
+      onError(error: unknown): void;
+    };
+    const error = Object.assign(new TypeError("secret response body"), {
+      payload: { token: "do-not-ship" },
+    });
+    options.onError(error);
+
+    expect(diagnosticValues(diagnostics[0]!)).toEqual({
+      failure_stage: "selection_write",
+      error_name: "TypeError",
+      harness_kind: "claude",
+    });
+    expect(JSON.stringify(diagnostics[0])).not.toContain("secret response body");
+    expect(JSON.stringify(diagnostics[0])).not.toContain("do-not-ship");
   });
 });
