@@ -1,4 +1,5 @@
 use agent_client_protocol as acp;
+use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
@@ -12,6 +13,41 @@ use crate::live::sessions::actor::state::SessionStartupState;
 
 type DuplexRead = tokio::io::ReadHalf<tokio::io::DuplexStream>;
 type DuplexWrite = tokio::io::WriteHalf<tokio::io::DuplexStream>;
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LegacySetModelRequest {
+    session_id: String,
+    model_id: String,
+}
+
+impl acp::JsonRpcMessage for LegacySetModelRequest {
+    fn matches_method(method: &str) -> bool {
+        method == "session/set_model"
+    }
+
+    fn method(&self) -> &'static str {
+        "session/set_model"
+    }
+
+    fn to_untyped_message(&self) -> Result<acp::UntypedMessage, acp::Error> {
+        acp::UntypedMessage::new(self.method(), self)
+    }
+
+    fn parse_message(
+        method: &str,
+        params: &impl Serialize,
+    ) -> Result<Self, acp::Error> {
+        if !Self::matches_method(method) {
+            return Err(acp::Error::method_not_found());
+        }
+        acp::util::json_cast(params)
+    }
+}
+
+impl acp::JsonRpcRequest for LegacySetModelRequest {
+    type Response = serde_json::Value;
+}
 
 struct FakeAcpConnection {
     conn: acp::ConnectionTo<acp::Agent>,
@@ -63,9 +99,20 @@ fn spawn_fake_agent(
 ) -> oneshot::Sender<()> {
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
     let transport = acp::ByteStreams::new(write.compat_write(), read.compat());
+    let model_response = response.clone();
     let connect_future = acp::Agent
         .builder()
         .name("direct-setter-confirmation-fake-agent")
+        .on_receive_request(
+            async move |request: LegacySetModelRequest,
+                        responder: acp::Responder<serde_json::Value>,
+                        _cx| {
+                assert_eq!(request.session_id, "native-1");
+                assert_eq!(request.model_id, "grok-4.5");
+                responder.respond(model_response.clone())
+            },
+            acp::on_receive_request!(),
+        )
         .on_receive_request(
             async move |_req: acp::ClientRequest,
                         responder: acp::Responder<serde_json::Value>,

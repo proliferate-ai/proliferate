@@ -282,6 +282,6 @@ fn non_settable_acp_values_stay_visible_but_unavailable() {
     );
     assert_eq!(
         view.validate_choice("model", &model_id),
-        Err(AgentConfigChoiceError::ValueUnknown)
+        Err(AgentConfigChoiceError::ConfigUnavailable)
     );
 }
