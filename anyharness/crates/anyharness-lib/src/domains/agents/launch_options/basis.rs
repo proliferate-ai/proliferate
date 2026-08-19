@@ -1,11 +1,11 @@
 use std::fmt::Write;
 use std::fs::Metadata;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
 use crate::domains::agents::installer::manifest::{read_manifest, role_name};
-use crate::domains::agents::model::ResolvedArtifact;
+use crate::domains::agents::model::{ResolvedArtifact, SpawnSpec};
 use crate::domains::agents::readiness::service::resolve_agent_unrouted;
 use crate::domains::agents::registry;
 use crate::domains::agents::route_auth::state::load_state_file;
@@ -45,15 +45,17 @@ pub fn compute_harness_basis_revision(runtime_home: &Path, harness_kind: &str) -
 
     if let Some(descriptor) = registry::descriptor(harness_kind) {
         let resolved = resolve_agent_unrouted(&descriptor, runtime_home);
-        if let Some(native) = resolved.native.as_ref() {
-            hash_resolved_artifact(&mut hasher, native);
-        } else {
-            hash_field(&mut hasher, b"no-native-artifact");
-        }
+        let ambient_native_override = effective_ambient_native_override(harness_kind);
+        hash_effective_native_artifact(
+            &mut hasher,
+            resolved.native.as_ref(),
+            ambient_native_override.as_deref(),
+        );
         hash_resolved_artifact(&mut hasher, &resolved.agent_process);
         if let Some(spawn) = resolved.spawn.as_ref() {
-            hash_field(&mut hasher, b"effective-spawn-program");
-            hash_executable_metadata(&mut hasher, &spawn.program);
+            hash_spawn_spec(&mut hasher, spawn);
+        } else {
+            hash_field(&mut hasher, b"no-effective-spawn-spec");
         }
     } else {
         hash_field(&mut hasher, b"unregistered-harness");
@@ -71,6 +73,57 @@ pub fn compute_harness_basis_revision(runtime_home: &Path, harness_kind: &str) -
         let _ = write!(&mut revision, "{byte:02x}");
     }
     revision
+}
+
+fn effective_ambient_native_override(harness_kind: &str) -> Option<PathBuf> {
+    if harness_kind != "claude" {
+        return None;
+    }
+    std::env::var_os("CLAUDE_CODE_EXECUTABLE")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
+fn hash_effective_native_artifact(
+    hasher: &mut Sha256,
+    resolved_native: Option<&ResolvedArtifact>,
+    ambient_native_override: Option<&Path>,
+) {
+    if let Some(native) = resolved_native {
+        hash_resolved_artifact(hasher, native);
+    } else if let Some(path) = ambient_native_override {
+        // When readiness found no native artifact, the Claude adapter can
+        // still inherit this host-level executable selector. It is therefore
+        // part of the executable identity actually used by probe and launch.
+        hash_field(hasher, b"ambient-native-override");
+        hash_executable_metadata(hasher, path);
+    } else {
+        hash_field(hasher, b"no-native-artifact");
+    }
+}
+
+fn hash_spawn_spec(hasher: &mut Sha256, spawn: &SpawnSpec) {
+    hash_field(hasher, b"effective-spawn-spec");
+    hash_executable_metadata(hasher, &spawn.program);
+    for arg in &spawn.args {
+        hash_field(hasher, b"spawn-arg");
+        hash_field(hasher, arg.as_bytes());
+    }
+
+    let mut env = spawn.env.iter().collect::<Vec<_>>();
+    env.sort_by(|(left, _), (right, _)| left.cmp(right));
+    for (key, value) in env {
+        hash_field(hasher, b"spawn-env");
+        hash_field(hasher, key.as_bytes());
+        hash_field(hasher, value.as_bytes());
+    }
+
+    if let Some(cwd) = spawn.cwd.as_deref() {
+        hash_field(hasher, b"spawn-cwd");
+        hash_field(hasher, cwd.as_os_str().as_encoded_bytes());
+    } else {
+        hash_field(hasher, b"no-spawn-cwd");
+    }
 }
 
 fn hash_resolved_artifact(hasher: &mut Sha256, artifact: &ResolvedArtifact) {
@@ -152,9 +205,42 @@ mod tests {
     use crate::domains::agents::installer::manifest::{record_entries, ManifestArtifact};
     use crate::domains::agents::model::ArtifactRole;
 
+    struct TestDir(PathBuf);
+
+    impl TestDir {
+        fn new(label: &str) -> Self {
+            let unique = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock after epoch")
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "anyharness-launch-basis-{label}-{}-{unique}",
+                std::process::id()
+            ));
+            std::fs::create_dir_all(&path).expect("create test directory");
+            Self(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TestDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn spawn_spec_digest(spawn: &SpawnSpec) -> Vec<u8> {
+        let mut hasher = Sha256::new();
+        hash_spawn_spec(&mut hasher, spawn);
+        hasher.finalize().to_vec()
+    }
+
     #[test]
     fn managed_native_transition_changes_basis_even_when_agent_process_is_stable() {
-        let home = tempfile::tempdir().expect("temp runtime home");
+        let home = TestDir::new("managed-native-transition");
         let entries = |native_sha: &str| {
             vec![
                 ManifestArtifact {
@@ -191,7 +277,7 @@ mod tests {
     fn path_executable_replacement_changes_effective_identity() {
         use std::os::unix::fs::PermissionsExt;
 
-        let home = tempfile::tempdir().expect("temp runtime home");
+        let home = TestDir::new("path-executable-replacement");
         let executable = home.path().join("grok");
         std::fs::write(&executable, "#!/bin/sh\nexit 0\n").expect("write first executable");
         std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))
@@ -210,5 +296,52 @@ mod tests {
         let mut second = Sha256::new();
         hash_executable_metadata(&mut second, &executable);
         assert_ne!(first.as_slice(), second.finalize().as_slice());
+    }
+
+    #[test]
+    fn complete_spawn_spec_changes_effective_identity() {
+        let base = SpawnSpec {
+            program: PathBuf::from("/tmp/agent-adapter"),
+            args: vec!["--stdio".to_string()],
+            env: std::collections::HashMap::from([(
+                "CLAUDE_CODE_EXECUTABLE".to_string(),
+                "/tmp/claude-a".to_string(),
+            )]),
+            cwd: Some(PathBuf::from("/tmp/adapter-a")),
+        };
+
+        let mut changed_args = base.clone();
+        changed_args.args.push("--models-from=config-b".to_string());
+        assert_ne!(spawn_spec_digest(&base), spawn_spec_digest(&changed_args));
+
+        let mut changed_env = base.clone();
+        changed_env.env.insert(
+            "CLAUDE_CODE_EXECUTABLE".to_string(),
+            "/tmp/claude-b".to_string(),
+        );
+        assert_ne!(spawn_spec_digest(&base), spawn_spec_digest(&changed_env));
+
+        let mut changed_cwd = base.clone();
+        changed_cwd.cwd = Some(PathBuf::from("/tmp/adapter-b"));
+        assert_ne!(spawn_spec_digest(&base), spawn_spec_digest(&changed_cwd));
+    }
+
+    #[test]
+    fn unresolved_native_includes_ambient_executable_selector() {
+        let mut first = Sha256::new();
+        hash_effective_native_artifact(
+            &mut first,
+            None,
+            Some(Path::new("/tmp/claude-native-a")),
+        );
+
+        let mut second = Sha256::new();
+        hash_effective_native_artifact(
+            &mut second,
+            None,
+            Some(Path::new("/tmp/claude-native-b")),
+        );
+
+        assert_ne!(first.finalize().as_slice(), second.finalize().as_slice());
     }
 }

@@ -16,9 +16,7 @@ use crate::domains::sessions::adapter_migration::SessionAdapterMarker;
 use crate::domains::sessions::launch_intent::ResolvedLaunchIntent;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::store::idempotent_create::InsertSessionByIdOutcome;
-use crate::domains::workspaces::env::{
-    read_materialized_launch_env, read_materialized_session_env, read_materialized_workspace_env,
-};
+use crate::domains::workspaces::env::read_materialized_launch_env;
 use crate::domains::workspaces::model::WorkspaceSurface;
 use crate::origin::OriginContext;
 
@@ -54,9 +52,15 @@ impl SessionService {
             system_prompt_append,
             subagents_enabled,
             origin,
-            |record, intent, current_basis, selection| {
+            |record, intent, basis_revision, selection| {
                 self.session_store
-                    .insert_with_launch_intent(record, intent, agent_kind, current_basis, selection)
+                    .insert_with_launch_intent(
+                        record,
+                        intent,
+                        agent_kind,
+                        basis_revision,
+                        selection,
+                    )
                     .map_err(|unsupported| {
                         map_selection_unsupported(
                             workspace_id,
@@ -94,7 +98,7 @@ impl SessionService {
         F: FnOnce(
             &SessionRecord,
             &ResolvedLaunchIntent,
-            &str,
+            &dyn Fn() -> String,
             &LaunchSelection,
         ) -> Result<HarnessLaunchOptionStateRow, CreateSessionError>,
     {
@@ -162,12 +166,10 @@ impl SessionService {
         );
 
         let workspace_path = Path::new(&workspace.path);
-        let workspace_env = read_materialized_workspace_env(workspace_path)
+        let readiness_env = read_materialized_launch_env(&self.runtime_home, workspace_path)
             .map_err(CreateSessionError::Internal)?;
-        let session_env =
-            read_materialized_session_env(workspace_path).map_err(CreateSessionError::Internal)?;
         if let Some(env_var_name) =
-            find_capability_affecting_env_override(&descriptor, &workspace_env, &session_env)
+            find_capability_affecting_env_override(&descriptor, &readiness_env)
         {
             return Err(CreateSessionError::AgentEnvOverrideUnsupported {
                 agent_kind: agent_kind.to_string(),
@@ -175,8 +177,6 @@ impl SessionService {
             });
         }
 
-        let readiness_env = read_materialized_launch_env(&self.runtime_home, workspace_path)
-            .map_err(CreateSessionError::Internal)?;
         let agent_resolution_started = Instant::now();
         // Fail closed BEFORE the readiness gate, so an unsatisfiable selection is
         // reported as the auth problem it is. The readiness gate would also refuse
@@ -239,7 +239,7 @@ impl SessionService {
             model_id: model_id.map(str::to_string),
             control_values: control_values.clone(),
         };
-        let current_basis = self.launch_options_service.basis_revision(agent_kind);
+        let basis_revision = || self.launch_options_service.basis_revision(agent_kind);
 
         let session_id = preselected_session_id
             .clone()
@@ -281,7 +281,13 @@ impl SessionService {
         let (outcome, validated_state) = if reuse_existing {
             let (insert_outcome, validated_state) = self
                 .session_store
-                .insert_or_find_by_id(&record, &intent, agent_kind, &current_basis, &selection)
+                .insert_or_find_by_id(
+                    &record,
+                    &intent,
+                    agent_kind,
+                    &basis_revision,
+                    &selection,
+                )
                 .map_err(|unsupported| {
                     map_selection_unsupported(
                         workspace_id,
@@ -305,7 +311,7 @@ impl SessionService {
             };
             (outcome, validated_state)
         } else {
-            let validated_state = persist_new(&record, &intent, &current_basis, &selection)?;
+            let validated_state = persist_new(&record, &intent, &basis_revision, &selection)?;
             (CreateSessionOutcome::Created(record), validated_state)
         };
         tracing::info!(

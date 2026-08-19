@@ -225,6 +225,7 @@ fn seed_starting_session(state: &AppState, session_id: &str) {
         ..Default::default()
     };
     let basis = state.launch_options_service.basis_revision("claude");
+    let basis_revision = || basis.clone();
     state
         .session_service
         .store()
@@ -232,7 +233,7 @@ fn seed_starting_session(state: &AppState, session_id: &str) {
             &starting_session(session_id),
             &intent,
             "claude",
-            &basis,
+            &basis_revision,
             &selection,
         )
         .expect("insert interrupted create row with immutable intent");

@@ -28,11 +28,11 @@ impl SessionStore {
         record: &SessionRecord,
         intent: &ResolvedLaunchIntent,
         harness_kind: &str,
-        current_basis: &str,
+        basis_revision: &dyn Fn() -> String,
         selection: &LaunchSelection,
     ) -> Result<(InsertSessionByIdOutcome, HarnessLaunchOptionStateRow), LaunchSelectionUnsupported>
     {
-        with_launch_admission_tx(&self.db, harness_kind, current_basis, selection, |conn| {
+        with_launch_admission_tx(&self.db, harness_kind, basis_revision, selection, |conn| {
             let existing = conn
                 .query_row(
                     "SELECT * FROM sessions WHERE id = ?1",

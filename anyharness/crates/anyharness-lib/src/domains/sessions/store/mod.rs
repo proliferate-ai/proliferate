@@ -50,14 +50,24 @@ impl SessionStore {
 pub(crate) fn with_launch_admission_tx<T>(
     db: &Db,
     harness_kind: &str,
-    current_basis: &str,
+    basis_revision: &dyn Fn() -> String,
     selection: &LaunchSelection,
     insert: impl FnOnce(&rusqlite::Connection) -> anyhow::Result<T>,
 ) -> Result<(T, HarnessLaunchOptionStateRow), LaunchAdmissionTxError> {
     let result = db.with_tx_anyhow(|conn| {
-        let validated = validate_selection_in_conn(conn, harness_kind, current_basis, selection)
-            .map_err(anyhow::Error::new)?;
+        // Basis computation is owned by the launch-options service but runs
+        // while this transaction owns the shared connection. Rechecking after
+        // the inserts turns the external install/auth inputs into a CAS: if
+        // they changed during admission, the second validation fails and the
+        // whole session/intent unit rolls back.
+        let opening_basis = basis_revision();
+        let validated =
+            validate_selection_in_conn(conn, harness_kind, &opening_basis, selection)
+                .map_err(anyhow::Error::new)?;
         let inserted = insert(conn)?;
+        let closing_basis = basis_revision();
+        validate_selection_in_conn(conn, harness_kind, &closing_basis, selection)
+            .map_err(anyhow::Error::new)?;
         Ok((inserted, validated))
     });
     match result {

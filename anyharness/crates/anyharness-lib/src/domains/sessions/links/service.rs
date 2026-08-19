@@ -219,7 +219,7 @@ impl SessionLinkService {
         input: CreateSessionLinkInput,
         max_children: usize,
         harness_kind: &str,
-        current_basis: &str,
+        basis_revision: &dyn Fn() -> String,
         selection: &LaunchSelection,
     ) -> Result<(SessionLinkRecord, HarnessLaunchOptionStateRow), CreateSubagentSessionAndLinkError>
     {
@@ -269,7 +269,7 @@ impl SessionLinkService {
                 &record,
                 max_children,
                 harness_kind,
-                current_basis,
+                basis_revision,
                 selection,
             )
             .map_err(|error| match error {

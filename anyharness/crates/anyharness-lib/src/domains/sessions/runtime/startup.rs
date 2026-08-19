@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::domains::agents::launch_options::environment::find_capability_affecting_env_override;
+use crate::domains::agents::launch_options::LaunchSelectionUnsupported;
 use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::readiness::service::resolve_launch_agent;
 use crate::domains::agents::registry;
@@ -20,9 +21,6 @@ use crate::domains::sessions::mcp_bindings::summaries::serialize_binding_summari
 use crate::domains::sessions::mcp_bindings::workspace_attachment::WorkspaceMcpAttachmentError;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::store::SessionStore;
-use crate::domains::workspaces::env::{
-    read_materialized_session_env, read_materialized_workspace_env,
-};
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::SessionHooks;
 use crate::live::sessions::SessionStartupStrategy;
@@ -72,6 +70,16 @@ pub(super) fn choose_session_startup_strategy(
         has_last_prompt_at: record.last_prompt_at.is_some(),
         has_turn_started_event: session_store.has_turn_started_event(&record.id)?,
     })
+}
+
+fn require_prepared_basis_unchanged(
+    prepared_basis_revision: &str,
+    current_basis_revision: &str,
+) -> Result<(), LaunchSelectionUnsupported> {
+    if prepared_basis_revision != current_basis_revision {
+        return Err(LaunchSelectionUnsupported::ObservationUnavailable { state: None });
+    }
+    Ok(())
 }
 
 impl SessionRuntime {
@@ -264,6 +272,7 @@ impl SessionRuntime {
             .map_err(|unsupported| {
                 map_launch_selection_unsupported(&record.agent_kind, unsupported)
             })?;
+        let prepared_basis_revision = validated_state.basis_revision.clone();
         tracing::info!(
             session_id = %record.id,
             agent_kind = %record.agent_kind,
@@ -307,24 +316,18 @@ impl SessionRuntime {
         );
 
         let workspace_path = PathBuf::from(&workspace.path);
-        let materialized_workspace_env = read_materialized_workspace_env(&workspace_path)
+        let workspace_env = self
+            .workspace_runtime
+            .workspace_env(&workspace)
             .map_err(StartSessionError::Internal)?;
-        let materialized_session_env =
-            read_materialized_session_env(&workspace_path).map_err(StartSessionError::Internal)?;
-        if let Some(env_var_name) = find_capability_affecting_env_override(
-            &descriptor,
-            &materialized_workspace_env,
-            &materialized_session_env,
-        ) {
+        if let Some(env_var_name) =
+            find_capability_affecting_env_override(&descriptor, &workspace_env)
+        {
             return Err(StartSessionError::AgentEnvOverrideUnsupported {
                 agent_kind: record.agent_kind.clone(),
                 env_var_name,
             });
         }
-        let workspace_env = self
-            .workspace_runtime
-            .workspace_env(&workspace)
-            .map_err(StartSessionError::Internal)?;
         let readiness_env = workspace_env.clone();
         // Fail closed BEFORE the readiness gate, mirroring create_session
         // (service/create.rs): an unsatisfiable selection must be reported as
@@ -539,6 +542,13 @@ impl SessionRuntime {
             .map_err(|unsupported| {
                 map_launch_selection_unsupported(&record.agent_kind, unsupported)
             })?;
+        require_prepared_basis_unchanged(
+            &prepared_basis_revision,
+            &validated_state.basis_revision,
+        )
+        .map_err(|unsupported| {
+            map_launch_selection_unsupported(&record.agent_kind, unsupported)
+        })?;
         tracing::info!(
             session_id = %record.id,
             agent_kind = %record.agent_kind,
@@ -570,5 +580,21 @@ impl SessionRuntime {
         }
 
         Ok((handle, ready.native_session_id))
+    }
+}
+
+#[cfg(test)]
+mod basis_continuity_tests {
+    use super::require_prepared_basis_unchanged;
+    use crate::domains::agents::launch_options::LaunchSelectionUnsupported;
+
+    #[test]
+    fn prepared_launch_rejects_a_newly_validated_different_basis() {
+        let error = require_prepared_basis_unchanged("basis-a", "basis-b")
+            .expect_err("prepared launch facts cannot cross a basis transition");
+        assert!(matches!(
+            error,
+            LaunchSelectionUnsupported::ObservationUnavailable { state: None }
+        ));
     }
 }

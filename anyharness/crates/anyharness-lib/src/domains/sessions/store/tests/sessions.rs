@@ -31,9 +31,16 @@ fn insert_or_find_by_id_reuses_the_original_session_row() {
     let original = session_record();
     let selection = LaunchSelection::default();
     let intent = ResolvedLaunchIntent::default();
+    let basis_revision = || "basis-1".to_string();
     assert!(matches!(
         store
-            .insert_or_find_by_id(&original, &intent, "claude", "basis-1", &selection)
+            .insert_or_find_by_id(
+                &original,
+                &intent,
+                "claude",
+                &basis_revision,
+                &selection,
+            )
             .expect("insert original session"),
         (
             super::super::idempotent_create::InsertSessionByIdOutcome::Inserted,
@@ -44,7 +51,13 @@ fn insert_or_find_by_id_reuses_the_original_session_row() {
     let mut replay = original.clone();
     replay.agent_kind = "codex".to_string();
     let existing = store
-        .insert_or_find_by_id(&replay, &intent, "claude", "basis-1", &selection)
+        .insert_or_find_by_id(
+            &replay,
+            &intent,
+            "claude",
+            &basis_revision,
+            &selection,
+        )
         .expect("find original session");
     let (
         super::super::idempotent_create::InsertSessionByIdOutcome::Existing {
@@ -75,13 +88,14 @@ fn atomic_admission_rejects_changed_options_before_session_or_intent_insert() {
     let store = SessionStore::new(db.clone());
     let record = session_record();
     let intent = ResolvedLaunchIntent::default();
+    let basis_revision = || "new-basis".to_string();
 
     let error = store
         .insert_with_launch_intent(
             &record,
             &intent,
             "claude",
-            "new-basis",
+            &basis_revision,
             &LaunchSelection::default(),
         )
         .expect_err("stale matching-basis row must not authorize a session");
@@ -127,10 +141,11 @@ fn concurrent_refresh_cannot_commit_between_validation_and_durable_insert() {
             .expect("commit concurrent refresh");
     });
 
+    let basis_revision = || "basis-1".to_string();
     let ((), validated) = with_launch_admission_tx(
         &db,
         "claude",
-        "basis-1",
+        &basis_revision,
         &LaunchSelection::default(),
         |conn| {
             validated_tx.send(()).expect("validation complete signal");
@@ -160,6 +175,54 @@ fn concurrent_refresh_cannot_commit_between_validation_and_durable_insert() {
         })
         .unwrap();
     assert_eq!(current_basis, "basis-2");
+}
+
+#[test]
+fn basis_change_during_admission_rolls_back_session_and_intent() {
+    use std::cell::Cell;
+
+    use crate::domains::sessions::store::launch_intents::insert_launch_intent_row;
+    use crate::domains::sessions::store::sessions::insert_session_row;
+    use crate::domains::sessions::store::with_launch_admission_tx;
+
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+    seed_launch_options(&db, "basis-1");
+    let record = session_record();
+    let intent = ResolvedLaunchIntent::default();
+    let basis_reads = Cell::new(0_u8);
+    let basis_revision = || {
+        let read = basis_reads.get();
+        basis_reads.set(read.saturating_add(1));
+        if read == 0 {
+            "basis-1".to_string()
+        } else {
+            "basis-2".to_string()
+        }
+    };
+
+    let error = with_launch_admission_tx(
+        &db,
+        "claude",
+        &basis_revision,
+        &LaunchSelection::default(),
+        |conn| {
+            insert_session_row(conn, &record)?;
+            insert_launch_intent_row(conn, &record.id, &intent)?;
+            Ok(())
+        },
+    )
+    .expect_err("basis change before commit must reject admission");
+    assert!(matches!(
+        error,
+        super::super::LaunchAdmissionTxError::Selection(
+            LaunchSelectionUnsupported::ObservationUnavailable { .. }
+        )
+    ));
+
+    let store = SessionStore::new(db);
+    assert!(store.find_by_id(&record.id).unwrap().is_none());
+    assert!(store.find_launch_intent(&record.id).unwrap().is_none());
 }
 
 #[test]

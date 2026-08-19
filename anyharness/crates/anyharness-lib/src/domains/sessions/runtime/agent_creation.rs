@@ -172,7 +172,7 @@ impl SessionRuntime {
             None,
             false,
             OriginContext::system_local_runtime(),
-            |record, intent, current_basis, selection| {
+            |record, intent, basis_revision, selection| {
                 let (link, validated_state) = self
                     .session_link_service
                     .create_subagent_session_and_link_with_child_limit(
@@ -189,7 +189,7 @@ impl SessionRuntime {
                         },
                         MAX_ACTIVE_SUBAGENTS_PER_PARENT,
                         agent_kind,
-                        current_basis,
+                        basis_revision,
                         selection,
                     )
                     .map_err(|error| match error {

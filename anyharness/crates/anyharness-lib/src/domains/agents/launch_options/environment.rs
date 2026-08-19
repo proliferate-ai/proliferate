@@ -66,12 +66,11 @@ fn capability_affecting_env_keys(descriptor: &AgentDescriptor) -> BTreeSet<Strin
 
 pub(crate) fn find_capability_affecting_env_override(
     descriptor: &AgentDescriptor,
-    workspace_env: &BTreeMap<String, String>,
-    session_env: &BTreeMap<String, String>,
+    composed_user_env: &BTreeMap<String, String>,
 ) -> Option<String> {
     capability_affecting_env_keys(descriptor)
         .into_iter()
-        .find(|key| workspace_env.contains_key(key) || session_env.contains_key(key))
+        .find(|key| composed_user_env.contains_key(key))
 }
 
 #[cfg(test)]
@@ -94,16 +93,23 @@ mod tests {
         ] {
             let workspace = BTreeMap::from([(key.to_string(), "workspace".to_string())]);
             assert_eq!(
-                find_capability_affecting_env_override(descriptor, &workspace, &BTreeMap::new()),
+                find_capability_affecting_env_override(descriptor, &workspace),
                 Some(key.to_string()),
                 "workspace layer must not change the probe universe"
             );
 
             let session = BTreeMap::from([(key.to_string(), "session".to_string())]);
             assert_eq!(
-                find_capability_affecting_env_override(descriptor, &BTreeMap::new(), &session),
+                find_capability_affecting_env_override(descriptor, &session),
                 Some(key.to_string()),
                 "session layer must not change the probe universe"
+            );
+
+            let global = BTreeMap::from([(key.to_string(), "global".to_string())]);
+            assert_eq!(
+                find_capability_affecting_env_override(descriptor, &global),
+                Some(key.to_string()),
+                "global secret layer must not change the probe universe"
             );
         }
     }
@@ -113,7 +119,7 @@ mod tests {
         let claude = registry::descriptor("claude").expect("claude descriptor");
         let workspace = BTreeMap::from([("PROJECT_FEATURE_FLAG".to_string(), "1".to_string())]);
         assert_eq!(
-            find_capability_affecting_env_override(&claude, &workspace, &BTreeMap::new()),
+            find_capability_affecting_env_override(&claude, &workspace),
             None
         );
     }

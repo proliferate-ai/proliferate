@@ -32,11 +32,11 @@ impl SessionStore {
         record: &SessionRecord,
         intent: &ResolvedLaunchIntent,
         harness_kind: &str,
-        current_basis: &str,
+        basis_revision: &dyn Fn() -> String,
         selection: &LaunchSelection,
     ) -> Result<HarnessLaunchOptionStateRow, LaunchSelectionUnsupported> {
         let ((), validated) =
-            with_launch_admission_tx(&self.db, harness_kind, current_basis, selection, |conn| {
+            with_launch_admission_tx(&self.db, harness_kind, basis_revision, selection, |conn| {
                 insert_session_row(conn, record)?;
                 insert_launch_intent_row(conn, &record.id, intent)?;
                 Ok(())
@@ -228,21 +228,6 @@ impl SessionStore {
             conn.execute(
                 "UPDATE sessions SET native_session_id = NULL, updated_at = ?1 WHERE id = ?2",
                 params![now, id],
-            )?;
-            Ok(())
-        })
-    }
-
-    pub fn update_model_selection(
-        &self,
-        id: &str,
-        model_id: &str,
-        now: &str,
-    ) -> anyhow::Result<()> {
-        self.db.with_conn(|conn| {
-            conn.execute(
-                "UPDATE sessions SET requested_model_id = ?1, current_model_id = ?1, updated_at = ?2 WHERE id = ?3",
-                params![model_id, now, id],
             )?;
             Ok(())
         })

@@ -142,6 +142,7 @@ async fn idempotent_create_requires_exact_intent_and_current_observation() {
         created_at: "2026-08-19T00:00:00Z".to_string(),
     };
     let basis = state.launch_options_service.basis_revision("grok");
+    let basis_revision = || basis.clone();
     let mut original = session_record(session_id);
     original.agent_kind = "grok".to_string();
     state
@@ -151,7 +152,7 @@ async fn idempotent_create_requires_exact_intent_and_current_observation() {
             &original,
             &original_intent,
             "grok",
-            &basis,
+            &basis_revision,
             &original_selection,
         )
         .expect("insert original session");
@@ -335,7 +336,7 @@ async fn unsupported_model_refusal_leaves_no_session_row_or_live_process() {
         agent_kind,
         key,
         value,
-        state,
+        state: launch_options_state,
     } = error
     else {
         panic!("expected the single unsupported-model refusal, got {error:?}");
@@ -344,8 +345,8 @@ async fn unsupported_model_refusal_leaves_no_session_row_or_live_process() {
     assert_eq!(key, "modelId");
     assert_eq!(value, "grok-4.3");
     assert_eq!(
-        state,
-        crate::domains::agents::launch_options::HarnessLaunchOptionsState::Ready
+        launch_options_state,
+        crate::domains::agents::launch_options::HarnessLaunchOptionsState::ObservedEmpty
     );
     assert!(state
         .session_service

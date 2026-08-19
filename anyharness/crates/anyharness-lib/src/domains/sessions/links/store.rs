@@ -121,12 +121,12 @@ impl SessionLinkStore {
         record: &SessionLinkRecord,
         max_children: usize,
         harness_kind: &str,
-        current_basis: &str,
+        basis_revision: &dyn Fn() -> String,
         selection: &LaunchSelection,
     ) -> Result<(InsertSubagentLinkOutcome, HarnessLaunchOptionStateRow), InsertSubagentSessionError>
     {
         let result =
-            with_launch_admission_tx(&self.db, harness_kind, current_basis, selection, |conn| {
+            with_launch_admission_tx(&self.db, harness_kind, basis_revision, selection, |conn| {
                 insert_session_row(conn, session)?;
                 insert_launch_intent_row(conn, &session.id, intent)?;
                 let inserted = conn.execute(
