@@ -273,6 +273,21 @@ fn assert_startup_restore_snapshot_captures_pre_restart_controls(agent_kind: Age
         "{} resume must retain the pre-overwrite snapshot",
         agent_kind.as_str()
     );
+
+    let mut migrated_legacy_record =
+        snapshot_to_record("session-1", &replacement_snapshot).expect("legacy snapshot record");
+    migrated_legacy_record.source_seq = 3;
+    migrated_legacy_record.full_snapshot_json = None;
+    store
+        .upsert_live_config_snapshot(&migrated_legacy_record)
+        .expect("persist migrated legacy snapshot");
+    assert!(
+        load_startup_restore_snapshot(&store, "session-1", true)
+            .expect("load migrated legacy snapshot")
+            .is_none(),
+        "{} must reapply migrated immutable launch intent when no canonical snapshot exists",
+        agent_kind.as_str()
+    );
 }
 
 fn launch_model(id: &str) -> HarnessLaunchModel {

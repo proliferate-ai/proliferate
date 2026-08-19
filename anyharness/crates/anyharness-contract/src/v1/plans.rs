@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -74,6 +76,10 @@ pub struct HandoffPlanRequest {
     pub agent_kind: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
+    #[serde(default)]
+    pub control_values: BTreeMap<String, String>,
+    /// N-1 HTTP compatibility only. The handler translates this into
+    /// `controlValues.mode` before the request enters the plans domain.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

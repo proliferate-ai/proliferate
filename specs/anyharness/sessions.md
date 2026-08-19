@@ -634,35 +634,27 @@ That is why model configuration spans both:
 
 #### Same-session model changes
 
-The current active catalog authorizes a catalog model against the recorded auth
-contexts captured when the session was created. Legacy sessions without those
-recorded auth contexts gain no extra catalog authorization: advertised options
-govern when present. The legacy direct setter may defer to the harness only
-when there is no model config option and no direct model control—both
-`current_model_id` and `available_models` are empty.
+The current canonical live snapshot authorizes a model for the active session.
+That snapshot, rather than a catalog or the original launch observation, owns
+the session's executable model membership. The legacy direct setter is attempted
+only when there is no raw model config option and no direct model control.
 
 The runtime will start or resume a live actor before applying a model change.
-What happens next depends on actor state and authorization:
+What happens next depends on actor state and confirmation:
 
-- When the actor is idle, an accepted update applies to the live process.
-- When the actor immediately rejects a catalog-authorized model, the runtime
-  persists the requested model, retires the agent process, and attempts to
-  relaunch it under the same session ID.
-- Persistence occurs before retirement and relaunch. If relaunch fails, the
-  request returns an internal error and the durable model selection remains
-  updated; it is not rolled back.
-- An immediate rejection that is not catalog-authorized returns
-  `SESSION_CONFIG_REJECTED` and does not relaunch the process.
+- When the actor is idle, it applies the update to the live process and reports
+  success only after exact current-value readback.
+- Transport acknowledgement without exact readback returns
+  `SESSION_CONFIG_REJECTED`; the runtime does not mutate local current state or
+  relaunch the process to manufacture success.
 - During an active turn, the actor persists the change and returns `Queued`.
-  It replays the change when idle. A replay rejection removes the pending
-  change inside the actor. The requested model remains persisted; current
-  model remains the last accepted value, and the rejection does not reach the
-  runtime relaunch arm or retroactively fail the original request. This is a
-  current gap rather than a universal relaunch contract.
+  Before replaying it when idle, the actor reloads the latest canonical live
+  snapshot and removes the pending change if model membership has disappeared.
+  Setter rejection also removes the pending change without changing current
+  model state.
 
-Every path preserves the durable session identity. A same-session model change
-may therefore keep or replace the live agent process without creating a new
-session.
+Every path preserves both the durable session identity and the existing live
+agent process.
 
 ## SSE and Event Flow
 

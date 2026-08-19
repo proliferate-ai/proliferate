@@ -11,13 +11,11 @@
 // from @proliferate/cloud-sdk; TypeScript's structural typing keeps the two
 // declarations assignable, and the contract fixtures keep them in lockstep.
 
+import type { components } from "../generated/openapi.js";
+
 export type WorkflowNodeTypeV2 = "agent" | "human_in_loop";
 
-export interface WorkflowNodeModelV2 {
-  agentKind: string;
-  modelId?: string | null;
-  controlValues?: Record<string, string>;
-}
+export type WorkflowNodeModelV2 = components["schemas"]["NodeModel"];
 
 export interface WorkflowSnapshotNodeV2 {
   id: string;

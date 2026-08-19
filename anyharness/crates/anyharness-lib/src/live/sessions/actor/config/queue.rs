@@ -3,6 +3,9 @@ use std::sync::Arc;
 use agent_client_protocol as acp;
 use tokio::sync::Mutex;
 
+use crate::domains::sessions::live_config::{
+    snapshot_from_record, validate_canonical_live_config_current,
+};
 use crate::domains::sessions::model::PendingConfigChangeRecord;
 use crate::live::sessions::actor::command::SetConfigOptionCommandError;
 use crate::live::sessions::actor::config::apply::{
@@ -23,12 +26,12 @@ pub(in crate::live::sessions::actor) fn queue_pending_config_change(
     startup_state: &SessionStartupState,
     config_id: &str,
     value: &str,
-    catalog_authorized_model: bool,
+    live_snapshot_authorized_model: bool,
 ) -> Result<String, SetConfigOptionCommandError> {
     let option = find_select_option_for_request(&startup_state.config_options, config_id);
     let is_model_request = is_model_config_request(config_id, option);
     let is_mode_request = is_mode_config_request(config_id, option);
-    let model_value_authorized = is_model_request && catalog_authorized_model;
+    let model_value_authorized = is_model_request && live_snapshot_authorized_model;
     let resolved_value = option.map_or_else(
         || value.to_string(),
         |option| resolve_model_variant_value(option, value),
@@ -121,8 +124,29 @@ pub(in crate::live::sessions::actor) async fn apply_pending_config_changes_if_id
     pending.sort_by_key(|change| pending_config_rank(startup_state, &change.config_id));
 
     for change in pending {
-        // Policy was enforced when the change was queued (advertised value
-        // or catalog-authorized model), so replay re-authorizes it.
+        let option = find_select_option_for_request(
+            &startup_state.config_options,
+            &change.config_id,
+        );
+        let is_model_request = is_model_config_request(&change.config_id, option);
+        let live_snapshot_authorized_model = if is_model_request {
+            pending_model_is_in_latest_live_snapshot(
+                store,
+                session_id,
+                &change.value,
+            )?
+        } else {
+            false
+        };
+        if is_model_request && !live_snapshot_authorized_model {
+            store.delete_pending_config_change(session_id, &change.config_id)?;
+            continue;
+        }
+
+        // Busy-time admission is not durable authorization. Replay validates
+        // model membership again against this session's latest canonical live
+        // snapshot so a value removed while the turn was running is never
+        // applied from the queue.
         let result = apply_specific_config_option(
             conn,
             native_session_id,
@@ -134,7 +158,7 @@ pub(in crate::live::sessions::actor) async fn apply_pending_config_changes_if_id
             startup_state,
             &change.config_id,
             &change.value,
-            true,
+            live_snapshot_authorized_model,
         )
         .await;
 
@@ -149,4 +173,23 @@ pub(in crate::live::sessions::actor) async fn apply_pending_config_changes_if_id
     }
 
     Ok(())
+}
+
+pub(in crate::live::sessions::actor) fn pending_model_is_in_latest_live_snapshot(
+    store: &dyn SessionStateDurable,
+    session_id: &str,
+    desired_value: &str,
+) -> anyhow::Result<bool> {
+    let Some(record) = store.find_live_config_snapshot(session_id)? else {
+        return Ok(false);
+    };
+    if record.full_snapshot_json.is_none() {
+        return Ok(false);
+    }
+    let snapshot = snapshot_from_record(&record)?;
+    validate_canonical_live_config_current(&snapshot)?;
+    Ok(snapshot
+        .models
+        .iter()
+        .any(|model| model.id == desired_value))
 }

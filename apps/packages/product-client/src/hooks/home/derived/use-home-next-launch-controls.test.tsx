@@ -4,19 +4,42 @@ import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useHomeNextLaunchControls } from "#product/hooks/home/derived/use-home-next-launch-controls";
 
-vi.mock("@anyharness/sdk-react", () => ({
-  useAgentLaunchOptionsQuery: () => ({ data: response(), isLoading: false }),
+const mocks = vi.hoisted(() => ({
+  args: null as Record<string, unknown> | null,
+  data: undefined as ReturnType<typeof response> | undefined,
+}));
+
+vi.mock("#product/hooks/home/derived/use-home-target-agent-launch-options", () => ({
+  useHomeTargetAgentLaunchOptions: (args: Record<string, unknown>) => {
+    mocks.args = args;
+    return {
+      data: mocks.data,
+      error: null,
+      isError: false,
+      isLoading: false,
+      isTargetUnobserved: false,
+    };
+  },
 }));
 
 describe("useHomeNextLaunchControls", () => {
   afterEach(cleanup);
 
   it("preserves both independent Codex controls and exact defaults", () => {
+    mocks.data = response();
+    const launchTarget = {
+      kind: "cloud",
+      gitOwner: "owner",
+      gitRepoName: "repo",
+      baseBranch: "main",
+    } as const;
     const { result } = renderHook(() => useHomeNextLaunchControls({
       modelSelection: { kind: "codex", modelId: "gpt-5.6-codex" },
+      launchTarget,
       controlOverrides: { mode: "agent-full-access" },
       onSelectControl: vi.fn(),
     }));
+    expect(mocks.args).toEqual({ harnessKind: "codex", launchTarget });
     expect(result.current.controls.map((control) => control.key)).toEqual([
       "collaboration_mode",
       "mode",
@@ -25,6 +48,18 @@ describe("useHomeNextLaunchControls", () => {
       collaboration_mode: "plan",
       mode: "agent-full-access",
     });
+  });
+
+  it("does not manufacture controls without target-observed options", () => {
+    mocks.data = undefined;
+    const { result } = renderHook(() => useHomeNextLaunchControls({
+      modelSelection: { kind: "codex", modelId: "gpt-5.6-codex" },
+      launchTarget: null,
+      controlOverrides: {},
+      onSelectControl: vi.fn(),
+    }));
+    expect(result.current.controls).toEqual([]);
+    expect(result.current.launchControlValues).toEqual({});
   });
 });
 

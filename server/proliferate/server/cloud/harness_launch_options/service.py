@@ -12,46 +12,38 @@ from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.harness_launch_options.models import (
     AgentReadiness,
     CopiedLaunchOptionsResponse,
+    CopiedLaunchOptionsState,
     LaunchOptionsCopyRequest,
 )
 
+_copied_state_adapter = TypeAdapter(CopiedLaunchOptionsState)
+_json_object_adapter = TypeAdapter(dict[str, object])
 
-def _validated_payload(body: LaunchOptionsCopyRequest, harness_kind: str) -> dict[str, object]:
+
+def _validated_payload(
+    body: LaunchOptionsCopyRequest,
+    harness_kind: str,
+) -> CopiedLaunchOptionsState:
     try:
-        payload = TypeAdapter(dict[str, object]).validate_json(body.payload_json)
+        raw_payload = _json_object_adapter.validate_json(body.payload_json)
     except (TypeError, ValueError) as error:
         raise CloudApiError(
             "invalid_launch_options_payload",
-            "Launch-option payload is not valid JSON.",
+            "Launch-option payload is not a valid JSON object.",
             status_code=400,
         ) from error
-    if (
-        payload.get("harnessKind") != harness_kind
-        or payload.get("revision") != body.source_revision
-    ):
+    try:
+        payload = _copied_state_adapter.validate_python(raw_payload)
+    except (TypeError, ValueError) as error:
+        raise CloudApiError(
+            "invalid_launch_options_envelope",
+            "Launch-option payload is not valid copied target state.",
+            status_code=400,
+        ) from error
+    if payload.harness_kind != harness_kind or payload.revision != body.source_revision:
         raise CloudApiError(
             "invalid_launch_options_envelope",
             "Launch-option envelope does not match its target or revision.",
-            status_code=400,
-        )
-    if "readiness" in payload:
-        raise CloudApiError(
-            "invalid_launch_options_envelope",
-            "Copied launch-option state must not contain readiness.",
-            status_code=400,
-        )
-    required = {
-        "basisRevision",
-        "state",
-        "options",
-        "observedAt",
-        "probeAttemptedAt",
-        "probeFailureCode",
-    }
-    if not required.issubset(payload):
-        raise CloudApiError(
-            "invalid_launch_options_envelope",
-            "Launch-option envelope is incomplete.",
             status_code=400,
         )
     return payload

@@ -31,10 +31,6 @@ export function useHomeNextState({
 }: UseHomeNextStateArgs) {
   const effectiveDestination = desktopTargetsAvailable ? destination : "repository";
   const effectiveRepoLaunchKind = desktopTargetsAvailable ? repoLaunchKind : "cloud";
-  const model = useHomeNextModelSelection({
-    modelSelectionOverride,
-    repoLaunchKind: effectiveRepoLaunchKind,
-  });
   const repository = useHomeNextRepositorySelection({
     destination: effectiveDestination,
     repositorySelection,
@@ -52,6 +48,10 @@ export function useHomeNextState({
     desktopTargetsAvailable || repository.launchTarget?.kind === "cloud"
       ? repository.launchTarget
       : null;
+  const model = useHomeNextModelSelection({
+    modelSelectionOverride,
+    launchTarget,
+  });
 
   const targetDisabledReason = useMemo(() => {
     if (effectiveDestination === "cowork") {

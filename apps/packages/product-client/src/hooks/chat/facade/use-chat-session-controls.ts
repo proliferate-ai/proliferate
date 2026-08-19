@@ -4,12 +4,8 @@ import {
   type LiveSessionControlDescriptor,
   type SupportedLiveControlKey,
 } from "#product/lib/domain/chat/session-controls/session-controls";
-import {
-  buildComposerSessionControlGroups,
-  filterComposerSessionControlsForSurface,
-} from "#product/lib/domain/chat/session-controls/composer-control-groups";
+import { buildComposerSessionControlGroups } from "#product/lib/domain/chat/session-controls/composer-control-groups";
 import { useSessionConfigActions } from "#product/hooks/sessions/workflows/use-session-config-actions";
-import { useWorkspaceSurfaceLookup } from "#product/hooks/workspaces/derived/use-workspace-surface-lookup";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import { useActiveSessionConfigState } from "#product/hooks/chat/derived/use-active-session-config-state";
 
@@ -21,7 +17,6 @@ export function useChatSessionControls(): {
   modeControl: LiveSessionControlDescriptor | null;
 } {
   const activeSessionConfig = useActiveSessionConfigState();
-  const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const showErrorToast = useToastStore((state) => state.showError);
   const { setActiveSessionConfigOption } = useSessionConfigActions();
 
@@ -49,20 +44,16 @@ export function useChatSessionControls(): {
       return EMPTY_CONTROLS;
     }
 
-    const nextControls = buildLiveSessionControlDescriptors(
+    // The live snapshot is the authority for every workspace surface. Cowork
+    // and standard chat receive the same complete control statement.
+    return buildLiveSessionControlDescriptors(
       activeSessionConfig.normalizedControls,
       activeSessionConfig.pendingConfigChanges,
       onSelect,
     );
-    return filterComposerSessionControlsForSurface(
-      nextControls,
-      getWorkspaceSurface(activeSessionConfig.workspaceId),
-    );
   }, [
     activeSessionConfig.normalizedControls,
     activeSessionConfig.pendingConfigChanges,
-    activeSessionConfig.workspaceId,
-    getWorkspaceSurface,
     onSelect,
   ]);
 

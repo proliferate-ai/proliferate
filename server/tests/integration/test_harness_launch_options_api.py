@@ -182,3 +182,87 @@ async def test_copied_state_is_owner_isolated_and_rejects_rebuilt_envelopes(
     )
     assert rejected.status_code == 400
     assert rejected.json()["detail"]["code"] == "invalid_launch_options_envelope"
+
+
+@pytest.mark.asyncio
+async def test_copy_rejects_malformed_state_and_nested_options_then_recovers(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    auth = await create_user_and_login(
+        client,
+        db_session,
+        email_prefix="launch-options-validation",
+    )
+    sandbox = await _sandbox(db_session, auth.user_id, "validation")
+    worker_token = await enroll_sandbox_worker(client, db_session, sandbox=sandbox)
+
+    invalid_state = _payload("codex", 4, "gpt-5.6-codex")
+    invalid_state["state"] = "observed_from_catalog"
+    state_response = await client.post(
+        "/v1/cloud/harness-launch-options/codex",
+        headers={"Authorization": f"Bearer {worker_token}"},
+        json={"sourceRevision": 4, "payloadJson": json.dumps(invalid_state)},
+    )
+    assert state_response.status_code == 400
+    assert state_response.json()["detail"]["code"] == "invalid_launch_options_envelope"
+
+    invalid_nested = _payload("codex", 4, "gpt-5.6-codex")
+    invalid_nested["options"] = {
+        "models": [
+            {
+                "id": "gpt-5.6-codex",
+                "observedName": None,
+                "observedDescription": None,
+            }
+        ],
+        "controls": [
+            {
+                "id": "mode",
+                "observedLabel": "Access",
+                "observedDescription": None,
+                "values": [
+                    {
+                        "value": 17,
+                        "observedLabel": "Full access",
+                        "observedDescription": None,
+                    }
+                ],
+            }
+        ],
+        "defaults": {
+            "modelId": "gpt-5.6-codex",
+            "controlValues": {"mode": "agent-full-access"},
+        },
+    }
+    nested_response = await client.post(
+        "/v1/cloud/harness-launch-options/codex",
+        headers={"Authorization": f"Bearer {worker_token}"},
+        json={"sourceRevision": 4, "payloadJson": json.dumps(invalid_nested)},
+    )
+    assert nested_response.status_code == 400
+    assert nested_response.json()["detail"]["code"] == "invalid_launch_options_envelope"
+
+    absent = await db_session.scalar(
+        select(HarnessLaunchOptionState).where(
+            HarnessLaunchOptionState.cloud_sandbox_id == sandbox.id,
+            HarnessLaunchOptionState.harness_kind == "codex",
+        )
+    )
+    assert absent is None
+
+    valid_payload = json.dumps(
+        _payload("codex", 4, "gpt-5.6-codex"),
+        separators=(", ", ": "),
+    )
+    await _upload(client, worker_token, "codex", valid_payload, 4)
+
+    stored = await db_session.scalar(
+        select(HarnessLaunchOptionState).where(
+            HarnessLaunchOptionState.cloud_sandbox_id == sandbox.id,
+            HarnessLaunchOptionState.harness_kind == "codex",
+        )
+    )
+    assert stored is not None
+    assert stored.source_revision == 4
+    assert stored.payload_json == valid_payload

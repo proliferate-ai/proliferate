@@ -1,6 +1,9 @@
 use std::ffi::OsString;
 use std::sync::{Arc, Mutex, OnceLock};
 
+use crate::domains::agents::launch_options::{
+    HarnessLaunchOptions, HarnessLaunchOptionsService,
+};
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::live_ports::SessionAttachmentSource;
 use crate::domains::sessions::mcp_bindings::crypto::DATA_KEY_ENV_VAR;
@@ -32,6 +35,27 @@ pub(crate) fn actor_capabilities_for_store(store: &SessionStore) -> ActorCapabil
         permission_advisor: None,
         launch_observation_invalidator: None,
     }
+}
+
+/// Seed the successful empty Claude observation required by session tests.
+pub(crate) fn seed_empty_claude_launch_options(service: &HarnessLaunchOptionsService) {
+    if service
+        .read("claude")
+        .expect("read Claude launch options")
+        .is_some()
+    {
+        return;
+    }
+    let started = service
+        .begin_probe("claude", "2026-08-10T23:58:00Z")
+        .expect("begin Claude launch-option observation");
+    service
+        .record_success(
+            &started,
+            &HarnessLaunchOptions::default(),
+            "2026-08-10T23:58:01Z",
+        )
+        .expect("record empty Claude launch-option observation");
 }
 
 struct TestAgentProductContextResolver;

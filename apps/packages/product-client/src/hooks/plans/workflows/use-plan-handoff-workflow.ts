@@ -16,10 +16,13 @@ import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows
 import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import type { PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
 import { buildPlanHandoffPrompt } from "#product/lib/domain/plans/handoff-prompt";
+import { buildLaunchControlDescriptors } from "#product/lib/domain/chat/models/launch-control-descriptors";
 import type {
   ModelSelectorProps,
   ModelSelectorSelection,
 } from "#product/lib/domain/chat/models/model-selector-types";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
+import type { PendingSessionConfigChanges } from "#product/domain/sessions/pending-config";
 import { resolveModelDisplayName } from "#product/lib/domain/chat/models/model-display";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { getSessionRecord } from "#product/stores/sessions/session-records";
@@ -44,6 +47,10 @@ export function usePlanHandoffWorkflow({
   const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
   const [promptText, setPromptText] = useState(PLAN_HANDOFF_DEFAULT_PROMPT);
   const [selection, setSelection] = useState<ModelSelectorSelection | null>(null);
+  const [controlSelection, setControlSelection] = useState<{
+    agentKind: string;
+    values: Record<string, string>;
+  } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const launchCatalog = useChatLaunchCatalog({
     activeSelection: selection ?? configuredLaunch.selection,
@@ -99,7 +106,7 @@ export function usePlanHandoffWorkflow({
     resolvedConnectionState,
   ]);
 
-  const launchControlValues = useMemo(() => Object.fromEntries(
+  const launchControlDefaults = useMemo(() => Object.fromEntries(
     (launchCatalog.launchAgents
       .find((candidate) => candidate.kind === effectiveSelection?.kind)
       ?.launchControls ?? [])
@@ -107,6 +114,44 @@ export function usePlanHandoffWorkflow({
         ? [[control.key, control.defaultValue] as const]
         : []),
   ), [effectiveSelection?.kind, launchCatalog.launchAgents]);
+  const launchControlValues = useMemo(() => ({
+    ...launchControlDefaults,
+    ...(controlSelection?.agentKind === effectiveSelection?.kind
+      ? controlSelection.values
+      : {}),
+  }), [controlSelection, effectiveSelection?.kind, launchControlDefaults]);
+  const launchControlPending = useMemo<PendingSessionConfigChanges>(() =>
+    Object.fromEntries(Object.entries(launchControlValues).map(([rawConfigId, value], index) => [
+      rawConfigId,
+      {
+        rawConfigId,
+        value,
+        status: "settling" as const,
+        mutationId: index,
+      },
+    ])), [launchControlValues]);
+  const launchControls = useMemo<LiveSessionControlDescriptor[]>(() =>
+    buildLaunchControlDescriptors({
+      selection: effectiveSelection,
+      launchAgents: launchCatalog.launchAgents,
+      pendingConfigChanges: launchControlPending,
+      onSelect: (agentKind, _controlKey, rawConfigId, value) => {
+        setControlSelection({
+          agentKind,
+          values: {
+            ...launchControlDefaults,
+            ...(controlSelection?.agentKind === agentKind ? controlSelection.values : {}),
+            [rawConfigId]: value,
+          },
+        });
+      },
+    }), [
+      controlSelection,
+      effectiveSelection,
+      launchCatalog.launchAgents,
+      launchControlDefaults,
+      launchControlPending,
+    ]);
 
   const submit = useCallback(async function submit() {
     if (!selectedWorkspaceId) {
@@ -167,6 +212,7 @@ export function usePlanHandoffWorkflow({
     promptText,
     setPromptText,
     modelSelectorProps,
+    launchControls,
   };
 }
 

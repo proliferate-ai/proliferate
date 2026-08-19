@@ -62,8 +62,8 @@ fn pending_config_rank_treats_synthetic_acp_model_control_as_model() {
 fn direct_model_setter_engages_only_without_live_model_control() {
     // Harnesses that report no live model control (neither a model config
     // option nor available_models) route a switch through the legacy
-    // `session/set_model` ext call; the agent is the sole authority on
-    // validity.
+    // `session/set_model` ext call; its response must still carry an exact
+    // current-model readback before the actor accepts it.
     let no_model_control = SessionStartupState {
         current_mode_id: None,
         legacy_mode_state: None,
@@ -124,7 +124,7 @@ fn model_config_request_without_raw_option_rejects_values_outside_acp_models() {
 }
 
 #[test]
-fn queue_accepts_catalog_authorized_model_value_outside_live_options() {
+fn queue_accepts_live_snapshot_authorized_model_value_outside_raw_options() {
     let db = Db::open_in_memory().expect("open db");
     test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace");
     let store = SessionStore::new(db.clone());
@@ -177,9 +177,9 @@ fn queue_accepts_catalog_authorized_model_value_outside_live_options() {
         prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
     };
 
-    // Same value and option list: only the recorded-context catalog
-    // authorization differs. Catalog authorization allows this value beyond
-    // the harness-advertised list while preserving the same session.
+    // Same value and raw option list: only the current canonical live-snapshot
+    // authorization differs. That exact-session statement can admit a value
+    // while the raw ACP select list is stale.
     queue_pending_config_change(
         &store,
         "session-1",
@@ -188,7 +188,7 @@ fn queue_accepts_catalog_authorized_model_value_outside_live_options() {
         "claude-fable-5",
         true,
     )
-    .expect("catalog-authorized model value must queue");
+    .expect("live-snapshot-authorized model value must queue");
 
     queue_pending_config_change(
         &store,
@@ -198,7 +198,62 @@ fn queue_accepts_catalog_authorized_model_value_outside_live_options() {
         "claude-fable-5",
         false,
     )
-    .expect_err("the same value without catalog authorization stays rejected");
+    .expect_err("the same value without live snapshot authorization stays rejected");
+
+    let fable_snapshot = SessionLiveConfigSnapshot {
+        models: vec![HarnessLaunchModel {
+            id: "claude-fable-5".to_string(),
+            observed_name: Some("Fable".to_string()),
+            observed_description: None,
+        }],
+        controls: Vec::new(),
+        current: SessionLiveConfigCurrent {
+            model_id: Some("claude-fable-5".to_string()),
+            control_values: Default::default(),
+        },
+        raw_config_options: Vec::new(),
+        normalized_controls: NormalizedSessionControls::default(),
+        prompt_capabilities: Default::default(),
+        source_seq: 1,
+        updated_at: "2026-03-25T00:00:01Z".to_string(),
+    };
+    store
+        .upsert_live_config_snapshot(
+            &snapshot_to_record("session-1", &fable_snapshot).expect("serialize snapshot"),
+        )
+        .expect("persist Fable live snapshot");
+    assert!(pending_model_is_in_latest_live_snapshot(
+        &store,
+        "session-1",
+        "claude-fable-5"
+    )
+    .expect("read latest snapshot"));
+
+    let sonnet_snapshot = SessionLiveConfigSnapshot {
+        models: vec![HarnessLaunchModel {
+            id: "sonnet".to_string(),
+            observed_name: Some("Sonnet".to_string()),
+            observed_description: None,
+        }],
+        current: SessionLiveConfigCurrent {
+            model_id: Some("sonnet".to_string()),
+            control_values: Default::default(),
+        },
+        source_seq: 2,
+        updated_at: "2026-03-25T00:00:02Z".to_string(),
+        ..fable_snapshot
+    };
+    store
+        .upsert_live_config_snapshot(
+            &snapshot_to_record("session-1", &sonnet_snapshot).expect("serialize snapshot"),
+        )
+        .expect("replace live snapshot without Fable");
+    assert!(!pending_model_is_in_latest_live_snapshot(
+        &store,
+        "session-1",
+        "claude-fable-5"
+    )
+    .expect("read replacement snapshot"));
 }
 
 #[test]

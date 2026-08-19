@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import { useAgentLaunchOptionsQuery } from "@anyharness/sdk-react";
 import { useShallow } from "zustand/react/shallow";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
+import { useHomeTargetAgentLaunchOptions } from "#product/hooks/home/derived/use-home-target-agent-launch-options";
 import {
   projectHarnessLaunchOptions,
   type DesktopLaunchModelRegistry as ModelRegistry,
@@ -11,8 +11,8 @@ import {
   resolveHomeModelAvailabilityState,
   resolveEffectiveHomeModelSelection,
   resolveHomeNextModelInfo,
+  type HomeLaunchTarget,
   type HomeNextModelSelection,
-  type HomeNextRepoLaunchKind,
 } from "#product/lib/domain/home/home-next-launch";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 
@@ -20,11 +20,12 @@ const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
 
 interface UseHomeNextModelSelectionArgs {
   modelSelectionOverride: HomeNextModelSelection | null;
-  repoLaunchKind?: HomeNextRepoLaunchKind | null;
+  launchTarget: HomeLaunchTarget | null;
 }
 
 export function useHomeNextModelSelection({
   modelSelectionOverride,
+  launchTarget,
 }: UseHomeNextModelSelectionArgs) {
   const {
     readyAgents,
@@ -38,13 +39,16 @@ export function useHomeNextModelSelection({
   })));
   const requestedHarnessKind = modelSelectionOverride?.kind
     || preferences.defaultChatAgentKind
-    || readyAgents[0]?.kind
+    || (launchTarget?.kind === "cloud" ? null : readyAgents[0]?.kind)
     || null;
-  const runtimeLaunchOptions = useAgentLaunchOptionsQuery({ harnessKind: requestedHarnessKind });
+  const targetLaunchOptions = useHomeTargetAgentLaunchOptions({
+    harnessKind: requestedHarnessKind,
+    launchTarget,
+  });
   const modelRegistries = useMemo(
     () => {
-      const agent = runtimeLaunchOptions.data
-        ? projectHarnessLaunchOptions(runtimeLaunchOptions.data)
+      const agent = targetLaunchOptions.data
+        ? projectHarnessLaunchOptions(targetLaunchOptions.data)
         : null;
       return agent ? [{
         kind: agent.kind,
@@ -53,7 +57,7 @@ export function useHomeNextModelSelection({
         models: agent.models,
       }] : EMPTY_MODEL_REGISTRIES;
     },
-    [runtimeLaunchOptions.data],
+    [targetLaunchOptions.data],
   );
   const readyAgentsForLaunch = useMemo(() => modelRegistries.map((registry) => ({
     kind: registry.kind,
@@ -91,20 +95,24 @@ export function useHomeNextModelSelection({
   );
 
   const isLoading =
-    agentsLoading
-    || runtimeLaunchOptions.isLoading;
+    (launchTarget?.kind === "cloud" ? false : agentsLoading)
+    || targetLaunchOptions.isLoading;
   const hasLoadError =
-    agentsError
-    || runtimeLaunchOptions.isError;
+    (launchTarget?.kind === "cloud" ? false : agentsError)
+    || targetLaunchOptions.isError;
   const hasLaunchableModel =
     modelGroups.length > 0
     && effectiveModelSelection !== null
     && selectedModel !== null;
-  const modelAvailabilityState = useMemo(() => resolveHomeModelAvailabilityState({
-    isLoading,
-    hasLoadError,
-    hasLaunchableModel,
-  }), [hasLoadError, hasLaunchableModel, isLoading]);
+  const modelAvailabilityState = useMemo(() => (
+    targetLaunchOptions.isTargetUnobserved
+      ? "target_unobserved" as const
+      : resolveHomeModelAvailabilityState({
+        isLoading,
+        hasLoadError,
+        hasLaunchableModel,
+      })
+  ), [hasLoadError, hasLaunchableModel, isLoading, targetLaunchOptions.isTargetUnobserved]);
 
   return {
     modelGroups,
@@ -112,8 +120,8 @@ export function useHomeNextModelSelection({
     effectiveModelSelection,
     selectedModel,
     isLoading,
-    error: agentsQueryError
-      ?? runtimeLaunchOptions.error,
+    error: (launchTarget?.kind === "cloud" ? null : agentsQueryError)
+      ?? targetLaunchOptions.error,
     modelAvailabilityState,
   };
 }

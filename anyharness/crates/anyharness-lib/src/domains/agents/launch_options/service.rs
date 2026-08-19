@@ -113,51 +113,14 @@ impl HarnessLaunchOptionsService {
             })
             .collect::<Vec<_>>();
 
-        let mut controls = controls_from_config_json(&snapshot.baseline_config_options);
-        let mut control_values = controls
+        let controls = controls_from_config_json(&snapshot.baseline_config_options);
+        let control_values = controls
             .iter()
             .filter_map(|control| {
                 current_value(&snapshot.baseline_config_options, &control.id)
                     .map(|value| (control.id.clone(), value))
             })
             .collect::<std::collections::BTreeMap<_, _>>();
-
-        if !controls.iter().any(|control| control.id == "mode") {
-            if let Some(values) = snapshot
-                .modes
-                .get("availableModes")
-                .and_then(serde_json::Value::as_array)
-            {
-                let values = values
-                    .iter()
-                    .filter_map(|value| {
-                        let id = value.get("id")?.as_str()?.to_string();
-                        Some(HarnessLaunchControlValue {
-                            observed_label: value
-                                .get("name")
-                                .and_then(serde_json::Value::as_str)
-                                .map(str::to_string),
-                            observed_description: value
-                                .get("description")
-                                .and_then(serde_json::Value::as_str)
-                                .map(str::to_string),
-                            value: id,
-                        })
-                    })
-                    .collect::<Vec<_>>();
-                if !values.is_empty() {
-                    controls.push(HarnessLaunchControl {
-                        id: "mode".to_string(),
-                        observed_label: Some("Mode".to_string()),
-                        observed_description: None,
-                        values,
-                    });
-                    if let Some(value) = snapshot.current_mode_id.clone() {
-                        control_values.insert("mode".to_string(), value);
-                    }
-                }
-            }
-        }
 
         HarnessLaunchOptions {
             models,

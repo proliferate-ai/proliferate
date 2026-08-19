@@ -61,6 +61,7 @@ export function HomeNextScreen() {
   });
   const homeLaunchControls = useHomeNextLaunchControls({
     modelSelection: homeNext.effectiveModelSelection,
+    launchTarget: homeNext.launchTarget,
     controlOverrides: launchControlOverrides,
     onSelectControl: (controlKey, value) => {
       setLaunchControlOverrides((current) => ({
@@ -127,17 +128,22 @@ export function HomeNextScreen() {
     || (authSetupEvidence !== undefined && authSetupEvidence !== null)
     || (modelProbeState !== undefined && modelProbeState.kind !== "hidden");
   const modelAvailabilityNotice =
-    homeNext.modelAvailabilityState === "no_launchable_model"
+    homeNext.modelAvailabilityState === "target_unobserved"
       ? {
-        text: "Finish agent setup to start a chat.",
-        actionLabel: "Agents",
+        text: "This cloud target hasn't reported launch options yet.",
+        actionLabel: null,
       }
-      : homeNext.modelAvailabilityState === "load_error"
+      : homeNext.modelAvailabilityState === "no_launchable_model"
         ? {
-          text: "Models are unavailable right now. Try again in a moment.",
-          actionLabel: null,
+          text: "Finish agent setup to start a chat.",
+          actionLabel: "Agents",
         }
-        : null;
+        : homeNext.modelAvailabilityState === "load_error"
+          ? {
+            text: "Models are unavailable right now. Try again in a moment.",
+            actionLabel: null,
+          }
+          : null;
   return (
     <div
       className="relative flex h-full w-full min-w-0 flex-1 overflow-hidden bg-background text-foreground"

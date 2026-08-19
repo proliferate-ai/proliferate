@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -75,7 +77,6 @@ pub struct ReviewPersonaRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
     #[serde(default)]
-    #[schema(value_type = Object)]
     pub control_values: BTreeMap<String, String>,
 }
 
@@ -234,7 +235,6 @@ pub struct ReviewAssignmentDetail {
     pub agent_kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
-    #[schema(value_type = Object)]
     pub control_values: BTreeMap<String, String>,
     pub launch_verification_status: ReviewLaunchVerificationStatus,
     pub status: ReviewAssignmentStatus,
@@ -261,4 +261,3 @@ const fn default_review_max_rounds() -> u32 {
 const fn default_auto_iterate() -> bool {
     true
 }
-use std::collections::BTreeMap;

@@ -278,7 +278,7 @@ fn non_settable_acp_values_stay_visible_but_unavailable() {
         .any(|value| value.value == raw_value && !value.executable));
     assert_eq!(
         view.validate_choice("model", &raw_value),
-        Err(AgentConfigChoiceError::ValueUnavailable)
+        Err(AgentConfigChoiceError::ConfigUnavailable)
     );
     assert_eq!(
         view.validate_choice("model", &model_id),

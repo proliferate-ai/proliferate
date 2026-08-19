@@ -265,7 +265,6 @@ fn openapi_registers_workspace_session_and_event_schemas() {
         "RuntimeCapabilities",
         "AgentSeedHealth",
         "AgentSeedStatus",
-        "GatewayModelEntry",
         "HarnessLaunchModel",
         "HarnessLaunchControlValue",
         "HarnessLaunchControl",
@@ -368,4 +367,20 @@ fn launch_option_schema_exposes_exact_models_controls_and_defaults() {
         create["properties"].get("controlValues").is_some(),
         "session create must expose the generic launch control map"
     );
+
+    let handoff = &spec["components"]["schemas"]["HandoffPlanRequest"];
+    assert_eq!(
+        handoff["properties"]["controlValues"]["additionalProperties"]["type"],
+        "string",
+        "plan handoff must expose the generic launch control map"
+    );
+
+    for schema_name in ["NodeModel", "ReviewPersonaRequest", "ReviewAssignmentDetail"] {
+        assert_eq!(
+            spec["components"]["schemas"][schema_name]["properties"]["controlValues"]
+                ["additionalProperties"]["type"],
+            "string",
+            "{schema_name}.controlValues must remain an open string map"
+        );
+    }
 }

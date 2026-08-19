@@ -38,6 +38,7 @@ vi.mock("#product/hooks/sessions/workflows/use-session-creation-actions", () => 
 }));
 
 vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
+  isDebugMeasurementEnabled: () => false,
   logLatency: vi.fn(),
 }));
 

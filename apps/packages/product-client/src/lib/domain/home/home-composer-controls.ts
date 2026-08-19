@@ -61,9 +61,9 @@ export function buildHomeModelSelectorProps({
         displayName: model.displayName,
         actionKind: "select" as const,
         isSelected: model.isSelected,
-        // Never marked here: Home is pre-session, so no target has had the
-        // chance to refuse anything yet. A refusal is a fact about one target,
-        // and Home has not picked one.
+        // Never marked here: every row already came from the selected target's
+        // launch-option observation. Create revalidates the exact selection;
+        // refusal state remains a fact about an attempted session launch.
         isUnsupported: false,
       })),
     })),

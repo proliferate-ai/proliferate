@@ -16,6 +16,7 @@ use crate::persistence::Db;
 
 mod pending_prompt_protection_tests;
 mod subagent_lifecycle_tests;
+
 pub(crate) struct EnvVarGuard {
     name: &'static str,
     previous: Option<std::ffi::OsString>,
@@ -64,7 +65,6 @@ async fn send_message_real_actor_executes_idle_running_fifo_and_ignores_a_stale_
         .await
         .expect("start real target actor");
     assert_eq!(resumed.native_session_id.as_deref(), Some("native-target"));
-
     let idle = send_message(&state, "idle agent message")
         .await
         .expect("idle send");
@@ -72,7 +72,6 @@ async fn send_message_real_actor_executes_idle_running_fifo_and_ignores_a_stale_
     wait_for_queue_len(&state, 0).await;
     wait_for_actor_idle(&state).await;
     assert_eq!(prompt_texts(&script.request_log), ["idle agent message"]);
-
     let handle = state
         .acp_manager
         .get_ready_handle("target")
@@ -320,6 +319,7 @@ pub(crate) fn build_state(runtime_home: &Path, db: Db, seed: bool) -> AppState {
         AgentSeedStore::not_configured_dev(),
     )
     .expect("app state");
+    test_support::seed_empty_claude_launch_options(&state.launch_options_service);
     if seed {
         let caller = session("caller", "workspace-a", "idle", "Exact Sender");
         let mut target = session("target", "workspace-b", "idle", "Target");

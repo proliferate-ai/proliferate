@@ -3190,7 +3190,12 @@ export interface components {
         };
         HandoffPlanRequest: {
             agentKind?: string | null;
+            controlValues?: {
+                [key: string]: string;
+            };
             instruction?: string | null;
+            /** @description N-1 HTTP compatibility only. The handler translates this into
+             *     `controlValues.mode` before the request enters the plans domain. */
             modeId?: string | null;
             modelId?: string | null;
             origin?: null | components["schemas"]["OriginContext"];
@@ -3700,7 +3705,9 @@ export interface components {
         };
         NodeModel: {
             agentKind: string;
-            controlValues?: Record<string, never>;
+            controlValues?: {
+                [key: string]: string;
+            };
             modelId?: string | null;
         };
         NodeView: {
@@ -4310,7 +4317,9 @@ export interface components {
         };
         ReviewAssignmentDetail: {
             agentKind: string;
-            controlValues: Record<string, never>;
+            controlValues: {
+                [key: string]: string;
+            };
             createdAt: string;
             critiqueArtifactPath?: string | null;
             deadlineAt: string;
@@ -4361,7 +4370,9 @@ export interface components {
         ReviewLaunchVerificationStatus: "pending" | "verified" | "mismatch" | "not_checked";
         ReviewPersonaRequest: {
             agentKind: string;
-            controlValues?: Record<string, never>;
+            controlValues?: {
+                [key: string]: string;
+            };
             label: string;
             modelId?: string | null;
             personaId: string;

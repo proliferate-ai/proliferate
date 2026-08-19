@@ -54,9 +54,9 @@ impl fmt::Debug for AgentStartupExitError {
 
 impl std::error::Error for AgentStartupExitError {}
 
-/// A catalog-authorized mode that the active agent session did not expose or
-/// confirm. Session creation must fail instead of reporting success with the
-/// agent's default mode.
+/// A legacy caller-requested mode that the active agent session did not expose
+/// or confirm. Session creation must fail instead of reporting success with
+/// the agent's default mode.
 #[derive(Clone, Debug)]
 pub(crate) struct RequestedModeApplyError {
     agent_kind: String,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, StrictInt, StrictStr
 from pydantic.alias_generators import to_camel
 from pydantic.dataclasses import dataclass
 
@@ -14,7 +14,20 @@ AgentReadiness = Literal[
     "unsupported",
     "error",
 ]
+LaunchOptionsState = Literal[
+    "detecting",
+    "refreshing",
+    "observed",
+    "observed_empty",
+    "last_good_after_failure",
+    "failed_without_observation",
+]
 CAMEL_CONFIG = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+STRICT_CAMEL_CONFIG = ConfigDict(
+    alias_generator=to_camel,
+    extra="forbid",
+    populate_by_name=True,
+)
 
 
 @dataclass(config=CAMEL_CONFIG)
@@ -23,56 +36,63 @@ class LaunchOptionsCopyRequest:
     payload_json: str
 
 
-@dataclass(config=CAMEL_CONFIG)
+@dataclass(config=STRICT_CAMEL_CONFIG)
 class LaunchModel:
-    id: str
-    observed_name: str | None
-    observed_description: str | None
+    id: StrictStr
+    observed_name: StrictStr | None
+    observed_description: StrictStr | None
 
 
-@dataclass(config=CAMEL_CONFIG)
+@dataclass(config=STRICT_CAMEL_CONFIG)
 class LaunchControlValue:
-    value: str
-    observed_label: str | None
-    observed_description: str | None
+    value: StrictStr
+    observed_label: StrictStr | None
+    observed_description: StrictStr | None
 
 
-@dataclass(config=CAMEL_CONFIG)
+@dataclass(config=STRICT_CAMEL_CONFIG)
 class LaunchControl:
-    id: str
-    observed_label: str | None
-    observed_description: str | None
+    id: StrictStr
+    observed_label: StrictStr | None
+    observed_description: StrictStr | None
     values: list[LaunchControlValue]
 
 
-@dataclass(config=CAMEL_CONFIG)
+@dataclass(config=STRICT_CAMEL_CONFIG)
 class LaunchDefaults:
-    model_id: str | None
-    control_values: dict[str, str]
+    model_id: StrictStr | None
+    control_values: dict[StrictStr, StrictStr]
 
 
-@dataclass(config=CAMEL_CONFIG)
+@dataclass(config=STRICT_CAMEL_CONFIG)
 class LaunchOptions:
     models: list[LaunchModel]
     controls: list[LaunchControl]
     defaults: LaunchDefaults
 
 
+@dataclass(config=STRICT_CAMEL_CONFIG)
+class CopiedLaunchOptionsState:
+    """Verbatim runtime-owned state accepted from a target Worker."""
+
+    harness_kind: StrictStr
+    basis_revision: StrictStr
+    revision: StrictInt
+    state: LaunchOptionsState
+    options: LaunchOptions | None
+    observed_at: StrictStr | None
+    probe_attempted_at: StrictStr
+    probe_failure_code: StrictStr | None
+
+
 @dataclass(config=CAMEL_CONFIG)
 class CopiedLaunchOptionsResponse:
-    harness_kind: str
-    basis_revision: str
-    revision: int
-    state: Literal[
-        "detecting",
-        "refreshing",
-        "observed",
-        "observed_empty",
-        "last_good_after_failure",
-        "failed_without_observation",
-    ]
+    harness_kind: StrictStr
+    basis_revision: StrictStr
+    revision: StrictInt
+    state: LaunchOptionsState
     options: LaunchOptions | None
-    observed_at: str | None
-    probe_attempted_at: str
-    probe_failure_code: str | None
+    observed_at: StrictStr | None
+    probe_attempted_at: StrictStr
+    probe_failure_code: StrictStr | None
     readiness: AgentReadiness

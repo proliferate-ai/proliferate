@@ -186,10 +186,17 @@ pub(in crate::live::sessions::actor) fn load_startup_restore_snapshot(
         return Ok(None);
     }
 
-    store
-        .find_live_config_snapshot(session_id)?
-        .map(|record| snapshot_from_record(&record))
-        .transpose()
+    let Some(record) = store.find_live_config_snapshot(session_id)? else {
+        return Ok(None);
+    };
+    // Rows created before the canonical snapshot column existed contain only
+    // presentation/rollback projections. They are not confirmed live
+    // authority: treating one as a restore snapshot would skip the migrated
+    // immutable launch intent and ready on handshake defaults.
+    if record.full_snapshot_json.is_none() {
+        return Ok(None);
+    }
+    snapshot_from_record(&record).map(Some)
 }
 
 pub(in crate::live::sessions::actor) fn emit_startup_state(

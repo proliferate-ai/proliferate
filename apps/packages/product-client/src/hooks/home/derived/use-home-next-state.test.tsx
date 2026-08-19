@@ -151,6 +151,7 @@ describe("useHomeNextState", () => {
     for (const modelAvailabilityState of [
       "loading",
       "load_error",
+      "target_unobserved",
       "no_launchable_model",
       "launchable",
     ] satisfies ModelAvailabilityState[]) {
@@ -197,7 +198,7 @@ describe("useHomeNextState", () => {
       repoLaunchKind: "worktree",
     });
 
-    expect(stateMocks.modelArgs).toMatchObject({ repoLaunchKind: "cloud" });
+    expect(stateMocks.modelArgs).toMatchObject({ launchTarget: null });
     expect(stateMocks.repositoryArgs).toMatchObject({
       destination: "repository",
       repoLaunchKind: "cloud",
@@ -227,6 +228,7 @@ describe("useHomeNextState", () => {
     });
 
     expect(web.result.current.launchTarget).toMatchObject({ kind: "cloud" });
+    expect(stateMocks.modelArgs.launchTarget).toMatchObject({ kind: "cloud" });
     expect(web.result.current.targetDisabledReason).toBeNull();
     expect(web.result.current.canLaunchTarget).toBe(true);
   });

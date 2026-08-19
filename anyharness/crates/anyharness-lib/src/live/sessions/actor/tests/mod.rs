@@ -10,7 +10,9 @@ use super::config::confirmation::{
 };
 use super::config::handle::ensure_resolved_launch_intent_confirmed;
 use super::config::persist::{emit_live_config_update, load_startup_restore_snapshot};
-use super::config::queue::queue_pending_config_change;
+use super::config::queue::{
+    pending_model_is_in_latest_live_snapshot, queue_pending_config_change,
+};
 use super::config::restore::canonical_restore_values;
 use super::config::selection::{
     find_select_option_for_request, is_mode_config_request, is_model_config_request,
@@ -58,6 +60,7 @@ use tokio::sync::{broadcast, mpsc, Mutex};
 
 mod conditional_cancel;
 mod config;
+mod config_direct_setter;
 mod config_restore;
 mod config_variants;
 mod domain_ops;

@@ -173,13 +173,21 @@ fn opencode_gateway_errors_when_plan_has_no_models() {
 }
 
 #[test]
-fn codex_gateway_errors_when_plan_has_no_default_model() {
-    // Codex refuses to launch without a model; an empty plan must fail the
-    // launch rather than write a config codex rejects (spec §3).
+fn codex_gateway_render_does_not_author_a_default_model() {
+    // Route materialization owns provider/auth configuration only. Model
+    // selection comes from target-observed launch options and the immutable
+    // launch intent, so an empty gateway model plan must not author one here.
     let home = TempHome::new("codex-empty-plan");
     home.write_state_json(&gateway_state("codex"));
     let resolver = FixedResolver(GatewayModelPlan::default());
-    let error =
-        resolve_launch_route_auth(home.path(), "codex", &resolver).expect_err("no default model");
-    assert_eq!(error.code(), "AGENT_ROUTE_SELECTION_INCOMPLETE");
+    let rendered =
+        resolve_launch_route_auth(home.path(), "codex", &resolver).expect("render auth route");
+    let config = rendered
+        .files
+        .iter()
+        .find(|file| file.path_family == PathFamily::CodexHome)
+        .and_then(|file| file.contents.as_ref())
+        .expect("codex config");
+    let config = std::str::from_utf8(config).expect("utf8 config");
+    assert!(!config.lines().any(|line| line.starts_with("model = ")));
 }

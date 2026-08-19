@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { useAgentLaunchOptionsQuery } from "@anyharness/sdk-react";
 import {
   projectHarnessLaunchOptions,
   type DesktopAgentLaunchAgent,
@@ -11,18 +10,24 @@ import type {
   LiveSessionControlDescriptor,
   SupportedLiveControlKey,
 } from "#product/lib/domain/chat/session-controls/session-controls";
-import type { HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
+import type {
+  HomeLaunchTarget,
+  HomeNextModelSelection,
+} from "#product/lib/domain/home/home-next-launch";
+import { useHomeTargetAgentLaunchOptions } from "#product/hooks/home/derived/use-home-target-agent-launch-options";
 
 const EMPTY_AGENTS: DesktopAgentLaunchAgent[] = [];
 
 interface UseHomeNextLaunchControlsArgs {
   modelSelection: HomeNextModelSelection | null;
+  launchTarget: HomeLaunchTarget | null;
   controlOverrides: Record<string, string>;
   onSelectControl: (controlKey: string, value: string) => void;
 }
 
 export function useHomeNextLaunchControls({
   modelSelection,
+  launchTarget,
   controlOverrides,
   onSelectControl,
 }: UseHomeNextLaunchControlsArgs): {
@@ -30,15 +35,18 @@ export function useHomeNextLaunchControls({
   launchControlValues: Record<string, string>;
   isLoading: boolean;
 } {
-  const runtimeLaunchOptions = useAgentLaunchOptionsQuery({ harnessKind: modelSelection?.kind });
+  const targetLaunchOptions = useHomeTargetAgentLaunchOptions({
+    harnessKind: modelSelection?.kind,
+    launchTarget,
+  });
   const launchAgents = useMemo(
     () => {
-      const projected = runtimeLaunchOptions.data
-        ? projectHarnessLaunchOptions(runtimeLaunchOptions.data)
+      const projected = targetLaunchOptions.data
+        ? projectHarnessLaunchOptions(targetLaunchOptions.data)
         : null;
       return projected ? [projected] : EMPTY_AGENTS;
     },
-    [runtimeLaunchOptions.data],
+    [targetLaunchOptions.data],
   );
 
   const descriptors = useMemo(
@@ -74,7 +82,7 @@ export function useHomeNextLaunchControls({
   return {
     controls: descriptors,
     launchControlValues,
-    isLoading: runtimeLaunchOptions.isLoading,
+    isLoading: targetLaunchOptions.isLoading,
   };
 }
 

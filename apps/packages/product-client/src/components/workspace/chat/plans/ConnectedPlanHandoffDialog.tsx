@@ -22,6 +22,7 @@ export function ConnectedPlanHandoffDialog({
       plan={plan}
       promptText={workflow.promptText}
       modelSelectorProps={workflow.modelSelectorProps}
+      launchControls={workflow.launchControls}
       isSubmitting={workflow.isSubmitting}
       onPromptTextChange={workflow.setPromptText}
       onClose={onClose}

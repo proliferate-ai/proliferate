@@ -56,6 +56,7 @@ export type HomeNextModelInfo = AgentModelInfo;
 export type ModelAvailabilityState =
   | "loading"
   | "load_error"
+  | "target_unobserved"
   | "no_launchable_model"
   | "launchable";
 

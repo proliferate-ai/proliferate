@@ -233,6 +233,59 @@ describe("ChatInputControlRow", () => {
     expect(modeControl.onSelect).toHaveBeenCalledWith("plan");
   });
 
+  it("renders collaboration mode and execution access as independent controls", () => {
+    const controls = createControls();
+    const accessControl: LiveSessionControlDescriptor = {
+      key: "mode",
+      label: "Access",
+      detail: "Agent",
+      rawConfigId: "mode",
+      settable: true,
+      pendingState: null,
+      kind: "select",
+      options: [
+        { value: "read-only", label: "Read Only", selected: false },
+        { value: "agent", label: "Agent", selected: true },
+        { value: "agent-full-access", label: "Full Access", selected: false },
+      ],
+      onSelect: vi.fn(),
+    };
+    controls.push(accessControl);
+
+    renderControlRow({ agentKind: "codex", sessionConfigControls: controls });
+
+    expect(screen.getByRole("button", { name: "Mode: Default" })).toBeTruthy();
+    const access = screen.getByRole("button", { name: "Access: Agent" });
+    expect(access.getAttribute("data-session-mode-next")).toBe("agent-full-access");
+    fireEvent.click(access);
+    expect(accessControl.onSelect).toHaveBeenCalledWith("agent-full-access");
+  });
+
+  it("keeps an arbitrary observed control reachable in the standard composer", () => {
+    const controls = createControls();
+    const profileControl: LiveSessionControlDescriptor = {
+      key: "provider_profile" as LiveSessionControlDescriptor["key"],
+      label: "Provider profile",
+      detail: "Fast",
+      rawConfigId: "provider_profile",
+      settable: true,
+      pendingState: null,
+      kind: "select",
+      options: [
+        { value: "fast", label: "Fast", selected: true },
+        { value: "deep", label: "Deep", selected: false },
+      ],
+      onSelect: vi.fn(),
+    };
+    controls.push(profileControl);
+
+    renderControlRow({ sessionConfigControls: controls });
+
+    fireEvent.click(screen.getByRole("button", { name: "Provider profile Fast" }));
+    fireEvent.click(screen.getByText("Deep"));
+    expect(profileControl.onSelect).toHaveBeenCalledWith("deep");
+  });
+
   it("hides the reasoning level word under the compact tier, keeping the ladder", () => {
     renderControlRow();
 

@@ -23,6 +23,8 @@ use super::driver::SessionMcpServer;
 
 mod config_options;
 use config_options::{current_model_from_config_options, model_entries_from_config_options};
+mod model_setter;
+use model_setter::{model_entries_from_model_state, set_init_meta_model_and_confirm};
 
 const PROBE_SESSION_ID: &str = "catalog-probe";
 const PROBE_WORKSPACE_ID: &str = "catalog-probe";
@@ -75,8 +77,8 @@ pub struct ProbeOptions {
     /// all still recorded.
     ///
     /// Runtime probes set `false` because the matrix costs one round-trip per
-    /// model against the user's own provider, and control wiring is
-    /// catalog-authoritative anyway (model-catalog.md, "Truth tiers").
+    /// model. Vendor init-meta model alternatives are the exception: they have no
+    /// config option, so each alternative is setter-confirmed before inclusion.
     pub switch_models: bool,
     /// Send one minimal prompt on the session's current model and record the
     /// outcome. This is the ONLY honest availability test for seeded model
@@ -403,7 +405,36 @@ async fn run_enumeration(
     let mut models = Vec::with_capacity(available.len());
     for (model_id, name, description) in available {
         drain_pending(notification_rx);
-        let config_options = if !options.switch_models {
+        let config_options = if model_source == "initMetaModelState" {
+            // Vendor init metadata is enumeration, not proof that the legacy
+            // setter can establish this value. Keep the current value as a
+            // no-op; every alternative must return an exact effective-model
+            // readback before the probe advertises it.
+            if current_model_id.as_deref() != Some(model_id.as_str()) {
+                match set_init_meta_model_and_confirm(
+                    conn,
+                    &native_session_id,
+                    &model_id,
+                )
+                .await
+                {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        warnings.push(format!(
+                            "session/set_model({model_id}) returned no matching model readback"
+                        ));
+                        continue;
+                    }
+                    Err(error) => {
+                        warnings.push(format!(
+                            "session/set_model({model_id}) failed: {error}"
+                        ));
+                        continue;
+                    }
+                }
+            }
+            None
+        } else if !options.switch_models {
             // The instruction was "do not switch", so there is no matrix and no
             // defect to warn about. The entry is still recorded in full.
             None
@@ -427,10 +458,6 @@ async fn run_enumeration(
                     None
                 }
             }
-        } else if model_source == "initMetaModelState" {
-            // Models advertised via `_meta` are not switchable through a config
-            // option, so there is no per-model config matrix to capture.
-            None
         } else {
             // ACP 0.14 removed set_session_model; harnesses that expose models
             // via the ACP models block can no longer be switched for per-model
@@ -522,33 +549,6 @@ fn elided(mut config_options: serde_json::Value) -> serde_json::Value {
         }
     }
     config_options
-}
-
-/// Some harnesses (e.g. Grok) advertise their model menu only via the
-/// initialize response's vendor `_meta.modelState.availableModels`
-/// (`[{ modelId, name, description, ... }]`) rather than the ACP models block
-/// or a `model` config option. Extract (model_id, name, description) entries.
-fn model_entries_from_model_state(
-    model_state: &serde_json::Value,
-) -> Option<Vec<(String, String, Option<String>)>> {
-    let models = model_state.get("availableModels")?.as_array()?;
-    let entries: Vec<(String, String, Option<String>)> = models
-        .iter()
-        .filter_map(|model| {
-            let id = model.get("modelId").and_then(|value| value.as_str())?;
-            let name = model
-                .get("name")
-                .and_then(|value| value.as_str())
-                .unwrap_or(id)
-                .to_string();
-            let description = model
-                .get("description")
-                .and_then(|value| value.as_str())
-                .map(str::to_string);
-            Some((id.to_string(), name, description))
-        })
-        .collect();
-    (!entries.is_empty()).then_some(entries)
 }
 
 /// Best-effort identification of the native CLI the adapter will use. Claude

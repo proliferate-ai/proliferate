@@ -12,8 +12,8 @@ use crate::domains::agent_operations::model::{
 use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
 use crate::domains::agents::catalog::service::ActiveCatalog;
 use crate::domains::agents::launch_options::{
-    HarnessLaunchDefaults, HarnessLaunchModel, HarnessLaunchOptions, HarnessLaunchOptionsResponse,
-    HarnessLaunchOptionsState,
+    HarnessLaunchControl, HarnessLaunchControlValue, HarnessLaunchDefaults, HarnessLaunchModel,
+    HarnessLaunchOptions, HarnessLaunchOptionsResponse, HarnessLaunchOptionsState,
 };
 use crate::domains::sessions::admission::{NoControllerPolicy, SessionMutationAdmission};
 use crate::domains::sessions::links::model::{
@@ -322,7 +322,16 @@ fn fixture(closed_child: bool) -> Fixture {
                 observed_name: None,
                 observed_description: None,
             }],
-            controls: Vec::new(),
+            controls: vec![HarnessLaunchControl {
+                id: "mode".to_string(),
+                observed_label: Some("Mode".to_string()),
+                observed_description: None,
+                values: vec![HarnessLaunchControlValue {
+                    value: "mode-a".to_string(),
+                    observed_label: Some("Mode A".to_string()),
+                    observed_description: None,
+                }],
+            }],
             defaults: HarnessLaunchDefaults {
                 model_id: Some(model_id.clone()),
                 control_values: Default::default(),

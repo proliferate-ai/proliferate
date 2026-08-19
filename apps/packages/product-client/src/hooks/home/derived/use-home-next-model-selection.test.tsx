@@ -5,15 +5,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { useHomeNextModelSelection } from "#product/hooks/home/derived/use-home-next-model-selection";
 
-const mocks = vi.hoisted(() => ({ data: undefined as Record<string, unknown> | undefined }));
+const mocks = vi.hoisted(() => ({
+  args: null as Record<string, unknown> | null,
+  data: undefined as Record<string, unknown> | undefined,
+  isTargetUnobserved: false,
+}));
 
-vi.mock("@anyharness/sdk-react", () => ({
-  useAgentLaunchOptionsQuery: () => ({
-    data: mocks.data,
-    isLoading: false,
-    isError: false,
-    error: null,
-  }),
+vi.mock("#product/hooks/home/derived/use-home-target-agent-launch-options", () => ({
+  useHomeTargetAgentLaunchOptions: (args: Record<string, unknown>) => {
+    mocks.args = args;
+    return {
+      data: mocks.data,
+      isLoading: false,
+      isError: false,
+      error: null,
+      isTargetUnobserved: mocks.isTargetUnobserved,
+    };
+  },
 }));
 
 vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
@@ -22,7 +30,9 @@ vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
 
 describe("useHomeNextModelSelection", () => {
   beforeEach(() => {
+    mocks.args = null;
     mocks.data = undefined;
+    mocks.isTargetUnobserved = false;
     useUserPreferencesStore.setState({
       defaultChatAgentKind: "claude",
       defaultChatModelIdByAgentKind: {},
@@ -32,8 +42,13 @@ describe("useHomeNextModelSelection", () => {
 
   it("uses the exact observed default and keeps an unknown upstream id reachable", () => {
     mocks.data = response();
-    const { result } = renderHook(() => useHomeNextModelSelection({ modelSelectionOverride: null }));
+    const launchTarget = { kind: "local", sourceRoot: "/repo", existingWorkspaceId: null } as const;
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+      launchTarget,
+    }));
     expect(result.current.modelAvailabilityState).toBe("launchable");
+    expect(mocks.args).toEqual({ harnessKind: "claude", launchTarget });
     expect(result.current.effectiveModelSelection).toEqual({ kind: "claude", modelId: "fable" });
     expect(result.current.modelGroups[0]?.models.map((model) => model.modelId)).toEqual([
       "fable",
@@ -42,7 +57,25 @@ describe("useHomeNextModelSelection", () => {
   });
 
   it("offers no explicit model before the target has an observation", () => {
-    const { result } = renderHook(() => useHomeNextModelSelection({ modelSelectionOverride: null }));
+    mocks.isTargetUnobserved = true;
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+      launchTarget: {
+        kind: "cloud",
+        gitOwner: "owner",
+        gitRepoName: "repo",
+        baseBranch: "main",
+      },
+    }));
+    expect(result.current.modelAvailabilityState).toBe("target_unobserved");
+    expect(result.current.effectiveModelSelection).toBeNull();
+  });
+
+  it("offers no explicit model when no launch target is selected", () => {
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+      launchTarget: null,
+    }));
     expect(result.current.modelAvailabilityState).toBe("no_launchable_model");
     expect(result.current.effectiveModelSelection).toBeNull();
   });

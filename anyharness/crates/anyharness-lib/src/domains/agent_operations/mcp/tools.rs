@@ -350,7 +350,7 @@ mod tests {
             ),
             (
                 "create_agent",
-                "9e1467ed625a438a3fa71a4bbd3cdf7bfb504cf35fd881eb5bd99c8e91137228".to_string(),
+                "6165a6fb8aa3144b0758347321fd44958879ae5698cc54fe266c77e781842953".to_string(),
             ),
             (
                 "configure_agent",

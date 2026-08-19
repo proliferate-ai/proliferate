@@ -111,6 +111,19 @@ fn validation_is_exact_and_never_authors_a_fallback() {
 }
 
 #[test]
+fn probe_legacy_modes_are_not_advertised_without_a_confirmable_config_control() {
+    let snapshot = crate::domains::agents::launch_probe::test_support::snapshot(
+        "codex",
+        &["gpt-5.6-sol".to_string()],
+    );
+
+    let options = HarnessLaunchOptionsService::options_from_probe(&snapshot);
+
+    assert!(options.controls.is_empty());
+    assert!(options.defaults.control_values.is_empty());
+}
+
+#[test]
 fn native_identity_change_then_probe_failure_never_serves_old_options() {
     let home = TestRuntimeHome::new("native-identity");
     let manifest_entries = |native_sha: &str| {
