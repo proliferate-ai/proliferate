@@ -26,9 +26,14 @@ function consentState(
     setScope: vi.fn(),
     activeSessionAvailable: true,
     isPreparing: false,
+    isBusy: false,
+    snapshotActionsBlocked: false,
     error: null,
     prepare: vi.fn(async () => ({ state: "none" as const })),
-    saveCopy: vi.fn(async () => {}),
+    saveCopy: vi.fn(async () => ({
+      state: "not_started" as const,
+      reason: "unavailable_or_not_consented" as const,
+    })),
     cancel: vi.fn(),
     ...overrides,
   };
@@ -118,7 +123,10 @@ describe("SupportSnapshotSaveCopyButton", () => {
   });
 
   it("saves a copy from the same live consent", () => {
-    const saveCopy = vi.fn(async () => {});
+    const saveCopy = vi.fn(async () => ({
+      state: "saved" as const,
+      cleanup: "confirmed" as const,
+    }));
     render(
       <SupportSnapshotSaveCopyButton
         snapshot={consentState({ consent: true, saveCopy })}
@@ -128,5 +136,30 @@ describe("SupportSnapshotSaveCopyButton", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save a copy…" }));
 
     expect(saveCopy).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/cleanup/i)).toBeNull();
+  });
+
+  it("loads for the whole busy action and disables for the cleanup latch", () => {
+    const rendered = render(
+      <SupportSnapshotSaveCopyButton
+        snapshot={consentState({ consent: true, isBusy: true })}
+      />,
+    );
+    const button = screen.getByRole("button", { name: "Save a copy…" });
+    expect(button.hasAttribute("disabled")).toBe(true);
+    expect(button.querySelector("[data-loading-spinner]")).toBeTruthy();
+
+    rendered.rerender(
+      <SupportSnapshotSaveCopyButton
+        snapshot={consentState({
+          consent: true,
+          isBusy: false,
+          snapshotActionsBlocked: true,
+        })}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Save a copy…" }).hasAttribute("disabled"))
+      .toBe(true);
+    expect(document.querySelector("[data-loading-spinner]")).toBeNull();
   });
 });
