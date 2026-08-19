@@ -3,7 +3,6 @@ use std::time::{Duration, Instant};
 
 use anyharness_contract::v1::PromptInputBlock;
 
-use crate::domains::sessions::mcp_bindings::assembly::SESSION_RESTART_REQUIRED_DETAIL;
 use crate::domains::sessions::model::PromptAttachmentState;
 use crate::domains::sessions::prompt::capabilities::capabilities_from_live_config;
 use crate::domains::sessions::prompt::prepare::prepare_prompt;
@@ -11,9 +10,12 @@ use crate::domains::sessions::prompt::provenance::{AgentSessionPromptSource, Pro
 use crate::domains::sessions::prompt::PromptPrepareContext;
 use crate::live::sessions::{LiveSessionCommandError, PromptAcceptError, PromptAcceptance};
 
-use super::{
-    SendPromptError, SendPromptOutcome, SessionLifecycleError, SessionRuntime, StartSessionError,
+use super::prompt_errors::{
+    classify_text_prompt_command_error, durable_prompt_start_failure_code,
+    map_lifecycle_error_to_prompt, map_start_error_to_prompt,
 };
+use super::prompt_title::PromptTitleAssignment;
+use super::{SendPromptError, SendPromptOutcome, SessionRuntime};
 
 impl SessionRuntime {
     /// Persist-first cross-agent delivery. The pending-row sequence is the
@@ -69,7 +71,6 @@ impl SessionRuntime {
 
         Ok(queue_seq)
     }
-
     pub(crate) async fn activate_durable_prompt_consumer(
         &self,
         session_id: &str,
@@ -126,11 +127,44 @@ impl SessionRuntime {
     }
 
     #[tracing::instrument(skip_all, fields(session_id = %session_id))]
+    pub async fn send_authored_prompt(
+        &self,
+        session_id: &str,
+        blocks: Vec<PromptInputBlock>,
+        prompt_id: Option<String>,
+    ) -> Result<SendPromptOutcome, SendPromptError> {
+        let title_assignment = PromptTitleAssignment::from_authored_texts(
+            blocks.iter().filter_map(|block| match block {
+                PromptInputBlock::Text { text } => Some(text.as_str()),
+                _ => None,
+            }),
+        );
+        self.send_prompt_with_title_assignment(session_id, blocks, prompt_id, title_assignment)
+            .await
+    }
+
+    #[tracing::instrument(skip_all, fields(session_id = %session_id))]
     pub async fn send_prompt(
         &self,
         session_id: &str,
         blocks: Vec<PromptInputBlock>,
         prompt_id: Option<String>,
+    ) -> Result<SendPromptOutcome, SendPromptError> {
+        self.send_prompt_with_title_assignment(
+            session_id,
+            blocks,
+            prompt_id,
+            PromptTitleAssignment::Disabled,
+        )
+        .await
+    }
+
+    async fn send_prompt_with_title_assignment(
+        &self,
+        session_id: &str,
+        blocks: Vec<PromptInputBlock>,
+        prompt_id: Option<String>,
+        title_assignment: PromptTitleAssignment,
     ) -> Result<SendPromptOutcome, SendPromptError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
@@ -189,9 +223,11 @@ impl SessionRuntime {
         // Invariant 1/2: the actor is the sole writer of `busy` and the queue.
         // The runtime no longer precaptures `busy`; it just forwards the command
         // and awaits the actor's decision (Started vs Queued).
+        let assigned = title_assignment.apply_before_dispatch(self, session_id);
         let acceptance = handle
             .send_prompt(prepared.payload.clone(), prompt_id)
             .await
+            .inspect_err(|error| assigned.revert_if_undelivered(self, session_id, error))
             .map_err(|error| match error {
                 LiveSessionCommandError::ActorUnavailable => {
                     SendPromptError::Internal(anyhow::anyhow!("session actor channel closed"))
@@ -237,6 +273,7 @@ impl SessionRuntime {
             .get_session(session_id)
             .map_err(SendPromptError::Internal)?
             .unwrap_or(record);
+        let session = assigned.merge_into(session);
 
         Ok(match acceptance {
             PromptAcceptance::Started { turn_id } => {
@@ -261,21 +298,35 @@ impl SessionRuntime {
         text: String,
         prompt_id: String,
     ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
-        self.send_text_prompt_with_id_inner(session_id, text, prompt_id, None)
-            .await
+        self.send_text_prompt_with_id_inner(
+            session_id,
+            text,
+            prompt_id,
+            None,
+            PromptTitleAssignment::Disabled,
+        )
+        .await
     }
 
     /// Creation-only variant carrying trusted agent-session provenance without
     /// activating the general cross-agent message surface.
-    pub(crate) async fn send_text_prompt_with_id_and_provenance(
+    pub(crate) async fn send_initial_task_prompt_with_id(
         &self,
         session_id: &str,
         text: String,
         prompt_id: String,
         provenance: PromptProvenance,
     ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
-        self.send_text_prompt_with_id_inner(session_id, text, prompt_id, Some(provenance))
-            .await
+        let title_assignment =
+            PromptTitleAssignment::from_authored_texts(std::iter::once(text.as_str()));
+        self.send_text_prompt_with_id_inner(
+            session_id,
+            text,
+            prompt_id,
+            Some(provenance),
+            title_assignment,
+        )
+        .await
     }
 
     /// Workflow-owned multi-block twin of [`Self::send_text_prompt_with_id`]:
@@ -295,8 +346,13 @@ impl SessionRuntime {
                 SendPromptError::EmptyPrompt,
             ));
         }
-        self.send_payload_prompt_with_id(session_id, payload, prompt_id)
-            .await
+        self.send_payload_prompt_with_id(
+            session_id,
+            payload,
+            prompt_id,
+            PromptTitleAssignment::Disabled,
+        )
+        .await
     }
 
     async fn send_text_prompt_with_id_inner(
@@ -305,6 +361,7 @@ impl SessionRuntime {
         text: String,
         prompt_id: String,
         provenance: Option<PromptProvenance>,
+        title_assignment: PromptTitleAssignment,
     ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
         if text.trim().is_empty() {
             return Err(TextPromptDispatchError::Dispatch(
@@ -315,7 +372,7 @@ impl SessionRuntime {
         if let Some(provenance) = provenance {
             payload = payload.with_provenance(provenance);
         }
-        self.send_payload_prompt_with_id(session_id, payload, prompt_id)
+        self.send_payload_prompt_with_id(session_id, payload, prompt_id, title_assignment)
             .await
     }
 
@@ -324,6 +381,7 @@ impl SessionRuntime {
         session_id: &str,
         payload: crate::domains::sessions::prompt::PromptPayload,
         prompt_id: String,
+        title_assignment: PromptTitleAssignment,
     ) -> Result<SendPromptOutcome, TextPromptDispatchError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
@@ -339,9 +397,11 @@ impl SessionRuntime {
             .ensure_live_session_handle(&record, None)
             .await
             .map_err(|error| TextPromptDispatchError::Dispatch(map_start_error_to_prompt(error)))?;
+        let assigned = title_assignment.apply_before_dispatch(self, session_id);
         let acceptance = handle
             .send_prompt(payload, Some(prompt_id))
             .await
+            .inspect_err(|error| assigned.revert_if_undelivered(self, session_id, error))
             .map_err(classify_text_prompt_command_error)?;
         // The prompt is accepted at this point; the re-read only refreshes the
         // returned snapshot. A failure here must not become a dispatch error
@@ -353,6 +413,7 @@ impl SessionRuntime {
             .ok()
             .flatten()
             .unwrap_or(record);
+        let session = assigned.merge_into(session);
         Ok(match acceptance {
             PromptAcceptance::Started { turn_id } => {
                 SendPromptOutcome::Running { session, turn_id }
@@ -426,184 +487,4 @@ pub(crate) enum TextPromptDispatchError {
     AcknowledgementLost,
     /// The dispatch verifiably failed before or at command delivery.
     Dispatch(SendPromptError),
-}
-
-/// Pure classification of a live-session command failure for the text-prompt
-/// seam: `ResponseDropped` is the one ambiguous case — it proves the command
-/// was enqueued to the actor's mailbox, not that the actor processed it, and
-/// the reply was lost either way; `ActorUnavailable` (command never enqueued)
-/// and an explicit rejection are safe to report as failed dispatch.
-fn classify_text_prompt_command_error(
-    error: LiveSessionCommandError<PromptAcceptError>,
-) -> TextPromptDispatchError {
-    match error {
-        LiveSessionCommandError::ResponseDropped => TextPromptDispatchError::AcknowledgementLost,
-        LiveSessionCommandError::ActorUnavailable => TextPromptDispatchError::Dispatch(
-            SendPromptError::Internal(anyhow::anyhow!("session actor channel closed")),
-        ),
-        LiveSessionCommandError::Rejected(PromptAcceptError::EnqueueFailed(detail)) => {
-            TextPromptDispatchError::Dispatch(SendPromptError::Internal(anyhow::anyhow!(
-                "failed to enqueue prompt: {detail}"
-            )))
-        }
-        LiveSessionCommandError::Rejected(PromptAcceptError::ProductContextUnavailable {
-            incident_id,
-            error,
-        }) => TextPromptDispatchError::Dispatch(SendPromptError::ProductContextUnavailable {
-            incident_id,
-            error,
-        }),
-    }
-}
-
-fn map_lifecycle_error_to_prompt(error: SessionLifecycleError) -> SendPromptError {
-    match error {
-        SessionLifecycleError::SessionNotFound(session_id) => {
-            SendPromptError::SessionNotFound(session_id)
-        }
-        SessionLifecycleError::Internal(error) => SendPromptError::Internal(error),
-    }
-}
-
-fn durable_prompt_start_failure_code(error: &StartSessionError) -> &'static str {
-    match error {
-        StartSessionError::WorkspaceNotFound => "workspace_not_found",
-        StartSessionError::WorkspaceDirectoryMissing { .. } => "workspace_directory_missing",
-        StartSessionError::AgentDescriptorNotFound(_) => "agent_descriptor_not_found",
-        StartSessionError::Closed => "session_closed",
-        StartSessionError::MissingDataKey => "missing_data_key",
-        StartSessionError::RestartRequired(_) => "restart_required",
-        StartSessionError::WorkspaceMcpAttachmentFailed(_) => "workspace_mcp_attachment_failed",
-        StartSessionError::RouteAuth(_) => "route_auth",
-        StartSessionError::AgentNotReady { .. } => "agent_not_ready",
-        StartSessionError::Internal(_) => "internal",
-        StartSessionError::AcpStart(_) => "acp_start",
-    }
-}
-
-fn map_start_error_to_prompt(error: StartSessionError) -> SendPromptError {
-    match error {
-        StartSessionError::WorkspaceNotFound => {
-            SendPromptError::Internal(anyhow::anyhow!("workspace not found for session"))
-        }
-        StartSessionError::WorkspaceDirectoryMissing { path } => {
-            SendPromptError::WorkspaceDirectoryMissing { path }
-        }
-        StartSessionError::AgentDescriptorNotFound(agent_kind) => {
-            SendPromptError::Internal(anyhow::anyhow!("agent descriptor not found: {agent_kind}"))
-        }
-        StartSessionError::Closed => SendPromptError::SessionClosed,
-        StartSessionError::MissingDataKey | StartSessionError::RestartRequired(_) => {
-            SendPromptError::Internal(anyhow::anyhow!(SESSION_RESTART_REQUIRED_DETAIL))
-        }
-        StartSessionError::WorkspaceMcpAttachmentFailed(error) => {
-            SendPromptError::WorkspaceMcpAttachmentFailed(error)
-        }
-        // Lazy-start on prompt: surface the typed agent-auth code so clients
-        // can distinguish the fail-closed launch refusal from generic errors.
-        StartSessionError::RouteAuth(error) => SendPromptError::InvalidPrompt(
-            crate::domains::sessions::prompt::PromptValidationError::new(
-                error.code(),
-                error.to_string(),
-            ),
-        ),
-        // A9 Scope C: lazy-start on prompt hits the same live-start readiness
-        // gate as resume/fork/create now. SendPromptError has no dedicated
-        // readiness variant, so this rides InvalidPrompt with a stable
-        // AGENT_NOT_READY code, same shape as the RouteAuth arm above.
-        StartSessionError::AgentNotReady {
-            agent_kind,
-            status,
-            detail,
-        } => {
-            let message = match detail {
-                Some(detail) => {
-                    format!("agent '{agent_kind}' is not ready (status: {status:?}): {detail}")
-                }
-                None => format!("agent '{agent_kind}' is not ready (status: {status:?})"),
-            };
-            SendPromptError::InvalidPrompt(
-                crate::domains::sessions::prompt::PromptValidationError::new(
-                    "AGENT_NOT_READY",
-                    message,
-                ),
-            )
-        }
-        StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
-            SendPromptError::Internal(error)
-        }
-    }
-}
-
-#[cfg(test)]
-mod dispatch_classification_tests {
-    use super::*;
-    use crate::domains::agents::model::ResolvedAgentStatus;
-
-    #[test]
-    fn send_message_start_failure_codes_do_not_expose_details() {
-        let cases = [
-            (
-                StartSessionError::WorkspaceDirectoryMissing {
-                    path: "/secret/workspace".into(),
-                },
-                "workspace_directory_missing",
-            ),
-            (
-                StartSessionError::AgentNotReady {
-                    agent_kind: "secret-agent".into(),
-                    status: ResolvedAgentStatus::Error,
-                    detail: Some("secret readiness detail".into()),
-                },
-                "agent_not_ready",
-            ),
-            (
-                StartSessionError::Internal(anyhow::anyhow!("secret")),
-                "internal",
-            ),
-            (
-                StartSessionError::AcpStart(anyhow::anyhow!("secret")),
-                "acp_start",
-            ),
-        ];
-
-        for (error, expected) in cases {
-            assert_eq!(durable_prompt_start_failure_code(&error), expected);
-        }
-    }
-
-    #[test]
-    fn response_dropped_is_a_lost_acknowledgement() {
-        assert!(matches!(
-            classify_text_prompt_command_error(LiveSessionCommandError::ResponseDropped),
-            TextPromptDispatchError::AcknowledgementLost
-        ));
-    }
-
-    #[test]
-    fn actor_unavailable_and_rejection_are_failed_dispatch() {
-        assert!(matches!(
-            classify_text_prompt_command_error(LiveSessionCommandError::ActorUnavailable),
-            TextPromptDispatchError::Dispatch(SendPromptError::Internal(_))
-        ));
-        assert!(matches!(
-            classify_text_prompt_command_error(LiveSessionCommandError::Rejected(
-                PromptAcceptError::EnqueueFailed("queue closed".to_string())
-            )),
-            TextPromptDispatchError::Dispatch(SendPromptError::Internal(_))
-        ));
-        assert!(matches!(
-            classify_text_prompt_command_error(LiveSessionCommandError::Rejected(
-                PromptAcceptError::ProductContextUnavailable {
-                    incident_id: "incident-1".to_string(),
-                    error: crate::live::sessions::product_context::AgentProductContextResolutionError::new(
-                        anyhow::anyhow!("private")
-                    ),
-                }
-            )),
-            TextPromptDispatchError::Dispatch(
-                SendPromptError::ProductContextUnavailable { incident_id, .. }
-            ) if incident_id == "incident-1"
-        ));
-    }
 }

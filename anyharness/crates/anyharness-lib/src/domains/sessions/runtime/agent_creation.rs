@@ -243,7 +243,7 @@ impl SessionRuntime {
             return Ok(started);
         };
         match self
-            .send_text_prompt_with_id_and_provenance(
+            .send_initial_task_prompt_with_id(
                 &record.id,
                 task,
                 format!("agent-create-{}", uuid::Uuid::new_v4()),
@@ -326,6 +326,9 @@ fn map_subagent_start_error(error: StartNewAgentSessionError) -> CreateSubagentA
     }
 }
 
+#[cfg(test)]
+#[path = "internal_creation_title_tests.rs"]
+mod internal_creation_title_tests;
 #[cfg(test)]
 #[path = "ordinary_creation_tests.rs"]
 mod ordinary_creation_tests;

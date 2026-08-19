@@ -37,14 +37,33 @@ impl SessionService {
     /// Applies a fallback title only when the session has none yet; returns
     /// whether it was applied. Used for prompt-derived titles so an assigned
     /// title (user rename or generated summary) is never replaced.
+    /// Returns the write's timestamp when it was applied, which identifies
+    /// that exact write for [`Self::clear_session_title_write`].
     pub fn update_session_title_if_absent(
         &self,
         session_id: &str,
         title: &str,
+    ) -> anyhow::Result<Option<String>> {
+        let applied_at = chrono::Utc::now().to_rfc3339();
+        let applied = self
+            .session_store
+            .update_title_if_absent(session_id, title, &applied_at)?;
+        Ok(applied.then_some(applied_at))
+    }
+
+    /// Undoes one title write, identified by the title it stored and the
+    /// timestamp it stored it at; any assignment since carries its own
+    /// timestamp and is left in place.
+    pub fn clear_session_title_write(
+        &self,
+        session_id: &str,
+        title: &str,
+        applied_at: &str,
     ) -> anyhow::Result<bool> {
-        self.session_store.update_title_if_absent(
+        self.session_store.clear_title_write(
             session_id,
             title,
+            applied_at,
             &chrono::Utc::now().to_rfc3339(),
         )
     }

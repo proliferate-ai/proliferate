@@ -144,11 +144,6 @@ max_lines = 1515
 reason = "existing SDK oversized file; legacy Subagents MCP reducer branch removed in PR10"
 
 [[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/prompt.rs"
-max_lines = 609
-reason = "session prompt dispatch ; +39: workflows gen-2 PR4 adds send_text_blocks_prompt_with_id (the workflow envelope's multi-block twin) sharing one send_payload_prompt_with_id seam with the text path"
-
-[[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/prompt_message_actor_tests.rs"
 max_lines = 601
 reason = "scripted-ACP prompt/queue race suite over the real actor ; +2: workflows gen-2 PR4 teaches the scripted agent program a refusal stop-reason branch"

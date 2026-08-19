@@ -704,10 +704,21 @@ Code path:
 - Config changes requested while busy must not be lost.
 - Session titles keep a fixed precedence. An explicitly assigned title (user
   rename or generated summary through `PATCH /v1/sessions/{id}/title`) always
-  wins and is never overwritten by lower layers. The prompt endpoint assigns
-  the first prompt's text as the title only when the session has none, and
-  harness `session_info_update` titles are fallback-only: both persist through
-  `update_title_if_absent` and never replace an assigned title.
+  wins and is never overwritten by lower layers. Title assignment is an
+  explicit sessions-runtime dispatch policy, not a property of every prompt
+  payload: HTTP-authored prompts and newly created agents' initial tasks opt in
+  to normalized first-text assignment, and only when the session has no title.
+  Internal plan, review, workflow, system, and injected dispatch stays
+  title-disabled. Harness `session_info_update` titles are fallback-only: both
+  sources persist through `update_title_if_absent` and never replace an
+  assigned title. Because both write through that one absent-only update, an
+  opted-in prompt stores its title before the prompt is dispatched, so no
+  harness title reported for that same turn can take the row. The write is
+  best effort and never fails an accepted prompt; a dispatch that verifiably
+  never reached the actor clears that write again, matched on both its text
+  and the `updated_at` it wrote, so any assignment made since - including one
+  of identical text - survives, while a dropped acknowledgement keeps the
+  title because the turn may be running.
 
 ## Extension Points
 

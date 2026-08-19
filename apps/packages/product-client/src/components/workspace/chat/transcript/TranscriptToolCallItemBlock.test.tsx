@@ -2,7 +2,7 @@
 import { createElement } from "react";
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { reduceEvents, type ToolCallItem } from "@anyharness/sdk";
+import { reduceEvents } from "@anyharness/sdk";
 import { toolCallItem } from "#product/lib/domain/chat/__fixtures__/playground/tool-call-item-fixture";
 import { TranscriptContextProviders } from "#product/components/workspace/chat/transcript/TranscriptContexts";
 import { TranscriptToolCallItemBlock } from "#product/components/workspace/chat/transcript/TranscriptToolCallItemBlock";
