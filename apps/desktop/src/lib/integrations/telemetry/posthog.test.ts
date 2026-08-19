@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   capture: vi.fn(),
   identify: vi.fn(),
   reset: vi.fn(),
+  startSessionRecording: vi.fn(),
 }));
 
 vi.mock("posthog-js", () => ({
@@ -24,7 +25,6 @@ const ENABLED_CONFIG = {
     enabled: true,
     apiKey: "phc_test",
     apiHost: "https://us.i.posthog.com",
-    sessionRecordingEnabled: false,
   },
 };
 
@@ -35,6 +35,52 @@ describe("desktop PostHog adapter", () => {
     mocks.capture.mockReset();
     mocks.identify.mockReset();
     mocks.reset.mockReset();
+    mocks.startSessionRecording.mockReset();
+  });
+
+  it("initializes once with recording disabled and no recording surfaces", async () => {
+    const adapter = await loadDesktopPostHog();
+    adapter.initializeDesktopPostHog(ENABLED_CONFIG);
+    adapter.initializeDesktopPostHog(ENABLED_CONFIG);
+
+    expect(mocks.init).toHaveBeenCalledOnce();
+
+    const [apiKey, options] = mocks.init.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(apiKey).toBe("phc_test");
+    const { before_send: beforeSend, ...rest } = options;
+    expect(rest).toEqual({
+      api_host: "https://us.i.posthog.com",
+      autocapture: false,
+      capture_pageview: false,
+      capture_pageleave: false,
+      person_profiles: "identified_only",
+      disable_session_recording: true,
+    });
+    const scrub = await import("./scrub");
+    expect(beforeSend).toBe(scrub.scrubPostHogPayload);
+    expect(Object.keys(options).sort()).toEqual([
+      "api_host",
+      "autocapture",
+      "before_send",
+      "capture_pageleave",
+      "capture_pageview",
+      "disable_session_recording",
+      "person_profiles",
+    ]);
+    expect(mocks.startSessionRecording).not.toHaveBeenCalled();
+  });
+
+  it("captures typed product events through the scrubber", async () => {
+    const adapter = await loadDesktopPostHog();
+    adapter.initializeDesktopPostHog(ENABLED_CONFIG);
+
+    adapter.trackDesktopPostHogEvent("app_update_available", { version: "1.2.3" });
+
+    expect(mocks.capture).toHaveBeenCalledOnce();
+    expect(mocks.capture.mock.calls[0]?.[0]).toBe("app_update_available");
   });
 
   it("identifies with the authenticated user id only", async () => {

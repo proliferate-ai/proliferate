@@ -29,7 +29,6 @@ export interface DesktopTelemetryConfig {
     enabled: boolean;
     apiKey: string | null;
     apiHost: string;
-    sessionRecordingEnabled: boolean;
   };
 }
 
@@ -62,10 +61,6 @@ export function getDesktopTelemetryConfig(): DesktopTelemetryConfig {
       apiHost:
         import.meta.env.VITE_PROLIFERATE_POSTHOG_HOST?.trim()
         || "https://us.i.posthog.com",
-      sessionRecordingEnabled: envFlagEnabled(
-        import.meta.env.VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED,
-        false,
-      ),
     },
   };
 }

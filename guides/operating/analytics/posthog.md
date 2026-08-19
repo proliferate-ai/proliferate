@@ -48,11 +48,14 @@ network requests in screenshots.
    - sign-out produces a new anonymous identity on the next session;
    - no prompt, transcript, repo name, file path, raw URL, terminal text,
      token, or raw error is present.
-5. Replay should be absent by default. If a reviewed build intentionally
-   enables it, verify input masking and block/mask selectors with synthetic
-   data only. On Desktop and Web, inspect whether recorded page metadata
-   contains workflow, workspace, or chat route ids; that is a known current
-   gap even though event URL properties are scrubbed.
+5. Desktop replay is expected to be absent. Desktop PostHog session recording
+   is source-disabled, so any Desktop replay observed in the provider is a
+   code-or-provider truth mismatch to triage, not a gate to look for or enable.
+   Synthetic replay verification applies only to a surface whose reviewed
+   source currently permits replay. For such a surface, verify input masking
+   and block/mask selectors with synthetic data only, and inspect whether
+   recorded page metadata contains workflow, workspace, or chat route ids;
+   that is a known current gap even though event URL properties are scrubbed.
 
 ## Diagnose Missing Evidence
 
@@ -62,8 +65,9 @@ network requests in screenshots.
   in `apps/desktop/src/lib/integrations/telemetry/client.ts`.
 - Web/Mobile views missing: verify the provider initialized and the normalized
   route/screen hook ran; raw paths are intentionally not capture values.
-- Replay missing: confirm the separate replay gate. Mobile also needs the
-  optional native replay package in that build.
+- Replay missing on a surface whose source permits it: confirm that surface's
+  separate replay gate. Mobile also needs the optional native replay package in
+  that build. Missing Desktop replay is the expected result, not a defect.
 - Provider data differs from checked-in behavior: capture event name, surface,
   environment, release, observed time, and a redacted provider URL. Route
   ingestion or deduplication defects to Issue Lifecycle.

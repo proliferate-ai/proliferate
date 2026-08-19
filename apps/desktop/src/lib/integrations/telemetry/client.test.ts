@@ -31,7 +31,6 @@ const mocks = vi.hoisted(() => {
         enabled: true,
         apiKey: "phc_test",
         apiHost: "https://us.i.posthog.com",
-        sessionRecordingEnabled: false,
       },
     })),
     isBuildTelemetryDisabledMock: vi.fn(() => false),
