@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { TARGET, WORKSPACE_BASE_URL, createGrafanaClient } from "./grafana-client.mjs";
+import { readMetadataInventoryInternal } from "./grafana-metadata-inventory.mjs";
 
 export const INVENTORY_TARGET = Object.freeze({
   awsAccount: TARGET.awsAccount,
@@ -9,6 +10,41 @@ export const INVENTORY_TARGET = Object.freeze({
   grafanaWorkspaceName: TARGET.grafanaWorkspaceName,
   expectedGrafanaVersion: TARGET.grafanaVersion,
 });
+
+export function datasource(uid, overrides = {}) {
+  return { uid, name: `name-${uid}`, type: "cloudwatch", access: "proxy",
+    isDefault: false, readOnly: true, ...overrides };
+}
+
+export function searchItem(type, uid, overrides = {}) {
+  return { type, uid, title: `title-${uid}`, ...overrides };
+}
+
+export function serviceAccount(id, overrides = {}) {
+  return { id, name: `name-${id}`, role: "Viewer", isDisabled: false, tokens: 0, ...overrides };
+}
+
+export function setSearchPages(plan, type, pages) {
+  for (let index = 0; index < pages.length; index += 1) {
+    plan.set(`/api/search?type=${type}&limit=100&page=${index + 1}`, pages[index]);
+  }
+}
+
+export function setServicePages(plan, pages) {
+  for (let index = 0; index < pages.length; index += 1) {
+    plan.set(`/api/serviceaccounts/search?perpage=100&page=${index + 1}`, pages[index]);
+  }
+}
+
+export function isDatasourceHealthRequest({ path }) {
+  return path.startsWith("/api/datasources/uid/") && path.endsWith("/health");
+}
+
+export function policyChain(depth, leaf = { receiver: "leaf" }) {
+  let node = leaf;
+  for (let index = 0; index < depth; index += 1) node = { receiver: `r${index}`, routes: [node] };
+  return node;
+}
 
 export function deferred() {
   let resolve;
@@ -250,6 +286,31 @@ export function internalPrepare(fetchImpl) {
       return { response, targetMatches };
     };
   };
+}
+
+export async function runPlan(plan = emptyPlan(), runtime = controlledRuntime()) {
+  const trace = [];
+  const fetchImpl = fixtureFetch(plan, { trace });
+  const result = await readMetadataInventoryInternal({ target: INVENTORY_TARGET,
+    prepareAuthorizedGet: internalPrepare(fetchImpl), productionClockAndTimers: runtime.dependencies });
+  return { result, trace, runtime };
+}
+
+export async function runControlledBody(path, body, expiresAtObservation, plan = emptyPlan()) {
+  const runtime = controlledRuntime();
+  let armed = false;
+  let observations = 0;
+  runtime.dependencies.monotonicNow = () => {
+    if (!armed) return 0;
+    observations += 1;
+    return observations >= expiresAtObservation ? 30_000 : 0;
+  };
+  plan.set(path, rawResponse({
+    body,
+    onRead(index) { if (index === 1) armed = true; },
+  }));
+  const { result, trace } = await runPlan(plan, runtime);
+  return { result, trace, observations };
 }
 
 export function surfaceFailure(state, reason, httpStatus) {
