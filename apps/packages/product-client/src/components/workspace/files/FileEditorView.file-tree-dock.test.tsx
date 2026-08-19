@@ -454,9 +454,49 @@ describe("FileEditorView dock controller", () => {
     expect(document.activeElement).toBe(toggle);
   });
 
-  it("does not steal focus into the tree when a hidden-dock breadcrumb reveal's dock later mounts (2091-R1-B02)", async () => {
+  it("focuses the filter once a default-rail widen lands (2091-R2-1)", async () => {
+    // Production default rail: 420px rail / 419px body, below the 660px
+    // dock threshold. The pending-focus token must still be minted here —
+    // it resolves once the requested widen actually lands.
+    measuredRailWidth = 420;
+    measuredBodyWidth = 419;
+    ensureRightPanelWidth.mockImplementation((width: number) => resizeTo(width - 1, width));
+    const { container } = renderViewer();
+
+    const toggle = screen.getByRole("button", { name: "Show files" });
+    toggle.focus();
+    fireEvent.click(toggle);
+    expect(ensureRightPanelWidth).toHaveBeenCalledWith(781);
+
+    await waitFor(() => expect(dock(container)).toBeTruthy());
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByPlaceholderText("Filter files…")));
+  });
+
+  it("reveals and focuses the crumb's row once a default-rail widen lands (2091-R2-1)", async () => {
+    measuredRailWidth = 420;
+    measuredBodyWidth = 419;
+    ensureRightPanelWidth.mockImplementation((width: number) => resizeTo(width - 1, width));
+    const { container } = renderViewer("src/index.ts");
+
+    const crumb = screen.getByRole("button", { name: "src" });
+    fireEvent.click(crumb);
+    expect(ensureRightPanelWidth).toHaveBeenCalled();
+
+    await waitFor(() => expect(dock(container)).toBeTruthy());
+    // The reveal token is consumed by the mounted dock: the revealed "src"
+    // row, not the filter, ends up focused.
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("treeitem", { name: /^src/ })));
+  });
+
+  it("discards a reveal token that hard-caps below 660px and never lets a later unrelated widen steal focus (2091-R2-1)", async () => {
     measuredBodyWidth = 459;
     measuredRailWidth = 460;
+    // The shell can only grant a clamped width that still can't reach the
+    // 660px dock threshold (e.g. a narrow OS window). The widen still
+    // "lands" — it just doesn't make the dock effectively visible.
+    ensureRightPanelWidth.mockImplementation(() => resizeTo(499, 500));
     const { container } = renderViewer("src/index.ts");
     expect(dock(container)).toBeNull();
 
@@ -464,15 +504,18 @@ describe("FileEditorView dock controller", () => {
     crumb.focus();
     fireEvent.click(crumb);
     // The reveal still retains requested visibility and asks the shell to
-    // widen, even though geometry cannot reach the dock threshold yet.
+    // widen, even though the settled geometry can't reach the dock
+    // threshold.
     expect(ensureRightPanelWidth).toHaveBeenCalled();
     expect(
       useFileTreeStore.getState().requestedVisibilityByWorkspace["logical-1"],
     ).toBe(true);
+    expect(dock(container)).toBeNull();
     expect(document.activeElement).toBe(crumb);
 
-    // A much later responsive widen mounts the dock; the reveal token from
-    // the hidden-dock click must not have survived to steal focus into it.
+    // A much later, unrelated responsive widen (e.g. the user manually
+    // resizes the OS window) mounts the dock; the reveal token from the
+    // settled-but-still-hidden click must not have survived to steal focus.
     resizeTo(780, 781);
     await waitFor(() => expect(dock(container)).toBeTruthy());
     expect(document.activeElement).toBe(crumb);
