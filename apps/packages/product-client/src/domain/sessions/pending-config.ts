@@ -115,7 +115,7 @@ export function getAuthoritativeConfigValue(
     return control.currentValue;
   }
 
-  return liveConfig.rawConfigOptions.find((option) => option.id === rawConfigId)?.currentValue ?? null;
+  return liveConfig.rawConfigOptions?.find((option) => option.id === rawConfigId)?.currentValue ?? null;
 }
 
 export function findNormalizedSessionControlByRawConfigId(
