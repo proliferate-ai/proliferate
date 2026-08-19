@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import ConfigDict, Field, StringConstraints, field_validator
+from pydantic import ConfigDict, Field, StringConstraints, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 from proliferate.db.store.workflow_definitions import WorkflowDefinitionSnapshot
@@ -170,6 +170,14 @@ class WorkflowInvocationPlacementV2(WorkflowInvocationWireModel):
     # Required iff mode is "existing_workspace" (F-A1); the CP freezes it
     # verbatim like the rest of placement — eligibility is the engine's job.
     workspace_id: Annotated[str, StringConstraints(min_length=1)] | None = None
+
+    @model_validator(mode="after")
+    def workspace_id_matches_mode(self) -> WorkflowInvocationPlacementV2:
+        if self.mode == "existing_workspace" and self.workspace_id is None:
+            raise ValueError("workspaceId is required for existing_workspace placement.")
+        if self.mode != "existing_workspace" and self.workspace_id is not None:
+            raise ValueError("workspaceId is only valid for existing_workspace placement.")
+        return self
 
 
 class WorkflowInvocationCreateRequestV2(WorkflowInvocationRequestWireModel):

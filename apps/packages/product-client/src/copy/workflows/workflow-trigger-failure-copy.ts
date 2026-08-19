@@ -25,6 +25,12 @@ const RUNTIME_FAILURE_COPY: Record<WorkflowRunProblemCodeV2, string> = {
     "This run has already moved on from that step. Open the run to see where it is now.",
   WORKFLOW_SNAPSHOT_INVALID:
     "This workflow cannot run as saved. Open it in the editor, fix the steps it reports, then start it again.",
+  WORKFLOW_PLACEMENT_CONFLICT:
+    "That workspace is already running another workflow. Wait for it to finish, or choose another workspace.",
+  WORKFLOW_WORKSPACE_NOT_FOUND:
+    "That workspace no longer exists on this runtime. Choose an available workspace, then start the workflow again.",
+  WORKFLOW_WORKSPACE_NOT_ELIGIBLE:
+    "That workspace cannot run this workflow because its checkout is unavailable. Restore the checkout or choose another workspace, then start it again.",
   WORKFLOW_WORKSPACE_MATERIALIZATION_FAILED:
     "The workspace for this run could not be created. Check the selected repository is still on disk, then start the run again.",
 };

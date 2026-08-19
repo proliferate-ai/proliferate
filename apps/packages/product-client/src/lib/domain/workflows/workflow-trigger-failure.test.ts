@@ -34,6 +34,14 @@ describe("workflowTriggerFailureMessage runtime plane", () => {
       .toBe("This run has already moved on from that step. Open the run to see where it is now.");
     expect(workflowTriggerFailureMessage(runtimeError(422, "WORKFLOW_SNAPSHOT_INVALID"), "run"))
       .toBe("This workflow cannot run as saved. Open it in the editor, fix the steps it reports, then start it again.");
+    expect(workflowTriggerFailureMessage(runtimeError(409, "WORKFLOW_PLACEMENT_CONFLICT"), "run"))
+      .toBe("That workspace is already running another workflow. Wait for it to finish, or choose another workspace.");
+    expect(workflowTriggerFailureMessage(runtimeError(404, "WORKFLOW_WORKSPACE_NOT_FOUND"), "run"))
+      .toBe("That workspace no longer exists on this runtime. Choose an available workspace, then start the workflow again.");
+    expect(workflowTriggerFailureMessage(
+      runtimeError(409, "WORKFLOW_WORKSPACE_NOT_ELIGIBLE"),
+      "run",
+    )).toBe("That workspace cannot run this workflow because its checkout is unavailable. Restore the checkout or choose another workspace, then start it again.");
     expect(workflowTriggerFailureMessage(
       runtimeError(500, "WORKFLOW_WORKSPACE_MATERIALIZATION_FAILED"),
       "run",
