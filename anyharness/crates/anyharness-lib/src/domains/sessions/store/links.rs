@@ -72,6 +72,12 @@ impl SessionStore {
             link.child_session_id == record.id,
             "fork link child id must match inserted session"
         );
+        if snapshot_events {
+            anyhow::ensure!(
+                result.prefix_terminal_seq.is_some(),
+                "snapshot fork child requires a prefix terminal seq"
+            );
+        }
 
         self.db.with_tx(|conn| {
             insert_session_row(conn, record)?;
@@ -83,9 +89,13 @@ impl SessionStore {
                      )
                      SELECT ?1, seq, timestamp, event_type, turn_id, item_id, payload_json
                      FROM session_events
-                     WHERE session_id = ?2
+                     WHERE session_id = ?2 AND seq <= ?3
                      ORDER BY seq ASC",
-                    params![record.id, link.parent_session_id],
+                    params![
+                        record.id,
+                        link.parent_session_id,
+                        result.prefix_terminal_seq
+                    ],
                 )?
             } else {
                 0

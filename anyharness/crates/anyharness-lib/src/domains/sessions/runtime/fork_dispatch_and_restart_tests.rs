@@ -90,6 +90,7 @@ async fn targeted_fork_persists_provider_anchor_and_exact_checkpoint_after_child
     wait_for_fork_wire_count(&script.request_log, 1).await;
     assert_eq!(fork_wire_anchors(&script.request_log), ["msg-0"]);
     assert_child_anchor_provenance(&state, &first.session.id, "msg-0", Some(checkpoint_id));
+    assert_child_event_prefix(&state, &parent_id, &first.session.id, 3);
 
     let second = state
         .session_runtime
@@ -104,6 +105,7 @@ async fn targeted_fork_persists_provider_anchor_and_exact_checkpoint_after_child
     wait_for_fork_wire_count(&script.request_log, 2).await;
     assert_eq!(fork_wire_anchors(&script.request_log), ["msg-0", "msg-1"]);
     assert_child_anchor_provenance(&state, &second.session.id, "msg-1", None);
+    assert_child_event_prefix(&state, &parent_id, &second.session.id, 6);
 
     let children = fork_children(&state, &parent_id);
     assert_eq!(children.len(), 2);
@@ -121,6 +123,55 @@ async fn targeted_fork_persists_provider_anchor_and_exact_checkpoint_after_child
     .await;
     drop(state);
     std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
+}
+
+fn assert_child_event_prefix(
+    state: &crate::app::AppState,
+    parent_id: &str,
+    child_id: &str,
+    terminal_seq: i64,
+) {
+    let events = |session_id| {
+        state
+            .session_service
+            .list_session_event_records(session_id, None, None, None, None, false)
+            .expect("list session event records")
+            .expect("session exists")
+            .into_iter()
+            .map(|event| {
+                (
+                    event.seq,
+                    event.timestamp,
+                    event.event_type,
+                    event.turn_id,
+                    event.item_id,
+                    event.payload_json,
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let parent_events = events(parent_id);
+    let expected = parent_events
+        .iter()
+        .filter(|event| event.0 <= terminal_seq)
+        .cloned()
+        .collect::<Vec<_>>();
+    let child_events = events(child_id);
+    let actual_prefix = child_events
+        .iter()
+        .filter(|event| event.0 <= terminal_seq)
+        .cloned()
+        .collect::<Vec<_>>();
+    assert_eq!(actual_prefix, expected);
+    for excluded in parent_events
+        .into_iter()
+        .filter(|event| event.0 > terminal_seq)
+    {
+        assert!(
+            !child_events.contains(&excluded),
+            "child snapshot copied a parent event past the resolved prefix"
+        );
+    }
 }
 
 // --- (b)(i) Restart-drift pin: pre-pin-bump surface ------------------------
