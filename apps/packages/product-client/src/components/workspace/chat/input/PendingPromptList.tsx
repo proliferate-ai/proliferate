@@ -1,7 +1,21 @@
 import { useCallback } from "react";
 import { Button } from "#product/primitives/Button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "#product/primitives/DropdownMenu";
 import { Tooltip } from "#product/primitives/Tooltip";
-import { ArrowUpRight, GripVertical, Pencil, X } from "#product/primitives/icons/core";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpRight,
+  GripVertical,
+  MoreHorizontal,
+  Pencil,
+  X,
+} from "#product/primitives/icons/core";
 import { ThinkingText } from "#product/primitives/patterns/ThinkingText";
 import { PendingAgentUpdatesRow } from "#product/components/workspace/chat/input/PendingAgentUpdatesRow";
 import { CHAT_STREAMING_STATUS_LABELS } from "#product/copy/chat/chat-copy";
@@ -168,15 +182,17 @@ function PendingPromptRow({
     && sessionMaterialized
     && !entry.isSending
     && !entry.isBeingEdited;
-  const canDragReorder =
+  const isReorderEligible =
     entry.kind === "plain"
-    &&
-    isRuntimeConfirmed
+    && isRuntimeConfirmed
     && sessionMaterialized
-    && runtimeEntryCount > 1
+    && runtimeEntryCount > 1;
+  const canDragReorder =
+    isReorderEligible
     && !queueMutationInFlight;
   const renderEditAction = entry.showEditAction && !entry.isBeingEdited && !entry.isSending;
   const renderDeleteAction = entry.showDeleteAction && (!entry.isSending || entry.canDelete);
+  const renderActionMenu = renderEditAction || isReorderEligible;
 
   const handleBeginEdit = useCallback(() => {
     if (entry.canEdit) {
@@ -202,6 +218,16 @@ function PendingPromptRow({
       onReorder(index, nextReorderIndex);
     }
   }, [index, nextReorderIndex, onReorder, previousReorderIndex]);
+  const handleMoveUp = useCallback(() => {
+    if (!queueMutationInFlight && previousReorderIndex != null) {
+      onReorder(index, previousReorderIndex);
+    }
+  }, [index, onReorder, previousReorderIndex, queueMutationInFlight]);
+  const handleMoveDown = useCallback(() => {
+    if (!queueMutationInFlight && nextReorderIndex != null) {
+      onReorder(index, nextReorderIndex);
+    }
+  }, [index, nextReorderIndex, onReorder, queueMutationInFlight]);
 
   const stateHint = entry.isSending || isSteering
     ? (
@@ -270,20 +296,56 @@ function PendingPromptRow({
               </Button>
             </Tooltip>
           )}
-          {renderEditAction && (
-            <Tooltip content={entry.editDisabledReason ?? "Edit message"}>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                disabled={!entry.canEdit || queueMutationInFlight}
-                onClick={handleBeginEdit}
-                className={ROW_ACTION_CLASSNAME}
-                aria-label="Edit queued message"
-              >
-                <Pencil className="icon-paired" />
-              </Button>
-            </Tooltip>
+          {renderActionMenu && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className={ROW_ACTION_CLASSNAME}
+                  aria-label="More queued-message actions"
+                >
+                  <MoreHorizontal className="icon-paired" aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {renderEditAction && (
+                  <DropdownMenuItem
+                    disabled={!entry.canEdit || queueMutationInFlight}
+                    onSelect={handleBeginEdit}
+                  >
+                    <Pencil className="icon-paired" aria-hidden />
+                    <span className="min-w-0">
+                      <span className="block">Edit message</span>
+                      {!entry.canEdit && entry.editDisabledReason && (
+                        <span className="block text-ui-sm text-muted-foreground">
+                          {entry.editDisabledReason}
+                        </span>
+                      )}
+                    </span>
+                  </DropdownMenuItem>
+                )}
+                {isReorderEligible && (
+                  <>
+                    <DropdownMenuItem
+                      disabled={queueMutationInFlight || previousReorderIndex == null}
+                      onSelect={handleMoveUp}
+                    >
+                      <ArrowUp className="icon-paired" aria-hidden />
+                      Move up
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={queueMutationInFlight || nextReorderIndex == null}
+                      onSelect={handleMoveDown}
+                    >
+                      <ArrowDown className="icon-paired" aria-hidden />
+                      Move down
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           {renderDeleteAction && (
             <Tooltip content={entry.deleteDisabledReason ?? "Remove from queue"}>
