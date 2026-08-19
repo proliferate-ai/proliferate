@@ -394,15 +394,15 @@ class Settings(BaseSettings):
     cloud_mcp_oauth_callback_base_url: str = ""
     cloud_mcp_oauth_callback_fallback_base_url: str = "http://localhost:8000"
     cloud_mcp_slack_enabled: bool = False
+    cloud_mcp_slack_distribution_ready: bool = False
     cloud_mcp_slack_client_id: str = ""
     cloud_mcp_slack_client_secret: str = ""
     cloud_mcp_slack_token_endpoint_auth_method: str = "client_secret_post"
     cloud_mcp_google_workspace_enabled: bool = False
     cloud_mcp_google_workspace_oauth_client_id: str = ""
     cloud_mcp_google_workspace_oauth_client_secret: str = ""
-    # Agent LLM gateway (LiteLLM proxy)
-    # Publisher lane (Update Flow ADR, FR-1): when set, the server advertises
-    # these on GET /meta so a desktop shell or cloud worker launches its
+    # Agent LLM gateway publisher lane (Update Flow ADR, FR-1): advertise these on
+    # GET /meta so a desktop shell or cloud worker launches its
     # runtime sidecar with ANYHARNESS_CATALOG_ARTIFACT_BASE_URL/_CHANNEL
     # populated. Absent (default) => `agentCatalog` is null and every runtime
     # this deployment launches stays on the compiled-in floor, by design.
