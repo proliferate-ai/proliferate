@@ -177,4 +177,42 @@ describe("FileChangeCall", () => {
       workspacePath: "",
     });
   });
+
+  it("routes a move outside the workspace to its destination, not the source", () => {
+    renderToStaticMarkup(
+      <FileChangeCall
+        operation="move"
+        path="src/a.ts"
+        workspacePath="src/a.ts"
+        newPath="/tmp/a.ts"
+        newWorkspacePath={null}
+        status="completed"
+      />,
+    );
+
+    // The component's own primary file-reference actions (used for open/copy)
+    // are established before any child chip renders, so this is always the
+    // first call recorded — child label chips make their own independent
+    // calls that must not be mistaken for the parent's.
+    expect(fileReferenceActionsCalls[0]).toEqual({
+      rawPath: "/tmp/a.ts",
+      workspacePath: null,
+    });
+  });
+
+  it("keeps workspacePath for a plain edit with no newPath", () => {
+    renderToStaticMarkup(
+      <FileChangeCall
+        operation="edit"
+        path="src/a.ts"
+        workspacePath="src/a.ts"
+        status="completed"
+      />,
+    );
+
+    expect(fileReferenceActionsCalls[0]).toEqual({
+      rawPath: "src/a.ts",
+      workspacePath: "src/a.ts",
+    });
+  });
 });

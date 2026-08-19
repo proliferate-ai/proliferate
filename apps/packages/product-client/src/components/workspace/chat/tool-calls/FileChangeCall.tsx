@@ -56,8 +56,11 @@ export function FileChangeCall({
   const hasDiff = !!patch;
   const actionLabel = getOperationLabel(operation, status);
   const rawReferencePath = newPath ?? path;
-  const structuredWorkspacePath = typeof newWorkspacePath === "string"
-    ? newWorkspacePath
+  // A move whose destination lives outside the workspace has no structured
+  // path of its own; falling back to the source workspacePath would silently
+  // route file-reference actions to the pre-move location.
+  const structuredWorkspacePath = newPath != null
+    ? (typeof newWorkspacePath === "string" ? newWorkspacePath : null)
     : workspacePath;
   const displayPath = firstNonblankPath(
     newWorkspacePath,

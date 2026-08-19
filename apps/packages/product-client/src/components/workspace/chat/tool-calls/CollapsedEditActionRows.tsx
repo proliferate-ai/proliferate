@@ -58,8 +58,11 @@ function EditActionRow({
 }) {
   const [expanded, setExpanded] = useState(false);
   const rawPath = part.newPath ?? part.path;
-  const workspacePath = typeof part.newWorkspacePath === "string"
-    ? part.newWorkspacePath
+  // A move whose destination lives outside the workspace has no structured
+  // path of its own; falling back to the source workspacePath would silently
+  // route file-reference actions to the pre-move location.
+  const workspacePath = part.newPath != null
+    ? (typeof part.newWorkspacePath === "string" ? part.newWorkspacePath : null)
     : part.workspacePath;
   const pathLabel = firstNonblankPath(
     part.newWorkspacePath,

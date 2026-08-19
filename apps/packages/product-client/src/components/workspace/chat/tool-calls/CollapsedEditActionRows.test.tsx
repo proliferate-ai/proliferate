@@ -148,4 +148,36 @@ describe("CollapsedEditActionRows", () => {
       workspacePath: "",
     });
   });
+
+  it("routes a move outside the workspace to its destination, not the source", () => {
+    const item = editItem();
+    const part = item.contentParts[0];
+    if (part?.type === "file_change") {
+      part.path = "src/a.ts";
+      part.workspacePath = "src/a.ts";
+      part.newPath = "/tmp/a.ts";
+      part.newWorkspacePath = null;
+    }
+    render(<EditRows item={item} />);
+    expect(fileReferenceActionsCalls).toContainEqual({
+      rawPath: "/tmp/a.ts",
+      workspacePath: null,
+    });
+  });
+
+  it("keeps workspacePath for a plain edit with no newPath", () => {
+    const item = editItem();
+    const part = item.contentParts[0];
+    if (part?.type === "file_change") {
+      part.path = "src/a.ts";
+      part.workspacePath = "src/a.ts";
+      part.newPath = null;
+      part.newWorkspacePath = null;
+    }
+    render(<EditRows item={item} />);
+    expect(fileReferenceActionsCalls).toContainEqual({
+      rawPath: "src/a.ts",
+      workspacePath: "src/a.ts",
+    });
+  });
 });
