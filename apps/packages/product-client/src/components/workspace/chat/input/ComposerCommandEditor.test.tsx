@@ -23,8 +23,15 @@ const slashCommandMock = vi.hoisted(() => ({
   selectedCount: 0,
 }));
 
+type MentionMenuItem =
+  | { kind: "file"; file: { path: string; name: string; parent: string } }
+  | {
+      kind: "contextDoc";
+      doc: { docId: string; runId: string; slug: string; filename: string; runLabel: string | null };
+    };
+
 const fileMentionMock = vi.hoisted(() => ({
-  results: [] as Array<{ path: string; name: string; parent: string }>,
+  items: [] as MentionMenuItem[],
   moveHighlight: vi.fn(),
   selectedCount: 0,
   lastQuery: null as string | null,
@@ -38,13 +45,13 @@ vi.mock("#product/hooks/chat/ui/use-chat-file-mention-menu", () => ({
   }: {
     open: boolean;
     query: string;
-    onSelect: (result: { path: string; name: string; parent: string }) => void;
+    onSelect: (item: MentionMenuItem) => void;
   }) => {
     if (open) {
       fileMentionMock.lastQuery = query;
     }
     return {
-      results: open ? fileMentionMock.results : [],
+      items: open ? fileMentionMock.items : [],
       isLoading: false,
       isError: false,
       isPending: false,
@@ -54,7 +61,7 @@ vi.mock("#product/hooks/chat/ui/use-chat-file-mention-menu", () => ({
       moveHighlight: fileMentionMock.moveHighlight,
       selectHighlighted: () => {
         fileMentionMock.selectedCount += 1;
-        const first = fileMentionMock.results[0];
+        const first = fileMentionMock.items[0];
         if (first) {
           onSelect(first);
         }
@@ -62,10 +69,27 @@ vi.mock("#product/hooks/chat/ui/use-chat-file-mention-menu", () => ({
       setRowRef: vi.fn(),
       handleRowMouseEnter: vi.fn(),
       getRowId: (index: number) => `file-mention-row-${index}`,
-      activeDescendantId: open && fileMentionMock.results.length > 0 ? "file-mention-row-0" : undefined,
+      activeDescendantId: open && fileMentionMock.items.length > 0 ? "file-mention-row-0" : undefined,
     };
   },
 }));
+
+function fileItem(file: { path: string; name: string; parent: string }): MentionMenuItem {
+  return { kind: "file", file };
+}
+
+function docMentionItem(): MentionMenuItem {
+  return {
+    kind: "contextDoc",
+    doc: {
+      docId: "doc-1",
+      runId: "run-01j8",
+      slug: "plan",
+      filename: "01-plan.md",
+      runLabel: "Release checklist",
+    },
+  };
+}
 
 vi.mock("#product/hooks/chat/ui/use-chat-slash-command-menu", () => ({
   useChatSlashCommandMenu: ({
@@ -129,7 +153,7 @@ describe("ComposerCommandEditor", () => {
     slashCommandMock.commands = [];
     slashCommandMock.moveHighlight.mockClear();
     slashCommandMock.selectedCount = 0;
-    fileMentionMock.results = [];
+    fileMentionMock.items = [];
     fileMentionMock.moveHighlight.mockClear();
     fileMentionMock.selectedCount = 0;
     fileMentionMock.lastQuery = null;
@@ -224,8 +248,8 @@ describe("ComposerCommandEditor", () => {
   });
 
   it("opens the file mention menu on an @ token and searches on the typed query", async () => {
-    fileMentionMock.results = [
-      { path: "docs/setup.md", name: "setup.md", parent: "docs" },
+    fileMentionMock.items = [
+      fileItem({ path: "docs/setup.md", name: "setup.md", parent: "docs" }),
     ];
     const { container } = renderEditor({ draft: createTextDraft("Open @set") });
 
@@ -235,8 +259,8 @@ describe("ComposerCommandEditor", () => {
   });
 
   it("wires the file mention menu as a listbox announced from the composer's editable", async () => {
-    fileMentionMock.results = [
-      { path: "docs/setup.md", name: "setup.md", parent: "docs" },
+    fileMentionMock.items = [
+      fileItem({ path: "docs/setup.md", name: "setup.md", parent: "docs" }),
     ];
     const { container, textarea } = renderEditor({ draft: createTextDraft("Open @set") });
 
@@ -271,8 +295,8 @@ describe("ComposerCommandEditor", () => {
   });
 
   it("inserts a selected file mention as a markdown file link", async () => {
-    fileMentionMock.results = [
-      { path: "docs/setup.md", name: "setup.md", parent: "docs" },
+    fileMentionMock.items = [
+      fileItem({ path: "docs/setup.md", name: "setup.md", parent: "docs" }),
     ];
     const onSubmit = vi.fn();
     const onDraftChange = vi.fn();
@@ -292,8 +316,8 @@ describe("ComposerCommandEditor", () => {
   });
 
   it("renders an inserted file mention as a chip rather than raw markdown", async () => {
-    fileMentionMock.results = [
-      { path: "docs/setup.md", name: "setup.md", parent: "docs" },
+    fileMentionMock.items = [
+      fileItem({ path: "docs/setup.md", name: "setup.md", parent: "docs" }),
     ];
     const { textarea } = renderEditor({ draft: createTextDraft("Open @set") });
 
@@ -308,8 +332,8 @@ describe("ComposerCommandEditor", () => {
   });
 
   it("renders an inserted file mention with its file glyph and path", async () => {
-    fileMentionMock.results = [
-      { path: "docs/guides/setup.md", name: "setup.md", parent: "docs/guides" },
+    fileMentionMock.items = [
+      fileItem({ path: "docs/guides/setup.md", name: "setup.md", parent: "docs/guides" }),
     ];
     const { textarea } = renderEditor({ draft: createTextDraft("Open @set") });
 
@@ -332,6 +356,59 @@ describe("ComposerCommandEditor", () => {
     const content = chip.querySelector("[data-composer-file-mention-content]");
     expect(content?.getAttribute("data-composer-file-mention-directory")).toBe("docs/guides");
     expect(chip.textContent).toBe("setup.md");
+  });
+
+  it("inserts a selected context doc serialized to the @doc token", async () => {
+    fileMentionMock.items = [docMentionItem()];
+    const onSubmit = vi.fn();
+    const onDraftChange = vi.fn();
+    const { textarea } = renderEditor({
+      draft: createTextDraft("Open @pla"),
+      onSubmit,
+      onDraftChange,
+    });
+
+    expect(fireEvent.keyDown(textarea, { key: "Enter", repeat: false })).toBe(false);
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(fileMentionMock.selectedCount).toBe(1);
+    await waitFor(() => expect(onDraftChange.mock.calls.some(
+      ([draft]) => serializeChatDraftToPrompt(draft)
+        === "Open [01-plan.md](@doc:run-01j8/01-plan.md) ",
+    )).toBe(true));
+  });
+
+  it("renders an inserted context-doc mention as a chip with the resolved path tooltip", async () => {
+    fileMentionMock.items = [docMentionItem()];
+    const { textarea } = renderEditor({ draft: createTextDraft("Open @pla") });
+
+    fireEvent.keyDown(textarea, { key: "Enter", repeat: false });
+
+    await waitFor(() => {
+      expect(textarea.querySelector("[data-composer-context-doc-mention]")).toBeTruthy();
+    });
+    const chip = textarea.querySelector<HTMLElement>("[data-composer-context-doc-mention]")!;
+    expect(chip.getAttribute("data-composer-context-doc-mention")).toBe("run-01j8/01-plan.md");
+    // The tooltip carries the workspace path the mention resolves to at send
+    // time, not the raw token.
+    expect(chip.title).toBe(".proliferate/context/01-plan.md");
+    const glyph = chip.querySelector("[data-composer-context-doc-mention-glyph]");
+    expect(glyph?.querySelector("svg")).toBeTruthy();
+    expect(glyph?.textContent).toBe("");
+    expect(chip.textContent).toBe("01-plan.md");
+    expect(textarea.textContent).not.toContain("](");
+  });
+
+  it("renders a restored draft's @doc token as a context-doc chip", () => {
+    const { textarea } = renderEditor({
+      draft: createTextDraft("See [01-plan.md](@doc:run-01j8/01-plan.md) please"),
+    });
+
+    const chip = textarea.querySelector<HTMLElement>("[data-composer-context-doc-mention]")!;
+    expect(chip.getAttribute("data-composer-context-doc-mention")).toBe("run-01j8/01-plan.md");
+    expect(chip.textContent).toBe("01-plan.md");
+    // Only the chip's own text may reach the draft's text stream.
+    expect(textarea.textContent).toBe("See 01-plan.md please");
   });
 
   it("renders a workspace file link from restored draft markdown as a chip", () => {
@@ -393,8 +470,8 @@ describe("ComposerCommandEditor", () => {
   });
 
   it("replaces a file trigger after a code block without shifting its range", async () => {
-    fileMentionMock.results = [
-      { path: "docs/setup.md", name: "setup.md", parent: "docs" },
+    fileMentionMock.items = [
+      fileItem({ path: "docs/setup.md", name: "setup.md", parent: "docs" }),
     ];
     const onDraftChange = vi.fn();
     const { textarea } = renderEditor({
@@ -424,8 +501,8 @@ describe("ComposerCommandEditor", () => {
   });
 
   it("replaces a file trigger before a code block without consuming the block", async () => {
-    fileMentionMock.results = [
-      { path: "docs/setup.md", name: "setup.md", parent: "docs" },
+    fileMentionMock.items = [
+      fileItem({ path: "docs/setup.md", name: "setup.md", parent: "docs" }),
     ];
     const onDraftChange = vi.fn();
     const { textarea } = renderEditor({

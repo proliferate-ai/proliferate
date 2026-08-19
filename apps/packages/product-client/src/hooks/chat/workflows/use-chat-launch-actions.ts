@@ -25,10 +25,8 @@ import { useUserPreferencesStore } from "#product/stores/preferences/user-prefer
 import { useActiveSessionLaunchState } from "#product/hooks/chat/derived/use-active-session-config-state";
 import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
 import { resolveAvailableLaunchSelection } from "#product/lib/domain/chat/models/launch-selection-defaults";
-import {
-  EMPTY_CHAT_DRAFT,
-  serializeChatDraftToPrompt,
-} from "#product/lib/domain/chat/composer/file-mention-draft-model";
+import { EMPTY_CHAT_DRAFT } from "#product/lib/domain/chat/composer/file-mention-draft-model";
+import { serializeChatDraftToOutgoingPrompt } from "#product/lib/domain/chat/composer/outgoing-prompt";
 import { resolveWorkspaceUiKey } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import {
   failLatencyFlow,
@@ -57,7 +55,7 @@ export function useChatLaunchActions(options?: {
   // ChatInput, ~20 hooks) on EVERY keystroke — the draft is only needed when
   // the user actually picks a launch option.
   const getCurrentDraftText = useCallback((): string => {
-    return serializeChatDraftToPrompt(
+    return serializeChatDraftToOutgoingPrompt(
       workspaceUiKey
         ? useChatInputStore.getState().draftByWorkspaceId[workspaceUiKey] ?? EMPTY_CHAT_DRAFT
         : EMPTY_CHAT_DRAFT,
