@@ -17,6 +17,8 @@ import {
   type ContentSearchSurface,
   useContentSearchStore,
 } from "#product/stores/search/content-search-store";
+import { resolveContentSearchPillPlacement } from "#product/lib/domain/content-search/content-search-placement";
+import { RIGHT_PANEL_MIN_WIDTH } from "#product/lib/domain/workspaces/shell/right-panel-model";
 
 const SURFACE_COPY: Record<ContentSearchSurface, { placeholder: string; inputLabel: string }> = {
   chat: { placeholder: "Search chat…", inputLabel: "Find in chat" },
@@ -70,7 +72,17 @@ function restoreFocusTo(surface: ContentSearchSurface, origin: HTMLElement | nul
   }
 }
 
-export function ContentSearchPill() {
+interface ContentSearchPillProps {
+  /** Whether the right-panel rail currently participates in layout. */
+  rightPanelOpen: boolean;
+  /** Rail content width when open, pre-floor-clamp. */
+  rightPanelWidth: number;
+}
+
+export function ContentSearchPill({
+  rightPanelOpen,
+  rightPanelWidth,
+}: ContentSearchPillProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   // Captures document.activeElement on each closed-to-open transition, and
   // the surface that was open when it was captured, so a later close can
@@ -170,6 +182,12 @@ export function ContentSearchPill() {
   }
 
   const { placeholder, inputLabel } = SURFACE_COPY[surface];
+  const placement = resolveContentSearchPillPlacement({
+    surface,
+    rightPanelOpen,
+    rightPanelWidth,
+    rightPanelMinWidth: RIGHT_PANEL_MIN_WIDTH,
+  });
   const resultRowColumnClass = "col-[1/3]";
   const resultLabel = hasMatches
     ? `${activeMatchIndex + 1} of ${matchCount}`
@@ -194,9 +212,13 @@ export function ContentSearchPill() {
 
   return (
     <div
-      // Pinned to the window's top-right corner, deliberately overlaying the
-      // header/tab chrome band while search is open.
-      className="pointer-events-none absolute top-2 right-4 z-popover flex justify-end"
+      // Per-surface placement resolved from shell/surface layout tokens (02B
+      // "Fixed composition and geometry"), never from arbitrary DOM
+      // measurement: chat sits 8px below the 46px tab strip inset from the
+      // effective right rail; file/review sit 8px below their 36px owned
+      // header (90px from the shell top), 16px from their content edge.
+      className="pointer-events-none absolute z-popover flex justify-end"
+      style={{ top: placement.top, right: placement.right }}
       data-content-search-overlay
       data-content-search-surface={surface}
     >

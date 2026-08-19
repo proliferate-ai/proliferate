@@ -383,7 +383,12 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                 />
               </div>
 
-              {hasWorkspaceShell && !hasLaunchIntentOnlyShell ? <ContentSearchPill /> : null}
+              {hasWorkspaceShell && !hasLaunchIntentOnlyShell ? (
+                <ContentSearchPill
+                  rightPanelOpen={rightPanelOpen}
+                  rightPanelWidth={rightPanelWidth}
+                />
+              ) : null}
             </div>
         </WorkspaceHeaderTabsViewModelProvider>
       </WorkspaceShellActionsProvider>
