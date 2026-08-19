@@ -264,17 +264,23 @@ export function useTranscriptFramePipelineLifecycle({
           }
         });
       }
-      const outcome = viewport.scrollTop > topBeforeCorrection
-        ? "corrective_position_write"
-        : "settled";
-      // A clamped no-advance attempt is settled as a writer outcome, but it did
-      // not observe the established seat held. Retain ownership until height
-      // recovery makes the seat reachable, unless the absolute ceiling wins.
-      if (!displacedAboveTarget || now >= floor.absoluteDeadline) {
+      const retained = displacedAboveTarget && now < floor.absoluteDeadline;
+      if (!retained) {
         compensationAnchorRef.current = null;
         compensationAbsoluteDeadlineRef.current = { anchor: null, deadline: 0 };
       }
-      return outcome;
+      // A retained displaced seat is NOT a settled outcome, even when the
+      // corrective attempt read back no advance: a still-running native
+      // scroll's latch (or a transient height dip's clamp) can swallow the
+      // write entirely, and no later scroll/resize signal is guaranteed once
+      // that native scroll completes. Reporting it settled lets the scheduler
+      // drain with the owner dormant and the reader stranded at the physical
+      // top. Owed-seat retention must keep the one writer's continuation
+      // scheduled until a later pass observes the seat held or the absolute
+      // ceiling releases.
+      return viewport.scrollTop > topBeforeCorrection || retained
+        ? "corrective_position_write"
+        : "settled";
     }
     // A fresh above-anchor growth this pass is a late estimate-to-measured
     // correction still arriving; keep the compensation window open past the
@@ -308,7 +314,13 @@ export function useTranscriptFramePipelineLifecycle({
         viewport.scrollTop = target;
       }
     });
-    return viewport.scrollTop > topBeforeCorrection
+    // Same owed-seat rule as the deadline branch above: a live anchor whose
+    // forward write left the position still short of the seat (swallowed by a
+    // native scroll latch, or clamped by a transient height dip) has not
+    // settled — keep the continuation scheduled so the seat is re-attempted
+    // each frame until a pass observes it held. Bounded by the ordinary and
+    // absolute deadlines, which still release the anchor.
+    return viewport.scrollTop > topBeforeCorrection || target - viewport.scrollTop > 1
       ? "corrective_position_write"
       : "settled";
   }, [
