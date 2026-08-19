@@ -321,6 +321,45 @@ describe("useWorkflowBuilder draft edits", () => {
     expect(result.current.draft.defaultRepoConfigId).toBe("");
     vi.useRealTimers();
   });
+
+  it("coalesces adjacent typing in one leg's editor into a single undo entry", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-17T12:00:00Z"));
+    const { result } = renderBuilder();
+    act(() => result.current.actions.addLeg("step-1"));
+    act(() => {
+      result.current.actions.updateLeg("step-1", 1, "d");
+      result.current.actions.updateLeg("step-1", 1, "dig");
+    });
+    expect(result.current.draft.nodes[0].legs?.[1]?.prompt).toBe("dig");
+    // One undo unwinds the whole typing burst, not one keystroke of it...
+    act(() => result.current.undo());
+    expect(result.current.draft.nodes[0].legs?.[1]?.prompt).toBe("");
+    // ...and the next lands on the structural addLeg entry underneath.
+    act(() => result.current.undo());
+    expect(result.current.draft.nodes[0].legs).toBeUndefined();
+    vi.useRealTimers();
+  });
+
+  it("keeps each leg's typing in its own undo entry", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-17T12:00:00Z"));
+    const { result } = renderBuilder();
+    const scalarPrompt = result.current.draft.nodes[0].prompt;
+    act(() => result.current.actions.addLeg("step-1"));
+    act(() => {
+      result.current.actions.updateLeg("step-1", 1, "dig");
+      result.current.actions.updateLeg("step-1", 0, "lead");
+    });
+    expect(result.current.draft.nodes[0].legs?.map((leg) => leg.prompt)).toEqual(["lead", "dig"]);
+    // Different leg, different key: leg 0's edit undoes alone, leg 1 keeps its text.
+    act(() => result.current.undo());
+    expect(result.current.draft.nodes[0].legs?.map((leg) => leg.prompt))
+      .toEqual([scalarPrompt, "dig"]);
+    // Leg 0 mirrors into the scalar prompt (ruling F5), so that unwound too.
+    expect(result.current.draft.nodes[0].prompt).toBe(scalarPrompt);
+    vi.useRealTimers();
+  });
 });
 
 function definitionWithPrompt(prompt: string): WorkflowDefinitionV2 {

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { WorkflowDefinitionV2, WorkflowNodeV2 } from "@proliferate/cloud-sdk";
 import v2FullFixture from "../../../../../../fixtures/contracts/workflow-definition/v2-full.json";
-import { definitionHeadId, orderedNodes, validateDefinitionV2 } from "./definition-v2";
+import {
+  definitionHeadId,
+  orderedNodes,
+  validateDefinitionV2,
+  type WorkflowDefinitionV2WithLegs,
+} from "./definition-v2";
 
 // Structural validation. The reference-grammar cases live in
 // `definition-v2-references.test.ts`.
@@ -432,5 +437,88 @@ describe("definitionHeadId", () => {
       { from: "b", to: "a" },
     ]))).toBeNull();
     expect(definitionHeadId(graph([], []))).toBeNull();
+  });
+});
+
+describe("validateDefinitionV2: node legs (ruling F5)", () => {
+  function legsDef(
+    legs: { prompt: string }[] | undefined,
+    promptOverride?: string,
+  ): WorkflowDefinitionV2WithLegs {
+    return {
+      schemaVersion: 2,
+      nodes: [
+        {
+          id: "a",
+          type: "agent",
+          title: "Review",
+          prompt: promptOverride ?? legs?.[0]?.prompt ?? "Solo prompt",
+          ...(legs ? { legs } : {}),
+        },
+      ],
+      edges: [],
+      inputs: [],
+      docTemplates: [],
+    };
+  }
+
+  it("accepts a node with no legs (today's behavior, unchanged)", () => {
+    expect(validateDefinitionV2(legsDef(undefined))).toEqual([]);
+  });
+
+  it("accepts a valid 2-leg node whose prompt equals legs[0].prompt", () => {
+    const def = legsDef([{ prompt: "Correctness review" }, { prompt: "Security review" }]);
+    expect(validateDefinitionV2(def)).toEqual([]);
+  });
+
+  it("rejects a single-leg list", () => {
+    const def = legsDef([{ prompt: "Solo prompt" }]);
+    const issues = validateDefinitionV2(def);
+    expect(issues.some((issue) => issue.code === "invalid_leg_count")).toBe(true);
+  });
+
+  it("rejects 9 legs", () => {
+    const legs = Array.from({ length: 9 }, (_, i) => ({ prompt: `Leg ${i}` }));
+    const def = legsDef(legs, "Leg 0");
+    const issues = validateDefinitionV2(def);
+    expect(issues.some((issue) => issue.code === "invalid_leg_count")).toBe(true);
+  });
+
+  it("rejects a blank leg prompt", () => {
+    const def = legsDef([{ prompt: "Leg 0" }, { prompt: "   " }], "Leg 0");
+    const issues = validateDefinitionV2(def);
+    expect(issues.some((issue) => issue.code === "blank_leg_prompt" && issue.index === 1))
+      .toBe(true);
+  });
+
+  it("rejects a prompt/legs[0] mismatch", () => {
+    const def = legsDef([{ prompt: "Leg 0" }, { prompt: "Leg 1" }], "Not leg 0");
+    const issues = validateDefinitionV2(def);
+    expect(issues.some((issue) => issue.code === "leg_prompt_mismatch")).toBe(true);
+  });
+
+  it("scans each leg's prompt for @input:/@doc: references independently", () => {
+    const def: WorkflowDefinitionV2WithLegs = {
+      schemaVersion: 2,
+      nodes: [
+        {
+          id: "a",
+          type: "agent",
+          title: "Review",
+          prompt: "Research @input:topic",
+          legs: [
+            { prompt: "Research @input:topic" },
+            { prompt: "Research @input:missing" },
+          ],
+        },
+      ],
+      edges: [],
+      inputs: [{ name: "topic", description: "", required: true }],
+      docTemplates: [],
+    };
+    const issues = validateDefinitionV2(def);
+    const unknownRefIssue = issues.find((issue) => issue.code === "unknown_input_ref");
+    expect(unknownRefIssue).toBeDefined();
+    expect(unknownRefIssue?.index).toBe(1);
   });
 });

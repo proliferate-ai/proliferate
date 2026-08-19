@@ -7,7 +7,8 @@
 //! test reuses that suite's scripted-agent fixture — real actor, real
 //! sessions, no mocks of our machinery.
 
-use super::actor::{launch_model, DEFAULT_WORKFLOW_AGENT_KIND};
+use super::actor::DEFAULT_WORKFLOW_AGENT_KIND;
+use super::launch::launch_model;
 use super::lifecycle_tests::{agent_node, chain, fixture, node_by_def};
 use crate::domains::workflows::definition::{
     DefinitionNode, NodeModel, WorkflowDefinition, DEFINITION_SCHEMA_VERSION,
@@ -55,6 +56,7 @@ fn definition_with_model(model: Option<NodeModel>) -> WorkflowDefinition {
             title: "Plan".into(),
             prompt: "plan".into(),
             model,
+            legs: None,
         }],
         edges: Vec::new(),
         inputs: Vec::new(),

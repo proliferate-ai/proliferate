@@ -1,4 +1,4 @@
-import type { WorkflowNodeV2 } from "@proliferate/cloud-sdk";
+import type { WorkflowNodeV2WithLegs as WorkflowNodeV2 } from "#product/domain/workflows/definition-v2";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
 import {
   workflowBuilderModelOptions,
@@ -30,6 +30,10 @@ export interface WorkflowBuilderNodeCardProps {
   onRemove: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  /** Ruling F5: adds one parallel leg (2..8 legs total). */
+  onAddLeg: () => void;
+  onRemoveLeg: (legIndex: number) => void;
+  onUpdateLeg: (legIndex: number, prompt: string) => void;
 }
 
 /**
@@ -49,12 +53,20 @@ export function WorkflowBuilderNodeCard({
   onRemove,
   onMoveUp,
   onMoveDown,
+  onAddLeg,
+  onRemoveLeg,
+  onUpdateLeg,
 }: WorkflowBuilderNodeCardProps) {
   const fieldPrefix = `workflow-builder-node-${node.id}`;
-  const promptInvalid = issues.some((issue) =>
-    issue.code === "unknown_input_ref"
-    || issue.code === "unknown_doc_ref"
-    || issue.code === "malformed_reference");
+  const legs = node.legs;
+  const promptIssueCodes = new Set(["unknown_input_ref", "unknown_doc_ref", "malformed_reference"]);
+  const promptInvalid = !legs
+    && issues.some((issue) => promptIssueCodes.has(issue.code) && issue.index === undefined);
+  const legInvalid = (legIndex: number) =>
+    issues.some((issue) =>
+      (promptIssueCodes.has(issue.code) || issue.code === "blank_leg_prompt"
+        || (issue.code === "leg_prompt_mismatch" && legIndex === 0))
+      && issue.index === legIndex);
   // Ids are minted, never typed, so the only way to reach an id error is to
   // open a definition authored elsewhere. The badge IS the id's field, so the
   // error is marked on it rather than only in the card's issue list.
@@ -155,15 +167,67 @@ export function WorkflowBuilderNodeCard({
       />
 
       <div className="mt-3">
-        <WorkflowBuilderPromptField
-          fieldId={`${fieldPrefix}-prompt`}
-          value={node.prompt}
-          disabled={disabled}
-          inputNames={inputNames}
-          docSlugs={docSlugs}
-          invalid={promptInvalid}
-          onChange={(prompt) => onChange({ prompt })}
-        />
+        {legs ? (
+          <div className="space-y-3">
+            {legs.map((leg, legIndex) => (
+              <div key={legIndex}>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`${fieldPrefix}-leg-${legIndex}-prompt`}>
+                    {WORKFLOW_BUILDER_COPY.legPromptLabel(legIndex + 1)}
+                  </Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={WORKFLOW_BUILDER_COPY.removeLegLabel(legIndex + 1)}
+                    disabled={disabled}
+                    onClick={() => onRemoveLeg(legIndex)}
+                  >
+                    <Trash className="icon-paired" aria-hidden />
+                  </Button>
+                </div>
+                <WorkflowBuilderPromptField
+                  fieldId={`${fieldPrefix}-leg-${legIndex}-prompt`}
+                  value={leg.prompt}
+                  disabled={disabled}
+                  inputNames={inputNames}
+                  docSlugs={docSlugs}
+                  invalid={legInvalid(legIndex)}
+                  onChange={(prompt) => onUpdateLeg(legIndex, prompt)}
+                />
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              disabled={disabled || legs.length >= 8}
+              onClick={onAddLeg}
+            >
+              {WORKFLOW_BUILDER_COPY.addLegLabel}
+            </Button>
+          </div>
+        ) : (
+          <div>
+            <WorkflowBuilderPromptField
+              fieldId={`${fieldPrefix}-prompt`}
+              value={node.prompt}
+              disabled={disabled}
+              inputNames={inputNames}
+              docSlugs={docSlugs}
+              invalid={promptInvalid}
+              onChange={(prompt) => onChange({ prompt })}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-2"
+              disabled={disabled}
+              onClick={onAddLeg}
+            >
+              {WORKFLOW_BUILDER_COPY.addParallelLegsLabel}
+            </Button>
+          </div>
+        )}
       </div>
 
       {issues.length > 0 ? (

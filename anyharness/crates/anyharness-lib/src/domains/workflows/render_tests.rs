@@ -314,3 +314,56 @@ fn rendered_prompt_and_preamble_paths_are_run_scoped() {
     assert!(preamble.contains("/ws/.proliferate/context/run-1/00-plan-doc.md"));
     assert!(preamble.contains("/ws/.proliferate/context/run-1/notes.md"));
 }
+
+// --- Ruling F5: the prompt-to-leg invariant (R4) ---
+
+/// Rendering leg i's selected prompt lands legs[i] — and no sibling leg — into
+/// that leg's envelope. The selection under test is `DefinitionNode::leg_prompts`
+/// (the same one the actor's fan-out consumes); its negative control is to make
+/// it return leg 0's prompt for every leg, which trips `leg {i} selection` here.
+#[test]
+fn each_leg_envelope_carries_only_its_own_leg_prompt() {
+    use super::definition::{DefinitionLeg, DefinitionNode};
+
+    let authored = ["CORRECTNESS-REVIEW", "SECURITY-REVIEW", "PERF-REVIEW"];
+    let node = DefinitionNode {
+        id: "panel".into(),
+        node_type: WorkflowNodeType::Agent,
+        title: "Panel".into(),
+        prompt: authored[0].into(),
+        model: None,
+        legs: Some(
+            authored
+                .iter()
+                .map(|p| DefinitionLeg { prompt: (*p).into() })
+                .collect(),
+        ),
+    };
+    let selected = node.leg_prompts();
+    assert_eq!(selected.len(), authored.len());
+    let no_args = arguments(&[]);
+    for (i, prompt) in selected.iter().enumerate() {
+        assert_eq!(*prompt, authored[i], "leg {i} selection must be legs[i].prompt");
+        let envelope = render_envelope(&RenderInputs {
+            node_type: WorkflowNodeType::Agent,
+            prompt,
+            mode: ResolveMode::Strict,
+            arguments: &no_args,
+            docs: &[],
+            context_dir: Path::new("/ws/.proliferate/context/run-1"),
+        })
+        .expect("render leg");
+        assert!(
+            envelope.first_message.contains(authored[i]),
+            "leg {i} envelope must contain its own prompt"
+        );
+        for (j, sibling) in authored.iter().enumerate() {
+            if i != j {
+                assert!(
+                    !envelope.first_message.contains(sibling),
+                    "leg {i} envelope must not contain leg {j}'s prompt"
+                );
+            }
+        }
+    }
+}

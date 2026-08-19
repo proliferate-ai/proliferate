@@ -34,6 +34,7 @@ use utoipa::OpenApi;
         crate::domains::workflows::model::WorkflowNodeType,
         crate::domains::workflows::definition::WorkflowDefinition,
         crate::domains::workflows::definition::DefinitionNode,
+        crate::domains::workflows::definition::DefinitionLeg,
         crate::domains::workflows::definition::NodeModel,
         crate::domains::workflows::definition::DefinitionEdge,
         crate::domains::workflows::definition::DefinitionInput,

@@ -38,13 +38,39 @@ pub(super) fn upsert_leg_tx(
     node_row_id: &str,
     session_id: &str,
 ) -> rusqlite::Result<()> {
+    upsert_leg_at_tx(tx, node_row_id, 0, session_id)
+}
+
+/// The fan-out primitive (ruling F5): insert (or reset) the row at `leg_index`,
+/// the durable prompt-to-leg linkage — `leg_index` addresses `legs[leg_index]`
+/// in the definition. Leg 0 is the representative; legs 1..N are the parallel
+/// siblings the actor mints one session each for.
+pub(super) fn upsert_leg_at_tx(
+    tx: &Connection,
+    node_row_id: &str,
+    leg_index: i64,
+    session_id: &str,
+) -> rusqlite::Result<()> {
     tx.execute(
         "INSERT INTO workflow_run_node_sessions
             (node_row_id, leg_index, session_id, status, completed_at)
-         VALUES (?1, 0, ?2, 'running', NULL)
+         VALUES (?1, ?2, ?3, 'running', NULL)
          ON CONFLICT(node_row_id, leg_index) DO UPDATE SET
             session_id = excluded.session_id, status = 'running', completed_at = NULL",
-        params![node_row_id, session_id],
+        params![node_row_id, leg_index, session_id],
+    )?;
+    Ok(())
+}
+
+/// Truncate every ledger row of a node (ruling F6): boot-fence resume
+/// re-fans-out ALL legs from the definition on a fresh generation, so the old
+/// rows are cleared before the relaunch re-inserts leg 0..N. A one-leg node has
+/// exactly one row, so this is the delete half of the reset the upsert did
+/// before — observable end state unchanged.
+pub(super) fn truncate_legs_tx(tx: &Connection, node_row_id: &str) -> rusqlite::Result<()> {
+    tx.execute(
+        "DELETE FROM workflow_run_node_sessions WHERE node_row_id = ?1",
+        params![node_row_id],
     )?;
     Ok(())
 }

@@ -5,6 +5,7 @@
 //! rebuilt from them on first touch.
 
 mod actor;
+mod launch;
 #[cfg(test)]
 mod launch_tests;
 #[cfg(test)]

@@ -7475,6 +7475,16 @@ export interface components {
              */
             createdAt: string;
         };
+        /**
+         * WorkflowNodeLegV2
+         * @description One parallel leg of a node's fan-out (ruling F5): its own authored
+         *     prompt, its own session at run time. No edges, no ordering, no inter-leg
+         *     dependencies — a leg is not a node.
+         */
+        WorkflowNodeLegV2: {
+            /** Prompt */
+            prompt: string;
+        };
         /** WorkflowNodeModelConfigV2 */
         WorkflowNodeModelConfigV2: {
             /** Agentkind */
@@ -7498,6 +7508,8 @@ export interface components {
             /** Prompt */
             prompt: string;
             model?: components["schemas"]["WorkflowNodeModelConfigV2"] | null;
+            /** Legs */
+            legs?: components["schemas"]["WorkflowNodeLegV2"][] | null;
         };
         /** WorkflowPromptStep */
         WorkflowPromptStep: {

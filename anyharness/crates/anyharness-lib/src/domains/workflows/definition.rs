@@ -22,6 +22,11 @@ use super::model::WorkflowNodeType;
 
 pub const DEFINITION_SCHEMA_VERSION: u32 = 2;
 
+/// The most parallel leg prompts one node may fan out to (ruling F5). A node
+/// with `legs` present must carry 2..=`MAX_NODE_LEGS`; a single-leg node is
+/// expressed the old way (no `legs`), so `legs` of length 0 or 1 is invalid.
+pub const MAX_NODE_LEGS: usize = 8;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WorkflowDefinition {
@@ -48,6 +53,33 @@ pub struct DefinitionNode {
     pub prompt: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<NodeModel>,
+    /// Parallel leg prompts (ruling F5). Absent means today's 1:1 node/session
+    /// behavior exactly (and serializes byte-identically). Present means a
+    /// parallel node: 2..=`MAX_NODE_LEGS` legs, each with its own authored
+    /// prompt, `legs[0].prompt` equal to `prompt` so leg 0 is the
+    /// representative session and `leg_index` addresses `legs[i]` uniformly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub legs: Option<Vec<DefinitionLeg>>,
+}
+
+impl DefinitionNode {
+    /// The authored prompt of every leg in order — the multi-leg list when
+    /// present, else the single node prompt. Leg 0 is always the node prompt
+    /// (validation pins `legs[0].prompt == prompt`).
+    pub fn leg_prompts(&self) -> Vec<&str> {
+        match &self.legs {
+            Some(legs) if legs.len() > 1 => legs.iter().map(|leg| leg.prompt.as_str()).collect(),
+            _ => vec![self.prompt.as_str()],
+        }
+    }
+}
+
+/// One parallel leg's authored prompt (ruling F5). Legs have no edges,
+/// ordering, or inter-leg dependencies — the chain stays linear at node level.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DefinitionLeg {
+    pub prompt: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -217,27 +249,54 @@ impl WorkflowDefinition {
 
         let chain = self.linear_chain(&node_ids)?;
 
-        for node in &self.nodes {
-            let references = parse_references(&node.prompt)
-                .map_err(|error| invalid(format!("node '{}': {}", node.id, error.detail)))?;
+        // Reference-grammar validation for one prompt, labelled by its owner
+        // (the node, or `node 'x' leg i` for a fan-out leg) so a bad reference
+        // inside a leg names the leg (ruling F5).
+        let validate_refs = |prompt: &str, label: &str| -> Result<(), DefinitionValidationError> {
+            let references = parse_references(prompt)
+                .map_err(|error| invalid(format!("{label}: {}", error.detail)))?;
             for reference in references {
                 match reference {
-                    PromptReference::Input(name) => {
-                        if !input_names.contains(name.as_str()) {
-                            return Err(invalid(format!(
-                                "node '{}' references undeclared @input:{name}",
-                                node.id
-                            )));
-                        }
+                    PromptReference::Input(name) if !input_names.contains(name.as_str()) => {
+                        return Err(invalid(format!("{label} references undeclared @input:{name}")));
                     }
-                    PromptReference::Doc(slug) => {
-                        if !doc_slugs.contains(slug.as_str()) {
-                            return Err(invalid(format!(
-                                "node '{}' references unknown @doc:{slug}",
-                                node.id
-                            )));
-                        }
+                    PromptReference::Doc(slug) if !doc_slugs.contains(slug.as_str()) => {
+                        return Err(invalid(format!("{label} references unknown @doc:{slug}")));
                     }
+                    _ => {}
+                }
+            }
+            Ok(())
+        };
+
+        for node in &self.nodes {
+            validate_refs(&node.prompt, &format!("node '{}'", node.id))?;
+            // Ruling F5: a parallel node carries 2..=MAX_NODE_LEGS legs, leg 0's
+            // prompt equals the node prompt (so every old consumer of
+            // node.prompt stays correct), and every leg prompt is non-blank and
+            // reference-grammar valid. `linear_chain` above is untouched: legs
+            // are inside the node, not edges.
+            if let Some(legs) = &node.legs {
+                if !(2..=MAX_NODE_LEGS).contains(&legs.len()) {
+                    return Err(invalid(format!(
+                        "node '{}' has {} legs; a parallel node needs 2..={MAX_NODE_LEGS} \
+                         (a single-leg node omits `legs`)",
+                        node.id,
+                        legs.len()
+                    )));
+                }
+                if legs[0].prompt != node.prompt {
+                    return Err(invalid(format!(
+                        "node '{}' prompt must equal legs[0].prompt (leg 0 is the \
+                         representative session)",
+                        node.id
+                    )));
+                }
+                for (index, leg) in legs.iter().enumerate() {
+                    if leg.prompt.trim().is_empty() {
+                        return Err(invalid(format!("node '{}' leg {index} has a blank prompt", node.id)));
+                    }
+                    validate_refs(&leg.prompt, &format!("node '{}' leg {index}", node.id))?;
                 }
             }
         }

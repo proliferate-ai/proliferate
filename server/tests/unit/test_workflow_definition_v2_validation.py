@@ -22,6 +22,7 @@ from proliferate.server.workflows.models_v2 import (
     WorkflowDefinitionDocumentV2,
     WorkflowDefinitionResponseV2,
     WorkflowInvocationResponseV2,
+    WorkflowNodeV2,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -173,6 +174,67 @@ def test_valid_refs_fixture_validates_clean() -> None:
     assert isinstance(definition, dict)
     document = WorkflowDefinitionDocumentV2.model_validate(definition)
     assert validate_definition_v2_document(document) is None
+
+
+def _node_kwargs(prompt: str = "Run.", **overrides: object) -> dict[str, object]:
+    base: dict[str, object] = {"id": "n_a", "type": "agent", "title": "T", "prompt": prompt}
+    base.update(overrides)
+    return base
+
+
+def test_node_legs_absent_is_unchanged() -> None:
+    node = WorkflowNodeV2.model_validate(_node_kwargs())
+    assert node.legs is None
+    assert node.prompt == "Run."
+
+
+def test_node_legs_valid_two_legs() -> None:
+    node = WorkflowNodeV2.model_validate(
+        _node_kwargs(
+            prompt="Reviewer A prompt.",
+            legs=[{"prompt": "Reviewer A prompt."}, {"prompt": "Reviewer B prompt."}],
+        )
+    )
+    assert node.legs is not None
+    assert len(node.legs) == 2
+    assert node.legs[0].prompt == node.prompt
+
+
+def test_node_legs_reject_single_leg_list() -> None:
+    with pytest.raises(ValidationError):
+        WorkflowNodeV2.model_validate(
+            _node_kwargs(legs=[{"prompt": "Run."}]),
+        )
+
+
+def test_node_legs_reject_nine_legs() -> None:
+    with pytest.raises(ValidationError):
+        WorkflowNodeV2.model_validate(
+            _node_kwargs(
+                prompt="Leg 0",
+                legs=[{"prompt": f"Leg {i}"} for i in range(9)],
+            ),
+        )
+
+
+def test_node_legs_reject_blank_leg() -> None:
+    with pytest.raises(ValidationError):
+        WorkflowNodeV2.model_validate(
+            _node_kwargs(
+                prompt="Leg 0",
+                legs=[{"prompt": "Leg 0"}, {"prompt": "   "}],
+            ),
+        )
+
+
+def test_node_legs_reject_prompt_mismatch() -> None:
+    with pytest.raises(ValidationError):
+        WorkflowNodeV2.model_validate(
+            _node_kwargs(
+                prompt="Not leg 0's prompt",
+                legs=[{"prompt": "Leg 0"}, {"prompt": "Leg 1"}],
+            ),
+        )
 
 
 def test_wellformed_references_still_distinguish_undeclared() -> None:

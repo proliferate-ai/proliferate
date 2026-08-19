@@ -10987,6 +10987,19 @@
         },
         "additionalProperties": false
       },
+      "DefinitionLeg": {
+        "type": "object",
+        "description": "One parallel leg's authored prompt (ruling F5). Legs have no edges,\nordering, or inter-leg dependencies — the chain stays linear at node level.",
+        "required": [
+          "prompt"
+        ],
+        "properties": {
+          "prompt": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "DefinitionNode": {
         "type": "object",
         "required": [
@@ -10998,6 +11011,16 @@
         "properties": {
           "id": {
             "type": "string"
+          },
+          "legs": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/DefinitionLeg"
+            },
+            "description": "Parallel leg prompts (ruling F5). Absent means today's 1:1 node/session\nbehavior exactly (and serializes byte-identically). Present means a\nparallel node: 2..=`MAX_NODE_LEGS` legs, each with its own authored\nprompt, `legs[0].prompt` equal to `prompt` so leg 0 is the\nrepresentative session and `leg_index` addresses `legs[i]` uniformly."
           },
           "model": {
             "oneOf": [
