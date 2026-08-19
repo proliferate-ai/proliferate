@@ -65,7 +65,7 @@ reason = "existing AnyHarness oversized test file"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs"
-max_lines = 1159
+max_lines = 1155
 reason = "existing AnyHarness oversized test file (launch-env tests moved to their owning module) + A9 Scope C resume/fork revoked-credentials regression tests (AgentNotReady at the common live-start seam) + a review-fix pin (unsatisfiable selection reports RouteAuth, not AgentNotReady, on resume) + Forks ADR rung 2 targeted-fork plumbing tests (item-less rejection, fail-closed no-child downgrade guard, idempotency conflict, unknown-outcome redispatch block); the same-payload resume lives in checkpoint_linkage_tests.rs with the Lane H NULL-linkage pins, and the rung-3 provider-anchor gates plus shared fixtures live in fork_anchor_gate_tests.rs"
 
 [[max_lines]]
