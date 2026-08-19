@@ -1,6 +1,5 @@
 import { PostHog } from "posthog-react-native";
 import type { PostHogOptions } from "posthog-react-native";
-import type { AuthUser } from "@proliferate/cloud-sdk";
 import { scrubTelemetryData } from "@proliferate/product-client/internal/domain/telemetry/scrub";
 
 import type { MobileTelemetryConfig } from "./config";
@@ -69,17 +68,9 @@ export function trackMobilePostHogScreenView(screen: MobileTelemetryScreen): voi
   }));
 }
 
-export function identifyMobilePostHogUser(user: AuthUser): void {
+export function identifyMobilePostHogUser(userId: string): void {
   if (!posthogClient) return;
-  const properties: Record<string, string> = { email: user.email };
-  if (user.display_name) {
-    properties.display_name = user.display_name;
-  }
-
-  posthogClient.identify(
-    user.id,
-    scrubTelemetryData(properties),
-  );
+  posthogClient.identify(userId);
 }
 
 export function resetMobilePostHogUser(): void {

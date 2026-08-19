@@ -183,7 +183,7 @@ export interface DesktopProductEventMap {
   connectors_pane_viewed: undefined;
   desktop_keychain_access_failed: {
     operation: KeychainTelemetryOperation;
-    error_message: string;
+    failure_kind: TelemetryFailureKind;
   };
   runtime_connection_state_changed: {
     connection_state: RuntimeConnectionTelemetryState;

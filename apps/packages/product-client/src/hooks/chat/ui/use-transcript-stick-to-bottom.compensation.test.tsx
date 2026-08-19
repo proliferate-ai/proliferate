@@ -563,7 +563,7 @@ describe("above-change compensation cancels on upward user intent (PRO-187, r4)"
   // compensation specifically: the reader asked for this by scrolling up, so
   // it must hold regardless of continued upward scrolling — unlike the
   // cancelable completed-turn-split case exercised above.
-  it("clamps a non-cancelable compensation forward against a native scroll event that would erode it below the anchor floor", () => {
+  it("restores the full settled seat after native scroll events erode a non-cancelable compensation", () => {
     const handle = renderHarness();
     const { viewport, api } = handle.current;
     setContentHeight(viewport, 5_552);
@@ -576,19 +576,23 @@ describe("above-change compensation cancels on upward user intent (PRO-187, r4)"
     act(() => { flushRafRound(); });
     act(() => { flushRafRound(); });
 
-    // Content has already settled at its final measured height (no further
-    // growth event will ever fire) while a still-in-flight wheelToTop gesture
-    // keeps writing scrollTop down natively, event by event, toward 0.
+    // Content settles and the lifecycle writer establishes the full running-max
+    // seat: 464 + (6908 - 5552) = 1820.
     setContentHeight(viewport, 6_908);
+    act(() => { api.notifyContentResize(); });
+    expect(viewport.scrollTop).toBe(1_820);
+
+    // A still-in-flight wheelToTop gesture keeps writing scrollTop down natively,
+    // event by event, after height has gone quiet.
     for (const nativeScrollTop of [300, 120, 40, 0]) {
       viewport.scrollTop = nativeScrollTop;
       act(() => { api.onViewportScroll(viewport); });
     }
+    act(() => { flushRafRound(); });
 
-    // NEGATIVE CONTROL: remove the forward-clamp guard in onViewportScroll
-    // (use-transcript-stick-to-bottom.ts) and this regresses to 0 — the exact
-    // CI failure (`expect(after.scrollTop).toBeGreaterThan(150)` receiving 0).
-    expect(viewport.scrollTop).toBe(464);
+    // The single lifecycle writer restores the whole seat, not only the captured
+    // pre-prepend floor.
+    expect(viewport.scrollTop).toBe(1_820);
     expect(viewport.scrollTop).toBeGreaterThan(150);
   });
 });

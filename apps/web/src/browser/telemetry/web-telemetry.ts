@@ -67,16 +67,9 @@ export const webProductTelemetry: ProductTelemetry = {
 
   setUser(user: ProductAuthUser | null): void {
     if (user) {
-      Sentry.setUser({ id: user.id, email: user.email ?? undefined });
+      Sentry.setUser({ id: user.id });
       if (posthog.__loaded) {
-        const properties: Record<string, string> = {};
-        if (user.email) {
-          properties.email = user.email;
-        }
-        if (user.displayName) {
-          properties.display_name = user.displayName;
-        }
-        posthog.identify(user.id, scrubTelemetryData(properties));
+        posthog.identify(user.id);
       }
       return;
     }

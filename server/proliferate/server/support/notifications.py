@@ -79,7 +79,7 @@ async def notify_support_report(
     urgent: bool = False,
     notify_me: bool = False,
     correlation: dict[str, object] | None,
-) -> None:
+) -> bool:
     webhook_url = settings.support_slack_webhook_url.strip()
     if not webhook_url:
         # Fail loudly: a completed report that no one gets pinged about is a
@@ -92,7 +92,7 @@ async def notify_support_report(
             report_id,
             extra={"support_report_id": report_id, "urgent": urgent},
         )
-        return
+        return False
 
     plan = build_support_report_plan(
         sender_name=sender_display_name or sender_email,
@@ -136,6 +136,8 @@ async def notify_support_report(
             exc_info=True,
             extra={"support_report_id": report_id, "urgent": urgent},
         )
+        return False
+    return True
 
 
 def _support_report_internal_url(report_id: str) -> str | None:

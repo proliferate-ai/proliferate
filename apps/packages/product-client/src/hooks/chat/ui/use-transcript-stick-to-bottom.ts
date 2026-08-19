@@ -181,27 +181,20 @@ export function useTranscriptStickToBottom({
     const previousTop = lastScrollTopRef.current;
     lastScrollTopRef.current = top;
 
+    // A live NON-cancelable history prepend remains invariant after height settles.
+    // Re-arm before marker precedence; WebKit momentum can keep eroding through its marker.
+    const hasLiveNonCancelableCompensation = (
+      compensationAnchorRef.current != null
+      && !compensationCancelableRef.current
+      && interactionNow() < compensationDeadlineRef.current
+    );
+    if (hasLiveNonCancelableCompensation) {
+      pipelineRef.current.ensureGlue();
+    }
+
     // Classification ladder. PRIMARY: a live ownership marker (queued, so a burst
     // of glue writes keeps attribution) owns this event — clear and return.
     if (ownershipMarkersRef.current.matchByValue(top)) {
-      onScrollSample({ programmatic: true });
-      return;
-    }
-
-    // NON-cancelable compensation (history prepend): never drop scrollTop below
-    // the pre-prepend floor. The pipeline only re-applies on a growth-driven
-    // pass, not a scroll EVENT, so a wheel gesture can erode it unopposed once
-    // content plateaus (CI webkit "prepend anchoring ... scrollTop Received 0").
-    const activeCompensationAnchor = compensationAnchorRef.current;
-    if (
-      activeCompensationAnchor != null
-      && !compensationCancelableRef.current
-      && interactionNow() < compensationDeadlineRef.current
-      && top < activeCompensationAnchor.scrollTop
-    ) {
-      notifyProgrammaticScroll(() => {
-        viewport.scrollTop = activeCompensationAnchor.scrollTop;
-      });
       onScrollSample({ programmatic: true });
       return;
     }
@@ -255,7 +248,6 @@ export function useTranscriptStickToBottom({
     compensationCancelableRef,
     compensationDeadlineRef,
     dispatchInsetEvent,
-    notifyProgrammaticScroll,
     onScrollSample,
     pinnedRef,
     repinThresholdPx,
@@ -284,6 +276,16 @@ export function useTranscriptStickToBottom({
   }, [notifyContentGrew, scrollRef]);
 
   const cancelFramePipeline = useCallback(() => {
+    // A trailing input listener may run after onViewportScroll re-armed the
+    // prepend reconciliation above. Preserve that one queued pass while the
+    // non-cancelable anchor is live; every other owner remains cancelable.
+    if (
+      compensationAnchorRef.current != null
+      && !compensationCancelableRef.current
+      && interactionNow() < compensationDeadlineRef.current
+    ) {
+      return;
+    }
     pipelineRef.current.cancel();
   }, []);
 

@@ -4,15 +4,19 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TurnDocumentReferenceCard } from "#product/components/workspace/chat/transcript/TurnDocumentReferenceCard";
 
-const { openPrimary } = vi.hoisted(() => ({ openPrimary: vi.fn() }));
+const fileActionMocks = vi.hoisted(() => ({
+  canOpenPrimary: true,
+  openPrimary: vi.fn(),
+}));
 
 vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
-  useFileReferenceActions: () => ({ openPrimary }),
+  useFileReferenceActions: () => fileActionMocks,
 }));
 
 afterEach(() => {
   cleanup();
-  openPrimary.mockReset();
+  fileActionMocks.canOpenPrimary = true;
+  fileActionMocks.openPrimary.mockReset();
 });
 
 describe("TurnDocumentReferenceCard", () => {
@@ -38,6 +42,27 @@ describe("TurnDocumentReferenceCard", () => {
     expect(screen.getByText("Open preview")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Open preview for decision.md" }));
-    expect(openPrimary).toHaveBeenCalledOnce();
+    expect(fileActionMocks.openPrimary).toHaveBeenCalledOnce();
+  });
+
+  it("disables the unavailable primary action and guards its handler", () => {
+    fileActionMocks.canOpenPrimary = false;
+    render(
+      <TurnDocumentReferenceCard
+        resource={{
+          rawPath: "/repo/specs/missing.md",
+          path: "/repo/specs/missing.md",
+          displayName: "missing.md",
+          typeLabel: "Document · MD",
+        }}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: "Open preview for missing.md",
+    });
+    expect((trigger as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(trigger);
+    expect(fileActionMocks.openPrimary).not.toHaveBeenCalled();
   });
 });

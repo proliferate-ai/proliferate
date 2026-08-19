@@ -40,7 +40,7 @@ export function MobileTelemetryProvider({ children }: { children: ReactNode }) {
     }
 
     setMobileSentryUser(user.id);
-    identifyMobilePostHogUser(user);
+    identifyMobilePostHogUser(user.id);
     lastIdentityRef.current = user.id;
   }, [authState, user]);
 
