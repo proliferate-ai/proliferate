@@ -87,12 +87,14 @@ export function buildGitPanelDiffFetchScopeKey(args: {
   activeWorkspaceId: string | null;
   baseRef: string | null;
   mode: GitPanelMode;
+  cacheGeneration: string;
   reviewEntries: readonly GitReviewFileEntry[];
 }): string {
   return [
     args.activeWorkspaceId ?? "",
     args.baseRef ?? "",
     args.mode,
+    args.cacheGeneration,
     args.reviewEntries.map((entry) => entry.key).join("\n"),
   ].join("\u001f");
 }

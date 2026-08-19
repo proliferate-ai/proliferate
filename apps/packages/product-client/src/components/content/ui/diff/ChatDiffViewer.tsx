@@ -15,7 +15,7 @@ import {
 } from "#product/components/content/ui/diff/DiffContextExpander";
 import { ChatDiffLineWrapContextMenu } from "#product/components/content/ui/diff/ChatDiffLineWrapContextMenu";
 import { HunkActionPill } from "#product/components/content/ui/diff/HunkActionPill";
-import type { UnifiedDiffHunkActions } from "#product/components/content/ui/diff/UnifiedDiffViewer";
+import type { UnifiedDiffHunkActions } from "#product/lib/domain/files/hunk-patch";
 import { useResolvedMode } from "#product/hooks/theme/derived/use-resolved-mode";
 import { Button } from "#product/primitives/Button";
 import {

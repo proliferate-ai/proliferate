@@ -7,7 +7,7 @@ import { formatGitPanelUndoError } from "./GitPanelReviewChrome";
 import { useDiffReviewMeasurement } from "#product/hooks/workspaces/ui/files/use-diff-review-measurement";
 import { useWorkspaceFileActions } from "#product/hooks/workspaces/facade/files/use-workspace-file-actions";
 import { useWorkspaceFileContext } from "#product/hooks/workspaces/derived/files/use-workspace-file-context";
-import { useGitPanelState } from "#product/hooks/workspaces/derived/use-git-panel-state";
+import { useGitPanelState } from "#product/hooks/workspaces/cache/use-git-panel-state";
 import { type GitPanelMode } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 import {
   resolveDiffDisplayPolicy,
@@ -81,7 +81,10 @@ function GitPanelContent({
   const [wrapLongLines, setWrapLongLines] = useState(false);
   // Files render expanded by default; this set only holds explicit collapses.
   const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(new Set());
-  const [settledDiffFetchKeys, setSettledDiffFetchKeys] = useState<Set<string>>(new Set());
+  const [settledDiffFetchState, setSettledDiffFetchState] = useState<{
+    scopeKey: string | null;
+    settled: ReadonlySet<string>;
+  }>(() => ({ scopeKey: null, settled: new Set() }));
   const [undoneTurnIds, setUndoneTurnIds] = useState<ReadonlySet<string>>(() => new Set());
   const fileContext = useWorkspaceFileContext();
   const modeRequest = useGitPanelUiStore((state) =>
@@ -94,6 +97,8 @@ function GitPanelContent({
     activeWorkspaceId,
     baseRef,
     branchRefs = [],
+    cacheGeneration,
+    metadataPending,
     sections,
     visibleChangedCount,
     isRuntimeReady,
@@ -150,13 +155,14 @@ function GitPanelContent({
       activeWorkspaceId,
       baseRef,
       mode: changesFilter,
+      cacheGeneration,
       reviewEntries,
     }),
-    [activeWorkspaceId, baseRef, changesFilter, reviewEntries],
+    [activeWorkspaceId, baseRef, cacheGeneration, changesFilter, reviewEntries],
   );
-  useEffect(() => {
-    setSettledDiffFetchKeys(new Set());
-  }, [diffFetchScopeKey]);
+  const settledDiffFetchKeys = settledDiffFetchState.scopeKey === diffFetchScopeKey
+    ? settledDiffFetchState.settled
+    : new Set<string>();
   const permittedDiffFetchKeys = useMemo<ReadonlySet<string>>(() => {
     return resolvePermittedGitPanelDiffFetchKeys({
       reviewEntries,
@@ -206,15 +212,20 @@ function GitPanelContent({
   }, []);
 
   const markDiffFetchSettled = useCallback((key: string) => {
-    setSettledDiffFetchKeys((current) => {
-      if (current.has(key)) {
-        return current;
+    setSettledDiffFetchState((current) => {
+      const settled = current.scopeKey === diffFetchScopeKey
+        ? current.settled
+        : new Set<string>();
+      if (settled.has(key)) {
+        return current.scopeKey === diffFetchScopeKey
+          ? current
+          : { scopeKey: diffFetchScopeKey, settled };
       }
-      const next = new Set(current);
+      const next = new Set(settled);
       next.add(key);
-      return next;
+      return { scopeKey: diffFetchScopeKey, settled: next };
     });
-  }, []);
+  }, [diffFetchScopeKey]);
 
   const focusReviewFile = useCallback((entry: GitReviewFileEntry) => {
     setCollapsedFiles((current) => {
@@ -308,6 +319,8 @@ function GitPanelContent({
         <GitPanelReviewBody
           changesFilter={changesFilter}
           baseRef={baseRef}
+          cacheGeneration={cacheGeneration}
+          metadataPending={metadataPending}
           isLoading={isLoading}
           errorMessage={errorMessage}
           runtimeBlockedReason={runtimeBlockedReason}

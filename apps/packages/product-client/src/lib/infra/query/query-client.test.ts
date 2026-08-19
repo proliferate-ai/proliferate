@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createAppQueryClient,
   hashAppQueryKey,
+  hashAppQueryKeyForTelemetry,
   shouldCaptureAppMutationError,
   shouldCaptureAppQueryError,
 } from "#product/lib/infra/query/query-client";
@@ -29,6 +30,37 @@ describe("hashAppQueryKey", () => {
     const event = new Event("click");
 
     expect(hashAppQueryKey(["event", event])).toBe('["event","[Event]"]');
+  });
+
+  it.each([
+    ["file", [
+      "anyharness",
+      "secret-cache-scope",
+      "workspace",
+      "secret-workspace-id",
+      "git-diff",
+      "base_worktree",
+      "origin/secret-branch",
+      "src/old-secret.ts",
+      "src/current-secret.ts",
+      "changes-cache-v1:secret-generation",
+    ]],
+    ["branch-files", [
+      "anyharness",
+      "secret-cache-scope",
+      "workspace",
+      "secret-workspace-id",
+      "git-diff",
+      "branch-files",
+      "origin/secret-branch",
+      "changes-metadata-list-v1:secret-generation",
+    ]],
+  ])("redacts %s Git diff identity from telemetry hashes", (kind, queryKey) => {
+    const telemetryHash = hashAppQueryKeyForTelemetry(queryKey);
+    expect(telemetryHash).toBe(
+      `["anyharness","workspace","git-diff","${kind}","[redacted]"]`,
+    );
+    expect(telemetryHash).not.toContain("secret");
   });
 });
 
@@ -145,6 +177,37 @@ describe("createAppQueryClient query telemetry", () => {
         query_hash: hashAppQueryKey(queryKey),
       },
     });
+  });
+
+  it("captures Git diff failures without query paths or generations", async () => {
+    const captureException = vi.fn();
+    const client = createAppQueryClient({ captureException });
+    const queryKey = [
+      "anyharness",
+      "secret-cache-scope",
+      "workspace",
+      "secret-workspace-id",
+      "git-diff",
+      "base_worktree",
+      "origin/secret-branch",
+      "src/old-secret.ts",
+      "src/current-secret.ts",
+      "changes-cache-v1:secret-generation",
+    ];
+    const error = new TypeError("Failed to fetch");
+
+    await runFailingQuery(client, queryKey, error);
+
+    expect(captureException).toHaveBeenCalledExactlyOnceWith(error, {
+      tags: {
+        action: "query_error",
+        domain: "react_query",
+      },
+      extras: {
+        query_hash: '["anyharness","workspace","git-diff","file","[redacted]"]',
+      },
+    });
+    expect(JSON.stringify(captureException.mock.calls)).not.toContain("secret");
   });
 
   it("captures the Cowork lifecycle code when its status is 5xx", async () => {

@@ -14,6 +14,8 @@ const staleDiffQuery = vi.hoisted(() => ({
   error: new Error("stale query error"),
   isError: true,
   isLoading: false,
+  isFetching: false,
+  isStale: false,
 }));
 
 vi.mock("@anyharness/sdk-react", async (importOriginal) => ({
@@ -25,14 +27,19 @@ describe("useTurnCurrentFilePatch", () => {
   it("clears stale live-query evidence after the current diff disappears", () => {
     const file = reviewFile();
     const { result, rerender } = renderHook(
-      ({ currentFile }: { currentFile: GitPanelReviewFile }) =>
+      ({ currentFile, metadataPending }: {
+        currentFile: GitPanelReviewFile;
+        metadataPending: boolean;
+      }) =>
         useTurnCurrentFilePatch({
           file: currentFile,
           workspaceId: "workspace-1",
           baseRef: "origin/main",
+          cacheGeneration: "generation-1",
+          metadataPending,
           enabled: true,
         }),
-      { initialProps: { currentFile: file } },
+      { initialProps: { currentFile: file, metadataPending: false } },
     );
 
     expect(result.current).toMatchObject({
@@ -43,7 +50,18 @@ describe("useTurnCurrentFilePatch", () => {
     });
     expect(result.current.patchPolicy).not.toBeNull();
 
-    rerender({ currentFile: { ...file, currentDiff: null } });
+    rerender({ currentFile: file, metadataPending: true });
+
+    expect(result.current).toMatchObject({
+      additions: 5,
+      deletions: 2,
+      patch: null,
+      diffData: null,
+      diffErrorMessage: null,
+    });
+    expect(result.current.patchPolicy).toMatchObject({ patchLineCount: 0 });
+
+    rerender({ currentFile: { ...file, currentDiff: null }, metadataPending: false });
 
     expect(result.current).toMatchObject({
       currentDiff: null,

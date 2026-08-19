@@ -58,6 +58,7 @@ vi.mock("#product/hooks/chat/cache/use-turn-current-file-diffs", () => ({
       currentDiff: input.file.currentDiff,
       metadataPolicy: null,
       diffQuery: gitDiffQuery.state,
+      diffData: input.file.currentDiff ? gitDiffQuery.state.data : null,
       diffErrorMessage: "stale query error",
       additions: 99,
       deletions: 88,
@@ -177,9 +178,10 @@ describe("recorded Last turn diff continuity", () => {
         turnId="turn-1"
         workspaceId="workspace-1"
         baseRef="origin/main"
+        cacheGeneration="generation-1"
         isRuntimeReady
         runtimeBlockedReason={null}
-        metadataLoading={false}
+        metadataPending={false}
         metadataErrorMessage={null}
         fallbackAdditions={5_001}
         fallbackDeletions={0}
@@ -246,10 +248,12 @@ function currentDiffState(files: GitPanelReviewFile[]) {
   return {
     activeWorkspaceId: "workspace-1",
     baseRef: "origin/main",
+    cacheGeneration: "generation-1",
     files,
     isRuntimeReady: true,
     runtimeBlockedReason: null,
     isLoading: false,
+    metadataPending: false,
     errorMessage: null,
   };
 }
@@ -307,6 +311,8 @@ function reviewRow(
       sectionScope="last_turn"
       file={file}
       baseRef="origin/main"
+      cacheGeneration="generation-1"
+      metadataPending={false}
       layout="unified"
       wrapLongLines={false}
       collapsed={false}

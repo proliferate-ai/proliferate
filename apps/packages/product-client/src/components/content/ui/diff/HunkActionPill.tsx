@@ -1,8 +1,7 @@
 import { Minus, Plus, Undo } from "#product/primitives/icons/core";
 import { Button } from "#product/primitives/Button";
 import { Tooltip } from "#product/primitives/Tooltip";
-
-export type HunkActionMode = "unstaged" | "staged";
+import type { HunkActionMode } from "#product/lib/domain/files/hunk-patch";
 
 interface HunkActionPillProps {
   mode: HunkActionMode;

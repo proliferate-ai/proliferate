@@ -2,11 +2,12 @@ import type { CSSProperties } from "react";
 import { DebugProfiler } from "#product/components/diagnostics/DebugProfiler";
 import { ChatDiffViewer } from "#product/components/content/ui/diff/ChatDiffViewer";
 import { SplitDiffViewer } from "#product/components/content/ui/diff/SplitDiffViewer";
-import { UnifiedDiffViewer, type UnifiedDiffHunkActions } from "#product/components/content/ui/diff/UnifiedDiffViewer";
+import { UnifiedDiffViewer } from "#product/components/content/ui/diff/UnifiedDiffViewer";
 import { useDiffHighlight } from "#product/hooks/ui/highlighting/use-diff-highlight";
 import type { MeasurementOperationId } from "#product/lib/domain/telemetry/debug-measurement-catalog";
 import { useChatDiffPreferencesStore } from "#product/stores/chat/chat-diff-preferences-store";
 import type { ContentSearchSurface } from "#product/stores/search/content-search-store";
+import type { UnifiedDiffHunkActions } from "#product/lib/domain/files/hunk-patch";
 
 interface DiffViewerProps {
   patch: string;

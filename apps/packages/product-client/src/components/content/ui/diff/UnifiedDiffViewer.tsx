@@ -7,7 +7,7 @@ import {
   DiffGapInfoRow,
   type ExpandDirection,
 } from "#product/components/content/ui/diff/DiffContextExpander";
-import { HunkActionPill, type HunkActionMode } from "#product/components/content/ui/diff/HunkActionPill";
+import { HunkActionPill } from "#product/components/content/ui/diff/HunkActionPill";
 import type {
   CollapsedContext,
   DiffHunk,
@@ -21,6 +21,10 @@ import {
   useGapExpansion,
 } from "#product/hooks/ui/diff/use-gap-expansion";
 import type { HighlightedToken } from "#product/lib/infra/editor/highlighting";
+import type {
+  HunkActionMode,
+  UnifiedDiffHunkActions,
+} from "#product/lib/domain/files/hunk-patch";
 
 function getLineType(type: DiffLine["type"]): string {
   if (type === "added") return "change-addition";
@@ -220,13 +224,6 @@ function ExpandedGapLines({
       ))}
     </>
   );
-}
-
-export interface UnifiedDiffHunkActions {
-  mode: HunkActionMode;
-  disabled: boolean;
-  onRevert: (hunkIndex: number) => void;
-  onStageOrUnstage: (hunkIndex: number) => void;
 }
 
 export function UnifiedDiffViewer({

@@ -1,6 +1,9 @@
+// @vitest-environment jsdom
+
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup as renderReactToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render as renderDom, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProductHost } from "@proliferate/product-client/host/product-host";
 import { ProductHostProvider } from "@proliferate/product-client/host/ProductHostProvider";
 import { GitPanel } from "./GitPanel";
@@ -20,11 +23,14 @@ function renderToStaticMarkup(ui: ReactElement) {
 const mockGitPanelState = vi.hoisted(() => vi.fn());
 const gitDiffQuery = vi.hoisted(() => ({
   calls: [] as unknown[],
+  resolve: null as ((options: unknown) => unknown) | null,
   state: {
     data: null as unknown,
     error: null as unknown,
     isError: false,
     isLoading: false,
+    isFetching: false,
+    isStale: false,
   },
 }));
 
@@ -34,7 +40,7 @@ vi.mock("@anyharness/sdk-react", () => ({
   }),
   useGitDiffQuery: (options: unknown) => {
     gitDiffQuery.calls.push(options);
-    return gitDiffQuery.state;
+    return gitDiffQuery.resolve?.(options) ?? gitDiffQuery.state;
   },
   useStageGitPathsMutation: () => ({
     mutateAsync: vi.fn(),
@@ -76,7 +82,7 @@ vi.mock("#product/hooks/workspaces/derived/files/use-workspace-file-context", ()
   }),
 }));
 
-vi.mock("#product/hooks/workspaces/derived/use-git-panel-state", () => ({
+vi.mock("#product/hooks/workspaces/cache/use-git-panel-state", () => ({
   useGitPanelState: () => mockGitPanelState(),
 }));
 
@@ -96,6 +102,8 @@ function createGitPanelState(overrides = {}) {
     activeWorkspaceId: "workspace-1",
     baseRef: "main",
     branchRefs: [],
+    cacheGeneration: "generation-1",
+    metadataPending: false,
     sections: [{
       scope: "unstaged",
       label: "Unstaged",
@@ -117,9 +125,12 @@ function createGitPanelState(overrides = {}) {
 }
 
 describe("GitPanel", () => {
+  afterEach(cleanup);
+
   beforeEach(() => {
     mockGitPanelState.mockReturnValue(createGitPanelState());
     gitDiffQuery.calls = [];
+    gitDiffQuery.resolve = null;
     gitDiffQuery.state = {
       data: {
         patch: [
@@ -135,6 +146,8 @@ describe("GitPanel", () => {
       error: null,
       isError: false,
       isLoading: false,
+      isFetching: false,
+      isStale: false,
     };
   });
 
@@ -165,6 +178,114 @@ describe("GitPanel", () => {
       path: "apps/desktop/src/components/workspace/git/GitPanel.tsx",
       enabled: true,
     });
+  });
+
+  it("admits only five file diffs on the first generation render", () => {
+    const files = Array.from({ length: 6 }, (_, index) => {
+      const path = `src/file-${index}.ts`;
+      const currentDiff = {
+        key: `:${path}:modified`,
+        path,
+        oldPath: null,
+        displayPath: path,
+        status: "modified",
+        includedState: "excluded",
+        additions: 1,
+        deletions: 0,
+        binary: false,
+      };
+      return { ...currentDiff, currentDiff };
+    });
+    mockGitPanelState.mockReturnValue(createGitPanelState({
+      cacheGeneration: "generation-2",
+      sections: [{ scope: "unstaged", label: "Unstaged", files }],
+      visibleChangedCount: files.length,
+    }));
+    gitDiffQuery.state = {
+      data: null,
+      error: null,
+      isError: false,
+      isLoading: true,
+      isFetching: true,
+      isStale: true,
+    };
+
+    renderToStaticMarkup(createElement(GitPanel));
+
+    expect(gitDiffQuery.calls).toHaveLength(6);
+    expect(gitDiffQuery.calls.filter((call) => (
+      call as { enabled?: boolean }
+    ).enabled)).toHaveLength(5);
+    expect(gitDiffQuery.calls.every((call) => (
+      call as { cacheGeneration?: string }
+    ).cacheGeneration === "generation-2")).toBe(true);
+  });
+
+  it("drops prior settled rows before the first render of a new generation", async () => {
+    const files = Array.from({ length: 6 }, (_, index) => {
+      const path = `src/generation-file-${index}.ts`;
+      const currentDiff = {
+        key: `:${path}:modified`,
+        path,
+        oldPath: null,
+        displayPath: path,
+        status: "modified",
+        includedState: "excluded",
+        additions: 1,
+        deletions: 0,
+        binary: false,
+      };
+      return { ...currentDiff, currentDiff };
+    });
+    let panelState = createGitPanelState({
+      cacheGeneration: "generation-1",
+      sections: [{ scope: "unstaged", label: "Unstaged", files }],
+      visibleChangedCount: files.length,
+    });
+    mockGitPanelState.mockImplementation(() => panelState);
+    gitDiffQuery.resolve = (options) => (
+      (options as { enabled?: boolean }).enabled
+        ? gitDiffQuery.state
+        : {
+            ...gitDiffQuery.state,
+            data: null,
+            isLoading: false,
+          }
+    );
+    const view = renderDom(
+      <ProductHostProvider host={webTestHost}><GitPanel /></ProductHostProvider>,
+    );
+    await waitFor(() => expect(gitDiffQuery.calls.some((call) => (
+      (call as { path?: string; enabled?: boolean }).path === files[5]?.path
+      && (call as { enabled?: boolean }).enabled
+    ))).toBe(true));
+
+    panelState = createGitPanelState({
+      cacheGeneration: "generation-2",
+      sections: [{ scope: "unstaged", label: "Unstaged", files }],
+      visibleChangedCount: files.length,
+    });
+    gitDiffQuery.resolve = () => ({
+      data: null,
+      error: null,
+      isError: false,
+      isLoading: true,
+      isFetching: true,
+      isStale: true,
+    });
+    gitDiffQuery.calls = [];
+    view.rerender(
+      <ProductHostProvider host={webTestHost}><GitPanel /></ProductHostProvider>,
+    );
+
+    const firstGenerationRender = gitDiffQuery.calls.slice(0, files.length);
+    expect(firstGenerationRender).toHaveLength(files.length);
+    expect(firstGenerationRender.filter((call) => (
+      (call as { enabled?: boolean }).enabled
+    ))).toHaveLength(5);
+    expect(firstGenerationRender.every((call) => (
+      (call as { cacheGeneration?: string }).cacheGeneration === "generation-2"
+    ))).toBe(true);
   });
 
   it("shows the branch target selector only in branch review mode", () => {

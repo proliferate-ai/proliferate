@@ -9,6 +9,15 @@
 // never contains the literal `@/` substring the frontend-boundary scanner flags.
 const HUNK_RANGE_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @[@]/;
 
+export type HunkActionMode = "unstaged" | "staged";
+
+export interface UnifiedDiffHunkActions {
+  mode: HunkActionMode;
+  disabled: boolean;
+  onRevert: (hunkIndex: number) => void;
+  onStageOrUnstage: (hunkIndex: number) => void;
+}
+
 export interface HunkPatchOptions {
   /** The full patch text as returned by the diff endpoint */
   patch: string;
