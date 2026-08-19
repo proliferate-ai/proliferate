@@ -21,11 +21,12 @@ import {
  * NOTE for reviewers: this suite exercises the docked tree end-to-end
  * (`[data-docked-file-tree]`, the `Files` toggle, the resize separator),
  * which is Workstream B's `FileEditorView`/`DockedFileTree` integration. It
- * is written against the frozen contract ahead of that integration landing,
+ * was written against the frozen contract ahead of that integration landing,
  * per the spec's implementation-order note ("After B integrates, C completes
  * the single production-chain fixture, screenshots, docs, and checker
- * cleanup"); it is not expected to pass until B's `FileEditorView` adopts the
- * `FileViewerFrame`/`ensureRightPanelWidth` seam this workstream defines.
+ * cleanup"); B's `FileEditorView` now adopts the
+ * `FileViewerFrame`/`ensureRightPanelWidth` seam this workstream defines, and
+ * this suite passes.
  */
 
 const FIXTURE_PATH = "/playground/files?case=workspace-file";

@@ -135,13 +135,16 @@ function FileTreeRetryRow({
   const handleRetry = async () => {
     const token = controller.captureRequest();
     const ownedRoving = controller.isRoving(rowKey);
-    const hadFocus = typeof document !== "undefined"
-      && document.activeElement instanceof HTMLElement
-      && document.activeElement.getAttribute("data-file-tree-row-key") === rowKey;
     const result = await refetch();
     if (!controller.isCurrent(token)) {
       return;
     }
+    // Re-evaluate focus at settlement, not at dispatch time: the user may
+    // have moved focus to the filter or another row while the refetch was
+    // in flight, and DOM focus must never be stolen back from them.
+    const hasFocus = typeof document !== "undefined"
+      && document.activeElement instanceof HTMLElement
+      && document.activeElement.getAttribute("data-file-tree-row-key") === rowKey;
     const children = result.data?.entries ?? [];
     // A repeated transient failure leaves the same retry row and roving
     // ownership in place; only a resolved listing moves the roving key, and
@@ -150,7 +153,7 @@ function FileTreeRetryRow({
       return;
     }
     const requested = children.find((entry) => entry.path === controller.selectedPath);
-    controller.requestRowFocus((requested ?? children[0]!).path, { moveDom: hadFocus });
+    controller.requestRowFocus((requested ?? children[0]!).path, { moveDom: hasFocus });
   };
 
   return (

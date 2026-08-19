@@ -213,19 +213,32 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     focusOriginRef.current = document.activeElement as HTMLElement | null;
     setRequestedVisibility(visibilityKeys, true);
     requestDockGeometry();
-    setPendingFocus({ kind: "filter" });
-  }, [closeDock, filesAvailable, requestDockGeometry, requestedOpen, setRequestedVisibility, visibilityKeys]);
+    // Only DockedFileTree ever consumes a pending-focus token, and geometry
+    // that cannot reach the visibility threshold never mounts it: setting a
+    // token here would sit unresolved and get consumed by a much-later
+    // responsive restore, stealing focus back from whatever the user is
+    // doing by then. Keep focus on the invoking control instead.
+    if (geometryPermits) {
+      setPendingFocus({ kind: "filter" });
+    }
+  }, [closeDock, filesAvailable, geometryPermits, requestDockGeometry, requestedOpen, setRequestedVisibility, visibilityKeys]);
 
   const handleRevealFilesPath = useCallback((path: string) => {
     if (!filesAvailable) {
       return;
     }
     focusOriginRef.current = document.activeElement as HTMLElement | null;
+    // requested=true and the width request happen unconditionally: a
+    // breadcrumb reveal while geometry is hidden still asks the shell to
+    // widen so the dock can become visible. Only the focus token is gated on
+    // current geometry, per the same stale-token rule as the filter toggle.
     setRequestedVisibility(visibilityKeys, true);
     requestDockGeometry();
-    revealTokenRef.current += 1;
-    setPendingFocus({ kind: "reveal", path, token: revealTokenRef.current });
-  }, [filesAvailable, requestDockGeometry, setRequestedVisibility, visibilityKeys]);
+    if (geometryPermits) {
+      revealTokenRef.current += 1;
+      setPendingFocus({ kind: "reveal", path, token: revealTokenRef.current });
+    }
+  }, [filesAvailable, geometryPermits, requestDockGeometry, setRequestedVisibility, visibilityKeys]);
 
   // A responsive shrink that auto-collapses the dock must not leave focus on a
   // detached row: move it to the Files toggle, otherwise the frame root.
@@ -233,6 +246,12 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
   useEffect(() => {
     const wasVisible = wasVisibleRef.current;
     wasVisibleRef.current = dockVisible;
+    if (wasVisible && !dockVisible) {
+      // The dock is no longer effectively visible (or never became visible
+      // for this request): drop any pending-focus token so a later
+      // responsive restore never consumes a stale one and steals focus.
+      setPendingFocus(null);
+    }
     if (wasVisible && !dockVisible && requestedOpen) {
       const active = typeof document === "undefined" ? null : document.activeElement;
       if (active !== null && active !== document.body) {

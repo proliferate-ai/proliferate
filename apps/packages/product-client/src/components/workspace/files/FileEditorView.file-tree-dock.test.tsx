@@ -218,13 +218,17 @@ beforeEach(() => {
     error: null,
     isLoading: false,
   });
-  workspaceFilesQuery.mockReturnValue({
-    data: { entries: ROOT_ENTRIES },
+  // Path-aware: only the root query returns entries. A flat mock that
+  // returns ROOT_ENTRIES (which contains a "src" directory) for every path,
+  // including nested "src", makes "src" self-referential and any reveal/
+  // auto-expand walk into it non-terminating.
+  workspaceFilesQuery.mockImplementation((options: { path?: string }) => ({
+    data: { entries: !options?.path ? ROOT_ENTRIES : [] },
     isLoading: false,
     isFetching: false,
     error: null,
-    refetch: vi.fn(async () => ({ data: { entries: ROOT_ENTRIES } })),
-  });
+    refetch: vi.fn(async () => ({ data: { entries: !options?.path ? ROOT_ENTRIES : [] } })),
+  }));
   searchWorkspaceFilesQuery.mockReturnValue({
     data: undefined,
     isLoading: false,
@@ -448,6 +452,30 @@ describe("FileEditorView dock controller", () => {
     resizeTo(780, 781);
     await waitFor(() => expect(dock(container)).toBeTruthy());
     expect(document.activeElement).toBe(toggle);
+  });
+
+  it("does not steal focus into the tree when a hidden-dock breadcrumb reveal's dock later mounts (2091-R1-B02)", async () => {
+    measuredBodyWidth = 459;
+    measuredRailWidth = 460;
+    const { container } = renderViewer("src/index.ts");
+    expect(dock(container)).toBeNull();
+
+    const crumb = screen.getByRole("button", { name: "src" });
+    crumb.focus();
+    fireEvent.click(crumb);
+    // The reveal still retains requested visibility and asks the shell to
+    // widen, even though geometry cannot reach the dock threshold yet.
+    expect(ensureRightPanelWidth).toHaveBeenCalled();
+    expect(
+      useFileTreeStore.getState().requestedVisibilityByWorkspace["logical-1"],
+    ).toBe(true);
+    expect(document.activeElement).toBe(crumb);
+
+    // A much later responsive widen mounts the dock; the reveal token from
+    // the hidden-dock click must not have survived to steal focus into it.
+    resizeTo(780, 781);
+    await waitFor(() => expect(dock(container)).toBeTruthy());
+    expect(document.activeElement).toBe(crumb);
   });
 
   it("wraps only the viewer content in the file-viewer context menu", () => {
