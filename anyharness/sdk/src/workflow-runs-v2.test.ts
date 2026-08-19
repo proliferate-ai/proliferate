@@ -6,6 +6,8 @@ import { WorkflowRunsV2Client } from "./client/workflow-runs-v2.js";
 import type { WorkflowRunsListResponseV2 } from "./client/workflow-runs-v2.js";
 import type {
   WorkflowRunFlipTypeRequestV2,
+  WorkflowRunNodeSessionV2,
+  WorkflowRunNodeV2,
   WorkflowRunProjectionV2,
   WorkflowRunPutRequestV2,
   WorkflowRunV2,
@@ -34,6 +36,28 @@ function projection(overrides: Partial<WorkflowRunV2> = {}): WorkflowRunProjecti
     run: run(overrides),
     nodes: [],
     docs: [],
+  };
+}
+
+function node(overrides: Partial<WorkflowRunNodeV2> & { id: string }): WorkflowRunNodeV2 {
+  return {
+    runId: "run-1",
+    definitionNodeId: overrides.id,
+    kind: "defined",
+    nodeType: "agent",
+    replacesNodeRowId: null,
+    anchorNodeRowId: null,
+    chainIndex: 0,
+    title: overrides.id,
+    prompt: "",
+    status: "running",
+    sessionId: null,
+    promptId: null,
+    failureCode: null,
+    createdAt: "2026-08-14T00:00:00.000Z",
+    startedAt: null,
+    completedAt: null,
+    ...overrides,
   };
 }
 
@@ -274,6 +298,51 @@ describe("WorkflowRunsV2Client run-level commands", () => {
       path: "/v1/workflow-runs/run-1/adhoc-nodes",
       body: { anchorNodeRowId: "node-1", prompt: "investigate the flake" },
     }]);
+  });
+});
+
+describe("WorkflowRunNodeV2 sessions rollup contract (ruling F4)", () => {
+  // A runtime that emits the rung-7 rollup: one entry per leg, ordered by
+  // legIndex, `failed` carrying its code in the sibling field.
+  const parallelNode: WorkflowRunNodeV2 = node({
+    id: "review",
+    sessions: [
+      { legIndex: 0, sessionId: "sess-a", status: "done", failureCode: null, completedAt: "2026-08-14T00:01:00.000Z" },
+      { legIndex: 1, sessionId: "sess-b", status: "failed", failureCode: "turn_error", completedAt: "2026-08-14T00:02:00.000Z" },
+      { legIndex: 2, sessionId: "sess-c", status: "running", failureCode: null, completedAt: null },
+    ],
+  });
+  // A runtime that predates the rollup: no `sessions` key at all, still a valid
+  // WorkflowRunNodeV2 (the field is optional). This is the back-compat fixture.
+  const legacyNode: WorkflowRunNodeV2 = node({ id: "solo", sessionId: "sess-only" });
+
+  it("passes a node carrying the per-leg rollup through getRun unchanged", async () => {
+    const response: WorkflowRunProjectionV2 = { run: run(), nodes: [parallelNode], docs: [] };
+    const transport = {
+      get: async () => response,
+    } as unknown as Transport;
+    const client = new WorkflowRunsV2Client(transport);
+
+    const result = await client.getRun("run-1");
+
+    expect(result.nodes[0]!.sessions).toEqual(parallelNode.sessions);
+    const sessions = result.nodes[0]!.sessions as WorkflowRunNodeSessionV2[];
+    expect(sessions.map((leg) => leg.legIndex)).toEqual([0, 1, 2]);
+    expect(sessions[1]).toMatchObject({ status: "failed", failureCode: "turn_error" });
+  });
+
+  it("accepts a legacy node with no sessions key and leaves it undefined", async () => {
+    const response: WorkflowRunProjectionV2 = { run: run(), nodes: [legacyNode], docs: [] };
+    const transport = {
+      get: async () => response,
+    } as unknown as Transport;
+    const client = new WorkflowRunsV2Client(transport);
+
+    const result = await client.getRun("run-1");
+
+    expect(result.nodes[0]!.sessions).toBeUndefined();
+    // The scalar representative session is the back-compat fall-back.
+    expect(result.nodes[0]!.sessionId).toBe("sess-only");
   });
 });
 

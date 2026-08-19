@@ -1491,6 +1491,9 @@ fn projection_serializes_camel_case_from_rows() {
     // declares `string | null`).
     assert!(json["run"]["completedAt"].is_null());
     assert!(json["nodes"][0]["sessionId"].is_null());
+    // Rung 7 (ruling F4): the additive per-leg rollup is always emitted as an
+    // array — empty here, since no leg has launched a session yet.
+    assert!(json["nodes"][0]["sessions"].is_array());
     assert!(json["nodes"][0]["promptId"].is_null());
     assert_eq!(json["nodes"][0]["runId"], "run-1");
     assert_eq!(json["nodes"][0]["definitionNodeId"], "plan");

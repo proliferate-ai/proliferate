@@ -6,6 +6,7 @@ import type { WorkflowRunNodeV2 } from "@anyharness/sdk";
 import type {
   WorkflowGraphNodeVM,
   WorkflowNodeControlSet,
+  WorkflowNodeLegRollup,
   WorkflowNodeTone,
 } from "#product/domain/workflows/run-view-model";
 import {
@@ -65,12 +66,14 @@ function buildVm(options: {
   controls?: Partial<WorkflowNodeControlSet>;
   isCurrent?: boolean;
   tone?: WorkflowNodeTone;
+  legRollup?: WorkflowNodeLegRollup | null;
 } = {}): WorkflowGraphNodeVM {
   return {
     node: baseNode(options.node),
     isCurrent: options.isCurrent ?? false,
     tone: options.tone ?? "info",
     controls: baseControls(options.controls),
+    legRollup: options.legRollup ?? null,
   };
 }
 
@@ -270,5 +273,32 @@ describe("WorkflowGraphNodeCard", () => {
     cleanup();
     renderCard({ vm: buildVm({ isCurrent: false }) });
     expect(screen.getByText("Research the topic").className).not.toContain("font-semibold");
+  });
+
+  it("renders the per-leg fan-in rollup: N/M done plus one labelled dot per leg", () => {
+    renderCard({
+      vm: buildVm({
+        legRollup: {
+          total: 3,
+          finished: 2,
+          legs: [
+            { legIndex: 0, sessionId: "a", status: "done", failureCode: null, tone: "success" },
+            { legIndex: 1, sessionId: "b", status: "failed", failureCode: "turn_error", tone: "danger" },
+            { legIndex: 2, sessionId: "c", status: "running", failureCode: null, tone: "current" },
+          ],
+        },
+      }),
+    });
+
+    expect(screen.getByText("2/3 done")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Leg 1: done" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Leg 2: failed" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Leg 3: running" })).toBeTruthy();
+  });
+
+  it("draws no rollup for a node with no leg rollup (a one-leg node falls back to the scalar session)", () => {
+    renderCard({ vm: buildVm({ legRollup: null }) });
+    expect(screen.queryByText(/\d+\/\d+ done/)).toBeNull();
+    expect(screen.queryByRole("img", { name: /^Leg / })).toBeNull();
   });
 });

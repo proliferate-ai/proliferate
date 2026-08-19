@@ -32,6 +32,27 @@ export const WORKFLOW_NODE_CARD_COPY = {
     return base;
   },
   needsInputBadge: "Needs input",
+  /**
+   * "2/3 done" — a parallel node's fan-in progress (ruling F4's rollup).
+   * `finished` is legs that reached any terminal fan-in status, so this reads
+   * as raw progress, not a success count; the per-leg dots beside it carry the
+   * pass/fail detail. Only rendered for a genuinely parallel node (the
+   * view-model returns no rollup for a one-leg node), so "1/1 done" never shows.
+   */
+  legRollupLabel: (finished: number, total: number): string =>
+    `${finished}/${total} done`,
+  /**
+   * Accessible name for one leg's status dot, one-based to match the card's own
+   * one-based chain index. `forced_unload` reads as "unloaded" (a restart tore
+   * the leg down), the only status whose wire token is not already plain.
+   */
+  legStatusLabel: (
+    legIndex: number,
+    status: "running" | "done" | "cancelled" | "forced_unload" | "failed",
+  ): string => {
+    const word = status === "forced_unload" ? "unloaded" : status;
+    return `Leg ${legIndex + 1}: ${word}`;
+  },
   approveLabel: "Approve",
   failRedoLabel: "Fail & redo",
   flipToAgentLabel: "Make agent",

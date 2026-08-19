@@ -27,6 +27,8 @@ use utoipa::OpenApi;
         crate::domains::workflows::projection::RunProjection,
         crate::domains::workflows::projection::RunView,
         crate::domains::workflows::projection::NodeView,
+        crate::domains::workflows::projection::NodeSessionView,
+        crate::domains::workflows::projection::WorkflowLegStatusV2,
         crate::domains::workflows::projection::DocView,
         crate::domains::workflows::model::WorkflowRunStatus,
         crate::domains::workflows::model::WorkflowNodeStatus,

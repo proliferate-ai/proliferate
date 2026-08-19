@@ -58,6 +58,7 @@ function buildVm(
     isCurrent: false,
     tone: "muted",
     controls: noControls(controls),
+    legRollup: null,
   };
 }
 
