@@ -281,7 +281,7 @@ describe("ChatInputControlRow", () => {
 
     renderControlRow({ sessionConfigControls: controls });
 
-    fireEvent.click(screen.getByRole("button", { name: "Provider profile Fast" }));
+    fireEvent.click(screen.getByRole("button", { name: "Provider profile: Fast" }));
     fireEvent.click(screen.getByText("Deep"));
     expect(profileControl.onSelect).toHaveBeenCalledWith("deep");
   });
