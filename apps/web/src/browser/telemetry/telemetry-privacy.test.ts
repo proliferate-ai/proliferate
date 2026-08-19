@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
     capture: vi.fn(),
     identify: vi.fn(),
     reset: vi.fn(),
+    startSessionRecording: vi.fn(),
     get_distinct_id: vi.fn(() => "distinct-123"),
     get_session_id: vi.fn(() => "session-123"),
   },
@@ -86,7 +87,6 @@ describe("web telemetry privacy", () => {
     );
     vi.stubEnv("VITE_PROLIFERATE_SENTRY_TRACES_SAMPLE_RATE", "0.25");
     vi.stubEnv("VITE_PROLIFERATE_TELEMETRY_DISABLED", "false");
-    vi.stubEnv("VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED", "false");
   });
 
   afterEach(() => {
@@ -277,5 +277,82 @@ describe("web telemetry privacy", () => {
     expect(installWebTelemetry()).toEqual({});
     expect(mocks.sentryInit).not.toHaveBeenCalled();
     expect(mocks.posthog.init).not.toHaveBeenCalled();
+  });
+
+  it("keeps telemetry uninitialized when telemetry is disabled", async () => {
+    vi.stubEnv("VITE_PROLIFERATE_TELEMETRY_DISABLED", "true");
+    vi.resetModules();
+    const { installWebTelemetry } = await import("./install-web-telemetry");
+
+    expect(installWebTelemetry()).toEqual({});
+    expect(mocks.sentryInit).not.toHaveBeenCalled();
+    expect(mocks.posthog.init).not.toHaveBeenCalled();
+  });
+
+  it("still sends intentional product events with scrubbed properties", async () => {
+    vi.resetModules();
+    const { webProductTelemetry } = await import("./web-telemetry");
+
+    webProductTelemetry.track({
+      name: "workspace_opened",
+      properties: { surface: "web", email: EMAIL_SENTINEL },
+    } as Parameters<typeof webProductTelemetry.track>[0]);
+
+    expect(mocks.posthog.capture).toHaveBeenCalledOnce();
+    const [name, properties] = mocks.posthog.capture.mock.calls[0]!;
+    expect(name).toBe("workspace_opened");
+    expect(properties).toMatchObject({ surface: "web" });
+    expectNoPrivateSentinels(properties);
+  });
+
+  // CP-C1PW tombstone: `VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED` is
+  // retired. It survives only here, to prove every parser equivalence class of
+  // a legacy build value is inert. The source scan proves no runtime reader
+  // remains in app-owned code.
+  describe.each([
+    ["undefined", undefined],
+    ["empty", ""],
+    ["blank", "   "],
+    ["0", "0"],
+    ["false", "false"],
+    ["no", "no"],
+    ["off", "off"],
+    ["1", "1"],
+    ["true", "true"],
+    ["TRUE", "TRUE"],
+    ["padded yes", " yes "],
+    ["on", "on"],
+    ["-1", "-1"],
+    ["0.5", "0.5"],
+    ["2", "2"],
+    ["enabled", "enabled"],
+    ["malformed", "malformed"],
+  ])("retired recording variable = %s", (_label, value) => {
+    it("initializes PostHog fail-closed and never starts a recorder", async () => {
+      if (value !== undefined) {
+        vi.stubEnv("VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED", value);
+      }
+      vi.resetModules();
+      const { installWebTelemetry } = await import("./install-web-telemetry");
+      installWebTelemetry();
+
+      expect(mocks.posthog.init).toHaveBeenCalledOnce();
+      const options = mocks.posthog.init.mock.calls[0]![1] as Record<string, unknown>;
+      expect(options.disable_session_recording).toBe(true);
+      expect(options.autocapture).toBe(false);
+      expect(options.capture_pageview).toBe(false);
+      expect(options.capture_pageleave).toBe(false);
+      expect(Object.hasOwn(options, "session_recording")).toBe(false);
+      expect(Object.hasOwn(options, "loaded")).toBe(false);
+      expect(typeof options.before_send).toBe("function");
+      expect(mocks.posthog.startSessionRecording).not.toHaveBeenCalled();
+      expect(mocks.posthog.capture).not.toHaveBeenCalled();
+      expect(mocks.posthog.register).toHaveBeenCalledWith({
+        app: "proliferate-web",
+        surface: "web",
+        environment: "production",
+        release: "proliferate-web@1.2.3+abcdef123456",
+      });
+    });
   });
 });
