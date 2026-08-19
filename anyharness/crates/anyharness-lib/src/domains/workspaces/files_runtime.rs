@@ -108,9 +108,12 @@ impl WorkspaceFilesRuntime {
         limit: usize,
     ) -> Result<Vec<WorkspaceFileSearchMatch>, FileServiceError> {
         let workspace = self.resolve_workspace(workspace_id)?;
-        self.workspace_file_search_cache
-            .search(workspace_id, &PathBuf::from(&workspace.path), query, limit)
-            .map_err(|error| FileServiceError::Io(error.to_string()))
+        self.workspace_file_search_cache.search(
+            workspace_id,
+            &PathBuf::from(&workspace.path),
+            query,
+            limit,
+        )
     }
 
     pub fn write_file(
@@ -198,7 +201,7 @@ impl WorkspaceFilesRuntime {
     fn resolve_workspace(&self, workspace_id: &str) -> Result<WorkspaceRecord, FileServiceError> {
         self.workspace_runtime
             .get_workspace(workspace_id)
-            .map_err(|error| FileServiceError::Io(error.to_string()))?
+            .map_err(|_| FileServiceError::Io)?
             .ok_or_else(|| {
                 FileServiceError::NotFound(format!("workspace not found: {workspace_id}"))
             })

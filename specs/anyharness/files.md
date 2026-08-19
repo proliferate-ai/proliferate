@@ -50,8 +50,9 @@ Every operation begins with the path-safety layer in
 `anyharness/crates/anyharness-lib/src/adapters/files/safety.rs`.
 
 Use `resolve_safe_path(...)` for operations that need the resolved target path,
-such as list, read, write, create, and stat. This resolver canonicalizes an
-existing target and follows the final component when it exists.
+such as list, read, write, and stat. This resolver canonicalizes an existing
+target and follows the final component when it exists. Create uses entry
+resolution so a dangling final symlink is occupied rather than absent.
 
 Use `resolve_safe_entry_path(...)` for entry mutations that operate on the
 entry itself, such as rename and delete. This resolver validates and
@@ -66,7 +67,40 @@ Both resolvers reject:
 - `.git` access
 - resolved paths that escape the workspace via canonicalization or symlinks
 
-This is the main security boundary for the files subsystem.
+Canonical containment is checked before canonical `.git` components. The
+`.git` scan is scoped to the path relative to the canonical workspace root, so
+an escaping target remains `PATH_OUTSIDE_WORKSPACE` even if its outside path
+contains `.git`, and a `.git` component above the workspace root does not
+poison contained paths.
+
+An empty relative path is the workspace root. Stat and list accept it; read and
+compatibility write reject it as `NOT_A_FILE`; create, rename, and delete reject
+it through their existing request-validation codes.
+
+This is the main security boundary for the files subsystem. Canonicalization
+establishes containment at validation time. Another same-user process that can
+mutate the workspace can still race a component between validation and the
+filesystem operation. Descriptor-relative traversal and no-follow handles are
+a separate hardening concern; this surface does not claim that stronger
+guarantee.
+
+### Filesystem error authority
+
+Filesystem errors are classified once and remain distinct through the HTTP
+boundary:
+
+| Filesystem outcome | Service result | HTTP problem |
+| --- | --- | --- |
+| Missing target, including a dangling final symlink | `NotFound` | `404 FILE_NOT_FOUND` |
+| Intermediate component is not a directory | `NotADirectory` | `400 NOT_A_DIRECTORY` |
+| Permission denied | `PermissionDenied` | `403 FILE_PERMISSION_DENIED` |
+| Canonical target outside the workspace | `OutsideWorkspace` | `400 PATH_OUTSIDE_WORKSPACE` |
+| Absolute, traversal, invalid, or `.git` path | safety refusal | `400 INVALID_FILE_PATH` |
+| Unexpected I/O | bounded `Io` | generic `500` |
+
+Unexpected-I/O responses and diagnostics use fixed summaries. Raw relative
+paths, canonical paths, target paths, and operating-system error strings are
+not logged or returned for that branch.
 
 ### Listing
 
@@ -79,6 +113,12 @@ This is the main security boundary for the files subsystem.
 4. classifies entries as file / directory / symlink
 5. adds lightweight metadata
 6. sorts directories first, then files alphabetically
+
+Parent listing describes each entry itself. A symlink row is always
+`symlink`; it does not follow the target to populate kind, child state, size,
+text state, or target timestamps. Directly listing a contained directory
+symlink follows its target but keeps the requested link path in
+`directoryPath` and every returned child path.
 
 ### Reading
 
@@ -106,6 +146,11 @@ This is the main security boundary for the files subsystem.
 5. renames atomically into place
 6. returns the new version token and metadata
 
+Compatibility write still upserts an ordinary missing file. A dangling final
+symlink is not an ordinary missing file: write returns `FILE_NOT_FOUND` and
+preserves the link. Writing through a contained live file symlink replaces the
+resolved target atomically and preserves the link entry.
+
 ### Creating
 
 `create_entry(...)` delegates to
@@ -126,6 +171,11 @@ Create semantics:
 7. creates directories with single-directory `create_dir`
 8. invalidates file search cache in the runtime layer
 9. returns the created entry, plus read metadata/version for files
+
+The final entry check uses symlink metadata. Contained live and dangling final
+symlinks are occupied and return `FILE_ALREADY_EXISTS`; a live final symlink
+whose target escapes the workspace or resolves into `.git` retains that safety
+refusal instead.
 
 ### Renaming
 
@@ -164,6 +214,29 @@ Delete semantics:
 7. invalidates file search cache in the runtime layer
 8. returns the deleted path and entry kind
 
+Rename and delete are entry operations. A final dangling, outside-target, or
+`.git`-target symlink may be renamed or deleted because the link itself is the
+target of the mutation. Traversal through that link remains refused.
+
+### Stat and symlinks
+
+Stat describes the resolved target. A contained file link reports `file`; a
+contained directory link reports `directory`. A dangling final link is
+missing, and an escaping or `.git` target is refused. The public response
+schema therefore keeps `symlink` for parent-list entry identity while stat
+uses the existing file/directory target kinds.
+
+### Search
+
+Workspace file search runs Git from the active workspace root with a pathspec
+scoped to that root, even when the workspace is nested below a larger
+repository. Results are workspace-relative. Every Git candidate passes through
+the Files safe-target resolver and must resolve to a regular file. Contained
+file symlinks retain their link path; directory, dangling, escaping, and
+`.git`-target symlinks are omitted. A stale Git candidate beneath a
+regular-file component is also omitted. Permission and unexpected-I/O outcomes
+are propagated rather than converted to an empty result.
+
 ## Boundaries
 
 ### Files Owns
@@ -187,6 +260,8 @@ Delete semantics:
 
 - File access must remain inside the workspace.
 - `.git` must stay hidden and inaccessible through this surface.
+- Missing, wrong-kind, denied, and unexpected-I/O states must remain distinct.
+- Search must not advertise a path that safe file operations refuse.
 - Writes must stay atomic.
 - Create-only operations must not create missing parents or overwrite existing
   entries.
