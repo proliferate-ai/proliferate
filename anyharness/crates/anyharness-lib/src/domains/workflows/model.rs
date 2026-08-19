@@ -184,6 +184,65 @@ impl WorkflowNodeFailureCode {
     }
 }
 
+/// One parallel leg's fan-in status in `workflow_run_node_sessions` (ruling
+/// F1). The failed cases reuse the node failure vocabulary so aggregation can
+/// recover the exact code; `Superseded` is a whole-row disposition, never a
+/// per-turn leg outcome, so it is not representable here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkflowLegStatus {
+    Running,
+    Done,
+    Cancelled,
+    ForcedUnload,
+    Failed(WorkflowNodeFailureCode),
+}
+
+impl WorkflowLegStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Running => "running",
+            Self::Done => "done",
+            Self::Cancelled => "cancelled",
+            Self::ForcedUnload => "forced_unload",
+            Self::Failed(code) => code.as_str(),
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "running" => Some(Self::Running),
+            "done" => Some(Self::Done),
+            "cancelled" => Some(Self::Cancelled),
+            "forced_unload" => Some(Self::ForcedUnload),
+            // 'superseded' is excluded by the table CHECK; every other failure
+            // code maps back to a failed leg.
+            other => WorkflowNodeFailureCode::parse(other)
+                .filter(|code| !matches!(code, WorkflowNodeFailureCode::Superseded))
+                .map(Self::Failed),
+        }
+    }
+
+    pub fn is_terminal(&self) -> bool {
+        !matches!(self, Self::Running)
+    }
+
+    pub fn is_failure(&self) -> bool {
+        matches!(self, Self::Failed(_))
+    }
+}
+
+/// One durable fan-in ledger row: which session ran leg `leg_index` of a node
+/// and how it finished. The node row's scalar `session_id` is the
+/// representative leg; this is the crash-safe set behind it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkflowRunNodeSessionRecord {
+    pub node_row_id: String,
+    pub leg_index: i64,
+    pub session_id: Option<String>,
+    pub status: WorkflowLegStatus,
+    pub completed_at: Option<String>,
+}
+
 /// Run interruption vocabulary: recoverable parks, offered by the resume
 /// popover. `runtime_restarted` is inherited from gen-1's boot fence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -5,7 +5,11 @@
 //! side effect the returned `ResolvedSideEffect` names (persist-before-act).
 //! Reads for the API come from these rows, never from live actors.
 
-use rusqlite::{params, types::Type, Connection, OptionalExtension, Row};
+// Fan-in ledger CRUD lives in a store child so its SQL stays inside the
+// store seam (AH-STORE-3).
+mod node_sessions;
+
+use rusqlite::{params, Connection, OptionalExtension};
 use uuid::Uuid;
 
 use super::definition::InvocationSnapshot;
@@ -15,6 +19,7 @@ use super::model::{
     WorkflowRunStatus,
 };
 use super::projection::{project, RunProjection};
+use super::store_rows::{map_doc, map_node, map_run};
 use super::transition::{
     AdhocOutcome, Decision, NewNodeSpec, RunState, Transition, TurnStopReason, WorkflowEvent,
 };
@@ -310,6 +315,13 @@ impl WorkflowStore {
                     completed_node_type,
                 } => {
                     complete_node(tx, completed_node_row_id, &timestamp, *completed_node_type)?;
+                    // Ruling F3: a parallel node's undo-window stamp lands in
+                    // this completing commit (no-op for one-leg nodes).
+                    node_sessions::stamp_first_turn_if_parallel_tx(
+                        tx,
+                        completed_node_row_id,
+                        &timestamp,
+                    )?;
                     start_node_row(tx, next_node_row_id, &timestamp)?;
                     update_run(
                         tx,
@@ -330,6 +342,11 @@ impl WorkflowStore {
                     completed_node_type,
                 } => {
                     complete_node(tx, completed_node_row_id, &timestamp, *completed_node_type)?;
+                    node_sessions::stamp_first_turn_if_parallel_tx(
+                        tx,
+                        completed_node_row_id,
+                        &timestamp,
+                    )?;
                     update_run(
                         tx,
                         run_id,
@@ -340,6 +357,10 @@ impl WorkflowStore {
                             ..RunUpdate::default()
                         },
                     )?;
+                }
+                Transition::RecordLegThenHold { .. } => {
+                    // Only the ledger changes (post-match, below); the node and
+                    // run rows hold. Never reached with one leg.
                 }
                 Transition::GateNode { node_row_id } => {
                     set_node_status(tx, node_row_id, WorkflowNodeStatus::AwaitingHuman)?;
@@ -586,6 +607,23 @@ impl WorkflowStore {
                 }
             }
 
+            // Fan-in ledger (ruling F1), stamped in this commit. Run-terminal
+            // Cancel stamps every still-running leg in the run; the rest stamp
+            // one leg keyed off the turn session (else representative).
+            if let Transition::Cancel { .. } = transition {
+                node_sessions::cancel_all_run_legs_tx(tx, run_id, &timestamp)?;
+            } else if let Some((leg_node, leg_status)) = node_sessions::finished_leg_of(transition) {
+                let session = turn_session(event)
+                    .or_else(|| state.node(leg_node).and_then(|node| node.session_id.clone()));
+                node_sessions::mark_leg_terminal_tx(
+                    tx,
+                    leg_node,
+                    session.as_deref(),
+                    leg_status,
+                    &timestamp,
+                )?;
+            }
+
             let state = Self::load_run_state_tx(tx, run_id)?
                 .expect("the run row existed at the top of this transaction");
             Ok((
@@ -612,11 +650,16 @@ impl WorkflowStore {
     /// past the first). The engine calls this on EVERY turn report before
     /// deciding, so the UndoAdvance window (Ruling J) closes even when the
     /// decision is a Hold.
+    /// Ruling F3 suppresses this per-report path for PARALLEL nodes (> 1 leg),
+    /// which stamp instead inside the completing transition. A one-leg node
+    /// (every definition today) keeps stamping here, so behavior is unchanged.
     pub fn note_first_turn_finished(&self, node_row_id: &str) -> anyhow::Result<()> {
         self.db.with_tx_anyhow(|tx| {
             tx.execute(
                 "UPDATE workflow_run_nodes SET first_turn_finished_at = ?2
-                 WHERE id = ?1 AND first_turn_finished_at IS NULL",
+                 WHERE id = ?1 AND first_turn_finished_at IS NULL
+                   AND (SELECT COUNT(*) FROM workflow_run_node_sessions
+                        WHERE node_row_id = ?1) <= 1",
                 params![node_row_id, now()],
             )?;
             Ok(())
@@ -638,6 +681,9 @@ impl WorkflowStore {
                 "UPDATE workflow_run_nodes SET session_id = ?2, prompt_id = ?3 WHERE id = ?1",
                 params![node_row_id, session_id, prompt_id],
             )?;
+            // Insert (or reset, on relaunch) the representative fan-in leg in the
+            // same transaction that stamps the scalar session (ruling F1).
+            node_sessions::upsert_leg_tx(tx, node_row_id, session_id)?;
             let (run_id, chain_index): (String, Option<i64>) = tx.query_row(
                 "SELECT run_id, chain_index FROM workflow_run_nodes WHERE id = ?1",
                 params![node_row_id],
@@ -696,7 +742,12 @@ impl WorkflowStore {
         let nodes = statement
             .query_map(params![run_id], map_node)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
-        Ok(Some(RunState { run, nodes }))
+        let node_legs = node_sessions::load_legs_tx(tx, run_id)?;
+        Ok(Some(RunState {
+            run,
+            nodes,
+            node_legs,
+        }))
     }
 
     pub fn list_docs(&self, run_id: &str) -> anyhow::Result<Vec<WorkflowRunDocRecord>> {
@@ -1226,6 +1277,15 @@ fn emit_transition_events(
     }
 }
 
+/// The finishing leg's session off a turn-finish event (`None` for commands
+/// and engine events).
+fn turn_session(event: &WorkflowEvent) -> Option<String> {
+    match event {
+        WorkflowEvent::TurnFinished(turn) => turn.session_id.clone(),
+        _ => None,
+    }
+}
+
 fn transition_node_row_id<'a>(
     transition: &'a Transition,
     applied: &'a AppliedTransition,
@@ -1238,7 +1298,8 @@ fn transition_node_row_id<'a>(
             completed_node_row_id,
             ..
         } => Some(completed_node_row_id),
-        Transition::GateNode { node_row_id }
+        Transition::RecordLegThenHold { node_row_id, .. }
+        | Transition::GateNode { node_row_id }
         | Transition::FailNode { node_row_id, .. }
         | Transition::InterruptNode { node_row_id, .. }
         | Transition::FlipNodeType { node_row_id, .. }
@@ -1255,123 +1316,3 @@ fn transition_node_row_id<'a>(
     }
 }
 
-fn map_run(row: &Row<'_>) -> rusqlite::Result<WorkflowRunRecord> {
-    Ok(WorkflowRunRecord {
-        id: row.get("id")?,
-        invocation_id: row.get("invocation_id")?,
-        definition_json: row.get("definition_json")?,
-        arguments_json: row.get("arguments_json")?,
-        workspace_id: row.get("workspace_id")?,
-        status: parse_text(row.get::<_, String>("status")?.as_str(), "run status", |s| {
-            WorkflowRunStatus::parse(s)
-        })?,
-        current_node_row_id: row.get("current_node_row_id")?,
-        failure_code: row.get("failure_code")?,
-        // Lenient: an unknown code (written by a newer binary) degrades to
-        // None with an error event instead of bricking the read path.
-        interruption_code: row
-            .get::<_, Option<String>>("interruption_code")?
-            .and_then(|code| {
-                let parsed = super::model::WorkflowInterruptionCode::parse(&code);
-                if parsed.is_none() {
-                    tracing::error!(code = %code, "unknown workflow run interruption_code; reading as none");
-                }
-                parsed
-            }),
-        created_at: row.get("created_at")?,
-        updated_at: row.get("updated_at")?,
-        completed_at: row.get("completed_at")?,
-    })
-}
-
-fn map_node(row: &Row<'_>) -> rusqlite::Result<WorkflowRunNodeRecord> {
-    // Lenient: a corrupt or newer-schema envelope degrades to None (the
-    // engine re-renders) instead of bricking every read of the run.
-    let envelope = row
-        .get::<_, Option<String>>("rendered_envelope")?
-        .and_then(|json| match serde_json::from_str::<RenderedEnvelope>(&json) {
-            Ok(envelope) => Some(envelope),
-            Err(error) => {
-                tracing::error!(%error, "unreadable workflow node rendered_envelope; reading as none");
-                None
-            }
-        });
-    // Same leniency: an unreadable model pick degrades to the default
-    // resolution path instead of bricking the run's reads.
-    let model = row
-        .get::<_, Option<String>>("model")?
-        .and_then(|json| match serde_json::from_str(&json) {
-            Ok(model) => Some(model),
-            Err(error) => {
-                tracing::error!(%error, "unreadable workflow node model; reading as none");
-                None
-            }
-        });
-    Ok(WorkflowRunNodeRecord {
-        id: row.get("id")?,
-        run_id: row.get("run_id")?,
-        definition_node_id: row.get("definition_node_id")?,
-        kind: parse_text(row.get::<_, String>("kind")?.as_str(), "node kind", |s| {
-            WorkflowNodeKind::parse(s)
-        })?,
-        node_type: parse_text(
-            row.get::<_, String>("node_type")?.as_str(),
-            "node type",
-            |s| WorkflowNodeType::parse(s),
-        )?,
-        replaces_node_row_id: row.get("replaces_node_row_id")?,
-        anchor_node_row_id: row.get("anchor_node_row_id")?,
-        chain_index: row.get("chain_index")?,
-        title: row.get("title")?,
-        prompt: row.get("prompt")?,
-        status: parse_text(
-            row.get::<_, String>("status")?.as_str(),
-            "node status",
-            |s| WorkflowNodeStatus::parse(s),
-        )?,
-        session_id: row.get("session_id")?,
-        prompt_id: row.get("prompt_id")?,
-        model,
-        rendered_envelope: envelope,
-        failure_code: row
-            .get::<_, Option<String>>("failure_code")?
-            .and_then(|code| {
-                let parsed = WorkflowNodeFailureCode::parse(&code);
-                if parsed.is_none() {
-                    tracing::error!(code = %code, "unknown workflow node failure_code; reading as none");
-                }
-                parsed
-            }),
-        first_turn_finished_at: row.get("first_turn_finished_at")?,
-        created_at: row.get("created_at")?,
-        started_at: row.get("started_at")?,
-        completed_at: row.get("completed_at")?,
-    })
-}
-
-fn map_doc(row: &Row<'_>) -> rusqlite::Result<WorkflowRunDocRecord> {
-    Ok(WorkflowRunDocRecord {
-        id: row.get("id")?,
-        run_id: row.get("run_id")?,
-        slug: row.get("slug")?,
-        filename: row.get("filename")?,
-        producing_node_row_id: row.get("producing_node_row_id")?,
-        seeded_from_template: row.get::<_, i64>("seeded_from_template")? != 0,
-        created_at: row.get("created_at")?,
-        updated_at: row.get("updated_at")?,
-    })
-}
-
-fn parse_text<T>(
-    value: &str,
-    what: &'static str,
-    parse: impl Fn(&str) -> Option<T>,
-) -> rusqlite::Result<T> {
-    parse(value).ok_or_else(|| {
-        rusqlite::Error::FromSqlConversionFailure(
-            0,
-            Type::Text,
-            format!("unknown {what}: {value}").into(),
-        )
-    })
-}

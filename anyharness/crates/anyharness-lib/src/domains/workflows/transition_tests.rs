@@ -1,7 +1,5 @@
 //! Exhaustive tests of the pure transition function: every row of the ADR
-//! transition table, the ruled edge interpretations, and a negative control
-//! per behavior (the same event against a state one step off, expecting Hold
-//! or Illegal instead of a transition).
+//! transition table plus a negative control per behavior.
 
 use super::model::{
     WorkflowInterruptionCode, WorkflowNodeFailureCode, WorkflowNodeKind, WorkflowNodeStatus,
@@ -93,12 +91,14 @@ fn mid_run() -> RunState {
                 WorkflowNodeStatus::Pending,
             ),
         ],
+        node_legs: Vec::new(),
     }
 }
 
 fn turn(node_row_id: &str, stop_reason: TurnStopReason, queue_empty: bool) -> WorkflowEvent {
     WorkflowEvent::TurnFinished(TurnFinished {
         node_row_id: node_row_id.into(),
+        session_id: None,
         stop_reason,
         queue_empty,
     })
