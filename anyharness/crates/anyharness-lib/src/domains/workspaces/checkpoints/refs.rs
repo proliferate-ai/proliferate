@@ -41,7 +41,11 @@ pub fn write_checkpoint_refs(
     checkpoint_id: &str,
     snap: &WorkspaceSnapshot,
 ) -> anyhow::Result<()> {
-    update_ref(repo_root, &head_ref(workspace_id, checkpoint_id), &snap.head_sha)?;
+    update_ref(
+        repo_root,
+        &head_ref(workspace_id, checkpoint_id),
+        &snap.head_sha,
+    )?;
     update_ref(
         repo_root,
         &work_tree_ref(workspace_id, checkpoint_id),
@@ -95,11 +99,7 @@ pub fn verify_checkpoint_refs(
 
 /// Remove exactly `(workspace_id, checkpoint_id)`'s three refs. Leaves every
 /// sibling checkpoint of the same workspace untouched.
-pub fn delete_for(
-    repo_root: &Path,
-    workspace_id: &str,
-    checkpoint_id: &str,
-) -> anyhow::Result<()> {
+pub fn delete_for(repo_root: &Path, workspace_id: &str, checkpoint_id: &str) -> anyhow::Result<()> {
     for ref_name in [
         head_ref(workspace_id, checkpoint_id),
         work_tree_ref(workspace_id, checkpoint_id),
@@ -135,11 +135,7 @@ pub fn list_for_workspace(
     let prefix = format!("{CHECKPOINT_REFS_PREFIX}{workspace_id}/");
     let output = Command::new("git")
         .current_dir(repo_root)
-        .args([
-            "for-each-ref",
-            "--format=%(objectname) %(refname)",
-            &prefix,
-        ])
+        .args(["for-each-ref", "--format=%(objectname) %(refname)", &prefix])
         .output()
         .map_err(|error| anyhow::anyhow!("git for-each-ref failed to run: {error}"))?;
     if !output.status.success() {
@@ -170,6 +166,51 @@ pub fn list_for_workspace(
     Ok(entries)
 }
 
+/// Enumerate workspace ids that own any checkpoint ref in this repository.
+/// This is the retention candidate backstop for a capture that crashed after
+/// refs were verified but before its first metadata row was inserted.
+pub fn list_workspace_ids_for_repo(
+    repo_root: &Path,
+) -> anyhow::Result<std::collections::BTreeSet<String>> {
+    let output = Command::new("git")
+        .current_dir(repo_root)
+        .args([
+            "for-each-ref",
+            "--format=%(refname)",
+            CHECKPOINT_REFS_PREFIX,
+        ])
+        .output()
+        .map_err(|error| anyhow::anyhow!("git for-each-ref failed to run: {error}"))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git for-each-ref failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    let mut workspace_ids = std::collections::BTreeSet::new();
+    for refname in String::from_utf8_lossy(&output.stdout).lines() {
+        let Some(rest) = refname.strip_prefix(CHECKPOINT_REFS_PREFIX) else {
+            continue;
+        };
+        let mut components = rest.split('/');
+        let (Some(workspace_id), Some(checkpoint_id), Some(family), None) = (
+            components.next(),
+            components.next(),
+            components.next(),
+            components.next(),
+        ) else {
+            continue;
+        };
+        if !workspace_id.is_empty()
+            && !checkpoint_id.is_empty()
+            && matches!(family, "head" | "worktree" | "index")
+        {
+            workspace_ids.insert(workspace_id.to_string());
+        }
+    }
+    Ok(workspace_ids)
+}
+
 fn head_ref(workspace_id: &str, checkpoint_id: &str) -> String {
     format!("{CHECKPOINT_REFS_PREFIX}{workspace_id}/{checkpoint_id}/head")
 }
@@ -198,9 +239,10 @@ fn update_ref(repo_root: &Path, ref_name: &str, oid: &str) -> anyhow::Result<()>
 }
 
 fn delete_ref_if_present(repo_root: &Path, ref_name: &str) -> anyhow::Result<()> {
-    if show_ref_verify(repo_root, ref_name).is_none() {
-        return Ok(());
-    }
+    // `git update-ref -d` is idempotent when the ref is absent. Running it
+    // unconditionally preserves the distinction between true absence and a
+    // spawn/repository failure; a lossy preflight would report cleanup success
+    // when git could not even inspect the repository.
     let output = Command::new("git")
         .current_dir(repo_root)
         .args(["update-ref", "-d", ref_name])
@@ -217,19 +259,30 @@ fn delete_ref_if_present(repo_root: &Path, ref_name: &str) -> anyhow::Result<()>
 
 /// Per-ref lookup with the FULL ref name (never a bare tail component, which
 /// would conflate the three families).
-fn show_ref_verify(repo_root: &Path, ref_name: &str) -> Option<String> {
+fn show_ref_verify(repo_root: &Path, ref_name: &str) -> anyhow::Result<Option<String>> {
     let output = Command::new("git")
         .current_dir(repo_root)
         .args(["show-ref", "--verify", ref_name])
         .output()
-        .ok()?;
+        .map_err(|error| anyhow::anyhow!("git show-ref failed to run: {error}"))?;
     if !output.status.success() {
-        return None;
+        if output.status.code() == Some(1) {
+            return Ok(None);
+        }
+        anyhow::bail!(
+            "git show-ref --verify {ref_name} failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
     }
     let text = String::from_utf8_lossy(&output.stdout);
-    let line = text.lines().next()?;
-    let (oid, _refname) = line.split_once(' ')?;
-    Some(oid.to_string())
+    let line = text
+        .lines()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("git show-ref returned no record for {ref_name}"))?;
+    let (oid, _refname) = line.split_once(' ').ok_or_else(|| {
+        anyhow::anyhow!("git show-ref returned a malformed record for {ref_name}")
+    })?;
+    Ok(Some(oid.to_string()))
 }
 
 fn rev_parse_verify(repo_root: &Path, expr: &str) -> anyhow::Result<String> {
@@ -253,12 +306,10 @@ fn verify_one(
     expected_oid: &str,
     peel: &str,
 ) -> anyhow::Result<()> {
-    let resolved = show_ref_verify(repo_root, ref_name)
+    let resolved = show_ref_verify(repo_root, ref_name)?
         .ok_or_else(|| anyhow::anyhow!("checkpoint ref {ref_name} does not exist"))?;
     if resolved != expected_oid {
-        anyhow::bail!(
-            "checkpoint ref {ref_name} points at {resolved}, expected {expected_oid}"
-        );
+        anyhow::bail!("checkpoint ref {ref_name} points at {resolved}, expected {expected_oid}");
     }
     rev_parse_verify(repo_root, &format!("{resolved}^{{{peel}}}"))
         .map(|_| ())

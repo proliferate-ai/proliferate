@@ -9,34 +9,28 @@
 //! would let two suites race the same env var; `pub(crate)` here keeps every
 //! setter behind one mutex.
 
-use std::sync::Mutex;
-
-/// `ANYHARNESS_CHECKPOINT_CAPTURE` is process-global; serialize every test that
-/// sets it so a concurrent test never observes the wrong flag state.
-static ENV_LOCK: Mutex<()> = Mutex::new(());
-
 /// Holds the shared env lock for its whole lifetime and sets/clears the capture
 /// flag. `pub(crate)` (rather than `pub(super)`) so suites in other subdomains
-/// can share the one lock above.
-pub(crate) struct EnvGuard<'a> {
-    _lock: std::sync::MutexGuard<'a, ()>,
+/// can share the crate-wide lock required for every process-global variable.
+pub(crate) struct EnvGuard {
+    _lock: std::sync::MutexGuard<'static, ()>,
 }
 
-impl EnvGuard<'_> {
+impl EnvGuard {
     pub(crate) fn on() -> Self {
-        let lock = ENV_LOCK.lock().unwrap_or_else(|poison| poison.into_inner());
+        let lock = crate::app::test_support::lock_env();
         std::env::set_var("ANYHARNESS_CHECKPOINT_CAPTURE", "on");
         EnvGuard { _lock: lock }
     }
 
     pub(crate) fn off() -> Self {
-        let lock = ENV_LOCK.lock().unwrap_or_else(|poison| poison.into_inner());
+        let lock = crate::app::test_support::lock_env();
         std::env::remove_var("ANYHARNESS_CHECKPOINT_CAPTURE");
         EnvGuard { _lock: lock }
     }
 }
 
-impl Drop for EnvGuard<'_> {
+impl Drop for EnvGuard {
     fn drop(&mut self) {
         std::env::remove_var("ANYHARNESS_CHECKPOINT_CAPTURE");
     }

@@ -4,7 +4,7 @@
 //! called from the three `prompt.rs` dispatch sites.
 
 use super::{SendPromptError, SessionRuntime};
-use crate::live::sessions::PromptAcceptance;
+use crate::live::sessions::{LiveSessionCommandError, PromptAcceptError, PromptAcceptance};
 
 impl SessionRuntime {
     /// Turn-start checkpoint capture (Lane H), called at every prompt dispatch
@@ -31,16 +31,14 @@ impl SessionRuntime {
         use crate::domains::workspaces::checkpoints::flags::{
             checkpoint_capture_enabled, CaptureFailurePolicy, TURN_START_CAPTURE_FAILURE_POLICY,
         };
-        use crate::domains::workspaces::checkpoints::CheckpointOrigin;
-
         if !checkpoint_capture_enabled() {
             return Ok(None);
         }
         if handle.is_busy() {
             // Coverage metric (observation phase): the prompt will queue, so the
             // eventual queue-drain turn start is NOT covered by this dispatch-seam
-            // hook. Emit at info with stable field names so every uncovered turn
-            // start is countable under the flag.
+            // hook. Emit at info with stable field names so this observed
+            // dispatch-skip class is countable under the flag.
             tracing::info!(
                 reason = "busy_will_queue",
                 session_id = %session_id,
@@ -50,73 +48,102 @@ impl SessionRuntime {
         }
         match self
             .checkpoint_service
-            .capture(
+            .capture_turn_start_under_workspace_lease(
                 workspace_id,
-                CheckpointOrigin::TurnStart,
                 Some(session_id.to_string()),
                 prompt_id.map(str::to_string),
             )
             .await
         {
             Ok(record) => Ok(Some(record.id)),
-            Err(error) => match TURN_START_CAPTURE_FAILURE_POLICY {
-                CaptureFailurePolicy::Abort => Err(SendPromptError::CheckpointCaptureFailed {
-                    reason: error.to_string(),
-                }),
-                CaptureFailurePolicy::Degrade => {
-                    tracing::warn!(
-                        session_id = %session_id,
-                        error = %error,
-                        "checkpoint capture failed; proceeding without a checkpoint (degrade policy)"
-                    );
-                    Ok(None)
+            Err(error) => {
+                let failure_class = error.failure_class();
+                match TURN_START_CAPTURE_FAILURE_POLICY {
+                    CaptureFailurePolicy::Abort => {
+                        tracing::error!(
+                            session_id = %session_id,
+                            sentry_code = "CHECKPOINT_CAPTURE_FAILED",
+                            failure_class,
+                            "checkpoint capture failed; refusing prompt"
+                        );
+                        Err(SendPromptError::CheckpointCaptureFailed {
+                            failure: error.public_failure(),
+                        })
+                    }
+                    CaptureFailurePolicy::Degrade => {
+                        tracing::warn!(
+                            session_id = %session_id,
+                            failure_class,
+                            "checkpoint capture failed; proceeding without a checkpoint (degrade policy)"
+                        );
+                        Ok(None)
+                    }
                 }
-            },
+            }
         }
     }
 
-    /// Post-dispatch bookkeeping for a turn-start checkpoint. `Started` backfills
-    /// the real `turn_id`; `Queued` means the race was lost, so the checkpoint is
-    /// expired and its refs deleted. Non-fatal: a bookkeeping error is logged, it
-    /// never fails a prompt whose command was already accepted.
-    pub(super) async fn finalize_turn_start_checkpoint(
+    /// Settle a captured boundary from the actor's raw command outcome before
+    /// the caller maps that outcome into its public error shape. `Started`
+    /// binds the turn; `Queued` and definitive non-acceptance discard the
+    /// checkpoint. A dropped response is acknowledgement-ambiguous, so its
+    /// unbound row and refs stay intact until ordinary retention ages them out.
+    ///
+    /// Settlement is non-fatal: it never changes the actor command's result.
+    pub(super) async fn settle_turn_start_checkpoint(
         &self,
         checkpoint_id: Option<String>,
-        acceptance: &PromptAcceptance,
+        outcome: &Result<PromptAcceptance, LiveSessionCommandError<PromptAcceptError>>,
     ) {
         let Some(checkpoint_id) = checkpoint_id else {
             return;
         };
-        match acceptance {
-            PromptAcceptance::Started { turn_id } => {
-                if let Err(error) = self.checkpoint_service.set_turn_id(&checkpoint_id, turn_id) {
+        match outcome {
+            Ok(PromptAcceptance::Started { turn_id }) => {
+                if let Err(_error) = self.checkpoint_service.set_turn_id(&checkpoint_id, turn_id) {
                     tracing::warn!(
                         checkpoint_id = %checkpoint_id,
-                        error = %error,
+                        sentry_code = "CHECKPOINT_SETTLEMENT_FAILED",
+                        failure_stage = "turn_id_backfill",
                         "could not backfill a checkpoint's turn_id after dispatch"
                     );
                 }
             }
-            PromptAcceptance::Queued { .. } => {
+            Ok(PromptAcceptance::Queued { .. })
+            | Err(LiveSessionCommandError::ActorUnavailable)
+            | Err(LiveSessionCommandError::Rejected(_)) => {
                 // Coverage metric (observation phase): a checkpoint was captured
-                // for a boundary that turned out to queue, so it is discarded. Stable
-                // field names, counted alongside checkpoint.capture.skipped.
+                // for a boundary that never started, so it is discarded. Stable
+                // field names are counted alongside checkpoint.capture.skipped.
+                let reason = match outcome {
+                    Ok(PromptAcceptance::Queued { .. }) => "queued",
+                    Err(LiveSessionCommandError::ActorUnavailable) => "actor_unavailable",
+                    Err(LiveSessionCommandError::Rejected(_)) => "rejected",
+                    _ => unreachable!("matched definitive non-start outcome"),
+                };
                 tracing::info!(
                     checkpoint_id = %checkpoint_id,
-                    "checkpoint.capture.discarded_queued"
+                    reason,
+                    "checkpoint.capture.discarded"
                 );
-                if let Err(error) = self
+                if let Err(_error) = self
                     .checkpoint_service
                     .expire_and_delete(&checkpoint_id)
                     .await
                 {
                     tracing::warn!(
                         checkpoint_id = %checkpoint_id,
-                        error = %error,
-                        "could not expire a checkpoint whose turn queued"
+                        sentry_code = "CHECKPOINT_SETTLEMENT_FAILED",
+                        failure_stage = "discard_after_dispatch",
+                        "could not expire a checkpoint for a boundary that did not start"
                     );
                 }
             }
+            Err(LiveSessionCommandError::ResponseDropped) => tracing::warn!(
+                checkpoint_id = %checkpoint_id,
+                reason = "response_dropped",
+                "checkpoint.capture.unresolved"
+            ),
         }
     }
 }

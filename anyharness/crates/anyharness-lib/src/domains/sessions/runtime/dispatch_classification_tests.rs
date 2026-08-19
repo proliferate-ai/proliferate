@@ -1,6 +1,6 @@
 //! Dispatch-classification unit tests, moved out of prompt.rs so the dispatch file stays under its size ratchet.
 
-use super::prompt::{
+use super::prompt_dispatch::{
     classify_text_prompt_command_error, durable_prompt_start_failure_code, TextPromptDispatchError,
 };
 use super::{SendPromptError, StartSessionError};

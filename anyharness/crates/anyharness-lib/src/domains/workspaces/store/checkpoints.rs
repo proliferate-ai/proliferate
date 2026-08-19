@@ -122,12 +122,7 @@ impl WorkspaceStore {
 
     /// Backfill the `turn_id` a turn-start checkpoint was captured against, once
     /// the actor reports the turn it Started.
-    pub fn set_checkpoint_turn_id(
-        &self,
-        id: &str,
-        turn_id: &str,
-        now: &str,
-    ) -> anyhow::Result<()> {
+    pub fn set_checkpoint_turn_id(&self, id: &str, turn_id: &str, now: &str) -> anyhow::Result<()> {
         self.db.with_conn(|conn| {
             conn.execute(
                 "UPDATE workspace_checkpoints SET turn_id = ?2, updated_at = ?3 WHERE id = ?1",
@@ -149,6 +144,25 @@ impl WorkspaceStore {
         })
     }
 
+    /// Mark every checkpoint for a workspace expired while preserving the rows
+    /// as sweep-discovery metadata. Purge uses this before deleting refs, then
+    /// removes the rows only after ref deletion succeeds.
+    pub fn mark_checkpoints_expired_for_workspace(
+        &self,
+        workspace_id: &str,
+        now: &str,
+    ) -> anyhow::Result<()> {
+        self.db.with_conn(|conn| {
+            conn.execute(
+                "UPDATE workspace_checkpoints
+                 SET expired_at = COALESCE(expired_at, ?2), updated_at = ?2
+                 WHERE workspace_id = ?1",
+                params![workspace_id, now],
+            )?;
+            Ok(())
+        })
+    }
+
     /// A workspace's unexpired checkpoints, newest first (the retention duty's
     /// cull ordering).
     pub fn list_unexpired_checkpoints_for_workspace(
@@ -162,7 +176,8 @@ impl WorkspaceStore {
                  ORDER BY created_at DESC, id DESC"
             ))?;
             let rows = stmt.query_map([workspace_id], map_checkpoint)?;
-            rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+            rows.collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(Into::into)
         })
     }
 
@@ -173,7 +188,8 @@ impl WorkspaceStore {
                 "SELECT DISTINCT workspace_id FROM workspace_checkpoints WHERE expired_at IS NULL",
             )?;
             let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
-            rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+            rows.collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(Into::into)
         })
     }
 
@@ -185,12 +201,14 @@ impl WorkspaceStore {
             let mut stmt =
                 conn.prepare("SELECT DISTINCT workspace_id FROM workspace_checkpoints")?;
             let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
-            rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+            rows.collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(Into::into)
         })
     }
 
-    /// Delete every checkpoint row for a workspace. Purge's row step, run before
-    /// `checkpoints::refs::delete_all_for` clears the bytes.
+    /// Delete every checkpoint row for a workspace. Purge calls this only after
+    /// the rows were expired and `checkpoints::refs::delete_all_for` cleared the
+    /// bytes, so a failed ref deletion stays discoverable by the retention pass.
     pub fn delete_checkpoints_for_workspace(&self, workspace_id: &str) -> anyhow::Result<()> {
         self.db.with_conn(|conn| {
             conn.execute(

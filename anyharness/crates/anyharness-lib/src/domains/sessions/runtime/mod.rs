@@ -23,13 +23,18 @@ use crate::domains::agents::route_auth::{GatewayModelResolve, RouteAuthError};
 use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::checkpoints::WorkspaceCheckpointService;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::sessions::LiveSessionManager;
 
 mod agent_creation;
+#[cfg(test)]
+mod checkpoint_dispatch_tests;
 mod checkpoint_hook;
 #[cfg(test)]
 mod checkpoint_linkage_tests;
+#[cfg(test)]
+mod checkpoint_queue_settlement_tests;
 mod config;
 mod creation;
 #[cfg(test)]
@@ -37,7 +42,6 @@ mod dispatch_classification_tests;
 mod fork;
 pub(crate) mod fork_boundary;
 pub(crate) mod fork_qualification;
-pub(crate) mod opencode_sidedoor_client;
 #[cfg(test)]
 mod idempotent_creation_tests;
 mod interactions;
@@ -48,14 +52,18 @@ mod launch_policy;
 mod lifecycle;
 #[cfg(test)]
 mod lifecycle_tests;
+pub(crate) mod opencode_sidedoor_client;
 mod pending_prompts;
 mod prompt;
+mod prompt_dispatch;
+mod prompt_lease;
 #[cfg(test)]
 pub(crate) mod prompt_message_actor_tests;
 #[cfg(test)]
 mod prompt_message_cold_start_tests;
 #[cfg(test)]
 mod prompt_message_tests;
+mod prompt_queue;
 mod replay;
 mod startup;
 mod startup_errors;
@@ -68,7 +76,7 @@ mod workspace_mcp_attachment;
 pub use agent_creation::{CreateOrdinaryAgentSessionError, CreateSubagentAgentSessionError};
 pub(crate) use creation::{InternalSessionCreateError, InternalSessionCreateInput};
 pub(crate) use lifecycle::LiveTurnCancelOutcome;
-pub(crate) use prompt::TextPromptDispatchError;
+pub(crate) use prompt_dispatch::TextPromptDispatchError;
 
 pub struct SessionRuntime {
     session_service: Arc<SessionService>,
@@ -80,6 +88,7 @@ pub struct SessionRuntime {
     session_extensions: Vec<Arc<dyn SessionExtension>>,
     product_mcp_launch_catalog: ProductMcpLaunchCatalog,
     access_gate: Arc<WorkspaceAccessGate>,
+    workspace_operation_gate: Arc<WorkspaceOperationGate>,
     plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
     plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
     /// Catalog-driven gateway model planner: supplies the render plane's
@@ -217,7 +226,7 @@ pub enum SendPromptError {
     /// is `Abort`, so the prompt is refused rather than run uncheckpointed. The
     /// turn never started; the caller may retry.
     CheckpointCaptureFailed {
-        reason: String,
+        failure: crate::domains::workspaces::checkpoints::capture::CheckpointCaptureFailure,
     },
     Internal(anyhow::Error),
 }
@@ -440,6 +449,7 @@ impl SessionRuntime {
         session_extensions: Vec<Arc<dyn SessionExtension>>,
         product_mcp_launch_catalog: ProductMcpLaunchCatalog,
         access_gate: Arc<WorkspaceAccessGate>,
+        workspace_operation_gate: Arc<WorkspaceOperationGate>,
         plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
         plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
         gateway_model_resolver: Arc<dyn GatewayModelResolve>,
@@ -458,6 +468,7 @@ impl SessionRuntime {
             session_extensions,
             product_mcp_launch_catalog,
             access_gate,
+            workspace_operation_gate,
             plan_reference_resolver,
             plan_interaction_link_resolver,
             gateway_model_resolver,

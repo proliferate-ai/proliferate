@@ -381,9 +381,15 @@ recovery; nothing load-bearing lives in opaque adapter `_meta`.
   recorded anchor or it fails.
 - Provenance. The record stores the product anchor, the provider anchor
   (kind/value and inclusivity rule), the exact copied-prefix terminal `seq` and
-  its digest, and the adapter/native versions. It is written atomically with the
-  child session row, the `fork` link, and (for snapshot adapters) the copied
-  event prefix.
+  its digest, the adapter/native versions, and a nullable
+  `fork_operations.checkpoint_id`. For a targeted fork, checkpoint linkage is
+  an exact lookup of the newest unexpired checkpoint at
+  `(parent_session_id, anchor_turn_id)`: the fork path never captures a new
+  checkpoint, chooses a nearest boundary, or joins through `prompt_id`.
+  `checkpoint_id = NULL` therefore means that no checkpoint sat at that exact
+  boundary, an explicit no-checkpoint state rather than an inferred fallback.
+  The operation is written atomically with the child session row, the `fork`
+  link, and (for snapshot adapters) the copied event prefix.
 - Identity/idempotency. The operation key is the caller's `child_session_id` or
   an `Idempotency-Key`, bound to a canonical request digest. Same key + same
   payload resumes the in-flight operation or returns the same child; same key +

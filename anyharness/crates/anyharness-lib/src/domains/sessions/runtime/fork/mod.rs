@@ -11,7 +11,7 @@ use crate::domains::sessions::model::{
 use crate::domains::sessions::runtime::fork_boundary;
 use crate::domains::sessions::store::fork_operations::ForkOperationChildResult;
 use crate::live::sessions::SessionStartupStrategy;
-use crate::live::sessions::{ForkSessionCommandResult, LiveSessionCommandError};
+use crate::live::sessions::ForkSessionCommandResult;
 
 use self::errors::{
     map_fork_target_error, map_live_fork_command_error, map_start_error_to_fork,
@@ -64,9 +64,9 @@ impl SessionRuntime {
                 "session agent does not advertise fork support".to_string(),
             ));
         }
-        // Capability-gated per-adapter dispatch (flag default OFF). No adapter
-        // advertises `targeted_fork` until the rung-3 bridges land, so a
-        // targeted request fails closed and tip-fork behavior is unchanged.
+        // Capability-gated per-adapter dispatch. OpenCode advertises
+        // `targeted_fork` only after its qualified side-door is ready; every
+        // other adapter stays false until its own bridge lands.
         if target.is_some() && !capabilities.targeted_fork {
             return Err(ForkSessionError::Unsupported(
                 "targeted fork is not supported by this agent".to_string(),

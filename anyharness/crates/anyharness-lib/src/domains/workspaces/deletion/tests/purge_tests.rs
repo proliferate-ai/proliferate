@@ -6,13 +6,61 @@ use std::process::Command;
 use super::purge_harness::{
     delete_admin_registration_only, pack_file_count, session_record, Harness,
 };
+use crate::app::test_support;
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::deletion::purge::{WorkspacePurgeError, WorkspacePurgeOutcome};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn local_kind_purge_never_touches_the_directory_but_deletes_sessions_and_the_row() {
+    let _env = test_support::lock_env();
+    let _bearer = test_support::set_bearer_token_env(None);
+    let _data_key = test_support::set_data_key_env(None);
     let harness = Harness::new("local-kind");
     let path = harness.local_workspace("workspace-local");
+    let capture_service = harness.state.workspace_checkpoint_service.clone();
+    let capture_lease = harness
+        .state
+        .workspace_operation_gate
+        .acquire_shared(
+            "workspace-local",
+            crate::domains::workspaces::operation_gate::WorkspaceOperationKind::SessionPrompt,
+        )
+        .await;
+    let checkpoint = capture_service
+        .capture_turn_start_under_workspace_lease(
+            "workspace-local",
+            Some("session-1".to_string()),
+            Some("prompt-1".to_string()),
+        )
+        .await
+        .expect("capture local checkpoint");
+    drop(capture_lease);
+    let checkpoint_tree = checkpoint.work_tree_oid.clone();
+    assert_ne!(
+        checkpoint_tree, checkpoint.index_tree_oid,
+        "the untracked user file makes the captured worktree tree checkpoint-only"
+    );
+    let checkpoint_blob = git_stdout(
+        &path,
+        &["rev-parse", &format!("{checkpoint_tree}:hand-written.txt")],
+    );
+    let checkpoint_only_oids = [checkpoint_tree, checkpoint_blob];
+    assert!(
+        !git_succeeds(&path, &["rev-parse", "HEAD:hand-written.txt"]),
+        "the checkpoint-only blob must not be reachable from committed history"
+    );
+    assert!(
+        checkpoint_only_oids
+            .iter()
+            .all(|oid| git_succeeds(&path, &["cat-file", "-e", oid])),
+        "checkpoint refs must initially retain their private tree and blob"
+    );
+    assert_eq!(
+        crate::domains::workspaces::checkpoints::refs::list_for_workspace(&path, "workspace-local")
+            .expect("list local checkpoint refs")
+            .len(),
+        3
+    );
     let session_store = SessionStore::new(harness.state.db.clone());
     session_store
         .insert(&session_record("session-1", "workspace-local", None))
@@ -33,13 +81,91 @@ async fn local_kind_purge_never_touches_the_directory_but_deletes_sessions_and_t
     );
     assert!(!harness.workspace_row_exists("workspace-local"));
     assert!(!harness.session_row_exists("session-1"));
-    // The whole point of kind=local: the directory the user owns is never
-    // touched, even though the row and its sessions are gone.
-    assert!(path.exists(), "local checkout directory must survive purge");
     assert!(
-        path.join("hand-written.txt").exists(),
-        "the user's own file must survive purge"
+        harness
+            .state
+            .workspace_checkpoint_service
+            .store_for_tests()
+            .find_checkpoint(&checkpoint.id)
+            .expect("find checkpoint after purge")
+            .is_none(),
+        "local purge must delete checkpoint metadata"
     );
+    assert!(
+        crate::domains::workspaces::checkpoints::refs::list_for_workspace(&path, "workspace-local")
+            .expect("list local checkpoint refs after purge")
+            .is_empty(),
+        "local purge must delete checkpoint refs"
+    );
+    let deferred = harness
+        .state
+        .workspace_archive_service
+        .deferred_gc_for_tests();
+    assert!(
+        deferred.iter().any(|repo_root| repo_root == &path),
+        "local checkpoint cleanup must hand its repo to deferred gc: {deferred:?}"
+    );
+    run_git(
+        &path,
+        &[
+            "-c",
+            "gc.cruftPacks=false",
+            "gc",
+            "--prune=now",
+            "--aggressive",
+        ],
+    );
+    assert!(
+        checkpoint_only_oids
+            .iter()
+            .all(|oid| !git_succeeds(&path, &["cat-file", "-e", oid])),
+        "once purge removes checkpoint refs, aggressive gc must reclaim checkpoint-only objects"
+    );
+    // The whole point of kind=local: the directory the user owns is never
+    // touched, even though the row, sessions, and checkpoint copies are gone.
+    assert!(path.exists(), "local checkout directory must survive purge");
+    assert_eq!(
+        std::fs::read(path.join("hand-written.txt")).expect("read surviving user file"),
+        b"mine\n",
+        "the user's own file bytes must survive checkpoint cleanup and gc"
+    );
+}
+
+fn run_git(cwd: &std::path::Path, args: &[&str]) {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .expect("spawn git");
+    assert!(
+        output.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn git_stdout(cwd: &std::path::Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .expect("spawn git");
+    assert!(
+        output.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+fn git_succeeds(cwd: &std::path::Path, args: &[&str]) -> bool {
+    Command::new("git")
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .expect("spawn git")
+        .status
+        .success()
 }
 
 #[tokio::test(flavor = "multi_thread")]

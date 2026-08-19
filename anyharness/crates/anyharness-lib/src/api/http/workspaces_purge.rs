@@ -192,6 +192,11 @@ fn map_purge_error(error: WorkspacePurgeError) -> ApiError {
             "a workspace operation is already in flight",
             "WORKSPACE_OPERATION_IN_FLIGHT",
         ),
+        WorkspacePurgeError::CheckpointCleanupFailed => ApiError::internal_with_safe_log_and_code(
+            "Could not remove workspace checkpoint artifacts.",
+            "workspace checkpoint cleanup failed",
+            Some("WORKSPACE_CHECKPOINT_CLEANUP_FAILED"),
+        ),
         WorkspacePurgeError::Failed(message) => ApiError::internal(message),
     }
 }

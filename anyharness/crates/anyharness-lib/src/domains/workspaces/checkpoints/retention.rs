@@ -2,18 +2,19 @@
 //! and how old they get, and reap crash-leftover refs. Runs as a new duty of
 //! the archive sweep (`sweep_leftovers`), after the deferred gcs.
 //!
-//! Flag-first: retention runs ONLY while `ANYHARNESS_CHECKPOINT_CAPTURE=on`, so
-//! flag-off leaves existing checkpoints untouched until purge deletes the
-//! workspace outright. This mirrors capture's flag: turning the feature off is a
-//! clean freeze, not a mass deletion.
+//! Flag-first: keep-N/age culling runs only while
+//! `ANYHARNESS_CHECKPOINT_CAPTURE=on`, so flag-off leaves live checkpoints
+//! untouched until purge. Orphan cleanup still converges refs whose metadata is
+//! already absent or expired; turning capture off must not strand a purge that
+//! already crossed its expiry boundary.
 //!
-//! Discipline copied from the archive sweep's duty 3: candidate workspaces come
-//! from the TABLE, each is taken under `try_acquire_exclusive` (a busy workspace
-//! skips to the next tick rather than queueing behind a user), rows are re-read
-//! UNDER the lease, and every git call runs in `spawn_blocking`. Deletion is the
-//! fail-safe direction (ADR 5.1): the row is marked `expired_at` FIRST, then the
-//! three refs are deleted — so an unexpired row never has its refs reaped out
-//! from under it.
+//! Candidate workspaces come from the metadata table plus a ref-derived
+//! crash-recovery backstop. Each is taken under `try_acquire_exclusive` (a busy
+//! workspace skips to the next tick rather than queueing behind a user), rows
+//! are re-read UNDER the lease, and every git call runs in `spawn_blocking`.
+//! Deletion is the fail-safe direction (ADR 5.1): the row is marked
+//! `expired_at` FIRST, then the three refs are deleted — so an unexpired row
+//! never has its refs reaped out from under it.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -30,20 +31,19 @@ pub const RETENTION_KEEP_N: usize = 20;
 /// observation-period status as [`RETENTION_KEEP_N`].
 pub const RETENTION_MAX_AGE: Duration = Duration::from_secs(14 * 24 * 60 * 60);
 
+#[tracing::instrument(skip_all, fields(duty = "checkpoint_retention"))]
 pub async fn sweep_retention(service: &Arc<WorkspaceCheckpointService>) {
-    // Flag-first: retention is part of the same cost-observation feature as
-    // capture, and a workspace's checkpoints are frozen (not deleted) while the
-    // flag is off.
-    if !checkpoint_capture_enabled() {
-        return;
-    }
+    // Flag-first applies to policy culling, not convergence cleanup. Live rows
+    // freeze while capture is off; already-expired or rowless refs remain safe
+    // to reap.
+    let apply_retention_policy = checkpoint_capture_enabled();
 
-    let workspace_ids = match service.store.list_workspace_ids_with_any_checkpoints() {
+    let workspace_ids = match candidate_workspace_ids(service).await {
         Ok(ids) => ids,
-        Err(error) => {
+        Err(_error) => {
             tracing::error!(
                 sentry_code = "CHECKPOINT_RETENTION_FAILED",
-                error = %error,
+                failure_stage = "candidate_metadata_list",
                 "checkpoint retention could not list workspaces"
             );
             return;
@@ -51,13 +51,90 @@ pub async fn sweep_retention(service: &Arc<WorkspaceCheckpointService>) {
     };
 
     for workspace_id in workspace_ids {
-        sweep_one_workspace(service, &workspace_id).await;
+        sweep_one_workspace(service, &workspace_id, apply_retention_policy).await;
     }
 }
 
-async fn sweep_one_workspace(service: &Arc<WorkspaceCheckpointService>, workspace_id: &str) {
+async fn candidate_workspace_ids(
+    service: &Arc<WorkspaceCheckpointService>,
+) -> anyhow::Result<std::collections::BTreeSet<String>> {
+    let mut candidates = service
+        .store
+        .list_workspace_ids_with_any_checkpoints()?
+        .into_iter()
+        .collect::<std::collections::BTreeSet<_>>();
+
+    // A ref name is not authority to allocate a permanent operation-gate key.
+    // Group current workspace rows by their exact repo root, enumerate only
+    // those roots, and admit only ids owned by that root. This still discovers
+    // a first capture that crashed before inserting metadata because the
+    // workspace row necessarily exists before capture begins.
+    let mut workspace_ids_by_root =
+        std::collections::BTreeMap::<String, std::collections::BTreeSet<String>>::new();
+    for workspace in service.store.list_all()? {
+        workspace_ids_by_root
+            .entry(workspace.repo_root_id)
+            .or_default()
+            .insert(workspace.id);
+    }
+    for (repo_root_id, owned_workspace_ids) in workspace_ids_by_root {
+        let Some(repo_root) = service.repo_root_store.find_by_id(&repo_root_id)? else {
+            tracing::error!(
+                repo_root_id = %repo_root_id,
+                sentry_code = "CHECKPOINT_RETENTION_FAILED",
+                failure_stage = "candidate_repo_root_lookup",
+                "checkpoint retention could not resolve a current repo root"
+            );
+            continue;
+        };
+        let path = std::path::PathBuf::from(repo_root.path);
+        match tokio::task::spawn_blocking(move || refs::list_workspace_ids_for_repo(&path)).await {
+            Ok(Ok(ref_workspace_ids)) => candidates.extend(
+                ref_workspace_ids
+                    .intersection(&owned_workspace_ids)
+                    .cloned(),
+            ),
+            Ok(Err(_error)) => tracing::error!(
+                repo_root_id = %repo_root_id,
+                sentry_code = "CHECKPOINT_RETENTION_FAILED",
+                failure_stage = "candidate_ref_list",
+                "checkpoint retention could not enumerate ref-backed candidates"
+            ),
+            Err(_error) => tracing::error!(
+                repo_root_id = %repo_root_id,
+                sentry_code = "CHECKPOINT_RETENTION_FAILED",
+                failure_stage = "candidate_ref_list_task",
+                "checkpoint retention candidate-enumeration task failed"
+            ),
+        }
+    }
+    Ok(candidates)
+}
+
+async fn sweep_one_workspace(
+    service: &Arc<WorkspaceCheckpointService>,
+    workspace_id: &str,
+    apply_retention_policy: bool,
+) {
+    // Ref-derived candidates are attacker-controllable git strings. Confirm a
+    // current workspace exists before `state_for` can allocate a permanent
+    // operation-gate entry; the authoritative row is still re-read below once
+    // the exclusive lease is held.
+    match service.store.find_workspace(workspace_id) {
+        Ok(Some(_)) => {}
+        Ok(None) => return,
+        Err(_error) => {
+            tracing::error!(
+                workspace_id = %workspace_id,
+                sentry_code = "CHECKPOINT_RETENTION_FAILED",
+                failure_stage = "workspace_preflight",
+                "checkpoint retention could not validate its workspace candidate"
+            );
+            return;
+        }
+    }
     let Some(_lease) = service
-        .operation_gate
+        .workspace_operation_gate
         .try_acquire_exclusive(workspace_id)
         .await
     else {
@@ -65,47 +142,68 @@ async fn sweep_one_workspace(service: &Arc<WorkspaceCheckpointService>, workspac
     };
     // Re-read the workspace + repo root under the lease. A workspace that was
     // purged between listing and lease resolves to nothing and is skipped.
-    let Ok(Some(workspace)) = service.store.find_workspace(workspace_id) else {
-        return;
-    };
-    let Ok(repo_root) = service.repo_root_path(&workspace) else {
-        return;
-    };
-
-    // Re-read the unexpired rows UNDER the lease, newest first.
-    let unexpired = match service
-        .store
-        .list_unexpired_checkpoints_for_workspace(workspace_id)
-    {
-        Ok(rows) => rows,
-        Err(error) => {
+    let workspace = match service.store.find_workspace(workspace_id) {
+        Ok(Some(workspace)) => workspace,
+        Ok(None) => return,
+        Err(_error) => {
             tracing::error!(
                 workspace_id = %workspace_id,
                 sentry_code = "CHECKPOINT_RETENTION_FAILED",
-                error = %error,
-                "checkpoint retention could not list a workspace's checkpoints"
+                failure_stage = "workspace_lookup",
+                "checkpoint retention could not read its workspace candidate"
+            );
+            return;
+        }
+    };
+    let repo_root = match service.repo_root_path(&workspace) {
+        Ok(repo_root) => repo_root,
+        Err(_error) => {
+            tracing::error!(
+                workspace_id = %workspace_id,
+                sentry_code = "CHECKPOINT_RETENTION_FAILED",
+                failure_stage = "repo_root_resolution",
+                "checkpoint retention could not resolve a workspace repo root"
             );
             return;
         }
     };
 
-    // The newest origin='safety' row is the standing un-revert handle: exempt
-    // from the N-cull, but NOT from the age cap.
-    let newest_safety_id = unexpired
-        .iter()
-        .find(|record| record.origin == CheckpointOrigin::Safety)
-        .map(|record| record.id.clone());
+    if apply_retention_policy {
+        // Re-read the unexpired rows UNDER the lease, newest first.
+        let unexpired = match service
+            .store
+            .list_unexpired_checkpoints_for_workspace(workspace_id)
+        {
+            Ok(rows) => rows,
+            Err(_error) => {
+                tracing::error!(
+                    workspace_id = %workspace_id,
+                    sentry_code = "CHECKPOINT_RETENTION_FAILED",
+                    failure_stage = "checkpoint_list",
+                    "checkpoint retention could not list a workspace's checkpoints"
+                );
+                return;
+            }
+        };
 
-    for (index, record) in unexpired.iter().enumerate() {
-        if should_retain(
-            record,
-            index,
-            newest_safety_id.as_deref(),
-            &service.inflight,
-        ) {
-            continue;
+        // The newest origin='safety' row is the standing un-revert handle:
+        // exempt from the N-cull, but NOT from the age cap.
+        let newest_safety_id = unexpired
+            .iter()
+            .find(|record| record.origin == CheckpointOrigin::Safety)
+            .map(|record| record.id.clone());
+
+        for (index, record) in unexpired.iter().enumerate() {
+            if should_retain(
+                record,
+                index,
+                newest_safety_id.as_deref(),
+                &service.inflight,
+            ) {
+                continue;
+            }
+            cull_checkpoint(service, workspace_id, &repo_root, &record.id).await;
         }
-        cull_checkpoint(service, workspace_id, &repo_root, &record.id).await;
     }
 
     // Orphan reap, same pass: delete any checkpoint ref whose row is absent or
@@ -145,12 +243,12 @@ async fn cull_checkpoint(
     repo_root: &std::path::Path,
     checkpoint_id: &str,
 ) {
-    if let Err(error) = service.store.mark_checkpoint_expired(checkpoint_id, &now()) {
+    if let Err(_error) = service.store.mark_checkpoint_expired(checkpoint_id, &now()) {
         tracing::error!(
             workspace_id = %workspace_id,
             checkpoint_id = %checkpoint_id,
             sentry_code = "CHECKPOINT_RETENTION_FAILED",
-            error = %error,
+            failure_stage = "row_expiry",
             "checkpoint retention could not expire a row"
         );
         return;
@@ -168,16 +266,18 @@ async fn cull_checkpoint(
             checkpoint_id = %checkpoint_id,
             "checkpoint retention culled a checkpoint"
         ),
-        Ok(Err(error)) => tracing::error!(
+        Ok(Err(_error)) => tracing::error!(
             workspace_id = %workspace_id,
             checkpoint_id = %checkpoint_id,
             sentry_code = "CHECKPOINT_RETENTION_FAILED",
-            error = %error,
+            failure_stage = "culled_ref_delete",
             "checkpoint retention could not delete a culled checkpoint's refs"
         ),
-        Err(error) => tracing::error!(
+        Err(_error) => tracing::error!(
+            workspace_id = %workspace_id,
+            checkpoint_id = %checkpoint_id,
             sentry_code = "CHECKPOINT_RETENTION_FAILED",
-            error = %error,
+            failure_stage = "culled_ref_delete_task",
             "the checkpoint ref-deletion task failed"
         ),
     }
@@ -191,20 +291,66 @@ async fn reap_orphans(
 ) {
     let probe_root = repo_root.to_path_buf();
     let probe_ws = workspace_id.to_string();
-    let Ok(Ok(entries)) =
-        tokio::task::spawn_blocking(move || refs::list_for_workspace(&probe_root, &probe_ws)).await
-    else {
-        return;
-    };
-    let mut orphan_ids: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    for entry in entries {
-        let row = service.store.find_checkpoint(&entry.checkpoint_id).ok().flatten();
-        let orphaned = match row {
-            None => true,
-            Some(record) => record.expired_at.is_some(),
+    let entries =
+        match tokio::task::spawn_blocking(move || refs::list_for_workspace(&probe_root, &probe_ws))
+            .await
+        {
+            Ok(Ok(entries)) => entries,
+            Ok(Err(_error)) => {
+                tracing::error!(
+                    workspace_id = %workspace_id,
+                    sentry_code = "CHECKPOINT_RETENTION_FAILED",
+                    failure_stage = "orphan_ref_list",
+                    "checkpoint retention could not list checkpoint refs"
+                );
+                return;
+            }
+            Err(_error) => {
+                tracing::error!(
+                    workspace_id = %workspace_id,
+                    sentry_code = "CHECKPOINT_RETENTION_FAILED",
+                    failure_stage = "orphan_ref_list_task",
+                    "the checkpoint ref-list task failed"
+                );
+                return;
+            }
+        };
+    let checkpoint_ids = entries
+        .into_iter()
+        .map(|entry| entry.checkpoint_id)
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut orphan_ids = std::collections::BTreeSet::new();
+    for checkpoint_id in checkpoint_ids {
+        let orphaned = match service.store.find_checkpoint(&checkpoint_id) {
+            Ok(None) => true,
+            Ok(Some(record)) if record.workspace_id == workspace_id => record.expired_at.is_some(),
+            Ok(Some(_record)) => {
+                tracing::error!(
+                    workspace_id = %workspace_id,
+                    checkpoint_id = %checkpoint_id,
+                    sentry_code = "CHECKPOINT_RETENTION_FAILED",
+                    failure_stage = "orphan_workspace_mismatch",
+                    "checkpoint retention found checkpoint metadata owned by another workspace"
+                );
+                return;
+            }
+            Err(_error) => {
+                // A read or row-mapping failure is not proof that metadata is
+                // absent. Abort the whole reap before deleting anything so a
+                // transient/corrupt read can never destroy live checkpoint
+                // bytes.
+                tracing::error!(
+                    workspace_id = %workspace_id,
+                    checkpoint_id = %checkpoint_id,
+                    sentry_code = "CHECKPOINT_RETENTION_FAILED",
+                    failure_stage = "orphan_row_classification",
+                    "checkpoint retention could not classify a checkpoint ref set"
+                );
+                return;
+            }
         };
         if orphaned {
-            orphan_ids.insert(entry.checkpoint_id);
+            orphan_ids.insert(checkpoint_id);
         }
     }
     for checkpoint_id in orphan_ids {
@@ -214,13 +360,24 @@ async fn reap_orphans(
             refs::delete_for(&repo_root, &workspace_id_owned, &checkpoint_id)
         })
         .await;
-        if let Ok(Err(error)) = deletion {
-            tracing::error!(
-                workspace_id = %workspace_id,
-                sentry_code = "CHECKPOINT_RETENTION_FAILED",
-                error = %error,
-                "checkpoint retention could not reap an orphaned ref set"
-            );
+        match deletion {
+            Ok(Ok(())) => {}
+            Ok(Err(_error)) => {
+                tracing::error!(
+                    workspace_id = %workspace_id,
+                    sentry_code = "CHECKPOINT_RETENTION_FAILED",
+                    failure_stage = "orphan_ref_delete",
+                    "checkpoint retention could not reap an orphaned ref set"
+                );
+            }
+            Err(_error) => {
+                tracing::error!(
+                    workspace_id = %workspace_id,
+                    sentry_code = "CHECKPOINT_RETENTION_FAILED",
+                    failure_stage = "orphan_ref_delete_task",
+                    "the orphaned checkpoint ref-deletion task failed"
+                );
+            }
         }
     }
 }

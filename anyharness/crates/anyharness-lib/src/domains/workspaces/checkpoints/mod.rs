@@ -24,6 +24,8 @@ pub mod refs;
 pub mod retention;
 
 #[cfg(test)]
+mod gc_tests;
+#[cfg(test)]
 mod retention_tests;
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -34,7 +36,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::domains::repo_roots::store::RepoRootStore;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceRecord};
 use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::store::WorkspaceStore;
 
@@ -101,12 +103,11 @@ pub struct CheckpointRecord {
 
 /// The house orchestrator pattern shared with `WorkspaceArchiveService` and
 /// `WorkspacePurgeService`: a service struct with injected dependencies,
-/// constructed directly in `app/mod.rs`.
+/// assembled by the workspace composition family in `app/workspaces.rs`.
 pub struct WorkspaceCheckpointService {
     pub(super) store: WorkspaceStore,
     pub(super) repo_root_store: RepoRootStore,
-    #[allow(dead_code)]
-    pub(super) operation_gate: Arc<WorkspaceOperationGate>,
+    pub(super) workspace_operation_gate: Arc<WorkspaceOperationGate>,
     pub(super) inflight: InFlightReverts,
 }
 
@@ -119,21 +120,29 @@ impl WorkspaceCheckpointService {
         Self {
             store,
             repo_root_store,
-            operation_gate,
+            workspace_operation_gate: operation_gate,
             inflight: InFlightReverts::default(),
         }
     }
 
     /// Capture the workspace's current git state as a turn-start checkpoint.
-    /// See `capture.rs`.
-    pub async fn capture(
+    /// The caller MUST hold the workspace's shared `SessionPrompt` lease for
+    /// the full capture→dispatch→settlement interval. SessionRuntime owns that
+    /// one non-nested lease for every prompt source, including internal ones.
+    pub(crate) async fn capture_turn_start_under_workspace_lease(
         self: &Arc<Self>,
         workspace_id: &str,
-        origin: CheckpointOrigin,
         session_id: Option<String>,
         prompt_id: Option<String>,
     ) -> Result<CheckpointRecord, capture::CheckpointCaptureError> {
-        capture::capture(self, workspace_id, origin, session_id, prompt_id).await
+        capture::capture(
+            self,
+            workspace_id,
+            CheckpointOrigin::TurnStart,
+            session_id,
+            prompt_id,
+        )
+        .await
     }
 
     /// The retention duty (keep-N + age cap + exemptions + orphan reap). See
@@ -150,11 +159,22 @@ impl WorkspaceCheckpointService {
         session_id: &str,
         turn_id: &str,
     ) -> Option<String> {
-        self.store
+        match self
+            .store
             .find_unexpired_checkpoint_by_boundary(session_id, turn_id)
-            .ok()
-            .flatten()
-            .map(|record| record.id)
+        {
+            Ok(record) => record.map(|record| record.id),
+            Err(_error) => {
+                tracing::warn!(
+                    session_id = %session_id,
+                    turn_id = %turn_id,
+                    sentry_code = "CHECKPOINT_LINKAGE_FAILED",
+                    failure_stage = "checkpoint_boundary_lookup",
+                    "checkpoint linkage lookup failed; recording fork without a checkpoint"
+                );
+                None
+            }
+        }
     }
 
     /// The in-flight revert registry, so the future revert flow (and this rung's
@@ -173,10 +193,7 @@ impl WorkspaceCheckpointService {
 
     /// Expire a checkpoint (row) and delete its three refs, in the fail-safe
     /// order (row first). Used by the prompt hook when a dispatch queued.
-    pub async fn expire_and_delete(
-        self: &Arc<Self>,
-        checkpoint_id: &str,
-    ) -> anyhow::Result<()> {
+    pub async fn expire_and_delete(self: &Arc<Self>, checkpoint_id: &str) -> anyhow::Result<()> {
         let Some(record) = self.store.find_checkpoint(checkpoint_id)? else {
             return Ok(());
         };
@@ -184,12 +201,60 @@ impl WorkspaceCheckpointService {
         let workspace = self.store.require_workspace(&record.workspace_id)?;
         let repo_root = self.repo_root_path(&workspace)?;
         let checkpoint_id = checkpoint_id.to_string();
-        let workspace_id = record.workspace_id.clone();
+        let workspace_id = record.workspace_id;
         tokio::task::spawn_blocking(move || {
             refs::delete_for(&repo_root, &workspace_id, &checkpoint_id)
         })
         .await
         .map_err(|error| anyhow::anyhow!("checkpoint ref delete task failed: {error}"))?
+    }
+
+    /// Remove every checkpoint artifact for a workspace in the fail-safe order:
+    /// expire metadata, delete refs, then delete metadata. All authoritative
+    /// workspace-row deletion paths call this before the row dies.
+    #[tracing::instrument(skip_all, fields(workspace_id = %workspace_id))]
+    pub async fn delete_all_for_workspace_under_exclusive(
+        self: &Arc<Self>,
+        workspace_id: &str,
+    ) -> anyhow::Result<()> {
+        let Some(workspace) = self.store.find_workspace(workspace_id)? else {
+            return Ok(());
+        };
+        let repo_root = self.repo_root_path(&workspace)?;
+        let local_repo_missing =
+            workspace.kind == WorkspaceKind::Local && !repo_root.try_exists()?;
+        self.store
+            .mark_checkpoints_expired_for_workspace(workspace_id, &now())?;
+        if !local_repo_missing {
+            let target = repo_root;
+            let id = workspace_id.to_string();
+            tokio::task::spawn_blocking(move || refs::delete_all_for(&target, &id))
+                .await
+                .map_err(|error| anyhow::anyhow!("checkpoint ref delete task failed: {error}"))??;
+        }
+        self.store.delete_checkpoints_for_workspace(workspace_id)
+    }
+
+    /// Blocking twin for the mobility destroy-source pipeline, whose domain
+    /// execution already runs inside `spawn_blocking` while holding the global
+    /// workspace-exclusive lease.
+    #[tracing::instrument(skip_all, fields(workspace_id = %workspace_id))]
+    pub fn delete_all_for_workspace_under_exclusive_blocking(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<()> {
+        let Some(workspace) = self.store.find_workspace(workspace_id)? else {
+            return Ok(());
+        };
+        let repo_root = self.repo_root_path(&workspace)?;
+        let local_repo_missing =
+            workspace.kind == WorkspaceKind::Local && !repo_root.try_exists()?;
+        self.store
+            .mark_checkpoints_expired_for_workspace(workspace_id, &now())?;
+        if !local_repo_missing {
+            refs::delete_all_for(&repo_root, workspace_id)?;
+        }
+        self.store.delete_checkpoints_for_workspace(workspace_id)
     }
 
     /// Resolve a workspace row's repo root into a path. Mirrors

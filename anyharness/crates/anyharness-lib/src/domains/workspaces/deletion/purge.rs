@@ -30,6 +30,7 @@ use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::archive::refs;
 use crate::domains::workspaces::archive::tokens::Phase2CancelOutcome;
 use crate::domains::workspaces::archive::WorkspaceArchiveService;
+use crate::domains::workspaces::checkpoints::WorkspaceCheckpointService;
 use crate::domains::workspaces::managed_root::is_managed_worktree_path;
 use crate::domains::workspaces::model::WorkspaceKind;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
@@ -61,6 +62,10 @@ pub enum WorkspacePurgeError {
     /// preceded by) timed out. Rare, honest, and retryable — the same shape
     /// archive and unarchive answer with.
     OperationInFlight,
+    /// Checkpoint metadata/ref cleanup failed before the workspace row died.
+    /// The underlying git/DB detail stays local; the API maps this to a static
+    /// code and detail because it may contain repository paths.
+    CheckpointCleanupFailed,
     /// A mechanical failure. Every step it can come from is either fully
     /// idempotent or has not yet had any destructive effect, so the honest
     /// answer is always "the row is untouched, try again".
@@ -80,6 +85,7 @@ impl std::fmt::Display for WorkspacePurgeError {
             Self::OperationInFlight => {
                 write!(f, "a workspace operation is already in flight")
             }
+            Self::CheckpointCleanupFailed => write!(f, "checkpoint cleanup failed"),
             Self::Failed(message) => write!(f, "{message}"),
         }
     }
@@ -98,6 +104,7 @@ pub struct WorkspacePurgeService {
     repo_root_service: RepoRootService,
     operation_gate: Arc<WorkspaceOperationGate>,
     archive: Arc<WorkspaceArchiveService>,
+    checkpoints: Arc<WorkspaceCheckpointService>,
     admission: Arc<SessionMutationAdmission>,
     runtime_home: PathBuf,
 }
@@ -114,6 +121,7 @@ impl WorkspacePurgeService {
         repo_root_service: RepoRootService,
         operation_gate: Arc<WorkspaceOperationGate>,
         archive: Arc<WorkspaceArchiveService>,
+        checkpoints: Arc<WorkspaceCheckpointService>,
         admission: Arc<SessionMutationAdmission>,
         runtime_home: PathBuf,
     ) -> Self {
@@ -127,6 +135,7 @@ impl WorkspacePurgeService {
             repo_root_service,
             operation_gate,
             archive,
+            checkpoints,
             admission,
             runtime_home,
         }
@@ -204,23 +213,10 @@ impl WorkspacePurgeService {
 
         let workspace_path = PathBuf::from(&workspace.path);
 
-        // kind=local: the directory is never touched, but sessions and native
-        // JSONL die like any purge — only the git/dir steps are skipped.
-        // (Today's purge rejects local rows entirely; accepting them is a
-        // deliberate change.)
-        if workspace.kind == WorkspaceKind::Local {
-            self.delete_session_artifacts(workspace_id, &workspace_path)
-                .await?;
-            self.store
-                .delete_workspace(workspace_id)
-                .map_err(|error| WorkspacePurgeError::Failed(error.to_string()))?;
-            return Ok(WorkspacePurgeOutcome::Deleted {
-                already_deleted: false,
-            });
-        }
-
-        // The repo root path is resolved first — WorkspaceRecord carries
-        // repo_root_id, a foreign key, not a path.
+        // Resolve the repo root for every workspace kind. Local purge never
+        // removes the user's directory or archive refs, but checkpoint refs
+        // live in that local repository and must be deleted before the row can
+        // die.
         let repo_root_record = self
             .repo_root_service
             .get_repo_root(&workspace.repo_root_id)
@@ -232,6 +228,27 @@ impl WorkspacePurgeService {
                 ))
             })?;
         let repo_root = PathBuf::from(repo_root_record.path);
+
+        // kind=local: the directory is never touched, but sessions and native
+        // JSONL die like any purge. The only repository writes are removal of
+        // Proliferate-owned checkpoint refs and a deferred gc handoff.
+        if workspace.kind == WorkspaceKind::Local {
+            let repo_root_exists = path_exists(&repo_root)
+                .await
+                .map_err(|error| WorkspacePurgeError::Failed(error.to_string()))?;
+            self.delete_checkpoint_artifacts(workspace_id).await?;
+            if repo_root_exists {
+                self.archive.defer_gc(repo_root);
+            }
+            self.delete_session_artifacts(workspace_id, &workspace_path)
+                .await?;
+            self.store
+                .delete_workspace(workspace_id)
+                .map_err(|error| WorkspacePurgeError::Failed(error.to_string()))?;
+            return Ok(WorkspacePurgeOutcome::Deleted {
+                already_deleted: false,
+            });
+        }
 
         // Managed-root containment guard, kept from today's
         // `retire_worktree_materialization` even though the ADR's §6
@@ -298,26 +315,7 @@ impl WorkspacePurgeService {
                 .map_err(|error| WorkspacePurgeError::Failed(error.to_string()))?;
         }
 
-        // Checkpoints (Lane H, ADR 5.3): delete the checkpoint ROWS first, then
-        // every checkpoint ref under this workspace id. Called directly through
-        // the store and the sole-writer `checkpoints::refs` — no service handle
-        // is needed, and the existing deferred-gc handoff below reclaims the
-        // bytes. Row-then-refs matches the retention deletion order.
-        self.store
-            .delete_checkpoints_for_workspace(workspace_id)
-            .map_err(|error| WorkspacePurgeError::Failed(error.to_string()))?;
-        {
-            let target = repo_root.clone();
-            let id = workspace_id.to_string();
-            tokio::task::spawn_blocking(move || {
-                crate::domains::workspaces::checkpoints::refs::delete_all_for(&target, &id)
-            })
-            .await
-            .map_err(|error| {
-                WorkspacePurgeError::Failed(format!("checkpoint ref delete task failed: {error}"))
-            })?
-            .map_err(|error| WorkspacePurgeError::Failed(error.to_string()))?;
-        }
+        self.delete_checkpoint_artifacts(workspace_id).await?;
 
         // The detached, guarded, non-fatal gc: repo-global by nature, so
         // skipped outright while any archive/unarchive is in flight on this
@@ -416,6 +414,32 @@ impl WorkspacePurgeService {
             return Ok(Some(WorkspacePurgeError::ControlledByWorkflow { run_id }));
         }
         Ok(None)
+    }
+
+    /// Checkpoints (Lane H, ADR 5.3): expire rows first, preserving them as
+    /// retention discovery metadata until every private ref is gone. Only then
+    /// delete the rows. A crash or ref-deletion failure therefore converges on
+    /// the next sweep or DELETE retry without making live metadata point at
+    /// missing bytes.
+    async fn delete_checkpoint_artifacts(
+        &self,
+        workspace_id: &str,
+    ) -> Result<(), WorkspacePurgeError> {
+        if self
+            .checkpoints
+            .delete_all_for_workspace_under_exclusive(workspace_id)
+            .await
+            .is_err()
+        {
+            tracing::error!(
+                workspace_id = %workspace_id,
+                sentry_code = "CHECKPOINT_PURGE_FAILED",
+                failure_stage = "checkpoint_artifact_cleanup",
+                "workspace purge could not delete checkpoint artifacts"
+            );
+            return Err(WorkspacePurgeError::CheckpointCleanupFailed);
+        }
+        Ok(())
     }
 
     /// `spawn_blocking`-wrapped session-artifact deletion. The workflow walks

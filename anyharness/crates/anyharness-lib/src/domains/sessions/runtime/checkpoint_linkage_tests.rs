@@ -10,25 +10,110 @@ use crate::app::AppState;
 use crate::domains::sessions::links::service::SessionLinkService;
 use crate::domains::sessions::links::store::SessionLinkStore;
 
-/// Positive Q-H4 linkage seam. The full targeted-fork path that stamps
-/// `checkpoint_id` from a resolved anchor boundary is undrivable in Tier 1 here
-/// (targeted native dispatch fails closed until rung 3), so this pins the two
-/// seams `fork_session` composes: (1) the boundary lookup
-/// `find_checkpoint_id_for_boundary`, seeded with a checkpoint whose
-/// `(session_id, turn_id)` matches, resolves to the checkpoint id; and (2) a
-/// `fork_operations` row carrying that id round-trips through the store.
+/// Positive Q-H4 linkage proof through the real OpenCode targeted-fork call
+/// site. The deliberately unavailable actor fails only after `fork_session`
+/// resolves the boundary and persists its operation, letting the test inspect
+/// the exact prepared/in-flight record without starting a native child.
 #[tokio::test(flavor = "current_thread")]
 async fn checkpoint_linkage_stamps_the_boundary_checkpoint_id_onto_the_fork_operation() {
-    use crate::domains::sessions::model::{ForkOperationPhase, ForkOperationRecord};
+    use anyharness_contract::v1::{ForkSessionTarget, ForkSessionTargetType};
+
+    use crate::app::test_support;
+    use crate::domains::agents::installer::seed::AgentSeedStore;
+    use crate::domains::sessions::model::{ForkOperationPhase, SessionEventRecord};
+    use crate::domains::sessions::runtime::ForkSessionError;
     use crate::domains::workspaces::checkpoints::{CheckpointOrigin, CheckpointRecord};
-    let (state, parent_id, runtime_home) = build_forkable_fork_state(r#"{"fork":true}"#);
+    use crate::persistence::Db;
+
+    let _env = test_support::lock_env();
+    let _bearer = test_support::set_bearer_token_env(None);
+    let _data_key = test_support::set_data_key_env(None);
+    let runtime_home = std::env::temp_dir().join(format!(
+        "anyharness-fork-checkpoint-linkage-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let workspace_path = runtime_home.join("workspace");
+    std::fs::create_dir_all(&workspace_path).expect("create workspace directory");
+    let state = AppState::new(
+        runtime_home.clone(),
+        "http://127.0.0.1:8457".to_string(),
+        Db::open_in_memory().expect("in-memory db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("app state");
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-fork-linkage",
+        "local",
+        &workspace_path.to_string_lossy(),
+    );
+
+    let mut parent = session_record("opencode");
+    parent.id = "checkpoint-fork-parent".to_string();
+    parent.workspace_id = "workspace-fork-linkage".to_string();
+    parent.last_prompt_at = Some("2026-03-25T00:05:00Z".to_string());
+    parent.action_capabilities_json = Some(r#"{"fork":true,"targetedFork":true}"#.to_string());
+    state
+        .session_service
+        .store()
+        .insert(&parent)
+        .expect("insert OpenCode parent");
+
+    for event in [
+        SessionEventRecord {
+            id: 0,
+            session_id: parent.id.clone(),
+            seq: 1,
+            timestamp: "2026-03-25T00:01:00Z".to_string(),
+            event_type: "item_completed".to_string(),
+            turn_id: Some("turn-7".to_string()),
+            item_id: Some("item-7".to_string()),
+            payload_json: serde_json::json!({
+                "type": "item_completed",
+                "item": {
+                    "kind": "user_message",
+                    "status": "completed",
+                    "sourceAgentKind": "opencode"
+                }
+            })
+            .to_string(),
+        },
+        SessionEventRecord {
+            id: 0,
+            session_id: parent.id.clone(),
+            seq: 2,
+            timestamp: "2026-03-25T00:02:00Z".to_string(),
+            event_type: "turn_ended".to_string(),
+            turn_id: Some("turn-7".to_string()),
+            item_id: None,
+            payload_json: r#"{"type":"turn_ended","stopReason":"end_turn"}"#.to_string(),
+        },
+    ] {
+        state
+            .session_service
+            .store()
+            .append_event(&event)
+            .expect("append committed parent boundary");
+    }
+    state
+        .session_service
+        .store()
+        .insert_opencode_message_id(
+            &parent.id,
+            "turn-7",
+            "item-7",
+            "vendor-message-7",
+            "2026-03-25T00:02:00Z",
+        )
+        .expect("seed OpenCode vendor message mapping");
 
     // Seed a turn-start checkpoint at the (parent_session_id, turn_id) boundary.
     let checkpoint = CheckpointRecord {
         id: "chk-boundary-1".to_string(),
-        workspace_id: "workspace-fork-rung2".to_string(),
+        workspace_id: "workspace-fork-linkage".to_string(),
         origin: CheckpointOrigin::TurnStart,
-        session_id: Some(parent_id.clone()),
+        session_id: Some(parent.id.clone()),
         turn_id: Some("turn-7".to_string()),
         prompt_id: None,
         fork_operation_id: None,
@@ -49,50 +134,26 @@ async fn checkpoint_linkage_stamps_the_boundary_checkpoint_id_onto_the_fork_oper
         .insert_checkpoint(&checkpoint)
         .expect("seed checkpoint");
 
-    // Seam 1: the exact lookup fork.rs performs for a resolved anchor boundary.
-    let resolved = state
-        .workspace_checkpoint_service
-        .find_checkpoint_id_for_boundary(&parent_id, "turn-7");
-    assert_eq!(
-        resolved.as_deref(),
-        Some("chk-boundary-1"),
-        "the boundary lookup resolves the seeded checkpoint id"
-    );
-    // A non-matching turn resolves to nothing (best-effort NULL).
-    assert_eq!(
-        state
-            .workspace_checkpoint_service
-            .find_checkpoint_id_for_boundary(&parent_id, "turn-other"),
-        None
-    );
-
-    // Seam 2: a fork operation carrying that id round-trips through the store.
-    let operation = ForkOperationRecord {
-        id: uuid::Uuid::new_v4().to_string(),
-        idempotency_key: "linked-child".to_string(),
-        request_digest: "digest".to_string(),
-        parent_session_id: parent_id.clone(),
-        child_session_id: "linked-child".to_string(),
-        phase: ForkOperationPhase::Completed,
-        anchor_turn_id: Some("turn-7".to_string()),
-        anchor_item_id: Some("item-7".to_string()),
-        provider_anchor_kind: Some("targeted".to_string()),
-        provider_anchor_value: None,
-        provider_anchor_inclusive: None,
-        prefix_terminal_seq: Some(0),
-        prefix_digest: Some("digest".to_string()),
-        adapter_version: None,
-        native_version: None,
-        native_child_session_id: None,
-        checkpoint_id: resolved,
-        created_at: "2026-03-25T00:00:00Z".to_string(),
-        updated_at: "2026-03-25T00:00:00Z".to_string(),
-    };
     state
-        .session_service
-        .store()
-        .insert_fork_operation(&operation)
-        .expect("insert operation");
+        .session_runtime
+        .acp_manager_for_test()
+        .insert_unavailable_session_for_test(&parent.id)
+        .await;
+    let error = state
+        .session_runtime
+        .fork_session(
+            &parent.id,
+            Some(ForkSessionTarget {
+                target_type: ForkSessionTargetType::BeforeUserMessage,
+                turn_id: "turn-7".to_string(),
+                item_id: Some("item-7".to_string()),
+            }),
+            Some("linked-child".to_string()),
+            None,
+        )
+        .await
+        .expect_err("the deliberately unavailable side-door actor rejects dispatch");
+    assert!(matches!(error, ForkSessionError::Internal(_)));
 
     let stored = state
         .session_service
@@ -105,6 +166,9 @@ async fn checkpoint_linkage_stamps_the_boundary_checkpoint_id_onto_the_fork_oper
         Some("chk-boundary-1"),
         "the fork operation row carries the boundary checkpoint id"
     );
+    assert_eq!(stored.anchor_turn_id.as_deref(), Some("turn-7"));
+    assert_eq!(stored.anchor_item_id.as_deref(), Some("item-7"));
+    assert_eq!(stored.phase, ForkOperationPhase::NativeOutcomeUnknown);
     let _ = std::fs::remove_dir_all(&runtime_home);
 }
 
@@ -131,12 +195,9 @@ async fn abort_capture_failure_cleans_up_the_persisted_prompt_attachment() {
     use crate::domains::workspaces::checkpoints::test_support::EnvGuard;
     use crate::persistence::Db;
 
-    let _env_lock = test_support::lock_env();
+    let _capture = EnvGuard::on();
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
-    // Capture ON, sharing the checkpoints suites' single process-global lock so
-    // this test never races their flag writes.
-    let _capture = EnvGuard::on();
 
     let runtime_home = temp_runtime_home("checkpoint-abort-cleanup");
     let script = write_scripted_agent(&runtime_home);
@@ -182,7 +243,10 @@ async fn abort_capture_failure_cleans_up_the_persisted_prompt_attachment() {
         .await
         .expect_err("capture failure aborts the turn");
     assert!(
-        matches!(error, super::SendPromptError::CheckpointCaptureFailed { .. }),
+        matches!(
+            error,
+            super::SendPromptError::CheckpointCaptureFailed { .. }
+        ),
         "the abort policy surfaces a checkpoint-capture failure, got: {error:?}"
     );
 

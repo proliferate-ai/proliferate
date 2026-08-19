@@ -1,9 +1,5 @@
-//! Tier 1, in-crate, real git + real sqlite. Every test builds a genuine
-//! `AppState` over an in-memory database plus a real git repository under a temp
-//! directory, and asserts against `git for-each-ref`, `git rev-parse`, and the
-//! stored row — the checkpoint service's guarantees are all about what is in the
-//! refs and in the row after a step, so a harness that faked either would prove
-//! nothing.
+//! Tier 1, in-crate, real git + real sqlite. Tests assert the refs and rows that
+//! carry the checkpoint service's guarantees; faking either would prove nothing.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -11,12 +7,12 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
-use super::flags::checkpoint_capture_enabled;
 use super::test_support::EnvGuard;
 use super::{refs, CheckpointOrigin, CheckpointRecord, WorkspaceCheckpointService};
 use crate::adapters::git::operations::snapshot::WorkspaceSnapshot;
 use crate::app::AppState;
 use crate::domains::agents::installer::seed::AgentSeedStore;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 use crate::persistence::Db;
 
 /// `pub(super)` so `retention_tests` (split out of this file to stay under
@@ -69,7 +65,14 @@ impl Harness {
         let path = self.base.join("worktrees").join(id);
         git(
             &self.repo_root,
-            &["worktree", "add", "-b", id, &path.display().to_string(), "HEAD"],
+            &[
+                "worktree",
+                "add",
+                "-b",
+                id,
+                &path.display().to_string(),
+                "HEAD",
+            ],
         );
         self.seed_row(id, &path);
         path
@@ -114,7 +117,11 @@ impl Harness {
         created_at: &str,
         expired: bool,
     ) {
-        let tree = make_tree(&self.repo_root, &format!("{checkpoint_id}.txt"), checkpoint_id);
+        let tree = make_tree(
+            &self.repo_root,
+            &format!("{checkpoint_id}.txt"),
+            checkpoint_id,
+        );
         let head = head_sha(&self.repo_root);
         let snap = bare_snapshot(head.clone(), tree.clone(), tree.clone());
         refs::write_checkpoint_refs(&self.repo_root, workspace_id, checkpoint_id, &snap)
@@ -144,13 +151,44 @@ impl Harness {
             .expect("insert checkpoint row");
     }
 
-    pub(super) fn checkpoint_ref_ids(&self, workspace_id: &str) -> std::collections::BTreeSet<String> {
+    pub(super) fn checkpoint_ref_ids(
+        &self,
+        workspace_id: &str,
+    ) -> std::collections::BTreeSet<String> {
         refs::list_for_workspace(&self.repo_root, workspace_id)
             .expect("list checkpoint refs")
             .into_iter()
             .map(|entry| entry.checkpoint_id)
             .collect()
     }
+
+    pub(super) fn corrupt_checkpoint_anchor_flag(&self, checkpoint_id: &str) {
+        self.state
+            .db
+            .with_conn(|conn| {
+                conn.execute(
+                    "UPDATE workspace_checkpoints SET work_tree_anchored = 'not-an-integer' WHERE id = ?1",
+                    [checkpoint_id],
+                )?;
+                Ok(())
+            })
+            .expect("corrupt checkpoint row for mapping-failure test");
+    }
+}
+
+async fn capture_turn_start(
+    service: &Arc<WorkspaceCheckpointService>,
+    workspace_id: &str,
+    session_id: Option<String>,
+    prompt_id: Option<String>,
+) -> Result<CheckpointRecord, super::capture::CheckpointCaptureError> {
+    let _lease = service
+        .workspace_operation_gate
+        .acquire_shared(workspace_id, WorkspaceOperationKind::SessionPrompt)
+        .await;
+    service
+        .capture_turn_start_under_workspace_lease(workspace_id, session_id, prompt_id)
+        .await
 }
 
 fn init_repo(path: &Path) {
@@ -235,7 +273,11 @@ pub(super) fn make_tree(repo: &Path, filename: &str, content: &str) -> String {
         .to_string()
 }
 
-pub(super) fn bare_snapshot(head_sha: String, work_tree: String, index_tree: String) -> WorkspaceSnapshot {
+pub(super) fn bare_snapshot(
+    head_sha: String,
+    work_tree: String,
+    index_tree: String,
+) -> WorkspaceSnapshot {
     WorkspaceSnapshot {
         head_sha,
         branch: Some("main".to_string()),
@@ -273,8 +315,7 @@ async fn capture_writes_three_verifiable_refs_and_a_row_with_the_peeled_oids() {
     make_dirty(&path);
     let service = harness.service();
 
-    let record = service
-        .capture("ws-1", CheckpointOrigin::TurnStart, Some("sess-1".into()), Some("p-1".into()))
+    let record = capture_turn_start(&service, "ws-1", Some("sess-1".into()), Some("p-1".into()))
         .await
         .expect("capture");
 
@@ -289,10 +330,7 @@ async fn capture_writes_three_verifiable_refs_and_a_row_with_the_peeled_oids() {
     refs::verify_checkpoint_refs(&harness.repo_root, "ws-1", &record.id, &snap)
         .expect("verify passes against the captured OIDs");
     // The peeled worktree tree in the row is what `worktree^{tree}` resolves to.
-    let worktree_ref = format!(
-        "refs/proliferate/checkpoints/ws-1/{}/worktree",
-        record.id
-    );
+    let worktree_ref = format!("refs/proliferate/checkpoints/ws-1/{}/worktree", record.id);
     let peeled = git_stdout(
         &harness.repo_root,
         &["rev-parse", &format!("{worktree_ref}^{{tree}}")],
@@ -306,6 +344,75 @@ async fn capture_writes_three_verifiable_refs_and_a_row_with_the_peeled_oids() {
     assert_eq!(row.origin, CheckpointOrigin::TurnStart);
     assert_eq!(row.session_id.as_deref(), Some("sess-1"));
     assert!(row.turn_id.is_none(), "turn_id is unknown at capture time");
+}
+
+#[tokio::test]
+async fn turn_start_capture_waits_for_the_workspace_exclusive_lease() {
+    let harness = Harness::new("capture-lease");
+    harness.worktree_workspace("ws-1");
+    let service = harness.service();
+    let exclusive = service
+        .workspace_operation_gate
+        .acquire_exclusive("ws-1")
+        .await;
+    let capture_service = service.clone();
+    let mut capture = tokio::spawn(async move {
+        capture_turn_start(&capture_service, "ws-1", Some("sess-1".into()), None).await
+    });
+
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(50), &mut capture)
+            .await
+            .is_err(),
+        "capture must not write refs while retention or purge holds exclusivity"
+    );
+    assert!(
+        harness.checkpoint_ref_ids("ws-1").is_empty(),
+        "no rowless refs may appear before the shared lease is admitted"
+    );
+
+    drop(exclusive);
+    let record = tokio::time::timeout(std::time::Duration::from_secs(5), capture)
+        .await
+        .expect("capture resumes after exclusivity ends")
+        .expect("capture task joins")
+        .expect("capture succeeds");
+    assert!(harness.checkpoint_ref_ids("ws-1").contains(&record.id));
+}
+
+#[tokio::test]
+async fn capture_does_not_nest_the_workspace_read_lease_behind_a_queued_writer() {
+    let harness = Harness::new("capture-nested-lease");
+    harness.worktree_workspace("ws-1");
+    let service = harness.service();
+    let workspace_gate = service.workspace_operation_gate.clone();
+    let outer_prompt_lease = workspace_gate
+        .acquire_shared("ws-1", WorkspaceOperationKind::SessionPrompt)
+        .await;
+    let writer_gate = workspace_gate.clone();
+    let (writer_started_tx, writer_started_rx) = tokio::sync::oneshot::channel();
+    let writer = tokio::spawn(async move {
+        let _ = writer_started_tx.send(());
+        writer_gate.acquire_exclusive("ws-1").await
+    });
+    writer_started_rx.await.expect("writer task starts");
+    tokio::task::yield_now().await;
+
+    let record = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        service.capture_turn_start_under_workspace_lease("ws-1", Some("sess-1".into()), None),
+    )
+    .await
+    .expect("capture must not wait behind the workspace writer")
+    .expect("capture succeeds under the outer prompt lease");
+    assert!(harness.checkpoint_ref_ids("ws-1").contains(&record.id));
+
+    drop(outer_prompt_lease);
+    let writer_lease = tokio::time::timeout(std::time::Duration::from_secs(1), writer)
+        .await
+        .expect("writer proceeds after the outer prompt lease drops")
+        .expect("writer task joins");
+    drop(writer_lease);
 }
 
 /// 2. Verify-failure negative control: an object deleted between write and verify
@@ -328,10 +435,24 @@ fn a_deleted_object_fails_checkpoint_verification() {
     let error = refs::verify_checkpoint_refs(&repo_base, "ws-1", "cp-1", &snap)
         .expect_err("a deleted object must never verify");
     assert!(
-        error.to_string().contains("does not exist") || error.to_string().contains("peel failed"),
-        "expected an existence/peel failure, got: {error}"
+        error.to_string().contains("git show-ref --verify"),
+        "expected the stable ref-verification failure, got: {error}"
     );
     let _ = std::fs::remove_dir_all(&repo_base);
+}
+
+#[test]
+fn checkpoint_ref_deletion_reports_an_unreadable_repository() {
+    let not_a_repo = std::env::temp_dir().join(format!(
+        "anyharness-checkpoints-not-repo-{}",
+        Uuid::new_v4()
+    ));
+    std::fs::create_dir_all(&not_a_repo).expect("create non-repository directory");
+
+    refs::delete_for(&not_a_repo, "ws-1", "cp-1")
+        .expect_err("git inspection failures must not masquerade as absent refs");
+
+    let _ = std::fs::remove_dir_all(not_a_repo);
 }
 
 /// 3. GC survival: after an aggressive prune the captured objects still peel,
@@ -341,16 +462,12 @@ async fn captured_objects_survive_an_aggressive_gc() {
     let harness = Harness::new("capture-gc");
     let path = harness.worktree_workspace("ws-1");
     make_dirty(&path);
-    let record = harness
-        .service()
-        .capture("ws-1", CheckpointOrigin::TurnStart, None, None)
+    let service = harness.service();
+    let record = capture_turn_start(&service, "ws-1", None, None)
         .await
         .expect("capture");
 
-    git(
-        &harness.repo_root,
-        &["gc", "--prune=now", "--aggressive"],
-    );
+    git(&harness.repo_root, &["gc", "--prune=now", "--aggressive"]);
 
     let snap = bare_snapshot(
         record.head_sha.clone(),
@@ -361,15 +478,12 @@ async fn captured_objects_survive_an_aggressive_gc() {
         .expect("objects still peel after gc --prune=now --aggressive");
 }
 
-/// 7. Sweep isolation regression: the archive sweep's `list_for_repo` ignores
-///    checkpoint refs, so archive's orphaned-refs duty leaves them untouched.
-///    Fails if the `checkpoints/` filter is removed from `archive/refs.rs`.
+/// Archive ref sweeping must ignore checkpoint refs.
 #[tokio::test]
 async fn the_archive_sweep_leaves_checkpoint_refs_untouched() {
     let _env = EnvGuard::off();
     let harness = Harness::new("isolation");
     harness.worktree_workspace("ws-1");
-    // Only checkpoint refs in the repo (no archive refs at all).
     harness.make_checkpoint(
         "ws-1",
         "cp-1",
@@ -377,7 +491,6 @@ async fn the_archive_sweep_leaves_checkpoint_refs_untouched() {
         &timestamp_days_ago(1),
         false,
     );
-    // The archive enumerator must return nothing for a checkpoint-only repo.
     let archive_entries =
         crate::domains::workspaces::archive::refs::list_for_repo(&harness.repo_root)
             .expect("archive list_for_repo must not hard-fail on checkpoint refs");
@@ -389,7 +502,6 @@ async fn the_archive_sweep_leaves_checkpoint_refs_untouched() {
             .map(|entry| (&entry.family, &entry.workspace_id))
             .collect::<Vec<_>>()
     );
-    // And the archive sweep's full pass leaves the checkpoint refs in place.
     harness
         .state
         .workspace_archive_service
@@ -401,8 +513,7 @@ async fn the_archive_sweep_leaves_checkpoint_refs_untouched() {
     );
 }
 
-/// 8. Purge: a workspace's checkpoint rows and refs are both gone after purge's
-///    checkpoint step.
+/// Purge's checkpoint step removes rows and refs.
 #[tokio::test]
 async fn purge_clears_checkpoint_rows_and_refs() {
     let harness = Harness::new("purge");
@@ -416,12 +527,13 @@ async fn purge_clears_checkpoint_rows_and_refs() {
     );
     let store = harness.service().store_for_tests().clone();
 
-    // Drive the two purge steps directly (the full purge flow is exercised by the
-    // deletion suite; here the checkpoint carve-out is under test).
+    store
+        .mark_checkpoints_expired_for_workspace("ws-1", "2026-08-19T00:00:00Z")
+        .expect("expire rows");
+    refs::delete_all_for(&harness.repo_root, "ws-1").expect("delete refs");
     store
         .delete_checkpoints_for_workspace("ws-1")
         .expect("delete rows");
-    refs::delete_all_for(&harness.repo_root, "ws-1").expect("delete refs");
 
     assert!(
         store
@@ -436,8 +548,7 @@ async fn purge_clears_checkpoint_rows_and_refs() {
     );
 }
 
-/// 9. Fork linkage: the boundary lookup finds an unexpired checkpoint at
-///    `(session, turn)`, and returns nothing when none exists.
+/// Fork linkage is exact on `(session, turn)`.
 #[tokio::test]
 async fn the_boundary_lookup_finds_the_checkpoint_or_nothing() {
     let harness = Harness::new("fork-linkage");
