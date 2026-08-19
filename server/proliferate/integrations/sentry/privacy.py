@@ -22,9 +22,9 @@ BEARER_TOKEN_PATTERN = re.compile(r"Bearer\s+[A-Za-z0-9\-._~+/]+=*", re.IGNORECA
 JWT_PATTERN = re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_.-]+\.[A-Za-z0-9_.-]+\b")
 
 
-def _words(text: str) -> list[str]:
+def _set(text: str) -> frozenset[str]:
     """Split a space-separated closed catalog into its exact values."""
-    return text.split()
+    return frozenset(text.split())
 
 
 REDACTED = "[redacted]"
@@ -66,9 +66,7 @@ def scrub_mapping(value: dict[str, Any] | None) -> dict[str, Any] | None:
 
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 _PY_NAME = re.compile(r"\A[A-Za-z_][A-Za-z0-9_]*\Z")
-_ANGLE_NAMES = frozenset(
-    _words("<module> <locals> <lambda> <genexpr> <listcomp> <dictcomp> <setcomp>")
-)
+_ANGLE_NAMES = _set("<module> <locals> <lambda> <genexpr> <listcomp> <dictcomp> <setcomp>")
 _FILE_SEGMENT = re.compile(r"\A[A-Za-z0-9_.-]+\Z")
 _RFC3339 = re.compile(r"\A\d{4}-\d\d-\d\d[Tt ]\d\d:\d\d:\d\d(?:\.\d+)?(?:[Zz]|[+-]\d\d:\d\d)\Z")
 
@@ -210,41 +208,37 @@ def _catalog(allowed: str, limit: int) -> Any:
     return lambda value: _exact(value, values, limit)
 
 
-ENVIRONMENTS = frozenset(_words("trusted-beta staging production Production"))
-environment_value = _catalog("trusted-beta staging production Production", 12)
-EVENT_LEVELS = frozenset(("debug", "info", "warning", "error", "critical", "fatal"))
-HTTP_METHODS = frozenset(_words("GET HEAD POST PUT PATCH DELETE OPTIONS TRACE CONNECT"))
-MECHANISM_TYPES = frozenset(_words("generic chained starlette threading excepthook celery"))
-BREADCRUMB_TYPES = frozenset(
-    _words("default debug error http info navigation query transaction ui user log")
+def _catalog_of(allowed: frozenset[str], limit: int) -> Any:
+    return lambda value: _exact(value, allowed, limit)
+
+
+ENVIRONMENTS = _set("trusted-beta staging production Production")
+EVENT_LEVELS = _set("debug info warning error critical fatal")
+HTTP_METHODS = _set("GET HEAD POST PUT PATCH DELETE OPTIONS TRACE CONNECT")
+MECHANISM_TYPES = _set("generic chained starlette threading excepthook celery")
+BREADCRUMB_TYPES = _set("default debug error http info navigation query transaction ui user log")
+SPAN_OPS = _set("http.server websocket.server queue.task.celery queue.process queue.publish")
+SPAN_STATUSES = _set(
+    "ok cancelled unknown_error invalid_argument deadline_exceeded not_found already_exists "
+    "permission_denied resource_exhausted failed_precondition aborted out_of_range "
+    "unimplemented internal_error unavailable data_loss unauthenticated"
 )
-SPAN_OPS = frozenset(
-    _words("http.server websocket.server queue.task.celery queue.process queue.publish")
+DROP_REASONS = _set(
+    "invoice_id_not_string invoice_no_cloud_subscription_line invoice_subject_unresolved "
+    "invoice_period_grant_gate_closed invoice_not_period_boundary unhandled_event_type "
+    "checkout_session_unhandled_mode_or_purpose checkout_session_id_not_string "
+    "checkout_session_subject_unresolved checkout_session_refill_price_missing "
+    "subscription_fields_not_strings subscription_subject_unresolved "
+    "payment_failed_subject_unresolved payment_hold_subject_unresolved"
 )
-SPAN_STATUSES = frozenset(
-    _words(
-        "ok cancelled unknown_error invalid_argument deadline_exceeded not_found already_exists "
-        "permission_denied resource_exhausted failed_precondition aborted out_of_range "
-        "unimplemented internal_error unavailable data_loss unauthenticated"
-    )
-)
-DROP_REASONS = frozenset(
-    _words(
-        "invoice_id_not_string invoice_no_cloud_subscription_line invoice_subject_unresolved "
-        "invoice_period_grant_gate_closed invoice_not_period_boundary unhandled_event_type "
-        "checkout_session_unhandled_mode_or_purpose checkout_session_id_not_string "
-        "checkout_session_subject_unresolved checkout_session_refill_price_missing "
-        "subscription_fields_not_strings subscription_subject_unresolved "
-        "payment_failed_subject_unresolved payment_hold_subject_unresolved"
-    )
-)
-_LABEL_PREFIXES = _words(
+environment_value = _catalog_of(ENVIRONMENTS, 12)
+_LABEL_PREFIXES = _set(
     "materialize_sandbox materialize_repo_environment "
     "materialize_secret_set materialize_agent_auth"
 )
 
 
-def _prefixed_uuid(value: Any, prefixes: list[str], limit: int) -> str | None:
+def _prefixed_uuid(value: Any, prefixes: frozenset[str], limit: int) -> str | None:
     """Admit exactly ``<listed prefix>:<canonical uuid>`` within the byte bound."""
     cleaned = _clean_str(value, limit)
     if cleaned is None or ":" not in cleaned:
@@ -256,18 +250,14 @@ def _prefixed_uuid(value: Any, prefixes: list[str], limit: int) -> str | None:
 
 
 def _tenant_id(value: Any) -> str | None:
-    return _prefixed_uuid(value, ["user", "org"], 41)
+    return _prefixed_uuid(value, _set("user org"), 41)
 
 
 def _label(value: Any) -> str | None:
     return _prefixed_uuid(value, _LABEL_PREFIXES, 65)
 
 
-def _catalog_of(allowed: frozenset[str], limit: int) -> Any:
-    return lambda value: _exact(value, allowed, limit)
-
-
-_UUID_TAGS = _words(
+_UUID_TAGS = _set(
     "user_id organization_id cloud_workspace_id cloud_target_id "
     "sandbox_profile_id cloud_sandbox_id enrollment_key_id"
 )
@@ -300,8 +290,8 @@ TAG_VALIDATORS: dict[str, Any] = {
     ),
 }
 
-_UUID_EXTRAS = _words("billing_subject_id owner_user_id subject_id")
-_BOOL_EXTRAS = _words(
+_UUID_EXTRAS = _set("billing_subject_id owner_user_id subject_id")
+_BOOL_EXTRAS = _set(
     "subject_resolved pro_pricing_enabled has_subscription_record "
     "has_period_start reason_recognized paid has_subscription_id "
     "has_customer_id has_status"

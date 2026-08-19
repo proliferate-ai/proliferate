@@ -149,10 +149,12 @@ change sits on:
   the pinned SDK's no-discovery sentinel (`None` would trigger ambient
   `SENTRY_RELEASE` / `SENTRY_ENVIRONMENT` discovery and a `production`
   default); both callbacks then remove the sentinel.
-- **Deliberately preserved through scrubbing:** the top-level Sentry
-  `environment` field (snapshot, scrub, restore) and the `runtime_env` tag on
-  Worker/Supervisor events whose only allowed live value is `e2b`. Every
-  other env-like key stays redacted; raw environment maps never pass.
+- **Deliberately preserved:** the top-level Sentry `environment` field and the
+  `runtime_env` tag on Worker/Supervisor events whose only allowed live value
+  is `e2b`. The Server keeps `environment` only when it matches its closed
+  four-value catalog; the client wrappers still use the snapshot/scrub/restore
+  mechanic for it. Every other env-like key stays redacted; raw environment
+  maps never pass.
 - **Structural, not length, bounds:** client payload scrubbing bounds depth,
   array positions, and object properties (`[circular]`, `[truncated]`) but
   does not truncate strings by length — what you put in a string field ships.
