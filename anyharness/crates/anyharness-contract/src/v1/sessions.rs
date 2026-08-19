@@ -169,8 +169,12 @@ pub struct CreateSessionRequest {
     pub agent_kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
+    /// Stateless N-1 compatibility input. The HTTP boundary translates it to
+    /// `controlValues.mode` before the request enters the session domain.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode_id: Option<String>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub control_values: std::collections::BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub system_prompt_append: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -260,6 +264,7 @@ impl fmt::Debug for CreateSessionRequest {
             .field("agent_kind", &self.agent_kind)
             .field("model_id", &self.model_id)
             .field("mode_id", &self.mode_id)
+            .field("control_keys", &self.control_values.keys().collect::<Vec<_>>())
             .field(
                 "system_prompt_append_count",
                 &self
@@ -544,6 +549,7 @@ mod tests {
             agent_kind: "claude".to_string(),
             model_id: Some("default".to_string()),
             mode_id: Some("bypassPermissions".to_string()),
+            control_values: std::collections::BTreeMap::new(),
             system_prompt_append: Some(vec!["Rename the branch".to_string()]),
             subagents_enabled: None,
             origin: None,

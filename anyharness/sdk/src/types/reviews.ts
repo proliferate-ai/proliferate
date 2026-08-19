@@ -5,28 +5,45 @@ export type ReviewRunStatus = components["schemas"]["ReviewRunStatus"];
 export type ReviewRoundStatus = components["schemas"]["ReviewRoundStatus"];
 export type ReviewAssignmentStatus =
   components["schemas"]["ReviewAssignmentStatus"];
-export type ReviewModeVerificationStatus =
-  components["schemas"]["ReviewModeVerificationStatus"];
+export type ReviewLaunchVerificationStatus =
+  "pending" | "verified" | "mismatch" | "not_checked";
 export type ReviewFeedbackDeliveryState =
   components["schemas"]["ReviewFeedbackDeliveryState"];
-export type ReviewPersonaRequest =
-  components["schemas"]["ReviewPersonaRequest"];
-export type StartPlanReviewRequest =
-  components["schemas"]["StartPlanReviewRequest"];
-export type StartCodeReviewRequest =
-  components["schemas"]["StartCodeReviewRequest"];
+export interface ReviewPersonaRequest {
+  personaId: string;
+  label: string;
+  prompt: string;
+  agentKind: string;
+  modelId?: string | null;
+  controlValues: Record<string, string>;
+}
+export interface StartPlanReviewRequest {
+  parentSessionId: string;
+  maxRounds?: number;
+  autoIterate?: boolean;
+  reviewers: ReviewPersonaRequest[];
+}
+export type StartCodeReviewRequest = StartPlanReviewRequest;
 export type MarkReviewRevisionReadyRequest =
   components["schemas"]["MarkReviewRevisionReadyRequest"];
 export type RetryReviewAssignmentRequest =
   components["schemas"]["RetryReviewAssignmentRequest"];
-export type ReviewAssignmentDetail =
-  components["schemas"]["ReviewAssignmentDetail"];
+export type ReviewAssignmentDetail = Omit<
+  components["schemas"]["ReviewAssignmentDetail"],
+  "requestedModeId" | "actualModeId" | "modeVerificationStatus"
+> & {
+  controlValues: Record<string, string>;
+  launchVerificationStatus: ReviewLaunchVerificationStatus;
+};
 export type ReviewCritiqueResponse =
   components["schemas"]["ReviewCritiqueResponse"];
 export type ReviewFeedbackDeliveryDetail =
   components["schemas"]["ReviewFeedbackDeliveryDetail"];
-export type ReviewRoundDetail = components["schemas"]["ReviewRoundDetail"];
-export type ReviewRunDetail = components["schemas"]["ReviewRunDetail"];
-export type ReviewRunResponse = components["schemas"]["ReviewRunResponse"];
-export type SessionReviewsResponse =
-  components["schemas"]["SessionReviewsResponse"];
+export type ReviewRoundDetail = Omit<components["schemas"]["ReviewRoundDetail"], "assignments"> & {
+  assignments: ReviewAssignmentDetail[];
+};
+export type ReviewRunDetail = Omit<components["schemas"]["ReviewRunDetail"], "rounds"> & {
+  rounds: ReviewRoundDetail[];
+};
+export interface ReviewRunResponse { run: ReviewRunDetail }
+export interface SessionReviewsResponse { reviews: ReviewRunDetail[] }

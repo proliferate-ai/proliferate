@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use super::super::model::{
     ReviewAssignmentRecord, ReviewAssignmentStatus, ReviewFeedbackJobRecord, ReviewKind,
-    ReviewModeVerificationStatus, ReviewRoundRecord, ReviewRunRecord,
+    ReviewLaunchVerificationStatus, ReviewRoundRecord, ReviewRunRecord,
 };
 use super::{
     ReviewError, ReviewPersonaInput, ReviewService, MAX_REVIEWERS_PER_RUN,
@@ -106,9 +106,8 @@ pub(super) fn build_assignments(
             persona_prompt: reviewer.prompt.clone(),
             agent_kind: reviewer.agent_kind.clone(),
             model_id: reviewer.model_id.clone(),
-            requested_mode_id: reviewer.mode_id.clone(),
-            actual_mode_id: None,
-            mode_verification_status: ReviewModeVerificationStatus::Pending,
+            control_values: reviewer.control_values.clone(),
+            launch_verification_status: ReviewLaunchVerificationStatus::Pending,
             status: ReviewAssignmentStatus::Queued,
             pass: None,
             summary: None,
@@ -136,7 +135,7 @@ pub(super) fn dedupe_personas(assignments: Vec<ReviewAssignmentRecord>) -> Vec<R
                 prompt: assignment.persona_prompt,
                 agent_kind: assignment.agent_kind,
                 model_id: assignment.model_id,
-                mode_id: assignment.requested_mode_id,
+                control_values: assignment.control_values,
             });
     }
     by_persona.into_values().collect()
@@ -318,9 +317,8 @@ fn assignment_to_contract(assignment: ReviewAssignmentRecord) -> v1::ReviewAssig
         persona_label: assignment.persona_label,
         agent_kind: assignment.agent_kind,
         model_id: assignment.model_id,
-        requested_mode_id: assignment.requested_mode_id,
-        actual_mode_id: assignment.actual_mode_id,
-        mode_verification_status: assignment.mode_verification_status.into(),
+        control_values: assignment.control_values,
+        launch_verification_status: assignment.launch_verification_status.into(),
         status: assignment.status.into(),
         pass: assignment.pass,
         summary: assignment.summary,

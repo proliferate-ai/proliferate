@@ -15,7 +15,7 @@ pub fn heartbeat_ack(response: &HeartbeatResponse) {
         worker_id = %response.worker_id,
         status = response.status.as_deref(),
         server_time = response.server_time.as_deref(),
-        model_snapshot_upload_allowed = response.model_snapshot_upload_allowed,
+        launch_options_upload_allowed = response.launch_options_upload_allowed,
         "cloud heartbeat acknowledged"
     );
 }

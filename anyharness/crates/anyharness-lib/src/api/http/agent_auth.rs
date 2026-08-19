@@ -10,7 +10,7 @@ use axum::{body::Bytes, extract::State, http::StatusCode, Json};
 
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::domains::agents::model_snapshot::{ModelSnapshotService, PokeReason};
+use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
 use crate::domains::agents::route_auth::{
     apply_state_file, clear_state_file, AgentAuthState, RouteAuthError,
 };
@@ -55,7 +55,7 @@ pub async fn put_agent_auth_state(
     //
     // Fire-and-forget: the apply response never waits for a probe; the picker
     // shows a refreshing state rather than stale data presented as current.
-    ModelSnapshotService::poke_harnesses_optional(
+    LaunchProbeService::poke_harnesses_optional(
         &state.automatic_poke_engine,
         &applied_harness_kinds(&document),
         PokeReason::AuthApplied,
@@ -83,7 +83,7 @@ pub async fn delete_agent_auth_state(
     // possible auth application. Without a poke here every harness's observation
     // stays pinned to an auth world that no longer exists, and the picker keeps
     // serving models the machine can no longer reach.
-    ModelSnapshotService::poke_all_optional(&state.automatic_poke_engine, PokeReason::AuthApplied);
+    LaunchProbeService::poke_all_optional(&state.automatic_poke_engine, PokeReason::AuthApplied);
     Ok(StatusCode::NO_CONTENT)
 }
 

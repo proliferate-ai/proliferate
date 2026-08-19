@@ -633,7 +633,7 @@ async fn an_adhoc_node_runs_beside_the_chain_and_never_moves_it() {
                 model: Some(crate::domains::workflows::definition::NodeModel {
                     agent_kind: "claude".into(),
                     model_id: Some("haiku".into()),
-                    mode_id: None,
+                    control_values: Default::default(),
                 }),
             },
         )

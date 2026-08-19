@@ -12,7 +12,6 @@ fn draft_catalog_parses_with_expected_shape() {
     let catalog = parse_draft();
 
     assert_eq!(catalog.schema_version, 2);
-    assert_eq!(catalog.default_agent_kind.as_deref(), Some("claude"));
     assert_eq!(catalog.catalog_version, draft_catalog_version().as_str());
     let probed_against = catalog.probed_against.as_ref().expect("probedAgainst");
     assert_eq!(
@@ -56,96 +55,20 @@ fn draft_catalog_parses_with_expected_shape() {
         gateway_context.signals,
         Some(AgentCatalogAuthSignal::Route("gateway".to_string()))
     );
-    // gatewayPolicy carries the small-fast role pin that used to be a Rust const.
-    let policy = claude
-        .session
-        .gateway_policy
-        .as_ref()
-        .expect("claude gatewayPolicy");
-    assert_eq!(
-        policy.roles.get("small_fast").map(String::as_str),
-        Some("claude-haiku-4-5-20251001")
-    );
-    let first = &claude.session.models[0];
+    let first = &claude.session.presentation_models[0];
     assert_eq!(first.id, "default");
-    // Bare ids are never Bedrock-servable (Bedrock takes only us.anthropic.*
-    // inference-profile ids), so `default` is api/oauth only — a Bedrock-routed
-    // account gets the us.anthropic.* rows, never this bare id.
-    assert_eq!(
-        first.availability.any_of,
-        vec!["anthropic-api", "anthropic-oauth"]
-    );
-    assert!(first.default_visible);
-    let effort = first.controls.get("effort").expect("effort control");
-    assert_eq!(
-        effort.values,
-        vec!["default", "low", "medium", "high", "xhigh", "max"]
-    );
-    assert_eq!(effort.observed_value.as_deref(), Some("default"));
-    assert_eq!(effort.default, None);
-
-    let codex = &catalog.agents[1];
-    let model_control = codex
-        .session
-        .controls
-        .iter()
-        .find(|control| control.key == "model")
-        .expect("model control");
-    let mapping = model_control.mapping.as_ref().expect("model mapping");
-    assert_eq!(mapping.switch_via.as_deref(), Some("configOption"));
-    assert_eq!(mapping.variant_syntax.as_deref(), None);
 
     let cursor = &catalog.agents[2];
     assert!(cursor.provenance.attestation.is_none());
     assert!(cursor.harness.native.is_none());
-    // Cursor is the variant-carrying agent: its model control declares the
-    // bracket-params syntax and its models carry probe-observed variant ids.
-    let cursor_model_control = cursor
-        .session
-        .controls
-        .iter()
-        .find(|control| control.key == "model")
-        .expect("cursor model control");
-    let cursor_mapping = cursor_model_control
-        .mapping
-        .as_ref()
-        .expect("cursor model mapping");
-    assert_eq!(
-        cursor_mapping.variant_syntax.as_deref(),
-        Some("bracket-params")
-    );
-    // Variant families are draft data — anchor on the stable shape, not a
-    // fixed model id (the probed model list moves between catalog runs).
-    let with_variants = cursor
-        .session
-        .models
-        .iter()
-        .find(|model| {
-            model
-                .provenance
-                .as_ref()
-                .is_some_and(|provenance| !provenance.variant_ids.is_empty())
-        })
-        .expect("some cursor model carries variant ids");
-    let provenance = with_variants.provenance.as_ref().expect("provenance");
-    assert!(provenance
-        .variant_ids
-        .iter()
-        .any(|variant| variant.starts_with(&format!("{}[", with_variants.id))));
+    assert!(!cursor.session.presentation_models.is_empty());
 
     let opencode = &catalog.agents[4];
     assert!(opencode
         .auth_contexts
         .iter()
         .any(|context| context.id == "baseline" && context.auth_slot_id.is_none()));
-    assert_eq!(
-        opencode
-            .session
-            .observed_defaults
-            .get("baseline")
-            .map(String::as_str),
-        Some("opencode/big-pickle")
-    );
+    assert!(!opencode.session.presentation_models.is_empty());
 }
 
 #[test]

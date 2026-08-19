@@ -24,8 +24,9 @@ use crate::domains::agents::catalog::service::AgentCatalogService;
 use crate::domains::agents::catalog::sync::CatalogSyncService;
 use crate::domains::agents::installer::reconcile::execution::AgentReconcileService;
 use crate::domains::agents::installer::seed::AgentSeedStore;
-use crate::domains::agents::model_snapshot::targets::RuntimeProbeTargets;
-use crate::domains::agents::model_snapshot::ModelSnapshotService;
+use crate::domains::agents::launch_options::HarnessLaunchOptionsService;
+use crate::domains::agents::launch_probe::targets::RuntimeProbeTargets;
+use crate::domains::agents::launch_probe::LaunchProbeService;
 use crate::domains::agents::runtime::AgentRuntime;
 use crate::domains::artifacts::protection::ArtifactProtectionService;
 use crate::domains::artifacts::runtime::ArtifactRuntime;
@@ -122,9 +123,10 @@ pub struct AppState {
     pub agent_seed_store: AgentSeedStore,
     pub agent_runtime: Arc<AgentRuntime>,
     pub catalog_sync_service: Arc<CatalogSyncService>,
+    pub launch_options_service: Arc<HarnessLaunchOptionsService>,
     /// The probe engine, for READS and for the user-initiated refresh: the status
     /// route and the launch-validation universe.
-    pub model_snapshot_service: Arc<ModelSnapshotService>,
+    pub launch_probe_service: Arc<LaunchProbeService>,
     /// The same engine, for the AUTOMATIC pokes — `None` under `cfg(test)`.
     ///
     /// A second field rather than a flag at each call site, so "may this site fire a
@@ -134,7 +136,7 @@ pub struct AppState {
     /// its ACP requests would otherwise see someone else's probe in their assertions.
     /// Reads and the manual refresh keep the real engine above, because nothing there
     /// fires on its own.
-    pub automatic_poke_engine: Option<Arc<ModelSnapshotService>>,
+    pub automatic_poke_engine: Option<Arc<LaunchProbeService>>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
@@ -239,32 +241,39 @@ impl AppState {
             catalog_sync_service.clone(),
             runtime_home.clone(),
         ));
-        // The machine model-snapshot engine. Constructed here so exactly ONE engine
+        // The machine launch-options probe. Constructed here so exactly ONE engine
         // exists per process: every poke site below holds this same handle, and its
         // single-flight gate is per-instance, so a second engine would mean two
         // independent probe schedulers over one document.
         //
         // Its lock decides ownership at construction: a second RUNTIME over the same
         // home comes up read-only and reports so on the status surface.
-        let model_snapshot_service = Arc::new(ModelSnapshotService::new(
+        let launch_options_service = Arc::new(HarnessLaunchOptionsService::new(
+            db.clone(),
             runtime_home.clone(),
-            gateway_model_planner.clone(),
-            Arc::new(RuntimeProbeTargets::new(runtime_home.clone())),
         ));
+        let launch_probe_service = Arc::new(
+            LaunchProbeService::new(
+                runtime_home.clone(),
+                gateway_model_planner.clone(),
+                Arc::new(RuntimeProbeTargets::new(runtime_home.clone())),
+            )
+            .with_launch_options(launch_options_service.clone()),
+        );
         // The one handle every AUTOMATIC poke site takes. See `AppState`'s field for
         // why it is separate; every one of the six sites reads THIS, so the
         // suppression is a property of the wiring rather than of which sites happened
         // to be threaded.
         #[cfg(not(test))]
-        let automatic_poke_engine = Some(model_snapshot_service.clone());
+        let automatic_poke_engine = Some(launch_probe_service.clone());
         #[cfg(test)]
-        let automatic_poke_engine: Option<Arc<ModelSnapshotService>> = None;
+        let automatic_poke_engine: Option<Arc<LaunchProbeService>> = None;
         // The agent runtime carries the engine for its startup and install-completed
         // pokes. Attached rather than constructor-injected because the engine needs the
         // catalog service the runtime also takes; building the runtime first and
         // attaching second keeps both constructors acyclic.
         let agent_runtime = Arc::new(match automatic_poke_engine.clone() {
-            Some(engine) => agent_runtime_without_probes.with_model_snapshot(engine),
+            Some(engine) => agent_runtime_without_probes.with_launch_probe(engine),
             None => agent_runtime_without_probes,
         });
         let process_service = Arc::new(ProcessService::new());
@@ -288,7 +297,7 @@ impl AppState {
             file_protection_registry,
             workspace_file_search_cache.clone(),
         ));
-        let session_service = Arc::new(SessionService::with_observed_universe(
+        let session_service = Arc::new(SessionService::with_launch_options(
             SessionStore::new(db.clone()),
             session_delete_workflow.clone(),
             WorkspaceStore::new(db.clone()),
@@ -297,7 +306,7 @@ impl AppState {
             // (model-catalog.md, "Launch validation"). A runtime IS the surface with a
             // snapshot, so the engine is the source here; surfaces without one keep
             // the shipped-catalog-only universe.
-            model_snapshot_service.clone(),
+            launch_options_service.clone(),
             runtime_home.clone(),
         ));
         let plan_service = Arc::new(PlanService::new(PlanStore::new(db.clone())));
@@ -614,7 +623,8 @@ impl AppState {
             agent_seed_store,
             agent_runtime,
             catalog_sync_service,
-            model_snapshot_service,
+            launch_options_service,
+            launch_probe_service,
             automatic_poke_engine,
             agent_reconcile_service,
             repo_root_service,

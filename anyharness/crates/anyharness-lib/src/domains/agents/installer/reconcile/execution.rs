@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use super::{reconcile_agent_with_progress, AgentReconcileOutcome, AgentReconcileResult};
 use crate::domains::agents::catalog::service::{ActiveCatalog, AgentCatalogService};
-use crate::domains::agents::model_snapshot::{ModelSnapshotService, PokeReason};
+use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
 use crate::domains::agents::installer::progress::{
     InstallProgressPhase, InstallProgressReporter, InstallProgressUpdate,
 };
@@ -135,7 +135,7 @@ impl AgentReconcileService {
         // The probe engine, poked per agent as each install finishes. Threaded in
         // exactly as `agent_seed_store` and `catalog` are, and `None` in tests for
         // the same reason: a job that pokes nothing must stay constructible.
-        model_snapshot: Option<Arc<ModelSnapshotService>>,
+        launch_probe: Option<Arc<LaunchProbeService>>,
         surface: RuntimeSurface,
         admission: AgentReconcileAdmission,
     ) -> Result<AgentReconcileJobSnapshot, AgentReconcileStartError> {
@@ -222,7 +222,7 @@ impl AgentReconcileService {
                 surface,
                 progress,
                 agent_seed_store,
-                model_snapshot,
+                launch_probe,
             )
             .await;
         });
@@ -260,7 +260,7 @@ async fn run_reconcile_job(
     surface: RuntimeSurface,
     progress: Arc<std::sync::Mutex<Vec<AgentInstallComponentProgress>>>,
     agent_seed_store: Option<AgentSeedStore>,
-    model_snapshot: Option<Arc<ModelSnapshotService>>,
+    launch_probe: Option<Arc<LaunchProbeService>>,
 ) {
     // Defense in depth around the single visible job slot: even if future
     // callers change admission policy, blocking installers never mutate the
@@ -426,8 +426,8 @@ async fn run_reconcile_job(
         // either would spend a real harness spawn to re-confirm an unchanged identity
         // the gate would then call fresh anyway.
         if probe_after_install(terminal_phase) {
-            ModelSnapshotService::poke_optional(
-                &model_snapshot,
+            LaunchProbeService::poke_optional(
+                &launch_probe,
                 kind.as_str(),
                 PokeReason::InstallCompleted,
             );

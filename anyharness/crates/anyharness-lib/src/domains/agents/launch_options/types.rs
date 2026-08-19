@@ -1,0 +1,117 @@
+use std::collections::BTreeMap;
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HarnessLaunchModel {
+    pub id: String,
+    pub observed_name: Option<String>,
+    pub observed_description: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HarnessLaunchControlValue {
+    pub value: String,
+    pub observed_label: Option<String>,
+    pub observed_description: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HarnessLaunchControl {
+    pub id: String,
+    pub observed_label: Option<String>,
+    pub observed_description: Option<String>,
+    pub values: Vec<HarnessLaunchControlValue>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HarnessLaunchDefaults {
+    pub model_id: Option<String>,
+    #[serde(default)]
+    pub control_values: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HarnessLaunchOptions {
+    pub models: Vec<HarnessLaunchModel>,
+    pub controls: Vec<HarnessLaunchControl>,
+    pub defaults: HarnessLaunchDefaults,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LaunchSelection {
+    pub model_id: Option<String>,
+    pub control_values: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProbeState {
+    Probing,
+    Succeeded,
+    Failed,
+}
+
+impl ProbeState {
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            Self::Probing => "probing",
+            Self::Succeeded => "succeeded",
+            Self::Failed => "failed",
+        }
+    }
+
+    pub(super) fn parse(value: &str) -> rusqlite::Result<Self> {
+        match value {
+            "probing" => Ok(Self::Probing),
+            "succeeded" => Ok(Self::Succeeded),
+            "failed" => Ok(Self::Failed),
+            other => Err(rusqlite::Error::FromSqlConversionFailure(
+                0,
+                rusqlite::types::Type::Text,
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("invalid launch-option probe state: {other}"),
+                )),
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HarnessLaunchOptionStateRow {
+    pub harness_kind: String,
+    pub basis_revision: String,
+    pub revision: i64,
+    pub options: Option<HarnessLaunchOptions>,
+    pub observed_at: Option<String>,
+    pub probe_state: ProbeState,
+    pub probe_attempted_at: String,
+    pub probe_failure_code: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HarnessLaunchOptionsState {
+    Detecting,
+    Refreshing,
+    Observed,
+    ObservedEmpty,
+    LastGoodAfterFailure,
+    FailedWithoutObservation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HarnessLaunchOptionsResponse {
+    pub harness_kind: String,
+    pub basis_revision: String,
+    pub revision: i64,
+    pub state: HarnessLaunchOptionsState,
+    pub options: Option<HarnessLaunchOptions>,
+    pub observed_at: Option<String>,
+    pub probe_attempted_at: String,
+    pub probe_failure_code: Option<String>,
+}

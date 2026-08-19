@@ -16,7 +16,6 @@ interface UseHomeNextComposerStateArgs {
   modelAvailabilityState: ModelAvailabilityState;
   canLaunchTarget: boolean;
   modelSelection: HomeNextModelSelection | null;
-  modeId: string | null;
   launchControlValues: Record<string, string>;
   launchTarget: HomeLaunchTarget | null;
   attachments: PromptAttachmentController;
@@ -27,7 +26,6 @@ export function useHomeNextComposerState({
   modelAvailabilityState,
   canLaunchTarget,
   modelSelection,
-  modeId,
   launchControlValues,
   launchTarget,
   attachments,
@@ -96,7 +94,6 @@ export function useHomeNextComposerState({
         text: submittedDraft.value,
         attachmentSnapshots,
         modelSelection,
-        modeId,
         launchControlValues,
         target: launchTarget,
       });
@@ -120,7 +117,6 @@ export function useHomeNextComposerState({
     launch,
     launchControlValues,
     launchTarget,
-    modeId,
     modelSelection,
   ]);
 

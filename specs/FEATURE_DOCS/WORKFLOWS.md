@@ -312,58 +312,29 @@ RETURNING ...;
 A stale replacement returns HTTP 409 and does not change any field. A
 read-then-write sequence without the revision predicate is invalid.
 
-## 6. Catalog Validation
+## 6. Launch-intent validation
 
-Definition authoring uses the current probe-generated catalog served by:
+Workflow definitions store `agentKind`, optional `modelId`, and generic
+`controlValues` as opaque intended IDs. The server validates document structure
+and ownership; it does not use the distribution catalog to authorize executable
+models, controls, defaults, aliases, or per-model tuning combinations.
 
-```text
-GET /v1/catalogs/agents?schemaVersion=2
-```
+When the editor has an execution target, it renders that target's copied
+`HarnessLaunchOptionsResponse` directly. It may warn that a saved value is no
+longer present, but it never rewrites the saved intent or selects the first row.
+Omitted model/control values stay omitted.
 
-The server reads the same catalog document directly. There is no workflow-only
-agent, model, or effort enum.
+At execution, each node's complete selection goes through the runtime's normal
+session-create validator against the execution target's current matching-basis
+launch options. Exact current membership succeeds; missing options fail with the
+same typed launch-value error as an interactive create. The runtime persists the
+resolved launch intent atomically with the node session and confirms all explicit
+values before reporting it ready.
 
-Rules:
-
-- `agentKind` must exist in the catalog;
-- an explicit model must be active and visible in the authoring menu
-  (`status == active` and `defaultVisible == true`);
-- promoted catalog rows materialize `defaultVisible`; malformed omissions fail
-  closed as hidden;
-- model aliases are accepted at the API boundary and the canonical model ID is
-  stored and returned;
-- `effort` requires an explicit model;
-- effort options come from that exact model's `effort` or
-  `reasoning_effort` control matrix;
-- the matching session control must also declare an application mapping
-  (`createField` or `liveConfigId`); probe metadata without an application
-  mapping is not authorable;
-- an agent-wide union must never authorize an option absent from the selected
-  model; and
-- a step with `goal` requires `session.supportsGoals` for that stage's agent.
-
-Examples that must fail even though the value exists elsewhere in the same
-harness catalog:
-
-- Claude `sonnet` with `xhigh`;
-- Claude `haiku` with `high`; and
-- Codex `gpt-5.5` with `ultra`.
-
-Omitted `modelId` and `effort` stay omitted. Probe-observed defaults are UI
-hints and must never be materialized into the stored definition merely because
-the user did not choose a value.
-
-`validatedCatalogVersion` records the catalog version consulted by the server
-for the most recent accepted create or replacement. It is diagnostic metadata,
-not a pin. Reads never fail solely because the live catalog changed. The UI
-compares every stored selection with the current catalog and warns about stale
-or unavailable selections; version equality alone is not proof that every
-selection remains available. New or changed selections must pass the current
-catalog. The editor must never silently rewrite stale stored selections.
-
-Target-specific installation, credentials, routing, and readiness are checked
-against AnyHarness launch options only when execution exists. They do not make
-a reusable definition invalid at authoring time.
+The legacy `validatedCatalogVersion` response field is diagnostic compatibility
+only and contains `target-observed`; it is not a catalog pin or an authorization
+receipt. Goal support remains a workflow-runner capability check independent of
+model/control membership.
 
 ## 7. Access Policy
 

@@ -48,11 +48,6 @@ const stateMocks = vi.hoisted(() => {
     cloudRepoActionBySourceRoot: {},
     launchTarget: { kind: "local", sourceRoot: "/repo" },
   } as any;
-  const mode = {
-    modeOptions: [],
-    effectiveMode: null,
-    effectiveModeId: null,
-  } as any;
   const computeTargets = {
     sshTargetOptions: [],
     isLoading: false,
@@ -61,11 +56,9 @@ const stateMocks = vi.hoisted(() => {
   return {
     model,
     repository,
-    mode,
     computeTargets,
     modelArgs: null as any,
     repositoryArgs: null as any,
-    modeArgs: null as any,
     computeTargetArgs: null as any,
   };
 });
@@ -81,13 +74,6 @@ vi.mock("#product/hooks/home/derived/use-home-next-repository-selection", () => 
   useHomeNextRepositorySelection: (args: any) => {
     stateMocks.repositoryArgs = args;
     return stateMocks.repository;
-  },
-}));
-
-vi.mock("#product/hooks/home/derived/use-home-next-mode-selection", () => ({
-  useHomeNextModeSelection: (args: any) => {
-    stateMocks.modeArgs = args;
-    return stateMocks.mode;
   },
 }));
 
@@ -129,7 +115,6 @@ function resetMocks() {
   stateMocks.computeTargets.isLoading = false;
   stateMocks.modelArgs = null;
   stateMocks.repositoryArgs = null;
-  stateMocks.modeArgs = null;
   stateMocks.computeTargetArgs = null;
 }
 
@@ -149,7 +134,6 @@ function renderHomeNextState({
     repoLaunchKind,
     modelSelectionOverride: null,
     baseBranchOverride: null,
-    modeOverrideId: null,
   }));
 }
 

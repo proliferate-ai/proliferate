@@ -1,7 +1,5 @@
 import {
-  resolveRuntimeConnection,
   useAgentLaunchOptionsQuery,
-  useAnyHarnessRuntimeContext,
   useCreateCoworkThreadMutation,
 } from "@anyharness/sdk-react";
 import { useCallback, useMemo } from "react";
@@ -27,20 +25,15 @@ import {
 } from "#product/hooks/workspaces/workflows/pending-workspace-attempt-access";
 import { useWorkspaceSessionCache } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
-import { useCloudAgentCatalog } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import {
   buildDesktopLaunchModelRegistries,
-  mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
+  projectHarnessLaunchOptions,
   type DesktopAgentLaunchAgent,
 } from "#product/lib/domain/agents/cloud-launch-catalog";
-import { resolveUnattendedModeId } from "#product/lib/domain/agents/unattended-mode";
 import {
   isStoredDefaultModelStale,
   withClearedDefaultModelIdByAgentKind,
 } from "#product/lib/domain/agents/model-options";
-import { applySessionLaunchDefaults } from "#product/lib/workflows/sessions/session-launch-defaults";
-import { mergeLiveDefaultLaunchControls } from "#product/lib/domain/sessions/creation/launch-controls";
-import { createSessionLaunchDefaultsClient } from "#product/lib/access/anyharness/session-launch-defaults-client";
 import {
   markWorkspaceViewed,
   rememberLastViewedSession,
@@ -60,7 +53,6 @@ const EMPTY_LAUNCH_AGENTS: DesktopAgentLaunchAgent[] = [];
 export function useCoworkThreadWorkflow() {
   const location = useLocation();
   const navigate = useNavigate();
-  const anyHarnessRuntime = useAnyHarnessRuntimeContext();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const { upsertLocalWorkspace } = useWorkspaceCollectionsMutationCache(runtimeUrl);
   const setPendingWorkspaceEntry = useSessionSelectionStore(
@@ -72,33 +64,20 @@ export function useCoworkThreadWorkflow() {
   const activateWorkspace = useSessionSelectionStore((state) => state.activateWorkspace);
   const { beginPendingWorkspace } = useWorkspaceEntryFlow();
   const { agents } = useAgentCatalog();
-  const cloudCatalogQuery = useCloudAgentCatalog();
-  // Gate the new-thread model set to the runtime's active auth context. The cloud
-  // catalog lists every model across all contexts (incl. bedrock us.anthropic.*),
-  // so resolving a stored default against it alone can pick a model that is not
-  // valid in the live context. The runtime launch-options are pre-filtered to
-  // visible + available for the classified context; merging them (runtime wins)
-  // yields the same context-valid set the composer/model-selector already uses.
-  const runtimeLaunchOptions = useAgentLaunchOptionsQuery();
-  const launchAgents = useMemo(
-    () => mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
-      cloudCatalogQuery.data?.agents ?? EMPTY_LAUNCH_AGENTS,
-      runtimeLaunchOptions.data?.agents ?? null,
-    ),
-    [cloudCatalogQuery.data?.agents, runtimeLaunchOptions.data?.agents],
-  );
-  const modelRegistries = useMemo(
-    () => buildDesktopLaunchModelRegistries(launchAgents),
-    [launchAgents],
-  );
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
-    defaultLiveSessionControlValuesByAgentKind:
-      state.defaultLiveSessionControlValuesByAgentKind,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
     set: state.set,
   })));
+  const requestedHarnessKind = preferences.defaultChatAgentKind || agents[0]?.kind || null;
+  const runtimeLaunchOptions = useAgentLaunchOptionsQuery({ harnessKind: requestedHarnessKind });
+  const launchAgents = useMemo(() => {
+    const projected = runtimeLaunchOptions.data
+      ? projectHarnessLaunchOptions(runtimeLaunchOptions.data)
+      : null;
+    return projected ? [projected] : EMPTY_LAUNCH_AGENTS;
+  }, [runtimeLaunchOptions.data]);
   const showToast = useToastStore((state) => state.show);
   const { selectWorkspace } = useWorkspaceSelection();
   const { initForWorkspace } = useWorkspaceFileActions();
@@ -117,7 +96,6 @@ export function useCoworkThreadWorkflow() {
     attemptId?: string;
     agentKind: string;
     modelId: string;
-    modeId?: string | null;
     launchAgent?: DesktopAgentLaunchAgent | null;
     launchControlValues?: Record<string, string>;
     draftText?: string | null;
@@ -127,12 +105,13 @@ export function useCoworkThreadWorkflow() {
     const launchAgent = inputLaunchAgent
       ?? launchAgents.find((candidate) => candidate.kind === input.agentKind)
       ?? null;
+    const launchControlValues = {
+      ...defaultLaunchControlValues(launchAgent),
+      ...(input.launchControlValues ?? {}),
+    };
     return createCoworkThreadWorkflow({
       ...workflowInput,
-      unattendedModeId: resolveUnattendedModeId({
-        agent: launchAgent,
-        modelId: input.modelId,
-      }),
+      launchControlValues,
       coworkWorkspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
       runtimeUrl,
     }, {
@@ -153,20 +132,6 @@ export function useCoworkThreadWorkflow() {
       beginPendingWorkspace,
       navigateToWorkspaceShell,
       createCoworkThread: (request) => createCoworkThreadMutation.mutateAsync(request),
-      applyLaunchDefaults: async ({ session, agentKind, launchControlValues }) => {
-        const launchDefaults = await applySessionLaunchDefaults({
-          client: createSessionLaunchDefaultsClient(resolveRuntimeConnection(anyHarnessRuntime)),
-          session,
-          agentKind,
-          modelRegistries,
-          defaultLiveSessionControlValuesByAgentKind: mergeLiveDefaultLaunchControls({
-            defaults: preferences.defaultLiveSessionControlValuesByAgentKind,
-            agentKind,
-            values: launchControlValues ?? {},
-          }),
-        });
-        return launchDefaults.session;
-      },
       upsertLocalWorkspace,
       upsertWorkspaceSessionRecord,
       recordCreatedSession: recordCreatedCoworkSession,
@@ -183,16 +148,13 @@ export function useCoworkThreadWorkflow() {
       showToast,
     });
   }, [
-    anyHarnessRuntime,
     beginPendingWorkspace,
     clearDraft,
     createCoworkThreadMutation,
     initForWorkspace,
     launchAgents,
-    modelRegistries,
     navigateToWorkspaceShell,
     preferences.coworkWorkspaceDelegationEnabled,
-    preferences.defaultLiveSessionControlValuesByAgentKind,
     runtimeUrl,
     setDraftText,
     activateWorkspace,
@@ -204,23 +166,19 @@ export function useCoworkThreadWorkflow() {
   ]);
 
   const createThread = useCallback(async () => {
-    // Resolve against the runtime's context-gated launch options, not the
-    // ungated cloud catalog. If the query has not resolved yet (e.g. a fast
-    // "New Thread" right after connect), fetch it now — otherwise the merge
-    // falls back to the cloud catalog and could pick a stale default (e.g. a
-    // bedrock id) that the runtime then rejects.
-    let runtimeAgents = runtimeLaunchOptions.data?.agents ?? null;
-    if (!runtimeAgents && runtimeUrl) {
-      runtimeAgents = (await runtimeLaunchOptions.refetch()).data?.agents ?? null;
-    }
-    const gatedLaunchAgents = mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
-      cloudCatalogQuery.data?.agents ?? EMPTY_LAUNCH_AGENTS,
-      runtimeAgents,
-    );
+    const response = runtimeLaunchOptions.data
+      ?? (runtimeUrl ? (await runtimeLaunchOptions.refetch()).data : undefined);
+    const projected = response ? projectHarnessLaunchOptions(response) : null;
+    const gatedLaunchAgents = projected ? [projected] : EMPTY_LAUNCH_AGENTS;
     const gatedRegistries = buildDesktopLaunchModelRegistries(gatedLaunchAgents);
+    const observedAgents = gatedLaunchAgents.map((agent) => ({
+      kind: agent.kind,
+      displayName: agent.displayName,
+      readiness: "ready" as const,
+    }));
     const defaults = resolveEffectiveChatDefaults(
       gatedRegistries,
-      agents,
+      observedAgents,
       preferences,
       null,
     );
@@ -235,9 +193,7 @@ export function useCoworkThreadWorkflow() {
     // re-fire on every new thread. Only act when the runtime authoritatively
     // lists the agent (avoids wiping a valid default while options are loading).
     const storedDefault = preferences.defaultChatModelIdByAgentKind[defaults.agentKind];
-    const runtimeAgent = runtimeAgents?.find(
-      (agent) => agent.kind === defaults.agentKind,
-    );
+    const runtimeAgent = gatedLaunchAgents.find((agent) => agent.kind === defaults.agentKind);
     const healedStaleDefault = isStoredDefaultModelStale(
       storedDefault,
       runtimeAgent?.models ?? null,
@@ -268,7 +224,6 @@ export function useCoworkThreadWorkflow() {
     });
   }, [
     agents,
-    cloudCatalogQuery.data?.agents,
     createThreadWithResolvedConfig,
     preferences,
     runtimeLaunchOptions,
@@ -280,7 +235,6 @@ export function useCoworkThreadWorkflow() {
     attemptId?: string;
     agentKind: string;
     modelId: string;
-    modeId?: string | null;
     launchControlValues?: Record<string, string>;
     draftText?: string | null;
     sourceWorkspaceId?: string | null;
@@ -289,7 +243,6 @@ export function useCoworkThreadWorkflow() {
       attemptId: input.attemptId,
       agentKind: input.agentKind,
       modelId: input.modelId,
-      modeId: input.modeId,
       launchControlValues: input.launchControlValues,
       draftText: input.draftText,
       sourceWorkspaceId: input.sourceWorkspaceId,
@@ -307,4 +260,16 @@ export function useCoworkThreadWorkflow() {
     openThread,
     isCreatingThread: createCoworkThreadMutation.isPending,
   };
+}
+
+function defaultLaunchControlValues(
+  agent: DesktopAgentLaunchAgent | null,
+): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const control of agent?.launchControls ?? []) {
+    if (control.defaultValue) {
+      values[control.key] = control.defaultValue;
+    }
+  }
+  return values;
 }

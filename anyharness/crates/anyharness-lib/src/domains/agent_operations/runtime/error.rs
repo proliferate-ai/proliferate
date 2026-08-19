@@ -116,8 +116,11 @@ impl AgentOperationsError {
             Self::LaunchSelection(AgentLaunchSelectionError::ModelUnavailable) => {
                 "AGENT_LAUNCH_MODEL_UNAVAILABLE"
             }
-            Self::LaunchSelection(AgentLaunchSelectionError::ModeUnknown) => {
-                "AGENT_LAUNCH_MODE_UNKNOWN"
+            Self::LaunchSelection(AgentLaunchSelectionError::ControlUnknown) => {
+                "AGENT_LAUNCH_CONTROL_UNKNOWN"
+            }
+            Self::LaunchSelection(AgentLaunchSelectionError::ControlValueUnknown) => {
+                "AGENT_LAUNCH_CONTROL_VALUE_UNKNOWN"
             }
             Self::ConfigChoice(AgentConfigChoiceError::ConfigUnknown) => {
                 "AGENT_CONFIG_OPTION_UNKNOWN"
@@ -322,8 +325,15 @@ fn create_code(error: &CreateOrdinaryAgentSessionError) -> &'static str {
 fn create_session_code(error: &CreateAndStartSessionError) -> &'static str {
     match error {
         CreateAndStartSessionError::Invalid(_) => "SESSION_CREATE_FAILED",
-        CreateAndStartSessionError::ModelUnsupported { .. } => "SESSION_MODEL_UNSUPPORTED",
-        CreateAndStartSessionError::ModeUnsupported { .. } => "SESSION_MODE_UNSUPPORTED",
+        CreateAndStartSessionError::LaunchOptionsUnavailable { .. } => {
+            "SESSION_LAUNCH_OPTIONS_UNAVAILABLE"
+        }
+        CreateAndStartSessionError::LaunchValueUnsupported { .. } => {
+            "SESSION_LAUNCH_VALUE_UNSUPPORTED"
+        }
+        CreateAndStartSessionError::AgentEnvOverrideUnsupported { .. } => {
+            "SESSION_AGENT_ENV_OVERRIDE_UNSUPPORTED"
+        }
         CreateAndStartSessionError::WorkspaceNotFound => "WORKSPACE_NOT_FOUND",
         CreateAndStartSessionError::WorkspaceDirectoryMissing { .. } => {
             "WORKSPACE_DIRECTORY_MISSING"
@@ -411,11 +421,14 @@ fn create_public_message(error: &CreateOrdinaryAgentSessionError) -> String {
 fn create_session_public_message(error: &CreateAndStartSessionError) -> String {
     match error {
         CreateAndStartSessionError::Invalid(_) => "The agent session could not be created.".into(),
-        CreateAndStartSessionError::ModelUnsupported { .. } => {
-            "The selected model is not supported for this agent.".into()
+        CreateAndStartSessionError::LaunchOptionsUnavailable { .. } => {
+            "Launch options have not been observed for this agent yet.".into()
         }
-        CreateAndStartSessionError::ModeUnsupported { .. } => {
-            "The selected mode is not supported for this agent.".into()
+        CreateAndStartSessionError::LaunchValueUnsupported { .. } => {
+            "The selected launch value is no longer supported for this agent.".into()
+        }
+        CreateAndStartSessionError::AgentEnvOverrideUnsupported { .. } => {
+            "Workspace or session environment cannot override agent authentication.".into()
         }
         CreateAndStartSessionError::WorkspaceNotFound => {
             "The requested workspace was not found.".into()

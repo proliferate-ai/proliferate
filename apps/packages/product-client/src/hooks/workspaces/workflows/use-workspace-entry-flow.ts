@@ -87,20 +87,27 @@ export function useWorkspaceEntryFlow() {
       ? buildPendingInitialSession({
         agentKind: configuredLaunch.selection?.kind,
         modelId: configuredLaunch.selection?.modelId,
-        modeId: configuredLaunch.selection?.kind
-          ? preferences.defaultSessionModeByAgentKind[configuredLaunch.selection.kind] ?? null
-          : null,
+        launchControlValues: configuredLaunch.selection?.kind
+          ? preferences.defaultLiveSessionControlValuesByAgentKind[
+            configuredLaunch.selection.kind
+          ] ?? {}
+          : {},
         displayTitle: configuredLaunch.displayName,
       }) ?? buildPendingInitialSession({
         agentKind: preferredAgentKind,
         modelId: preferredModelId,
-        modeId: preferredAgentKind
-          ? preferences.defaultSessionModeByAgentKind[preferredAgentKind] ?? null
-          : null,
+        launchControlValues: preferredAgentKind
+          ? preferences.defaultLiveSessionControlValuesByAgentKind[preferredAgentKind] ?? {}
+          : {},
       }) ?? buildPendingInitialSession({
         agentKind: activeRecord?.agentKind ?? null,
         modelId: activeRecord?.modelId ?? null,
-        modeId: activeRecord?.modeId ?? null,
+        launchControlValues: activeRecord?.liveConfig?.normalizedControls
+          ? Object.fromEntries(Object.values(activeRecord.liveConfig.normalizedControls)
+            .flatMap((value) => Array.isArray(value) ? value : value ? [value] : [])
+            .map((control) => [control.rawConfigId, control.currentValue])
+            .filter((entry): entry is [string, string] => Boolean(entry[1])))
+          : {},
       })
       : options.initialSession;
     const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(entry);

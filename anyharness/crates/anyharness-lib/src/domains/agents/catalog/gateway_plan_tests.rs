@@ -1,4 +1,4 @@
-//! The planner's memo, its TTL, its floor, and the launch/probe asymmetry.
+//! The planner's memo, its TTL, and the launch/probe asymmetry.
 //!
 //! Real filesystem for `state.json` (the credentials ARE state) and a counting
 //! fetcher for `GET /v1/models`, so every property is exercised without a network.
@@ -7,9 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use super::gateway_plan::{
-    GatewayModelFetch, GatewayModelPlanner, DEFAULT_PLAN_FETCH_TTL, SEED_FALLBACK_WARNING,
-};
+use super::gateway_plan::{GatewayModelFetch, GatewayModelPlanner, DEFAULT_PLAN_FETCH_TTL};
 use super::sync::CatalogSyncService;
 use crate::domains::agents::route_auth::GatewayModelResolve;
 
@@ -212,14 +210,9 @@ fn invalidation_refetches_the_named_harness_only() {
     );
 }
 
-/// The seed list is a WARNED FLOOR, not a silent substitute.
-///
-/// Both halves matter. The list must be non-empty or `render_opencode_gateway`
-/// hard-fails `SelectionIncomplete` and the launch dies; and the flag must be set or a
-/// tautological observation gets recorded as the gateway's model set. An empty 200
-/// response is treated the same as an error for exactly the same reason.
+/// A failed or empty fetch produces no executable model rows and is never cached.
 #[test]
-fn a_failed_or_empty_fetch_falls_back_to_a_warned_seed_floor() {
+fn a_failed_or_empty_fetch_produces_no_model_plan() {
     let home = TempHome::new("floor");
     home.write_gateway_state("opencode", "https://gw.example", "sk-virtual");
 
@@ -227,28 +220,16 @@ fn a_failed_or_empty_fetch_falls_back_to_a_warned_seed_floor() {
     *failing.fails.lock().expect("flag") = true;
     let planner_failing = build_planner(&home, failing.clone(), DEFAULT_PLAN_FETCH_TTL);
     let (plan, used_floor) = planner_failing.resolve_gateway_models_blocking("opencode", 3);
-    assert!(used_floor, "an unreachable gateway must report the floor");
-    assert!(
-        !plan.models.is_empty(),
-        "the floor must keep the launch renderable: an empty models map hard-fails \
-         the opencode gateway recipe"
-    );
-    // The floor is the catalog's own seed list.
-    let seeds = super::bundled::bundled_agent_catalog_document()
-        .agents
-        .iter()
-        .find(|agent| agent.kind == "opencode")
-        .and_then(|agent| agent.session.gateway_policy.clone())
-        .map(|policy| policy.seed_models)
-        .expect("opencode seed models");
-    assert_eq!(plan.models, seeds);
+    assert!(!used_floor);
+    assert!(plan.models.is_empty());
 
     // A reachable gateway serving nothing is the same answer, and for the same
     // reason: there is nothing to render and nothing was discovered.
     let empty = Arc::new(CountingFetch::new(&[]));
     let planner_empty = build_planner(&home, empty, DEFAULT_PLAN_FETCH_TTL);
-    let (_, used_floor) = planner_empty.resolve_gateway_models_blocking("opencode", 3);
-    assert!(used_floor, "an empty 200 is not a discovery either");
+    let (plan, used_floor) = planner_empty.resolve_gateway_models_blocking("opencode", 3);
+    assert!(!used_floor);
+    assert!(plan.models.is_empty());
 
     // A failed fetch is never memoized: the next attempt must be free to succeed.
     planner_failing.resolve_gateway_models_blocking("opencode", 3);
@@ -259,11 +240,7 @@ fn a_failed_or_empty_fetch_falls_back_to_a_warned_seed_floor() {
     );
 }
 
-/// A harness with NO gateway source at all takes the seed list WITHOUT the warning.
-///
-/// There is nothing to fetch and nothing to be wrong about — the catalog's list is
-/// simply the answer. Warning here would put a "fell back" note on every entry of a
-/// machine that never enrolled, which is noise a UI would have to learn to ignore.
+/// A harness with no gateway source has no gateway model plan.
 #[test]
 fn a_harness_with_no_gateway_source_is_not_a_fallback() {
     let home = TempHome::new("no-gateway");
@@ -283,11 +260,11 @@ fn a_harness_with_no_gateway_source_is_not_a_fallback() {
     let (plan, used_floor) = planner.resolve_gateway_models_blocking("opencode", 1);
     assert_eq!(fetcher.calls(), 0, "no credentials, no fetch");
     assert!(!used_floor);
-    assert!(!plan.models.is_empty());
+    assert!(plan.models.is_empty());
 }
 
-/// **A launch never waits on the network.** The launch path reads the memo and takes
-/// the floor on a miss; only the probe path may fetch.
+/// **A launch never waits on the network.** The launch path reads only the memo;
+/// only the probe path may fetch.
 ///
 /// This is the property `probe_gateway_models`' own 10s timeout bounds but cannot
 /// provide: a launch is a synchronous render on the spawn path, so a fetch there is a
@@ -300,11 +277,10 @@ fn the_launch_path_reads_the_memo_and_never_fetches() {
     let fetcher = Arc::new(CountingFetch::new(&["live-1", "live-2"]));
     let planner = build_planner(&home, fetcher.clone(), Duration::from_secs(300));
 
-    // Cold memo: the launch takes the floor rather than blocking.
+    // Cold memo: the launch has no plan rather than blocking or seeding.
     let cold = planner.resolve_gateway_models("opencode", 3);
     assert_eq!(fetcher.calls(), 0, "a launch must not fetch");
-    assert!(!cold.models.is_empty(), "and must still be renderable");
-    assert!(!cold.models.contains(&"live-1".to_string()));
+    assert!(cold.models.is_empty());
 
     // A probe warms it; the next launch gets the live list, still without fetching.
     planner.resolve_gateway_models_blocking("opencode", 3);
@@ -314,11 +290,7 @@ fn the_launch_path_reads_the_memo_and_never_fetches() {
     assert_eq!(fetcher.calls(), 1, "the launch read the memo, it did not refresh it");
 }
 
-/// An EXPIRED memo still beats the floor on the launch path.
-///
-/// It was really observed from this proxy, where the floor is a curated guess that can
-/// only ever be a subset. The launch may not refresh it, so serving the last real
-/// observation is strictly the better of the two answers available without blocking.
+/// An expired memo remains exact target evidence on the launch path.
 #[test]
 fn an_expired_memo_still_beats_the_floor_for_a_launch() {
     let home = TempHome::new("expired-memo");
@@ -334,19 +306,14 @@ fn an_expired_memo_still_beats_the_floor_for_a_launch() {
     assert_eq!(
         plan.models,
         vec!["live-1", "live-2"],
-        "a stale real observation beats a curated guess when we may not block"
+        "a stale exact observation remains usable when launch may not block"
     );
     assert_eq!(fetcher.calls(), 1);
 }
 
-/// Claude's `roles`-derived `small_fast_model` and `default_model` still ride
-/// through the real `GatewayModelPlanner` now that the provider filter that used
-/// to sit next to them (`provider_filtering_is_preserved_for_a_scoped_harness`,
-/// deleted with the client-side filter itself) is gone. No filtering assertion
-/// here on purpose — the live list passes through untouched, which
-/// `a_probe_plan_carries_the_live_gateway_list_not_the_seed_floor` already covers.
+/// The planner passes every live row through without provider filtering.
 #[test]
-fn a_claude_plan_pins_roles_without_filtering() {
+fn a_claude_plan_preserves_the_live_list_without_static_roles() {
     let home = TempHome::new("claude-roles");
     home.write_gateway_state("claude", "https://gw.example", "sk-virtual");
     let fetcher = Arc::new(CountingFetch::new(&["claude-sonnet-4-5", "gpt-5.2", "grok-4"]));
@@ -359,25 +326,5 @@ fn a_claude_plan_pins_roles_without_filtering() {
         plan.models,
         vec!["claude-sonnet-4-5", "gpt-5.2", "grok-4"],
         "no client-side provider filter narrows the live list anymore"
-    );
-    assert_eq!(
-        plan.small_fast_model,
-        Some("claude-haiku-4-5-20251001".to_string()),
-        "claude's small_fast role pin, from the catalog's gatewayPolicy.roles"
-    );
-    assert_eq!(
-        plan.default_model,
-        Some("claude-sonnet-4-5".to_string()),
-        "the gateway default model, from session.defaults.gateway"
-    );
-}
-
-/// The seed-floor warning string is the one the entry records, asserted here so the
-/// planner and the entry projection cannot drift apart silently.
-#[test]
-fn the_seed_fallback_warning_is_a_shared_constant() {
-    assert_eq!(
-        SEED_FALLBACK_WARNING,
-        "gateway model plan fell back to seed models"
     );
 }

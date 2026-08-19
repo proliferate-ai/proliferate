@@ -41,11 +41,7 @@ fn material_for(home: &TempHome, harness: &str) -> Result<ProbeAuthMaterial, Rou
 
 fn plan_with(models: &[&str]) -> GatewayModelPlan {
     GatewayModelPlan {
-        default_model: Some("gpt-5.2".to_string()),
-        native_default_model: Some("gpt-5.5".to_string()),
-        small_fast_model: Some("claude-haiku-4-5-20251001".to_string()),
         models: models.iter().map(|model| model.to_string()).collect(),
-        ..Default::default()
     }
 }
 

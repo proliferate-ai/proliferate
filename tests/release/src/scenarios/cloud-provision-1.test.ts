@@ -886,11 +886,11 @@ function capturedResponse(body: string, status: number): { stdout: string; stder
   return { stdout: `${body}\n${status}`, stderr: "", exitCode: 0 };
 }
 
-test("createCloudProvision1Driver().liveProbeModels POSTs refresh-gateway (body+status capture) and returns the model ids on a 200", async () => {
+test("createCloudProvision1Driver().liveProbeModels POSTs launch-options refresh and returns observed model ids", async () => {
   const box = fakeBoxExec();
   const { fn: exec, calls } = fakeExecInProviderSandbox((url) =>
-    url.includes("/v1/agents/claude/catalog/refresh-gateway")
-      ? capturedResponse(JSON.stringify({ models: ["claude-haiku-4-5"], probedAt: new Date().toISOString() }), 200)
+    url.includes("/v1/agents/claude/launch-options/refresh")
+      ? capturedResponse(JSON.stringify({ harnessKind: "claude", state: "observed", options: { models: [{ id: "claude-haiku-4-5" }] } }), 200)
       : "[]",
   );
   const driver = createCloudProvision1Driver({ execInProviderSandbox: exec });
@@ -900,14 +900,14 @@ test("createCloudProvision1Driver().liveProbeModels POSTs refresh-gateway (body+
 
   const curlCall = calls.find((c) => c.curlScript);
   assert.ok(curlCall, "expected one authenticated curl call");
-  assert.equal(curlCall!.curlMethod, "POST", "refresh-gateway is a POST endpoint, not GET");
+  assert.equal(curlCall!.curlMethod, "POST", "launch-options refresh is a POST endpoint, not GET");
   assert.match(
     curlCall!.curlScript!,
-    new RegExp(`127\\.0\\.0\\.1:${SANDBOX_RUNTIME_PORT}/v1/agents/claude/catalog/refresh-gateway`),
+    new RegExp(`127\\.0\\.0\\.1:${SANDBOX_RUNTIME_PORT}/v1/agents/claude/launch-options/refresh`),
   );
   assert.match(curlCall!.curlScript!, /Authorization: Bearer \$TOK/);
   // Captures the body even on errors: no `-f`, status appended via `-w`.
-  assert.ok(!curlCall!.curlScript!.includes("-fsS"), "refresh-gateway curl must drop -f so a 4xx body is captured");
+  assert.ok(!curlCall!.curlScript!.includes("-fsS"), "refresh curl must drop -f so a 4xx body is captured");
   assert.match(curlCall!.curlScript!, /-w '\\n%\{http_code\}'/);
   assert.equal(curlCall!.curlToken, FAKE_BEARER_TOKEN);
   // Exactly one call: the materializer had already synced the gateway
@@ -915,11 +915,11 @@ test("createCloudProvision1Driver().liveProbeModels POSTs refresh-gateway (body+
   assert.equal(calls.length, 1);
 });
 
-test("createCloudProvision1Driver().liveProbeModels polls refresh-gateway until the cloud materializer syncs the gateway selection", async () => {
+test("createCloudProvision1Driver().liveProbeModels polls launch-options refresh until materialization converges", async () => {
   const box = fakeBoxExec();
   let attempts = 0;
   const { fn: exec, calls } = fakeExecInProviderSandbox((url) => {
-    if (!url.includes("/v1/agents/claude/catalog/refresh-gateway")) {
+    if (!url.includes("/v1/agents/claude/launch-options/refresh")) {
       return "[]";
     }
     attempts += 1;
@@ -929,7 +929,7 @@ test("createCloudProvision1Driver().liveProbeModels polls refresh-gateway until 
       // body carries the error code; status is the appended `\n400`.
       return capturedResponse(JSON.stringify({ code: "GATEWAY_REFRESH_NO_SELECTION" }), 400);
     }
-    return capturedResponse(JSON.stringify({ models: ["claude-haiku-4-5"], probedAt: new Date().toISOString() }), 200);
+    return capturedResponse(JSON.stringify({ harnessKind: "claude", state: "observed", options: { models: [{ id: "claude-haiku-4-5" }] } }), 200);
   });
   const driver = createCloudProvision1Driver({
     execInProviderSandbox: exec,
@@ -1004,11 +1004,11 @@ test("createCloudProvision1Driver().liveProbeModels surfaces a hard curl exit (n
   assert.match(surfaced!, /Connection refused/);
 });
 
-test("createCloudProvision1Driver().liveProbeModels surfaces the raw body and times out when refresh-gateway returns 0 models (empty gateway)", async () => {
+test("createCloudProvision1Driver().liveProbeModels surfaces the raw body when refresh observes zero models", async () => {
   const box = fakeBoxExec();
   const { fn: exec } = fakeExecInProviderSandbox((url) =>
-    url.includes("/v1/agents/claude/catalog/refresh-gateway")
-      ? capturedResponse(JSON.stringify({ models: [], probedAt: new Date().toISOString() }), 200)
+    url.includes("/v1/agents/claude/launch-options/refresh")
+      ? capturedResponse(JSON.stringify({ harnessKind: "claude", state: "observed", options: { models: [] } }), 200)
       : "[]",
   );
   const driver = createCloudProvision1Driver({
@@ -1035,28 +1035,28 @@ test("createCloudProvision1Driver().liveProbeModels surfaces the raw body and ti
 test("waitForSandboxLaunchOptions polls until the runtime lists the harness with models", async () => {
   let attempts = 0;
   const { fn: exec, calls } = fakeExecInProviderSandbox((url) => {
-    if (!url.endsWith("/v1/agents/launch-options")) {
+    if (!url.endsWith("/v1/agents/claude/launch-options")) {
       return "[]";
     }
     attempts += 1;
     // Empty at first (readiness not flipped), then claude appears with a model.
     return attempts < 3
-      ? JSON.stringify({ agents: [] })
-      : JSON.stringify({ agents: [{ kind: "claude", models: [{ id: "claude-haiku-4-5" }] }] });
+      ? JSON.stringify({ harnessKind: "claude", state: "unavailable", options: null })
+      : JSON.stringify({ harnessKind: "claude", state: "observed", options: { models: [{ id: "claude-haiku-4-5" }] } });
   });
   await waitForSandboxLaunchOptions(exec, "provider-sandbox-a", FAKE_BEARER_TOKEN, "claude", 10_000, 1);
   assert.equal(attempts, 3);
   // Bearer-authed, correct port and path, token as its own argv element.
-  const curlCall = calls.find((c) => c.curlScript?.includes("/v1/agents/launch-options"));
+  const curlCall = calls.find((c) => c.curlScript?.includes("/v1/agents/claude/launch-options"));
   assert.ok(curlCall);
-  assert.match(curlCall!.curlScript!, new RegExp(`127\\.0\\.0\\.1:${SANDBOX_RUNTIME_PORT}/v1/agents/launch-options`));
+  assert.match(curlCall!.curlScript!, new RegExp(`127\\.0\\.0\\.1:${SANDBOX_RUNTIME_PORT}/v1/agents/claude/launch-options`));
   assert.equal(curlCall!.curlToken, FAKE_BEARER_TOKEN);
 });
 
 test("waitForSandboxLaunchOptions requires the harness to carry at least one model, not just be listed", async () => {
   const { fn: exec } = fakeExecInProviderSandbox((url) =>
-    url.endsWith("/v1/agents/launch-options")
-      ? JSON.stringify({ agents: [{ kind: "claude", models: [] }] })
+    url.endsWith("/v1/agents/claude/launch-options")
+      ? JSON.stringify({ harnessKind: "claude", state: "observed", options: { models: [] } })
       : JSON.stringify([]),
   );
   const writes = captureStderr();
@@ -1072,8 +1072,8 @@ test("waitForSandboxLaunchOptions requires the harness to carry at least one mod
 
 test("waitForSandboxLaunchOptions dumps per-agent readiness on timeout so the failing precondition names itself", async () => {
   const { fn: exec } = fakeExecInProviderSandbox((url) => {
-    if (url.endsWith("/v1/agents/launch-options")) {
-      return JSON.stringify({ agents: [] });
+    if (url.endsWith("/v1/agents/claude/launch-options")) {
+      return JSON.stringify({ harnessKind: "claude", state: "unavailable", options: null });
     }
     if (url.endsWith("/v1/agents")) {
       // The decisive signal: claude installed=false → InstallRequired, the

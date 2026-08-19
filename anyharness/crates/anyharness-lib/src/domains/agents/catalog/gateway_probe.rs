@@ -4,7 +4,7 @@
 //! a harness by asking the gateway itself, with the harness's virtual key. NO
 //! harness process is spawned. This module owns only the HTTP call and its
 //! tolerant parse; the caller decides what to do with the result — the
-//! machine-snapshot poke engine (`model_snapshot`) for observation, and
+//! machine-snapshot poke engine (`launch_probe`) for observation, and
 //! `catalog::gateway_plan::GatewayModelPlanner` for the render-plane's memoized
 //! plan. There is no store here any more: the old `gateway_model_probe` sqlite
 //! table (revision-keyed, so any harness's auth change invalidated every

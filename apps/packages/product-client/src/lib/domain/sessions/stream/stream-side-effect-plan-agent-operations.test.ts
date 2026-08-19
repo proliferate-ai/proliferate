@@ -303,7 +303,7 @@ function workspaceAgentView(role: "subagent" | "ordinary") {
       : null,
     role,
     title: "Workspace agent",
-    configuration: { agentKind: "codex", modelId: null, modeId: null },
+    configuration: { agentKind: "codex", modelId: null },
     status: { presentation: "available", execution: "idle", hasLiveActor: true },
     capabilities: ["get_agent", "send_message"],
     createdAt: "2026-04-04T00:00:00Z",

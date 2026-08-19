@@ -102,8 +102,7 @@ There are two supported AnyHarness runtime agent inputs:
 - `catalogs/agents/catalog.json` (the lockfile)
   - supported agent families
   - resolved, sha-pinned install `source` per harness role
-  - model/control metadata + static session-display metadata
-  - optional `session.unattendedModeId` for catalog-curated unattended launches
+  - presentation metadata that never asserts executable options
 - `catalogs/agents/registry.json`
   - supported agent families
   - install method/launch metadata (probe-time discovery config)
@@ -115,14 +114,13 @@ Runtime code projects those bundled inputs into target-local surfaces:
 - `anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs`
   - trusted built-in `AgentDescriptor` values
 - `anyharness/crates/anyharness-lib/src/domains/agents/catalog/**`
-  - schema, validation, bundled loading, and model/control projections
+  - distribution schema, validation, bundled loading, and install projections
 - `anyharness/crates/anyharness-lib/src/domains/agents/registry/**`
   - schema, validation, bundled loading, and descriptor/auth-slot projections
 
-There is no separate runtime `catalog.rs` source and no split model/launch
-catalog path. Cloud product catalogs may be newer than these bundled runtime
-inputs; AnyHarness still validates creation against what the target runtime can
-actually launch.
+Executable launch options are not projected from either document. The runtime
+probes the installed harness, persists target-scoped observations, and validates
+creation only against that current observed revision.
 
 Both inputs ride the binary: `catalog.json` and `registry.json` are
 `include_str!`'d, so a new document ships iff a new runtime binary ships —
@@ -133,12 +131,9 @@ mailbox request; Desktop gets a new binary via the app bundle. There is no
 live catalog sync: no served catalog version on the heartbeat and no push
 route on the runtime.
 
-The unattended mode is part of the active catalog rather than the trusted
-registry recipe. Catalog validation requires a non-blank value that exists in
-the agent's `mode` control and in every model-specific mode vocabulary where one
-is declared. The resolved launch-options projection carries the active value to
-both local and remote product clients. An absent catalog value is intentional:
-the runtime and product must not invent a permissive fallback for that agent.
+Neither document carries an unattended mode or executable fallback. Product
+consumers preserve exact target-observed control IDs and omission remains
+omission.
 
 ### Resolution Flow
 
@@ -281,7 +276,8 @@ Important install cases:
 Public HTTP routes include:
 
 - `GET /v1/agents`
-- `GET /v1/agents/launch-options`
+- `GET /v1/agents/{kind}/launch-options`
+- `POST /v1/agents/{kind}/launch-options/refresh`
 - `GET /v1/agents/reconcile`
 - `POST /v1/agents/reconcile`
 - `GET /v1/agents/{kind}`
@@ -291,8 +287,6 @@ Public HTTP routes include:
 - `GET /v1/agents/login-terminals/{id}`
 - `DELETE /v1/agents/login-terminals/{id}`
 - `GET /v1/agents/login-terminals/{id}/ws`
-- `GET /v1/agents/{kind}/model-registry`
-- `POST /v1/agents/{kind}/model-registry/refresh`
 
 `login/start` is a compatibility endpoint for older clients that still show a
 command. New local/Desktop clients use `login/terminal`: AnyHarness resolves

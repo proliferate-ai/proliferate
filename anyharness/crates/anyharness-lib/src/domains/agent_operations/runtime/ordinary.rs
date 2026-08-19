@@ -51,7 +51,7 @@ impl AgentOperations {
             .validate_selection(
                 agent_kind,
                 input.model_id.as_deref(),
-                input.mode_id.as_deref(),
+                &input.control_values,
             )
             .map_err(AgentOperationsError::LaunchSelection)?;
 
@@ -88,7 +88,7 @@ impl AgentOperations {
                     &input.workspace.workspace_id,
                     &selection.agent_kind,
                     selection.model_id.as_deref(),
-                    selection.mode_id.as_deref(),
+                    &selection.control_values,
                     input.task,
                     &current_caller.record.id,
                     &source_label,
@@ -101,7 +101,7 @@ impl AgentOperations {
                     &input.workspace.workspace_id,
                     &selection.agent_kind,
                     selection.model_id.as_deref(),
-                    selection.mode_id.as_deref(),
+                    &selection.control_values,
                     input.task.expect("subagent task validated above"),
                     &current_caller.record.id,
                     &source_label,

@@ -269,6 +269,10 @@ pub trait BackgroundWorkDurable: Send + Sync {
 /// Durable session-row state: status/title/activity, config snapshots and the
 /// pending-config queue, capabilities, turn repair.
 pub trait SessionStateDurable: Send + Sync {
+    fn find_launch_intent(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Option<crate::domains::sessions::launch_intent::ResolvedLaunchIntent>>;
     fn update_status(&self, id: &str, status: &str, now: &str) -> anyhow::Result<()>;
     fn update_title_if_absent(&self, id: &str, title: &str, now: &str) -> anyhow::Result<bool>;
     fn update_last_prompt_at(&self, id: &str, now: &str) -> anyhow::Result<()>;

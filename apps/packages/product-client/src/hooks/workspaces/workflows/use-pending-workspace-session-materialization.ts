@@ -71,7 +71,12 @@ function materializeProjectedSession(input: {
     workspaceId: input.workspaceId,
     agentKind: input.session.agentKind,
     modelId: input.session.requestedModelId ?? input.session.modelId ?? input.session.agentKind,
-    modeId: input.session.modeId ?? undefined,
+    launchControlValues: input.session.liveConfig?.normalizedControls
+      ? Object.fromEntries(Object.values(input.session.liveConfig.normalizedControls)
+        .flatMap((value) => Array.isArray(value) ? value : value ? [value] : [])
+        .map((control) => [control.rawConfigId, control.currentValue])
+        .filter((entry): entry is [string, string] => Boolean(entry[1])))
+      : {},
     reuseInFlightEmptySession: false,
     preserveProjectedSessionOnCreateFailure: true,
     activateOnCreate: input.activateOnCreate,

@@ -9,6 +9,7 @@ pub(crate) mod fork_operations;
 pub(crate) mod idempotent_create;
 pub(crate) mod link_completions;
 mod links;
+pub(crate) mod launch_intents;
 mod live_config;
 pub(crate) mod mobility;
 mod notifications;
@@ -31,5 +32,9 @@ pub struct SessionStore {
 impl SessionStore {
     pub fn new(db: Db) -> Self {
         Self { db }
+    }
+
+    pub(crate) fn db(&self) -> Db {
+        self.db.clone()
     }
 }

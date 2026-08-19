@@ -1,21 +1,8 @@
 use super::super::model::{
-    ReviewAssignmentRecord, ReviewKind, ReviewModeVerificationStatus, ReviewRunRecord,
+    ReviewAssignmentRecord, ReviewKind, ReviewRunRecord,
 };
 use super::super::service::ReviewError;
 use crate::domains::sessions::runtime::CreateAndStartSessionError;
-
-pub(super) fn verify_mode(
-    requested_mode_id: Option<&str>,
-    actual_mode_id: Option<&str>,
-) -> ReviewModeVerificationStatus {
-    match requested_mode_id {
-        None => ReviewModeVerificationStatus::NotChecked,
-        Some(requested) if Some(requested) == actual_mode_id => {
-            ReviewModeVerificationStatus::Verified
-        }
-        Some(_) => ReviewModeVerificationStatus::Mismatch,
-    }
-}
 
 pub(super) fn build_reviewer_prompt(
     run: &ReviewRunRecord,
@@ -141,9 +128,8 @@ mod tests {
             persona_prompt: "Look for security issues.".to_string(),
             agent_kind: "proliferate".to_string(),
             model_id: Some("gpt-5.4".to_string()),
-            requested_mode_id: None,
-            actual_mode_id: None,
-            mode_verification_status: ReviewModeVerificationStatus::NotChecked,
+            control_values: Default::default(),
+            launch_verification_status: ReviewLaunchVerificationStatus::NotChecked,
             status: ReviewAssignmentStatus::Queued,
             pass: None,
             summary: None,

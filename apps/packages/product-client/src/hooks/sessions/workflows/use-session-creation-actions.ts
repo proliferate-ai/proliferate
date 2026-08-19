@@ -8,7 +8,6 @@ import {
   toSessionCreateFailureDisplayError,
 } from "#product/lib/domain/sessions/creation/create-session-error";
 import { pickLiveDefaultLaunchControls } from "#product/lib/domain/sessions/creation/launch-controls";
-import { resolveSessionCreationModeId } from "#product/lib/domain/sessions/creation/mode";
 import { isWorkspaceArchivedRefusal } from "#product/lib/domain/workspaces/archived/workspace-archived-refusal";
 import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { useToastStore } from "#product/stores/toast/toast-store";
@@ -20,7 +19,6 @@ import {
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
 import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
-import { useWorkspaceSurfaceLookup } from "#product/hooks/workspaces/derived/use-workspace-surface-lookup";
 import { useSessionPromptWorkflow } from "#product/hooks/sessions/workflows/use-session-prompt-workflow";
 import {
   createPendingSessionId,
@@ -35,7 +33,6 @@ import { writeChatShellIntentForSession } from "#product/hooks/workspaces/workfl
 import type { WorkspaceShellIntentKey } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { inFlightSessionCreatesByWorkspace } from "#product/hooks/sessions/workflows/session-creation-in-flight";
-import { useCloudAgentCatalogCache } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import type {
   CreateEmptySessionWithResolvedConfigOptions,
   CreateSessionWithResolvedConfigOptions,
@@ -74,10 +71,8 @@ export function useSessionCreationActions() {
   const { getWorkspaceRuntimeBlockError } = useWorkspaceRuntimeBlock();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const { invalidateWorkspaceCollectionsForRuntime } = useWorkspaceCollectionsInvalidationActions();
-  const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const { promptSession } = useSessionPromptWorkflow();
   const { activateSession, closeSessionSlotStream } = useSessionRuntimeActions();
-  const { ensureCloudAgentCatalog } = useCloudAgentCatalogCache();
   const { getWorkspaceSessionCacheSnapshot, removeWorkspaceSessionRecord, upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const dismissSessionMutation = useDismissSessionMutation();
   const showToast = useToastStore((state) => state.show);
@@ -119,9 +114,6 @@ export function useSessionCreationActions() {
     }
 
     const preferenceState = useUserPreferencesStore.getState();
-    const preferredModeId = preferenceState
-      .defaultSessionModeByAgentKind[options.agentKind]
-      ?.trim() || undefined;
     const frozenDefaultLiveSessionControlValuesByAgentKind = options.frozenLiveControlValues
       ? { [options.agentKind]: { ...options.frozenLiveControlValues } }
       : { ...preferenceState.defaultLiveSessionControlValuesByAgentKind };
@@ -134,17 +126,10 @@ export function useSessionCreationActions() {
         ...explicitLiveLaunchControls,
       };
     }
-    const workspaceSurface = getWorkspaceSurface(workspaceId);
-    const resolvedModeId = options.resolvedModeId !== undefined
-      ? options.resolvedModeId
-      : resolveSessionCreationModeId({
-        explicitModeId: options.modeId
-          ?? options.launchControlValues?.mode
-          ?? options.launchControlValues?.access_mode,
-        workspaceSurface,
-        unattendedModeId: options.unattendedModeId,
-        preferredModeId,
-      });
+    const selectedControlValues = {
+      ...(frozenDefaultLiveSessionControlValuesByAgentKind[options.agentKind] ?? {}),
+      ...(options.launchControlValues ?? {}),
+    };
     const pendingSessionId = options.clientSessionId ?? createPendingSessionId(options.agentKind);
     const existingProjectedRecord = getSessionRecord(pendingSessionId);
     annotateLatencyFlow(options.latencyFlowId, {
@@ -158,7 +143,6 @@ export function useSessionCreationActions() {
       modelId: options.modelId,
       pendingSessionId,
       promptText: hasPrompt ? options.text : null,
-      resolvedModeId: resolvedModeId ?? null,
       workspaceId,
     });
 
@@ -171,7 +155,6 @@ export function useSessionCreationActions() {
       workspaceId,
       agentKind: options.agentKind,
       modelId: options.modelId,
-      modeId: resolvedModeId ?? null,
       hasExistingProjectedRecord: Boolean(existingProjectedRecord),
       existingProjectedWorkspaceId: existingProjectedRecord?.workspaceId ?? null,
       hasPrompt,
@@ -264,7 +247,7 @@ export function useSessionCreationActions() {
         hadExistingProjectedRecord: Boolean(existingProjectedRecord),
         hasPrompt,
         launchIntentId: options.launchIntentId,
-        modeId: resolvedModeId ?? null,
+        controlValues: selectedControlValues,
         modelId: options.modelId,
         pendingSessionId,
         preserveProjectedSessionOnCreateFailure:
@@ -314,8 +297,7 @@ export function useSessionCreationActions() {
             runtimeSessionId: options.runtimeSessionId,
             agentKind: options.agentKind,
             modelId: options.modelId,
-            modeId: resolvedModeId ?? null,
-            launchControlValues: options.launchControlValues,
+            launchControlValues: selectedControlValues,
             frozenLiveControlValues: {
               ...(frozenDefaultLiveSessionControlValuesByAgentKind[options.agentKind] ?? {}),
             },
@@ -339,7 +321,6 @@ export function useSessionCreationActions() {
       materializeSessionCreation({
         trackProductEvent: telemetry.track,
         captureException: telemetry.captureException,
-        ensureCloudAgentCatalog,
         existingProjectedRecord,
         frozenDefaultLiveSessionControlValuesByAgentKind,
         localRuntime,
@@ -353,7 +334,6 @@ export function useSessionCreationActions() {
           }
           : options,
         pendingSessionId,
-        resolvedModeId: resolvedModeId ?? null,
         upsertWorkspaceSessionRecord,
         workspaceId,
         onRuntimeSessionCreated: pendingCreationLifecycle.current
@@ -421,12 +401,10 @@ export function useSessionCreationActions() {
     activateSession,
     closeSessionSlotStream,
     dismissSessionMutation,
-    ensureCloudAgentCatalog,
     getWorkspaceSessionCacheSnapshot,
     getWorkspaceRuntimeBlockError,
     invalidateWorkspaceCollectionsForRuntime,
     runtimeUrl,
-    getWorkspaceSurface,
     localRuntime,
     ssh,
     cloudClient,

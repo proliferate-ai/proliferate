@@ -12,6 +12,15 @@ It is not a Cloud command runner. It does not lease commands, materialize
 workspaces, upload session events, or maintain Cloud projections. Cloud
 reaches AnyHarness directly for the current workspace and session flows.
 
+## Harness launch-option synchronization
+
+`launch_options_sync.rs` reads the runtime's per-harness launch-option state on
+the heartbeat schedule and uploads only changed basis/revision documents. The
+server heartbeat eligibility bit gates all work. Payloads are copied verbatim;
+the Worker does not interpret models, controls, defaults, or evidence. A server
+denial after advertised eligibility is a bounded contract contradiction and
+does not advance the local last-pushed revision.
+
 On a **supervisor-owned target** (`supervisor_update_request_dir` set in
 config — every managed-cloud target, unconditionally; no longer gated behind
 `supervisor_owned_runtime`, which only gates the D5 bridge heartbeat signal
@@ -417,7 +426,7 @@ persisted, timed, or resettable; a Worker restart is the one recovery boundary.
 Network failures and every non-403 status keep their existing retry behavior and
 never trip it.
 
-See [MODELS.md "Write path"](FEATURE_DOCS/MODELS.md#write-path)
+See [MODELS.md "Cloud copy"](FEATURE_DOCS/MODELS.md#cloud-copy)
 for the server half of this contract.
 
 ## Catalog Convergence (none)

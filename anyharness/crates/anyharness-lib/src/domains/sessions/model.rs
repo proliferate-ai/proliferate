@@ -287,6 +287,7 @@ pub struct SessionLiveConfigSnapshotRecord {
     pub raw_config_options_json: String,
     pub normalized_controls_json: String,
     pub prompt_capabilities_json: Option<String>,
+    pub full_snapshot_json: Option<String>,
     pub updated_at: String,
 }
 

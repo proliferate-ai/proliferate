@@ -56,7 +56,8 @@ struct CreateAgentArgs {
     task: Option<String>,
     agent_kind: Option<String>,
     model_id: Option<String>,
-    mode_id: Option<String>,
+    #[serde(default)]
+    control_values: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -235,7 +236,7 @@ async fn dispatch_tool(
                         task: args.task,
                         agent_kind: args.agent_kind,
                         model_id: args.model_id,
-                        mode_id: args.mode_id,
+                        control_values: args.control_values,
                     },
                 )
                 .await;

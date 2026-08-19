@@ -21,7 +21,7 @@ use crate::domains::agents::model::{AgentKind, ResolvedAgent};
 /// Claude's catalog-declared sentinel model id (`catalogs/agents/catalog.json`,
 /// claude's `models[]`): "use the harness's own default", not a real model
 /// name the CLI understands. A session can carry this as its resolved
-/// `requested_model_id` (it is a legitimate, `defaultVisible` picker entry —
+/// `requested_model_id` (it is a legitimate target-observed picker entry —
 /// [`ActiveCatalog::validate_launch_in_universe`] resolves it like any other
 /// row), so launch env must recognize and skip it rather than forward it as
 /// `ANTHROPIC_MODEL`, which the CLI rejects with `model_not_found`.

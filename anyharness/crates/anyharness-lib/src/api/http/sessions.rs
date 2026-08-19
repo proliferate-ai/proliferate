@@ -57,7 +57,21 @@ pub async fn create_session(
         let session_id = req.session_id.clone();
         let agent_kind = req.agent_kind.clone();
         let model_id = req.model_id.clone();
-        let mode_id = req.mode_id.clone();
+        let mut control_values = req.control_values.clone();
+        if let Some(mode_id) = req.mode_id.as_ref() {
+            match control_values.get("mode") {
+                Some(value) if value != mode_id => {
+                    return Err(ApiError::bad_request(
+                        "modeId conflicts with controlValues.mode",
+                        "SESSION_LAUNCH_VALUE_UNSUPPORTED",
+                    ));
+                }
+                Some(_) => {}
+                None => {
+                    control_values.insert("mode".to_string(), mode_id.clone());
+                }
+            }
+        }
         let origin = request_origin_or_api_default(req.origin.clone(), "create_session");
         assert_workspace_auth_scope(&auth, &workspace_id)?;
         let system_prompt_append_count = req
@@ -69,7 +83,7 @@ pub async fn create_session(
             workspace_id = %workspace_id,
             agent_kind = %agent_kind,
             model_id = ?model_id,
-            mode_id = ?mode_id,
+            control_ids = ?control_values.keys().collect::<Vec<_>>(),
             system_prompt_append_count,
             "[workspace-latency] session.http.create.request_received"
         );
@@ -93,7 +107,7 @@ pub async fn create_session(
                 &agent_kind,
                 session_id.as_deref(),
                 model_id.as_deref(),
-                mode_id.as_deref(),
+                &control_values,
                 req.system_prompt_append,
                 Vec::new(),
                 None,

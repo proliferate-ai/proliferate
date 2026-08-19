@@ -124,7 +124,7 @@ describe("home-next branch helpers", () => {
     expect(resolveHomeNextDefaultBranchName({
       branchRefs: [],
       repoRootDefaultBranch: "main",
-    })).toBeNull();
+    })).toEqual({ kind: "claude", modelId: "sonnet" });
   });
 
   it("falls back to git default and then the first local branch without inventing main", () => {
@@ -298,7 +298,7 @@ describe("home-next model helpers", () => {
     expect(groups[0]?.models[1]?.isSelected).toBe(true);
   });
 
-  it("resolves model defaults from user preference, provider default, then first model", () => {
+  it("resolves only exact preferences and target-observed defaults", () => {
     const groups = buildHomeNextModelGroups(
       [agent({ kind: "codex" }), agent({ kind: "claude" })],
       [
@@ -324,13 +324,13 @@ describe("home-next model helpers", () => {
       defaultChatModelIdByAgentKind: {
         claude: "sonnet",
       },
-    })).toEqual({ kind: "claude", modelId: "sonnet" });
+    })).toBeNull();
     expect(resolveEffectiveHomeModelSelection(groups, null, {
       defaultChatAgentKind: "missing",
       defaultChatModelIdByAgentKind: {
         missing: "missing",
       },
-    })).toEqual({ kind: "claude", modelId: "sonnet" });
+    })).toBeNull();
   });
 });
 

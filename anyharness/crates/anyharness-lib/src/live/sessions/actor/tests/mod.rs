@@ -54,7 +54,6 @@ mod domain_ops;
 mod notifications;
 mod prompt;
 mod queue;
-mod requested_mode;
 mod shutdown;
 mod workspace_stop;
 

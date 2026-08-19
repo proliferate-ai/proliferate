@@ -53,34 +53,24 @@ export function describeHomeLaunchTarget(target: HomeLaunchTarget): string {
   }
 }
 
-export function modeOptions(modeId: string | null): { modeId?: string } {
-  return modeId ? { modeId } : {};
-}
-
 export function newHomeNextLaunchId(): string {
   return crypto.randomUUID();
 }
 
-export function buildResolvedHomeLaunchControlValues(input: {
-  modeId: string | null;
-  launchControlValues?: Record<string, string>;
-}): Record<string, string> {
-  return {
-    ...input.launchControlValues,
-    ...(input.modeId ? { mode: input.modeId } : {}),
-  };
+export function buildResolvedHomeLaunchControlValues(
+  launchControlValues?: Record<string, string>,
+): Record<string, string> {
+  return { ...launchControlValues };
 }
 
 export function buildHomePendingWorkspaceInitialSession(input: {
   modelSelection: HomeNextModelSelection;
-  modeId: string | null;
   launchControlValues: Record<string, string>;
 }): PendingWorkspaceInitialSession {
   return {
     kind: "session",
     agentKind: input.modelSelection.kind,
     modelId: input.modelSelection.modelId,
-    modeId: input.modeId,
     launchControlValues: input.launchControlValues,
     displayTitle: input.modelSelection.modelId,
   };
@@ -152,21 +142,18 @@ export function beginHomeNextLaunch(
   input: {
     prompt: string;
     modelSelection: HomeNextModelSelection;
-    modeId: string | null;
     launchControlValues?: Record<string, string>;
     target: HomeLaunchTarget;
   },
 ): StartedHomeNextLaunch {
-  const { prompt, modelSelection, modeId, target } = input;
+  const { prompt, modelSelection, target } = input;
   const launchIntentId = newHomeNextLaunchId();
   const promptId = newHomeNextLaunchId();
-  const resolvedLaunchControlValues = buildResolvedHomeLaunchControlValues({
-    modeId,
-    launchControlValues: input.launchControlValues,
-  });
+  const resolvedLaunchControlValues = buildResolvedHomeLaunchControlValues(
+    input.launchControlValues,
+  );
   const initialSession = buildHomePendingWorkspaceInitialSession({
     modelSelection,
-    modeId,
     launchControlValues: resolvedLaunchControlValues,
   });
   begin({
@@ -174,7 +161,6 @@ export function beginHomeNextLaunch(
     catalogSnapshotId: null,
     agentKind: modelSelection.kind,
     modelId: modelSelection.modelId,
-    modeId,
     launchControlValues: resolvedLaunchControlValues,
     promptId,
     queuedPromptBlocks: [{ type: "text", text: prompt }],
@@ -185,7 +171,6 @@ export function beginHomeNextLaunch(
     retryInput: {
       text: prompt,
       modelSelection,
-      modeId,
       launchControlValues: resolvedLaunchControlValues,
       target,
     },

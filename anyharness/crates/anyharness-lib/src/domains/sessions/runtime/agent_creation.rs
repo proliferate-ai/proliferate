@@ -7,6 +7,7 @@ use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::prompt::provenance::PromptProvenance;
 use crate::domains::workspaces::access_gate::WorkspaceAccessError;
 use crate::origin::OriginContext;
+use std::collections::BTreeMap;
 
 use super::creation::{map_create_session_service_error, map_encrypt_bindings_error_to_create};
 use super::{CreateAndStartSessionError, SessionRuntime};
@@ -45,7 +46,7 @@ impl SessionRuntime {
         workspace_id: &str,
         agent_kind: &str,
         model_id: Option<&str>,
-        mode_id: Option<&str>,
+        control_values: &BTreeMap<String, String>,
         task: Option<String>,
         source_session_id: String,
         source_label: String,
@@ -61,7 +62,7 @@ impl SessionRuntime {
                 agent_kind,
                 None,
                 model_id,
-                mode_id,
+                control_values,
                 None,
                 vec![],
                 None,
@@ -92,7 +93,7 @@ impl SessionRuntime {
         workspace_id: &str,
         agent_kind: &str,
         model_id: Option<&str>,
-        mode_id: Option<&str>,
+        control_values: &BTreeMap<String, String>,
         task: String,
         parent_session_id: &str,
         source_label: &str,
@@ -101,7 +102,7 @@ impl SessionRuntime {
             workspace_id,
             agent_kind,
             model_id,
-            mode_id,
+            control_values,
             parent_session_id,
             None,
         )?;
@@ -126,7 +127,7 @@ impl SessionRuntime {
         workspace_id: &str,
         agent_kind: &str,
         model_id: Option<&str>,
-        mode_id: Option<&str>,
+        control_values: &BTreeMap<String, String>,
         parent_session_id: &str,
         link_label: Option<String>,
     ) -> Result<(SessionRecord, SessionLinkRecord), CreateSubagentAgentSessionError> {
@@ -162,18 +163,19 @@ impl SessionRuntime {
             None,
             false,
             model_id,
-            mode_id,
+            control_values,
             mcp_bindings_ciphertext,
             None,
             SessionMcpBindingPolicy::InheritWorkspace,
             None,
             false,
             OriginContext::system_local_runtime(),
-            |record| {
+            |record, intent| {
                 let link = self
                     .session_link_service
                     .create_subagent_session_and_link_with_child_limit(
                         record,
+                        intent,
                         CreateSessionLinkInput {
                             relation: SessionLinkRelation::Subagent,
                             parent_session_id: parent_session_id.to_string(),

@@ -53,7 +53,7 @@ export interface AgentLaunchControlLike {
 
 export const SESSION_CONTROL_LABELS: Record<SupportedLiveControlKey, string> = {
   collaboration_mode: "Mode",
-  mode: "Permissions",
+  mode: "Access",
   reasoning: "Reasoning",
   effort: "Reasoning effort",
   fast_mode: "Fast mode",
@@ -118,15 +118,15 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         isDefault: true,
       },
       {
-        value: "auto",
-        label: "Auto",
-        shortLabel: "Auto",
-        description: "Auto-approve standard edits.",
+        value: "agent",
+        label: "Agent",
+        shortLabel: "Agent",
+        description: "Allow standard agent edits.",
         icon: "edit",
       },
       {
-        value: "full-access",
-        label: "Full Access",
+        value: "agent-full-access",
+        label: "Agent Full Access",
         shortLabel: "Full Access",
         description: "Allow unrestricted changes.",
         icon: "zap",

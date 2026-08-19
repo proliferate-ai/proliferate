@@ -102,7 +102,7 @@ export function buildAgentModelGroups({
           isDefault: model.isDefault,
           isSelected:
             selected?.kind === registry.kind
-            && modelMatchesId(model, selected.modelId),
+            && model.id === selected.modelId,
         })),
       } satisfies AgentModelGroup;
     })
@@ -126,7 +126,7 @@ export function findAgentModelSelection(
 
   const group = groups.find((candidate) => candidate.kind === selection.kind) ?? null;
   const model =
-    group?.models.find((candidate) => modelOptionMatchesId(candidate, selection.modelId))
+    group?.models.find((candidate) => candidate.modelId === selection.modelId)
     ?? null;
   return group && model ? { group, model } : null;
 }
@@ -135,8 +135,8 @@ export function defaultAgentModelForGroup(
   group: AgentModelGroup,
 ): AgentModelOption | null {
   return group.models.find((candidate) =>
-    candidate.modelId === group.defaultModelId || candidate.isDefault
-  ) ?? group.models[0] ?? null;
+    candidate.modelId === group.defaultModelId
+  ) ?? null;
 }
 
 export function preferredAgentModelForGroup(
@@ -145,7 +145,7 @@ export function preferredAgentModelForGroup(
 ): AgentModelOption | null {
   const preferredModelId = defaultModelIdByAgentKind[group.kind];
   return preferredModelId
-    ? group.models.find((candidate) => modelOptionMatchesId(candidate, preferredModelId)) ?? null
+    ? group.models.find((candidate) => candidate.modelId === preferredModelId) ?? null
     : null;
 }
 
@@ -173,16 +173,6 @@ export function resolveEffectiveAgentModelSelection(
     return model
       ? { kind: preferredGroup.kind, modelId: model.modelId }
       : null;
-  }
-
-  for (const group of groups) {
-    const model = preferredAgentModelForGroup(
-      group,
-      preferences.defaultModelIdByAgentKind,
-    ) ?? defaultAgentModelForGroup(group);
-    if (model) {
-      return { kind: group.kind, modelId: model.modelId };
-    }
   }
 
   return null;
@@ -231,8 +221,7 @@ export function withClearedDefaultModelIdByAgentKind(
 // (cleared). `runtimeModels` must be the agent's launch models for the active
 // auth context, or null/undefined when the runtime does not (yet) list the
 // agent — in which case we never report stale, to avoid clearing a still-valid
-// default while options are loading or the agent is unclassified. A stored id
-// that matches a model's alias is considered valid (not stale).
+// default while options are loading or the agent is unclassified.
 export function isStoredDefaultModelStale(
   storedModelId: string | null | undefined,
   runtimeModels: ReadonlyArray<{ id: string; aliases?: readonly string[] | null }> | null | undefined,
@@ -240,9 +229,7 @@ export function isStoredDefaultModelStale(
   if (!storedModelId || !runtimeModels) {
     return false;
   }
-  return !runtimeModels.some(
-    (model) => model.id === storedModelId || (model.aliases ?? []).includes(storedModelId),
-  );
+  return !runtimeModels.some((model) => model.id === storedModelId);
 }
 
 export function resolveAgentModelInfo(
@@ -256,7 +243,7 @@ export function resolveAgentModelInfo(
 
   const group = groups.find((candidate) => candidate.kind === selection.kind);
   const registry = modelRegistries.find((candidate) => candidate.kind === selection.kind);
-  const model = registry?.models.find((candidate) => modelMatchesId(candidate, selection.modelId));
+  const model = registry?.models.find((candidate) => candidate.id === selection.modelId);
 
   return group && model
     ? {
@@ -265,18 +252,4 @@ export function resolveAgentModelInfo(
       model,
     }
     : null;
-}
-
-function modelMatchesId(
-  model: Pick<AgentModelRegistryModel, "id" | "aliases">,
-  modelId: string,
-): boolean {
-  return model.id === modelId || (model.aliases ?? []).includes(modelId);
-}
-
-function modelOptionMatchesId(
-  model: Pick<AgentModelOption, "modelId" | "aliases">,
-  modelId: string,
-): boolean {
-  return model.modelId === modelId || model.aliases.includes(modelId);
 }

@@ -46,10 +46,10 @@ function isNode(value: unknown): boolean {
     || typeof value.title !== "string" || typeof value.prompt !== "string") return false;
   if (value.model === undefined || value.model === null) return true;
   return isRecord(value.model)
-    && hasOnlyKeys(value.model, ["agentKind", "modelId", "modeId"])
+    && hasOnlyKeys(value.model, ["agentKind", "modelId", "controlValues"])
     && typeof value.model.agentKind === "string"
     && optionalNullableString(value.model.modelId)
-    && optionalNullableString(value.model.modeId);
+    && optionalStringRecord(value.model.controlValues);
 }
 
 function isEdge(value: unknown): boolean {
@@ -71,6 +71,11 @@ function isDoc(value: unknown): boolean {
 
 function optionalNullableString(value: unknown): boolean {
   return value === undefined || value === null || typeof value === "string";
+}
+
+function optionalStringRecord(value: unknown): boolean {
+  return value === undefined || (isRecord(value)
+    && Object.values(value).every((entry) => typeof entry === "string"));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

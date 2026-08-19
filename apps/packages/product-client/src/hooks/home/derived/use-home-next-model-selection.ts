@@ -2,13 +2,10 @@ import { useMemo } from "react";
 import { useAgentLaunchOptionsQuery } from "@anyharness/sdk-react";
 import { useShallow } from "zustand/react/shallow";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
-import { useCloudLaunchModelRegistries } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import {
-  mergeRuntimeLaunchOptionsIntoDesktopLaunchModelRegistries,
+  projectHarnessLaunchOptions,
   type DesktopLaunchModelRegistry as ModelRegistry,
 } from "#product/lib/domain/agents/cloud-launch-catalog";
-import type { AgentCatalogSummary } from "#product/lib/domain/agents/model-options";
-import { filterVisibleModelRegistries } from "#product/lib/domain/chat/models/model-visibility";
 import {
   buildHomeNextModelGroups,
   resolveHomeModelAvailabilityState,
@@ -28,7 +25,6 @@ interface UseHomeNextModelSelectionArgs {
 
 export function useHomeNextModelSelection({
   modelSelectionOverride,
-  repoLaunchKind = null,
 }: UseHomeNextModelSelectionArgs) {
   const {
     readyAgents,
@@ -36,53 +32,38 @@ export function useHomeNextModelSelection({
     isError: agentsError,
     error: agentsQueryError,
   } = useAgentCatalog();
-  const isCloudLaunchTarget = repoLaunchKind === "cloud";
-  const modelRegistriesQuery = useCloudLaunchModelRegistries();
-  const runtimeLaunchOptions = useAgentLaunchOptionsQuery();
-  const modelRegistries = useMemo(
-    () => mergeRuntimeLaunchOptionsIntoDesktopLaunchModelRegistries(
-      modelRegistriesQuery.data ?? EMPTY_MODEL_REGISTRIES,
-      isCloudLaunchTarget ? null : runtimeLaunchOptions.data?.agents ?? null,
-    ),
-    [isCloudLaunchTarget, modelRegistriesQuery.data, runtimeLaunchOptions.data?.agents],
-  );
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
-    chatModelVisibilityOverridesByAgentKind:
-      state.chatModelVisibilityOverridesByAgentKind,
   })));
-  const visibleModelRegistries = useMemo(
-    () => filterVisibleModelRegistries({
-      modelRegistries,
-      overrides: preferences.chatModelVisibilityOverridesByAgentKind,
-      selected: null,
-    }),
-    [modelRegistries, preferences.chatModelVisibilityOverridesByAgentKind],
+  const requestedHarnessKind = modelSelectionOverride?.kind
+    || preferences.defaultChatAgentKind
+    || readyAgents[0]?.kind
+    || null;
+  const runtimeLaunchOptions = useAgentLaunchOptionsQuery({ harnessKind: requestedHarnessKind });
+  const modelRegistries = useMemo(
+    () => {
+      const agent = runtimeLaunchOptions.data
+        ? projectHarnessLaunchOptions(runtimeLaunchOptions.data)
+        : null;
+      return agent ? [{
+        kind: agent.kind,
+        displayName: agent.displayName,
+        defaultModelId: agent.defaultModelId,
+        models: agent.models,
+      }] : EMPTY_MODEL_REGISTRIES;
+    },
+    [runtimeLaunchOptions.data],
   );
-  const readyAgentsForLaunch = useMemo<AgentCatalogSummary[]>(() => {
-    if (!isCloudLaunchTarget) {
-      // `GET /v1/agents` is now route-aware, so a harness whose gateway/api_key
-      // route supplies the launch credential already reports `ready` there and
-      // this union is usually redundant. It is kept because the two reads still
-      // differ in env scope — `/v1/agents` resolves against the HOST env while
-      // launch options resolve against the workspace's composed env — so a
-      // workspace-scoped credential can make launch options list an agent that
-      // the host-scoped read does not. Launch options never list an uninstalled
-      // agent, so this cannot resurrect an install-required agent.
-      return mergeLaunchReadyAgents(readyAgents, runtimeLaunchOptions.data?.agents ?? null);
-    }
-    return buildCloudReadyAgentSummaries({ modelRegistries });
-  }, [
-    isCloudLaunchTarget,
-    modelRegistries,
-    readyAgents,
-    runtimeLaunchOptions.data?.agents,
-  ]);
+  const readyAgentsForLaunch = useMemo(() => modelRegistries.map((registry) => ({
+    kind: registry.kind,
+    displayName: registry.displayName,
+    readiness: "ready" as const,
+  })), [modelRegistries]);
 
   const unselectedGroups = useMemo(
-    () => buildHomeNextModelGroups(readyAgentsForLaunch, visibleModelRegistries, null),
-    [readyAgentsForLaunch, visibleModelRegistries],
+    () => buildHomeNextModelGroups(readyAgentsForLaunch, modelRegistries, null),
+    [readyAgentsForLaunch, modelRegistries],
   );
   const effectiveModelSelection = useMemo(
     () => resolveEffectiveHomeModelSelection(
@@ -95,28 +76,26 @@ export function useHomeNextModelSelection({
   const modelGroups = useMemo(
     () => buildHomeNextModelGroups(
       readyAgentsForLaunch,
-      visibleModelRegistries,
+      modelRegistries,
       effectiveModelSelection,
     ),
-    [effectiveModelSelection, readyAgentsForLaunch, visibleModelRegistries],
+    [effectiveModelSelection, readyAgentsForLaunch, modelRegistries],
   );
   const selectedModel = useMemo(
     () => resolveHomeNextModelInfo(
       modelGroups,
-      visibleModelRegistries,
+      modelRegistries,
       effectiveModelSelection,
     ),
-    [effectiveModelSelection, modelGroups, visibleModelRegistries],
+    [effectiveModelSelection, modelGroups, modelRegistries],
   );
 
   const isLoading =
     agentsLoading
-    || modelRegistriesQuery.isLoading
-    || (!isCloudLaunchTarget && runtimeLaunchOptions.isLoading);
+    || runtimeLaunchOptions.isLoading;
   const hasLoadError =
     agentsError
-    || modelRegistriesQuery.isError
-    || (!isCloudLaunchTarget && runtimeLaunchOptions.isError);
+    || runtimeLaunchOptions.isError;
   const hasLaunchableModel =
     modelGroups.length > 0
     && effectiveModelSelection !== null
@@ -129,53 +108,12 @@ export function useHomeNextModelSelection({
 
   return {
     modelGroups,
-    modelRegistries: visibleModelRegistries,
+    modelRegistries,
     effectiveModelSelection,
     selectedModel,
     isLoading,
     error: agentsQueryError
-      ?? modelRegistriesQuery.error
-      ?? (isCloudLaunchTarget ? null : runtimeLaunchOptions.error),
+      ?? runtimeLaunchOptions.error,
     modelAvailabilityState,
   };
-}
-
-/**
- * Union of native-ready agents and launch-ready agents (present with models in
- * the runtime's launch options — the enrolled route supplies their launch
- * credential even when the vendor CLI itself is not logged in).
- */
-function mergeLaunchReadyAgents(
-  readyAgents: AgentCatalogSummary[],
-  launchOptionAgents:
-    | ReadonlyArray<{ kind: string; displayName: string; models: ReadonlyArray<unknown> }>
-    | null,
-): AgentCatalogSummary[] {
-  if (!launchOptionAgents || launchOptionAgents.length === 0) {
-    return readyAgents;
-  }
-  const nativeReadyKinds = new Set(readyAgents.map((agent) => agent.kind));
-  const launchReady = launchOptionAgents
-    .filter((agent) => agent.models.length > 0 && !nativeReadyKinds.has(agent.kind))
-    .map((agent) => ({
-      kind: agent.kind,
-      displayName: agent.displayName,
-      readiness: "ready" as const,
-    }));
-  if (launchReady.length === 0) {
-    return readyAgents;
-  }
-  return [...readyAgents, ...launchReady];
-}
-
-function buildCloudReadyAgentSummaries({
-  modelRegistries,
-}: {
-  modelRegistries: readonly ModelRegistry[];
-}): AgentCatalogSummary[] {
-  return modelRegistries.map((registry) => ({
-    kind: registry.kind,
-    displayName: registry.displayName,
-    readiness: "ready",
-  }));
 }

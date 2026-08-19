@@ -4,8 +4,8 @@ use super::attachment_storage::PromptAttachmentStorage;
 use super::deletion::SessionDeleteWorkflow;
 use super::model::SessionRecord;
 use super::store::SessionStore;
-use crate::domains::agents::catalog::service::{ActiveUniverse, AgentCatalogService};
-use crate::domains::agents::model_snapshot::universe::ObservedUniverseSource;
+use crate::domains::agents::catalog::service::AgentCatalogService;
+use crate::domains::agents::launch_options::HarnessLaunchOptionsService;
 use crate::domains::workspaces::store::WorkspaceStore;
 
 pub(crate) mod attachments;
@@ -26,15 +26,7 @@ pub struct SessionService {
     attachment_storage: PromptAttachmentStorage,
     workspace_store: WorkspaceStore,
     catalog_service: AgentCatalogService,
-    /// This machine's observed models per auth context, consulted by launch
-    /// validation so a probe's discoveries are launchable and the shipped catalog
-    /// fills in where nothing was observed.
-    ///
-    /// A seam rather than the probe engine itself: the engine takes a filesystem
-    /// lock on the runtime home at construction, and requiring one to answer a pure
-    /// validation question would put an flock in the middle of every session test.
-    /// [`NoObservations`] is the pre-probe universe, i.e. exactly the old behavior.
-    observed_universe: Arc<dyn ObservedUniverseSource>,
+    launch_options_service: Arc<HarnessLaunchOptionsService>,
     runtime_home: std::path::PathBuf,
 }
 
@@ -66,14 +58,19 @@ pub enum CreateSessionError {
     /// typed refusal for every unservable model intent
     /// (`SESSION_MODEL_UNSUPPORTED`). `active_universe` names which truth
     /// refused so the wire detail can say so.
-    ModelUnsupported {
+    LaunchOptionsUnavailable {
         agent_kind: String,
-        model_id: String,
-        active_universe: ActiveUniverse,
+        state: Option<crate::domains::agents::launch_options::HarnessLaunchOptionsState>,
     },
-    ModeUnsupported {
+    LaunchValueUnsupported {
         agent_kind: String,
-        mode_id: String,
+        key: String,
+        value: String,
+        state: crate::domains::agents::launch_options::HarnessLaunchOptionsState,
+    },
+    AgentEnvOverrideUnsupported {
+        agent_kind: String,
+        env_var_name: String,
     },
     /// The harness's enrolled agent-auth selection cannot be satisfied
     /// (agent-auth.md: "present-but-empty fails closed"). Distinct from
@@ -101,17 +98,6 @@ pub enum UpdateSessionTitleError {
 }
 
 impl SessionService {
-    /// A service that validates against the shipped catalog only — the pre-probe
-    /// universe.
-    ///
-    /// **Test-only today.** Production wiring always has a runtime home and therefore a
-    /// probe engine, so it goes through
-    /// [`SessionService::with_observed_universe`]. This constructor is kept (rather
-    /// than deleted) because it is the shape every catalog/session suite wants — a
-    /// service whose validation answers are a pure function of the shipped catalog,
-    /// with no filesystem lock taken on a temp home — and because it documents that
-    /// the no-observation universe is a legitimate configuration rather than an
-    /// error path.
     #[cfg(test)]
     pub fn new(
         session_store: SessionStore,
@@ -120,22 +106,26 @@ impl SessionService {
         catalog_service: AgentCatalogService,
         runtime_home: std::path::PathBuf,
     ) -> Self {
-        Self::with_observed_universe(
+        let launch_options_service = Arc::new(HarnessLaunchOptionsService::new(
+            session_store.db(),
+            runtime_home.clone(),
+        ));
+        Self::with_launch_options(
             session_store,
             delete_workflow,
             workspace_store,
             catalog_service,
-            Arc::new(crate::domains::agents::model_snapshot::universe::NoObservations),
+            launch_options_service,
             runtime_home,
         )
     }
 
-    pub fn with_observed_universe(
+    pub fn with_launch_options(
         session_store: SessionStore,
         delete_workflow: SessionDeleteWorkflow,
         workspace_store: WorkspaceStore,
         catalog_service: AgentCatalogService,
-        observed_universe: Arc<dyn ObservedUniverseSource>,
+        launch_options_service: Arc<HarnessLaunchOptionsService>,
         runtime_home: std::path::PathBuf,
     ) -> Self {
         Self {
@@ -144,7 +134,7 @@ impl SessionService {
             attachment_storage: PromptAttachmentStorage::new(runtime_home.clone()),
             workspace_store,
             catalog_service,
-            observed_universe,
+            launch_options_service,
             runtime_home,
         }
     }

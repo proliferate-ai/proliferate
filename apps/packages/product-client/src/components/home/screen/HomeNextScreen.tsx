@@ -40,7 +40,6 @@ export function HomeNextScreen() {
   } = useHomeNextTargetSelectionState();
   const [modelSelectionOverride, setModelSelectionOverride] =
     useState<HomeNextModelSelection | null>(null);
-  const [modeOverrideId, setModeOverrideId] = useState<string | null>(null);
   const [launchControlOverrides, setLaunchControlOverrides] = useState<Record<string, string>>({});
   const {
     onboardingCards,
@@ -58,12 +57,10 @@ export function HomeNextScreen() {
     repoLaunchKind,
     modelSelectionOverride,
     baseBranchOverride,
-    modeOverrideId,
     selectedSshTargetId,
   });
   const homeLaunchControls = useHomeNextLaunchControls({
     modelSelection: homeNext.effectiveModelSelection,
-    modeId: homeNext.effectiveModeId,
     controlOverrides: launchControlOverrides,
     onSelectControl: (controlKey, value) => {
       setLaunchControlOverrides((current) => ({
@@ -90,12 +87,7 @@ export function HomeNextScreen() {
   } = useHomeComposerAttachments(homeNext.launchTarget?.kind ?? null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const homeSessionConfigControls = buildHomeSessionConfigControls({
-    destination,
-    agentKind: homeAgentKind,
-    modes: homeNext.modeOptions,
-    selectedModeId: homeNext.effectiveMode?.value ?? null,
     launchControls: homeLaunchControls.controls,
-    onSelectMode: setModeOverrideId,
   });
   const homeModelSelectorProps = buildHomeModelSelectorProps({
     groups: homeNext.modelGroups,
@@ -103,7 +95,6 @@ export function HomeNextScreen() {
     availabilityState: homeNext.modelAvailabilityState,
     onSelect: (selection) => {
       setModelSelectionOverride(selection);
-      setModeOverrideId(null);
       setLaunchControlOverrides({});
     },
   });
@@ -257,7 +248,6 @@ export function HomeNextScreen() {
               modelAvailabilityState={homeNext.modelAvailabilityState}
               canLaunchTarget={homeNext.canLaunchTarget}
               modelSelection={homeNext.effectiveModelSelection}
-              modeId={homeNext.effectiveModeId}
               launchControlValues={homeLaunchControls.launchControlValues}
               launchTarget={homeNext.launchTarget}
               attachments={attachments}

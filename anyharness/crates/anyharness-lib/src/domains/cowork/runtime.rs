@@ -161,8 +161,7 @@ pub struct CoworkCodingSessionContext {
     pub agent_kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mode_id: Option<String>,
+    pub control_values: std::collections::BTreeMap<String, String>,
     pub wake_scheduled: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_completion: Option<CoworkCodingCompletion>,
@@ -475,14 +474,14 @@ impl CoworkRuntime {
         &self,
         agent_kind: &str,
         model_id: Option<&str>,
-        mode_id: Option<&str>,
+        control_values: &std::collections::BTreeMap<String, String>,
         workspace_delegation_enabled: bool,
     ) -> Result<CreateCoworkThreadResult, CoworkCreateThreadError> {
         let total_started = Instant::now();
         tracing::info!(
             agent_kind = %agent_kind,
             model_id = ?model_id,
-            mode_id = ?mode_id,
+            control_values = ?control_values,
             workspace_delegation_enabled,
             "[workspace-latency] cowork.runtime.create_thread.start"
         );
@@ -524,7 +523,7 @@ impl CoworkRuntime {
             agent_kind,
             None,
             model_id,
-            mode_id,
+            control_values,
             None,
             Vec::new(),
             None,
@@ -880,7 +879,7 @@ impl CoworkRuntime {
                 &parent_thread,
                 input.harness_id.as_deref(),
                 input.model_id.as_deref(),
-                input.mode_id.as_deref(),
+                &input.control_values,
             )
             .map_err(|error| match error {
                 CreateAndStartSessionError::WorkspaceDirectoryMissing { path } => {
@@ -1318,6 +1317,15 @@ impl CoworkRuntime {
             let sessions = linked_sessions
                 .into_iter()
                 .map(|(link, session)| {
+                    let live_config = self.session_runtime.live_config_snapshot(&session.id)?;
+                    let model_id = live_config
+                        .as_ref()
+                        .and_then(|snapshot| snapshot.current.model_id.clone())
+                        .or_else(|| session.current_model_id.clone())
+                        .or_else(|| session.requested_model_id.clone());
+                    let control_values = live_config
+                        .map(|snapshot| snapshot.current.control_values)
+                        .unwrap_or_default();
                     let status = normalized_session_status(&session.status).to_string();
                     let latest_completion = self
                         .delegation_service
@@ -1339,8 +1347,8 @@ impl CoworkRuntime {
                         label: link.label,
                         status,
                         agent_kind: session.agent_kind,
-                        model_id: session.current_model_id.or(session.requested_model_id),
-                        mode_id: session.current_mode_id.or(session.requested_mode_id),
+                        model_id,
+                        control_values,
                         wake_scheduled: scheduled.contains(&link.id),
                         latest_completion,
                         link_created_at: link.created_at,
@@ -1371,17 +1379,10 @@ impl CoworkRuntime {
         parent_thread: &CoworkThreadRecord,
         agent_kind: Option<&str>,
         model_id: Option<&str>,
-        mode_id: Option<&str>,
+        control_values: &std::collections::BTreeMap<String, String>,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
         let resolved_agent_kind =
             normalize_optional_ref(agent_kind).unwrap_or(parent_thread.agent_kind.as_str());
-        // Cowork owns the access policy for delegated coding sessions. An
-        // explicit caller choice wins; otherwise use the active catalog's
-        // vetted unattended mode and omit the mode when none is declared.
-        let resolved_mode_id = normalize_optional_ref(mode_id)
-            .map(str::to_string)
-            .or_else(|| self.session_service.unattended_mode_id(resolved_agent_kind));
-
         // Same pre-durable-create checkout admission as the interactive create
         // path: a delegated coding session against a deleted managed checkout
         // must be refused typed instead of inserting a durable session row.
@@ -1397,8 +1398,8 @@ impl CoworkRuntime {
             workspace_id,
             resolved_agent_kind,
             None,
-            normalize_optional_ref(model_id).or(parent_thread.requested_model_id.as_deref()),
-            resolved_mode_id.as_deref(),
+            normalize_optional_ref(model_id),
+            control_values,
             None,
             Vec::new(),
             None,

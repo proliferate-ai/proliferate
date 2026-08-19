@@ -153,7 +153,7 @@ impl SubagentLifecycleMutations for State {
         workspace_id: &str,
         agent_kind: &str,
         model_id: Option<&str>,
-        _mode_id: Option<&str>,
+        _control_values: &std::collections::BTreeMap<String, String>,
         _task: String,
         parent_session_id: &str,
         _source_label: &str,
@@ -323,9 +323,9 @@ fn fixture(closed: bool) -> (Arc<AgentOperations>, Arc<State>, Arc<Queue>, Strin
     let agent = active
         .agents()
         .iter()
-        .find(|agent| !agent.session.models.is_empty())
+        .find(|agent| !agent.session.presentation_models.is_empty())
         .unwrap();
-    let model = &agent.session.models[0];
+    let model = &agent.session.presentation_models[0];
     let agent_kind = agent.kind.clone();
     let model_id = model.id.clone();
     let launch = ResolvedWorkspaceLaunchOptions {
@@ -333,16 +333,17 @@ fn fixture(closed: bool) -> (Arc<AgentOperations>, Arc<State>, Arc<Queue>, Strin
             kind: agent.kind.clone(),
             display_name: agent.display_name.clone(),
             default_model_id: Some(model.id.clone()),
-            unattended_mode_id: agent.session.unattended_mode_id.clone(),
+            controls: Vec::new(),
+            default_control_values: Default::default(),
             models: vec![ResolvedLaunchModelOption {
                 id: model.id.clone(),
                 display_name: model.display_name.clone(),
-                aliases: model.aliases.clone(),
+                aliases: Vec::new(),
                 is_default: true,
                 default_opt_in: None,
                 description: model.description.clone(),
                 provider: None,
-                status: Some(model.status),
+                status: Some(crate::domains::agents::model::ModelCatalogStatus::Active),
                 effort: None,
                 live_effort_candidates: Vec::new(),
                 fast_mode: false,
@@ -452,7 +453,7 @@ async fn create_subagent_preserves_one_stable_identity_and_relationship() {
                 task: Some("research the session path".into()),
                 agent_kind: Some(agent_kind),
                 model_id: Some(model_id),
-                mode_id: None,
+                control_values: Default::default(),
             },
         )
         .await
@@ -484,7 +485,7 @@ async fn subagent_create_waits_on_the_parent_session_permit() {
                     task: Some("serialized child".into()),
                     agent_kind: Some(agent_kind),
                     model_id: Some(model_id),
-                    mode_id: None,
+                    control_values: Default::default(),
                 },
             )
             .await

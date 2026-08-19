@@ -41,8 +41,8 @@ Fences with the neighboring platforms:
   consumes the minted per-(subject, harness) key as an opaque value.
 - Which models a gateway key can see is enforced proxy-side by the key's
   access-group grant (model-gateway.md); agent auth never filters models.
-- Probed model snapshots and picker data belong to the
-  [model catalog](MODELS.md).
+- Target-observed harness launch options and picker data belong to
+  [Models and harness launch options](MODELS.md).
 - Readiness *projection* (the five-state ladder) belongs to
   [agent-distribution.md](../codebase/platforms/product/agent-distribution.md); agent auth supplies the
   route signal that upgrades it at launch.
@@ -134,22 +134,14 @@ Every other plane mirrors those sets rather than re-deriving them:
   so the stored truth and the delivered document never drift for longer
   than one materialization pass.
 
-### Not auth: harness settings
+### Not auth: retired harness launch settings
 
-`agent_auth_harness_settings` stores per-harness *configuration* toggles,
-not credentials — for example claude's "Use Claude Code with Chrome"
-switch, whose catalog declaration maps it to the `--chrome` CLI flag. The
-toggles a harness offers are declared in the agent catalog
-(agent-distribution's declare side); this table stores only the user's
-chosen values, and they ride `state.json`'s per-harness `settings` map as
-a **passenger** because it is the one per-user, per-surface document
-already delivered to every runtime. At launch,
-[`resolve_settings_deltas`](../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/settings.rs)
-joins the catalog's declarations with the persisted values and emits the
-CLI-flag/env deltas — entirely outside the auth pipeline. Read
-"agent_auth" in this table's name as naming the *delivery vehicle*, not
-the content; nothing in it is a secret and nothing in it affects which
-credentials a session runs on.
+The former `agent_auth_harness_settings` passenger was configuration, never
+credential state. Static launch flag/env deltas were removed with the
+target-observed launch-option cutover: first-party launch behavior now sends
+only an exact model and `controlValues` selected from the target observation.
+No catalog-declared harness setting may change executable membership or the
+auth route used by the override-free probe.
 
 The passenger needs a vehicle: a harness only gets a `harnesses` entry
 when it has an enabled selection ("Absent means native; present-but-empty

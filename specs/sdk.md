@@ -12,6 +12,18 @@ Cloud SDK speaks to the Proliferate control plane; the AnyHarness SDK speaks to
 an AnyHarness runtime. Neither SDK owns app-specific orchestration or product
 policy.
 
+## Harness launch options
+
+The AnyHarness SDK owns the local target contract and client methods for
+`HarnessLaunchOptionsResponse`, refresh, `LaunchSelection.controlValues`, and
+the full `SessionLiveConfigSnapshot`. SDK React exposes query/mutation hooks
+and keys scoped by runtime, cache scope, and harness.
+
+The Cloud SDK owns the copied target response and reads it by cloud sandbox ID
+plus harness kind. Cloud React keys include both values. Neither SDK composes,
+seeds, aliases, or filters executable membership; wire types and clients
+preserve exact ordered IDs and unknown values.
+
 ## 1. File Tree
 
 ```text

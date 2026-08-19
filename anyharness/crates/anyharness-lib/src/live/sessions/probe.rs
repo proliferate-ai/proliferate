@@ -360,6 +360,9 @@ async fn run_enumeration(
             &new_session.config_options.clone().unwrap_or_default(),
         ) {
             model_source = "modelConfigOption";
+            current_model_id = current_model_from_config_options(
+                &new_session.config_options.clone().unwrap_or_default(),
+            );
             model_config_id = Some(config_id);
             available = entries;
         }
@@ -491,6 +494,21 @@ async fn run_enumeration(
         models,
         warnings: std::mem::take(warnings),
     })
+}
+
+fn current_model_from_config_options(
+    config_options: &[acp::schema::SessionConfigOption],
+) -> Option<String> {
+    let option = config_options.iter().find(|option| {
+        matches!(
+            option.category,
+            Some(acp::schema::SessionConfigOptionCategory::Model)
+        ) || option.id.to_string() == "model"
+    })?;
+    match &option.kind {
+        acp::schema::SessionConfigKind::Select(select) => Some(select.current_value.to_string()),
+        _ => None,
+    }
 }
 
 fn drain_pending(notification_rx: &mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>) {

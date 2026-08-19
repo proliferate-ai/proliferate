@@ -247,6 +247,9 @@ mod tests {
     fn into_contract_matches_legacy_session_assembly_byte_for_byte() {
         let record = session_record("claude");
         let live_config = Some(SessionLiveConfigSnapshot {
+            models: Vec::new(),
+            controls: Vec::new(),
+            current: Default::default(),
             raw_config_options: Vec::new(),
             normalized_controls: NormalizedSessionControls::default(),
             prompt_capabilities: PromptCapabilities::default(),

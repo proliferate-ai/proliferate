@@ -2,7 +2,7 @@ use rusqlite::{params, OptionalExtension};
 
 use super::rows::map_assignment;
 use super::ReviewStore;
-use crate::domains::reviews::model::{ReviewAssignmentRecord, ReviewModeVerificationStatus};
+use crate::domains::reviews::model::{ReviewAssignmentRecord, ReviewLaunchVerificationStatus};
 
 impl ReviewStore {
     pub fn list_assignments_for_round(
@@ -88,8 +88,7 @@ impl ReviewStore {
         assignment_id: &str,
         reviewer_session_id: &str,
         session_link_id: &str,
-        actual_mode_id: Option<&str>,
-        mode_status: ReviewModeVerificationStatus,
+        launch_status: ReviewLaunchVerificationStatus,
     ) -> anyhow::Result<bool> {
         let now = chrono::Utc::now().to_rfc3339();
         self.db.with_conn(|conn| {
@@ -97,11 +96,10 @@ impl ReviewStore {
                 "UPDATE review_assignments
                  SET reviewer_session_id = ?1,
                      session_link_id = ?2,
-                     actual_mode_id = ?3,
-                     mode_verification_status = ?4,
+                     launch_verification_status = ?3,
                      status = 'reviewing',
-                     updated_at = ?5
-                 WHERE id = ?6
+                     updated_at = ?4
+                 WHERE id = ?5
                    AND status IN ('queued', 'launching', 'reviewing')
                    AND EXISTS (
                        SELECT 1
@@ -115,8 +113,7 @@ impl ReviewStore {
                 params![
                     reviewer_session_id,
                     session_link_id,
-                    actual_mode_id,
-                    mode_status.as_str(),
+                    launch_status.as_str(),
                     now,
                     assignment_id
                 ],
@@ -203,8 +200,7 @@ impl ReviewStore {
                      model_id = ?1,
                      reviewer_session_id = NULL,
                      session_link_id = NULL,
-                     actual_mode_id = NULL,
-                     mode_verification_status = 'pending',
+                     launch_verification_status = 'pending',
                      pass = NULL,
                      summary = NULL,
                      critique_markdown = NULL,

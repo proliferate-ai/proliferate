@@ -276,6 +276,13 @@ impl BackgroundWorkDurable for SessionStore {
 }
 
 impl SessionStateDurable for SessionStore {
+    fn find_launch_intent(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Option<crate::domains::sessions::launch_intent::ResolvedLaunchIntent>> {
+        SessionStore::find_launch_intent(self, session_id)
+    }
+
     fn update_status(&self, id: &str, status: &str, now: &str) -> anyhow::Result<()> {
         SessionStore::update_status(self, id, status, now)
     }

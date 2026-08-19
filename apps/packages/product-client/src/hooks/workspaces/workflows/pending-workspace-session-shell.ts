@@ -35,7 +35,6 @@ export function ensurePendingWorkspaceSessionShell(input: {
       materializedSessionId: null,
       modelId: initialSession.modelId,
       requestedModelId: initialSession.modelId,
-      modeId: initialSession.modeId ?? null,
       title: initialSession.displayTitle ?? initialSession.modelId,
       optimisticPrompt: null,
       sessionRelationship: { kind: "root" },

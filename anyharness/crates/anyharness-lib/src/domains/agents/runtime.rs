@@ -13,7 +13,7 @@ use super::installer::reconcile::execution::{
 use super::installer::seed::AgentSeedStore;
 use super::installer::{self, InstallError, InstallOptions, InstalledArtifactResult};
 use super::model::*;
-use super::model_snapshot::{ModelSnapshotService, PokeReason};
+use super::launch_probe::{LaunchProbeService, PokeReason};
 use super::readiness::service::resolve_agent;
 use super::registry::built_in_registry;
 
@@ -29,7 +29,7 @@ pub struct AgentRuntime {
     /// `Option` so the reconcile suite can construct a runtime without standing up
     /// an engine — which would take a filesystem lock on a temp home and sweep it.
     /// `None` means "no pokes", never "probe anyway".
-    model_snapshot: Option<Arc<ModelSnapshotService>>,
+    launch_probe: Option<Arc<LaunchProbeService>>,
 }
 
 /// Which surface this runtime is serving. The auto-install pass needs it for
@@ -139,15 +139,15 @@ impl AgentRuntime {
             seed_store,
             catalog_service,
             surface,
-            model_snapshot: None,
+            launch_probe: None,
         }
     }
 
     /// Attach the probe engine. Separate from [`AgentRuntime::new`] because the
     /// engine is built after the runtime in `app/mod.rs` and because a runtime
     /// without one is a legitimate configuration (every reconcile test).
-    pub fn with_model_snapshot(mut self, model_snapshot: Arc<ModelSnapshotService>) -> Self {
-        self.model_snapshot = Some(model_snapshot);
+    pub fn with_launch_probe(mut self, launch_probe: Arc<LaunchProbeService>) -> Self {
+        self.launch_probe = Some(launch_probe);
         self
     }
 
@@ -317,7 +317,7 @@ impl AgentRuntime {
                 requested_agent_kinds,
                 Some(self.seed_store.clone()),
                 Some(self.catalog_service.clone()),
-                self.model_snapshot.clone(),
+                self.launch_probe.clone(),
                 self.surface,
                 AgentReconcileAdmission::ReuseCompatible,
             )
@@ -354,7 +354,7 @@ impl AgentRuntime {
                     Vec::new(),
                     Some(self.seed_store.clone()),
                     Some(self.catalog_service.clone()),
-                    self.model_snapshot.clone(),
+                    self.launch_probe.clone(),
                     self.surface,
                     AgentReconcileAdmission::RequireIdle,
                 )
@@ -411,15 +411,15 @@ impl AgentRuntime {
             // guarantee of a re-probe against the NEW binary is the per-agent
             // completion poke inside the reconcile job, which is precise about which
             // harness just changed.
-            self.poke_model_snapshots(PokeReason::Startup);
+            self.poke_launch_probes(PokeReason::Startup);
         });
     }
 
     /// The startup pass's third step, named so it can be asserted without driving a
     /// real install pass (which would download every supported harness into the
     /// test's temp home). A runtime with no engine attached pokes nothing.
-    pub(crate) fn poke_model_snapshots(&self, reason: PokeReason) {
-        ModelSnapshotService::poke_all_optional(&self.model_snapshot, reason);
+    pub(crate) fn poke_launch_probes(&self, reason: PokeReason) {
+        LaunchProbeService::poke_all_optional(&self.launch_probe, reason);
     }
 }
 

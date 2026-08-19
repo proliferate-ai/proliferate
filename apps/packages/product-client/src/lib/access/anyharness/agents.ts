@@ -3,8 +3,8 @@ import { getAnyHarnessClient, type AnyHarnessClientConnection } from "@anyharnes
 
 export function getAgentLaunchOptions(
   connection: AnyHarnessClientConnection,
-  workspaceId?: string | null,
+  harnessKind: string,
   options?: AnyHarnessRequestOptions,
 ) {
-  return getAnyHarnessClient(connection).agents.getLaunchOptions(workspaceId, options);
+  return getAnyHarnessClient(connection).agents.getLaunchOptions(harnessKind, options);
 }

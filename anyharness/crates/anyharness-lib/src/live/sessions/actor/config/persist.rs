@@ -126,6 +126,14 @@ pub(in crate::live::sessions::actor) async fn emit_live_config_update(
         next_seq,
         updated_at.clone(),
     );
+    let source_seq = snapshot.source_seq;
+    let current_control_keys = snapshot
+        .current
+        .control_values
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    let current_model_present = snapshot.current.model_id.is_some();
     if let Some(model_id) = snapshot
         .normalized_controls
         .model
@@ -144,6 +152,15 @@ pub(in crate::live::sessions::actor) async fn emit_live_config_update(
     }
 
     store.upsert_live_config_snapshot(&snapshot_to_record(session_id, &snapshot)?)?;
+    tracing::info!(
+        session_id,
+        harness_kind = source_agent_kind,
+        source_seq,
+        current_model_present,
+        current_control_keys = ?current_control_keys,
+        event = "session.live_config.changed",
+        "persisted a higher-sequence full live configuration snapshot"
+    );
     persist_current_config_state_from_startup(
         store,
         event_sink,

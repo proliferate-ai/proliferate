@@ -104,12 +104,22 @@ pub async fn create_cowork_thread(
     State(state): State<AppState>,
     Json(req): Json<CreateCoworkThreadRequest>,
 ) -> Result<Json<CreateCoworkThreadResponse>, ApiError> {
+    let mut control_values = req.control_values;
+    if let Some(mode_id) = req.mode_id {
+        if control_values.contains_key("mode") {
+            return Err(ApiError::bad_request(
+                "modeId conflicts with controlValues.mode",
+                "INVALID_SESSION_LAUNCH_CONTROLS",
+            ));
+        }
+        control_values.insert("mode".to_string(), mode_id);
+    }
     let result = state
         .cowork_runtime
         .create_thread(
             &req.agent_kind,
             req.model_id.as_deref(),
-            req.mode_id.as_deref(),
+            &control_values,
             req.cowork_workspace_delegation_enabled.unwrap_or(true),
         )
         .await
@@ -251,24 +261,28 @@ fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
             crate::domains::sessions::runtime::CreateAndStartSessionError::Invalid(detail) => {
                 ApiError::bad_request(detail, "SESSION_CREATE_FAILED")
             }
-            crate::domains::sessions::runtime::CreateAndStartSessionError::ModelUnsupported {
+            crate::domains::sessions::runtime::CreateAndStartSessionError::LaunchOptionsUnavailable {
                 agent_kind,
-                model_id,
-                active_universe,
-            } => ApiError::bad_request(
-                format!(
-                    "model '{model_id}' is not supported for agent '{agent_kind}': \
-                     not served by {}",
-                    active_universe.describe()
-                ),
-                "SESSION_MODEL_UNSUPPORTED",
+                state,
+            } => ApiError::conflict(
+                format!("launch options are not available for agent '{agent_kind}' (state: {state:?})"),
+                "SESSION_LAUNCH_OPTIONS_UNAVAILABLE",
             ),
-            crate::domains::sessions::runtime::CreateAndStartSessionError::ModeUnsupported {
+            crate::domains::sessions::runtime::CreateAndStartSessionError::LaunchValueUnsupported {
                 agent_kind,
-                mode_id,
+                key,
+                value,
+                state,
             } => ApiError::bad_request(
-                format!("mode '{mode_id}' is not supported for agent '{agent_kind}'"),
-                "SESSION_MODE_UNSUPPORTED",
+                format!("launch value '{value}' for '{key}' is not supported for agent '{agent_kind}' (state: {state:?})"),
+                "SESSION_LAUNCH_VALUE_UNSUPPORTED",
+            ),
+            crate::domains::sessions::runtime::CreateAndStartSessionError::AgentEnvOverrideUnsupported {
+                agent_kind,
+                env_var_name,
+            } => ApiError::bad_request(
+                format!("workspace/session environment cannot override agent-owned key '{env_var_name}' for '{agent_kind}'"),
+                "SESSION_AGENT_ENV_OVERRIDE_UNSUPPORTED",
             ),
             crate::domains::sessions::runtime::CreateAndStartSessionError::MissingDataKey => {
                 ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
@@ -520,31 +534,23 @@ mod tests {
     use axum::response::IntoResponse;
 
     use super::CoworkCreateThreadError;
-    use crate::domains::agents::catalog::service::ActiveUniverse;
     use crate::domains::agents::route_auth::RouteAuthError;
     use crate::domains::sessions::runtime::CreateAndStartSessionError;
 
-    /// Cowork thread creation shares the sessions API's single model refusal:
-    /// 400 `SESSION_MODEL_UNSUPPORTED` naming the active universe.
+    /// Cowork creation shares the exact launch-value refusal.
     #[test]
     fn unsupported_model_uses_the_single_refusal() {
         let error =
-            CoworkCreateThreadError::CreateSession(CreateAndStartSessionError::ModelUnsupported {
+            CoworkCreateThreadError::CreateSession(CreateAndStartSessionError::LaunchValueUnsupported {
                 agent_kind: "claude".to_string(),
-                model_id: "opus[1m]".to_string(),
-                active_universe: ActiveUniverse::CatalogSeed,
+                key: "model".to_string(),
+                value: "opus[1m]".to_string(),
+                state: crate::domains::agents::launch_options::HarnessLaunchOptionsState::Observed,
             });
 
         let mapped = super::map_create_cowork_thread_error(error);
         assert_eq!(mapped.status(), StatusCode::BAD_REQUEST);
-        assert_eq!(mapped.code(), Some("SESSION_MODEL_UNSUPPORTED"));
-        assert_eq!(
-            mapped.detail(),
-            Some(
-                "model 'opus[1m]' is not supported for agent 'claude': \
-                 not served by the shipped catalog under the active auth contexts"
-            )
-        );
+        assert_eq!(mapped.code(), Some("SESSION_LAUNCH_VALUE_UNSUPPORTED"));
     }
 
     /// Materialization IO / malformed-state route-auth failures are server-side

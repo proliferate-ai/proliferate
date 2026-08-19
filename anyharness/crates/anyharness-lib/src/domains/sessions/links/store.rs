@@ -6,6 +6,8 @@ use super::model::{
     SubagentLinkOpenResult,
 };
 use crate::domains::sessions::model::SessionRecord;
+use crate::domains::sessions::launch_intent::ResolvedLaunchIntent;
+use crate::domains::sessions::store::launch_intents::insert_launch_intent_row;
 use crate::domains::sessions::store::sessions::insert_session_row;
 use crate::persistence::Db;
 
@@ -105,11 +107,13 @@ impl SessionLinkStore {
     pub fn insert_subagent_session_with_child_limit(
         &self,
         session: &SessionRecord,
+        intent: &ResolvedLaunchIntent,
         record: &SessionLinkRecord,
         max_children: usize,
     ) -> anyhow::Result<InsertSubagentLinkOutcome> {
         let result = self.db.with_tx_anyhow(|conn| {
             insert_session_row(conn, session)?;
+            insert_launch_intent_row(conn, &session.id, intent)?;
             let inserted = conn.execute(
                 "INSERT INTO session_links (
                     id, public_id, relation, parent_session_id, child_session_id,

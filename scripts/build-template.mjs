@@ -359,7 +359,7 @@ function prepareTemplateContext(bundlePaths) {
 // `USER user` does NOT update $HOME, so an unpinned bake-time install-agents
 // can resolve a different default home, leaving agents where the serving
 // runtime never looks (readiness reports InstallRequired and
-// GET /v1/agents/launch-options returns zero launchable agents → empty
+// GET /v1/agents/{kind}/launch-options returns no observed options → empty
 // composer picker in fresh cloud sandboxes).
 const ANYHARNESS_RUNTIME_HOME = "/home/user/.proliferate/anyharness";
 

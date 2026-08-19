@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  useCloudAgentCatalog,
+  useCloudHarnessLaunchOptions,
   useCloudRepoBranches,
+  useCloudSandbox,
   useRepositories,
 } from "@proliferate/cloud-sdk-react";
 import {
   buildCloudLaunchComposerControls,
   DEFAULT_DIRECT_PROMPT_AGENT_KIND,
-  DEFAULT_DIRECT_PROMPT_MODEL_ID,
   resolveCloudLaunchSelection,
   type CloudLaunchComposerSelection,
 } from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
@@ -27,12 +27,15 @@ export function useMobileHomeLaunchModel() {
   const [runtimeId, setRuntimeId] = useState("cloud");
   const [launchSelection, setLaunchSelection] = useState<CloudLaunchComposerSelection>({
     agentKind: DEFAULT_DIRECT_PROMPT_AGENT_KIND,
-    modelId: DEFAULT_DIRECT_PROMPT_MODEL_ID,
-    modeId: null,
+    modelId: null,
     controlValues: {},
   });
   const repoConfigs = useRepositories();
-  const agentCatalog = useCloudAgentCatalog();
+  const cloudSandbox = useCloudSandbox();
+  const launchOptions = useCloudHarnessLaunchOptions({
+    cloudSandboxId: cloudSandbox.data?.id,
+    harnessKind: launchSelection.agentKind,
+  });
   const configuredCloudRepos = useMemo(
     () => (repoConfigs.data?.repositories ?? []).flatMap((repo) => {
       const cloudEnvironment = repo.environments.find((environment) =>
@@ -78,40 +81,32 @@ export function useMobileHomeLaunchModel() {
     ?? null;
   const selectedRuntime =
     runtimeOptions.find((runtime) => runtime.id === runtimeId) ?? runtimeOptions[0] ?? null;
-  const catalogAgentKindsKey = agentCatalog.data?.agents.map((agent) => agent.kind).join("\0") ?? "";
   const harnessAvailability = useMemo(() => resolveCloudHarnessAvailability({
-    catalogAgentKinds: agentCatalog.data?.agents.map((agent) => agent.kind),
+    catalogAgentKinds: launchOptions.data?.options ? [launchOptions.data.harnessKind] : [],
   }), [
-    agentCatalog.data,
-    catalogAgentKindsKey,
+    launchOptions.data,
   ]);
   const launchableAgentKinds = harnessAvailability.launchableAgentKinds;
   const resolvedLaunchSelection = useMemo(
     () => resolveCloudLaunchSelection({
-      catalog: agentCatalog.data,
-      launchableAgentKinds,
+      launchOptions: launchOptions.data,
       selection: launchSelection,
     }),
-    [agentCatalog.data, launchSelection, launchableAgentKinds],
+    [launchOptions.data, launchSelection],
   );
   const launchComposerControls = useMemo(
     () => buildCloudLaunchComposerControls({
-      catalog: agentCatalog.data,
-      launchableAgentKinds,
+      launchOptions: launchOptions.data,
       selection: resolvedLaunchSelection,
       onAgentModelSelect: (agentKind, modelId) => {
         setLaunchSelection((current) => ({
           agentKind,
           modelId,
-          modeId: current.agentKind === agentKind ? current.modeId : null,
           controlValues: current.agentKind === agentKind ? current.controlValues : {},
         }));
       },
       onControlSelect: ({ controlKey, value }) => {
         setLaunchSelection((current) => {
-          if (controlKey === "mode") {
-            return { ...current, modeId: value };
-          }
           return {
             ...current,
             controlValues: {
@@ -122,7 +117,7 @@ export function useMobileHomeLaunchModel() {
         });
       },
     }),
-    [agentCatalog.data, launchableAgentKinds, resolvedLaunchSelection],
+    [launchOptions.data, resolvedLaunchSelection],
   );
 
   useEffect(() => {
@@ -138,7 +133,7 @@ export function useMobileHomeLaunchModel() {
   }, [runtimeId, runtimeOptions]);
 
   return {
-    agentCatalog,
+    launchOptions,
     harnessAvailability,
     launchableAgentKinds,
     launchComposerControls,

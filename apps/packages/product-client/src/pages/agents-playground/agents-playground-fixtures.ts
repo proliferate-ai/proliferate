@@ -1,7 +1,6 @@
 import type { AgentSummary, ReconcileAgentsResponse } from "@anyharness/sdk";
 import {
   anyHarnessAgentLaunchOptionsKey,
-  anyHarnessAgentModelSnapshotStatusKey,
   anyHarnessAgentReconcileStatusKey,
   anyHarnessAgentsKey,
 } from "@anyharness/sdk-react";
@@ -210,47 +209,24 @@ function seedHarnessQueries(
     fixture.reconcile,
   );
   client.setQueryData(
-    anyHarnessAgentLaunchOptionsKey(runtimeUrl, null, PLAYGROUND_CACHE_SCOPE),
+    anyHarnessAgentLaunchOptionsKey(runtimeUrl, scenario.harnessKind, PLAYGROUND_CACHE_SCOPE),
     {
-      agents: [{
-        kind: scenario.harnessKind,
-        displayName: fixture.agent.displayName,
-        defaultModelId: "model-default",
+      harnessKind: scenario.harnessKind,
+      basisRevision: "playground-basis",
+      revision: 1,
+      state: "observed",
+      options: {
         models: [
-          { id: "model-default", displayName: "Recommended", provider: "provider", isDefault: true },
-          { id: "model-fast", displayName: "Fast", provider: "provider", isDefault: false },
+          { id: "model-default", observedName: "Recommended", observedDescription: null },
+          { id: "model-fast", observedName: "Fast", observedDescription: null },
         ],
-      }],
-    },
-  );
-  // The composed observation (model-catalog.md "Runtime routes"): one status
-  // document per harness, carrying the model/mode lists off the same document
-  // read that serves probedAt/lastAttempt and the provenance fields.
-  client.setQueryData(
-    anyHarnessAgentModelSnapshotStatusKey(
-      runtimeUrl,
-      scenario.harnessKind,
-      PLAYGROUND_CACHE_SCOPE,
-    ),
-    {
-      agent: scenario.harnessKind,
-      schemaVersion: 2,
-      probeEngine: "owner",
-      state: "idle",
-      probedAt: "2026-07-18T18:00:00Z",
-      snapshotAgeSeconds: 120,
-      modelCount: 2,
-      modeCount: 1,
-      models: [
-        { id: "model-default", name: "Recommended", provider: "provider" },
-        { id: "model-fast", name: "Fast", provider: "provider" },
-      ],
-      modes: [{ id: "build", name: "Build" }],
-      attestation: { name: scenario.harnessKind, version: "playground" },
-      installIdentity: { role: "agent_process", version: "playground", source: "pinned_archive" },
-      lastAttempt: { at: "2026-07-18T18:00:00Z", outcome: "ok", detail: null },
-      lastError: null,
-      warnings: [],
+        controls: [],
+        defaults: { modelId: "model-default", controlValues: {} },
+      },
+      observedAt: "2026-07-18T18:00:00Z",
+      probeAttemptedAt: "2026-07-18T18:00:00Z",
+      probeFailureCode: null,
+      readiness: fixture.agent.readiness,
     },
   );
 }

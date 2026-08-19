@@ -54,7 +54,6 @@ export interface LaunchSessionConfigUpdate {
 export interface CloudLaunchComposerSelection {
   agentKind: string;
   modelId: string | null;
-  modeId: string | null;
   controlValues: Record<string, string>;
 }
 

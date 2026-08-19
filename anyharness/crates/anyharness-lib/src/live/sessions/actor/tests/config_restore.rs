@@ -45,6 +45,9 @@ fn assert_startup_restore_snapshot_captures_pre_restart_controls(agent_kind: Age
         .expect("insert session");
 
     let persisted_snapshot = SessionLiveConfigSnapshot {
+        models: Vec::new(),
+        controls: Vec::new(),
+        current: Default::default(),
         raw_config_options: vec![],
         normalized_controls: NormalizedSessionControls {
             model: None,
@@ -88,6 +91,9 @@ fn assert_startup_restore_snapshot_captures_pre_restart_controls(agent_kind: Age
         .expect("snapshot exists");
 
     let replacement_snapshot = SessionLiveConfigSnapshot {
+        models: Vec::new(),
+        controls: Vec::new(),
+        current: Default::default(),
         raw_config_options: vec![],
         normalized_controls: NormalizedSessionControls {
             model: None,

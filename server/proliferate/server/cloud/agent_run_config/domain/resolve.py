@@ -1,4 +1,4 @@
-"""Pure agent run config catalog resolution."""
+"""Saved launch intent and execution-scope rules for agent run configs."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from proliferate.constants.cloud_agent_run_config import (
     CLOUD_AGENT_RUN_CONFIG_STATUS_ACTIVE,
 )
 from proliferate.db.store.cloud_agent_run_config import CloudAgentRunConfigRecord
-from proliferate.server.catalogs.models import AgentCatalogAgent, AgentCatalogResponse
 
 
 @dataclass(frozen=True)
@@ -27,67 +26,29 @@ class ResolvedAgentRunConfig:
     config_name: str
     agent_kind: str
     model_id: str
-    control_values: dict[str, object]
+    control_values: dict[str, str]
     ignored_keys: tuple[str, ...]
 
 
-def _catalog_agent(catalog: AgentCatalogResponse, agent_kind: str) -> AgentCatalogAgent | None:
-    for agent in catalog.agents:
-        if agent.kind == agent_kind:
-            return agent
-    return None
-
-
-def canonical_model_id_for_config(
-    catalog: AgentCatalogResponse,
-    *,
-    agent_kind: str,
-    model_id: str,
-) -> str | None:
-    agent = _catalog_agent(catalog, agent_kind)
-    if agent is None:
-        return None
-    for model in agent.session.models:
-        if model.status not in {"active", "candidate"}:
-            continue
-        if model.id == model_id or model_id in model.aliases:
-            return model.id
-    return None
-
-
 def validate_config_values(
-    catalog: AgentCatalogResponse,
     *,
     agent_kind: str,
     model_id: str,
-    control_values: dict[str, object],
+    control_values: dict[str, str],
 ) -> AgentRunConfigIssue | None:
-    agent = _catalog_agent(catalog, agent_kind)
-    if agent is None:
-        return AgentRunConfigIssue("agent_kind_unavailable", "Agent kind is not available.")
-    if (
-        canonical_model_id_for_config(
-            catalog,
-            agent_kind=agent_kind,
-            model_id=model_id,
-        )
-        is None
-    ):
-        return AgentRunConfigIssue("model_unavailable", "Model is not available for this agent.")
-    allowed_controls = {
-        control.key: control for control in agent.session.controls if control.key != "model"
-    }
+    """Validate shape only; target launch options validate membership at create."""
+
+    if not agent_kind.strip():
+        return AgentRunConfigIssue("agent_kind_unavailable", "Agent kind is required.")
+    if not model_id.strip():
+        return AgentRunConfigIssue("model_unavailable", "Model is required.")
     for key, value in control_values.items():
-        control = allowed_controls.get(key)
-        if control is None:
-            return AgentRunConfigIssue(
-                "control_unavailable",
-                f"Control '{key}' is not available for this agent.",
-            )
-        if control.values and str(value) not in control.values:
+        if not key.strip():
+            return AgentRunConfigIssue("control_unavailable", "Control id is required.")
+        if not isinstance(value, str) or not value:
             return AgentRunConfigIssue(
                 "control_value_unavailable",
-                f"Control '{key}' has an unsupported value.",
+                f"Control '{key}' must have a non-empty string value.",
             )
     return None
 
@@ -101,20 +62,11 @@ def validate_config_execution_scope(
     usable_in: str,
 ) -> AgentRunConfigIssue | None:
     if config.status != CLOUD_AGENT_RUN_CONFIG_STATUS_ACTIVE:
-        return AgentRunConfigIssue(
-            "agent_run_config_not_found",
-            "Agent run config not found.",
-        )
+        return AgentRunConfigIssue("agent_run_config_not_found", "Agent run config not found.")
     if usable_in == "shared_sandboxes":
-        if not config.usable_in_shared_sandboxes:
+        if not config.usable_in_shared_sandboxes or organization_id is None:
             return AgentRunConfigIssue(
-                "agent_run_config_not_usable",
-                "Agent run config is not usable in shared sandboxes.",
-            )
-        if organization_id is None:
-            return AgentRunConfigIssue(
-                "agent_run_config_not_usable",
-                "Shared sandbox runs require an organization.",
+                "agent_run_config_not_usable", "Config is not usable in shared sandboxes."
             )
         if config.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL:
             return AgentRunConfigIssue(
@@ -125,35 +77,26 @@ def validate_config_execution_scope(
             config.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION
             and config.organization_id != organization_id
         ):
-            return AgentRunConfigIssue(
-                "agent_run_config_not_found",
-                "Agent run config not found.",
-            )
+            return AgentRunConfigIssue("agent_run_config_not_found", "Agent run config not found.")
         return None
 
     if usable_in == "personal_sandboxes":
         if not config.usable_in_personal_sandboxes:
             return AgentRunConfigIssue(
-                "agent_run_config_not_usable",
-                "Agent run config is not usable in personal sandboxes.",
+                "agent_run_config_not_usable", "Config is not usable in personal sandboxes."
             )
         if config.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL:
             if actor_user_id is None or config.owner_user_id != actor_user_id:
                 return AgentRunConfigIssue(
-                    "agent_run_config_not_found",
-                    "Agent run config not found.",
+                    "agent_run_config_not_found", "Agent run config not found."
                 )
         elif config.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION:
             if organization_id is None or config.organization_id != organization_id:
                 return AgentRunConfigIssue(
-                    "agent_run_config_not_found",
-                    "Agent run config not found.",
+                    "agent_run_config_not_found", "Agent run config not found."
                 )
         elif config.owner_scope != CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_SYSTEM:
-            return AgentRunConfigIssue(
-                "agent_run_config_not_found",
-                "Agent run config not found.",
-            )
+            return AgentRunConfigIssue("agent_run_config_not_found", "Agent run config not found.")
         if (
             owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION
             and config.owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL
@@ -165,54 +108,30 @@ def validate_config_execution_scope(
         return None
 
     return AgentRunConfigIssue(
-        "agent_run_config_not_usable",
-        "Agent run config target scope is invalid.",
+        "agent_run_config_not_usable", "Agent run config target scope is invalid."
     )
 
 
 def resolve_runtime_values(
-    catalog: AgentCatalogResponse,
     config: CloudAgentRunConfigRecord,
 ) -> ResolvedAgentRunConfig | AgentRunConfigIssue:
+    values = {
+        str(key): value
+        for key, value in config.control_values_json.items()
+        if isinstance(value, str)
+    }
     issue = validate_config_values(
-        catalog,
         agent_kind=config.agent_kind,
         model_id=config.model_id,
-        control_values=config.control_values_json,
+        control_values=values,
     )
     if issue is not None:
         return issue
-
-    agent = _catalog_agent(catalog, config.agent_kind)
-    if agent is None:
-        return AgentRunConfigIssue("agent_kind_unavailable", "Agent kind is not available.")
-    model_id = canonical_model_id_for_config(
-        catalog,
-        agent_kind=config.agent_kind,
-        model_id=config.model_id,
-    )
-    if model_id is None:
-        return AgentRunConfigIssue("model_unavailable", "Model is not available for this agent.")
-    allowed_controls = {
-        control.key: control for control in agent.session.controls if control.key != "model"
-    }
-    resolved: dict[str, object] = {}
-    ignored: list[str] = []
-    for key, value in config.control_values_json.items():
-        if key in allowed_controls:
-            resolved[key] = value
-        else:
-            ignored.append(key)
-    # Curation-owned per-model defaults fill controls the config leaves unset.
-    model = next(model for model in agent.session.models if model.id == model_id)
-    for key, model_control in model.controls.items():
-        if key in allowed_controls and key not in resolved and model_control.default is not None:
-            resolved[key] = model_control.default
     return ResolvedAgentRunConfig(
         config_id=str(config.id),
         config_name=config.name,
         agent_kind=config.agent_kind,
-        model_id=model_id,
-        control_values=resolved,
-        ignored_keys=tuple(sorted(ignored)),
+        model_id=config.model_id,
+        control_values=values,
+        ignored_keys=(),
     )

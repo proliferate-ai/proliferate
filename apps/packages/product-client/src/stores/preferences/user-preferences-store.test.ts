@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearWorktreeAutoDeleteLimitAdoption,
-  hasAppliedModelVisibilityDefaultsReset,
   hasPendingWorktreeAutoDeleteLimitAdoption,
   selectPersistedUserPreferencesSlice,
 } from "#product/lib/domain/preferences/persisted-metadata";
@@ -202,7 +201,7 @@ describe("user preference migration", () => {
     expect(persisted.acknowledgedAvailableVersion).toBeUndefined();
   });
 
-  it("preserves unrelated unknown keys while marking model visibility defaults reset", async () => {
+  it("preserves unrelated unknown keys without adding retired model-visibility metadata", async () => {
     memory.values.set("user_preferences", {
       ...USER_PREFERENCE_DEFAULTS,
       futurePreference: true,
@@ -211,7 +210,8 @@ describe("user preference migration", () => {
     await bootstrapUserPreferencesForTest();
     const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
     expect(persisted.futurePreference).toBe(true);
-    expect(hasAppliedModelVisibilityDefaultsReset(persisted)).toBe(true);
+    expect(persisted.futurePreference).toBe(true);
+    expect(persisted.modelVisibilityDefaultsReset).toBeUndefined();
   });
 
   it("preserves unrelated unknown keys when hydration rewrites known preferences", async () => {
@@ -477,7 +477,7 @@ describe("user preference migration", () => {
               prompt: "Find planning gaps.",
               agentKind: "codex",
               modelId: "gpt-5.4",
-              modeId: "read-only",
+              controlValues: { mode: "read-only" },
             },
           ],
         },
@@ -496,7 +496,7 @@ describe("user preference migration", () => {
           prompt: "Find planning gaps.",
           agentKind: "codex",
           modelId: "gpt-5.4",
-          modeId: "read-only",
+          controlValues: { mode: "read-only" },
         },
       ],
     });

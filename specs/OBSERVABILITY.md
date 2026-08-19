@@ -7,6 +7,23 @@ in the PR description. System depth lives in
 [`specs/codebase/systems/engineering/observability/`](codebase/systems/engineering/observability/README.md);
 this page is the per-PR decision layer over it.
 
+## Harness launch-option authority events
+
+The observation → create → actor → live-mutation chain emits these bounded
+records:
+
+| Event | Required safe fields |
+| --- | --- |
+| `agent.launch_options_probe.completed` | harness kind, basis/revision, result/state, counts, duration, bounded failure code |
+| `agent.launch_options.served` | harness kind, basis/revision, state, counts |
+| `session.launch_selection.validated` | session/correlation identity, harness kind, result, selected key names/counts, bounded rejection code |
+| `session.initial_config.apply` | session identity, config key, membership/apply/confirmation result |
+| `session.live_config.changed` | session identity, source sequence, changed key, apply result |
+
+These events never contain selected values, model IDs, descriptions, provider
+output, credentials, prompts, environment values, or filesystem paths. Probe
+materialization errors use bounded codes rather than error bodies.
+
 ## The model
 
 Four signal surfaces, deliberately separate:

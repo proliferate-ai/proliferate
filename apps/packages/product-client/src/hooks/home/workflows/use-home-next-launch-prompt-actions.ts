@@ -5,7 +5,6 @@ import { useSessionCreationActions } from "#product/hooks/sessions/workflows/use
 import { useSessionPromptWorkflow } from "#product/hooks/sessions/workflows/use-session-prompt-workflow";
 import type { HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
 import { useChatLaunchIntentStore } from "#product/stores/chat/chat-launch-intent-store";
-import { modeOptions } from "#product/hooks/home/workflows/home-next-launch-intent";
 import {
   resolveProjectedPendingWorkspaceSession,
   waitForProjectedPendingWorkspaceSession,
@@ -22,7 +21,6 @@ export function useHomeNextLaunchPromptActions() {
   const createFreshSession = useCallback(async (input: {
     workspaceId: string;
     modelSelection: HomeNextModelSelection;
-    modeId: string | null;
     launchControlValues?: Record<string, string>;
     text: string;
     attachmentSnapshots?: PromptAttachmentSnapshot[];
@@ -38,7 +36,6 @@ export function useHomeNextLaunchPromptActions() {
       launchIntentId: input.launchIntentId,
       launchControlValues: input.launchControlValues,
       ...promptAttachmentSendFields(input.text, input.attachmentSnapshots),
-      ...modeOptions(input.modeId),
     });
   }, [createSessionWithResolvedConfig]);
 
@@ -46,7 +43,6 @@ export function useHomeNextLaunchPromptActions() {
     workspaceId: string;
     projectedSessionId: string | null | undefined;
     modelSelection: HomeNextModelSelection;
-    modeId: string | null;
     launchControlValues?: Record<string, string>;
     text: string;
     attachmentSnapshots?: PromptAttachmentSnapshot[];
@@ -79,7 +75,6 @@ export function useHomeNextLaunchPromptActions() {
     await createFreshSession({
       workspaceId: input.workspaceId,
       modelSelection: input.modelSelection,
-      modeId: input.modeId,
       launchControlValues: input.launchControlValues,
       text: input.text,
       attachmentSnapshots: input.attachmentSnapshots,

@@ -1,19 +1,11 @@
 #!/usr/bin/env node
 // Collate raw probe snapshots (generated/*.probe.json) into a single
-// catalog-v2 draft. Probe owns facts (ids, names, matrices, availability);
-// curation owns taste (display overrides, visibility) — curation hooks are
-// stubbed here and applied last.
+// distribution/presentation catalog draft. Probes may inform labels, but the
+// executable launch inventory is persisted separately as target-observed
+// HarnessLaunchOptions and is never emitted here.
 //
-// Core rules implemented (see catalog-v2 schema spec):
-//  - availability = OBSERVED SET: exactly the contexts (incl. 'baseline')
-//    whose runs contained the model. No inference — availability is not
-//    monotone (credentials can REMOVE models; proven by OpenCode free tier).
-//  - per-model matrices: strip self-referential model option, then assert
-//    matrix equality across contexts for the same model id (invariant [e])
-//  - controls universe = union of per-model control keys/values, plus a
-//    values-less `model` mapping control recording switchVia
-//  - probe emits observedDefaults/observedValue; `defaults`/`default` are
-//    curation-owned and not fabricated here
+// Executable models, controls, values, defaults, availability, and gateway
+// routing are intentionally excluded from the output.
 
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -210,26 +202,6 @@ const AUTH_CONTEXT_SIGNALS = {
   },
 };
 
-// Curated per-context launch defaults (session.defaults): the classifier's
-// winning context picks its default; the runtime default ladder still
-// requires the model to be AVAILABLE under the active contexts, so a stale
-// entry degrades to the first-visible fallback instead of failing.
-const AGENT_SESSION_DEFAULTS = {
-  claude: {
-    "anthropic-api": "sonnet",
-    "anthropic-oauth": "opus",
-    "bedrock": "us.anthropic.claude-sonnet-4-6",
-  },
-  codex: {
-    "openai-api": "gpt-5.5",
-    "openai-oauth": "gpt-5.5",
-    "bedrock": "openai.gpt-5.5",
-  },
-  cursor: { "cursor-login": "default" },
-  opencode: { "baseline": "opencode/big-pickle" },
-  grok: { "xai-api": "grok-4.20-0309-non-reasoning" },
-};
-
 // Native goal support per harness (session.supportsGoals, curation-owned):
 // the pinned harness version implements the GoalPort (claude >= 2.1.139,
 // codex >= 0.133). The runtime capability stays ACP-advertised at initialize;
@@ -240,113 +212,12 @@ const AGENT_SUPPORTS_GOALS = {
   codex: true,
 };
 
-// Create-time permission mode used by unattended product surfaces. Only
-// curate a value when the harness exposes a proven bypass-capable mode across
-// its advertised model matrix. Interactive launches keep their own defaults.
-const AGENT_UNATTENDED_MODE_IDS = {
-  claude: "bypassPermissions",
-  // codex-acp 1.1.14 renamed the bypass-capable mode `full-access` ->
-  // `agent-full-access` (probe-attested vocabulary: read-only/agent/
-  // agent-full-access). Forks ADR rung-1 catalog flip.
-  codex: "agent-full-access",
-};
-
 // Display-name curation: probe snapshots carry pretty names for some models
 // and raw ids for others. When a display name has no uppercase at all we
 // title-case it with a brand-aware token map (matching the existing
 // "GPT-5.4-Mini" hyphenated style); provider-prefixed ids ("opencode-go/x")
 // keep the prefix as a parenthetical. Names the probe cased itself pass
 // through untouched.
-// Application paths for non-model session controls (curation, carried over
-// from the v1 catalog's hand-curated apply blocks): which create field or
-// live config id applies each control. A control WITHOUT a mapping is a
-// probe-observed matrix dimension only (e.g. cursor's bracket-param
-// effort/reasoning/thinking/context) — real data, but nothing the desktop
-// can apply, so consumers must not project it as a composer control.
-const CONTROL_MAPPINGS = {
-  claude: {
-    mode: { createField: "modeId", liveConfigId: "mode" },
-    effort: { liveConfigId: "effort" },
-    // claude names this control `fast` (codex names its own `fast-mode`);
-    // the key must match the probed option id or the control ships unmapped
-    // and no desktop surface can apply it.
-    fast: { liveConfigId: "fast" },
-  },
-  codex: {
-    mode: { createField: "modeId", liveConfigId: "mode" },
-    collaboration_mode: { liveConfigId: "collaboration_mode" },
-    reasoning_effort: { liveConfigId: "reasoning_effort" },
-    // The rung-1 fork renamed this option from `fast_mode` to `fast-mode`;
-    // both spellings stay mapped so a re-probe against either fork works.
-    fast_mode: { liveConfigId: "fast_mode" },
-    "fast-mode": { liveConfigId: "fast-mode" },
-  },
-  cursor: { mode: { createField: "modeId", liveConfigId: "mode" } },
-  opencode: { mode: { createField: "modeId", liveConfigId: "mode" } },
-  grok: { mode: { createField: "modeId", liveConfigId: "mode" } },
-};
-
-// Visibility policy: every PROVEN model (harness menu or accepted trial)
-// is advertised by default — trial-proven models appear without waiting
-// for a curation PR. Opt-outs exist only to suppress duplicate ids for
-// the same underlying model. Availability itself is never curated — only
-// the probe can prove a model launches.
-const MODEL_VISIBILITY_OPT_OUTS = {
-  claude: [
-    // Only opt out GENUINE same-context duplicates. The bare current-gen ids
-    // (claude-fable-5, claude-opus-4-8) are oauth/api-only — never gateway-
-    // reachable — so they are NOT duplicates of the us.anthropic.* Bedrock
-    // entries and must stay visible on the native/api surfaces (that's the
-    // only form of those models an OAuth/API login can use). Only the
-    // global-region id duplicates its us.anthropic.* sibling WITHIN the
-    // bedrock context, so it alone stays opted out.
-    "global.anthropic.claude-fable-5",
-  ],
-  grok: [
-    // image/video generation models — not coding models, hidden from the picker
-    "grok-imagine-image",
-    "grok-imagine-image-quality",
-    "grok-imagine-video",
-    "grok-imagine-video-1.5-preview",
-  ],
-};
-
-// Availability stays the OBSERVED SET (menu or accepted trial per context)
-// with ONE sanctioned correction. Bedrock serves only region-prefixed
-// inference-profile ids (us.anthropic.* / global.anthropic.*). The Claude CLI
-// still lists the bare current-gen ids (default / haiku / opus) on its menu
-// during a bedrock probe run, so the raw observed set tags them
-// bedrock-available — but the CLI 400s those bare ids on use ("Try --model to
-// switch to us.anthropic.claude-opus-4-7 ..."). Menu presence is not
-// serve-ability: this is a menu-lie. Strip bedrock from any claude id that is
-// not a region-prefixed inference profile so validate_launch never accepts a
-// bare id a Bedrock-routed account cannot serve. The us.anthropic.* rows stay
-// the account's real menu; a normal oauth/api login (no bedrock context) is
-// untouched. Provenance keeps the honest observation.
-function correctAvailability(kind, modelId, contexts) {
-  if (kind === "claude" && !modelId.includes(".anthropic.")) {
-    return contexts.filter((context) => context !== "bedrock");
-  }
-  return contexts;
-}
-
-// Per-harness advanced settings: declared here (curation-owned), emitted onto
-// the agent entry, and applied at launch per the mapping kind. v1 supports
-// boolean-only, surfaces ⊆ {local, cloud}, mapping.kind ∈ {cli_flag, env}.
-const HARNESS_SETTINGS = {
-  claude: [
-    {
-      key: "chrome",
-      type: "boolean",
-      label: "Use Claude Code with Chrome",
-      description: "Allow Claude Code to control your Chrome browser. Requires the Claude Code Chrome extension.",
-      default: false,
-      surfaces: ["local"],
-      mapping: { kind: "cli_flag", flag: "--chrome" },
-    },
-  ],
-};
-
 // Explicit display overrides where prettifying alone is ambiguous (two
 // "GPT-5.4" rows when the bedrock CMB models sit beside the API ones), or
 // where the probe-reported name is a lowercase/hyphenated raw id.
@@ -644,52 +515,18 @@ function mergeMatrices(matrices) {
   return merged;
 }
 
-// Gateway rows and policy are curated runtime-route metadata, not probe
-// observations. Preserve that overlay from the bundled lockfile while fresh
-// probe facts are rebuilt. Inactive agents are copied wholesale below.
+// Preserve exact-key display curation from the bundled presentation catalog.
 function applyBundledCuration(agent) {
   const previous = previousByKind.get(agent.kind);
   if (!previous) return agent;
-
-  const gatewayContext = previous.authContexts?.find((context) => context.id === "gateway");
-  if (gatewayContext && !agent.authContexts.some((context) => context.id === "gateway")) {
-    agent.authContexts.push(structuredClone(gatewayContext));
-  }
-
-  for (const previousModel of previous.session?.models ?? []) {
-    if (!previousModel.availability?.anyOf?.includes("gateway")) continue;
-    const currentModel = agent.session.models.find((model) => model.id === previousModel.id);
-    if (!currentModel) {
-      // A gateway-only model absent from this probe run is carried over from the
-      // bundled lockfile verbatim — but its per-model `mode` matrix must NOT be
-      // cloned. `mode` is an adapter-GLOBAL vocabulary, not a per-model
-      // capability: `modesBlockMatrix` stamps every freshly-probed model with an
-      // identical copy of the harness `modes` block. A frozen clone silently
-      // goes stale the moment the adapter renames a mode (codex-acp 1.1.14:
-      // full-access -> agent-full-access, auto -> agent), after which the stale
-      // copy fails the unattended-mode validator ("unattendedModeId ... is not
-      // supported by model ..."). Drop the redundant `mode` so the model
-      // inherits the freshly-probed agent-level vocabulary — the validator's
-      // documented inheritance path — making the rename migration structural
-      // rather than another frozen copy. Genuine per-model controls
-      // (reasoning_effort, etc.) are preserved.
-      const carried = structuredClone(previousModel);
-      if (carried.controls && "mode" in carried.controls) {
-        delete carried.controls.mode;
-      }
-      agent.session.models.push(carried);
-      continue;
+  for (const model of agent.session.presentationModels) {
+    const presentation = previous.session?.presentationModels?.find(
+      (candidate) => candidate.id === model.id,
+    );
+    if (presentation) {
+      model.displayName = presentation.displayName;
+      if (presentation.description) model.description = presentation.description;
     }
-    if (!currentModel.availability.anyOf.includes("gateway")) {
-      currentModel.availability.anyOf.push("gateway");
-    }
-  }
-
-  if (previous.session?.defaults?.gateway) {
-    agent.session.defaults.gateway = previous.session.defaults.gateway;
-  }
-  if (previous.session?.gatewayPolicy) {
-    agent.session.gatewayPolicy = structuredClone(previous.session.gatewayPolicy);
   }
   if (probeState) {
     agent.harness = structuredClone(probeState.candidateByKind.get(agent.kind).harness);
@@ -708,8 +545,8 @@ for (const [kind, runs] of byAgent) {
   const attestation = runs[0].data.attestation ?? null;
 
   // observation table: modelId -> { name, description, observedIn[], matrices,
-  //   onMenu } — menu observations set defaultVisible; accepted trials add
-  //   available-but-hidden rows (observed via a real inference turn).
+  //   onMenu }. Menu observations and accepted trials can contribute exact-key
+  //   presentation labels, but neither becomes catalog execution authority.
   const observed = new Map();
   const note = (modelId, fields) => {
     if (!observed.has(modelId)) {
@@ -766,83 +603,13 @@ for (const [kind, runs] of byAgent) {
     }
   }
 
-  // invariant [e] (relaxed to a superset merge — see mergeMatrices): the same
-  // id may report different controls across auth contexts. Merge to the per-id
-  // superset rather than reject, but warn when contexts diverge so a real
-  // capability regression stays visible instead of being silently absorbed.
-  for (const [modelId, entry] of observed) {
-    const keys = new Set(Object.values(entry.matrices).map(matrixKey));
-    if (keys.size > 1) {
-      console.warn(`⚠ ${kind}/${modelId}: controls differ across auth contexts — merging to superset:`);
-      for (const [ctx, matrix] of Object.entries(entry.matrices)) {
-        console.warn(`    ${ctx}: ${matrixKey(matrix)}`);
-      }
-    }
-    entry.mergedMatrix = mergeMatrices(entry.matrices);
-  }
-
-  const probedContexts = runs.map((r) => r.data.authContext);
-  const models = [...observed.entries()].map(([modelId, entry]) => {
-    const matrix = entry.mergedMatrix ?? {};
-    // Observed-set semantics: exactly the contexts that saw this model.
-    // 'baseline' is a first-class context; no always/anyOf inference.
-    const observedContexts = [...new Set(entry.observedIn.map((r) => r.split(".").slice(1).join(".")))];
-    const availabilityContexts = correctAvailability(kind, modelId, observedContexts);
-    return {
-      id: modelId,
-      displayName:
-        MODEL_DISPLAY_OVERRIDES[kind]?.[modelId] ??
-        prettifyDisplayName(versionedDisplayName(entry.name, entry.description, modelId)),
-      ...(entry.description ? { description: entry.description } : {}),
-      availability: { anyOf: availabilityContexts },
-      // On a harness menu somewhere -> advertised; trial-only -> available
-      // but hidden unless curation opts it in.
-      defaultVisible: !(MODEL_VISIBILITY_OPT_OUTS[kind] ?? []).includes(modelId),
-      controls: matrix,
-      status: "active",
-      provenance: {
-        observedIn: [...new Set(entry.observedIn)],
-        observedInAllContexts: observedContexts.length === probedContexts.length,
-        viaTrialOnly: !entry.onMenu,
-        ...(entry.variants ? { variantIds: entry.variants } : {}),
-      },
-    };
-  });
-
-  // controls universe = union of per-model keys/values, plus the values-less
-  // `model` mapping control (how the runtime switches models on this harness,
-  // discovered by the probe via modelSource)
-  const universe = {};
-  for (const model of models) {
-    for (const [key, control] of Object.entries(model.controls)) {
-      universe[key] ??= new Set();
-      for (const value of control.values) universe[key].add(value);
-    }
-  }
-  const switchVia = runs[0].data.modelSource === "modelConfigOption" ? "configOption" : "setSessionModel";
-  const controls = [
-    { key: "model", mapping: {
-        createField: "modelId", switchVia, liveConfigId: "model",
-        ...(variantSyntax ? { variantSyntax } : {}),
-    } },
-    ...Object.entries(universe).map(([key, values]) => ({
-      key,
-      values: [...values],
-      ...(CONTROL_MAPPINGS[kind]?.[key]
-        ? { mapping: CONTROL_MAPPINGS[kind][key] }
-        : {}),
-    })),
-  ];
-
-  // observedDefaults per auth context: the model the harness had selected at
-  // session start (probe-owned input for curation; `defaults` is curation-owned)
-  const observedDefaults = {};
-  for (const run of runs) {
-    const current = run.data.currentModelId
-      ?? run.data.baselineConfigOptions?.find?.(isModelOption)?.currentValue
-      ?? null;
-    if (current) observedDefaults[run.data.authContext] = current;
-  }
+  const presentationModels = [...observed.entries()].map(([modelId, entry]) => ({
+    id: modelId,
+    displayName:
+      MODEL_DISPLAY_OVERRIDES[kind]?.[modelId] ??
+      prettifyDisplayName(versionedDisplayName(entry.name, entry.description, modelId)),
+    ...(entry.description ? { description: entry.description } : {}),
+  }));
 
   const nativeVersions = new Set(runs.map((r) => r.data.nativeCli?.version).filter(Boolean));
   if (nativeVersions.size > 1) {
@@ -879,15 +646,8 @@ for (const [kind, runs] of byAgent) {
       })),
     session: {
       supportsGoals: AGENT_SUPPORTS_GOALS[kind] ?? false,
-      ...(AGENT_UNATTENDED_MODE_IDS[kind]
-        ? { unattendedModeId: AGENT_UNATTENDED_MODE_IDS[kind] }
-        : {}),
-      controls,
-      models,
-      defaults: AGENT_SESSION_DEFAULTS[kind] ?? {},
-      observedDefaults,
+      presentationModels,
     },
-    ...(HARNESS_SETTINGS[kind] ? { settings: HARNESS_SETTINGS[kind] } : {}),
     provenance: {
       probedAt: runs.map((r) => r.data.probedAt).sort().at(-1),
       attestation,
@@ -924,13 +684,10 @@ const catalog = {
   catalogVersion: `${today}.${revision}`,
   probedAgainst: { registryVersion },
   generatedAt: new Date().toISOString(),
-  ...(previousCatalog?.defaultAgentKind
-    ? { defaultAgentKind: previousCatalog.defaultAgentKind }
-    : {}),
   agents: agents.sort((a, b) => a.kind.localeCompare(b.kind)),
 };
 
 writeFileSync(outPath, JSON.stringify(catalog, null, 2) + "\n");
 console.log(`wrote ${outPath}`);
-console.log(`agents: ${catalog.agents.map((a) => `${a.kind}(${a.session.models.length} models)`).join(", ")}`);
+console.log(`agents: ${catalog.agents.map((a) => `${a.kind}(${a.session.presentationModels.length} presentation models)`).join(", ")}`);
 for (const warning of warnings) console.log(`warning: ${warning}`);

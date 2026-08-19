@@ -14,35 +14,23 @@ use super::{load_state_file, resolve_launch_route_auth, resolve_profile, RouteAu
 const GATEWAY_BASE_URL: &str = "https://llm.proliferate.ai";
 const VK: &str = "sk-virtual-1234";
 
-/// opencode's catalog `gatewayPolicy.seedModels` — the pre-probe fallback list
-/// the resolver returns when no live probe row exists (mirrors the values now
-/// living in `catalogs/agents/catalog.json`, not a Rust const).
-const OPENCODE_SEED_MODELS: &[&str] = &[
+/// Exact live gateway rows supplied by the test resolver.
+const OPENCODE_LIVE_MODELS: &[&str] = &[
     "claude-sonnet-4-5",
     "claude-sonnet-4-5-20250929",
     "claude-haiku-4-5",
     "claude-haiku-4-5-20251001",
 ];
 
-/// Stub resolver mirroring the catalog's gateway curation for the harnesses the
-/// render snapshots exercise: claude's small-fast pin, codex's default model,
-/// opencode's seed model list. Keeps the byte-snapshot literals flowing through
-/// a [`GatewayModelPlan`] exactly as the real catalog resolver would.
+/// Only opencode needs a model list before spawn; the list here represents the
+/// target's live gateway response.
 struct HarnessPlanResolver;
 
 impl GatewayModelResolve for HarnessPlanResolver {
     fn resolve_gateway_models(&self, harness_kind: &str, _revision: i64) -> GatewayModelPlan {
         match harness_kind {
-            "claude" => GatewayModelPlan {
-                small_fast_model: Some("claude-haiku-4-5-20251001".to_string()),
-                ..Default::default()
-            },
-            "codex" => GatewayModelPlan {
-                default_model: Some("gpt-5.2".to_string()),
-                ..Default::default()
-            },
             "opencode" => GatewayModelPlan {
-                models: OPENCODE_SEED_MODELS.iter().map(|m| m.to_string()).collect(),
+                models: OPENCODE_LIVE_MODELS.iter().map(|m| m.to_string()).collect(),
                 ..Default::default()
             },
             _ => GatewayModelPlan::default(),
@@ -101,10 +89,7 @@ fn claude_gateway_sets_base_url_token_and_sanitizes_ambient() {
         GATEWAY_BASE_URL
     );
     assert_eq!(rendered.set.get("ANTHROPIC_AUTH_TOKEN").unwrap(), VK);
-    assert_eq!(
-        rendered.set.get("ANTHROPIC_SMALL_FAST_MODEL").unwrap(),
-        "claude-haiku-4-5-20251001"
-    );
+    assert!(!rendered.set.contains_key("ANTHROPIC_SMALL_FAST_MODEL"));
     // Isolated CLAUDE_CONFIG_DIR so ambient ~/.claude cannot defeat sanitization.
     let config_dir = rendered
         .set
@@ -278,12 +263,7 @@ fn codex_gateway_materializes_config_toml_and_sets_env() {
     let config = std::fs::read_to_string(std::path::Path::new(codex_home).join("config.toml"))
         .expect("read config.toml");
     assert!(config.contains("model_provider = \"proliferate\""));
-    // Explicit default model line: codex otherwise falls back to a codex-native
-    // model id the gateway cannot serve (HARNESS-MATRIX codex recipe).
-    assert!(
-        config.contains("model = \"gpt-5.2\""),
-        "config.toml must pin a gateway-served default model, got:\n{config}"
-    );
+    assert!(!config.contains("model ="), "route config must not author a model: {config}");
     assert!(config.contains("base_url = \"https://llm.proliferate.ai/v1\""));
     assert!(config.contains("env_key = \"PROLIFERATE_GATEWAY_KEY\""));
     assert!(config.contains("wire_api = \"responses\""));
@@ -530,9 +510,6 @@ mod cursor_render;
 
 #[path = "contract_fixture_tests.rs"]
 mod contract_fixture;
-
-#[path = "native_render_tests.rs"]
-mod native_render;
 
 #[path = "opencode_render_tests.rs"]
 mod opencode_render;

@@ -9,7 +9,7 @@ export interface CloudAgentRunConfig {
   createdByUserId?: string | null;
   agentKind: string;
   modelId: string;
-  controlValues: Record<string, unknown>;
+  controlValues: Record<string, string>;
   usableInPersonalSandboxes: boolean;
   usableInSharedSandboxes: boolean;
   seedKey?: string | null;
@@ -20,7 +20,7 @@ export interface CloudAgentRunConfig {
     configName: string;
     agentKind: string;
     modelId: string;
-    controlValues: Record<string, unknown>;
+    controlValues: Record<string, string>;
     ignoredKeys: string[];
   } | null;
   createdAt: string;
@@ -71,7 +71,7 @@ export interface CreateCloudAgentRunConfigRequest {
   organizationId?: string | null;
   agentKind: string;
   modelId: string;
-  controlValues?: Record<string, unknown>;
+  controlValues?: Record<string, string>;
   usableInPersonalSandboxes?: boolean;
   usableInSharedSandboxes?: boolean;
 }
@@ -79,7 +79,7 @@ export interface CreateCloudAgentRunConfigRequest {
 export interface UpdateCloudAgentRunConfigRequest {
   name?: string | null;
   modelId?: string | null;
-  controlValues?: Record<string, unknown> | null;
+  controlValues?: Record<string, string> | null;
   usableInPersonalSandboxes?: boolean | null;
   usableInSharedSandboxes?: boolean | null;
 }

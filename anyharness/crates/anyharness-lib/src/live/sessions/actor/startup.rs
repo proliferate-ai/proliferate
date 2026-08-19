@@ -5,14 +5,13 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::SessionExecutionPhase;
 use tokio::sync::{mpsc, Mutex};
 
-use crate::domains::sessions::model::RequestedModeApplyError as ModeApplyError;
 use crate::domains::sessions::prompt::capabilities::capabilities_from_acp;
 use crate::live::sessions::actor::capabilities::{
     action_capabilities_from_acp, persist_session_action_capabilities,
 };
 use crate::live::sessions::actor::config::apply::restore_persisted_live_config_if_needed;
 use crate::live::sessions::actor::config::handle::{
-    apply_requested_mode_preference, apply_requested_model_preference,
+    apply_resolved_launch_intent,
 };
 use crate::live::sessions::actor::config::persist::{
     emit_live_config_update, emit_startup_state, load_startup_restore_snapshot,
@@ -288,13 +287,11 @@ impl SessionActor {
             "failed to persist initial live config snapshot",
             "initial_live_config",
         );
-        apply_requested_model_preference(
-            &conn,
-            &native_session_id,
-            &config.launch.session,
-            &mut startup_state,
-        )
-        .await;
+        let launch_intent = config
+            .caps
+            .state
+            .find_launch_intent(&session_id)?
+            .ok_or_else(|| anyhow::anyhow!("session {session_id} has no persisted launch intent"))?;
         let restore_live_config_started = Instant::now();
         let result = restore_persisted_live_config_if_needed(
             &conn,
@@ -316,17 +313,25 @@ impl SessionActor {
             "failed to restore persisted live config",
             "restore_live_config",
         );
-        if let Err(error) = apply_requested_mode_preference(
-            &conn,
-            &native_session_id,
-            &config.launch.session,
-            &mut startup_state,
-        )
-        .await
-        {
-            tracing::warn!(session_id = %session_id, error = %error, "failed to apply requested session mode");
-            let _ = ready_tx.send(Err(ModeApplyError::clone_for_readiness(&error)));
-            return Err(error);
+        // The immutable launch intent establishes a newly-created session.
+        // Once a full live snapshot exists, that exact session's latest
+        // confirmed current values own resume/recovery; replaying the original
+        // intent here would silently undo later live mutations.
+        if startup_restore_snapshot.is_none() {
+            if let Err(error) = apply_resolved_launch_intent(
+                &conn,
+                &native_session_id,
+                &session_id,
+                &source_agent_kind,
+                &launch_intent,
+                &mut startup_state,
+            )
+            .await
+            {
+                tracing::warn!(session_id = %session_id, error = %error, "failed to apply and confirm launch intent");
+                let _ = ready_tx.send(Err(anyhow::anyhow!(error.to_string())));
+                return Err(error);
+            }
         }
         let post_preferences_live_config_started = Instant::now();
         let result = emit_live_config_update(
@@ -404,4 +409,3 @@ impl SessionActor {
         Ok((actor, notification_rx, background_work_rx))
     }
 }
-

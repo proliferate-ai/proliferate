@@ -172,13 +172,18 @@ impl PlanRuntime {
                 .filter(|value| !value.is_empty())
                 .ok_or(HandoffPlanError::AgentKindRequired)?;
             let origin = handoff_origin_or_api_default(input.origin);
+            let control_values = input
+                .mode_id
+                .as_ref()
+                .map(|value| [("mode".to_string(), value.clone())].into())
+                .unwrap_or_default();
             let record = self
                 .session_runtime
                 .create_and_start_session(
                     &plan.workspace_id,
                     agent_kind,
                     input.model_id.as_deref(),
-                    input.mode_id.as_deref(),
+                    &control_values,
                     None,
                     Vec::new(),
                     None,

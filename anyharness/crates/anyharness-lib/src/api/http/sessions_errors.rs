@@ -109,23 +109,30 @@ pub(super) fn map_create_session_error(error: CreateAndStartSessionError) -> Api
         CreateAndStartSessionError::Invalid(detail) => {
             ApiError::bad_request(detail, "SESSION_CREATE_FAILED")
         }
-        CreateAndStartSessionError::ModelUnsupported {
+        CreateAndStartSessionError::LaunchOptionsUnavailable {
             agent_kind,
-            model_id,
-            active_universe,
+            state,
+        } => ApiError::conflict(
+            format!("launch options are not available for agent '{agent_kind}' (state: {state:?})"),
+            "SESSION_LAUNCH_OPTIONS_UNAVAILABLE",
+        ),
+        CreateAndStartSessionError::LaunchValueUnsupported {
+            agent_kind,
+            key,
+            value,
+            state,
+        } => ApiError::bad_request(
+            format!("launch value '{value}' for '{key}' is not supported for agent '{agent_kind}' (state: {state:?})"),
+            "SESSION_LAUNCH_VALUE_UNSUPPORTED",
+        ),
+        CreateAndStartSessionError::AgentEnvOverrideUnsupported {
+            agent_kind,
+            env_var_name,
         } => ApiError::bad_request(
             format!(
-                "model '{model_id}' is not supported for agent '{agent_kind}': not served by {}",
-                active_universe.describe()
+                "workspace/session environment cannot override agent-owned key '{env_var_name}' for '{agent_kind}'"
             ),
-            "SESSION_MODEL_UNSUPPORTED",
-        ),
-        CreateAndStartSessionError::ModeUnsupported {
-            agent_kind,
-            mode_id,
-        } => ApiError::bad_request(
-            format!("mode '{mode_id}' is not supported for agent '{agent_kind}'"),
-            "SESSION_MODE_UNSUPPORTED",
+            "SESSION_AGENT_ENV_OVERRIDE_UNSUPPORTED",
         ),
         CreateAndStartSessionError::WorkspaceNotFound => {
             ApiError::bad_request("workspace not found", "WORKSPACE_NOT_FOUND")
@@ -440,7 +447,6 @@ mod tests {
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
 
-    use crate::domains::agents::catalog::service::ActiveUniverse;
     use crate::domains::sessions::runtime::{CreateAndStartSessionError, ResolveInteractionError};
     use crate::domains::workspaces::access_gate::WorkspaceAccessError;
 
@@ -495,27 +501,19 @@ mod tests {
         assert_eq!(mapped.into_response().status(), StatusCode::CONFLICT);
     }
 
-    /// The single refusal for an unservable model intent: 400
-    /// `SESSION_MODEL_UNSUPPORTED`, with a detail naming the active universe
-    /// and carrying no per-context unlock enumeration.
+    /// Exact unsupported launch values use the stable typed refusal.
     #[test]
-    fn unsupported_model_maps_to_the_single_refusal_naming_the_active_universe() {
+    fn unsupported_model_maps_to_the_exact_launch_value_refusal() {
         let mapped =
-            super::map_create_session_error(CreateAndStartSessionError::ModelUnsupported {
+            super::map_create_session_error(CreateAndStartSessionError::LaunchValueUnsupported {
                 agent_kind: "claude".to_string(),
-                model_id: "opus".to_string(),
-                active_universe: ActiveUniverse::MachineObservation,
+                key: "model".to_string(),
+                value: "opus".to_string(),
+                state: crate::domains::agents::launch_options::HarnessLaunchOptionsState::Observed,
             });
 
         assert_eq!(mapped.status(), StatusCode::BAD_REQUEST);
-        assert_eq!(mapped.code(), Some("SESSION_MODEL_UNSUPPORTED"));
-        assert_eq!(
-            mapped.detail(),
-            Some(
-                "model 'opus' is not supported for agent 'claude': \
-                 not served by the machine's composed observation"
-            )
-        );
+        assert_eq!(mapped.code(), Some("SESSION_LAUNCH_VALUE_UNSUPPORTED"));
         assert_eq!(mapped.into_response().status(), StatusCode::BAD_REQUEST);
     }
 

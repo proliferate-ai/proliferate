@@ -38,7 +38,9 @@ export type AnyHarnessEventSupportWindowV1 =
   components["schemas"]["AnyHarnessEventSupportWindowV1"];
 export type AnyHarnessRawNotificationSupportWindowV1 =
   components["schemas"]["AnyHarnessRawNotificationSupportWindowV1"];
-export type CreateSessionRequest = components["schemas"]["CreateSessionRequest"];
+export type CreateSessionRequest = components["schemas"]["CreateSessionRequest"] & {
+  controlValues?: Record<string, string>;
+};
 export type SessionMcpEnvVar = components["schemas"]["SessionMcpEnvVar"];
 export type SessionMcpHeader = components["schemas"]["SessionMcpHeader"];
 export type SessionMcpHttpServer = components["schemas"]["SessionMcpHttpServer"];

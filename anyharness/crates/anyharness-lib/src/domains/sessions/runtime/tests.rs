@@ -600,7 +600,7 @@ async fn create_persisted_internal_session_rejects_missing_checkout_without_inse
             workspace_id: "workspace-missing".to_string(),
             agent_kind: "claude".to_string(),
             model_id: None,
-            mode_id: None,
+            control_values: Default::default(),
             origin: OriginContext::api_local_runtime(),
             preselected_session_id: None,
         })

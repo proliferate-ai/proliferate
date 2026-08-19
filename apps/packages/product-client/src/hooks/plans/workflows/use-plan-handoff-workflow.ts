@@ -1,12 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
-import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
-import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import type {
   ContentPart,
-  NormalizedSessionControl,
   PromptInputBlock,
 } from "@anyharness/sdk";
-import { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
 import { PLAN_HANDOFF_DEFAULT_PROMPT } from "#product/copy/plans/plan-prompts";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import { useActiveSessionLaunchState } from "#product/hooks/chat/derived/use-active-session-config-state";
@@ -20,20 +16,11 @@ import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows
 import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import type { PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
 import { buildPlanHandoffPrompt } from "#product/lib/domain/plans/handoff-prompt";
-import {
-  listPlanHandoffModeOptions,
-  resolvePlanHandoffModeId,
-  resolvePlanHandoffModeIdFromOptions,
-  resolvePlanHandoffPrePromptConfigChanges,
-} from "#product/lib/domain/plans/handoff-mode";
 import type {
   ModelSelectorProps,
   ModelSelectorSelection,
 } from "#product/lib/domain/chat/models/model-selector-types";
 import { resolveModelDisplayName } from "#product/lib/domain/chat/models/model-display";
-import { resolveUnattendedModeId } from "#product/lib/domain/agents/unattended-mode";
-import { getSessionClientAndWorkspace } from "#product/lib/access/anyharness/session-runtime";
-import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 import { getSessionRecord } from "#product/stores/sessions/session-records";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
@@ -48,9 +35,6 @@ export function usePlanHandoffWorkflow({
   plan: PromptPlanAttachmentDescriptor;
   onCompleted: () => void;
 }) {
-  const host = useProductHost();
-  const ssh = host.desktop?.ssh ?? null;
-  const cloudClient = host.cloud.client;
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
@@ -60,7 +44,6 @@ export function usePlanHandoffWorkflow({
   const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
   const [promptText, setPromptText] = useState(PLAN_HANDOFF_DEFAULT_PROMPT);
   const [selection, setSelection] = useState<ModelSelectorSelection | null>(null);
-  const [modeOverrideId, setModeOverrideId] = useState<string | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const launchCatalog = useChatLaunchCatalog({
     activeSelection: selection ?? configuredLaunch.selection,
@@ -70,7 +53,6 @@ export function usePlanHandoffWorkflow({
   const { dismissSession } = useSessionDismissActions();
   const { activateChatTab } = useWorkspaceShellActivation();
   const { promptSession } = useSessionPromptWorkflow();
-  const setSessionConfigOptionMutation = useSetSessionConfigOptionMutation();
 
   const resolvedConnectionState = selectedCloudRuntime.state?.phase === "ready"
     ? "healthy"
@@ -117,30 +99,14 @@ export function usePlanHandoffWorkflow({
     resolvedConnectionState,
   ]);
 
-  const defaultModeId = useMemo(
-    () => resolvePlanHandoffModeId(
-      effectiveSelection?.kind,
-      resolveUnattendedModeId({
-        agent: launchCatalog.launchAgents.find(
-          (candidate) => candidate.kind === effectiveSelection?.kind,
-        ),
-        modelId: effectiveSelection?.modelId,
-      }),
-    ),
-    [effectiveSelection, launchCatalog.launchAgents],
-  );
-  const modeOptions = useMemo(
-    () => listPlanHandoffModeOptions(effectiveSelection?.kind, defaultModeId),
-    [defaultModeId, effectiveSelection?.kind],
-  );
-  const selectedModeId = modeOptions.some((option) => option.value === modeOverrideId)
-    ? modeOverrideId
-    : resolvePlanHandoffModeIdFromOptions(defaultModeId, modeOptions);
-  const modePickerProps = useMemo(() => ({
-    options: modeOptions,
-    value: selectedModeId,
-    onChange: setModeOverrideId,
-  }), [modeOptions, selectedModeId]);
+  const launchControlValues = useMemo(() => Object.fromEntries(
+    (launchCatalog.launchAgents
+      .find((candidate) => candidate.kind === effectiveSelection?.kind)
+      ?.launchControls ?? [])
+      .flatMap((control) => control.defaultValue
+        ? [[control.key, control.defaultValue] as const]
+        : []),
+  ), [effectiveSelection?.kind, launchCatalog.launchAgents]);
 
   const submit = useCallback(async function submit() {
     if (!selectedWorkspaceId) {
@@ -159,20 +125,12 @@ export function usePlanHandoffWorkflow({
       await executePlanHandoff({
         launchSelection,
         selectedWorkspaceId,
-        selectedModeId,
+        launchControlValues,
         text: prompt.text,
         blocks: prompt.blocks,
         optimisticContentParts: prompt.optimisticContentParts,
         previousActiveSessionId,
         createEmptySessionWithResolvedConfig,
-        applyPrePromptConfigChanges: (sessionId) =>
-          applyPlanHandoffPrePromptConfigChanges(
-            sessionId,
-            currentCollaborationModeForSession(sessionId),
-            setSessionConfigOptionMutation.mutateAsync,
-            ssh,
-            cloudClient,
-          ),
         promptSession,
         dismissSession,
         selectSession: (sessionId) => activateChatTab({
@@ -197,9 +155,8 @@ export function usePlanHandoffWorkflow({
     plan,
     promptText,
     promptSession,
-    selectedModeId,
+    launchControlValues,
     selectedWorkspaceId,
-    setSessionConfigOptionMutation,
     showErrorToast,
     showToast,
   ]);
@@ -210,14 +167,13 @@ export function usePlanHandoffWorkflow({
     promptText,
     setPromptText,
     modelSelectorProps,
-    modePickerProps,
   };
 }
 
 interface ExecutePlanHandoffInput {
   launchSelection: ModelSelectorSelection;
   selectedWorkspaceId: string;
-  selectedModeId?: string;
+  launchControlValues: Record<string, string>;
   text: string;
   blocks: PromptInputBlock[];
   optimisticContentParts: ContentPart[];
@@ -225,10 +181,9 @@ interface ExecutePlanHandoffInput {
   createEmptySessionWithResolvedConfig: (options: {
     agentKind: string;
     modelId: string;
-    modeId?: string;
+    launchControlValues?: Record<string, string>;
     workspaceId: string;
   }) => Promise<string>;
-  applyPrePromptConfigChanges: (sessionId: string) => Promise<void>;
   promptSession: (options: {
     sessionId: string;
     text: string;
@@ -248,13 +203,12 @@ interface ExecutePlanHandoffInput {
 export async function executePlanHandoff({
   launchSelection,
   selectedWorkspaceId,
-  selectedModeId,
+  launchControlValues,
   text,
   blocks,
   optimisticContentParts,
   previousActiveSessionId,
   createEmptySessionWithResolvedConfig,
-  applyPrePromptConfigChanges,
   promptSession,
   dismissSession,
   selectSession,
@@ -268,10 +222,9 @@ export async function executePlanHandoff({
     createdSessionId = await createEmptySessionWithResolvedConfig({
       agentKind: launchSelection.kind,
       modelId: launchSelection.modelId,
-      modeId: selectedModeId,
+      launchControlValues,
       workspaceId: selectedWorkspaceId,
     });
-    await applyPrePromptConfigChanges(createdSessionId);
     await promptSession({
       sessionId: createdSessionId,
       text,
@@ -296,47 +249,4 @@ export async function executePlanHandoff({
       retry,
     });
   }
-}
-
-async function applyPlanHandoffPrePromptConfigChanges(
-  sessionId: string,
-  collaborationMode: NormalizedSessionControl | null,
-  setSessionConfigOption: ReturnType<typeof useSetSessionConfigOptionMutation>["mutateAsync"],
-  ssh: DesktopSshBridge | null,
-  cloudClient: CloudSandboxGatewayUrlSource | null,
-): Promise<void> {
-  const changes = resolvePlanHandoffPrePromptConfigChanges(collaborationMode);
-  if (changes.length === 0) {
-    return;
-  }
-
-  const { materializedSessionId, workspaceId } = await getSessionClientAndWorkspace(
-    sessionId,
-    ssh,
-    cloudClient,
-  );
-  for (const change of changes) {
-    const response = await setSessionConfigOption({
-      workspaceId,
-      sessionId: materializedSessionId,
-      request: {
-        configId: change.rawConfigId,
-        value: change.value,
-      },
-    });
-    if (response.applyState !== "applied") {
-      // Queued config changes apply after a turn completes. Handoff must switch
-      // out of plan mode before sending the first prompt, so queued is unsafe.
-      throw new Error("The session could not leave plan mode before the first prompt.");
-    }
-  }
-}
-
-function currentCollaborationModeForSession(
-  sessionId: string,
-): NormalizedSessionControl | null {
-  return getSessionRecord(sessionId)
-    ?.liveConfig
-    ?.normalizedControls
-    .collaborationMode ?? null;
 }

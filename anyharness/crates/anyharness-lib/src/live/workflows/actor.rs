@@ -280,13 +280,13 @@ impl WorkflowActor {
             }
         };
 
-        let (agent_kind, model_id, mode_id) = launch_model(&node, &definition);
+        let (agent_kind, model_id, control_values) = launch_model(&node, &definition);
 
         let input = InternalSessionCreateInput {
             workspace_id: state.run.workspace_id.clone(),
             agent_kind: agent_kind.clone(),
             model_id,
-            mode_id,
+            control_values,
             origin: OriginContext::system_local_runtime(),
             preselected_session_id: None,
         };
@@ -510,7 +510,7 @@ impl WorkflowActor {
 pub(super) fn launch_model(
     node: &WorkflowRunNodeRecord,
     definition: &WorkflowDefinition,
-) -> (String, Option<String>, Option<String>) {
+) -> (String, Option<String>, std::collections::BTreeMap<String, String>) {
     let model = node.model.clone().or_else(|| {
         node.definition_node_id
             .as_deref()
@@ -518,7 +518,7 @@ pub(super) fn launch_model(
             .and_then(|node| node.model.clone())
     });
     match model {
-        Some(model) => (model.agent_kind, model.model_id, model.mode_id),
-        None => (DEFAULT_WORKFLOW_AGENT_KIND.to_string(), None, None),
+        Some(model) => (model.agent_kind, model.model_id, model.control_values),
+        None => (DEFAULT_WORKFLOW_AGENT_KIND.to_string(), None, Default::default()),
     }
 }

@@ -146,7 +146,10 @@ pub fn build_tool_list() -> Vec<Value> {
                     },
                     "agentKind": { "type": "string" },
                     "modelId": { "type": "string" },
-                    "modeId": { "type": "string" }
+                    "controlValues": {
+                        "type": "object",
+                        "additionalProperties": { "type": "string" }
+                    }
                 },
                 "required": ["workspaceId", "kind"],
                 "if": {

@@ -35,9 +35,6 @@ from proliferate.integrations.sandbox import (
 )
 from proliferate.lib.infra.encryption.fernet import decrypt_text
 from proliferate.lib.infra.time.wall_clock import utcnow
-from proliferate.server.cloud.agent_models.domain.snapshot_upload import (
-    snapshot_upload_owner,
-)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.bootstrap import (
     build_runtime_env,
@@ -366,14 +363,12 @@ async def record_heartbeat(
         ),
         desired_topology=desired_topology,
         supervisor_bridge=supervisor_bridge,
-        model_snapshot_upload_allowed=snapshot_upload_owner(
-            runtime_kind=worker.runtime_kind,
-            cloud_sandbox_id=worker.cloud_sandbox_id,
-            sandbox_exists=sandbox is not None,
-            sandbox_owner_user_id=sandbox.owner_user_id if sandbox is not None else None,
-            sandbox_destroyed_at=sandbox.destroyed_at if sandbox is not None else None,
-        )
-        is not None,
+        launch_options_upload_allowed=(
+            worker.runtime_kind == "cloud_sandbox"
+            and worker.cloud_sandbox_id is not None
+            and sandbox is not None
+            and sandbox.destroyed_at is None
+        ),
     )
 
 

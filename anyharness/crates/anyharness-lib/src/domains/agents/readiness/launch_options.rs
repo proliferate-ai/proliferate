@@ -46,9 +46,8 @@ pub struct ResolvedLaunchAgentOption {
     pub kind: String,
     pub display_name: String,
     pub default_model_id: Option<String>,
-    /// Curated unattended mode from the active catalog. `None` is an
-    /// authoritative declaration that this agent has no vetted default.
-    pub unattended_mode_id: Option<String>,
+    pub controls: Vec<anyharness_contract::v1::HarnessLaunchControl>,
+    pub default_control_values: std::collections::BTreeMap<String, String>,
     pub models: Vec<ResolvedLaunchModelOption>,
 }
 

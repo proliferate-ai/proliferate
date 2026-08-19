@@ -25,27 +25,6 @@ export function launchControlToConfiguredSessionControlValues(
   return sharedLaunchControlToConfiguredSessionControlValues(agentKind, control);
 }
 
-export function withUpdatedDefaultSessionModeByAgentKind(
-  defaultsByAgentKind: Record<string, string>,
-  agentKind: string,
-  modeId: string | null | undefined,
-): Record<string, string> {
-  const trimmedAgentKind = agentKind.trim();
-  const trimmedModeId = modeId?.trim() ?? "";
-  if (!trimmedAgentKind || !trimmedModeId) {
-    return defaultsByAgentKind;
-  }
-
-  if (defaultsByAgentKind[trimmedAgentKind] === trimmedModeId) {
-    return defaultsByAgentKind;
-  }
-
-  return {
-    ...defaultsByAgentKind,
-    [trimmedAgentKind]: trimmedModeId,
-  };
-}
-
 export function getPreviousSessionModeValue(
   options: Array<{ value: string }>,
   currentValue: string | null,

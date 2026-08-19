@@ -204,6 +204,7 @@ impl SessionLinkService {
     pub fn create_subagent_session_and_link_with_child_limit(
         &self,
         session: &crate::domains::sessions::model::SessionRecord,
+        intent: &crate::domains::sessions::launch_intent::ResolvedLaunchIntent,
         input: CreateSessionLinkInput,
         max_children: usize,
     ) -> Result<SessionLinkRecord, CreateSessionLinkError> {
@@ -247,7 +248,7 @@ impl SessionLinkService {
         };
         let outcome = self
             .store
-            .insert_subagent_session_with_child_limit(session, &record, max_children)
+            .insert_subagent_session_with_child_limit(session, intent, &record, max_children)
             .map_err(|error| {
                 if is_unique_constraint_error(&error) {
                     CreateSessionLinkError::Duplicate

@@ -3,6 +3,7 @@ use rusqlite::{params, OptionalExtension};
 use super::attachments::insert_prompt_attachment_row;
 use super::events::insert_event_row;
 use super::live_config::{upsert_live_config_snapshot_row, upsert_pending_config_change_row};
+use super::launch_intents::insert_launch_intent_row;
 use super::notifications::insert_raw_notification_row;
 use super::pending_prompts::insert_pending_prompt_row;
 use super::SessionStore;
@@ -11,12 +12,25 @@ use crate::domains::sessions::model::{
     SessionLiveConfigSnapshotRecord, SessionMcpBindingPolicy, SessionRawNotificationRecord,
     SessionRecord,
 };
+use crate::domains::sessions::launch_intent::ResolvedLaunchIntent;
 use crate::origin::{decode_origin_json, encode_origin_json};
 
 impl SessionStore {
     pub fn insert(&self, record: &SessionRecord) -> anyhow::Result<()> {
         self.db.with_conn(|conn| {
             insert_session_row(conn, record)?;
+            Ok(())
+        })
+    }
+
+    pub fn insert_with_launch_intent(
+        &self,
+        record: &SessionRecord,
+        intent: &ResolvedLaunchIntent,
+    ) -> anyhow::Result<()> {
+        self.db.with_tx(|conn| {
+            insert_session_row(conn, record)?;
+            insert_launch_intent_row(conn, &record.id, intent)?;
             Ok(())
         })
     }

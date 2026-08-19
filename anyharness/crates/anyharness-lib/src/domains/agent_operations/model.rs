@@ -183,8 +183,6 @@ pub struct AgentConfiguration {
     pub agent_kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mode_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -245,7 +243,7 @@ pub struct CreateAgentInput {
     pub task: Option<String>,
     pub agent_kind: Option<String>,
     pub model_id: Option<String>,
-    pub mode_id: Option<String>,
+    pub control_values: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -412,8 +410,8 @@ pub struct AgentLaunchOption {
     pub unavailable_reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_model_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub unattended_mode_id: Option<String>,
+    pub controls: Vec<anyharness_contract::v1::HarnessLaunchControl>,
+    pub default_control_values: std::collections::BTreeMap<String, String>,
     pub models: Vec<AgentLaunchModelOption>,
 }
 
@@ -429,7 +427,7 @@ pub struct AgentLaunchOptionsView {
 pub struct ValidatedAgentLaunchSelection {
     pub agent_kind: String,
     pub model_id: Option<String>,
-    pub mode_id: Option<String>,
+    pub control_values: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -442,8 +440,10 @@ pub enum AgentLaunchSelectionError {
     ModelUnknown,
     #[error("model is currently unavailable")]
     ModelUnavailable,
-    #[error("mode is not in the effective launch options")]
-    ModeUnknown,
+    #[error("control is not in the effective launch options")]
+    ControlUnknown,
+    #[error("control value is not in the effective launch options")]
+    ControlValueUnknown,
 }
 
 impl AgentLaunchOptionsView {
@@ -451,7 +451,7 @@ impl AgentLaunchOptionsView {
         &self,
         agent_kind: &str,
         model_id: Option<&str>,
-        mode_id: Option<&str>,
+        control_values: &std::collections::BTreeMap<String, String>,
     ) -> Result<ValidatedAgentLaunchSelection, AgentLaunchSelectionError> {
         let agent = self
             .agents
@@ -466,9 +466,7 @@ impl AgentLaunchOptionsView {
                 let model = agent
                     .models
                     .iter()
-                    .find(|model| {
-                        model.id == model_id || model.aliases.iter().any(|alias| alias == model_id)
-                    })
+                    .find(|model| model.id == model_id)
                     .ok_or(AgentLaunchSelectionError::ModelUnknown)?;
                 if !model.executable {
                     return Err(AgentLaunchSelectionError::ModelUnavailable);
@@ -477,34 +475,24 @@ impl AgentLaunchOptionsView {
             }
             None => None,
         };
-        if let Some(mode_id) = mode_id {
-            let model_supports_mode = |model: &AgentLaunchModelOption| {
-                model
-                    .modes
-                    .as_ref()
-                    .is_some_and(|modes| modes.iter().any(|mode| mode == mode_id))
-            };
-            let effective_model = selected_model.or_else(|| {
-                agent.default_model_id.as_deref().and_then(|default_id| {
-                    agent.models.iter().find(|model| {
-                        model.executable
-                            && (model.id == default_id
-                                || model.aliases.iter().any(|alias| alias == default_id))
-                    })
-                })
-            });
-            let mode_is_listed = match effective_model {
-                Some(model) => model_supports_mode(model),
-                None => false,
-            };
-            if !mode_is_listed {
-                return Err(AgentLaunchSelectionError::ModeUnknown);
+        for (control_id, value) in control_values {
+            let control = agent
+                .controls
+                .iter()
+                .find(|control| control.id == control_id.as_str())
+                .ok_or(AgentLaunchSelectionError::ControlUnknown)?;
+            if !control
+                .values
+                .iter()
+                .any(|candidate| candidate.value == value.as_str())
+            {
+                return Err(AgentLaunchSelectionError::ControlValueUnknown);
             }
         }
         Ok(ValidatedAgentLaunchSelection {
             agent_kind: agent.agent_kind.clone(),
             model_id: selected_model.map(|model| model.id.clone()),
-            mode_id: mode_id.map(str::to_string),
+            control_values: control_values.clone(),
         })
     }
 }

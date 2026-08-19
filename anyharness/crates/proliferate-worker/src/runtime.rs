@@ -9,7 +9,7 @@ use crate::{
     identity,
     identity::credentials::WorkerIdentity,
     integration_gateway, lifecycle,
-    model_snapshot_sync::{self, ModelSnapshotSyncState},
+    launch_options_sync::{self, LaunchOptionsSyncState},
     process_lock::WorkerProcessLock,
     self_update,
     store::WorkerStore,
@@ -43,14 +43,14 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
         );
     }
 
-    let model_snapshot_sync_state = ModelSnapshotSyncState::new();
+    let launch_options_sync_state = LaunchOptionsSyncState::new();
     if heartbeat_and_converge(
         &config,
         &cloud,
         &store,
         &identity,
         integration_gateway.as_ref(),
-        &model_snapshot_sync_state,
+        &launch_options_sync_state,
         once,
     )
     .await
@@ -69,7 +69,7 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
             &store,
             &identity,
             integration_gateway.as_ref(),
-            &model_snapshot_sync_state,
+            &launch_options_sync_state,
             false,
         )
         .await
@@ -90,7 +90,7 @@ async fn heartbeat_and_converge(
     store: &WorkerStore,
     identity: &WorkerIdentity,
     gateway: Option<&crate::cloud_client::IntegrationGatewayConfig>,
-    model_snapshot_sync_state: &ModelSnapshotSyncState,
+    launch_options_sync_state: &LaunchOptionsSyncState,
     dry_run: bool,
 ) -> TickControl {
     let anyharness_version = anyharness_update::running_anyharness_version(store);
@@ -118,19 +118,19 @@ async fn heartbeat_and_converge(
         }
     }
 
-    // Model-snapshot sync: non-fatal, runs first (a worker binary swap
+    // Launch-options copy: non-fatal, runs first (a worker binary swap
     // exec's and never returns, so anything on this tick must precede it).
     //
     // REL-10: the server's verdict off THIS tick's ack is handed straight to the
-    // admission gate. Absent decodes to `false`, so an old server pauses snapshot
+    // admission gate. Absent decodes to `false`, so an old server pauses copying
     // sync before any local read; the bit is never cached, aged, or reinterpreted
     // here, and it never influences the convergence work below.
-    model_snapshot_sync::maybe_sync(
-        response.model_snapshot_upload_allowed,
+    launch_options_sync::maybe_sync(
+        response.launch_options_upload_allowed,
         config,
         cloud,
         &identity.worker_token,
-        model_snapshot_sync_state,
+        launch_options_sync_state,
     )
     .await;
 

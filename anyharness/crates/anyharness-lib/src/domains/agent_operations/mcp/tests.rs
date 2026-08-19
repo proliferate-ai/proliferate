@@ -160,7 +160,7 @@ impl SubagentLifecycleMutations for Lifecycle {
         _workspace_id: &str,
         _agent_kind: &str,
         _model_id: Option<&str>,
-        _mode_id: Option<&str>,
+        _control_values: &std::collections::BTreeMap<String, String>,
         _task: String,
         _parent_session_id: &str,
         _source_label: &str,

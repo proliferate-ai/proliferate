@@ -1592,7 +1592,7 @@ clean:
 # ── agent catalog ────────────────────────────────────────────────────────────
 # View the current catalog draft (rebuild from committed snapshots + open viewer).
 catalog-view:
-	cd scripts/agent-catalog && node build-catalog.mjs && node render-catalog.mjs && open catalog.html
+	cd scripts/agent-catalog && node build-catalog.mjs && open catalog.draft.json
 
 # Rebuild the draft, resolve every harness into a fenced pin (per-platform
 # {url,sha256} or npm/git, reusing prior shas for unchanged URLs), and promote
@@ -1608,8 +1608,7 @@ catalog-pin:
 		fi
 	cd scripts/agent-catalog && node build-catalog.mjs \
 		&& node resolve-pins.mjs --catalog catalog.draft.json --reuse-from ../../catalogs/agents/catalog.json \
-		&& cp catalog.draft.json ../../catalogs/agents/catalog.json \
-		&& node render-catalog.mjs
+		&& cp catalog.draft.json ../../catalogs/agents/catalog.json
 	node scripts/validate-agent-catalog.mjs
 
 # Resolve current upstream pins, install those exact artifacts, run the complete
@@ -1622,6 +1621,5 @@ catalog-pin:
 catalog-update:
 	CATALOG_PROBE_AGENTS="$(CATALOG_PROBE_AGENTS)" ./scripts/agent-catalog/run-probes.sh $(CATALOG_PROBE_ARGS)
 	cd scripts/agent-catalog && node build-catalog.mjs --require-complete-probe \
-		&& cp catalog.draft.json ../../catalogs/agents/catalog.json \
-		&& node render-catalog.mjs
+		&& cp catalog.draft.json ../../catalogs/agents/catalog.json
 	node scripts/validate-agent-catalog.mjs

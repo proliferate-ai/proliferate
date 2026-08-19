@@ -30,7 +30,7 @@ class AgentRunConfigCreateRequest(AgentRunConfigBaseModel):
     name: str
     agent_kind: str = Field(alias="agentKind")
     model_id: str = Field(alias="modelId")
-    control_values: dict[str, object] = Field(default_factory=dict, alias="controlValues")
+    control_values: dict[str, str] = Field(default_factory=dict, alias="controlValues")
     usable_in_personal_sandboxes: bool = Field(True, alias="usableInPersonalSandboxes")
     usable_in_shared_sandboxes: bool = Field(False, alias="usableInSharedSandboxes")
 
@@ -38,7 +38,7 @@ class AgentRunConfigCreateRequest(AgentRunConfigBaseModel):
 class AgentRunConfigUpdateRequest(AgentRunConfigBaseModel):
     name: str | None = None
     model_id: str | None = Field(default=None, alias="modelId")
-    control_values: dict[str, object] | None = Field(default=None, alias="controlValues")
+    control_values: dict[str, str] | None = Field(default=None, alias="controlValues")
     usable_in_personal_sandboxes: bool | None = Field(
         default=None,
         alias="usableInPersonalSandboxes",
@@ -58,7 +58,7 @@ class AgentRunConfigResolvedSnapshot(AgentRunConfigBaseModel):
     config_name: str = Field(alias="configName")
     agent_kind: str = Field(alias="agentKind")
     model_id: str = Field(alias="modelId")
-    control_values: dict[str, object] = Field(alias="controlValues")
+    control_values: dict[str, str] = Field(alias="controlValues")
     ignored_keys: list[str] = Field(alias="ignoredKeys")
 
 
@@ -71,7 +71,7 @@ class AgentRunConfigResponse(AgentRunConfigBaseModel):
     name: str
     agent_kind: str = Field(alias="agentKind")
     model_id: str = Field(alias="modelId")
-    control_values: dict[str, object] = Field(alias="controlValues")
+    control_values: dict[str, str] = Field(alias="controlValues")
     usable_in_personal_sandboxes: bool = Field(alias="usableInPersonalSandboxes")
     usable_in_shared_sandboxes: bool = Field(alias="usableInSharedSandboxes")
     seed_key: str | None = Field(alias="seedKey")

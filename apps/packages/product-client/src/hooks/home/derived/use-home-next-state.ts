@@ -6,7 +6,6 @@ import {
   type HomeNextRepositorySelection,
 } from "#product/lib/domain/home/home-next-launch";
 import { useHomeNextModelSelection } from "#product/hooks/home/derived/use-home-next-model-selection";
-import { useHomeNextModeSelection } from "#product/hooks/home/derived/use-home-next-mode-selection";
 import { useHomeNextRepositorySelection } from "#product/hooks/home/derived/use-home-next-repository-selection";
 import { useComputeTargetOptions } from "#product/hooks/compute/derived/use-compute-target-options";
 
@@ -17,7 +16,6 @@ interface UseHomeNextStateArgs {
   repoLaunchKind: HomeNextRepoLaunchKind;
   modelSelectionOverride: HomeNextModelSelection | null;
   baseBranchOverride: string | null;
-  modeOverrideId: string | null;
   selectedSshTargetId?: string | null;
 }
 
@@ -29,7 +27,6 @@ export function useHomeNextState({
   repoLaunchKind,
   modelSelectionOverride,
   baseBranchOverride,
-  modeOverrideId,
   selectedSshTargetId = null,
 }: UseHomeNextStateArgs) {
   const effectiveDestination = desktopTargetsAvailable ? destination : "repository";
@@ -43,12 +40,6 @@ export function useHomeNextState({
     repositorySelection,
     repoLaunchKind: effectiveRepoLaunchKind,
     baseBranchOverride,
-  });
-  const mode = useHomeNextModeSelection({
-    destination: effectiveDestination,
-    modelSelection: model.effectiveModelSelection,
-    modeOverrideId,
-    repoLaunchKind: effectiveRepoLaunchKind,
   });
   const computeTargets = useComputeTargetOptions({
     enabled: desktopTargetsAvailable && effectiveDestination === "repository",
@@ -148,9 +139,6 @@ export function useHomeNextState({
     sshTargetsLoading: desktopTargetsAvailable && computeTargets.isLoading,
     selectedSshTarget,
     ...model,
-    modeOptions: mode.modeOptions,
-    effectiveMode: mode.effectiveMode,
-    effectiveModeId: mode.effectiveModeId,
     targetDisabledReason,
     canLaunchTarget:
       targetDisabledReason === null

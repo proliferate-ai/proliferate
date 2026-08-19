@@ -49,7 +49,7 @@ pub enum ReviewAssignmentStatus {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum ReviewModeVerificationStatus {
+pub enum ReviewLaunchVerificationStatus {
     Pending,
     Verified,
     Mismatch,
@@ -74,8 +74,9 @@ pub struct ReviewPersonaRequest {
     pub agent_kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mode_id: Option<String>,
+    #[serde(default)]
+    #[schema(value_type = Object)]
+    pub control_values: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -233,11 +234,9 @@ pub struct ReviewAssignmentDetail {
     pub agent_kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub requested_mode_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub actual_mode_id: Option<String>,
-    pub mode_verification_status: ReviewModeVerificationStatus,
+    #[schema(value_type = Object)]
+    pub control_values: BTreeMap<String, String>,
+    pub launch_verification_status: ReviewLaunchVerificationStatus,
     pub status: ReviewAssignmentStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pass: Option<bool>,
@@ -262,3 +261,4 @@ const fn default_review_max_rounds() -> u32 {
 const fn default_auto_iterate() -> bool {
     true
 }
+use std::collections::BTreeMap;
