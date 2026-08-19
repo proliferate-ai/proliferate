@@ -8,11 +8,12 @@ all-changes review surfaces.
 Files is filesystem navigation from file-viewing surfaces:
 
 - open file viewer targets from chat links, command-palette results, git rows,
-  the docked file tree, and the file viewer search modal
+  and the docked file tree
 - browse directories from the non-modal docked file tree attached to
   file/diff viewing surfaces (see Docked File Tree below)
-- search workspace files from the command palette or the file-viewer-local
-  search modal
+- search workspace files from the command palette; search an open file's
+  content through the shared shell `ContentSearchPill` (see
+  `specs/codebase/features/content-search.md`), not a file-viewer-local modal
 
 Files is not a standalone durable right-panel tool. The old Files pane/tab must
 not be rendered in the shared right-panel header.
@@ -132,7 +133,8 @@ Zustand stores only local UI/editor state:
 - `workspace-file-tree-ui-store.ts`: expanded folders, selected folder,
   create draft
 - `workspace-file-buffers-store.ts`: local editable drafts, base version token,
-  save/conflict state
+  save/conflict state — dormant legacy scaffold, unwired from `FileEditorView`
+  (see File Viewing below)
 - `workspace-change-review-store.ts`: session-local viewed state for
   all-changes rows
 
@@ -220,37 +222,63 @@ Markdown/code renderers; the editable Scratch editor is not syntax-highlighted.
 
 ## File Viewing
 
-`.md` and `.mdx` files default to rendered mode. Other text files default to
-edit mode. User mode choices persist for the open target until that target is
-closed.
+The viewer is **read-only**: there is no edit mode, no file edit buffer, and
+no Save action or `Cmd/Ctrl+S` binding on the supported path. `.md`/`.mdx`
+targets default to rendered mode (`defaultFileViewerMode`); every other text
+target defaults to source. User mode choices persist for the open target
+until that target is closed.
 
-The rendered file surface is **read-only**: existing source, rendered
-Markdown, binary/too-large, error, and diff rendering are unchanged, and there
-is no Save action or `Cmd/Ctrl+S` binding on the supported path. The
-`workspace-file-buffers-store.ts` buffer/save/dirty-close scaffolding and its
-pinning tests are dormant legacy residue that the rendered viewer does not
-consume; they are neither wired nor deleted here, and removing them requires a
-separately scoped constitution review because it crosses tab-close/right-panel
-owners and pinning tests. Do not read that scaffolding as evidence the viewer
-is editable.
+The `workspace-file-buffers-store.ts` buffer/save/dirty-close scaffolding,
+`use-workspace-file-buffer-actions.ts`, and `viewerTargetEditablePath` are
+dormant legacy residue that `FileEditorView` does not populate, render, or
+call: no production caller invokes their save/reload callbacks. They are
+neither wired nor deleted here, and removing them (plus their pinning tests)
+requires a separately scoped constitution review because it crosses
+tab-close/right-panel owners. Do not read that scaffolding as evidence the
+viewer is or was editable.
 
-The file viewer frame (`FileViewerFrame`) owns the path header and
-binary/too-large placeholders. Its header exposes a minimal `Files`
-toggle/breadcrumb control (below) alongside the existing options menu.
+### Header
 
-The viewer's action menu (copy content, copy path, word wrap, rich preview) is
-OS-native in Desktop: the toolbar options button and a right-click in the
-content area both open the host context menu via the shared native-menu bridge,
-with the DOM popover kept as the browser/test fallback. Native menus carry no
-checkmark state, so toggles read as "Enable/Disable …" verbs. That context-menu
-trigger wraps only the viewer-content slot (`[data-file-viewer-content]`),
-never the docked file tree.
+`FileViewerFrame` owns a single 36px (`h-9`, `data-file-viewer-toolbar`)
+header rendered once per frame, never duplicated per source/rendered/diff
+subview, containing (left to right, via `FileViewerToolbar`):
 
-The file viewer may open a palette-style file search modal scoped to the
-current viewer tab. It reuses the workspace file search API and command-palette
-input/list primitives; global shortcut ownership remains with the workspace
-command palette unless a dedicated binding is introduced later. Content search
-inside the file tree itself is out of scope here (see the successor slice).
+- **Breadcrumbs**: a leading literal `Files` crumb (never the workspace's
+  absolute/home/SSH/companion root) that calls `onRevealFilesPath("")` to
+  reveal the 02A tree root, followed by normalized workspace-relative
+  directory crumbs (each opens the dock and reveals that directory) and an
+  inert final basename crumb. Long paths truncate/scroll within the flex
+  remainder.
+- **Options menu** (`FileViewerOptionsMenu`/`FileViewerMenuBody`): OS-native
+  in Desktop via `use-file-viewer-native-menu.ts`, with the DOM popover as the
+  browser/test fallback; both list the same items in the same order —
+  `Copy content` (settled readable text only), `Copy path` (calls Slice 01D's
+  capability-bound `copyCurrentPath()`; never derives a native path from
+  breadcrumb text), `Enable/Disable word wrap`, and `Enable/Disable rich
+  preview` (omitted for `fileDiff` and non-previewable targets). Native menus
+  carry no checkmark state, so toggles read as "Enable/Disable …" verbs. The
+  content-area context-menu trigger wraps only `[data-file-viewer-content]`,
+  never the docked file tree.
+- **Open-in split action**: rendered only when Slice 01D's
+  `useFileReferenceActions` reports a settled local `nativePathKind`,
+  non-empty `openTargets`, and a non-null `defaultOpenTarget` — fail-closed,
+  never re-derived from path syntax. It is a `SplitButton` with
+  `showLabel=false`, accessible label `Open in <defaultOpenTarget.label>`,
+  keyed by a session-only monotonic `openInRevision` (bumped on any locator
+  identity, `nativePathKind`, target-set, or default-target change) so an
+  open popover remounts closed on a capability change. The primary action
+  calls `openDefault()`; the adjacent menu lists `openTargets` and calls
+  `openWithTarget(targetId)`. User-visible copy carries no native paths.
+- **Find in file**: shown only while `canFindInFile` (an eligible readable,
+  non-diff, non-too-large text target); opens the shared `ContentSearchPill`
+  on surface `file`.
+- **02A files toggle** (`FolderTree` icon): see Docked File Tree below.
+
+### No edit surface
+
+The supported viewer creates or consumes no file edit buffer and exposes no
+Save, Save As, Reload, dirty marker, conflict state, or `Cmd/Ctrl+S`
+handler.
 
 ## Docked File Tree
 

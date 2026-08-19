@@ -10,15 +10,31 @@ One store (`apps/packages/product-client/src/stores/search/content-search-store.
 - **file**: the file viewer. Searches the open file's source / diff.
 - **review**: the git Changes pane. Searches diff content across every rendered review file row. Available only while the Changes pane is mounted (see Availability below). Unlike chat, review search has no dedicated index/paint split; it registers straight off the same `ChatDiffViewer` diff-match extraction the chat surface uses, just tagged with a different `surface`.
 
-`surface` alone gates which units are visible; there is no separate "scope". The shortcut (`workspace.find-content`) resolves the surface from the focused zone and calls `openSearch(surface)`; when focus is already inside the pill and review is available, the same shortcut cycles surface between "chat" and "review" instead of reopening. Placeholder/aria: "Search chat…" / "Find in chat", "Search file…" / "Find in file", and "Search changes…" / "Find in changes".
+`surface` alone gates which units are visible; there is no separate "scope". The shortcut (`workspace.find-content`, in `use-workspace-content-shortcuts.ts`) resolves the surface from the focused zone and calls `openSearch(surface)`. `resolveContentSearchSurfaceForShortcut` prefers an ancestor match (`[data-file-viewer-frame]` -> `file`, `[data-git-review-document]` -> `review`) before falling back to focus zone; outside those, chat is the default and terminal focus is a no-op.
 
-The pill is a single component mounted once at the shell level (`StandardWorkspaceShell`), fixed to the top-right, positioned to clear the fixed header/tab chrome band (`top-[calc(var(--tab-system-height)+8px)]`). There is no per-surface vertical offset anymore, since there is only one mount shared by all three surfaces.
+When focus is already inside the pill (`[data-content-search-overlay]`), the same shortcut does not reopen: on `file` it always reselects/refocuses the input and never cycles away, since file search must not silently switch surfaces; on `chat`/`review` it cycles between those two when review is available, otherwise it just refocuses. Placeholder/aria: "Search chat…" / "Find in chat", "Search file…" / "Find in file", and "Search changes…" / "Find in changes".
+
+The pill (`ContentSearchPill`) is a single component mounted once at the shell level (`StandardWorkspaceShell`), pinned near the shell's top-right corner (`absolute top-2 right-4`, `data-content-search-overlay`). One mount serves all three surfaces; there is no separate per-surface mount or file-search modal. The ruled placement contract is: chat sits 8px below the 46px shell tab strip; file and review sit 8px below their own 36px owned header (90px from the shell top); every surface keeps 16px clearance from its content edge. Confirm the current pixel offsets in `StandardWorkspaceShell`/`ContentSearchPill` before depending on an exact value in new code or tests.
 
 ## Availability
 
 Chat is always available. File and review availability are tracked in the store (`surfaceAvailability: { file, review }`) and toggled by each surface's host component on mount/unmount: `FileViewerFrame` (`apps/packages/product-client/src/components/workspace/files/viewer/FileViewerFrame.tsx`) sets `file`, `GitPanelReviewBody` (`apps/packages/product-client/src/components/workspace/git/GitPanelReviewBody.tsx`) sets `review`. `setSurfaceAvailability` auto-closes the pill when the surface that just went unavailable was the open one: a search whose host unmounted (e.g. the git pane closed) is meaningless and would otherwise leave a stale pill floating over unrelated content.
 
-The Chat | Diff toggle (a `SegmentedControl` in `ContentSearchPill`) renders only when `surfaceAvailability.review` is true. File surface and review availability are mutually exclusive in practice: review availability implies the git pane is the active right-panel tab, and the file viewer occupies that same tab slot.
+The Chat | Diff toggle (a `SegmentedControl` in `ContentSearchPill`) renders only when `surfaceAvailability.review` is true and the current surface is not `file`. File surface and review availability are mutually exclusive in practice: review availability implies the git pane is the active right-panel tab, and the file viewer occupies that same tab slot.
+
+## File: eligibility, rendered-to-source transition, and exclusion
+
+File content search is eligible only for an active `file` target (never `fileDiff`) whose settled read is text and not too large (`FileEditorView`'s `canFindInFile = !activeDiffTarget && read?.isText && !read.tooLarge`). Match-unit registration itself is owned by the mounted `FileSourceView`, which registers with `surface: "file"`.
+
+Rendered Markdown stays display-only until search is opened: the closed-to-open transition (Find button, `Cmd/Ctrl+F`, or programmatic `openSearch("file")`) does a one-way switch from rendered to source mode (`setTargetMode(targetKey, "source")`) before search focuses, and does not oscillate the mode again on query changes or next/previous navigation.
+
+`FileDiffPane` is explicitly excluded: it registers no content-search unit, a `fileDiff` target never reports `canFindInFile`, and the file surface shortcut/Find button do not apply to it. Diff rendering does not implement the file-search owner contract; do not read the diff viewers as supporting file search.
+
+## Focus capture and restoration
+
+`ContentSearchPill` captures `document.activeElement` on every closed-to-open transition, along with the surface open at capture time. Escape, the close button, or the pill unmounting while open restores that captured element via `restoreFocusTo` when it is still connected, visible (not `hidden`/`display:none`/`visibility:hidden`), and enabled — otherwise it falls back to the registered surface owner root (`[data-chat-transcript-root='true']` for chat, `[data-file-viewer-frame]` for file, `[data-git-review-document]` for review), and if that owner is also gone, to the shell root (`[data-workspace-shell]`).
+
+`content-search-store.ts`'s `closeSearch({ restoreFocus?: boolean })` defaults `restoreFocus` to `true` and stores no DOM node; passing `false` increments a session-only `closeSuppressRestoreToken` instead. The pill compares that token across the open-to-closed transition and skips restoration for exactly that one close when it changed — Escape, the close button, and an unprompted surface/target unmount all keep the default `true` and do restore. This suppression exists so a target activation that closes a stale search (old file's still-mounted Find control, a switched tab/tree row) cannot steal focus back from wherever the new activation is placing it.
 
 ## Store model
 
