@@ -123,6 +123,10 @@ export class TranscriptFramePipeline {
   private glueStartedAt = 0;
   private glueLastHeight = -1;
   private glueQuietFrames = 0;
+  // Ensures delivered during a running pass are owed one coalesced trailing
+  // pass; requests already present when a pass starts are satisfied by it.
+  private glueDemandGeneration = 0;
+  private glueServedGeneration = 0;
   // PRO-168 (rung 12): the motion writer's own continuation handle, separate
   // from frameHandle/glueHandle so it never contends with either's guard
   // bookkeeping. Only ever armed when the writer reports pending motion.
@@ -253,12 +257,14 @@ export class TranscriptFramePipeline {
     this.glueStartedAt = this.now();
     this.glueLastHeight = -1;
     this.glueQuietFrames = 0;
+    this.glueServedGeneration = this.glueDemandGeneration;
     this.glueHandle = this.raf(this.glueTick);
   }
 
   /** Preserve an active glue window, or start one when no window is scheduled. */
   ensureGlue(): void {
     if (this.glueActive) {
+      this.glueDemandGeneration += 1;
       return;
     }
     this.beginGlue();
@@ -275,7 +281,9 @@ export class TranscriptFramePipeline {
       this.continueMotionIfPending();
       return;
     }
+    const passGeneration = this.glueDemandGeneration;
     writer.runFramePass();
+    this.glueServedGeneration = passGeneration;
 
     const height = writer.measureContentHeight();
     if (height === this.glueLastHeight) {
@@ -286,7 +294,11 @@ export class TranscriptFramePipeline {
     }
 
     const capElapsed = this.now() - this.glueStartedAt >= TRANSCRIPT_GLUE_MAX_MS;
-    if (this.glueQuietFrames >= GLUE_SETTLE_QUIET_FRAMES || capElapsed) {
+    const trailingEnsurePending = this.glueServedGeneration !== this.glueDemandGeneration;
+    if (
+      (this.glueQuietFrames >= GLUE_SETTLE_QUIET_FRAMES || capElapsed)
+      && !trailingEnsurePending
+    ) {
       this.glueActive = false;
       // PRO-168 (rung 12): the height-quiet/hard-cap glue terminator is about
       // CONTENT settling, not the motion writer's own catch-up distance — an
@@ -323,6 +335,7 @@ export class TranscriptFramePipeline {
       this.caf(this.motionHandle);
     }
     this.motionHandle = null;
+    this.glueServedGeneration = this.glueDemandGeneration;
   }
 
   /** Whether a forced-glue window is currently running (for tests/diagnostics). */
