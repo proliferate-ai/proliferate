@@ -55,6 +55,9 @@ export function VirtualizedTranscriptRowList({
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const pendingPrependAnchorRef = useRef<HistoryPrependScrollAnchor | null>(null);
+  // Whether the CURRENT pending anchor's request has been observed loading;
+  // "not loading, rows unchanged" only proves "resolved with no rows" after that.
+  const pendingPrependLoadingSeenRef = useRef(false);
   const lastOlderHistoryCursorRequestRef = useRef<number | null>(null);
   const lastPrefetchDecisionLogRef = useRef<string | null>(null);
   const lastBlankReportSignatureRef = useRef<string | null>(null);
@@ -224,6 +227,7 @@ export function VirtualizedTranscriptRowList({
       && pendingPrependAnchorRef.current === null
     ) {
       lastOlderHistoryCursorRequestRef.current = olderHistoryCursor;
+      pendingPrependLoadingSeenRef.current = false;
       pendingPrependAnchorRef.current = {
         cursor: olderHistoryCursor,
         rowCount: rows.length,
@@ -257,6 +261,7 @@ export function VirtualizedTranscriptRowList({
   useLayoutEffect(() => {
     lastBlankReportSignatureRef.current = null;
     pendingPrependAnchorRef.current = null;
+    pendingPrependLoadingSeenRef.current = false;
     lastOlderHistoryCursorRequestRef.current = null;
     lastPrefetchDecisionLogRef.current = null;
     resetForSession(buildSessionRestorePlan()); // FR-2: restore finalized / bottom-pin streaming.
@@ -297,11 +302,24 @@ export function VirtualizedTranscriptRowList({
 
   useEffect(() => {
     const anchor = pendingPrependAnchorRef.current;
-    if (!isLoadingOlderHistory && anchor?.rowCount === rows.length) {
-      pendingPrependAnchorRef.current = null;
-    }
     if (isLoadingOlderHistory) {
+      if (anchor) {
+        pendingPrependLoadingSeenRef.current = true;
+      }
       return;
+    }
+    // Release a stale anchor ONLY once its request demonstrably resolved
+    // without a prepend: its loading window closed with rows unchanged, or the
+    // cursor moved past the one it captured. A merely in-flight request looks
+    // identical on "not loading, rows unchanged" alone; discarding it on an
+    // unrelated commit in that gap loses the prepend seat entirely.
+    if (
+      anchor
+      && anchor.rowCount === rows.length
+      && (pendingPrependLoadingSeenRef.current || anchor.cursor !== olderHistoryCursor)
+    ) {
+      pendingPrependAnchorRef.current = null;
+      pendingPrependLoadingSeenRef.current = false;
     }
 
     const frame = window.requestAnimationFrame(() => {
