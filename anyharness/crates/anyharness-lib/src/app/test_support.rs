@@ -1,10 +1,12 @@
 use std::ffi::OsString;
+use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::domains::agents::launch_options::{
     HarnessLaunchDefaults, HarnessLaunchModel, HarnessLaunchOptions,
     HarnessLaunchOptionsService,
 };
+use crate::domains::agents::route_auth::{apply_state_file, AgentAuthState};
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::live_ports::SessionAttachmentSource;
 use crate::domains::sessions::mcp_bindings::crypto::DATA_KEY_ENV_VAR;
@@ -69,6 +71,26 @@ pub(crate) fn seed_scripted_claude_launch_options(service: &HarnessLaunchOptions
             "2026-08-10T23:58:01Z",
         )
         .expect("record scripted Claude launch-option observation");
+}
+
+/// Install the product-owned API-key route used by scripted Claude fixtures.
+/// Capability-affecting credentials must never ride the global/workspace env
+/// that launch admission deliberately rejects.
+pub(crate) fn install_scripted_claude_auth(runtime_home: &Path) {
+    let state: AgentAuthState = serde_json::from_value(serde_json::json!({
+        "version": 2,
+        "revision": 1,
+        "harnesses": [{
+            "harness_kind": "claude",
+            "sources": [{
+                "kind": "api_key",
+                "env_var_name": "ANTHROPIC_API_KEY",
+                "value": "test-not-a-real-key"
+            }]
+        }]
+    }))
+    .expect("scripted Claude agent-auth state");
+    apply_state_file(runtime_home, &state).expect("install scripted Claude agent-auth state");
 }
 
 struct TestAgentProductContextResolver;

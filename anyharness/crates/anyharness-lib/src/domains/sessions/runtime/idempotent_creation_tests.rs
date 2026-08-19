@@ -20,9 +20,9 @@ use crate::persistence::Db;
 // The `ANYHARNESS_CLAUDE_AGENT_PROGRAM` override (like the scripted-agent
 // suite in `scripted-agent suites`) makes the agent-process
 // artifact resolve as installed without faking the managed npm install
-// layout; `test_state`'s `secrets/global.env` gives claude's required
-// anthropic slot a credential, so `credential_state` is `Ready` and the
-// native-artifact check in `compute_readiness` is never reached.
+// layout; `test_state`'s product-owned API-key route gives Claude its required
+// credential, so `credential_state` is `Ready` and the native-artifact check
+// in `compute_readiness` is never reached.
 struct AgentProgramGuard {
     previous: Option<std::ffi::OsString>,
 }
@@ -175,16 +175,9 @@ fn test_state(label: &str) -> AppState {
     ));
     let workspace_path = runtime_home.join("workspace");
     std::fs::create_dir_all(&workspace_path).expect("create workspace directory");
-    // Give claude's required `anthropic` auth slot a credential, and a real
-    // (stub) executable for the `ANYHARNESS_CLAUDE_AGENT_PROGRAM` override,
-    // so `credential_state`/`agent_process.installed` both resolve `Ready`
-    // (Scope C's readiness check).
-    std::fs::create_dir_all(runtime_home.join("secrets")).expect("create secrets directory");
-    std::fs::write(
-        runtime_home.join("secrets/global.env"),
-        "ANTHROPIC_API_KEY=test-not-a-real-key\n",
-    )
-    .expect("write test credential");
+    // Give Claude a product-owned API-key route and a real (stub) executable
+    // for the program override, so credential and artifact readiness agree.
+    test_support::install_scripted_claude_auth(&runtime_home);
     let agent_program = runtime_home.join("claude-agent-stub");
     std::fs::write(&agent_program, "#!/bin/sh\nexit 0\n").expect("write agent stub");
     crate::integrations::agent_cli::executable::make_executable(&agent_program)

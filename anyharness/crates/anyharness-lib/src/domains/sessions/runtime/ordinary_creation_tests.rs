@@ -37,12 +37,7 @@ fn test_state(label: &str, program: &str) -> (AppState, AgentProgramGuard) {
     ));
     let workspace_path = runtime_home.join("workspace");
     std::fs::create_dir_all(&workspace_path).unwrap();
-    std::fs::create_dir_all(runtime_home.join("secrets")).unwrap();
-    std::fs::write(
-        runtime_home.join("secrets/global.env"),
-        "ANTHROPIC_API_KEY=test-not-a-real-key\n",
-    )
-    .unwrap();
+    test_support::install_scripted_claude_auth(&runtime_home);
     let agent_program = runtime_home.join("claude-agent-stub");
     std::fs::write(&agent_program, program).unwrap();
     crate::integrations::agent_cli::executable::make_executable(&agent_program).unwrap();

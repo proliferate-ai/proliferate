@@ -392,12 +392,7 @@ pub(crate) fn install_scripted_agent_env(script: &ScriptedAgent) -> (EnvVarGuard
 }
 
 pub(crate) fn write_scripted_agent(runtime_home: &Path) -> ScriptedAgent {
-    std::fs::create_dir_all(runtime_home.join("secrets")).expect("secrets directory");
-    std::fs::write(
-        runtime_home.join("secrets/global.env"),
-        "ANTHROPIC_API_KEY=test-not-a-real-key\n",
-    )
-    .expect("test credentials");
+    test_support::install_scripted_claude_auth(runtime_home);
     let native = runtime_home.join("agents/claude/native/claude");
     std::fs::create_dir_all(native.parent().expect("native parent")).expect("native directory");
     std::fs::write(&native, "#!/bin/sh\nexit 0\n").expect("native stub");
