@@ -189,7 +189,7 @@ export function useTranscriptStickToBottom({
       && interactionNow() < compensationDeadlineRef.current
     );
     if (hasLiveNonCancelableCompensation) {
-      pipelineRef.current.beginGlue();
+      pipelineRef.current.ensureGlue();
     }
 
     // Classification ladder. PRIMARY: a live ownership marker (queued, so a burst

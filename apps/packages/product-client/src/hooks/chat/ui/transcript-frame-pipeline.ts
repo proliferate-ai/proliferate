@@ -256,6 +256,14 @@ export class TranscriptFramePipeline {
     this.glueHandle = this.raf(this.glueTick);
   }
 
+  /** Preserve an active glue window, or start one when no window is scheduled. */
+  ensureGlue(): void {
+    if (this.glueActive) {
+      return;
+    }
+    this.beginGlue();
+  }
+
   private glueTick = (): void => {
     const writer = this.writer;
     if (writer == null || !writer.shouldContinueGlue()) {
