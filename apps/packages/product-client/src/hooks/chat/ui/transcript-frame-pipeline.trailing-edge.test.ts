@@ -56,6 +56,7 @@ describe("TranscriptFramePipeline trailing-edge ensure", () => {
             pipeline.ensureGlue();
           }
         }
+        return "settled";
       },
       measureContentHeight: () => 6_908,
       shouldContinueGlue: () => true,

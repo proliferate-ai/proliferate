@@ -5,12 +5,7 @@ import {
   type TranscriptFrameWriter,
 } from "#product/hooks/chat/ui/transcript-frame-pipeline";
 
-/**
- * Deterministic frame/clock harness. rAF callbacks are queued, not fired, until
- * a test explicitly flushes a frame; `now` advances only when a frame is
- * flushed. This lets the ordering / one-pass-per-frame / settle-cap invariants
- * be asserted without any real animation-frame timing.
- */
+/** Queued frame/clock harness for deterministic ordering and cap assertions. */
 class FakeFrames {
   time = 0;
   cancelled: number[] = [];
@@ -67,23 +62,20 @@ describe("TranscriptFramePipeline", () => {
       runFramePass: () => {
         events.push("snap");
         snappedToHeight = committedHeight;
+        return "settled";
       },
       measureContentHeight: () => committedHeight,
       shouldContinueGlue: () => true,
     };
     pipeline.setWriter(writer);
 
-    // Mutation source: the height grows, THEN the source requests a frame. The
-    // content ResizeObserver fires post-layout / pre-paint, so the snap must run
-    // synchronously in THIS frame — NOT deferred to the next rAF. Re-deferring
-    // (scheduling runFramePass inside the guard rAF) is the pinned-follow drift
-    // regression: it leaves the viewport a frame behind a growing stream and
-    // fails this assertion (and the Playwright pinned-follow gate).
+    // ResizeObserver reports committed layout, so snap synchronously before
+    // paint; deferring to rAF would leave pinned follow one frame behind.
     committedHeight = 420;
     events.push("mutate");
     pipeline.requestFrame();
 
-    // The snap already ran, in-line, against the committed height.
+    // The snap already ran inline against committed height.
     expect(events).toEqual(["mutate", "snap"]);
     expect(snappedToHeight).toBe(420);
 
@@ -99,6 +91,7 @@ describe("TranscriptFramePipeline", () => {
     pipeline.setWriter({
       runFramePass: () => {
         passes += 1;
+        return "settled";
       },
       measureContentHeight: () => 0,
       shouldContinueGlue: () => true,
@@ -135,6 +128,7 @@ describe("TranscriptFramePipeline", () => {
     pipeline.setWriter({
       runFramePass: () => {
         passes += 1;
+        return "settled";
       },
       measureContentHeight: () => heights[Math.min(frameIndex, heights.length - 1)],
       shouldContinueGlue: () => true,
@@ -148,8 +142,7 @@ describe("TranscriptFramePipeline", () => {
     }
 
     expect(pipeline.isGluing).toBe(false);
-    // Snapped on the growth frames plus the first quiet frame — a tight window,
-    // nowhere near the 20-frame ceiling. Never runs unbounded.
+    // Growth frames plus the first quiet frame; never the generous ceiling.
     expect(passes).toBeGreaterThan(0);
     expect(passes).toBeLessThanOrEqual(5);
     // Terminated on quiet, well before the time cap.
@@ -163,6 +156,7 @@ describe("TranscriptFramePipeline", () => {
     pipeline.setWriter({
       runFramePass: () => {
         passes += 1;
+        return "settled";
       },
       // Never stable: height changes every frame, so quiet never fires.
       measureContentHeight: () => (height += 1),
@@ -187,6 +181,7 @@ describe("TranscriptFramePipeline", () => {
     pipeline.setWriter({
       runFramePass: () => {
         passes += 1;
+        return "settled";
       },
       measureContentHeight: () => passes, // always changing → never quiet
       shouldContinueGlue: () => allowed,
@@ -208,6 +203,7 @@ describe("TranscriptFramePipeline", () => {
     pipeline.setWriter({
       runFramePass: () => {
         passes += 1;
+        return "settled";
       },
       measureContentHeight: () => passes,
       shouldContinueGlue: () => true,
@@ -237,6 +233,7 @@ describe("TranscriptFramePipeline", () => {
     pipeline.setWriter({
       runFramePass: () => {
         passes += 1;
+        return "settled";
       },
       measureContentHeight: () => 500, // immediately quiet after first frame
       shouldContinueGlue: () => true,
@@ -255,6 +252,7 @@ describe("TranscriptFramePipeline", () => {
     pipeline.setWriter({
       runFramePass: () => {
         passes += 1;
+        return "settled";
       },
       measureContentHeight: () => 500,
       shouldContinueGlue: () => true,
@@ -275,7 +273,7 @@ describe("TranscriptFramePipeline", () => {
   it("beginGlue still restarts a fresh owner window", () => {
     const { frames, pipeline } = makePipeline();
     pipeline.setWriter({
-      runFramePass: () => undefined,
+      runFramePass: () => "settled",
       measureContentHeight: () => 500,
       shouldContinueGlue: () => true,
     });
@@ -287,10 +285,7 @@ describe("TranscriptFramePipeline", () => {
     expect(frames.pending).toBe(1);
   });
 
-  // PRO-168 (rung 12, Q16): the eased-follow motion writer's continuation seam.
-  // The instant writer never implements `hasPendingMotion`, so these prove the
-  // seam is additive: absent it, existing behavior above is untouched (asserted
-  // by every prior test in this file, none of which define it).
+  // PRO-168 (rung 12, Q16): eased-follow's optional continuation seam.
   describe("hasPendingMotion continuation (PRO-168, rung 12)", () => {
     it("requestFrame schedules ONE more frame per pass while motion is pending, then stops", () => {
       const { frames, pipeline } = makePipeline();
@@ -299,6 +294,7 @@ describe("TranscriptFramePipeline", () => {
       pipeline.setWriter({
         runFramePass: () => {
           passes += 1;
+          return "settled";
         },
         measureContentHeight: () => 0,
         shouldContinueGlue: () => true,
@@ -327,6 +323,7 @@ describe("TranscriptFramePipeline", () => {
       pipeline.setWriter({
         runFramePass: () => {
           passes += 1;
+          return "settled";
         },
         measureContentHeight: () => 0,
         shouldContinueGlue: () => true,
@@ -348,6 +345,7 @@ describe("TranscriptFramePipeline", () => {
       pipeline.setWriter({
         runFramePass: () => {
           passes += 1;
+          return "settled";
         },
         measureContentHeight: () => 500,
         shouldContinueGlue: () => true,
@@ -377,6 +375,7 @@ describe("TranscriptFramePipeline", () => {
       pipeline.setWriter({
         runFramePass: () => {
           passes += 1;
+          return "settled";
         },
         measureContentHeight: () => 0,
         shouldContinueGlue: () => true,
