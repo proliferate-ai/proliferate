@@ -58,6 +58,11 @@ const DESTINATIONS: PlaygroundDestination[] = [
     path: "/playground/crash-recovery",
     description: "Deterministic render-crash states for the app error boundary.",
   },
+  {
+    title: "Home suggestions",
+    path: "/playground/home-suggestions",
+    description: "Post-onboarding task suggestions with the real Home rich-text editor.",
+  },
 ];
 
 /** Dev-only front door: every playground destination, one row each. */

@@ -17,6 +17,12 @@ const mocks = vi.hoisted(() => ({
   readyAgents: [{ kind: "claude" }, { kind: "codex" }],
   agentsLoading: false,
   isReconciling: true,
+  repositoriesLoading: false,
+  repoConfigsData: { repositories: [] } as { repositories: never[] } | undefined,
+  repoConfigsPending: false,
+  cloudActive: false,
+  cloudSignInChecking: false,
+  adoptedHarnessKinds: [] as string[] | null,
   readIsStaleCallbacks: [] as Array<() => boolean>,
   navigate: vi.fn(),
   openAddRepoFlow: vi.fn(),
@@ -28,8 +34,8 @@ vi.mock("react-router-dom", () => ({
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
   useRepositories: () => ({
-    data: { repositories: [] },
-    isPending: false,
+    data: mocks.repoConfigsData,
+    isPending: mocks.repoConfigsPending,
   }),
 }));
 
@@ -50,7 +56,10 @@ vi.mock("#product/hooks/agents/lifecycle/use-auth-setup-onboarding-evidence", ()
 }));
 
 vi.mock("#product/hooks/cloud/derived/use-cloud-availability-state", () => ({
-  useCloudAvailabilityState: () => ({ cloudActive: false }),
+  useCloudAvailabilityState: () => ({
+    cloudActive: mocks.cloudActive,
+    cloudSignInChecking: mocks.cloudSignInChecking,
+  }),
 }));
 
 vi.mock("#product/hooks/workspaces/workflows/use-add-repo", () => ({
@@ -66,8 +75,14 @@ vi.mock("#product/hooks/workspaces/derived/use-standard-repo-projection", () => 
   useStandardRepoProjection: () => ({
     localWorkspaces: [],
     repoRoots: [],
-    isLoading: false,
+    isLoading: mocks.repositoriesLoading,
   }),
+}));
+
+vi.mock("#product/stores/agents/auth-setup-onboarding-store", () => ({
+  useAuthSetupOnboardingStore: (
+    selector: (state: { adoptedHarnessKinds: string[] | null }) => unknown,
+  ) => selector({ adoptedHarnessKinds: mocks.adoptedHarnessKinds }),
 }));
 
 vi.mock("#product/stores/preferences/user-preferences-store", () => ({
@@ -157,6 +172,12 @@ describe("useHomeScreen model-probe dismissal hydration", () => {
     mocks.readyAgents = [{ kind: "claude" }, { kind: "codex" }];
     mocks.agentsLoading = false;
     mocks.isReconciling = true;
+    mocks.repositoriesLoading = false;
+    mocks.repoConfigsData = { repositories: [] };
+    mocks.repoConfigsPending = false;
+    mocks.cloudActive = false;
+    mocks.cloudSignInChecking = false;
+    mocks.adoptedHarnessKinds = [];
     mocks.readIsStaleCallbacks.length = 0;
     mocks.storageContext = null;
   });
@@ -178,6 +199,42 @@ describe("useHomeScreen model-probe dismissal hydration", () => {
 
     await resolveDeferredRead(read, "1");
 
+    expect(result.current.modelProbeInputs).toEqual({
+      dismissed: true,
+      agentsLoading: true,
+      isReconciling: true,
+      harnessKinds: ["claude", "codex"],
+    });
+  });
+
+  it("returns the readiness facts it already owns without changing probe inputs", async () => {
+    mocks.agentsLoading = true;
+    mocks.isReconciling = true;
+    mocks.repositoriesLoading = true;
+    mocks.repoConfigsData = undefined;
+    mocks.repoConfigsPending = true;
+    mocks.cloudActive = true;
+    mocks.cloudSignInChecking = true;
+    mocks.adoptedHarnessKinds = null;
+    installStorage({ getItem: async () => "1" });
+
+    const { result } = renderHook(() => useHomeScreen());
+
+    expect(result.current.modelProbeDismissalState).toBe("loading");
+    expect(result.current.modelProbeInputs).toBeUndefined();
+    expect(result.current).toMatchObject({
+      repositoriesLoading: true,
+      agentsLoading: true,
+      isReconciling: true,
+      cloudRepoConfigsLoading: true,
+      cloudSignInChecking: true,
+      cloudActive: true,
+      adoptedHarnessKinds: null,
+    });
+
+    await waitFor(() => {
+      expect(result.current.modelProbeDismissalState).toBe("dismissed");
+    });
     expect(result.current.modelProbeInputs).toEqual({
       dismissed: true,
       agentsLoading: true,

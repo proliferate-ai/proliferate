@@ -200,6 +200,17 @@ never collapsed. A composer kept mounted behind an `aria-hidden` route host
 (the settings overlay) is never focused. Hosted Web applies no activation
 restore.
 
+After every Home onboarding and launch-readiness source has settled, the Home
+card slot may show task suggestions. A suggestion is a user command, not a
+submit: `HomeNextScreen` asks the draft-owning `HomeComposerForm` to replace
+its local draft, direct-command focus the shared rich-text editor, and collapse
+the caret at the end. The private `HomeComposerCommandEditor` handle owns the
+Lexical selection command so neither editor state nor same-screen draft state
+is lifted to the screen or routed through the cross-route draft-handoff store.
+Repeated selection of the already-current prompt remains a command and still
+restores focus and the end caret; attachments and launch selections are left
+unchanged.
+
 ## 1.1 Model Selector Semantics
 
 The composer model selector presents the model-catalog contract from

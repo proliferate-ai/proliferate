@@ -221,3 +221,54 @@ describe("HomeOnboardingCards evidence-bound card (rung 7)", () => {
     expect(container.innerHTML).toBe("");
   });
 });
+
+describe("HomeOnboardingCards actionable cards", () => {
+  it("selects an ordinary onboarding card through its native primary button", () => {
+    const onboardingCard = card("agent-defaults");
+    const onSelect = vi.fn();
+    renderCards({ cards: [onboardingCard], onSelect });
+
+    const primary = screen.getByRole("button", { name: onboardingCard.title });
+    primary.click();
+
+    expect(primary.getAttribute("type")).toBe("button");
+    expect(onSelect).toHaveBeenCalledWith(onboardingCard);
+  });
+
+  it("keeps the add-repository primary action disabled while loading", () => {
+    const onboardingCard = card("add-repository");
+    const onSelect = vi.fn();
+    renderCards({
+      cards: [onboardingCard],
+      isAddingRepo: true,
+      onSelect,
+    });
+
+    const primary = screen.getByRole("button", { name: onboardingCard.title });
+    expect((primary as HTMLButtonElement).disabled).toBe(true);
+    primary.click();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("keeps model-probe primary and dismiss actions independent with accessories present", () => {
+    const onOpenAgents = vi.fn();
+    const onDismissModelProbe = vi.fn();
+    renderCards({
+      modelProbe: {
+        kind: "done",
+        modelCount: 2,
+        harnessKinds: ["claude", "codex"],
+      },
+      onOpenAgents,
+      onDismissModelProbe,
+    });
+
+    screen.getByRole("button", { name: "Dismiss: 2 models available" }).click();
+    expect(onDismissModelProbe).toHaveBeenCalledTimes(1);
+    expect(onOpenAgents).not.toHaveBeenCalled();
+
+    screen.getByRole("button", { name: "2 models available" }).click();
+    expect(onOpenAgents).toHaveBeenCalledTimes(1);
+    expect(onDismissModelProbe).toHaveBeenCalledTimes(1);
+  });
+});

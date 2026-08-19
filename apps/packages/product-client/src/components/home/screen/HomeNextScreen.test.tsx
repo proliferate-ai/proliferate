@@ -94,9 +94,9 @@ vi.mock("#product/hooks/home/workflows/use-home-next-launch", () => ({
 
 vi.mock("#product/hooks/home/facade/use-home-screen", () => ({
   useHomeScreen: () => ({
-    onboardingCards: screenMocks.onboardingCards,
-    isAddingRepo: false,
-    handleHomeAction: screenMocks.handleHomeAction,
+    onboardingCards: screenMocks.onboardingCards, authSetupStep: "hidden", authSetupEvidence: null, repositoriesLoading: false, agentsLoading: false, isReconciling: false,
+    cloudRepoConfigsLoading: false, cloudSignInChecking: false, cloudActive: false, adoptedHarnessKinds: null, modelProbeDismissalState: "dismissed",
+    modelProbeInputs: { dismissed: true, agentsLoading: false, isReconciling: false, harnessKinds: [] }, isAddingRepo: false, handleHomeAction: screenMocks.handleHomeAction, dismissModelProbeCard: vi.fn(),
   }),
 }));
 

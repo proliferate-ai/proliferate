@@ -1,6 +1,13 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
-import type { LexicalEditor } from "lexical";
+import { $getRoot, type LexicalEditor } from "lexical";
 import type { AvailableSessionCommand } from "@anyharness/sdk";
 import { ComposerRichTextEditor } from "#product/components/workspace/chat/input/ComposerRichTextEditor";
 import { ComposerSlashCommandSearch } from "#product/components/workspace/chat/input/ComposerSlashCommandSearch";
@@ -35,6 +42,10 @@ interface HomeComposerCommandEditorProps {
   overlayHostElement: HTMLElement | null;
 }
 
+interface HomeComposerCommandEditorHandle {
+  placeCaretAtEnd: () => void;
+}
+
 /**
  * The home composer's counterpart of the workspace `ComposerCommandEditor`:
  * the same slash-command menu over the same rich-text editor, fed by the
@@ -42,7 +53,10 @@ interface HomeComposerCommandEditorProps {
  * (PRO-228). File mentions are deliberately absent — there is no workspace to
  * search before the launch creates one.
  */
-export function HomeComposerCommandEditor({
+export const HomeComposerCommandEditor = forwardRef<
+  HomeComposerCommandEditorHandle,
+  HomeComposerCommandEditorProps
+>(function HomeComposerCommandEditor({
   value,
   snapshot,
   onChange,
@@ -52,8 +66,17 @@ export function HomeComposerCommandEditor({
   placeholder,
   availableCommands,
   overlayHostElement,
-}: HomeComposerCommandEditorProps) {
+}, ref) {
   const editorRef = useRef<LexicalEditor | null>(null);
+  useImperativeHandle(ref, () => ({
+    placeCaretAtEnd() {
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.update(() => {
+        $getRoot().selectEnd();
+      }, { discrete: true });
+    },
+  }), []);
   const commandTriggerRef = useRef<ComposerMenuTrigger | null>(null);
   const [editorContext, setEditorContext] = useState<ComposerEditorContext>({
     plainText: value,
@@ -182,4 +205,4 @@ export function HomeComposerCommandEditor({
       />
     </>
   );
-}
+});

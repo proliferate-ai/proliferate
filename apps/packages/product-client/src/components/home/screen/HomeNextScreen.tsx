@@ -1,6 +1,10 @@
-import { useRef, useState } from "react";
-import { HomeComposerForm } from "#product/components/home/screen/HomeComposerForm";
+import { useCallback, useRef, useState } from "react";
+import {
+  HomeComposerForm,
+  type HomeComposerFormHandle,
+} from "#product/components/home/screen/HomeComposerForm";
 import { HomeOnboardingCards } from "#product/components/home/screen/HomeOnboardingCards";
+import { HomeSuggestionCards } from "#product/components/home/screen/HomeSuggestionCards";
 import { HomeProjectMenu } from "#product/components/home/screen/HomeProjectMenu";
 import { HomeTargetPicker } from "#product/components/home/screen/HomeTargetPicker";
 import {
@@ -25,7 +29,10 @@ import {
   buildHomeSessionConfigControls,
 } from "#product/lib/domain/home/home-composer-controls";
 import { type HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
-import { resolveHomeModelProbeCardState } from "#product/lib/domain/home/home-screen";
+import {
+  resolveHomeModelProbeCardState,
+  shouldShowHomeSuggestions,
+} from "#product/lib/domain/home/home-screen";
 import { resolveHomeTargetLaunchKindForRepository } from "#product/lib/domain/home/home-target-picker";
 
 export function HomeNextScreen() {
@@ -42,12 +49,24 @@ export function HomeNextScreen() {
     useState<HomeNextModelSelection | null>(null);
   const [modeOverrideId, setModeOverrideId] = useState<string | null>(null);
   const [launchControlOverrides, setLaunchControlOverrides] = useState<Record<string, string>>({});
+  const composerRef = useRef<HomeComposerFormHandle>(null);
+  const handleSuggestionSelect = useCallback((prompt: string) => {
+    composerRef.current?.replaceDraftAndFocus(prompt);
+  }, []);
   const {
     onboardingCards,
     isAddingRepo,
     handleHomeAction,
     authSetupStep,
     authSetupEvidence,
+    repositoriesLoading,
+    agentsLoading,
+    isReconciling,
+    cloudRepoConfigsLoading,
+    cloudSignInChecking,
+    cloudActive,
+    adoptedHarnessKinds,
+    modelProbeDismissalState,
     modelProbeInputs,
     dismissModelProbeCard,
   } = useHomeScreen();
@@ -135,6 +154,22 @@ export function HomeNextScreen() {
     || authSetupStep === "settingUp"
     || (authSetupEvidence !== undefined && authSetupEvidence !== null)
     || (modelProbeState !== undefined && modelProbeState.kind !== "hidden");
+  const homeSuggestionsVisible = modelProbeState !== undefined
+    && shouldShowHomeSuggestions({
+      repositoriesLoading,
+      agentsLoading,
+      isReconciling,
+      cloudRepoConfigsLoading,
+      cloudSignInChecking,
+      cloudActive,
+      adoptedHarnessKinds,
+      onboardingCards,
+      authSetupStep,
+      authSetupEvidence,
+      modelProbeDismissalState,
+      modelProbeCardState: modelProbeState,
+      modelAvailabilityState: homeNext.modelAvailabilityState,
+    });
   const modelAvailabilityNotice =
     homeNext.modelAvailabilityState === "no_launchable_model"
       ? {
@@ -223,23 +258,29 @@ export function HomeNextScreen() {
               </h1>
             </div>
 
-            {homeOnboardingVisible ? (
+            {homeOnboardingVisible || homeSuggestionsVisible ? (
               <div
                 className="absolute inset-x-[29px] top-full mt-8"
-                data-home-onboarding-region
+                data-home-card-region
+                data-home-onboarding-region={homeOnboardingVisible ? true : undefined}
+                data-home-suggestions-region={homeSuggestionsVisible ? true : undefined}
               >
-                <DebugProfiler id="home-onboarding">
-                  <HomeOnboardingCards
-                    cards={onboardingCards}
-                    isAddingRepo={isAddingRepo}
-                    onSelect={(card) => handleHomeAction(card.id)}
-                    authSetup={authSetupStep}
-                    authSetupEvidence={authSetupEvidence}
-                    modelProbe={modelProbeState}
-                    onOpenAgents={() => handleHomeAction("agent-settings")}
-                    onDismissModelProbe={dismissModelProbeCard}
-                  />
-                </DebugProfiler>
+                {homeOnboardingVisible ? (
+                  <DebugProfiler id="home-onboarding">
+                    <HomeOnboardingCards
+                      cards={onboardingCards}
+                      isAddingRepo={isAddingRepo}
+                      onSelect={(card) => handleHomeAction(card.id)}
+                      authSetup={authSetupStep}
+                      authSetupEvidence={authSetupEvidence}
+                      modelProbe={modelProbeState}
+                      onOpenAgents={() => handleHomeAction("agent-settings")}
+                      onDismissModelProbe={dismissModelProbeCard}
+                    />
+                  </DebugProfiler>
+                ) : (
+                  <HomeSuggestionCards onSelect={handleSuggestionSelect} />
+                )}
               </div>
             ) : null}
           </div>
@@ -253,6 +294,7 @@ export function HomeNextScreen() {
         >
           <div className="mx-auto w-full max-w-transcript-thread">
             <HomeComposerForm
+              ref={composerRef}
               targetDisabledReason={homeNext.targetDisabledReason}
               modelAvailabilityState={homeNext.modelAvailabilityState}
               canLaunchTarget={homeNext.canLaunchTarget}

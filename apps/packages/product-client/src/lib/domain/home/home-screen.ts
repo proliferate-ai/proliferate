@@ -1,5 +1,8 @@
 import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
 import { HOME_SCREEN_LABELS } from "#product/copy/home/home-screen-copy";
+import type { AuthSetupEvidence } from "#product/lib/domain/agents/auth-setup-badges";
+import type { AuthSetupStepState } from "#product/lib/domain/agents/auth-onboarding";
+import type { ModelAvailabilityState } from "#product/lib/domain/home/home-next-launch";
 import { cloudRepositoryKey } from "#product/lib/domain/settings/repositories";
 
 export type HomeActionId =
@@ -64,6 +67,52 @@ export function resolveHomeModelProbeCardState(args: {
     return { kind: "hidden" };
   }
   return { kind: "none" };
+}
+
+/**
+ * Suggestions occupy Home's readiness slot only after every source that can
+ * produce an onboarding or launch-blocking surface has settled.
+ */
+export function shouldShowHomeSuggestions(args: {
+  repositoriesLoading: boolean;
+  agentsLoading: boolean;
+  isReconciling: boolean;
+  cloudRepoConfigsLoading: boolean;
+  cloudSignInChecking: boolean;
+  cloudActive: boolean;
+  adoptedHarnessKinds: readonly string[] | null;
+  onboardingCards: readonly HomeOnboardingCardModel[];
+  authSetupStep: AuthSetupStepState;
+  authSetupEvidence: AuthSetupEvidence | null;
+  modelProbeDismissalState: "loading" | "visible" | "dismissed";
+  modelProbeCardState: HomeModelProbeCardState;
+  modelAvailabilityState: ModelAvailabilityState;
+}): boolean {
+  const hasValidAdoptionInput =
+    args.adoptedHarnessKinds === null || Array.isArray(args.adoptedHarnessKinds);
+  const authDecisionSettled =
+    args.cloudSignInChecking === false
+    && (args.cloudActive === false
+      || (args.cloudActive === true && Array.isArray(args.adoptedHarnessKinds)));
+  const authSetupSettled =
+    args.authSetupStep === "hidden"
+    || args.authSetupStep === "applied"
+    || args.authSetupStep === "advanced";
+
+  return args.repositoriesLoading === false
+    && args.agentsLoading === false
+    && args.isReconciling === false
+    && args.cloudRepoConfigsLoading === false
+    && (args.cloudActive === true || args.cloudActive === false)
+    && hasValidAdoptionInput
+    && authDecisionSettled
+    && Array.isArray(args.onboardingCards)
+    && args.onboardingCards.length === 0
+    && authSetupSettled
+    && args.authSetupEvidence === null
+    && args.modelProbeDismissalState === "dismissed"
+    && args.modelProbeCardState?.kind === "hidden"
+    && args.modelAvailabilityState === "launchable";
 }
 
 export interface HomeRepositoryIdentity {

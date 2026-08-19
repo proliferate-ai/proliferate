@@ -24,3 +24,10 @@ export const HOME_SCREEN_LABELS = {
   modelProbeNoneTitle: "Connect a provider to get started",
   modelProbeNoneDescription: "Add an agent provider to see your available models.",
 } as const;
+
+export const HOME_SUGGESTION_PROMPTS = [
+  "Explain how the codebase works",
+  "Build a new feature or tool",
+  "Review changes and suggest fixes",
+  "Fix failing tests and issues",
+] as const;
