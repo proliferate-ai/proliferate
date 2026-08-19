@@ -484,6 +484,23 @@ fn unsafe_public_paths_are_rejected_before_filesystem_access() {
 }
 
 #[test]
+fn git_named_workspace_ancestor_does_not_poison_contained_paths() {
+    let outer = std::env::temp_dir().join(format!(
+        "anyharness-files-git-ancestor-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let workspace = outer.join(".git/workspace");
+    std::fs::create_dir_all(&workspace).expect("seed workspace under .git-named ancestor");
+    std::fs::write(workspace.join("inside.txt"), "inside").expect("seed contained file");
+
+    let stat = WorkspaceFilesService::stat_file(&workspace, "inside.txt")
+        .expect("contained path remains valid");
+    assert_eq!(stat.kind, WorkspaceFileKind::File);
+
+    let _ = std::fs::remove_dir_all(outer);
+}
+
+#[test]
 fn io_classifier_keeps_missing_permission_and_unexpected_distinct() {
     let missing = FileServiceError::from_io(
         std::io::Error::from(std::io::ErrorKind::NotFound),
@@ -502,6 +519,15 @@ fn io_classifier_keeps_missing_permission_and_unexpected_distinct() {
     assert!(matches!(denied, FileServiceError::PermissionDenied));
     assert!(matches!(unexpected, FileServiceError::Io));
     assert_eq!(unexpected.to_string(), "file operation failed");
+
+    assert!(matches!(
+        FileServiceError::from_safety(SafetyError::PermissionDenied, "secret.txt"),
+        FileServiceError::PermissionDenied
+    ));
+    assert!(matches!(
+        FileServiceError::from_safety(SafetyError::IoError, "seeded/private/path.txt"),
+        FileServiceError::Io
+    ));
 }
 
 #[cfg(unix)]
@@ -659,10 +685,13 @@ fn dangling_symlink_is_missing_for_target_operations_but_occupied_for_create() {
 #[test]
 fn external_symlink_is_listed_but_target_operations_are_refused() {
     let dir = TestWorkspace::new();
-    let external = std::env::temp_dir().join(format!(
-        "anyharness-files-external-target-{}",
+    let external_root = std::env::temp_dir().join(format!(
+        "anyharness-files-external-root-{}",
         uuid::Uuid::new_v4()
     ));
+    let external = external_root.join(".git/target.txt");
+    std::fs::create_dir_all(external.parent().expect("external parent"))
+        .expect("seed external parent");
     std::fs::write(&external, "outside").expect("seed external target");
     std::os::unix::fs::symlink(&external, dir.path().join("external-link"))
         .expect("seed external link");
@@ -697,8 +726,8 @@ fn external_symlink_is_listed_but_target_operations_are_refused() {
             CreateWorkspaceFileEntryKind::File,
             None,
         )
-        .expect_err("external link occupies entry"),
-        FileServiceError::AlreadyExists(path) if path == "external-link"
+        .expect_err("external link target is refused"),
+        FileServiceError::Safety(SafetyError::OutsideWorkspace)
     ));
 
     WorkspaceFilesService::rename_entry(dir.path(), "external-link", "renamed-external")
@@ -709,7 +738,7 @@ fn external_symlink_is_listed_but_target_operations_are_refused() {
         std::fs::read_to_string(&external).expect("external target preserved"),
         "outside"
     );
-    let _ = std::fs::remove_file(external);
+    let _ = std::fs::remove_dir_all(external_root);
 }
 
 #[cfg(unix)]
@@ -749,8 +778,8 @@ fn git_symlink_is_listed_but_target_operations_are_refused() {
             CreateWorkspaceFileEntryKind::Directory,
             None,
         )
-        .expect_err("git link occupies entry"),
-        FileServiceError::AlreadyExists(path) if path == "git-link"
+        .expect_err("git link target is refused"),
+        FileServiceError::Safety(SafetyError::GitDirectory)
     ));
 
     WorkspaceFilesService::rename_entry(dir.path(), "git-link", "renamed-git-link")

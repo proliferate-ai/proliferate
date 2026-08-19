@@ -100,11 +100,13 @@ fn validate_canonical_target(
     canonical_path: &Path,
     canonical_root: &Path,
 ) -> Result<(), SafetyError> {
-    reject_git_path(canonical_path)?;
     if !canonical_path.starts_with(canonical_root) {
         return Err(SafetyError::OutsideWorkspace);
     }
-    Ok(())
+    let workspace_relative = canonical_path
+        .strip_prefix(canonical_root)
+        .map_err(|_| SafetyError::OutsideWorkspace)?;
+    reject_git_path(workspace_relative)
 }
 
 fn validate_relative_path(relative_path: &str) -> Result<&Path, SafetyError> {
@@ -137,8 +139,8 @@ fn validate_relative_path(relative_path: &str) -> Result<&Path, SafetyError> {
     Ok(rel)
 }
 
-fn reject_git_path(canonical_path: &Path) -> Result<(), SafetyError> {
-    for component in canonical_path.components() {
+fn reject_git_path(workspace_relative_path: &Path) -> Result<(), SafetyError> {
+    for component in workspace_relative_path.components() {
         if let Component::Normal(segment) = component {
             if segment == ".git" {
                 return Err(SafetyError::GitDirectory);
@@ -214,5 +216,37 @@ impl std::fmt::Display for SafetyError {
             Self::PermissionDenied => write!(f, "permission denied during path resolution"),
             Self::IoError => write!(f, "path resolution failed"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{validate_canonical_target, SafetyError};
+
+    #[test]
+    fn external_target_with_git_component_is_outside_before_git_scoping() {
+        let scope = std::env::temp_dir().join("anyharness-safety-precedence");
+        let root = scope.join("workspace/root");
+        let external_git_target = scope.join("outside/.git/config");
+
+        assert_eq!(
+            validate_canonical_target(&external_git_target, &root),
+            Err(SafetyError::OutsideWorkspace)
+        );
+    }
+
+    #[test]
+    fn git_component_is_scoped_relative_to_canonical_workspace_root() {
+        let root = std::env::temp_dir()
+            .join("anyharness-safety-scope")
+            .join("container/.git/workspace");
+        let contained_file = root.join("src/main.rs");
+        let contained_git_target = root.join("nested/.git/config");
+
+        assert_eq!(validate_canonical_target(&contained_file, &root), Ok(()));
+        assert_eq!(
+            validate_canonical_target(&contained_git_target, &root),
+            Err(SafetyError::GitDirectory)
+        );
     }
 }

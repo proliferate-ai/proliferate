@@ -67,6 +67,12 @@ Both resolvers reject:
 - `.git` access
 - resolved paths that escape the workspace via canonicalization or symlinks
 
+Canonical containment is checked before canonical `.git` components. The
+`.git` scan is scoped to the path relative to the canonical workspace root, so
+an escaping target remains `PATH_OUTSIDE_WORKSPACE` even if its outside path
+contains `.git`, and a `.git` component above the workspace root does not
+poison contained paths.
+
 An empty relative path is the workspace root. Stat and list accept it; read and
 compatibility write reject it as `NOT_A_FILE`; create, rename, and delete reject
 it through their existing request-validation codes.
@@ -165,8 +171,10 @@ Create semantics:
 8. invalidates file search cache in the runtime layer
 9. returns the created entry, plus read metadata/version for files
 
-The final entry check uses symlink metadata, so a dangling symlink is occupied
-and returns `FILE_ALREADY_EXISTS`.
+The final entry check uses symlink metadata. Contained live and dangling final
+symlinks are occupied and return `FILE_ALREADY_EXISTS`; a live final symlink
+whose target escapes the workspace or resolves into `.git` retains that safety
+refusal instead.
 
 ### Renaming
 
