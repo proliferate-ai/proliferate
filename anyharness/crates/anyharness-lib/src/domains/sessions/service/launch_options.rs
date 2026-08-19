@@ -101,7 +101,24 @@ impl SessionService {
                     .map(|agent| agent.display_name.clone())
                     .unwrap_or_else(|| kind.display_name().to_string()),
                 default_model_id: options.defaults.model_id.clone(),
-                controls: options.controls.clone(),
+                controls: options
+                    .controls
+                    .iter()
+                    .map(|control| anyharness_contract::v1::HarnessLaunchControl {
+                        id: control.id.clone(),
+                        observed_label: control.observed_label.clone(),
+                        observed_description: control.observed_description.clone(),
+                        values: control
+                            .values
+                            .iter()
+                            .map(|value| anyharness_contract::v1::HarnessLaunchControlValue {
+                                value: value.value.clone(),
+                                observed_label: value.observed_label.clone(),
+                                observed_description: value.observed_description.clone(),
+                            })
+                            .collect(),
+                    })
+                    .collect(),
                 default_control_values: options.defaults.control_values.clone(),
                 models,
             });

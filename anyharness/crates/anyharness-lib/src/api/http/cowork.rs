@@ -404,7 +404,7 @@ fn cowork_coding_session_to_contract(
         status: session_status_to_contract(&session.status),
         agent_kind: session.agent_kind,
         model_id: session.model_id,
-        mode_id: session.mode_id,
+        mode_id: session.control_values.get("mode").cloned(),
         wake_scheduled: session.wake_scheduled,
         latest_completion: session.latest_completion.map(cowork_completion_to_contract),
         link_created_at: session.link_created_at,

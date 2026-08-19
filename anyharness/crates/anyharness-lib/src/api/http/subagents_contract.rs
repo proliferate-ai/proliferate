@@ -109,7 +109,7 @@ fn agent_to_contract(agent: AgentView) -> AgentOperationsAgent {
         configuration: AgentOperationsConfiguration {
             agent_kind: agent.configuration.agent_kind,
             model_id: agent.configuration.model_id,
-            mode_id: agent.configuration.mode_id,
+            mode_id: None,
         },
         status: AgentOperationsStatus {
             presentation: match agent.status.presentation {
