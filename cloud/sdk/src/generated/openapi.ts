@@ -11114,8 +11114,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                cloud_sandbox_id: string;
                 harness_kind: string;
+                cloud_sandbox_id: string;
             };
             cookie?: never;
         };
