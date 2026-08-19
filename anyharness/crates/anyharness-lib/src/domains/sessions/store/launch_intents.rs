@@ -11,6 +11,24 @@ impl SessionStore {
         self.db
             .with_conn(|conn| find_launch_intent_row(conn, session_id))
     }
+
+    /// Mirror the 0076 migration's reality for directly inserted fixture
+    /// rows: every persisted session owns exactly one immutable (possibly
+    /// empty) launch intent, and real starts fail closed without it.
+    #[cfg(test)]
+    pub(crate) fn seed_empty_launch_intent(&self, session_id: &str) {
+        self.db
+            .with_conn(|conn| {
+                conn.execute(
+                    "INSERT OR IGNORE INTO session_launch_intents (
+                        session_id, requested_model_id, requested_controls_json, created_at
+                     ) VALUES (?1, NULL, '{}', ?2)",
+                    rusqlite::params![session_id, "2026-08-10T23:59:00Z"],
+                )?;
+                Ok(())
+            })
+            .expect("seed empty launch intent");
+    }
 }
 
 pub(crate) fn find_launch_intent_row(

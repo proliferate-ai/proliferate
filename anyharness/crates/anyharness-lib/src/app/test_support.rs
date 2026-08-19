@@ -235,6 +235,7 @@ pub(crate) fn insert_session_row(
         origin: Some(crate::origin::OriginContext::system_local_runtime()),
     };
     store.insert(&record).expect("insert session row");
+    store.seed_empty_launch_intent(session_id);
 }
 
 pub(crate) fn seed_repo_root(db: &Db, repo_root_id: &str, path: &str) {

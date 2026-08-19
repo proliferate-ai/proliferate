@@ -22,15 +22,17 @@ CREATE TABLE session_launch_intents (
 
 -- Measured N-1 data migration: old rows remain resumable, but all runtime
 -- startup reads the one immutable intent table after this migration.
+-- Backfilled intents are deliberately empty: legacy model/mode requests were
+-- never target-observed values, and admission exact-validates every intent
+-- entry against current observations, so copying them would permanently block
+-- resume for any value the target no longer (or never) reports. Migrated
+-- sessions restore their live values from the persisted live snapshot.
 INSERT INTO session_launch_intents (
     session_id, requested_model_id, requested_controls_json, created_at
 )
 SELECT id,
-       requested_model_id,
-       CASE
-           WHEN requested_mode_id IS NULL THEN '{}'
-           ELSE json_object('mode', requested_mode_id)
-       END,
+       NULL,
+       '{}',
        created_at
 FROM sessions;
 
@@ -43,9 +45,8 @@ ALTER TABLE review_assignments
 ALTER TABLE review_assignments
     ADD COLUMN launch_verification_status TEXT NOT NULL DEFAULT 'pending';
 
+-- Same emptiness rule as session intents: legacy review mode ids are not
+-- observed control values and would fail strict launch validation.
 UPDATE review_assignments
-SET control_values_json = CASE
-        WHEN requested_mode_id IS NULL THEN '{}'
-        ELSE json_object('mode', requested_mode_id)
-    END,
+SET control_values_json = '{}',
     launch_verification_status = mode_verification_status;

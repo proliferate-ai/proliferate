@@ -138,7 +138,19 @@ pub(in crate::live::sessions::actor) async fn apply_pending_config_changes_if_id
         } else {
             false
         };
-        if is_model_request && !live_snapshot_authorized_model {
+        // A harness with no live model list can never satisfy snapshot
+        // membership; its queued switches ride the same direct-setter
+        // authorization the idle path uses.
+        if is_model_request
+            && !live_snapshot_authorized_model
+            && !should_apply_model_via_direct_setter(startup_state, &change.value)
+        {
+            tracing::warn!(
+                session_id,
+                config_id = %change.config_id,
+                value = %change.value,
+                "[model-switch] dropping queued model change absent from the latest live snapshot"
+            );
             store.delete_pending_config_change(session_id, &change.config_id)?;
             continue;
         }
