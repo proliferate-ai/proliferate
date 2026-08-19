@@ -295,22 +295,18 @@ impl WorkflowActor {
         true
     }
 
-    /// StartNode, the one two-step effect: render (or reuse) the envelope,
-    /// create the durable session, link and stamp, start, dispatch the first
-    /// prompt. The crash window between the row commit and the stamp is
-    /// deliberate — the boot fence reads a running node with no session as
-    /// exactly what it is. Any failure AFTER the session row exists
-    /// compensates it (the house create-then-start pattern): a half-born
-    /// session must not linger in the run workspace.
+    /// StartNode renders the envelope, creates the durable session, links and
+    /// stamps it, starts it, then dispatches the first prompt. The deliberate
+    /// pre-stamp crash window is fenced as a running node without a session.
+    /// Any later failure compensates the half-born session.
     async fn launch_node(
         &self,
         state: &mut RunState,
         node_row_id: &str,
         workspace_lease: Option<WorkspaceOperationLease>,
     ) -> anyhow::Result<()> {
-        // Destructive workspace lifecycle flows hold the exclusive side of
-        // this gate. The initial PUT hands its pre-lookup lease through; every
-        // later advance/redo/replay acquires here at the one launch seam.
+        // Destructive lifecycle flows hold the exclusive side. Initial PUT
+        // hands its pre-lookup lease through; later launches acquire here.
         let workspace_lease = match workspace_lease {
             Some(lease) if lease.workspace_id() == state.run.workspace_id.as_str() => lease,
             lease => {
@@ -373,14 +369,13 @@ impl WorkflowActor {
             .map_err(|error| anyhow::anyhow!("session create failed: {error:?}"))?
         };
 
+        let leased_workspace_id = workspace_lease.workspace_id();
         if let Err(error) = self
-            .link_start_and_dispatch(&node, &session, &envelope, &agent_kind)
+            .link_start_and_dispatch(&node, &session, &envelope, &agent_kind, leased_workspace_id)
             .await
         {
-            // The session row exists but never became a working node session:
-            // close and delete it before the failure feeds NodeLaunchFailed.
-            // Best-effort — the rows already tell the truth, and the original
-            // error must not be masked by a cleanup error.
+            // Close and delete the half-born session; the rows retain truth,
+            // and cleanup must not mask the original error.
             if let Err(cleanup_error) = self
                 .deps
                 .session_runtime
@@ -408,14 +403,14 @@ impl WorkflowActor {
         Ok(())
     }
 
-    /// The fallible tail of a launch, split out so `launch_node` can
-    /// compensate the freshly created session on ANY failure in here.
+    /// Fallible tail kept separate so `launch_node` can compensate any failure.
     async fn link_start_and_dispatch(
         &self,
         node: &WorkflowRunNodeRecord,
         session: &SessionRecord,
         envelope: &RenderedEnvelope,
         agent_kind: &str,
+        leased_workspace_id: &str,
     ) -> anyhow::Result<()> {
         // Link and stamp BEFORE start: the launch extras resolve the envelope
         // through the sessions columns, and the extension matches turn reports
@@ -435,22 +430,25 @@ impl WorkflowActor {
             .await
             .map_err(|error| anyhow::anyhow!("session start failed: {error:?}"))?;
 
-        // Ruling D: the wrapped instruction blocks ride IN-BAND as leading
-        // text blocks of the first prompt — identical for every harness — and
-        // the node's first message is always the LAST block.
+        // Ruling D: wrapped instructions ride in-band before the first message,
+        // which is always the last block, identically for every harness.
         let mut texts = envelope.instruction_blocks.clone();
         texts.push(envelope.first_message.clone());
         match self
             .deps
             .session_runtime
-            .send_text_blocks_prompt_with_id(&session.id, texts, prompt_id)
+            .send_text_blocks_prompt_with_id_under_workspace_lease(
+                leased_workspace_id,
+                &session.id,
+                texts,
+                prompt_id,
+            )
             .await
         {
             Ok(_running_or_queued) => Ok(()),
             Err(TextPromptDispatchError::AcknowledgementLost) => {
-                // The ambiguity rule: a lost acknowledgement is never a failure
-                // claim — the turn may be running. The extension or the fence
-                // resolves the row. No compensation: the session may be live.
+                // A lost acknowledgement is never a failure claim: the extension
+                // or fence resolves the potentially live session, without compensation.
                 tracing::warn!(
                     run_id = %self.run_id,
                     node_row_id = %node.id,

@@ -257,9 +257,11 @@ impl SessionRuntime {
     /// the leading blocks are a node envelope's already-wrapped
     /// system-instruction blocks, delivered in-band ahead of the first
     /// message, which is always the LAST block (Ruling D). Same access check,
-    /// live handle, actor command, and acknowledgement-ambiguity contract.
-    pub(crate) async fn send_text_blocks_prompt_with_id(
+    /// live handle, actor command, and acknowledgement-ambiguity contract. The
+    /// supplied key is checked against the session before dispatch.
+    pub(crate) async fn send_text_blocks_prompt_with_id_under_workspace_lease(
         &self,
+        leased_workspace_id: &str,
         session_id: &str,
         texts: Vec<String>,
         prompt_id: String,
@@ -274,7 +276,7 @@ impl SessionRuntime {
             session_id,
             payload,
             prompt_id,
-            PromptWorkspaceLeaseMode::Acquire,
+            PromptWorkspaceLeaseMode::AlreadyHeld(leased_workspace_id),
         )
         .await
     }

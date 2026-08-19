@@ -156,6 +156,9 @@ async fn creator_lease_reaches_an_actor_spawned_by_a_racing_caller() {
             panic!("writer acquired before prompt acceptance barrier: {result:?}")
         }
         result = &mut accepted_rx => result.expect("prompt acceptance barrier reached"),
+        _ = tokio::time::sleep(Duration::from_secs(2)) => {
+            panic!("prompt acceptance deadlocked behind the queued writer")
+        }
     }
     assert_eq!(
         gate.snapshot(&existing.id)
