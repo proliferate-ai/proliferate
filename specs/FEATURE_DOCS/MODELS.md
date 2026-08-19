@@ -537,6 +537,25 @@ this platform:
 - **The list is auto-collapsed by default.** It is reference material, not
   the reason a user opened the pane.
 
+### Home probe-card dismissal
+
+Home persists dismissal of its model-probe card under the raw-string key
+`proliferate.home.modelProbeCardDismissed`, with exact value `"1"` as the only
+dismissed sentinel. The facade owns an explicit per-mount hydration state:
+`loading`, `visible`, or `dismissed`. While it is `loading`, the facade omits
+the probe inputs entirely, so cached agent and model data cannot mount the card
+before the persisted choice is known. An exact sentinel settles to
+`dismissed`; a missing value, any other raw value, or a captured read failure
+settles to `visible`.
+
+Hydration may transition only a still-loading state. A current user dismissal
+moves the state synchronously to `dismissed` before the existing best-effort
+sentinel write, and a late read cannot overwrite it. Reads use the mounted
+host's storage context and its staleness guard, so an unmounted result is
+ignored. Read and write failures retain the persistence layer's existing
+captured, non-blocking behavior: a failed read still settles to visible, and a
+failed write never rolls the in-memory dismissal back.
+
 ### Probing during a degraded apply
 
 An apply can land while gateway enrollment sync is incomplete, in which case
