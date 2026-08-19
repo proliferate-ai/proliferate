@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
-import { createElement } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, createElement } from "react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useContentSearchStore } from "#product/stores/search/content-search-store";
 import { ContentSearchPill } from "#product/components/workspace/search/ContentSearchPill";
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
+  .IS_REACT_ACT_ENVIRONMENT = true;
 
 function resetContentSearchStore() {
   useContentSearchStore.setState({
@@ -15,6 +18,7 @@ function resetContentSearchStore() {
     unitsById: {},
     nextUnitOrder: 0,
     surfaceAvailability: { file: false, review: false },
+    closeSuppressRestoreToken: 0,
   });
 }
 
@@ -72,5 +76,91 @@ describe("ContentSearchPill", () => {
 
     expect(screen.getByPlaceholderText("Search changes…")).toBeTruthy();
     expect(screen.getByLabelText("Find in changes")).toBeTruthy();
+  });
+
+  it("restores the exact origin element on Escape when it is still connected", () => {
+    const button = document.createElement("button");
+    document.body.append(button);
+    button.focus();
+    expect(document.activeElement).toBe(button);
+
+    render(createElement(ContentSearchPill));
+    act(() => {
+      useContentSearchStore.getState().openSearch("chat");
+    });
+
+    fireEvent.keyDown(screen.getByPlaceholderText("Search chat…"), { key: "Escape" });
+
+    expect(document.activeElement).toBe(button);
+    button.remove();
+  });
+
+  it("falls back to the owning surface root when the origin element is disconnected", () => {
+    const button = document.createElement("button");
+    document.body.append(button);
+    button.focus();
+
+    const fileFrame = document.createElement("div");
+    fileFrame.setAttribute("data-file-viewer-frame", "true");
+    fileFrame.tabIndex = -1;
+    document.body.append(fileFrame);
+
+    render(createElement(ContentSearchPill));
+    act(() => {
+      useContentSearchStore.getState().openSearch("file");
+    });
+
+    // Origin element disconnects while search is open (e.g. the triggering
+    // control unmounted).
+    button.remove();
+
+    fireEvent.keyDown(screen.getByPlaceholderText("Search file…"), { key: "Escape" });
+
+    expect(document.activeElement).toBe(fileFrame);
+    fileFrame.remove();
+  });
+
+  it("does not restore focus for a close suppressed with restoreFocus:false", () => {
+    const button = document.createElement("button");
+    document.body.append(button);
+    button.focus();
+
+    render(createElement(ContentSearchPill));
+    act(() => {
+      useContentSearchStore.getState().openSearch("chat");
+    });
+
+    const decoy = document.createElement("button");
+    document.body.append(decoy);
+    decoy.focus();
+
+    act(() => {
+      useContentSearchStore.getState().closeSearch({ restoreFocus: false });
+    });
+
+    expect(document.activeElement).toBe(decoy);
+    button.remove();
+    decoy.remove();
+  });
+
+  it("restores the origin element on unmount", () => {
+    const button = document.createElement("button");
+    document.body.append(button);
+    button.focus();
+
+    const { unmount } = render(createElement(ContentSearchPill));
+    act(() => {
+      useContentSearchStore.getState().openSearch("chat");
+    });
+
+    const decoy = document.createElement("button");
+    document.body.append(decoy);
+    decoy.focus();
+
+    unmount();
+
+    expect(document.activeElement).toBe(button);
+    button.remove();
+    decoy.remove();
   });
 });

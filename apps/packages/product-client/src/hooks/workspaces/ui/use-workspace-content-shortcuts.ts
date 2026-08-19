@@ -94,10 +94,14 @@ export function useWorkspaceContentShortcuts(
     const activeElement = document.activeElement;
     if (activeElement?.closest("[data-content-search-overlay]")) {
       // Focus is already in the pill: Cmd+F cycles Chat <-> Diff when review
-      // search is available, rather than reopening/no-opping.
+      // search is available, rather than reopening/no-opping. On `file`,
+      // cycling must never fire — it stays on file and just reselects/
+      // refocuses the input.
       const state = useContentSearchStore.getState();
-      if (state.surfaceAvailability.review) {
+      if (state.surface !== "file" && state.surfaceAvailability.review) {
         openContentSearch(state.surface === "review" ? "chat" : "review");
+      } else {
+        focusContentSearchInput();
       }
       return true;
     }
@@ -110,6 +114,13 @@ export function useWorkspaceContentShortcuts(
     openContentSearch(surface);
     return true;
   }, { enabled });
+}
+
+function focusContentSearchInput(): void {
+  const input = document.getElementById("content-search-input");
+  if (input instanceof HTMLInputElement) {
+    input.select();
+  }
 }
 
 function resolveContentSearchSurfaceForShortcut(): ContentSearchSurface | null {

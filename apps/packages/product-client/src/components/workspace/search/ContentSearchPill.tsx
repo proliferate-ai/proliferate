@@ -29,14 +29,63 @@ const SEARCH_SCOPE_ITEMS: readonly SegmentedControlItem<"chat" | "review">[] = [
   { id: "review", label: "Diff" },
 ];
 
+// Fallback DOM roots to restore focus to when the captured origin element is
+// no longer connected/visible/enabled. Keyed by search surface; the shell
+// root is the last resort when the owning surface itself unmounted.
+const SURFACE_OWNER_FALLBACK_SELECTOR: Record<ContentSearchSurface, string> = {
+  chat: "[data-chat-transcript-root='true']",
+  file: "[data-file-viewer-frame]",
+  review: "[data-git-review-document]",
+};
+const SHELL_ROOT_FALLBACK_SELECTOR = "[data-workspace-shell]";
+
+function isRestorable(element: Element | null): element is HTMLElement {
+  if (!element || !(element instanceof HTMLElement) || !element.isConnected) {
+    return false;
+  }
+  if ("disabled" in element && (element as { disabled?: boolean }).disabled) {
+    return false;
+  }
+  if (element.hidden || element.style.display === "none" || element.style.visibility === "hidden") {
+    return false;
+  }
+  return true;
+}
+
+function restoreFocusTo(surface: ContentSearchSurface, origin: HTMLElement | null): void {
+  if (isRestorable(origin)) {
+    origin.focus();
+    return;
+  }
+
+  const ownerFallback = document.querySelector(SURFACE_OWNER_FALLBACK_SELECTOR[surface]);
+  if (isRestorable(ownerFallback)) {
+    ownerFallback.focus();
+    return;
+  }
+
+  const shellFallback = document.querySelector(SHELL_ROOT_FALLBACK_SELECTOR);
+  if (isRestorable(shellFallback)) {
+    shellFallback.focus();
+  }
+}
+
 export function ContentSearchPill() {
   const inputRef = useRef<HTMLInputElement>(null);
+  // Captures document.activeElement on each closed-to-open transition, and
+  // the surface that was open when it was captured, so a later close can
+  // restore it. Lives only in this mounted component, never in the store.
+  const originRef = useRef<{ element: HTMLElement | null; surface: ContentSearchSurface } | null>(null);
+  const wasOpenRef = useRef(false);
+  const lastSuppressTokenRef = useRef<number | null>(null);
   const open = useContentSearchStore((state) => state.open);
   const surface = useContentSearchStore((state) => state.surface);
+  const currentSurfaceRef = useRef<ContentSearchSurface>(surface);
   const query = useContentSearchStore((state) => state.query);
   const activeMatchIndex = useContentSearchStore((state) => state.activeMatchIndex);
   const activeMatchId = useContentSearchStore((state) => state.activeMatchId);
   const reviewAvailable = useContentSearchStore((state) => state.surfaceAvailability.review);
+  const closeSuppressRestoreToken = useContentSearchStore((state) => state.closeSuppressRestoreToken);
   const matchCount = useContentSearchStore((state) =>
     selectVisibleContentSearchMatchIds(state).length
   );
@@ -47,14 +96,48 @@ export function ContentSearchPill() {
   const openSearch = useContentSearchStore((state) => state.openSearch);
   const hasQuery = query.trim().length > 0;
   const hasMatches = matchCount > 0;
+  const showScopeToggle = reviewAvailable && surface !== "file";
 
   useEffect(() => {
-    if (open) {
+    if (lastSuppressTokenRef.current === null) {
+      lastSuppressTokenRef.current = closeSuppressRestoreToken;
+    }
+
+    if (open && !wasOpenRef.current) {
+      // Closed-to-open transition: capture the pre-open focus origin.
+      const activeElement = document.activeElement;
+      originRef.current = {
+        element: activeElement instanceof HTMLElement ? activeElement : null,
+        surface,
+      };
       window.requestAnimationFrame(() => {
         inputRef.current?.select();
       });
+    } else if (!open && wasOpenRef.current) {
+      // Open-to-closed transition: restore unless this close is suppressed.
+      const suppressed = closeSuppressRestoreToken !== lastSuppressTokenRef.current;
+      lastSuppressTokenRef.current = closeSuppressRestoreToken;
+      if (!suppressed) {
+        const origin = originRef.current;
+        restoreFocusTo(origin?.surface ?? surface, origin?.element ?? null);
+      }
+      originRef.current = null;
     }
-  }, [open]);
+
+    wasOpenRef.current = open;
+    currentSurfaceRef.current = surface;
+  }, [open, surface, closeSuppressRestoreToken]);
+
+  useEffect(() => {
+    // If the pill itself unmounts while still open (surface/target unmount),
+    // fall back to the same restoration sequence.
+    return () => {
+      if (wasOpenRef.current) {
+        const origin = originRef.current;
+        restoreFocusTo(origin?.surface ?? currentSurfaceRef.current, origin?.element ?? null);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!open || !activeMatchId) {
@@ -157,7 +240,7 @@ export function ContentSearchPill() {
           </>
         )}
         <div className="col-[2/3] row-[1] flex h-[44px] items-center pr-4">
-          {reviewAvailable && (
+          {showScopeToggle && (
             <>
               <SegmentedControl
                 variant="plain"
@@ -175,7 +258,7 @@ export function ContentSearchPill() {
             size="unstyled"
             aria-label="Close find"
             className="-m-0.5 flex size-6 items-center justify-center rounded-full text-foreground hover:bg-hover"
-            onClick={closeSearch}
+            onClick={() => closeSearch()}
           >
             <X className="icon-paired" />
           </Button>

@@ -34,8 +34,12 @@ interface ContentSearchState {
   unitsById: Record<string, ContentSearchUnit>;
   nextUnitOrder: number;
   surfaceAvailability: ContentSearchSurfaceAvailability;
+  // Session-only suppression token: incremented each time a close should not
+  // restore focus (e.g. target activation dismissing a stale search). The
+  // pill consumes it for that one close only. Never holds a DOM node.
+  closeSuppressRestoreToken: number;
   openSearch: (surface?: ContentSearchSurface) => void;
-  closeSearch: () => void;
+  closeSearch: (options?: { restoreFocus?: boolean }) => void;
   setQuery: (query: string) => void;
   goToNextMatch: () => void;
   goToPreviousMatch: () => void;
@@ -53,6 +57,7 @@ export const useContentSearchStore = create<ContentSearchState>((set) => ({
   unitsById: {},
   nextUnitOrder: 0,
   surfaceAvailability: { file: false, review: false },
+  closeSuppressRestoreToken: 0,
 
   openSearch: (surface = "chat") => {
     set((state) => resolveActiveMatch({
@@ -62,8 +67,14 @@ export const useContentSearchStore = create<ContentSearchState>((set) => ({
     }, 0));
   },
 
-  closeSearch: () => {
-    set({ open: false });
+  closeSearch: (options) => {
+    const restoreFocus = options?.restoreFocus ?? true;
+    set((state) => ({
+      open: false,
+      closeSuppressRestoreToken: restoreFocus
+        ? state.closeSuppressRestoreToken
+        : state.closeSuppressRestoreToken + 1,
+    }));
   },
 
   setQuery: (query) => {

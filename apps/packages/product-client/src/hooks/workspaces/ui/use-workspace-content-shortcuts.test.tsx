@@ -321,6 +321,27 @@ describe("useWorkspaceContentShortcuts", () => {
     expect(useContentSearchStore.getState().surface).toBe("chat");
   });
 
+  it("does not cycle away from the file surface even when review is available", () => {
+    const actions = createActions();
+    useContentSearchStore.getState().setSurfaceAvailability("review", true);
+    const overlay = document.createElement("div");
+    overlay.setAttribute("data-content-search-overlay", "true");
+    const focusTarget = document.createElement("input");
+    focusTarget.id = "content-search-input";
+    overlay.append(focusTarget);
+    document.body.append(overlay);
+    focusTarget.focus();
+    useContentSearchStore.getState().openSearch("file");
+
+    renderHook(() => useWorkspaceContentShortcuts(actions));
+
+    expect(runShortcutHandler("workspace.find-content", { source: "keyboard" })).toBe(true);
+    expect(useContentSearchStore.getState().surface).toBe("file");
+
+    expect(runShortcutHandler("workspace.find-content", { source: "keyboard" })).toBe(true);
+    expect(useContentSearchStore.getState().surface).toBe("file");
+  });
+
   it("does not cycle scope when the search pill owns focus but review is unavailable", () => {
     const actions = createActions();
     const overlay = document.createElement("div");
