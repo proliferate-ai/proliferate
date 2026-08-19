@@ -101,6 +101,25 @@ export type MarkdownCodeBlockRenderer = (
   input: MarkdownCodeBlockRenderInput,
 ) => ReactNode | null | undefined;
 
+/**
+ * Streaming render-copy available to fenced-code renderers. Completeness
+ * decisions (e.g. mermaid) belong in those renderers, not a second Markdown
+ * parser here.
+ */
+export interface MarkdownStreamingSource {
+  isStreaming: boolean;
+  source: string;
+}
+
+const MarkdownStreamingSourceContext = createContext<MarkdownStreamingSource>({
+  isStreaming: false,
+  source: "",
+});
+
+export function useMarkdownStreamingSource(): MarkdownStreamingSource {
+  return useContext(MarkdownStreamingSourceContext);
+}
+
 type MdElementProps = HTMLAttributes<HTMLElement> & {
   node?: unknown;
 };
@@ -407,24 +426,34 @@ export const MarkdownBody = memo(function MarkdownBody({
     [revealText, revealedUpTo],
   );
 
+  const streamingSource = useMemo(
+    (): MarkdownStreamingSource => ({
+      isStreaming,
+      source: parsedContent,
+    }),
+    [isStreaming, parsedContent],
+  );
+
   const body = (
-    <MarkdownSurfaceProvider value={surface}>
-      <MarkdownRevealContext.Provider value={revealState}>
-        <div
-          className={markdownClassName}
-          data-markdown-body="true"
-          data-markdown-surface={surface}
-        >
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            urlTransform={markdownUrlTransform}
-            components={components}
+    <MarkdownStreamingSourceContext.Provider value={streamingSource}>
+      <MarkdownSurfaceProvider value={surface}>
+        <MarkdownRevealContext.Provider value={revealState}>
+          <div
+            className={markdownClassName}
+            data-markdown-body="true"
+            data-markdown-surface={surface}
           >
-            {parsedContent}
-          </ReactMarkdown>
-        </div>
-      </MarkdownRevealContext.Provider>
-    </MarkdownSurfaceProvider>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              urlTransform={markdownUrlTransform}
+              components={components}
+            >
+              {parsedContent}
+            </ReactMarkdown>
+          </div>
+        </MarkdownRevealContext.Provider>
+      </MarkdownSurfaceProvider>
+    </MarkdownStreamingSourceContext.Provider>
   );
 
   // Secondary chrome (tool detail bodies, plan cards) reuses MarkdownBody but

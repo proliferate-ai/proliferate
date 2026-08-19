@@ -8,6 +8,7 @@ import {
 } from "./ChatContentSearchContext";
 import {
   MarkdownBody,
+  useMarkdownStreamingSource,
   type MarkdownLinkRenderInput,
 } from "./MarkdownBody";
 import { CHAT_TRANSCRIPT_LINK_CLASS } from "#product/config/transcript-link-styles";
@@ -147,4 +148,53 @@ describe("MarkdownBody presentation", () => {
     expect(html).toContain(CHAT_TRANSCRIPT_LINK_CLASS);
     expect(html).not.toContain("hover:text-foreground");
   });
+
+  it("exposes the streaming render copy to fenced code renderers", () => {
+    const source = "```ts\nconst ready = true;\n```";
+    const html = renderMarkdown(source, {
+      isStreaming: true,
+      renderCodeBlock: () => createElement(StreamingSourceProbe),
+    });
+
+    expect(html).toContain('data-markdown-streaming="true"');
+    expect(html).toContain(`data-markdown-source="${escapeHtmlAttr(source)}"`);
+  });
+
+  it("exposes settled markdown as a non-streaming render copy", () => {
+    const source = "```ts\nconst ready = true;\n```";
+    const html = renderMarkdown(source, {
+      renderCodeBlock: () => createElement(StreamingSourceProbe),
+    });
+
+    expect(html).toContain('data-markdown-streaming="false"');
+    expect(html).toContain(`data-markdown-source="${escapeHtmlAttr(source)}"`);
+  });
+
+  it("publishes the stabilized render copy into fenced-code context", () => {
+    const source = "```ts\nconst ready = true;\n```\n\nOpen [config](/tmp/project/config";
+    const html = renderMarkdown(source, {
+      isStreaming: true,
+      renderCodeBlock: () => createElement(StreamingSourceProbe),
+    });
+
+    expect(html).toContain('data-markdown-streaming="true"');
+    expect(html).toContain("Open [config](/tmp/project/config)");
+    expect(html).not.toMatch(/data-markdown-source="[^"]*Open \[config\]\(\/tmp\/project\/config"/);
+  });
 });
+
+function StreamingSourceProbe() {
+  const streaming = useMarkdownStreamingSource();
+  return createElement("span", {
+    "data-markdown-streaming": streaming.isStreaming ? "true" : "false",
+    "data-markdown-source": streaming.source,
+  });
+}
+
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
