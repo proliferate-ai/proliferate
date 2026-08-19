@@ -62,7 +62,9 @@ pub struct OpencodeSidedoorClient {
 
 impl OpencodeSidedoorClient {
     pub fn new(port: u16, password: String) -> anyhow::Result<Self> {
-        let client = reqwest::Client::builder().timeout(REQUEST_TIMEOUT).build()?;
+        let client = reqwest::Client::builder()
+            .timeout(REQUEST_TIMEOUT)
+            .build()?;
         Ok(Self {
             base_url: format!("http://127.0.0.1:{port}"),
             username: "opencode".to_string(),
@@ -251,7 +253,8 @@ mod tests {
         let body = ForkRequestBody {
             message_id: Some("msg_01hqrstuvwxyzabcdefghij0"),
         };
-        let ours: serde_json::Value = serde_json::from_str(&serde_json::to_string(&body).unwrap()).unwrap();
+        let ours: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&body).unwrap()).unwrap();
         let fixture: serde_json::Value = serde_json::from_str(FORK_REQUEST_FIXTURE).unwrap();
         assert_eq!(ours, fixture);
     }
