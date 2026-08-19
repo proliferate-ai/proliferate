@@ -327,6 +327,15 @@ pub trait SessionStateDurable: Send + Sync {
     ) -> anyhow::Result<()>;
 }
 
+/// Product-side feedback for a live session whose harness statement no longer
+/// agrees with the target observation that admitted the immutable intent.
+///
+/// Live owns only the contradiction signal. App wiring decides how target
+/// observation is invalidated/refreshed, preserving the live/domain boundary.
+pub trait LaunchObservationInvalidator: Send + Sync {
+    fn queue_refresh(&self, harness_kind: &str);
+}
+
 /// The never-varies capability set the actor runs against; wired once at
 /// manager construction and shared by every session the manager starts.
 #[derive(Clone)]
@@ -344,6 +353,8 @@ pub struct ActorCapabilities {
     pub observers: Vec<Arc<dyn SessionEventObserver>>,
     /// Consulted by the inbound permission door before parking.
     pub permission_advisor: Option<Arc<dyn PermissionAdvisor>>,
+    /// Queues a deduplicated target re-observation after a live contradiction.
+    pub launch_observation_invalidator: Option<Arc<dyn LaunchObservationInvalidator>>,
 }
 
 /// Per-call powers: hooks and context that vary per session start.

@@ -1,7 +1,9 @@
 pub mod apply;
+pub mod confirmation;
 pub mod diagnostics;
 pub mod handle;
 pub mod persist;
 pub mod queue;
+pub mod restore;
 pub mod selection;
 pub mod types;

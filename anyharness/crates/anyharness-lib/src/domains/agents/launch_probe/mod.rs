@@ -39,6 +39,8 @@ pub mod targets;
 #[cfg(test)]
 mod runner_tests;
 #[cfg(test)]
+mod contradiction_tests;
+#[cfg(test)]
 pub(crate) mod test_support;
 
 use std::collections::HashMap;
@@ -368,7 +370,9 @@ impl LaunchProbeService {
         if !self.is_owner() {
             return;
         }
-        if !reason.is_user_initiated() && !self.targets.allows_automatic_probe(harness_kind) {
+        if !reason.allows_manual_refresh_only_harness()
+            && !self.targets.allows_automatic_probe(harness_kind)
+        {
             tracing::debug!(
                 harness = harness_kind,
                 reason = reason.as_str(),

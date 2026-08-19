@@ -10,10 +10,10 @@ use super::probe::ProbeError;
 use crate::domains::agents::route_auth::RouteAuthError;
 
 /// Why a poke fired. **This is the closed trigger set** (model-catalog.md,
-/// "Freshness is event-driven"): the unconditional startup pass, the auth-apply
-/// ack, install completed, login-terminal exit, and manual refresh. There is no
-/// poll, no timer, and no gate-triggered spawn — a poke probes, subject only to
-/// the engine's concurrency guards and the failure backoff.
+/// "Freshness is event-driven"): the unconditional startup pass, auth apply,
+/// install completion, login-terminal exit, live contradiction, and manual
+/// refresh. There is no poll or timer — a poke probes, subject only to the
+/// engine's concurrency guards and the failure backoff.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PokeReason {
     /// The unconditional startup pass — the safety net that catches everything
@@ -25,18 +25,19 @@ pub enum PokeReason {
     AuthApplied,
     /// A native login performed through the product's login terminal ended.
     LoginTerminal,
+    /// A real session contradicted the target observation that admitted its
+    /// immutable launch intent.
+    LiveContradiction,
     Manual,
 }
 
 impl PokeReason {
-    /// Was this poke raised by a user asking for it, right now?
-    ///
-    /// The one policy that turns on this distinction is cursor's
-    /// manual-refresh-only law (model-catalog.md, "Cursor is manual-refresh only"):
-    /// an unattended `cursor-agent` spawn can surface an OS keychain prompt with no
-    /// user-visible cause, whereas a prompt the user just asked for explains itself.
-    pub fn is_user_initiated(self) -> bool {
-        matches!(self, Self::Manual)
+    /// May this event re-observe a manual-refresh-only harness? A live
+    /// contradiction is tied to a real session the product already launched,
+    /// so it must repair that target even when routine unattended pokes are
+    /// suppressed.
+    pub fn allows_manual_refresh_only_harness(self) -> bool {
+        matches!(self, Self::LiveContradiction | Self::Manual)
     }
 
     pub fn as_str(self) -> &'static str {
@@ -45,6 +46,7 @@ impl PokeReason {
             Self::InstallCompleted => "install_completed",
             Self::AuthApplied => "auth_applied",
             Self::LoginTerminal => "login_terminal",
+            Self::LiveContradiction => "live_contradiction",
             Self::Manual => "manual",
         }
     }

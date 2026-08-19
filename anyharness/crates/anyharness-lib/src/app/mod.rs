@@ -233,9 +233,8 @@ impl AppState {
         let (launch_options_service, launch_probe_service) =
             agent_launch::build_services(&db, &runtime_home, catalog_sync_service.clone());
         // The one handle every AUTOMATIC poke site takes. See `AppState`'s field for
-        // why it is separate; every one of the six sites reads THIS, so the
-        // suppression is a property of the wiring rather than of which sites happened
-        // to be threaded.
+        // why it is separate; the suppression is a property of the wiring rather
+        // than of which event sites happened to be threaded.
         #[cfg(not(test))]
         let automatic_poke_engine = Some(launch_probe_service.clone());
         #[cfg(test)]
@@ -335,6 +334,7 @@ impl AppState {
             loop_service: loop_service.clone(),
             activity_service: activity_service.clone(),
             product_context: agent_product_context,
+            automatic_poke_engine: automatic_poke_engine.clone(),
         });
         let cowork_delegation_service = CoworkDelegationService::new(
             (*cowork_service).clone(),

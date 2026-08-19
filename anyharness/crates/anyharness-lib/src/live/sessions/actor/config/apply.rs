@@ -1,13 +1,16 @@
 use std::sync::Arc;
 
 use agent_client_protocol as acp;
-use anyharness_contract::v1::{ConfigApplyState, SessionLiveConfigSnapshot};
+use anyharness_contract::v1::ConfigApplyState;
 use tokio::sync::Mutex;
 
 use crate::live::sessions::actor::command::SetConfigOptionCommandError;
+use crate::live::sessions::actor::config::confirmation::{
+    select_option_current_value_matches, select_setter_response_outcome,
+};
 use crate::live::sessions::actor::config::diagnostics;
 use crate::live::sessions::actor::config::persist::{
-    emit_live_config_update, persist_requested_config_value_if_changed, persisted_control_values,
+    emit_live_config_update, persist_requested_config_value_if_changed,
 };
 use crate::live::sessions::actor::config::queue::config_request_matches_current_state;
 use crate::live::sessions::actor::config::selection::{
@@ -300,57 +303,6 @@ pub(in crate::live::sessions::actor) async fn apply_specific_config_option(
     Ok(ConfigApplyState::Applied)
 }
 
-pub(in crate::live::sessions::actor) async fn restore_persisted_live_config_if_needed(
-    conn: &acp::ConnectionTo<acp::Agent>,
-    native_session_id: &str,
-    source_agent_kind: &str,
-    session_id: &str,
-    store: &dyn SessionStateDurable,
-    event_sink: &Arc<Mutex<SessionEventSink>>,
-    persisted_config_state: &mut PersistedSessionConfigState,
-    startup_state: &mut SessionStartupState,
-    persisted_snapshot: Option<&SessionLiveConfigSnapshot>,
-) -> anyhow::Result<()> {
-    let Some(snapshot) = persisted_snapshot else {
-        return Ok(());
-    };
-    let desired = persisted_control_values(&snapshot.normalized_controls);
-    if desired.is_empty() {
-        return Ok(());
-    }
-
-    let mut changed = false;
-    for (_, config_id, value) in desired {
-        if apply_config_option_if_possible(
-            conn,
-            native_session_id,
-            startup_state,
-            &config_id,
-            &value,
-        )
-        .await?
-            == ConfigApplyOutcome::AppliedAuthoritative
-        {
-            changed = true;
-        }
-    }
-
-    if changed {
-        emit_live_config_update(
-            source_agent_kind,
-            session_id,
-            store,
-            event_sink,
-            persisted_config_state,
-            startup_state,
-            chrono::Utc::now().to_rfc3339(),
-        )
-        .await?;
-    }
-
-    Ok(())
-}
-
 pub(in crate::live::sessions::actor) async fn apply_config_option_if_possible(
     conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
@@ -446,7 +398,11 @@ pub(in crate::live::sessions::actor) async fn apply_config_option_if_possible_wi
         .block_task()
         .await?;
     startup_state.config_options = response.config_options;
-    Ok(ConfigApplyOutcome::AppliedAuthoritative)
+    Ok(select_setter_response_outcome(
+        startup_state,
+        config_id,
+        desired_value,
+    ))
 }
 
 /// Wire method for the legacy `session/set_model` RPC. ACP 0.14 dropped the
@@ -586,15 +542,4 @@ pub(in crate::live::sessions::actor) fn set_select_option_current_value_for_purp
 
     select.current_value = desired_value.to_string().into();
     true
-}
-
-pub(in crate::live::sessions::actor) fn select_option_current_value_matches(
-    config_options: &[acp::schema::SessionConfigOption],
-    config_id: &str,
-    desired_value: &str,
-) -> bool {
-    find_select_option_for_request(config_options, config_id)
-        .and_then(current_select_value)
-        .as_deref()
-        .is_some_and(|current| current == desired_value)
 }

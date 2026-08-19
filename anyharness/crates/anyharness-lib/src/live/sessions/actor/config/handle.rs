@@ -5,6 +5,7 @@ use crate::domains::sessions::launch_intent::ResolvedLaunchIntent;
 use crate::live::sessions::actor::config::apply::{
     apply_mode_via_direct_setter_legacy, apply_specific_config_option, try_apply_model_preference,
 };
+use crate::live::sessions::actor::config::confirmation::config_value_matches_current_state;
 use crate::live::sessions::actor::config::persist::persist_requested_config_value_if_changed;
 use crate::live::sessions::actor::config::queue::queue_pending_config_change;
 use crate::live::sessions::actor::config::selection::{
@@ -131,6 +132,10 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
         "requested controls are absent from the live {agent_kind} session: {:?}",
         pending.keys().collect::<Vec<_>>()
     );
+    if let Err(error) = ensure_resolved_launch_intent_confirmed(startup_state, intent) {
+        log_initial_config_apply(session_id, agent_kind, "complete_intent", "final_mismatch");
+        return Err(error);
+    }
     tracing::info!(
         harness = agent_kind,
         selected_model = intent.model_id.is_some(),
@@ -138,6 +143,25 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
         event = "session.launch_intent.confirmed",
         "confirmed every explicit launch intent value"
     );
+    Ok(())
+}
+
+pub(in crate::live::sessions::actor) fn ensure_resolved_launch_intent_confirmed(
+    startup_state: &SessionStartupState,
+    intent: &ResolvedLaunchIntent,
+) -> anyhow::Result<()> {
+    if let Some(model_id) = intent.model_id.as_deref() {
+        anyhow::ensure!(
+            config_value_matches_current_state(startup_state, "model", model_id),
+            "final live model does not equal requested model '{model_id}'"
+        );
+    }
+    for (config_id, value) in &intent.control_values {
+        anyhow::ensure!(
+            config_value_matches_current_state(startup_state, config_id, value),
+            "final live control '{config_id}' does not equal requested value '{value}'"
+        );
+    }
     Ok(())
 }
 

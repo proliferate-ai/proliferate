@@ -175,3 +175,50 @@ fn normalized_control_value(control: &Option<NormalizedSessionControl>) -> Optio
         .as_ref()
         .and_then(|control| control.current_value.as_deref())
 }
+
+#[tokio::test]
+async fn full_live_snapshot_store_failure_is_returned_before_readiness() {
+    let db = Db::open_in_memory().expect("open db");
+    db.with_conn(|conn| {
+        conn.execute_batch("DROP TABLE session_live_config_snapshots")?;
+        Ok(())
+    })
+    .expect("install snapshot-store failure");
+    let store = SessionStore::new(db);
+    let (event_tx, _) = broadcast::channel(8);
+    let event_sink = Arc::new(Mutex::new(SessionEventSink::new(
+        "session-1".to_string(),
+        "codex".to_string(),
+        PathBuf::from("/tmp/workspace"),
+        event_tx,
+        Arc::new(store.clone()),
+    )));
+    let mut persisted_config_state = PersistedSessionConfigState {
+        requested_model_id: None,
+        current_model_id: None,
+        requested_mode_id: None,
+        current_mode_id: None,
+    };
+    let mut startup_state = SessionStartupState {
+        current_mode_id: None,
+        legacy_mode_state: None,
+        config_options: Vec::new(),
+        current_model_id: None,
+        available_models: Vec::new(),
+        prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+    };
+
+    let error = emit_live_config_update(
+        "codex",
+        "session-1",
+        &store,
+        &event_sink,
+        &mut persisted_config_state,
+        &mut startup_state,
+        "2026-08-19T00:00:00Z".to_string(),
+    )
+    .await
+    .expect_err("startup must observe a full-snapshot persistence failure");
+
+    assert!(error.to_string().contains("session_live_config_snapshots"));
+}

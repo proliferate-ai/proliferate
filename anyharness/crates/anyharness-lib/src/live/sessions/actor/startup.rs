@@ -9,7 +9,6 @@ use crate::domains::sessions::prompt::capabilities::capabilities_from_acp;
 use crate::live::sessions::actor::capabilities::{
     action_capabilities_from_acp, persist_session_action_capabilities,
 };
-use crate::live::sessions::actor::config::apply::restore_persisted_live_config_if_needed;
 use crate::live::sessions::actor::config::handle::{
     apply_resolved_launch_intent,
 };
@@ -17,6 +16,7 @@ use crate::live::sessions::actor::config::persist::{
     emit_live_config_update, emit_startup_state, load_startup_restore_snapshot,
     log_config_stage_result,
 };
+use crate::live::sessions::actor::config::restore::restore_persisted_live_config_if_needed;
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
 use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
 use crate::live::sessions::actor::state::{SessionActor, SessionActorConfig, SessionStartupState};
@@ -268,25 +268,35 @@ impl SessionActor {
             }
             emit_startup_state(&mut sink, &startup_state);
         }
-        let initial_live_config_started = Instant::now();
-        let result = emit_live_config_update(
-            &source_agent_kind,
-            &session_id,
-            config.caps.state.as_ref(),
-            &event_sink,
-            &mut persisted_config_state,
-            &mut startup_state,
-            chrono::Utc::now().to_rfc3339(),
-        )
-        .await;
-        log_config_stage_result(
-            &session_id,
-            &workspace_id,
-            &result,
-            initial_live_config_started.elapsed(),
-            "failed to persist initial live config snapshot",
-            "initial_live_config",
-        );
+        // Never replace a resume snapshot with the un-restored handshake. If
+        // restore later fails, the saved full authority must survive for a
+        // subsequent retry rather than being silently rewritten by a failed
+        // startup generation.
+        if startup_restore_snapshot.is_none() {
+            let initial_live_config_started = Instant::now();
+            let result = emit_live_config_update(
+                &source_agent_kind,
+                &session_id,
+                config.caps.state.as_ref(),
+                &event_sink,
+                &mut persisted_config_state,
+                &mut startup_state,
+                chrono::Utc::now().to_rfc3339(),
+            )
+            .await;
+            log_config_stage_result(
+                &session_id,
+                &workspace_id,
+                &result,
+                initial_live_config_started.elapsed(),
+                "failed to persist initial live config snapshot",
+                "initial_live_config",
+            );
+            if let Err(error) = result {
+                let _ = ready_tx.send(Err(anyhow::anyhow!(error.to_string())));
+                return Err(error);
+            }
+        }
         let launch_intent = config
             .caps
             .state
@@ -313,6 +323,11 @@ impl SessionActor {
             "failed to restore persisted live config",
             "restore_live_config",
         );
+        if let Err(error) = result {
+            queue_launch_observation_refresh(&config.caps, &source_agent_kind, &session_id);
+            let _ = ready_tx.send(Err(anyhow::anyhow!(error.to_string())));
+            return Err(error);
+        }
         // The immutable launch intent establishes a newly-created session.
         // Once a full live snapshot exists, that exact session's latest
         // confirmed current values own resume/recovery; replaying the original
@@ -329,6 +344,7 @@ impl SessionActor {
             .await
             {
                 tracing::warn!(session_id = %session_id, error = %error, "failed to apply and confirm launch intent");
+                queue_launch_observation_refresh(&config.caps, &source_agent_kind, &session_id);
                 let _ = ready_tx.send(Err(anyhow::anyhow!(error.to_string())));
                 return Err(error);
             }
@@ -352,6 +368,10 @@ impl SessionActor {
             "failed to persist post-preference live config snapshot",
             "post_preferences_live_config",
         );
+        if let Err(error) = result {
+            let _ = ready_tx.send(Err(anyhow::anyhow!(error.to_string())));
+            return Err(error);
+        }
 
         let _ = ready_tx.send(Ok(native_session_id.to_string()));
         handle
@@ -408,4 +428,21 @@ impl SessionActor {
         };
         Ok((actor, notification_rx, background_work_rx))
     }
+}
+
+pub(in crate::live::sessions::actor) fn queue_launch_observation_refresh(
+    caps: &crate::live::sessions::model::ActorCapabilities,
+    harness_kind: &str,
+    session_id: &str,
+) {
+    let Some(invalidator) = caps.launch_observation_invalidator.as_ref() else {
+        return;
+    };
+    invalidator.queue_refresh(harness_kind);
+    tracing::info!(
+        session_id,
+        harness_kind,
+        event = "session.launch_observation.contradiction",
+        "queued a deduplicated target launch-options refresh"
+    );
 }

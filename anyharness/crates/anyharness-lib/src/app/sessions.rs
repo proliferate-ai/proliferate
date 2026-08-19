@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use crate::domains::activity::service::ActivityService;
 use crate::domains::activity::session_observer::ActivitySessionObserver;
+use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
 use crate::domains::goals::service::GoalService;
 use crate::domains::goals::session_observer::GoalSessionObserver;
 use crate::domains::loops::service::LoopService;
@@ -25,7 +26,9 @@ use crate::domains::sessions::subagents::delivery::{
     CompletionDeliveryStore, CompletionDeliveryWorker,
 };
 use crate::domains::sessions::subagents::hooks::SubagentSessionHooks;
-use crate::live::sessions::model::{ActorCapabilities, PermissionAdvisor, SessionEventObserver};
+use crate::live::sessions::model::{
+    ActorCapabilities, LaunchObservationInvalidator, PermissionAdvisor, SessionEventObserver,
+};
 use crate::live::sessions::product_context::AgentProductContextResolver;
 use crate::live::sessions::LiveSessionManager;
 use crate::persistence::Db;
@@ -39,6 +42,19 @@ pub(super) struct LiveSessionsWiringDeps {
     pub loop_service: Arc<LoopService>,
     pub activity_service: Arc<ActivityService>,
     pub product_context: Arc<dyn AgentProductContextResolver>,
+    pub automatic_poke_engine: Option<Arc<LaunchProbeService>>,
+}
+
+struct LaunchObservationProbeQueue {
+    engine: Arc<LaunchProbeService>,
+}
+
+impl LaunchObservationInvalidator for LaunchObservationProbeQueue {
+    fn queue_refresh(&self, harness_kind: &str) {
+        self.engine
+            .clone()
+            .poke_harness(harness_kind, PokeReason::LiveContradiction);
+    }
 }
 
 /// Registration order is the observer dispatch order: plans must run before
@@ -74,6 +90,10 @@ pub(super) fn wire_live_sessions(deps: &LiveSessionsWiringDeps) -> LiveSessionMa
         product_context: deps.product_context.clone(),
         observers,
         permission_advisor,
+        launch_observation_invalidator: deps.automatic_poke_engine.clone().map(|engine| {
+            Arc::new(LaunchObservationProbeQueue { engine })
+                as Arc<dyn LaunchObservationInvalidator>
+        }),
     };
     LiveSessionManager::new(caps)
 }

@@ -457,3 +457,121 @@ fn collaboration_mode_option_is_not_treated_as_mode_request() {
     assert_eq!(tracked_config_purpose("collaboration_mode", resolved), None);
     assert!(find_select_option_for_request(&options, "mode").is_none());
 }
+
+#[test]
+fn final_whole_intent_rejects_a_later_setter_resetting_the_model() {
+    let mut model = acp::schema::SessionConfigOption::select(
+        "model",
+        "Model",
+        "m-old",
+        vec![
+            acp::schema::SessionConfigSelectOption::new("m-old", "Old"),
+            acp::schema::SessionConfigSelectOption::new("m-new", "New"),
+        ],
+    );
+    model.category = Some(acp::schema::SessionConfigOptionCategory::Model);
+    let later_control = acp::schema::SessionConfigOption::select(
+        "effort",
+        "Effort",
+        "high",
+        vec![
+            acp::schema::SessionConfigSelectOption::new("low", "Low"),
+            acp::schema::SessionConfigSelectOption::new("high", "High"),
+        ],
+    );
+    let startup_state = SessionStartupState {
+        current_mode_id: None,
+        legacy_mode_state: None,
+        // This is the adversarial full response after setting `effort`: the
+        // later setter confirmed itself but reset the previously confirmed model.
+        config_options: vec![model, later_control],
+        current_model_id: Some("m-new".to_string()),
+        available_models: session_model_options(&["m-old", "m-new"]),
+        prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+    };
+    let intent = ResolvedLaunchIntent {
+        model_id: Some("m-new".to_string()),
+        control_values: [("effort".to_string(), "high".to_string())]
+            .into_iter()
+            .collect(),
+        created_at: "2026-08-19T00:00:00Z".to_string(),
+    };
+
+    let error = ensure_resolved_launch_intent_confirmed(&startup_state, &intent)
+        .expect_err("the final aggregate must notice the reset model");
+    assert!(error.to_string().contains("final live model"));
+}
+
+#[test]
+fn generic_setter_noop_response_is_not_authoritative() {
+    let option = acp::schema::SessionConfigOption::select(
+        "fast_mode",
+        "Fast Mode",
+        "off",
+        vec![
+            acp::schema::SessionConfigSelectOption::new("off", "Off"),
+            acp::schema::SessionConfigSelectOption::new("on", "On"),
+        ],
+    );
+    let startup_state = SessionStartupState {
+        current_mode_id: None,
+        legacy_mode_state: None,
+        config_options: vec![option],
+        current_model_id: None,
+        available_models: Vec::new(),
+        prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+    };
+
+    assert_eq!(
+        select_setter_response_outcome(&startup_state, "fast_mode", "on"),
+        ConfigApplyOutcome::NotApplied,
+        "a valid full response that keeps the old current value is a refusal"
+    );
+}
+
+#[test]
+fn restore_rejects_a_saved_value_missing_from_the_live_statement() {
+    let startup_state = SessionStartupState {
+        current_mode_id: None,
+        legacy_mode_state: None,
+        config_options: Vec::new(),
+        current_model_id: None,
+        available_models: Vec::new(),
+        prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+    };
+    let saved = vec![(
+        normalized_key_rank(NormalizedControlKind::Extra),
+        "removed-control".to_string(),
+        "saved-value".to_string(),
+    )];
+
+    let error = ensure_config_values_confirmed(&startup_state, &saved, "saved")
+        .expect_err("a missing saved value must fail resume");
+    assert!(error.to_string().contains("removed-control"));
+}
+
+#[test]
+fn every_reported_live_contradiction_reaches_the_refresh_port() {
+    struct RecordingInvalidator(std::sync::atomic::AtomicUsize);
+
+    impl LaunchObservationInvalidator for RecordingInvalidator {
+        fn queue_refresh(&self, _harness_kind: &str) {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    let db = Db::open_in_memory().expect("open db");
+    let store = SessionStore::new(db);
+    let recorder = Arc::new(RecordingInvalidator(std::sync::atomic::AtomicUsize::new(0)));
+    let mut caps = test_support::actor_capabilities_for_store(&store);
+    caps.launch_observation_invalidator = Some(recorder.clone());
+
+    queue_launch_observation_refresh(&caps, "codex", "session-1");
+    queue_launch_observation_refresh(&caps, "codex", "session-2");
+
+    assert_eq!(
+        recorder.0.load(std::sync::atomic::Ordering::SeqCst),
+        2,
+        "the actor must not suppress any contradiction before the queue deduplicates it"
+    );
+}

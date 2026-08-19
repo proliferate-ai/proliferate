@@ -30,6 +30,7 @@ pub(crate) fn actor_capabilities_for_store(store: &SessionStore) -> ActorCapabil
         product_context: Arc::new(TestAgentProductContextResolver),
         observers: Vec::new(),
         permission_advisor: None,
+        launch_observation_invalidator: None,
     }
 }
 
