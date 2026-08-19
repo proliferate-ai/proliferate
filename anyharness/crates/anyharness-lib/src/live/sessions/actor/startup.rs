@@ -218,7 +218,7 @@ impl SessionActor {
         // See `opencode_sidedoor::derive_sidedoor_capability`: with the vendor
         // server up (native session established), runs the fail-closed
         // side-door readiness check and derives `targeted_fork` for OpenCode.
-        // Every other kind keeps the hardcoded `false` from
+        // Other kinds retain the exact agent/target-domain classification from
         // `action_capabilities_from_acp`.
         let sidedoor = if let Some(config_sd) = sidedoor_config {
             let native_id = native_session_id.to_string();
@@ -404,4 +404,3 @@ impl SessionActor {
         Ok((actor, notification_rx, background_work_rx))
     }
 }
-

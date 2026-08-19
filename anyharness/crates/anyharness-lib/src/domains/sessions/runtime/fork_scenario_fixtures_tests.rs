@@ -272,19 +272,29 @@ pub(super) fn fork_wire_anchors(path: &Path) -> Vec<String> {
     anchors
 }
 
-pub(super) fn assert_child_anchor_provenance(state: &AppState, child_id: &str, expected: &str) {
+pub(super) fn assert_child_anchor_provenance(
+    state: &AppState,
+    child_id: &str,
+    expected_anchor: &str,
+    expected_checkpoint_id: Option<&str>,
+) {
     let operation = state
         .session_service
         .store()
         .find_fork_operation_by_child(child_id)
         .expect("query fork operation")
         .expect("fork operation row exists");
+    assert_eq!(operation.phase, ForkOperationPhase::Completed);
     assert_eq!(
         operation.provider_anchor_kind.as_deref(),
         Some("message_id")
     );
-    assert_eq!(operation.provider_anchor_value.as_deref(), Some(expected));
+    assert_eq!(
+        operation.provider_anchor_value.as_deref(),
+        Some(expected_anchor)
+    );
     assert_eq!(operation.provider_anchor_inclusive, Some(true));
+    assert_eq!(operation.checkpoint_id.as_deref(), expected_checkpoint_id);
     assert!(state
         .session_service
         .get_session(child_id)

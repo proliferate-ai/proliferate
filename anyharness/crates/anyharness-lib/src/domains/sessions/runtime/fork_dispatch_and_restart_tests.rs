@@ -4,6 +4,8 @@
 //! dispatch seams the pure gate/anchor tests (`fork_anchor_gate_tests`,
 //! `launch_policy`, `startup_facts`) only cover in isolation: the derived
 //! provider anchor actually rides the outbound `session/fork` wire request,
+//! its durable provenance coexists with an exact checkpoint link after child
+//! persistence,
 //! the shipped legacy probe still fails closed for a targeted request, a cold
 //! restart refuses a targeted child whose recorded anchor is missing, and a
 //! concurrent same-key double fork never duplicates the child.
@@ -23,17 +25,20 @@ use crate::app::test_support;
 use crate::domains::sessions::model::parse_action_capabilities;
 use crate::domains::sessions::runtime::fork_anchor::ProviderForkAnchor;
 use crate::domains::sessions::runtime::{EnsureLiveSessionError, ForkSessionError};
+use crate::domains::workspaces::checkpoints::{CheckpointOrigin, CheckpointRecord};
 use crate::live::sessions::SessionStartupStrategy;
 use crate::persistence::Db;
 
 // --- (a) Two-boundary dispatch proof ---------------------------------------
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn targeted_fork_dispatches_the_derived_message_id_anchor_for_each_boundary() {
+async fn targeted_fork_persists_provider_anchor_and_exact_checkpoint_after_child_persistence() {
     // Each targeted fork dispatches through the real Claude process-local
     // branch: the derived inclusive anchor rides the outbound `session/fork`
     // `_meta.anyharness.upToMessageId` AND is recorded verbatim as the fork
-    // operation's provider anchor. Never anchor-less, never a tip downgrade.
+    // operation's provider anchor. The first boundary also has an exact Lane H
+    // checkpoint; both provenance dimensions must coexist on the completed
+    // operation. The second boundary pins the explicit no-checkpoint case.
     let _env_lock = test_support::lock_env();
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
@@ -47,6 +52,30 @@ async fn targeted_fork_dispatches_the_derived_message_id_anchor_for_each_boundar
     );
     let parent_id = seed_parent(&state, Some(r#"{"fork":true,"targetedFork":true}"#));
     seed_three_turn_transcript(&state, &parent_id);
+    let checkpoint_id = "checkpoint-at-turn-1";
+    state
+        .workspace_checkpoint_service
+        .store_for_tests()
+        .insert_checkpoint(&CheckpointRecord {
+            id: checkpoint_id.to_string(),
+            workspace_id: "workspace-fork".to_string(),
+            origin: CheckpointOrigin::TurnStart,
+            session_id: Some(parent_id.clone()),
+            turn_id: Some("turn-1".to_string()),
+            prompt_id: None,
+            fork_operation_id: None,
+            revert_operation_id: None,
+            head_sha: "0".repeat(40),
+            work_tree_oid: "1".repeat(40),
+            index_tree_oid: "2".repeat(40),
+            work_tree_anchored: false,
+            index_tree_anchored: false,
+            notices_json: None,
+            created_at: "2026-08-17T00:00:00Z".to_string(),
+            updated_at: "2026-08-17T00:00:00Z".to_string(),
+            expired_at: None,
+        })
+        .expect("seed exact targeted-fork checkpoint");
 
     let first = state
         .session_runtime
@@ -60,7 +89,7 @@ async fn targeted_fork_dispatches_the_derived_message_id_anchor_for_each_boundar
         .expect("first targeted fork dispatches");
     wait_for_fork_wire_count(&script.request_log, 1).await;
     assert_eq!(fork_wire_anchors(&script.request_log), ["msg-0"]);
-    assert_child_anchor_provenance(&state, &first.session.id, "msg-0");
+    assert_child_anchor_provenance(&state, &first.session.id, "msg-0", Some(checkpoint_id));
 
     let second = state
         .session_runtime
@@ -74,7 +103,7 @@ async fn targeted_fork_dispatches_the_derived_message_id_anchor_for_each_boundar
         .expect("second targeted fork dispatches");
     wait_for_fork_wire_count(&script.request_log, 2).await;
     assert_eq!(fork_wire_anchors(&script.request_log), ["msg-0", "msg-1"]);
-    assert_child_anchor_provenance(&state, &second.session.id, "msg-1");
+    assert_child_anchor_provenance(&state, &second.session.id, "msg-1", None);
 
     let children = fork_children(&state, &parent_id);
     assert_eq!(children.len(), 2);
