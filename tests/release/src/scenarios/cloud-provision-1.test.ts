@@ -1063,7 +1063,7 @@ test("waitForSandboxLaunchOptions requires the harness to carry at least one mod
   try {
     await assert.rejects(
       () => waitForSandboxLaunchOptions(exec, "provider-sandbox-a", FAKE_BEARER_TOKEN, "claude", 10, 5),
-      /never listed "claude" with models/,
+      /never observed "claude" with models/,
     );
   } finally {
     writes.restore();
@@ -1096,7 +1096,7 @@ test("waitForSandboxLaunchOptions dumps per-agent readiness on timeout so the fa
   try {
     await assert.rejects(
       () => waitForSandboxLaunchOptions(exec, "provider-sandbox-a", FAKE_BEARER_TOKEN, "claude", 10, 5),
-      /never listed "claude" with models/,
+      /never observed "claude" with models/,
     );
   } finally {
     writes.restore();

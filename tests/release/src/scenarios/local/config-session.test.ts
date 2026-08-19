@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
@@ -10,7 +9,6 @@ import {
   configSurfaceFor,
   cycleConfigControls,
   defaultLocalConfigDriver,
-  selectDistinctEligibleModel,
   type LocalConfigControl,
   type LocalConfigDriver,
   type LocalSessionTabsDriver,
@@ -643,39 +641,14 @@ test("enumerateControls keeps only promoted UI controls and drops shadowed reaso
     ...fakeWorld(),
     runtime: { baseUrl: "http://fake", client: { getLiveConfig: async () => liveConfig } },
   } as unknown as ReadyLocalWorld;
-  const controls = await defaultLocalConfigDriver.enumerateControls(world, "session-1", "claude", "claude-haiku");
+  const controls = await defaultLocalConfigDriver.enumerateControls(world, "session-1", "claude");
   assert.deepEqual(
     controls.map((control) => `${control.key}:${control.surface}`).sort(),
     ["collaboration_mode:mode", "effort:tuning"],
   );
 });
 
-test("Grok catalog model control resolves one distinct allowlisted live-probed picker target", async () => {
-  const catalog = JSON.parse(
-    readFileSync(
-      new URL("../../../../../catalogs/agents/catalog.json", import.meta.url),
-      "utf8",
-    ),
-  ) as {
-    agents: Array<{
-      kind: string;
-      session: {
-        controls: Array<{ key: string; mapping?: { switchVia?: string } }>;
-        gatewayPolicy?: { seedModels?: string[] };
-      };
-    }>;
-  };
-  const grok = catalog.agents.find((agent) => agent.kind === "grok");
-  assert.ok(grok?.session.controls.some(
-    (entry) => entry.key === "model" && entry.mapping?.switchVia === "setSessionModel",
-  ));
-  assert.deepEqual(grok?.session.gatewayPolicy?.seedModels, [
-    "grok-4",
-    "grok-4-fast",
-    "grok-code-fast-1",
-    "grok-build",
-  ]);
-
+test("Grok uses the live snapshot model control verbatim without gateway or catalog projection", async () => {
   const liveConfig = {
     rawConfigOptions: [],
     sourceSeq: 1,
@@ -693,50 +666,36 @@ test("Grok catalog model control resolves one distinct allowlisted live-probed p
       },
     },
   };
-  const probed = ["grok-4", "grok-4-fast", "grok-code-fast-1", "grok-build"];
+  let liveConfigReads = 0;
   const world = {
     ...fakeWorld(),
     runtime: {
       baseUrl: "http://fake",
       client: {
-        getLiveConfig: async () => liveConfig,
-        getGatewayModels: async () => probed.map((id) => ({ id })),
+        getLiveConfig: async () => {
+          liveConfigReads += 1;
+          return liveConfig;
+        },
       },
-    },
-    gateway: {
-      preflight: async () => ({
-        adminReachable: true,
-        allowlistModels: [...probed, "not-probed"],
-        eligibleClaudeModels: [],
-      }),
     },
   } as unknown as ReadyLocalWorld;
   const controls = await defaultLocalConfigDriver.enumerateControls(
     world,
     "session-grok",
     "grok",
-    "grok-4-fast",
   );
   assert.deepEqual(controls, [{
     key: "model",
     rawConfigId: "model",
-    currentValue: "grok-4-fast",
+    currentValue: "raw-probe-default",
     settable: true,
-    values: ["grok-4-fast", "grok-code-fast-1"],
+    values: ["raw-probe-default", "raw-probe-other"],
     surface: "model",
   }]);
-  assert.equal(
-    selectDistinctEligibleModel("grok-4-fast", probed, probed),
-    "grok-code-fast-1",
-  );
-  assert.equal(
-    selectDistinctEligibleModel("grok-4-fast", ["grok-4-fast"], probed),
-    null,
-  );
+  assert.equal(liveConfigReads, 1);
 });
 
-test("Grok materializes its catalog-backed model control when ACP omits the raw model option", async () => {
-  const probed = ["grok-4", "grok-4-fast", "grok-code-fast-1"];
+test("Grok exposes no model control when the live snapshot omits it", async () => {
   const world = {
     ...fakeWorld(),
     runtime: {
@@ -747,15 +706,7 @@ test("Grok materializes its catalog-backed model control when ACP omits the raw 
           sourceSeq: 1,
           normalizedControls: {},
         }),
-        getGatewayModels: async () => probed.map((id) => ({ id })),
       },
-    },
-    gateway: {
-      preflight: async () => ({
-        adminReachable: true,
-        allowlistModels: probed,
-        eligibleClaudeModels: [],
-      }),
     },
   } as unknown as ReadyLocalWorld;
 
@@ -763,16 +714,8 @@ test("Grok materializes its catalog-backed model control when ACP omits the raw 
     world,
     "session-grok",
     "grok",
-    "grok-4-fast",
   );
-  assert.deepEqual(controls, [{
-    key: "model",
-    rawConfigId: "catalog:model",
-    currentValue: "grok-4-fast",
-    settable: true,
-    values: ["grok-4-fast", "grok-code-fast-1"],
-    surface: "model",
-  }]);
+  assert.deepEqual(controls, []);
 });
 
 test("default Grok model picker proof preserves the session and correlates one post-switch turn", async () => {
@@ -892,7 +835,7 @@ test("model config selection remains unavailable to non-Grok harnesses", async (
   );
 });
 
-test("configSurfaceFor maps the catalog model picker and promoted live-composer controls", () => {
+test("configSurfaceFor maps the live model picker and promoted live-composer controls", () => {
   // The live chat composer renders exactly the promoted control groups
   // (ChatInputControlRow): combined model/tuning and working-mode controls.
   assert.equal(configSurfaceFor("effort"), "tuning");

@@ -8,10 +8,6 @@ import { authenticatedActor, type AuthenticatedActor } from "../../fixtures/auth
 import { findErrorEvent, findTurnEndedEvent } from "../../fixtures/local-runtime.js";
 import { preparedRepository, type PreparedRepository } from "../../fixtures/prepared-repository.js";
 import { productPage, type ProductPage } from "../../fixtures/product-page.js";
-import {
-  selectCheapestEligibleModel,
-  selectQualificationGatewayModel,
-} from "../../services/qualification-litellm.js";
 import type { ReadyLocalWorld } from "../../worlds/local-workspace/world.js";
 import {
   LOCAL_HARNESS_KINDS,
@@ -120,7 +116,6 @@ export interface LocalConfigDriver {
     world: ReadyLocalWorld,
     sessionId: string,
     harness: LocalHarnessKind,
-    activeModelId: string,
   ): Promise<LocalConfigControl[]>;
 
   /**
@@ -147,7 +142,7 @@ export interface LocalConfigControl {
   settable: boolean;
   values: readonly string[];
   /** Which composer surface renders it, so the driver picks the right testid.
-   * Grok's catalog-backed `model` control is driven through the composer model
+   * Grok's live-snapshot `model` control is driven through the composer model
    * picker; mode and reasoning use their promoted live composer controls. */
   surface: "model" | "mode" | "tuning";
 }
@@ -218,7 +213,7 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
   ensureHarnessReady: (world, page, harness) => ensureHarnessReady(world, page, harness),
   selectRepoAndWorkLocally: (page, repo) => selectRepoAndWorkLocally(page, repo),
   runBaselineTurn: (world, page, harness, repoPath) => runBaselineTurn(world, page, harness, repoPath),
-  async enumerateControls(world, sessionId, harness, activeModelId) {
+  async enumerateControls(world, sessionId, harness) {
     const live = await world.runtime.client.getLiveConfig(sessionId);
     const normalized = Object.values(live.normalizedControls);
     // The combined picker renders ONE reasoning ladder: `effort` wins over
@@ -233,19 +228,6 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
     const hasCollaborationMode = normalized.some(
       (control) => control.key === "collaboration_mode" && control.values.length >= 2,
     );
-    let grokModelValues: string[] | null = null;
-    if (harness === "grok") {
-      const [preflight, probed] = await Promise.all([
-        world.gateway.preflight(),
-        world.runtime.client.getGatewayModels(harness),
-      ]);
-      const alternate = selectDistinctEligibleModel(
-        activeModelId,
-        preflight.allowlistModels,
-        probed.map((model) => model.id),
-      );
-      grokModelValues = alternate ? [activeModelId, alternate] : [activeModelId];
-    }
     const controls = normalized.flatMap((control) => {
       const surface = configSurfaceFor(control.key);
       if (
@@ -265,32 +247,13 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
         {
           key: control.key,
           rawConfigId: control.rawConfigId,
-          currentValue: surface === "model" ? activeModelId : control.currentValue,
+          currentValue: control.currentValue,
           settable: control.settable,
-          values: surface === "model"
-            ? (grokModelValues ?? [activeModelId])
-            : control.values.map((option) => option.value),
+          values: control.values.map((option) => option.value),
           surface,
         },
       ];
     });
-    // Grok's checked-in catalog owns model switching through
-    // `setSessionModel`, while the ACP process may omit its raw `model` option
-    // from one live-config snapshot. The composer still advertises the
-    // allowlist ∩ gateway-probe models and can apply that catalog-backed live
-    // switch. Materialize that advertised control when the raw ACP control is
-    // absent; the later same-session turn plus exact spend correlation remains
-    // the fail-closed proof that the switch really reached the provider.
-    if (harness === "grok" && !controls.some((control) => control.surface === "model")) {
-      controls.push({
-        key: "model",
-        rawConfigId: "catalog:model",
-        currentValue: activeModelId,
-        settable: true,
-        values: grokModelValues ?? [activeModelId],
-        surface: "model",
-      });
-    }
     return controls;
   },
   selectConfigValueInUi: (context, control, value) => selectConfigValueInUi(context, control, value),
@@ -419,7 +382,7 @@ export async function collectLocal4ConfigCells(
         await driver.ensureHarnessReady(world, page, harness);
         await driver.selectRepoAndWorkLocally(page, repo);
         const { workspaceId, sessionId, modelId } = await driver.runBaselineTurn(world, page, harness, repo.path);
-        const controls = await driver.enumerateControls(world, sessionId, harness, modelId);
+        const controls = await driver.enumerateControls(world, sessionId, harness);
         const { recorded, known1063 } = await cycleConfigControls(page, controls, {
           selectConfigValueInUi: (_page, control, value) => driver.selectConfigValueInUi(
             { world, page: page!, actor, harness, sessionId },
@@ -901,12 +864,11 @@ function allCleanupBooleansTrue(cleanup: LocalCleanupV1): boolean {
  * and the product's supported normalized keys are exactly that set
  * (config/session-controls.ts SupportedLiveControlKey). Everything else has no
  * composer surface:
- *   - the raw ACP `model` control is owned by the catalog model picker
- *     (data-model-option carries catalog/live-probed model ids, never the raw
- *     ACP values). LOCAL-GROK-CFG-003 maps this surface for Grok; enumeration
- *     replaces raw values with the allowlist ∩ live gateway probe and the
- *     driver proves picker readback, same-session survival, and one bounded
- *     attributed turn. Other harness model semantics remain unchanged;
+ *   - the live snapshot's normalized `model` control maps to the model picker
+ *     for LOCAL-GROK-CFG-003. Its current value and allowed values are consumed
+ *     verbatim; absent live model state remains absent. The driver proves picker
+ *     readback, same-session survival, and one bounded attributed turn. Other
+ *     harness model semantics remain unchanged;
  *   - the generic SessionConfigControls strip (data-session-config-control)
  *     renders only on the Settings/automations composers, not the live chat
  *     composer;
@@ -922,20 +884,6 @@ export function configSurfaceFor(key: string): LocalConfigControl["surface"] | n
     return "mode";
   }
   return null;
-}
-
-/** Picks one distinct model from the exact qualification allowlist/live-probe
- * intersection. The existing cheap-tier ordering remains the authority; the
- * active model is excluded before selection so a no-op can never pass. */
-export function selectDistinctEligibleModel(
-  activeModelId: string,
-  allowlist: readonly string[],
-  liveProbe: readonly string[],
-): string | null {
-  return selectCheapestEligibleModel(
-    allowlist.filter((modelId) => modelId !== activeModelId),
-    liveProbe,
-  );
 }
 
 function dedupe(values: readonly string[]): string[] {
@@ -1112,12 +1060,7 @@ async function runBaselineTurn(
   harness: LocalHarnessKind,
   repoPath: string,
 ): Promise<{ workspaceId: string; sessionId: string; modelId: string }> {
-  const preflight = await world.gateway.preflight();
-  const probe = (await world.runtime.client.getGatewayModels(harness).catch(() => [])).map((model) => model.id);
-  const modelId = selectQualificationGatewayModel(harness, preflight.allowlistModels, probe);
-  if (!modelId) {
-    throw new Error(`runBaselineTurn: no eligible non-Fable model for "${harness}" in the allowlist ∩ live probe`);
-  }
+  const [modelId] = await observedLaunchModelIds(world, harness, "runBaselineTurn");
   await selectModelInComposer(page, harness, modelId);
 
   const p = page.page;
@@ -1184,7 +1127,7 @@ async function selectConfigValueInUi(
 }
 
 /**
- * Drives Grok's catalog-backed model control through the real composer picker.
+ * Drives Grok's live-snapshot model control through the real composer picker.
  * A successful return means all four acceptance facts held: the target was
  * distinct and picker-visible, UI/runtime readback matched, the concrete
  * AnyHarness session id survived, and a new turn on that same session
@@ -1212,13 +1155,11 @@ async function switchGrokModelAndProveTurn(
   }
 
   await selectModelInComposer(page, harness, value);
-  const catalogBacked = control.rawConfigId === "catalog:model";
   await waitForRuntimeModelReadback(
     world,
     sessionId,
     value,
     CONFIG_REJECTION_WINDOW_MS,
-    catalogBacked,
   );
   const readback = await readRequiredAttr(
     page.page,
@@ -1274,7 +1215,6 @@ async function switchGrokModelAndProveTurn(
     sessionId,
     value,
     CONFIG_REJECTION_WINDOW_MS,
-    catalogBacked,
   );
   return { accepted: true, readback };
 }
@@ -1284,7 +1224,6 @@ async function waitForRuntimeModelReadback(
   sessionId: string,
   expectedModelId: string,
   timeoutMs: number,
-  allowSessionFallback = false,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   let last: string[] = [];
@@ -1302,10 +1241,7 @@ async function waitForRuntimeModelReadback(
     // Session model/requested-model fields can reflect product intent before
     // the harness accepts it. The live-config current value is the authoritative
     // runtime readback for this existing-session switch.
-    if (
-      liveModelId === expectedModelId
-      || (allowSessionFallback && (session?.modelId === expectedModelId || session?.requestedModelId === expectedModelId))
-    ) {
+    if (liveModelId === expectedModelId) {
       return;
     }
     await sleep(300);
@@ -1386,19 +1322,14 @@ async function materializeFirstChat(
   // Fix round 3 (live-proof ruling): the local workspace + AnyHarness session —
   // and therefore the tab strip — materialize ONLY on first send. Waiting for the
   // tab strip pre-send (the round-2 body) timed out. So materialize the first
-  // (single-turn) session through the real send path: select the cheapest
-  // eligible model, send one bounded prompt from the home composer, then read the
+  // (single-turn) session through the real send path: select the target's first
+  // observed model, send one bounded prompt from the home composer, then read the
   // materialized session's tab off the strip. Sending to create the session is
   // not "seeding" — it is the only real creation path. NOTE: this necessarily
   // gives the tab transcript (a materialized session is never empty per the
   // product's `isSessionEmpty`), so tab A is the MESSAGED starting point, not an
   // empty chat.
-  const preflight = await world.gateway.preflight();
-  const probe = (await world.runtime.client.getGatewayModels(harness).catch(() => [])).map((model) => model.id);
-  const modelId = selectCheapestEligibleModel(preflight.allowlistModels, probe);
-  if (!modelId) {
-    throw new Error(`materializeFirstChat: no eligible non-Fable model for "${harness}" in the allowlist ∩ live probe`);
-  }
+  const [modelId] = await observedLaunchModelIds(world, harness, "materializeFirstChat");
   await selectModelInComposer(page, harness, modelId);
   const editor = p.locator("[data-home-composer-editor]").first();
   await editor.waitFor({ state: "visible", timeout: 15_000 });
@@ -1641,18 +1572,30 @@ async function changeModelSameHarness(
   // (Actions run 29575928457, T3-SESSION-1).
   const sessionId = await waitForReconciledSessionId(p, activeTab);
   const harness = (await readRequiredAttr(p, "[data-chat-tab]", "data-chat-tab-harness", activeTab)) as LocalHarnessKind;
-  // The model the composer is currently on — the change must move OFF this one,
-  // otherwise a no-op selection would trivially "stay in session".
-  const fromModelId = await readRequiredAttr(p, "[data-composer-model-trigger]", "data-composer-selected-model");
-  const preflight = await world.gateway.preflight();
-  const probe = (await world.runtime.client.getGatewayModels(harness).catch(() => [])).map((model) => model.id);
-  const toModelId = selectCheapestEligibleModel(
-    preflight.allowlistModels.filter((id) => id !== fromModelId),
-    probe,
+  const live = await world.runtime.client.getLiveConfig(sessionId);
+  const modelControl = live.normalizedControls.model;
+  if (!modelControl) {
+    throw new Error(
+      `changeModelSameHarness: session "${sessionId}" advertised no live model control for "${harness}".`,
+    );
+  }
+  const fromModelId = modelControl.currentValue;
+  const composerModelId = await readRequiredAttr(
+    p,
+    "[data-composer-model-trigger]",
+    "data-composer-selected-model",
   );
+  if (composerModelId !== fromModelId) {
+    throw new Error(
+      `changeModelSameHarness: composer model "${composerModelId}" did not match the live snapshot current model ` +
+        `"${fromModelId}".`,
+    );
+  }
+  const toModelId = modelControl.values.find((option) => option.value !== fromModelId)?.value ?? null;
   if (!toModelId) {
     throw new Error(
-      `changeModelSameHarness: no alternate eligible model for "${harness}" other than the active "${fromModelId}" ` +
+      `changeModelSameHarness: live snapshot advertised no alternate model for "${harness}" other than ` +
+        `the active "${fromModelId}" ` +
         "— cannot prove an in-session model change without a distinct target.",
     );
   }
@@ -1733,23 +1676,15 @@ async function reloadAndVerifyTabs(
 /** Selects `harness` in the composer by picking one of ITS models in the model
  * picker. Rows stamp both their harness kind and model id, which is required
  * because different harness groups can expose the same canonical model id.
- * Resolve the target harness's own model ids from the runtime's gateway probe
- * and click the first exact kind+model row the picker offers. */
+ * Resolve the target harness's exact target-observed model ids and click the
+ * first exact kind+model row the picker offers. */
 async function selectHarnessInComposer(
   world: ReadyLocalWorld,
   page: ProductPage,
   harness: LocalHarnessKind,
 ): Promise<void> {
   const p = page.page;
-  const candidates = (await world.runtime.client.getGatewayModels(harness).catch(() => [])).map(
-    (model) => model.id,
-  );
-  if (candidates.length === 0) {
-    throw new Error(
-      `selectHarnessInComposer: the runtime probed no gateway model for "${harness}", so the picker has no ` +
-        "option that would switch to it.",
-    );
-  }
+  const candidates = await observedLaunchModelIds(world, harness, "selectHarnessInComposer");
   const deadline = Date.now() + MODEL_PICKER_TIMEOUT_MS;
   while (Date.now() < deadline) {
     const trigger = p.locator("[data-composer-model-trigger]:not([disabled])").first();
@@ -1778,6 +1713,24 @@ async function selectHarnessInComposer(
     await sleep(2_000);
   }
   throw new Error(`selectHarnessInComposer: no "${harness}" model option appeared in the composer picker.`);
+}
+
+async function observedLaunchModelIds(
+  world: ReadyLocalWorld,
+  harness: LocalHarnessKind,
+  caller: string,
+): Promise<[string, ...string[]]> {
+  const response = await world.runtime.client.getHarnessLaunchOptions(harness);
+  if (response.harnessKind !== harness) {
+    throw new Error(
+      `${caller}: launch-options returned harness "${response.harnessKind}", expected "${harness}".`,
+    );
+  }
+  const models = response.options?.models.map((model) => model.id) ?? [];
+  if (models.length === 0) {
+    throw new Error(`${caller}: target observed no launch model for "${harness}".`);
+  }
+  return models as [string, ...string[]];
 }
 
 // ── Runtime/DOM read helpers ─────────────────────────────────────────────────
