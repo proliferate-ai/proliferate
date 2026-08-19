@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from proliferate.background.config import (
     DEFAULT_QUEUE,
     HEALTH_NOOP_TASK,
+    INTEGRATION_REVOCATION_PROCESS_TASK,
     PERIODIC_DEFAULT_QUEUE,
     WORKFLOW_CANCEL_TASK,
     WORKFLOW_DELIVER_TASK,
@@ -71,6 +72,7 @@ async def test_backlog_snapshot_reports_supported_pending_by_family(
     )
     assert snapshot.supported_pending_by_family == {
         HEALTH_NOOP_TASK: 2,
+        INTEGRATION_REVOCATION_PROCESS_TASK: 0,
         WORKFLOW_DELIVER_TASK: 0,
         WORKFLOW_OBSERVE_TASK: 0,
         WORKFLOW_CANCEL_TASK: 0,
@@ -113,12 +115,14 @@ async def test_run_relay_tick_publishes_and_snapshots(
     assert tick.failed == 0
     assert tick.supported_pending_by_family == {
         HEALTH_NOOP_TASK: 0,
+        INTEGRATION_REVOCATION_PROCESS_TASK: 0,
         WORKFLOW_DELIVER_TASK: 0,
         WORKFLOW_OBSERVE_TASK: 0,
         WORKFLOW_CANCEL_TASK: 0,
     }
     assert tick.supported_oldest_pending_age_by_family == {
         HEALTH_NOOP_TASK: 0.0,
+        INTEGRATION_REVOCATION_PROCESS_TASK: 0.0,
         WORKFLOW_DELIVER_TASK: 0.0,
         WORKFLOW_OBSERVE_TASK: 0.0,
         WORKFLOW_CANCEL_TASK: 0.0,

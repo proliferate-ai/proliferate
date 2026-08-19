@@ -10,6 +10,9 @@ from proliferate.integrations.integration_oauth.models import (
     AuthorizationServerMetadata,
     ProtectedResourceMetadata,
 )
+from proliferate.integrations.integration_oauth.revocation import (
+    validate_revocation_endpoint_origin,
+)
 
 
 def _protected_resource_candidates(server_url: str) -> list[str]:
@@ -174,10 +177,26 @@ async def discover_authorization_server_metadata(
                     "discovery_failed",
                     "This OAuth provider does not advertise PKCE S256 support.",
                 )
+            discovered_issuer = str(payload["issuer"])
+            token_endpoint = str(payload["token_endpoint"])
+            revocation_endpoint = (
+                str(payload["revocation_endpoint"]) if payload.get("revocation_endpoint") else None
+            )
+            if revocation_endpoint is not None:
+                try:
+                    validate_revocation_endpoint_origin(
+                        revocation_endpoint=revocation_endpoint,
+                        issuer=discovered_issuer,
+                        token_endpoint=token_endpoint,
+                    )
+                except IntegrationOAuthProviderError:
+                    # Revocation is optional. Ignore unsafe metadata rather than
+                    # persisting a future credential-bearing request target.
+                    revocation_endpoint = None
             return AuthorizationServerMetadata(
-                issuer=str(payload["issuer"]),
+                issuer=discovered_issuer,
                 authorization_endpoint=str(payload["authorization_endpoint"]),
-                token_endpoint=str(payload["token_endpoint"]),
+                token_endpoint=token_endpoint,
                 registration_endpoint=(
                     str(payload["registration_endpoint"])
                     if payload.get("registration_endpoint")
@@ -186,6 +205,7 @@ async def discover_authorization_server_metadata(
                 token_endpoint_auth_methods_supported=_string_tuple(
                     payload.get("token_endpoint_auth_methods_supported")
                 ),
+                revocation_endpoint=revocation_endpoint,
             )
     raise IntegrationOAuthProviderError(
         "discovery_failed",

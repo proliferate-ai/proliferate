@@ -3148,6 +3148,8 @@ export interface components {
              * Format: uuid
              */
             integrationAccountId: string;
+            /** Integrationaccountgrantversion */
+            integrationAccountGrantVersion: number;
             /** Integrationaccountauthversion */
             integrationAccountAuthVersion: number;
             /** Organizationid */
