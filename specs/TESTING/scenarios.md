@@ -154,22 +154,22 @@ Negatives: member setting org-scope secret → 403.
 
 ---
 
-## Tier 2 — integrations (connect + toggle, real definition, no outbound)
+## Tier 2 — integrations (catalog + policy, real definition, no outbound)
 
-### T2-INT-1: api_key connect + org policy toggle
+### T2-INT-1: cataloged provider + org policy toggle
 Ruled 2026-07-08: **no stub/fake integration provider** — same posture as
 no-fake-sandbox/no-mock-LLM. Use a **real cataloged api_key-kind integration
-definition**; the stored key is a placeholder value (connect/CRUD paths never
-validate it against the provider). No outbound call leaves the stack in
-tier 2 — the real tool call through the gateway is T3-INT-1's job.
-Steps: user connects via `POST /integrations/authentications`
-(authKind api_key) → account created. Org admin toggles
+definition. API-key authentication validates staged credentials against the
+real provider boundary, so Tier 2 does not submit a placeholder credential or
+fake that boundary. Mocked tier-1 server tests own stage/validate/swap; the real
+provider proof remains T3-INT-1.
+Steps: resolve the real seed through product data, read it from the catalog,
+assert its no-account health projection, then have an org admin toggle
 `PATCH /integrations/admin/organizations/{id}/definitions/{id}/enabled` off.
-Assert: `effective_enabled` reflects all three layers (org policy override >
-definition default, AND account enabled) — assert the composed value the UI
-shows, off then on again.
-Negatives: OAuth-kind connect is asserted only to the seam: flow row created,
-`authorizationUrl` returned (no real provider round-trip in tier 2).
+Assert: the catalog and health surfaces agree on the exact definition;
+`effective_enabled` reflects the org policy override over the definition
+default, off then on again; the health state remains `needs_auth` with no
+fabricated account. Authentication/provider validation is deliberately absent.
 
 ---
 

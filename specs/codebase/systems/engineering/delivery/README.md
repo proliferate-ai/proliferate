@@ -58,6 +58,10 @@ staging, the nightly train, or production promotion. The Worker reusable lane
 is a configured no-op while `WORKERS_DEPLOY_ENABLED` is false and deliberately
 fails if enabled before a canonical worker service and command exist.
 
+Hosted Playwright and Cargo Tauri dependency steps normalize the known Ubuntu
+runner mirror indirection to the canonical archive immediately before
+apt-managed installs; the required dependency sets are unchanged.
+
 See the [Hosted procedure](../../../../../guides/deploying/hosted.md).
 
 ### Background plane topology
