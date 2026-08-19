@@ -669,16 +669,13 @@ async fn an_adhoc_node_runs_beside_the_chain_and_never_moves_it() {
         adhoc.model.as_ref().and_then(|model| model.model_id.as_deref()),
         Some("haiku")
     );
-    let adhoc_session = fixture
-        .state
-        .session_service
-        .get_session(adhoc.session_id.as_deref().expect("adhoc session"))
-        .expect("load adhoc session")
-        .expect("adhoc session exists");
-    assert_eq!(
-        adhoc_session.requested_model_id.as_deref(),
-        Some("haiku")
-    );
+    // The cutover moved the requested pick into the immutable launch intent.
+    let store = fixture.state.session_service.store();
+    let intent = store
+        .find_launch_intent(adhoc.session_id.as_deref().expect("adhoc session"))
+        .expect("load adhoc launch intent")
+        .expect("adhoc launch intent exists");
+    assert_eq!(intent.model_id.as_deref(), Some("haiku"));
 
     fixture.touch_control("release-turn");
     let state = fixture
@@ -878,10 +875,8 @@ async fn a_failed_launch_fails_the_run_and_compensates_the_half_born_session() {
     std::fs::write(&dud, "#!/bin/sh\nexit 0\n").expect("write dud agent");
     make_executable(&dud).expect("make dud agent executable");
     std::env::set_var("ANYHARNESS_CLAUDE_AGENT_PROGRAM", &dud);
-    // The program swap changed the spawn spec, so the boot-time observation is
-    // basis-stale and admission would refuse the create BEFORE the row exists.
-    // Re-observe at the dud basis: this test's failure must land AFTER the
-    // stamp, in the compensation window.
+    // The swap changed the spawn spec (= observation basis); re-observe so the
+    // create is admitted and the failure lands AFTER the stamp, as intended.
     test_support::seed_observed_launch_options(&fixture.state.launch_options_service, "claude");
     let definition = chain(vec![agent_node("solo", "never launches")]);
     fixture.start("run-launchfail", definition);
