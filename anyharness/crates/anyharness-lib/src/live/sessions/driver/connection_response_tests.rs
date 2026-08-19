@@ -72,6 +72,54 @@ fn protected_response_with_neither_result_nor_error_fails_closed() {
 }
 
 #[test]
+fn protected_preflight_rejects_null_valued_result_and_error_keys() {
+    for (id, method, line) in [
+        (
+            21,
+            "session/fork",
+            r#"{"jsonrpc":"2.0","id":21,"result":{"sessionId":"child"},"error":null}"#,
+        ),
+        (
+            22,
+            "session/fork",
+            r#"{"jsonrpc":"2.0","id":22,"result":null,"error":{"code":-32001,"message":"provider-response-secret"}}"#,
+        ),
+        (
+            23,
+            "session/fork",
+            r#"{"jsonrpc":"2.0","id":23,"error":null}"#,
+        ),
+    ] {
+        let observer = protected_observer();
+        observe_request(&observer, &id.to_string(), method);
+        observe_response(&observer, line);
+
+        let error = validate_protected_incoming_line(&observer, line.to_string())
+            .expect_err("null-valued envelope fields must fail closed");
+        assert_eq!(error.to_string(), "protected ACP input was malformed");
+        assert!(!error.to_string().contains("provider-response-secret"));
+        assert_eq!(
+            observer.fork_wire_response(),
+            ForkWireResponse::MalformedEnvelope
+        );
+    }
+}
+
+#[test]
+fn protected_opaque_result_null_is_a_preserved_success_envelope() {
+    let observer = protected_observer();
+    observe_request(&observer, "24", "session/set_model");
+    let raw = r#"{"jsonrpc":"2.0","id":24,"result":null}"#;
+    observe_response(&observer, raw);
+
+    assert_eq!(
+        validate_protected_incoming_line(&observer, raw.to_string())
+            .expect("an opaque null result is valid JSON and is preserved"),
+        raw
+    );
+}
+
+#[test]
 fn protected_owned_extensions_preserve_opaque_success_product_data() {
     let observer = protected_observer();
     for (id, method) in [(14, "session/set_model"), (15, "_anyharness/goal/get")] {

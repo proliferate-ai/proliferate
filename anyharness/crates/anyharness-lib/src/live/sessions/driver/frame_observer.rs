@@ -78,16 +78,50 @@ pub(in crate::live::sessions) enum ForkWireResponse {
     MalformedEnvelope,
 }
 
+/// Raw top-level key presence for a JSON-RPC response envelope.
+///
+/// Serde collapses an explicit JSON `null` into `None`, so a decoded
+/// `Option` cannot tell `{"error":null}` from an absent `error`. Presence is
+/// therefore read off the raw line before any ACP decoding, so that
+/// `{"result":{...},"error":null}` stays a both-field rejection and an
+/// opaque `result: null` stays a preserved success envelope.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::live::sessions) struct RawResponseFields {
+    result_present: bool,
+    error_present: bool,
+    error_is_null: bool,
+}
+
+impl RawResponseFields {
+    /// `None` when the line is not a JSON object at all; callers treat that as
+    /// malformed rather than guessing at the envelope.
+    pub(in crate::live::sessions) fn from_line(line: &str) -> Option<Self> {
+        let object =
+            serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(line).ok()?;
+        Some(Self {
+            result_present: object.contains_key("result"),
+            error_present: object.contains_key("error"),
+            error_is_null: object.get("error").is_some_and(serde_json::Value::is_null),
+        })
+    }
+
+    /// Closed classification shared by the frame observer and the connection
+    /// preflight so both sides agree on every envelope shape.
+    pub(in crate::live::sessions) fn classify(self) -> ForkWireResponse {
+        match (self.result_present, self.error_present) {
+            (false, true) if !self.error_is_null => ForkWireResponse::ExplicitError,
+            (true, false) => ForkWireResponse::ResultEnvelope,
+            _ => ForkWireResponse::MalformedEnvelope,
+        }
+    }
+}
+
 #[derive(Default, Deserialize)]
 pub(super) struct FrameHeader<'a> {
     #[serde(borrow, default)]
     pub(super) method: Option<&'a str>,
     #[serde(borrow, default)]
     pub(super) id: Option<&'a RawValue>,
-    #[serde(borrow, default)]
-    pub(super) result: Option<&'a RawValue>,
-    #[serde(borrow, default)]
-    pub(super) error: Option<&'a RawValue>,
 }
 
 impl Default for FrameObserver {
@@ -162,11 +196,10 @@ impl FrameObserver {
             FrameDirection::Recv
                 if header.method.is_none() && observation.request_id.as_ref() == Some(&id) =>
             {
-                observation.response = match (header.result.is_some(), header.error.is_some()) {
-                    (false, true) => ForkWireResponse::ExplicitError,
-                    (true, false) => ForkWireResponse::ResultEnvelope,
-                    _ => ForkWireResponse::MalformedEnvelope,
-                };
+                observation.response = RawResponseFields::from_line(line).map_or(
+                    ForkWireResponse::MalformedEnvelope,
+                    RawResponseFields::classify,
+                );
             }
             _ => {}
         }
@@ -282,6 +315,69 @@ mod tests {
         );
         assert_eq!(
             observer.fork_wire_response(),
+            ForkWireResponse::MalformedEnvelope
+        );
+    }
+
+    #[test]
+    fn null_valued_result_and_error_keys_are_classified_by_raw_presence() {
+        let observer = FrameObserver::default();
+        observer.protect_process_local_fork();
+        observer.observe_frame(
+            FrameDirection::Send,
+            r#"{"jsonrpc":"2.0","id":21,"method":"session/fork"}"#,
+        );
+
+        // An explicit `error: null` alongside a result is still a both-field
+        // envelope: serde would have collapsed it into a plain success.
+        observer.observe_frame(
+            FrameDirection::Recv,
+            r#"{"jsonrpc":"2.0","id":21,"result":{"sessionId":"child"},"error":null}"#,
+        );
+        assert_eq!(
+            observer.fork_wire_response(),
+            ForkWireResponse::MalformedEnvelope
+        );
+
+        // A null result beside a real error is malformed, not an explicit error.
+        observer.observe_frame(
+            FrameDirection::Recv,
+            r#"{"jsonrpc":"2.0","id":21,"result":null,"error":{"code":-32602}}"#,
+        );
+        assert_eq!(
+            observer.fork_wire_response(),
+            ForkWireResponse::MalformedEnvelope
+        );
+
+        // `error: null` with no result key at all carries no error to report.
+        observer.observe_frame(
+            FrameDirection::Recv,
+            r#"{"jsonrpc":"2.0","id":21,"error":null}"#,
+        );
+        assert_eq!(
+            observer.fork_wire_response(),
+            ForkWireResponse::MalformedEnvelope
+        );
+
+        // A present-but-null result is a success envelope: `null` is valid JSON.
+        observer.observe_frame(
+            FrameDirection::Recv,
+            r#"{"jsonrpc":"2.0","id":21,"result":null}"#,
+        );
+        assert_eq!(
+            observer.fork_wire_response(),
+            ForkWireResponse::ResultEnvelope
+        );
+    }
+
+    #[test]
+    fn raw_response_fields_reject_non_object_lines() {
+        assert!(RawResponseFields::from_line("[1,2,3]").is_none());
+        assert!(RawResponseFields::from_line("not json at all").is_none());
+        assert_eq!(
+            RawResponseFields::from_line(r#"{"jsonrpc":"2.0","id":1}"#)
+                .expect("object line")
+                .classify(),
             ForkWireResponse::MalformedEnvelope
         );
     }

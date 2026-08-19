@@ -6,7 +6,9 @@ use futures::{AsyncBufReadExt, AsyncWriteExt, StreamExt};
 use tokio::sync::oneshot;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
-use crate::live::sessions::driver::frame_observer::{FrameObserver, ProtectedResponseKind};
+use crate::live::sessions::driver::frame_observer::{
+    ForkWireResponse, FrameObserver, ProtectedResponseKind, RawResponseFields,
+};
 use crate::live::sessions::driver::frame_tee::{log_frame, FrameDirection};
 use crate::live::sessions::driver::inbound::{cancelled_permission_response, InboundDoor};
 
@@ -264,21 +266,28 @@ fn validate_protected_incoming_line(
             let response_kind = observer
                 .take_protected_response_kind(&response_id)
                 .ok_or_else(protected_input_error)?;
-            match (&response.result, &response.error) {
-                (Some(result), None) => {
+            // Classified off the raw line: serde has already collapsed an
+            // explicit `null` into `None`, so the decoded envelope cannot
+            // distinguish `{"error":null}` from an absent `error`.
+            let fields = RawResponseFields::from_line(&line).ok_or_else(protected_input_error)?;
+            match fields.classify() {
+                ForkWireResponse::ResultEnvelope => {
                     if let ProtectedResponseKind::StandardAcp(method) = response_kind {
-                        acp::AgentResponse::from_value(method, result.clone())
+                        let result = response.result.clone().unwrap_or(serde_json::Value::Null);
+                        acp::AgentResponse::from_value(method, result)
                             .map_err(|_| protected_input_error())?;
                     }
                 }
-                (None, Some(_)) => {
-                    let error = response.error.as_mut().expect("matched protected error");
+                ForkWireResponse::ExplicitError => {
+                    let error = response.error.as_mut().ok_or_else(protected_input_error)?;
                     error.message = "protected ACP request failed".to_string();
                     error.data = None;
                     return serde_json::to_string(&acp::jsonrpcmsg::Message::Response(response))
                         .map_err(|_| protected_input_error());
                 }
-                _ => return Err(protected_input_error()),
+                ForkWireResponse::MalformedEnvelope | ForkWireResponse::None => {
+                    return Err(protected_input_error())
+                }
             }
         }
         acp::jsonrpcmsg::Message::Request(request) => {
