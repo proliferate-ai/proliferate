@@ -101,7 +101,7 @@ describe("FileTreeOverlay", () => {
     });
     queryMocks.root.data = { entries: rootEntries };
     queryMocks.stat.set("apps-link", {
-      data: { kind: "symlink" },
+      data: { kind: "directory" },
       isFetching: false,
       refetch: vi.fn(),
     });
@@ -143,12 +143,12 @@ describe("FileTreeOverlay", () => {
     queryMocks.stat.set("folder-link", {
       data: undefined,
       isFetching: false,
-      refetch: vi.fn(async () => ({ data: { kind: "symlink" } })),
+      refetch: vi.fn(async () => ({ data: { kind: "directory" } })),
     });
     queryMocks.stat.set("file-link.ts", {
       data: undefined,
       isFetching: false,
-      refetch: vi.fn(async () => ({ data: { kind: "symlink", sizeBytes: 0 } })),
+      refetch: vi.fn(async () => ({ data: { kind: "file", sizeBytes: 0 } })),
     });
     const onOpenFile = vi.fn();
     renderOverlay({ selectedPath: "", onOpenFile });
