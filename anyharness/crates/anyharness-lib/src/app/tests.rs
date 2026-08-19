@@ -204,6 +204,7 @@ async fn app_state_launches_and_serves_workspace_mcp_for_an_eligible_session() {
         AgentSeedStore::not_configured_dev(),
     )
     .expect("expected app state");
+    test_support::seed_scripted_claude_launch_options(&state.launch_options_service);
     test_support::seed_workspace_with_repo_root(
         &state.db,
         "workspace-1",
