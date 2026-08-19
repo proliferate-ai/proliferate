@@ -243,6 +243,26 @@ describe("TranscriptFramePipeline", () => {
     expect(frames.pending).toBe(1);
   });
 
+  it("coalesces repeated beginGlue calls before a frame into one writer pass", () => {
+    const { frames, pipeline } = makePipeline();
+    let passes = 0;
+    pipeline.setWriter({
+      runFramePass: () => {
+        passes += 1;
+      },
+      measureContentHeight: () => 500,
+      shouldContinueGlue: () => true,
+    });
+
+    pipeline.beginGlue();
+    pipeline.beginGlue();
+    pipeline.beginGlue();
+
+    expect(frames.pending).toBe(1);
+    frames.flushFrame();
+    expect(passes).toBe(1);
+  });
+
   // PRO-168 (rung 12, Q16): the eased-follow motion writer's continuation seam.
   // The instant writer never implements `hasPendingMotion`, so these prove the
   // seam is additive: absent it, existing behavior above is untouched (asserted
