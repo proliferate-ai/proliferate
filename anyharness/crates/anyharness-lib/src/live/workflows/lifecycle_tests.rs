@@ -869,15 +869,15 @@ async fn a_failed_launch_fails_the_run_and_compensates_the_half_born_session() {
 
     let fixture = fixture("wf-launchfail");
     // Swap the agent for a dud AFTER the fixture installed the real one: a
-    // valid executable (so readiness passes and the durable session row gets
-    // created) that exits without ever speaking ACP (so the start fails —
-    // the failure lands AFTER the row exists, the compensation window). The
-    // fixture holds the env lock for its whole life, so the direct set_var
-    // is race-free, and the fixture's own guard restores the value on drop.
+    // valid executable (readiness passes, the durable row is created) that
+    // never speaks ACP, so the failure lands AFTER the row exists — the
+    // compensation window. The fixture's env lock makes set_var race-free;
+    // the swap moves the basis, so re-observe or admission refuses it first.
     let dud = fixture.runtime_home.join("dud-agent");
     std::fs::write(&dud, "#!/bin/sh\nexit 0\n").expect("write dud agent");
     make_executable(&dud).expect("make dud agent executable");
     std::env::set_var("ANYHARNESS_CLAUDE_AGENT_PROGRAM", &dud);
+    test_support::seed_scripted_claude_launch_options(&fixture.state.launch_options_service);
     let definition = chain(vec![agent_node("solo", "never launches")]);
     fixture.start("run-launchfail", definition);
 

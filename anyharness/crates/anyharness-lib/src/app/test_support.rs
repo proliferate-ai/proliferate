@@ -3,8 +3,8 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::domains::agents::launch_options::{
-    HarnessLaunchDefaults, HarnessLaunchModel, HarnessLaunchOptions,
-    HarnessLaunchOptionsService,
+    HarnessLaunchDefaults, HarnessLaunchModel, HarnessLaunchOptions, HarnessLaunchOptionsService,
+    HarnessLaunchOptionsState,
 };
 use crate::domains::agents::route_auth::{apply_state_file, AgentAuthState};
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
@@ -48,6 +48,12 @@ pub(crate) fn seed_scripted_claude_launch_options(service: &HarnessLaunchOptions
 
 /// Seed one target-observed launch-option statement for `harness_kind` so
 /// intent validation at the start seam has a current-basis observation.
+///
+/// Only a CURRENT-basis observation is a no-op. A fixture that swaps the
+/// harness executable after booting moves the basis, which strands the earlier
+/// statement (`read` projects it as `Detecting`); calling this again after the
+/// swap re-observes against the new target instead of silently leaving
+/// admission to reject every launch.
 pub(crate) fn seed_observed_launch_options(
     service: &HarnessLaunchOptionsService,
     harness_kind: &str,
@@ -55,7 +61,7 @@ pub(crate) fn seed_observed_launch_options(
     if service
         .read(harness_kind)
         .expect("read launch options")
-        .is_some()
+        .is_some_and(|options| options.state == HarnessLaunchOptionsState::Observed)
     {
         return;
     }
