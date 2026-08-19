@@ -294,7 +294,7 @@ pub fn enrich_model(
             provider,
             status: Some(model.status),
             effort: model_effort(model),
-            fast_mode: Some(model.controls.contains_key("fast_mode")),
+            fast_mode: Some(model.supports_fast_mode()),
             modes: model_modes(model),
         }
     } else if let Some(model) = foreign_match {

@@ -267,13 +267,19 @@ const CONTROL_MAPPINGS = {
   claude: {
     mode: { createField: "modeId", liveConfigId: "mode" },
     effort: { liveConfigId: "effort" },
-    fast_mode: { liveConfigId: "fast_mode" },
+    // claude names this control `fast` (codex names its own `fast-mode`);
+    // the key must match the probed option id or the control ships unmapped
+    // and no desktop surface can apply it.
+    fast: { liveConfigId: "fast" },
   },
   codex: {
     mode: { createField: "modeId", liveConfigId: "mode" },
     collaboration_mode: { liveConfigId: "collaboration_mode" },
     reasoning_effort: { liveConfigId: "reasoning_effort" },
+    // The rung-1 fork renamed this option from `fast_mode` to `fast-mode`;
+    // both spellings stay mapped so a re-probe against either fork works.
     fast_mode: { liveConfigId: "fast_mode" },
+    "fast-mode": { liveConfigId: "fast-mode" },
   },
   cursor: { mode: { createField: "modeId", liveConfigId: "mode" } },
   opencode: { mode: { createField: "modeId", liveConfigId: "mode" } },

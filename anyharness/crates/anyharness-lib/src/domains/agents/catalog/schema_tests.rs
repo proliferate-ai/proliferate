@@ -288,3 +288,121 @@ fn registry_gateway_capability_matches_render_assumption() {
         "cursor must never be gateway-capable (render.rs returns UnsupportedRoute)"
     );
 }
+
+/// PRO-318: claude's fast-mode option is `fast`, not codex's `fast_mode`.
+/// The control must carry an apply mapping and every model that declares it
+/// must report the capability, or Opus ships a Fast toggle nothing can apply.
+#[test]
+fn claude_fast_control_is_mapped_and_reported() {
+    let catalog = crate::domains::agents::catalog::bundled::bundled_agent_catalog_document();
+    let claude = catalog
+        .agents
+        .iter()
+        .find(|agent| agent.kind == "claude")
+        .expect("claude agent");
+    let fast = claude
+        .session
+        .controls
+        .iter()
+        .find(|control| control.key == "fast")
+        .expect("claude declares a `fast` control");
+
+    assert_eq!(
+        fast.mapping
+            .as_ref()
+            .and_then(|mapping| mapping.live_config_id.as_deref()),
+        Some("fast"),
+        "the fast control needs a live-apply path or no surface can set it"
+    );
+    for (id, name, description_prefix) in [
+        ("opus", "Opus 5", Some("Opus 5")),
+        ("opus[1m]", "Opus 5 (1M context)", Some("Opus 5")),
+        ("claude-opus-4-8", "Opus 4.8", None),
+    ] {
+        let model = claude
+            .session
+            .models
+            .iter()
+            .find(|model| model.id == id)
+            .unwrap_or_else(|| panic!("missing {name} model"));
+        if let Some(prefix) = description_prefix {
+            assert!(model
+                .description
+                .as_deref()
+                .is_some_and(|value| value.starts_with(prefix)));
+        }
+        assert!(model.supports_fast_mode(), "{name} supports fast mode");
+    }
+}
+
+/// The rung-1 codex fork renamed its fast option `fast_mode` -> `fast-mode`.
+/// The bundled control must stay mapped and the models that declare it must
+/// report the capability, mirroring the claude coverage above.
+#[test]
+fn codex_fast_mode_control_is_mapped_and_reported() {
+    let catalog = crate::domains::agents::catalog::bundled::bundled_agent_catalog_document();
+    let codex = catalog
+        .agents
+        .iter()
+        .find(|agent| agent.kind == "codex")
+        .expect("codex agent");
+    let fast = codex
+        .session
+        .controls
+        .iter()
+        .find(|control| control.key == "fast-mode")
+        .expect("codex declares a `fast-mode` control");
+
+    assert_eq!(
+        fast.mapping
+            .as_ref()
+            .and_then(|mapping| mapping.live_config_id.as_deref()),
+        Some("fast-mode"),
+        "the fast-mode control needs a live-apply path or no surface can set it"
+    );
+    let carriers: Vec<_> = codex
+        .session
+        .models
+        .iter()
+        .filter(|model| model.controls.contains_key("fast-mode"))
+        .collect();
+    assert!(
+        !carriers.is_empty(),
+        "at least one codex model carries fast-mode"
+    );
+    for model in carriers {
+        assert!(
+            model.supports_fast_mode(),
+            "{} supports fast mode",
+            model.id
+        );
+    }
+}
+
+/// Cursor's `fast` entry is a probe-observed bracket-param variant dimension
+/// with a single value per model — not a switchable control. It must not be
+/// classified as fast-mode capability.
+#[test]
+fn cursor_single_value_fast_is_not_fast_mode_capability() {
+    let catalog = crate::domains::agents::catalog::bundled::bundled_agent_catalog_document();
+    let cursor = catalog
+        .agents
+        .iter()
+        .find(|agent| agent.kind == "cursor")
+        .expect("cursor agent");
+    let carriers: Vec<_> = cursor
+        .session
+        .models
+        .iter()
+        .filter(|model| model.controls.contains_key("fast"))
+        .collect();
+    assert!(!carriers.is_empty(), "cursor models carry a `fast` variant");
+    for model in carriers {
+        assert_eq!(model.controls["fast"].values.len(), 1);
+        assert!(
+            !model.supports_fast_mode(),
+            "{} must not report fast-mode capability",
+            model.id
+        );
+    }
+}
