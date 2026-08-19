@@ -25,6 +25,54 @@ const WORKFLOWS_ROOT = join(REPO_ROOT, ".github", "workflows");
 const WITH_DEPS_MARKER = "--with-deps";
 const HELPER_COMMAND =
   'sudo "$(command -v node)" "$GITHUB_WORKSPACE/scripts/ci-cd/configure-playwright-apt.mjs"';
+const HOSTED_TWO_STANZA_SOURCE = [
+  "# Hosted runner Ubuntu source configuration",
+  `# The mirror indirection remains documented as ${RUNNER_MIRROR_URI}`,
+  "",
+  "Types: deb",
+  `URIs: ${RUNNER_MIRROR_URI}`,
+  "Suites: noble noble-updates noble-backports",
+  "Components: main universe restricted multiverse",
+  "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg",
+  "",
+  "Types: deb",
+  `URIs: ${RUNNER_MIRROR_URI}`,
+  "Suites: noble-security",
+  "Components: main universe restricted multiverse",
+  "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg",
+  "",
+].join("\n");
+
+function twoStanzaSource({
+  archiveUri = RUNNER_MIRROR_URI,
+  securityUri = RUNNER_MIRROR_URI,
+  owners = ["archive", "security"],
+  lineEnding = "\n",
+  includeComments = false,
+} = {}) {
+  const stanzaByOwner = {
+    archive: {
+      uri: archiveUri,
+      suites: "noble noble-updates noble-backports",
+    },
+    security: {
+      uri: securityUri,
+      suites: "noble-security",
+    },
+  };
+  const stanzas = owners.map((owner) => {
+    const stanza = stanzaByOwner[owner];
+    return [
+      ...(includeComments ? [`# ${owner} suite owner`] : []),
+      "Types: deb",
+      `URIs: ${stanza.uri}`,
+      `Suites: ${stanza.suites}`,
+      "Components: main universe restricted multiverse",
+      "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg",
+    ].join(lineEnding);
+  });
+  return `${stanzas.join(`${lineEnding}${lineEnding}`)}${lineEnding}`;
+}
 
 async function withTemporarySource(source, callback) {
   const directory = await mkdtemp(join(tmpdir(), "configure-playwright-apt-"));
@@ -54,34 +102,43 @@ function indentation(line) {
   return line.length - line.trimStart().length;
 }
 
-test("normalizes the known hosted-runner mirror without changing unrelated bytes", () => {
-  const input = [
-    "# runner-owned source",
-    "Types: deb",
-    `URIs: ${RUNNER_MIRROR_URI}  `,
-    "Suites: noble noble-updates noble-backports",
-    "Components: main universe restricted multiverse",
-    "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg",
-    "",
-  ].join("\r\n");
+test("normalizes both hosted archive and security mirror stanzas", async () => {
+  const expected = HOSTED_TWO_STANZA_SOURCE.replaceAll(
+    `URIs: ${RUNNER_MIRROR_URI}`,
+    `URIs: ${CANONICAL_UBUNTU_URI}`,
+  );
+  const normalized = normalizePlaywrightAptSource(HOSTED_TWO_STANZA_SOURCE);
+
+  assert.equal(normalized.changed, true);
+  assert.equal(normalized.source, expected);
+
+  await withTemporarySource(HOSTED_TWO_STANZA_SOURCE, async (sourcePath) => {
+    assert.equal(await configurePlaywrightAptSource(sourcePath), true);
+    assert.equal(await readFile(sourcePath, "utf8"), expected);
+  });
+});
+
+test("preserves comments, critical fields, CRLF bytes, and reversed stanza order", () => {
+  const input = twoStanzaSource({
+    owners: ["security", "archive"],
+    lineEnding: "\r\n",
+    includeComments: true,
+  });
 
   const normalized = normalizePlaywrightAptSource(input);
 
   assert.equal(normalized.changed, true);
   assert.equal(
     normalized.source,
-    input.replace(RUNNER_MIRROR_URI, CANONICAL_UBUNTU_URI),
+    input.replaceAll(RUNNER_MIRROR_URI, CANONICAL_UBUNTU_URI),
   );
 });
 
-test("accepts the canonical source without rewriting the file", async () => {
-  const input = [
-    "Types: deb",
-    `URIs: ${CANONICAL_UBUNTU_URI}`,
-    "Suites: noble noble-updates noble-backports",
-    "Components: main universe restricted multiverse",
-    "",
-  ].join("\n");
+test("accepts both canonical stanzas without rewriting the file", async () => {
+  const input = twoStanzaSource({
+    archiveUri: CANONICAL_UBUNTU_URI,
+    securityUri: CANONICAL_UBUNTU_URI,
+  });
 
   await withTemporarySource(input, async (sourcePath) => {
     const fixedTime = new Date("2000-01-01T00:00:00.000Z");
@@ -96,19 +153,81 @@ test("accepts the canonical source without rewriting the file", async () => {
   });
 });
 
-test("rejects unknown source shapes without modifying the file", async (context) => {
+test("rejects unknown two-stanza shapes without modifying the file", async (context) => {
   const cases = {
-    missing: "Types: deb\nSuites: noble\n",
-    duplicate: `URIs: ${RUNNER_MIRROR_URI}\nURIs: ${RUNNER_MIRROR_URI}\n`,
-    mixed: `URIs: ${RUNNER_MIRROR_URI}\nURIs: ${CANONICAL_UBUNTU_URI}\n`,
-    "multiple values": `URIs: ${RUNNER_MIRROR_URI} ${CANONICAL_UBUNTU_URI}\n`,
-    unknown: "URIs: https://regional.example.invalid/ubuntu/\n",
+    "missing security stanza": twoStanzaSource({ owners: ["archive"] }),
+    "extra Ubuntu stanza": twoStanzaSource({
+      owners: ["archive", "security", "archive"],
+    }),
+    "duplicate archive suite owner": twoStanzaSource({
+      owners: ["archive", "archive"],
+    }),
+    "unexpected suite ownership": HOSTED_TWO_STANZA_SOURCE.replace(
+      "Suites: noble-security",
+      "Suites: noble-security noble-updates",
+    ),
+    "mirror plus canonical": twoStanzaSource({
+      securityUri: CANONICAL_UBUNTU_URI,
+    }),
+    "multiple URI values": twoStanzaSource({
+      archiveUri: `${RUNNER_MIRROR_URI} ${CANONICAL_UBUNTU_URI}`,
+    }),
+    "unknown URI": twoStanzaSource({
+      securityUri: "https://regional.example.invalid/ubuntu/",
+    }),
+    "unknown Types value": HOSTED_TWO_STANZA_SOURCE.replace(
+      "Types: deb",
+      "Types: deb deb-src",
+    ),
+    "unknown Components value": HOSTED_TWO_STANZA_SOURCE.replace(
+      "Components: main universe restricted multiverse",
+      "Components: main universe",
+    ),
+    "unknown Signed-By value": HOSTED_TWO_STANZA_SOURCE.replace(
+      "/usr/share/keyrings/ubuntu-archive-keyring.gpg",
+      "/tmp/unknown-key.gpg",
+    ),
+    "missing critical field": HOSTED_TWO_STANZA_SOURCE.replace(
+      "Components: main universe restricted multiverse\n",
+      "",
+    ),
+    "duplicate critical field": HOSTED_TWO_STANZA_SOURCE.replace(
+      "Types: deb\n",
+      "Types: deb\nTypes: deb\n",
+    ),
+    "folded critical field": HOSTED_TWO_STANZA_SOURCE.replace(
+      "Suites: noble-security",
+      "Suites: noble-security\n noble-updates",
+    ),
+    "unknown critical field casing": HOSTED_TWO_STANZA_SOURCE.replace(
+      "Signed-By:",
+      "Signed-by:",
+    ),
+    "extra Enabled field": HOSTED_TWO_STANZA_SOURCE.replace(
+      "Types: deb\n",
+      "Enabled: no\nTypes: deb\n",
+    ),
+    "extra Architectures field": HOSTED_TWO_STANZA_SOURCE.replace(
+      "Types: deb\n",
+      "Types: deb\nArchitectures: arm64\n",
+    ),
+    "orphan continuation": HOSTED_TWO_STANZA_SOURCE.replace(
+      "Types: deb\n",
+      " unexpected\nTypes: deb\n",
+    ),
   };
 
   for (const [name, input] of Object.entries(cases)) {
     await context.test(name, async () => {
       await withTemporarySource(input, async (sourcePath) => {
+        const fixedTime = new Date("2000-01-01T00:00:00.000Z");
+        await utimes(sourcePath, fixedTime, fixedTime);
+        const before = await stat(sourcePath, { bigint: true });
+
         await assert.rejects(configurePlaywrightAptSource(sourcePath));
+
+        const after = await stat(sourcePath, { bigint: true });
+        assert.equal(after.mtimeNs, before.mtimeNs);
         assert.equal(await readFile(sourcePath, "utf8"), input);
       });
     });
