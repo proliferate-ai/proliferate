@@ -52,9 +52,9 @@ pub(super) const PLACEMENT_CONFLICT: &str = "WORKFLOW_PLACEMENT_CONFLICT";
 /// not know. 404: the reference is dangling, not a conflict.
 pub(super) const WORKSPACE_NOT_FOUND: &str = "WORKFLOW_WORKSPACE_NOT_FOUND";
 /// ExistingWorkspace placement names a real workspace that cannot host a run:
-/// archived, checkout gone, not a local checkout, or registered to a
-/// different repo root than the snapshot claims. Retrying the same snapshot
-/// cannot fix it — 409.
+/// archived, checkout gone, or not a local checkout. `repoConfigId` resolves
+/// independently and is never compared with the workspace's repo root.
+/// Retrying the same snapshot cannot fix an ineligible workspace — 409.
 pub(super) const WORKSPACE_NOT_ELIGIBLE: &str = "WORKFLOW_WORKSPACE_NOT_ELIGIBLE";
 
 /// The workflow-runs route table, merged into the v1 router by `build_router`
@@ -196,8 +196,9 @@ fn map_placement_error(error: WorkflowPlacementError) -> ApiError {
 }
 
 /// A placed workspace plus what compensation must tear down if a later step
-/// fails before any row exists — populated only for the worktree mode; a
-/// repo-root placement is the user's own checkout and is never torn down.
+/// fails before any row exists — populated only for the worktree mode;
+/// repo-root and adopted existing-workspace placements are the user's own
+/// checkout and are never torn down.
 struct PlacedWorkspace {
     workspace: WorkspaceRecord,
     worktree: Option<ResolvedWorkflowPlacement>,
@@ -228,9 +229,10 @@ async fn place_workspace(
     };
 
     // F-A1: ExistingWorkspace ADOPTS the caller's workspace after validation
-    // (exists, active, repo-backed and present on disk, registered to the
-    // snapshot's repo root). Adoption records the association on the run row
-    // alone — no creator-context rewrite, no worktree artifact, and therefore
+    // (exists, active, local checkout present). repoConfigId independently
+    // resolved above; it has no required id or path relationship with the
+    // adopted workspace. Adoption records the association on the run row alone
+    // — no creator-context rewrite, no worktree artifact, and therefore
     // nothing for compensation to tear down.
     if placement.mode == PlacementMode::ExistingWorkspace {
         let workspace_id = placement
@@ -264,11 +266,10 @@ async fn place_workspace(
                 WORKSPACE_NOT_ELIGIBLE,
             ));
         }
-        // Deliberately NOT checked: workspace.repo_root_id vs the snapshot's
-        // repoConfigId. Workspace registration can mint its own repo-root row
-        // for the same checkout, so an equality check would reject the very
-        // workspaces this mode exists for; the id was still validated as a
-        // known repo root above (Ruling A).
+        // Deliberately NOT checked: workspace.repo_root_id or checkout path vs
+        // the snapshot's repoConfigId. Cross-repository adoption is valid; the
+        // only relation is that repoConfigId independently resolved above
+        // (Ruling A / F-A1 erratum).
         return Ok(PlacedWorkspace {
             workspace,
             worktree: None,

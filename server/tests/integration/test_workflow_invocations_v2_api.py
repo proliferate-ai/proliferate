@@ -85,15 +85,19 @@ def _invocation_body(
     repo_config_id: str,
     *,
     mode: str = "worktree",
+    workspace_id: str | None = None,
     arguments: dict[str, object] | None = None,
 ) -> dict[str, object]:
+    placement = {"repoConfigId": repo_config_id, "mode": mode}
+    if workspace_id is not None:
+        placement["workspaceId"] = workspace_id
     return {
         "schemaVersion": 2,
         "workflowDefinitionId": definition_id,
         "arguments": {"topic": "workflow engines", "depth": "deep"}
         if arguments is None
         else arguments,
-        "placement": {"repoConfigId": repo_config_id, "mode": mode},
+        "placement": placement,
     }
 
 
@@ -205,6 +209,72 @@ async def test_v2_invocation_freezes_the_run_snapshot_contract_shape(
 
 
 @pytest.mark.asyncio
+async def test_v2_existing_workspace_invocation_preserves_workspace_id(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner = await register_and_login(client, "wf2-inv-existing-workspace@example.com")
+    repo = await _seed_repo(db_session, user_id=owner["user_id"], name="adopted-repo")
+    definition = await _create_v2_definition(client, owner)
+
+    invocation_id = str(uuid4())
+    workspace_id = "workspace-adopted-1"
+    body = _invocation_body(
+        str(definition["id"]),
+        str(repo.id),
+        mode="existing_workspace",
+        workspace_id=workspace_id,
+    )
+    created = await client.put(
+        f"/v1/workflow-invocations/{invocation_id}",
+        headers=_headers(owner),
+        json=body,
+    )
+    assert created.status_code == 201
+    frozen = created.json()
+    assert frozen["placement"] == {
+        "repoConfigId": str(repo.id),
+        "mode": "existing_workspace",
+        "workspaceId": workspace_id,
+    }
+
+    invocation_row = (
+        await db_session.execute(
+            select(WorkflowInvocation).where(WorkflowInvocation.id == UUID(invocation_id))
+        )
+    ).scalar_one()
+    assert invocation_row.creation_request_json["placement"] == frozen["placement"]
+    assert invocation_row.invocation_json["placement"] == frozen["placement"]
+
+    replay = await client.put(
+        f"/v1/workflow-invocations/{invocation_id}",
+        headers=_headers(owner),
+        json=body,
+    )
+    assert replay.status_code == 200
+    assert replay.json() == frozen
+
+    conflicting_workspace = await client.put(
+        f"/v1/workflow-invocations/{invocation_id}",
+        headers=_headers(owner),
+        json=_invocation_body(
+            str(definition["id"]),
+            str(repo.id),
+            mode="existing_workspace",
+            workspace_id="workspace-adopted-2",
+        ),
+    )
+    assert conflicting_workspace.status_code == 409
+
+    fetched = await client.get(
+        f"/v1/workflow-invocations/{invocation_id}",
+        headers=_headers(owner),
+    )
+    assert fetched.status_code == 200
+    assert fetched.json() == frozen
+
+
+@pytest.mark.asyncio
 async def test_v2_invocation_argument_and_placement_rejections(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -259,7 +329,34 @@ async def test_v2_invocation_argument_and_placement_rejections(
         "repoConfigId": "rr_local_9f2c",
         "mode": "repo_root",
     }
-    # Shape still holds: empty ids and unknown modes are rejected.
+    # Shape still holds: workspaceId travels exactly with existing_workspace,
+    # and empty ids or unknown modes are rejected before any row is inserted.
+    invalid_placements = [
+        {"repoConfigId": str(repo.id), "mode": "existing_workspace"},
+        {
+            "repoConfigId": str(repo.id),
+            "mode": "existing_workspace",
+            "workspaceId": "",
+        },
+        {
+            "repoConfigId": str(repo.id),
+            "mode": "worktree",
+            "workspaceId": "workspace-stray",
+        },
+    ]
+    for placement in invalid_placements:
+        invalid_id = uuid4()
+        rejected = await client.put(
+            f"/v1/workflow-invocations/{invalid_id}",
+            headers=_headers(owner),
+            json={
+                **_invocation_body(definition_id, str(repo.id)),
+                "placement": placement,
+            },
+        )
+        assert rejected.status_code == 422
+        assert await db_session.get(WorkflowInvocation, invalid_id) is None
+
     assert await put(_invocation_body(definition_id, "")) == 422
     assert await put(_invocation_body(definition_id, str(repo.id), mode="floating")) == 422
 

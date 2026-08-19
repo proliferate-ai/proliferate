@@ -1,4 +1,4 @@
-//! Tier-2 tests for F-A1's ExistingWorkspace placement: adoption of the
+//! Tier-1 tests for F-A1's ExistingWorkspace placement: adoption of the
 //! caller's workspace (no worktree, no provenance rewrite), the re-scoped
 //! one-live-run law (N concurrent runs admitted under this mode only), the
 //! stable eligibility errors, and the cardinal-sin negative control — a
@@ -146,6 +146,29 @@ async fn existing_workspace_placement_answers_stable_validation_errors() {
         .resolve_from_path(&side_dir.to_string_lossy())
         .expect("register side workspace")
         .workspace;
+
+    // F-A1 erratum: repoConfigId independently names the fixture's primary
+    // repo root, while this workspace is a different repository. No equality
+    // or path relationship is required, so cross-repository adoption succeeds.
+    let cross_repo_run = run_uuid(0x27);
+    let mut cross_repo_body = fixture.snapshot(single_node_definition("wrap up"));
+    cross_repo_body["placement"]["mode"] = json!("existing_workspace");
+    cross_repo_body["placement"]["workspaceId"] = json!(side.id);
+    let (status, projection) = fixture
+        .request(
+            Method::PUT,
+            &format!("/v1/workflow-runs/{cross_repo_run}"),
+            Some(cross_repo_body),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{projection}");
+    assert_eq!(projection["run"]["workspaceId"], json!(side.id));
+    fixture
+        .wait_for_run(&cross_repo_run, "cross-repo run completes", |state| {
+            state.run.status == WorkflowRunStatus::Completed
+        })
+        .await;
+
     std::fs::remove_dir_all(&side_dir).expect("delete checkout");
     let mut body = fixture.snapshot(single_node_definition("wrap up"));
     body["placement"]["mode"] = json!("existing_workspace");
