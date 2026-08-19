@@ -1,7 +1,9 @@
 import { create } from "zustand";
 import { normalizeContentSearchQuery } from "#product/lib/domain/content-search/content-search";
 
-export type ContentSearchSurface = "chat" | "file" | "review";
+import type { ContentSearchSurface } from "#product/lib/domain/content-search/content-search-placement";
+
+export type { ContentSearchSurface };
 
 export interface ContentSearchUnitRegistration {
   unitId: string;

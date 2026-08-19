@@ -1,4 +1,4 @@
-import type { ContentSearchSurface } from "#product/stores/search/content-search-store";
+export type ContentSearchSurface = "chat" | "file" | "review";
 
 /**
  * Fixed shell geometry the placement contract is derived from (see 02B spec
