@@ -663,22 +663,22 @@ async fn an_adhoc_node_runs_beside_the_chain_and_never_moves_it() {
     );
     assert!(prompt_texts(&fixture.script.request_log)
         .contains(&"adhoc side question".to_string()));
-    // The pick persisted on the row and reached the minted session (F3): a
-    // model choice the API accepted must never silently launch the default.
+    // The pick persisted on the row and reached the minted session's launch
+    // intent (F3): a model choice the API accepted must never silently launch
+    // the default. The intent is the authority — the live actor applies it
+    // strictly at start; the legacy sessions column is written elsewhere.
     assert_eq!(
         adhoc.model.as_ref().and_then(|model| model.model_id.as_deref()),
         Some("haiku")
     );
-    let adhoc_session = fixture
+    let intent = fixture
         .state
         .session_service
-        .get_session(adhoc.session_id.as_deref().expect("adhoc session"))
-        .expect("load adhoc session")
-        .expect("adhoc session exists");
-    assert_eq!(
-        adhoc_session.requested_model_id.as_deref(),
-        Some("haiku")
-    );
+        .store()
+        .find_launch_intent(adhoc.session_id.as_deref().expect("adhoc session"))
+        .expect("load adhoc launch intent")
+        .expect("adhoc launch intent exists");
+    assert_eq!(intent.model_id.as_deref(), Some("haiku"));
 
     fixture.touch_control("release-turn");
     let state = fixture
