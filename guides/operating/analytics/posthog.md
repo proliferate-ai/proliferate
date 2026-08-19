@@ -44,7 +44,7 @@ network requests in screenshots.
 4. In the authenticated PostHog UI, filter read-only by the exact release,
    environment, and test account distinct id. Verify:
    - the expected allowlisted Desktop event or Web/Mobile view event arrived;
-   - identity is the user UUID with email and optional display name;
+   - identity is the authenticated user UUID only, with no email or display-name person properties;
    - sign-out produces a new anonymous identity on the next session;
    - no prompt, transcript, repo name, file path, raw URL, terminal text,
      token, or raw error is present.

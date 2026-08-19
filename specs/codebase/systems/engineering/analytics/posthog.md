@@ -10,7 +10,7 @@ initialized by the Server API.
 | --- | --- |
 | Deployment modes | Desktop initializes PostHog only in `hosted_product`. Web and Mobile initialize their adapters when the build has a key and telemetry is not disabled; those are current hosted-product clients. Local-dev and self-managed Desktop do not initialize PostHog. |
 | Source components | Desktop `apps/desktop/src/lib/integrations/telemetry/{client,config,posthog}.ts`; Web `apps/web/src/lib/integrations/telemetry/{config,posthog}.ts`; Mobile `apps/mobile/src/lib/integrations/telemetry/{config,posthog}.ts`. |
-| Identity and data | Distinct id is the authenticated user UUID; identify properties are email and optional display name. Captured data is the fixed event surface below plus scrubbed low-cardinality properties and registered app/surface/environment/release context. |
+| Identity and data | Distinct id is the authenticated user UUID, and identify calls send that UUID only with no email, display name, or other person properties. Captured data is the fixed event surface below plus scrubbed low-cardinality properties and registered app/surface/environment/release context. |
 | Destination | The configured PostHog host, defaulting to `https://us.i.posthog.com`. |
 | Enable, disable, or no-op | A missing API key makes each adapter inert. Web/Mobile also honor their public telemetry-disable setting; Desktop additionally requires hosted-product routing. Replay has a separate false-by-default gate. |
 | Privacy and replay | Autocapture and automatic page views are off. Payload scrubbers remove sensitive values. Replay is off by default; enabled Desktop/Web replay masks inputs and honors block/mask selectors, and Mobile masks text, images, and sandboxed views. |
@@ -44,6 +44,9 @@ cloud_workspace_created
 support_report_submitted
 desktop_keychain_access_failed
 ```
+
+`desktop_keychain_access_failed` carries only the keychain `operation` and a
+closed `failure_kind`; raw error text is never sent.
 
 Other typed product events may become Sentry breadcrumbs when vendor telemetry
 is enabled, but are dropped before PostHog. Sign-out calls `reset(true)`.
