@@ -176,7 +176,7 @@ AnyHarness owns its separate user-requested archive, unarchive, and purge
 operations. Cloud provider loss is also separate: it marks affected product
 rows lost rather than pretending their runtime content can be restored.
 
-There is no longer a backstop retention pass. Automatic pruning was the
+There is no longer a backstop checkout/worktree-retention pass. Automatic pruning was the
 retire lifecycle's sweeper, and both left together when `retired` was
 absorbed into `archived` — the runtime no longer deletes a checkout the user
 did not ask it to delete. A workspace's recorded path stays reserved for its
