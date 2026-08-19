@@ -71,8 +71,12 @@ test("public method wires the full fixed plan with one bearer and no mutation", 
 });
 
 test("the maximal legitimate plan is exactly 37 sequential requests", async () => {
-  const { client, trace } = publicFixture(maximalPlan());
+  const contexts = [];
+  const { client, trace } = publicFixture(maximalPlan(), {
+    tokenProvider(context) { contexts.push(context); return "inventory-token"; },
+  });
   const result = await client.readMetadataInventory();
+  assert.equal(contexts.length, 1);
   assert.equal(trace.length, 37);
   assert.equal(result.surfaces.folders.itemCount, 499);
   assert.equal(result.surfaces.dashboards.itemCount, 499);
@@ -80,7 +84,9 @@ test("the maximal legitimate plan is exactly 37 sequential requests", async () =
   assert.equal(result.surfaces.datasourceHealth.itemCount, 16);
   assert.equal(trace[0].path, "/api/health");
   assert.equal(trace[20].path, "/api/serviceaccounts/search?perpage=100&page=5");
-  assert.ok(trace.slice(21).every((entry) => entry.path.includes("/health")));
+  const healthPaths = Array.from({ length: 16 }, (_, index) => `/api/datasources/uid/ds${index}/health`).sort();
+  assert.deepEqual(trace.slice(21).map((entry) => entry.path), healthPaths);
+  assert.ok(trace.every((entry) => entry.authorizationPresent && entry.authorizationEqual));
 });
 
 test("client retains the exact existing public method set plus inventory", () => {
@@ -100,7 +106,7 @@ test("client retains the exact existing public method set plus inventory", () =>
   ]);
 });
 
-test("legacy reads still call tokenProvider synchronously with zero arguments once per request", async () => {
+test("legacy methods still call tokenProvider synchronously with zero arguments once per request", async () => {
   const providerCalls = [];
   const requests = [];
   let providerCalled = false;
@@ -114,9 +120,21 @@ test("legacy reads still call tokenProvider synchronously with zero arguments on
   });
   await client.listAlertRules();
   providerCalled = false;
+  await client.listAlertRulesViaRuler();
+  providerCalled = false;
+  await client.getAlertRule("uid");
+  providerCalled = false;
   await client.getContactPoints();
-  assert.deepEqual(providerCalls.map((args) => args.length), [0, 0]);
-  assert.equal(requests.length, 2);
+  providerCalled = false;
+  await client.getNotificationPolicy();
+  providerCalled = false;
+  await client.upsertAlertRule("uid", { uid: "uid" });
+  providerCalled = false;
+  await client.getAlertmanagerConfig();
+  providerCalled = false;
+  await client.postAlertmanagerConfig({});
+  assert.deepEqual(providerCalls.map((args) => args.length), Array(8).fill(0));
+  assert.equal(requests.length, 8);
   assert.ok(requests.every(({ url, init }) => url.startsWith(`${WORKSPACE_BASE_URL}/api/`) &&
     init.redirect === "manual" && init.headers.Authorization === "Bearer legacy-token"));
 });

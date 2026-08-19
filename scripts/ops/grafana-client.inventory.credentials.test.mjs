@@ -63,19 +63,25 @@ test("credential token grammar and size are fail closed with zero fetches", asyn
   for (const token of invalid) {
     await t.test(String(token), async () => {
       let fetches = 0;
+      const contexts = [];
       const client = createGrafanaClient({
-        tokenProvider: () => token,
+        tokenProvider: (context) => { contexts.push(context); return token; },
         fetchImpl: async () => { fetches += 1; throw new Error("must not fetch"); },
       });
       const result = await client.readMetadataInventory();
       assertAllCredentialUnavailable(result);
       assert.equal(fetches, 0);
+      assert.equal(contexts.length, 1);
+      assert.equal(contexts[0].signal instanceof AbortSignal, true);
+      assert.equal(typeof contexts[0].throwIfDeadlineExpired, "function");
     });
   }
   const token = "a".repeat(8192);
   const { client, trace } = publicFixture(emptyPlan(), { token });
   assert.equal((await client.readMetadataInventory()).surfaces.api.state, "ok");
   assert.equal(trace.length, 9);
+  assert.equal((await publicFixture(emptyPlan(), { token: "abc==" }).client.readMetadataInventory())
+    .surfaces.api.state, "ok");
 });
 
 test("provider rejection and non-resolution settle as credential_unavailable without a Grafana call", async () => {
@@ -216,7 +222,7 @@ function localChildExec(script, lifecycle) {
 }
 
 for (const fixture of [
-  { name: "closes on SIGTERM", handler: "process.exit(0)" },
+  { name: "closes on SIGTERM", handler: "setTimeout(()=>process.exit(0),250)" },
   { name: "ignores SIGTERM", handler: "void 0", ignores: true },
 ]) {
   test(`credential result is bounded while a direct child ${fixture.name}`, async () => {
@@ -241,11 +247,13 @@ for (const fixture of [
     assert.equal(lifecycle.child.killed, true);
     assert.equal(dependentLaunches, 0);
     assert.equal(JSON.stringify(result).includes("child-output-sentinel"), false);
+    assert.equal(lifecycle.child.exitCode, null);
     if (fixture.ignores) {
-      assert.equal(lifecycle.child.exitCode, null);
       lifecycle.child.kill("SIGKILL");
     }
     await lifecycle.close;
+    assert.equal(lifecycle.output.includes("child-output-sentinel"), true);
+    lifecycle.output = "";
   });
 }
 
@@ -259,4 +267,11 @@ test("legacy resolver calls remain exact two-argument execFile calls", async () 
   const accountCalls = [];
   await assertOperatorAccount(validAwsImpl(accountCalls));
   assert.equal(accountCalls[0].length, 2);
+
+  const failedCalls = [];
+  await assert.rejects(assertOperatorAccount(async (...args) => {
+    failedCalls.push(args);
+    throw new Error("legacy-provider-prose");
+  }), /Unable to determine the AWS caller identity/);
+  assert.equal(failedCalls[0].length, 2);
 });

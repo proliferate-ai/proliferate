@@ -87,10 +87,11 @@ function safeNonNegative(value) {
 function validDatasourceUid(uid) {
   return uid !== "." && uid !== ".." && !/[\\/?#\s\u0000-\u001f\u007f]/u.test(uid);
 }
+// One invocation per numbered parsed-precedence row, including inapplicable rows.
 function row(guard) {
   guard();
 }
-function orderedKeysForRow7(map, guard) {
+function orderedKeysForRow7(map) {
   const keys = Object.keys(map);
   if (!keys.every(isWellFormed)) return null;
   keys.sort(compareUtf8);
@@ -185,23 +186,29 @@ function searchPageResult(payload, guard, expectedType, page, seen) {
   row(guard); row(guard);
   return { items, complete: payload.length < LIMITS.pageSize };
 }
-function rulerRawCount(payload) {
+function rulerExceedsItemLimit(payload, guard) {
   let count = 0;
   for (const groups of Object.values(payload)) {
     if (!Array.isArray(groups)) continue;
     for (const group of groups) {
-      if (isObject(group) && Array.isArray(group.rules)) count += group.rules.length;
+      guard();
+      if (isObject(group) && Array.isArray(group.rules)) {
+        count += group.rules.length;
+        if (count > LIMITS.itemsPerCollection) return true;
+      }
     }
   }
-  return count;
+  return false;
 }
-function rulerMapKeyLimit(payload) {
+function rulerMapKeyLimit(payload, guard) {
   if (Object.keys(payload).length > LIMITS.dynamicKeysPerMap) return true;
   for (const groups of Object.values(payload)) {
     if (!Array.isArray(groups)) continue;
     for (const group of groups) {
+      guard();
       if (!isObject(group) || !Array.isArray(group.rules)) continue;
       for (const entry of group.rules) {
+        guard();
         if (!isObject(entry)) continue;
         for (const map of [entry.labels, entry.annotations]) {
           if (isObject(map) && Object.keys(map).length > LIMITS.dynamicKeysPerMap) return true;
@@ -215,11 +222,11 @@ function alertRulesResult(payload, guard) {
   row(guard);
   if (!isObject(payload)) return parsedFailure("malformed", "invalid_shape");
   row(guard); row(guard); row(guard);
-  if (rulerRawCount(payload) > LIMITS.itemsPerCollection) return parsedFailure("unknown", "item_limit");
+  if (rulerExceedsItemLimit(payload, guard)) return parsedFailure("unknown", "item_limit");
   row(guard); row(guard);
-  if (rulerMapKeyLimit(payload)) return parsedFailure("unknown", "key_limit");
+  if (rulerMapKeyLimit(payload, guard)) return parsedFailure("unknown", "key_limit");
   row(guard);
-  const namespaces = orderedKeysForRow7(payload, guard);
+  const namespaces = orderedKeysForRow7(payload);
   if (!namespaces) return parsedFailure("malformed", "invalid_shape");
   const seen = new Set();
   const staged = [];
@@ -246,8 +253,8 @@ function alertRulesResult(payload, guard) {
             (Object.hasOwn(ga, "is_paused") && typeof ga.is_paused !== "boolean")) {
           return parsedFailure("malformed", "invalid_shape");
         }
-        const labelKeys = orderedKeysForRow7(labels, guard);
-        const annotationKeys = orderedKeysForRow7(annotations, guard);
+        const labelKeys = orderedKeysForRow7(labels);
+        const annotationKeys = orderedKeysForRow7(annotations);
         if (!labelKeys || !annotationKeys || !validKeysForRow7(labelKeys, guard) ||
             !validKeysForRow7(annotationKeys, guard)) {
           return parsedFailure("malformed", "invalid_shape");
@@ -304,7 +311,7 @@ function contactPointsResult(payload, guard) {
         (Object.hasOwn(item, "disableResolveMessage") && typeof item.disableResolveMessage !== "boolean")) {
       return parsedFailure("malformed", "invalid_shape");
     }
-    const settingKeys = orderedKeysForRow7(item.settings, guard);
+    const settingKeys = orderedKeysForRow7(item.settings);
     if (!settingKeys || !validKeysForRow7(settingKeys, guard)) return parsedFailure("malformed", "invalid_shape");
     seen.add(item.uid);
     staged.push({ item, settingKeys });
@@ -357,18 +364,17 @@ function notificationPolicyResult(payload, guard) {
   })) return parsedFailure("unknown", "depth_limit");
   row(guard); row(guard);
   const receiverNames = new Set();
-  let invalid = false;
-  walkPolicy(payload, guard, (node) => {
+  const valid = walkPolicy(payload, guard, (node) => {
     if (!isObject(node) || !validString(node.receiver) ||
-        (Object.hasOwn(node, "routes") && !Array.isArray(node.routes))) invalid = true;
-    else receiverNames.add(node.receiver);
+        (Object.hasOwn(node, "routes") && !Array.isArray(node.routes))) return false;
+    receiverNames.add(node.receiver);
     return true;
   });
-  if (invalid) return parsedFailure("malformed", "invalid_shape");
+  if (!valid) return parsedFailure("malformed", "invalid_shape");
   row(guard);
-  let oversized = false;
-  walkPolicy(payload, guard, (node) => { if (!withinStringLimit(node.receiver)) oversized = true; return true; });
-  if (oversized) return parsedFailure("malformed", "string_limit");
+  if (!walkPolicy(payload, guard, (node) => withinStringLimit(node.receiver))) {
+    return parsedFailure("malformed", "string_limit");
+  }
   row(guard); row(guard);
   return completed([{
     rootReceiver: payload.receiver,
@@ -383,7 +389,7 @@ function callerPermissionsResult(payload, guard) {
   row(guard); row(guard); row(guard); row(guard); row(guard);
   if (Object.keys(payload).length > LIMITS.dynamicKeysPerMap) return parsedFailure("unknown", "key_limit");
   row(guard);
-  const keys = orderedKeysForRow7(payload, guard);
+  const keys = orderedKeysForRow7(payload);
   if (!keys) return parsedFailure("malformed", "invalid_shape");
   const items = [];
   for (const action of keys) {
@@ -618,6 +624,7 @@ async function readJson(path, authorizedGet, runtime, whole, budget, healthChild
         chunks.push(chunk);
       }
     }
+    request.guard();
     request.close();
     if (responseBytes === 0) return { result: failure("malformed", "empty_body", 200), global: false };
     const bytes = new Uint8Array(responseBytes);
@@ -658,13 +665,14 @@ function stopGlobal(result, current, selected) {
     if (result.surfaces[name] === null) result.surfaces[name] = failure(selected.state, selected.reason);
   }
 }
+function recordReadFailure(result, name, read) {
+  result.surfaces[name] = read.result;
+  if (read.global) stopGlobal(result, name, read.result);
+  return read.global;
+}
 async function direct(result, name, path, normalizer, context) {
   const read = await readJson(path, context.get, context.runtime, context.whole, context.budget);
-  if (read.result) {
-    result.surfaces[name] = read.result;
-    if (read.global) stopGlobal(result, name, read.result);
-    return read.global;
-  }
+  if (read.result) return recordReadFailure(result, name, read);
   try { result.surfaces[name] = normalizer(read.payload, context.whole.guard); }
   catch { stopGlobal(result, name, failure("unavailable", "timeout", 200)); return true; }
   return false;
@@ -675,11 +683,7 @@ async function pagedSearch(result, name, type, context) {
   for (let page = 1; page <= LIMITS.pagesPerCollection; page += 1) {
     const path = `/api/search?type=${type}&limit=100&page=${page}`;
     const read = await readJson(path, context.get, context.runtime, context.whole, context.budget);
-    if (read.result) {
-      result.surfaces[name] = read.result;
-      if (read.global) stopGlobal(result, name, read.result);
-      return read.global;
-    }
+    if (read.result) return recordReadFailure(result, name, read);
     let normalized;
     try { normalized = searchPageResult(read.payload, context.whole.guard, type, page, seen); }
     catch { stopGlobal(result, name, failure("unavailable", "timeout", 200)); return true; }
@@ -701,11 +705,7 @@ async function serviceAccounts(result, context) {
   for (let page = 1; page <= LIMITS.pagesPerCollection; page += 1) {
     const path = `/api/serviceaccounts/search?perpage=100&page=${page}`;
     const read = await readJson(path, context.get, context.runtime, context.whole, context.budget);
-    if (read.result) {
-      result.surfaces.serviceAccounts = read.result;
-      if (read.global) stopGlobal(result, "serviceAccounts", read.result);
-      return read.global;
-    }
+    if (read.result) return recordReadFailure(result, "serviceAccounts", read);
     let normalized;
     try { normalized = serviceAccountPageResult(read.payload, context.whole.guard, page, total, seen, rawCount); }
     catch { stopGlobal(result, "serviceAccounts", failure("unavailable", "timeout", 200)); return true; }

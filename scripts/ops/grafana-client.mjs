@@ -200,16 +200,21 @@ export function adminTokenProvider({ tokenPath = ADMIN_TOKEN_PATH } = {}) {
   return token;
 }
 
+function hasAwsCredentialContext(signal, throwIfDeadlineExpired) {
+  const contextual = signal !== undefined || throwIfDeadlineExpired !== undefined;
+  if (contextual && (!signal || typeof throwIfDeadlineExpired !== "function")) {
+    throw new Error("AWS credential context requires both signal and deadline guard");
+  }
+  return contextual;
+}
+
 // Hard identity gate before any secret resolution: the AWS caller must be in
 // the fixed target account, or we refuse to read anything.
 export async function assertOperatorAccount(
   execFileImpl = execFileAsync,
   { signal, throwIfDeadlineExpired } = {},
 ) {
-  const contextual = signal !== undefined || throwIfDeadlineExpired !== undefined;
-  if (contextual && (!signal || typeof throwIfDeadlineExpired !== "function")) {
-    throw new Error("AWS credential context requires both signal and deadline guard");
-  }
+  const contextual = hasAwsCredentialContext(signal, throwIfDeadlineExpired);
   let account;
   try {
     const args = ["sts", "get-caller-identity", "--output", "json"];
@@ -233,10 +238,7 @@ export async function resolveSecretField(
   field,
   { execFileImpl = execFileAsync, signal, throwIfDeadlineExpired } = {},
 ) {
-  const contextual = signal !== undefined || throwIfDeadlineExpired !== undefined;
-  if (contextual && (!signal || typeof throwIfDeadlineExpired !== "function")) {
-    throw new Error("AWS credential context requires both signal and deadline guard");
-  }
+  const contextual = hasAwsCredentialContext(signal, throwIfDeadlineExpired);
   await assertOperatorAccount(execFileImpl, { signal, throwIfDeadlineExpired });
   let stdout;
   try {

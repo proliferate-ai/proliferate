@@ -109,7 +109,8 @@ export function completePlan() {
 
 function routeValue(plan, key, call) {
   const value = plan.get(key);
-  if (Array.isArray(value) && value.every((entry) => entry?.fixtureResponse === true)) return value.shift().response;
+  if (Array.isArray(value) && value.length > 0 &&
+      value.every((entry) => entry?.fixtureResponse === true)) return value.shift().response;
   return typeof value === "function" ? value(call) : value;
 }
 
