@@ -25,6 +25,28 @@ const SESSION: StoredAuthSession = {
   display_name: null,
 }
 
+function installMemoryLocalStorage(): void {
+  const values = new Map<string, string>()
+  const storage: Storage = {
+    get length() {
+      return values.size
+    },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => Array.from(values.keys())[index] ?? null,
+    removeItem: (key) => {
+      values.delete(key)
+    },
+    setItem: (key, value) => {
+      values.set(key, value)
+    },
+  }
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: storage,
+  })
+}
+
 // reportKeychainFailure dedupes per module instance, so each test loads a
 // fresh copy of the module under test.
 async function loadAuthAccess() {
@@ -42,7 +64,7 @@ describe("tauri auth access", () => {
   beforeEach(() => {
     mocks.invoke.mockReset()
     mocks.trackProductEvent.mockReset()
-    window.localStorage.clear()
+    installMemoryLocalStorage()
   })
 
   it("returns the native session without telemetry when invoke succeeds", async () => {
@@ -59,7 +81,11 @@ describe("tauri auth access", () => {
   it("falls back to localStorage and reports when the keychain read fails", async () => {
     const auth = await loadAuthAccess()
     window.localStorage.setItem("proliferate.auth.session", JSON.stringify(SESSION))
-    mocks.invoke.mockRejectedValue(new Error("keychain access denied"))
+    mocks.invoke.mockRejectedValue(
+      new Error(
+        "permission denied for user@example.com token secret-token at /Users/private/auth",
+      ),
+    )
 
     expect(await auth.getStoredAuthSession()).toEqual(SESSION)
 
@@ -68,9 +94,13 @@ describe("tauri auth access", () => {
       "desktop_keychain_access_failed",
       {
         operation: "get_auth_session",
-        error_message: "keychain access denied",
+        failure_kind: "permission_error",
       },
     )
+    const serializedCalls = JSON.stringify(mocks.trackProductEvent.mock.calls)
+    expect(serializedCalls).not.toContain("user@example.com")
+    expect(serializedCalls).not.toContain("secret-token")
+    expect(serializedCalls).not.toContain("/Users/private/auth")
   })
 
   it("reports each operation at most once per run", async () => {
@@ -111,5 +141,55 @@ describe("tauri auth access", () => {
 
     expect(window.localStorage.getItem("proliferate.auth.session")).toBeNull()
     await flushTelemetry()
+  })
+
+  it("falls back and reports unknown_error when classification throws", async () => {
+    const auth = await loadAuthAccess()
+    window.localStorage.setItem("proliferate.auth.session", JSON.stringify(SESSION))
+    const hostileError = Object.create(null, {
+      name: {
+        get: () => {
+          throw new Error("hostile name getter")
+        },
+      },
+      toString: {
+        value: () => {
+          throw new Error("hostile toString")
+        },
+      },
+    })
+    mocks.invoke.mockRejectedValue(hostileError)
+
+    expect(await auth.getStoredAuthSession()).toEqual(SESSION)
+
+    await flushTelemetry()
+    expect(mocks.trackProductEvent).toHaveBeenCalledWith(
+      "desktop_keychain_access_failed",
+      {
+        operation: "get_auth_session",
+        failure_kind: "unknown_error",
+      },
+    )
+  })
+
+  it("falls back and reports unknown_error for a hostile toString", async () => {
+    const auth = await loadAuthAccess()
+    window.localStorage.setItem("proliferate.auth.session", JSON.stringify(SESSION))
+    mocks.invoke.mockRejectedValue({
+      toString: () => {
+        throw new Error("hostile toString")
+      },
+    })
+
+    expect(await auth.getStoredAuthSession()).toEqual(SESSION)
+
+    await flushTelemetry()
+    expect(mocks.trackProductEvent).toHaveBeenCalledWith(
+      "desktop_keychain_access_failed",
+      {
+        operation: "get_auth_session",
+        failure_kind: "unknown_error",
+      },
+    )
   })
 })

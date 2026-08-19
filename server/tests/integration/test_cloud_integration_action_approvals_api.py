@@ -559,6 +559,8 @@ async def test_account_credential_rotation_invalidates_prior_approval(
         expected_auth_version=context.account_auth_version,
     )
     assert rotated is not None
+    assert rotated.grant_version == rotated.auth_version
+    assert rotated.credential_version == rotated.auth_version
     await db_session.commit()
 
     old_revision = await _consume(context, approval_id=approval_id, arguments=arguments)

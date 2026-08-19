@@ -490,7 +490,7 @@ async def _complete_db_backed_report(
         },
     )
     if should_notify:
-        await notify_support_report(
+        delivered = await notify_support_report(
             sender_email=sender_email,
             sender_display_name=sender_display_name,
             report_id=completed_report.id,
@@ -505,7 +505,8 @@ async def _complete_db_backed_report(
             notify_me=completed_report.notify_me,
             correlation=support_report_correlation_record(completed_report),
         )
-        await support_reports.mark_report_slack_notified(db, report_id=completed_report.id)
+        if delivered:
+            await support_reports.mark_report_slack_notified(db, report_id=completed_report.id)
     return SupportReportCompleteResponse(reportId=report.id)
 
 

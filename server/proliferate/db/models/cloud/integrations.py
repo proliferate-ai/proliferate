@@ -164,6 +164,18 @@ class CloudIntegrationAccount(Base):
     # the real format ('secret-fields-v1' / 'oauth-bundle-v1') with the bundle.
     credential_format: Mapped[str | None] = mapped_column(String(64), nullable=True)
     auth_version: Mapped[int] = mapped_column(Integer, default=1)
+    grant_version: Mapped[int] = mapped_column(Integer, default=1)
+    credential_version: Mapped[int] = mapped_column(Integer, default=1)
+    definition_security_revision_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_integration_definition_security_revision.id"),
+        nullable=True,
+    )
+    provider_client_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_integration_oauth_client.id"),
+        nullable=True,
+    )
+    credential_audience: Mapped[str | None] = mapped_column(Text, nullable=True)
+    effective_scopes_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     settings_json: Mapped[str] = mapped_column(Text, default="{}")
     token_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -178,11 +190,28 @@ class CloudIntegrationAccount(Base):
 class CloudIntegrationOAuthClient(Base):
     __tablename__ = "cloud_integration_oauth_client"
     __table_args__ = (
+        CheckConstraint(
+            "revision > 0",
+            name="ck_cloud_integration_oauth_client_revision_positive",
+        ),
+        CheckConstraint(
+            "lifecycle_state IN ('candidate', 'active', 'retiring', 'retired')",
+            name="ck_cloud_integration_oauth_client_lifecycle_state",
+        ),
         UniqueConstraint(
             "issuer",
             "redirect_uri",
             "definition_id",
-            name="uq_cloud_integration_oauth_client_key",
+            "revision",
+            name="uq_cloud_integration_oauth_client_revision",
+        ),
+        Index(
+            "ux_cloud_integration_oauth_client_active",
+            "issuer",
+            "redirect_uri",
+            "definition_id",
+            unique=True,
+            postgresql_where="lifecycle_state = 'active'",
         ),
     )
 
@@ -195,6 +224,8 @@ class CloudIntegrationOAuthClient(Base):
     redirect_uri: Mapped[str] = mapped_column(Text)
     resource: Mapped[str | None] = mapped_column(Text, nullable=True)
     client_id: Mapped[str] = mapped_column(String(512))
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    lifecycle_state: Mapped[str] = mapped_column(String(32), default="active")
     client_secret_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     client_secret_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -230,6 +261,11 @@ class CloudIntegrationOAuthFlow(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     account_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("cloud_integration_account.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    attempt_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_integration_authorization_attempt.id", ondelete="CASCADE"),
         index=True,
         nullable=True,
     )
