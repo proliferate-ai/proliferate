@@ -1,41 +1,19 @@
 //! The single read surface over the active agent catalog.
 //!
-//! Every runtime consumer of catalog data goes through here: installer
-//! pins, model menus, control matrices, and launch validation.
-//!
-//! Semantic rules:
-//! - `defaultVisible` is the menu, `availability` is the truth:
-//!   [`ActiveCatalog::validate_launch`] accepts launchable-but-unadvertised
-//!   models (available under the active contexts but not default-visible).
-//! - Availability is observation-first: where a composed observation exists it IS
-//!   the available set (trial-verified rows exempt — `universe.rs` carries the
-//!   reasoning), and where none exists the catalog's per-context declarations
-//!   serve as the seed, with `"baseline"` counting like any other context when it
-//!   is active. A machine with no snapshot validates exactly as it did before
-//!   probing existed.
-//! - Models are entities, never modes; variant launch ids (`variantSyntax`)
-//!   resolve to their base model for availability and control checks while
-//!   the composed variant id is preserved as the launch id.
+//! The catalog owns distribution pins, route/auth metadata, and presentation
+//! prose. It does not own executable launch membership, validation, or defaults.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use super::schema::{
     AgentCatalogAgent, AgentCatalogArtifactPin, AgentCatalogArtifactSource,
-    AgentCatalogAuthContext, AgentCatalogDocument, AgentCatalogHarnessPins, AgentCatalogModel,
-    AgentCatalogModelControl, AgentCatalogPinTarget,
-};
-use super::selection::{
-    default_model, find_model, model_is_available, resolve_requested_model, validate_mode,
-    ResolvedModel,
+    AgentCatalogAuthContext, AgentCatalogDocument, AgentCatalogHarnessPins, AgentCatalogPinTarget,
 };
 use super::sync::CatalogSyncService;
-use super::universe::ObservedUniverse;
-use crate::domains::agents::auth::context::ActiveAuthContexts;
 use crate::domains::agents::installer::install_policy::{
     PinOverrides, ResolvedPinSource, ResolvedPinTarget,
 };
-use crate::domains::agents::model::ModelCatalogStatus;
 
 /// Read surface over the active catalog held by [`CatalogSyncService`].
 #[derive(Clone)]
@@ -144,63 +122,6 @@ pub struct ActiveCatalog {
     document: Arc<AgentCatalogDocument>,
 }
 
-/// The validated launch selection for one session create.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ResolvedSelection {
-    /// Canonical catalog model id; `None` means "no selection" (the harness
-    /// picks its own default — mirrors the v1 no-default behavior).
-    pub model_id: Option<String>,
-    /// The id the session launches with: the composed variant id when the
-    /// request used `variantSyntax` (e.g. `"gpt-5.5/xhigh"`), else the
-    /// canonical model id.
-    pub launch_model_id: Option<String>,
-    pub mode_id: Option<String>,
-}
-
-/// Which truth judged a refused model selection. Carried so the refusal
-/// detail can name the active universe — never a per-context enumeration
-/// (the composed observation has no contexts), and static text only, so no
-/// credential material can ride along.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ActiveUniverse {
-    /// The machine's composed observation exists and is the truth.
-    MachineObservation,
-    /// No observation exists yet; the shipped catalog's declarations for the
-    /// active auth contexts serve as the seed.
-    CatalogSeed,
-}
-
-impl ActiveUniverse {
-    /// Human-readable name for refusal details. Deliberately static.
-    pub fn describe(self) -> &'static str {
-        match self {
-            Self::MachineObservation => "the machine's composed observation",
-            Self::CatalogSeed => "the shipped catalog under the active auth contexts",
-        }
-    }
-}
-
-/// Structured launch-selection rejections (expected outcomes, not errors).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SelectionUnsupported {
-    UnknownAgent {
-        agent_kind: String,
-    },
-    /// The requested model cannot launch: it resolves to nothing the active
-    /// universe serves — absent from the composed observation (trial-verified
-    /// catalog rows exempt), or, pre-probe, undeclared by the shipped catalog
-    /// under the active auth contexts. The single typed refusal
-    /// (`SESSION_MODEL_UNSUPPORTED`, model-catalog.md "Launch validation");
-    /// `active_universe` names which truth refused.
-    UnsupportedModel {
-        model_id: String,
-        active_universe: ActiveUniverse,
-    },
-    UnsupportedMode {
-        mode_id: String,
-    },
-}
-
 impl ActiveCatalog {
     pub fn new(document: Arc<AgentCatalogDocument>) -> Self {
         Self { document }
@@ -261,206 +182,7 @@ impl ActiveCatalog {
             .unwrap_or(false)
     }
 
-    /// Curated mode for surfaces that deliberately run this agent unattended.
-    /// `None` means no unattended mode has been vetted for the agent.
-    pub fn unattended_mode_id(&self, kind: &str) -> Option<&str> {
-        self.agent(kind)?.session.unattended_mode_id.as_deref()
-    }
-
-    /// Models available under the active contexts: `availability.anyOf`
-    /// intersected with the active ids (`"baseline"` counts when active).
-    ///
-    /// Catalog-only, deliberately: projecting the machine snapshot into the PICKER
-    /// is its own change (model-catalog.md, "Serving per surface", still an open
-    /// gap), and widening the menu here would ship half of it — a model in the menu
-    /// with no curated display name or control wiring. Launch validation reads the
-    /// union through [`ActiveCatalog::validate_launch_in_universe`]; a picker that
-    /// shows less than launch accepts is the pre-existing, safe direction of that
-    /// asymmetry (it is already true for trial-verified rows).
-    pub fn models(&self, kind: &str, contexts: &ActiveAuthContexts) -> Vec<&AgentCatalogModel> {
-        let Some(agent) = self.agent(kind) else {
-            return Vec::new();
-        };
-        let universe = ObservedUniverse::empty();
-        agent
-            .session
-            .models
-            .iter()
-            .filter(|model| model_is_available(model, contexts, &universe))
-            .collect()
-    }
-
-    /// The menu: `defaultVisible` ∩ available ∩ active-status.
-    pub fn visible_models(
-        &self,
-        kind: &str,
-        contexts: &ActiveAuthContexts,
-    ) -> Vec<&AgentCatalogModel> {
-        self.models(kind, contexts)
-            .into_iter()
-            .filter(|model| model.default_visible && model.status == ModelCatalogStatus::Active)
-            .collect()
-    }
-
-    /// Per-model option matrix (control key -> supported values).
-    pub fn controls(
-        &self,
-        kind: &str,
-        model_id: &str,
-    ) -> Option<&BTreeMap<String, AgentCatalogModelControl>> {
-        let agent = self.agent(kind)?;
-        find_model(agent, model_id).map(|model| &model.controls)
-    }
-
-    /// Validate a session-create selection against the catalog and the
-    /// active auth contexts. Replaces `resolve_launch_model_id` +
-    /// `resolve_mode_id` in the v2 era.
-    ///
-    /// Settled semantics:
-    /// - Requested model resolves by id, alias, probe-observed variant id,
-    ///   or `variantSyntax` composition (base model + values validated
-    ///   against the base model's controls). Unresolvable ->
-    ///   `UnsupportedModel`.
-    /// - Availability beats visibility: the resolved base model must be
-    ///   available under the active universe (`UnsupportedModel` otherwise),
-    ///   but need not be `defaultVisible`.
-    /// - No requested model -> curation default for the first active context
-    ///   carrying one (`session.defaults`), else the first visible available
-    ///   model in document order, else `None` (harness default) — defaults
-    ///   never hard-fail.
-    /// - Mode is validated against the resolved model's `mode` control when
-    ///   the document carries one, else the agent-level `mode` control. An
-    ///   agent with no mode vocabulary accepts no mode selection.
-    pub fn validate_launch(
-        &self,
-        kind: &str,
-        contexts: &ActiveAuthContexts,
-        model_id: Option<&str>,
-        mode_id: Option<&str>,
-    ) -> Result<ResolvedSelection, SelectionUnsupported> {
-        self.validate_launch_in_universe(
-            kind,
-            contexts,
-            model_id,
-            mode_id,
-            &ObservedUniverse::empty(),
-        )
-    }
-
-    /// [`ActiveCatalog::validate_launch`] against the machine's composed
-    /// observation as well as the shipped catalog — the observation-first form
-    /// the wired launch paths use.
-    ///
-    /// The universe changes what validation accepts in three ways:
-    ///
-    /// 1. a catalog model the observation carries is available even when
-    ///    `availability.anyOf` predates the auth serving it — the observation is
-    ///    the truth wherever it exists;
-    /// 2. a model the catalog does not know at all, present in the observation,
-    ///    resolves to itself — this is the case that makes a gateway-side model
-    ///    add launchable on the day it appears, without a catalog release;
-    /// 3. a model the catalog declares that the observation does NOT carry is
-    ///    refused — the downgraded-key case, which is how the user gets a legible
-    ///    pre-launch rejection instead of a provider 403 mid-session.
-    ///    Trial-verified rows are exempt (see `universe.rs`).
-    ///
-    /// Every unservable intent gets the same `UnsupportedModel` refusal —
-    /// there is no gated middle state and no enumeration of which auth would
-    /// serve the model. An interactive picker cannot construct such a request
-    /// (the picker is the observation); the answer to "why isn't my model
-    /// here" is the settings surface, not a launch error.
-    pub fn validate_launch_in_universe(
-        &self,
-        kind: &str,
-        contexts: &ActiveAuthContexts,
-        model_id: Option<&str>,
-        mode_id: Option<&str>,
-        universe: &ObservedUniverse,
-    ) -> Result<ResolvedSelection, SelectionUnsupported> {
-        let agent = self
-            .agent(kind)
-            .ok_or_else(|| SelectionUnsupported::UnknownAgent {
-                agent_kind: kind.to_string(),
-            })?;
-        let active_universe = if universe.has_observation() {
-            ActiveUniverse::MachineObservation
-        } else {
-            ActiveUniverse::CatalogSeed
-        };
-
-        let requested = model_id.map(str::trim).filter(|id| !id.is_empty());
-        let resolved = match requested {
-            Some(requested) => {
-                let Some(resolved) = resolve_requested_model(agent, requested) else {
-                    // Not in the catalog by any spelling. Before rejecting, ask the
-                    // observation: the shipped catalog is a snapshot of a nightly
-                    // probe, so a model the gateway or the provider added since is
-                    // genuinely launchable and genuinely absent here.
-                    return self.validate_observed_only_model(
-                        agent,
-                        requested,
-                        mode_id,
-                        universe,
-                        active_universe,
-                    );
-                };
-                if !model_is_available(resolved.model, contexts, universe) {
-                    return Err(SelectionUnsupported::UnsupportedModel {
-                        model_id: requested.to_string(),
-                        active_universe,
-                    });
-                }
-                Some(resolved)
-            }
-            None => default_model(agent, contexts, universe).map(|model| ResolvedModel {
-                model,
-                launch_id: model.id.clone(),
-            }),
-        };
-
-        let mode_id = validate_mode(agent, resolved.as_ref().map(|r| r.model), mode_id)?;
-
-        Ok(ResolvedSelection {
-            model_id: resolved.as_ref().map(|r| r.model.id.clone()),
-            launch_model_id: resolved.map(|r| r.launch_id),
-            mode_id,
-        })
-    }
-
-    /// A requested id the catalog does not carry, judged purely on observation.
-    ///
-    /// Its canonical id is the observed id itself: there is no catalog identity to
-    /// normalize to, and inventing one would be the guessy name matching the
-    /// enrichment join deliberately avoids. Mode validation falls through to the
-    /// agent-level vocabulary, since no model row exists to carry a `mode` control.
-    ///
-    /// One question, one answer: the composed observation either carries the id
-    /// (a launch right now would show it — resolve) or it does not
-    /// (`UnsupportedModel`). There is no "observed under another context"
-    /// middle state, because the observation has no contexts.
-    fn validate_observed_only_model(
-        &self,
-        agent: &AgentCatalogAgent,
-        requested: &str,
-        mode_id: Option<&str>,
-        universe: &ObservedUniverse,
-        active_universe: ActiveUniverse,
-    ) -> Result<ResolvedSelection, SelectionUnsupported> {
-        if !universe.observes_id(requested) {
-            return Err(SelectionUnsupported::UnsupportedModel {
-                model_id: requested.to_string(),
-                active_universe,
-            });
-        }
-        let mode_id = validate_mode(agent, None, mode_id)?;
-        Ok(ResolvedSelection {
-            model_id: Some(requested.to_string()),
-            launch_model_id: Some(requested.to_string()),
-            mode_id,
-        })
-    }
 }
-
 
 #[cfg(test)]
 mod pin_identity_tests {

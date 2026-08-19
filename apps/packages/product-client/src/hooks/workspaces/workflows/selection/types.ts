@@ -8,6 +8,9 @@ import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions
 import type { LogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-model";
 import type { CloudSandboxGatewayUrlSource } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 import type { ClearSelectionOptions } from "#product/stores/sessions/session-selection-store";
+import type {
+  ProductAnyHarnessResolvedConnection,
+} from "#product/lib/access/anyharness/resolve-workspace-connection";
 
 export interface WorkspaceSelectionOptions {
   force?: boolean;
@@ -69,6 +72,8 @@ export interface WorkspaceSelectionDeps {
       runtimeUrl: string;
       accessToken?: string | null;
       anyharnessWorkspaceId?: string | null;
+      runtimeGeneration: number;
+      webSocketAuthTransport?: "protocol";
     }>;
   };
   /**
@@ -124,6 +129,6 @@ export type ReadyCloudReadinessResult = Extract<
 
 export interface WorkspaceConnectionResult {
   runtimeUrl: string;
-  workspaceConnection: AnyHarnessResolvedConnection;
+  workspaceConnection: ProductAnyHarnessResolvedConnection;
   materializedWorkspaceId?: string | null;
 }

@@ -50,11 +50,7 @@ export function useSessionModelFallbackAction() {
       requestedModelId:
         response.session.requestedModelId
         ?? fallbackModelId,
-      modeId:
-        liveConfig?.normalizedControls.mode?.currentValue
-        ?? response.session.modeId
-        ?? latestSlot.modeId
-        ?? null,
+      modeId: liveConfig?.normalizedControls.mode?.currentValue ?? null,
       status: resolveStatusFromExecutionSummary(
         response.session.executionSummary ?? latestSlot.executionSummary ?? null,
         response.session.status,

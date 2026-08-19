@@ -24,7 +24,7 @@ pub struct CreateCodingSessionInput {
     pub label: Option<String>,
     pub harness_id: Option<String>,
     pub model_id: Option<String>,
-    pub mode_id: Option<String>,
+    pub control_values: std::collections::BTreeMap<String, String>,
     pub wake_on_completion: bool,
 }
 

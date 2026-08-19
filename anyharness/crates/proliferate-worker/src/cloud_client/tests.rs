@@ -150,7 +150,7 @@ fn heartbeat_response_parses_the_shared_v1_fixture_as_allowed() {
     let response = serde_json::from_str::<HeartbeatResponse>(V1_FIXTURE)
         .expect("the committed v1 heartbeat fixture must parse");
     assert!(
-        response.model_snapshot_upload_allowed,
+        response.launch_options_upload_allowed,
         "the shared v1 fixture advertises eligibility"
     );
     // The rest of the golden body still decodes, so this fixture really is
@@ -173,7 +173,7 @@ fn heartbeat_response_parses_the_shared_legacy_fixture_as_denied() {
     let response = serde_json::from_str::<HeartbeatResponse>(V0_LEGACY_FIXTURE)
         .expect("the committed legacy heartbeat fixture must parse");
     assert!(
-        !response.model_snapshot_upload_allowed,
+        !response.launch_options_upload_allowed,
         "an omitted capability must fail closed to false"
     );
     // Everything the legacy server DOES send is still honoured, so failing
@@ -185,17 +185,17 @@ fn heartbeat_response_parses_the_shared_legacy_fixture_as_denied() {
 #[test]
 fn the_legacy_fixture_really_omits_the_capability_member() {
     // Guards the proof above from a fixture edit that quietly adds
-    // `"modelSnapshotUploadAllowed": false`, which would make the
+    // `"launchOptionsUploadAllowed": false`, which would make the
     // default-false assertion pass for the wrong reason.
     let value: serde_json::Value =
         serde_json::from_str(V0_LEGACY_FIXTURE).expect("legacy fixture is json");
     assert!(
-        value.get("modelSnapshotUploadAllowed").is_none(),
+        value.get("launchOptionsUploadAllowed").is_none(),
         "the legacy fixture must OMIT the member, not send false"
     );
     let v1: serde_json::Value =
         serde_json::from_str(V1_FIXTURE).expect("v1 fixture is json");
-    assert_eq!(v1["modelSnapshotUploadAllowed"], serde_json::json!(true));
+    assert_eq!(v1["launchOptionsUploadAllowed"], serde_json::json!(true));
 }
 
 #[test]
@@ -204,11 +204,11 @@ fn heartbeat_response_parses_an_explicit_false_capability() {
         "workerId": "worker",
         "serverTime": "2026-08-18T00:00:00Z",
         "heartbeatIntervalSeconds": 30,
-        "modelSnapshotUploadAllowed": false
+        "launchOptionsUploadAllowed": false
     }"#;
     let response = serde_json::from_slice::<HeartbeatResponse>(payload)
         .expect("heartbeat ack with an explicit false capability");
-    assert!(!response.model_snapshot_upload_allowed);
+    assert!(!response.launch_options_upload_allowed);
 }
 
 #[test]

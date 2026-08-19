@@ -9,10 +9,6 @@ export interface CreateSessionWithResolvedConfigOptions {
   optimisticContentParts?: ContentPart[];
   agentKind: string;
   modelId: string;
-  modeId?: string;
-  /** Resolved mode frozen before an interrupted empty create; null means none. */
-  resolvedModeId?: string | null;
-  unattendedModeId?: string | null;
   launchControlValues?: Record<string, string>;
   /** Live defaults frozen before an interrupted empty create. */
   frozenLiveControlValues?: Record<string, string>;
@@ -73,9 +69,6 @@ export interface CreateSessionWithResolvedConfigOptions {
 export interface CreateEmptySessionWithResolvedConfigOptions {
   agentKind: string;
   modelId: string;
-  modeId?: string;
-  resolvedModeId?: string | null;
-  unattendedModeId?: string | null;
   launchControlValues?: Record<string, string>;
   frozenLiveControlValues?: Record<string, string>;
   workspaceId?: string;

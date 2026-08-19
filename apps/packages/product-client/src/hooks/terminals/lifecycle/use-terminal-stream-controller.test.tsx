@@ -91,10 +91,14 @@ vi.mock("#product/hooks/workspaces/derived/use-workspace-runtime-block", () => (
 
 vi.mock("#product/lib/access/anyharness/resolve-workspace-connection", () => ({
   resolveWorkspaceConnection: vi.fn(async () => ({
-    runtimeUrl: "http://runtime.test",
-    authToken: mockState.token,
-    anyharnessWorkspaceId: "anyharness-workspace-1",
-    runtimeGeneration: mockState.runtimeGeneration,
+    connection: {
+      runtimeUrl: "http://runtime.test",
+      authToken: mockState.token,
+      anyharnessWorkspaceId: "anyharness-workspace-1",
+      runtimeGeneration: mockState.runtimeGeneration,
+      runtimeAccessKind: "direct",
+    },
+    filesystemOrigin: "desktop-local",
   })),
 }));
 

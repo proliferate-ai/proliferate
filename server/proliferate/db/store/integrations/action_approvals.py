@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, or_, select, text, update
@@ -24,7 +24,7 @@ class ActionApprovalRecord:
     owner_user_id: UUID
     organization_id: UUID | None
     integration_account_id: UUID
-    integration_account_auth_version: int
+    integration_account_grant_version: int
     runtime_worker_id: UUID
     gateway_session_id: UUID
     workspace_id: str
@@ -62,7 +62,7 @@ def _record(row: CloudIntegrationActionApproval) -> ActionApprovalRecord:
         owner_user_id=row.owner_user_id,
         organization_id=row.organization_id,
         integration_account_id=row.integration_account_id,
-        integration_account_auth_version=row.integration_account_auth_version,
+        integration_account_grant_version=row.integration_account_grant_version,
         runtime_worker_id=row.runtime_worker_id,
         gateway_session_id=row.gateway_session_id,
         workspace_id=row.workspace_id,
@@ -155,7 +155,7 @@ async def create_or_get_pending(
     owner_user_id: UUID,
     organization_id: UUID | None,
     integration_account_id: UUID,
-    integration_account_auth_version: int,
+    integration_account_grant_version: int,
     runtime_worker_id: UUID,
     gateway_session_id: UUID,
     workspace_id: str,
@@ -186,7 +186,7 @@ async def create_or_get_pending(
         owner_user_id=owner_user_id,
         organization_id=organization_id,
         integration_account_id=integration_account_id,
-        integration_account_auth_version=integration_account_auth_version,
+        integration_account_grant_version=integration_account_grant_version,
         runtime_worker_id=runtime_worker_id,
         gateway_session_id=gateway_session_id,
         workspace_id=workspace_id,
@@ -338,6 +338,46 @@ async def expire_due_for_user(
     )
 
 
+async def revoke_active_for_account(
+    db: AsyncSession,
+    *,
+    integration_account_id: UUID,
+) -> tuple[ActionApprovalStateTransition, ...]:
+    rows = list(
+        (
+            await db.scalars(
+                select(CloudIntegrationActionApproval)
+                .where(
+                    CloudIntegrationActionApproval.integration_account_id
+                    == integration_account_id,
+                    CloudIntegrationActionApproval.status.in_(ACTIVE_STATUSES),
+                )
+                .order_by(CloudIntegrationActionApproval.id)
+                .with_for_update()
+            )
+        ).all()
+    )
+    now = datetime.now(UTC)
+    prior_statuses: dict[UUID, str] = {}
+    for row in rows:
+        prior_statuses[row.id] = row.status
+        row.status = "revoked"
+        row.revoked_at = now
+        row.updated_at = now
+    await db.flush()
+    # Re-read so database timestamps are concrete in returned audit snapshots.
+    refreshed: list[ActionApprovalStateTransition] = []
+    for row in rows:
+        await db.refresh(row)
+        refreshed.append(
+            ActionApprovalStateTransition(
+                approval=_record(row),
+                from_status=prior_statuses[row.id],
+            )
+        )
+    return tuple(refreshed)
+
+
 async def consume_approved_matching(
     db: AsyncSession,
     *,
@@ -345,7 +385,7 @@ async def consume_approved_matching(
     owner_user_id: UUID,
     organization_id: UUID | None,
     integration_account_id: UUID,
-    integration_account_auth_version: int,
+    integration_account_grant_version: int,
     runtime_worker_id: UUID,
     gateway_session_id: UUID,
     workspace_id: str,
@@ -374,8 +414,8 @@ async def consume_approved_matching(
                 CloudIntegrationActionApproval.owner_user_id == owner_user_id,
                 CloudIntegrationActionApproval.organization_id == organization_id,
                 CloudIntegrationActionApproval.integration_account_id == integration_account_id,
-                CloudIntegrationActionApproval.integration_account_auth_version
-                == integration_account_auth_version,
+                CloudIntegrationActionApproval.integration_account_grant_version
+                == integration_account_grant_version,
                 CloudIntegrationActionApproval.runtime_worker_id == runtime_worker_id,
                 CloudIntegrationActionApproval.gateway_session_id == gateway_session_id,
                 CloudIntegrationActionApproval.workspace_id == workspace_id,

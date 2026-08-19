@@ -12,7 +12,6 @@ import {
   type WorkspaceShellTab,
 } from "#product/lib/domain/workspaces/tabs/shell-tabs";
 import { resolveAvailableLaunchSelection } from "#product/lib/domain/chat/models/launch-selection-defaults";
-import { resolveUnattendedModeId } from "#product/lib/domain/agents/unattended-mode";
 import { useToastStore } from "#product/stores/toast/toast-store";
 import {
   failLatencyFlow,
@@ -97,12 +96,13 @@ export function useWorkspaceCommandPaletteTabs() {
     void createEmptySessionWithResolvedConfig({
       agentKind: selection.kind,
       modelId: selection.modelId,
-      unattendedModeId: resolveUnattendedModeId({
-        agent: configuredLaunch.launchCatalog.launchAgents.find(
+      launchControlValues: Object.fromEntries(
+        (configuredLaunch.launchCatalog.launchAgents.find(
           (candidate) => candidate.kind === selection.kind,
-        ),
-        modelId: selection.modelId,
-      }),
+        )?.launchControls ?? [])
+          .filter((control) => control.defaultValue !== null)
+          .map((control) => [control.key, control.defaultValue as string]),
+      ),
       latencyFlowId,
       reuseInFlightEmptySession: false,
     }).catch((error) => {

@@ -143,9 +143,6 @@ class WorkflowRunEligibilityBlocker(WorkflowWireModel):
         "stage_count_not_supported",
         "step_count_not_supported",
         "goal_not_supported",
-        "agent_catalog_selection_unavailable",
-        "model_catalog_selection_unavailable",
-        "effort_catalog_selection_unavailable",
         "default_repository_unavailable",
     ]
     path: str

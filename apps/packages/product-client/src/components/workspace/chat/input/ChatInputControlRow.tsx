@@ -7,6 +7,7 @@ import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/sess
 import { ComposerContextRing } from "./ComposerContextRing";
 import { ComposerIntegrationsControl } from "./ComposerIntegrationsControl";
 import { ComposerModeBadge } from "./ComposerModeBadge";
+import { SessionConfigControls } from "./SessionConfigControls";
 import {
   buildComposerSessionControlGroups,
 } from "#product/lib/domain/chat/session-controls/composer-control-groups";
@@ -47,10 +48,11 @@ export interface ComposerLeadingControlsProps {
 }
 
 /**
- * The leading control cluster (model selector, fast mode, effort stepper, mode
- * badge, goal, urgent integrations). Shared verbatim between the in-session
- * chat composer (ChatInputControlRow) and the home/new-chat composer
- * (HomeNextScreen slot): home feeds it launch-time control descriptors instead
+ * The leading control cluster (model selector, fast mode, effort stepper,
+ * collaboration mode, execution access, goal, urgent integrations). Shared
+ * verbatim between the in-session chat composer (ChatInputControlRow) and the
+ * home/new-chat composer (HomeNextScreen slot): home feeds it launch-time
+ * control descriptors instead
  * of live-session ones, and session-only controls (goal) hide via their own
  * gating.
  */
@@ -121,7 +123,29 @@ export function ComposerLeadingControls({
         />
       )}
 
-      {/* 5. Goal button. Kept on the compact grammar: the goal system is
+      {/* 5. Execution access is independent from collaboration mode. */}
+      {controlGroups.accessControl && (
+        <ComposerModeBadge
+          agentKind={agentKind}
+          control={controlGroups.accessControl}
+          className={runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""}
+        />
+      )}
+
+      {/* Every other observed axis remains reachable. These controls are not
+          availability-gated or collapsed out of the statement. */}
+      <span
+        className={`inline-flex items-center gap-1.5 ${
+          runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+        }`}
+      >
+        <SessionConfigControls
+          agentKind={agentKind}
+          controls={controlGroups.overflowControls}
+        />
+      </span>
+
+      {/* 7. Goal button. Kept on the compact grammar: the goal system is
           unchanged by this pass, so its only entry path must not be orphaned. */}
       {canSetGoal && (
         <ComposerControlButton
@@ -139,7 +163,7 @@ export function ComposerLeadingControls({
         />
       )}
 
-      {/* 6. Integrations — renders only for an urgent re-auth. */}
+      {/* 8. Integrations — renders only for an urgent re-auth. */}
       <ComposerIntegrationsControl />
     </>
   );

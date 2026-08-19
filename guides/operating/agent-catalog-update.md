@@ -23,13 +23,13 @@ The scheduled `Catalog Probe` workflow (daily, 09:00 UTC) opens a PR when
 resolved pins or probe observations changed. Reviewing it is the routine
 operation:
 
-1. Read the rendered diff on `catalog.json`. Expected shapes: version
-   bumps in `harness.agentProcess`/`harness.native` with new sha256
-   targets, model list changes under `session.models`, control or default
-   changes, refreshed `provenance` timestamps and attestations.
+1. Read the diff on `catalog.json`. Expected shapes: version bumps in
+   `harness.agentProcess`/`harness.native` with new sha256 targets,
+   presentation-only model labels under `session.presentationModels`, and
+   refreshed `provenance` timestamps and attestations.
 2. Treat these as stop signals, not diff noise:
    - An attested version that does not match the pinned version.
-   - A model or control disappearing for a harness whose upstream did not
+   - A presentation model disappearing for a harness whose upstream did not
      announce a removal (often a probe environment problem, not reality).
    - An install-source change (npm to git, new download host) with no
      matching registry change in the same PR.
@@ -102,16 +102,17 @@ the adapter comes from:
 
 An adapter bump that chases a native CLI change needs no extra
 sequencing inside the catalog: the focused `catalog-update` installs the
-new adapter and native pins together and probes them over ACP as a
-pair, so a mismatched adapter/CLI combination fails the probe and never
-promotes.
+new adapter and native pins together and probes them over ACP as a pair. A
+mismatched adapter/CLI combination fails the probe and never promotes the pin
+or presentation metadata. Executable launch options remain target-observed
+runtime state and are never shipped in this catalog.
 
 ## Roll back
 
 Revert the catalog PR, or repin the fleet to the previous runtime
 version — both work because the runtime binary is the catalog's only
 transport, so the runtime version is the rollback unit: it carries the
-code, the pins, and the probe-observed behavior back together. A revert
+code, pins, and launch-option probe implementation back together. A revert
 reaches desktops with the next app update and cloud sandboxes with the
 next runtime binary roll. The version-discipline check still applies: the
 revert commit must carry a new, higher `catalogVersion`, which
@@ -130,9 +131,10 @@ delay, since both documents only ship in binaries.
 2. After merge and the next runtime release: the runtime reports the new
    catalog (`GET /v1/catalogs/agents/version` reports the new
    `catalogVersion`), and its startup reconcile installs the new pins.
-3. `cd scripts/agent-catalog && node render-catalog.mjs` renders the
-   promoted document to HTML for a human-readable check of models,
-   controls, and pins.
+3. `make catalog-view` rebuilds and opens the presentation/distribution JSON.
+   Executable models, controls, and defaults are verified against a real target
+   with `scripts/verify-harness-launch-options.mjs`, not inferred from the
+   catalog.
 
 ## Failure modes
 

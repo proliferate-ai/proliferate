@@ -52,22 +52,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agents/launch-options": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_agent_launch_options"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/agents/login-terminals/{terminal_id}": {
         parameters: {
             query?: never;
@@ -116,38 +100,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/agents/{kind}/catalog/gateway-models": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_gateway_models"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{kind}/catalog/refresh-gateway": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["refresh_gateway_models"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/agents/{kind}/install": {
         parameters: {
             query?: never;
@@ -158,6 +110,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["install_agent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{kind}/launch-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_launch_options"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{kind}/launch-options/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["refresh_launch_options"];
         delete?: never;
         options?: never;
         head?: never;
@@ -190,38 +174,6 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["start_agent_login_terminal"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{kind}/model-snapshot": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_model_snapshot_status"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/agents/{kind}/model-snapshot/refresh": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["refresh_model_snapshot"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2305,41 +2257,6 @@ export interface components {
         AgentInstallProgressPhase: "queued" | "downloading" | "verifying" | "extracting" | "installing" | "finalizing" | "completed" | "skipped" | "failed";
         /** @enum {string} */
         AgentInstallState: "installed" | "install_required" | "installing" | "failed";
-        AgentLaunchModelOption: {
-            aliases?: string[];
-            defaultOptIn?: boolean | null;
-            description?: string | null;
-            displayName: string;
-            effort?: null | components["schemas"]["ModelEffort"];
-            fastMode?: boolean | null;
-            id: string;
-            isDefault: boolean;
-            /**
-             * @description The permission/agent modes the model supports (joined from the bundled
-             *     catalog's `controls.mode.values`); absent when the model has no mode
-             *     control (contract §5).
-             */
-            modes?: string[] | null;
-            provider?: string | null;
-            status?: null | components["schemas"]["ModelCatalogStatus"];
-        };
-        AgentLaunchOption: {
-            defaultModelId?: string | null;
-            displayName: string;
-            kind: string;
-            models: components["schemas"]["AgentLaunchModelOption"][];
-            /**
-             * @description Curated unattended mode from the selected runtime's active catalog.
-             *     This field intentionally serializes as `null` when no mode is vetted,
-             *     allowing clients to distinguish that declaration from an older runtime
-             *     that omitted the field entirely.
-             */
-            unattendedModeId?: string | null;
-        };
-        AgentLaunchOptionsResponse: {
-            agents: components["schemas"]["AgentLaunchOption"][];
-            workspaceId?: string | null;
-        };
         AgentLoginTerminalRecord: {
             commandDisplay: string;
             createdAt: string;
@@ -2839,7 +2756,11 @@ export interface components {
         };
         CreateCoworkThreadRequest: {
             agentKind: string;
+            controlValues?: {
+                [key: string]: string;
+            };
             coworkWorkspaceDelegationEnabled?: boolean | null;
+            /** @description N-1 HTTP compatibility only. First-party clients send `controlValues.mode`. */
             modeId?: string | null;
             modelId?: string | null;
         };
@@ -2869,6 +2790,13 @@ export interface components {
         };
         CreateSessionRequest: {
             agentKind: string;
+            controlValues?: {
+                [key: string]: string;
+            };
+            /**
+             * @description Stateless N-1 compatibility input. The HTTP boundary translates it to
+             *     `controlValues.mode` before the request enters the session domain.
+             */
             modeId?: string | null;
             modelId?: string | null;
             origin?: null | components["schemas"]["OriginContext"];
@@ -3071,50 +2999,6 @@ export interface components {
         };
         /** @enum {string} */
         ForkSessionTargetType: "before_user_message";
-        /**
-         * @description One enriched gateway model row (spec §1). Catalog-known ids carry the joined
-         *     display metadata; probe-only ids (the proxy serves it but the bundled
-         *     catalog doesn't know it) emit just `{ id, provider? }`.
-         */
-        GatewayModelEntry: {
-            /** @description Catalog description; absent when the catalog omits one or for probe-only ids. */
-            description?: string | null;
-            /** @description Catalog display name; absent for probe-only ids. */
-            displayName?: string | null;
-            effort?: null | components["schemas"]["ModelEffort"];
-            /** @description Whether the model carries a `fast_mode` control; absent for probe-only ids. */
-            fastMode?: boolean | null;
-            /** @description The gateway model id (always present — the render plane keys on this). */
-            id: string;
-            /**
-             * @description The permission/agent modes the model supports (`controls.mode.values`);
-             *     absent when the model has no mode control or is probe-only (contract §5).
-             */
-            modes?: string[] | null;
-            /**
-             * @description Provider id from the id-prefix matcher (`claude-*`→anthropic, …); absent
-             *     when no family matches.
-             */
-            provider?: string | null;
-            status?: null | components["schemas"]["ModelCatalogStatus"];
-        };
-        /** @description Resolved gateway model plan for the local surface. */
-        GatewayModelsResponse: {
-            /**
-             * @description The resolved gateway models — each id enriched with the bundled
-             *     catalog row (or bare `{ id, provider? }` for probe-only ids). No
-             *     client-side provider filtering is applied; server-side access groups
-             *     (once B1 lands) own scoping.
-             */
-            models: components["schemas"]["GatewayModelEntry"][];
-            /** @description When a probe supplied the list (RFC3339); absent for seed. */
-            probedAt?: string | null;
-            /**
-             * @description `"seed"` (no snapshot entry yet) or `"probe"` (a snapshot observation
-             *     supplied the list).
-             */
-            source: string;
-        };
         /** @description Response payload for fetching the current live session config snapshot. */
         GetSessionLiveConfigResponse: {
             liveConfig?: null | components["schemas"]["SessionLiveConfigSnapshot"];
@@ -3306,7 +3190,14 @@ export interface components {
         };
         HandoffPlanRequest: {
             agentKind?: string | null;
+            controlValues?: {
+                [key: string]: string;
+            };
             instruction?: string | null;
+            /**
+             * @description N-1 HTTP compatibility only. The handler translates this into
+             *     `controlValues.mode` before the request enters the plans domain.
+             */
             modeId?: string | null;
             modelId?: string | null;
             origin?: null | components["schemas"]["OriginContext"];
@@ -3320,6 +3211,47 @@ export interface components {
             sourceSessionId: string;
             targetSessionId: string;
         };
+        HarnessLaunchControl: {
+            id: string;
+            observedDescription?: string | null;
+            observedLabel?: string | null;
+            values: components["schemas"]["HarnessLaunchControlValue"][];
+        };
+        HarnessLaunchControlValue: {
+            observedDescription?: string | null;
+            observedLabel?: string | null;
+            value: string;
+        };
+        HarnessLaunchDefaults: {
+            controlValues?: {
+                [key: string]: string;
+            };
+            modelId?: string | null;
+        };
+        HarnessLaunchModel: {
+            id: string;
+            observedDescription?: string | null;
+            observedName?: string | null;
+        };
+        HarnessLaunchOptions: {
+            controls: components["schemas"]["HarnessLaunchControl"][];
+            defaults: components["schemas"]["HarnessLaunchDefaults"];
+            models: components["schemas"]["HarnessLaunchModel"][];
+        };
+        HarnessLaunchOptionsResponse: {
+            basisRevision: string;
+            harnessKind: string;
+            observedAt?: string | null;
+            options?: null | components["schemas"]["HarnessLaunchOptions"];
+            probeAttemptedAt: string;
+            probeFailureCode?: string | null;
+            readiness: components["schemas"]["AgentReadinessState"];
+            /** Format: int64 */
+            revision: number;
+            state: components["schemas"]["HarnessLaunchOptionsState"];
+        };
+        /** @enum {string} */
+        HarnessLaunchOptionsState: "detecting" | "refreshing" | "observed" | "observed_empty" | "last_good_after_failure" | "failed_without_observation";
         HealthResponse: {
             agentReconcile: components["schemas"]["AgentReconcileSummary"];
             agentSeed: components["schemas"]["AgentSeedHealth"];
@@ -3733,6 +3665,7 @@ export interface components {
             sessionLinkId: string;
         };
         MobilitySessionLiveConfigSnapshotRecord: {
+            fullSnapshotJson?: string | null;
             normalizedControlsJson: string;
             promptCapabilitiesJson?: string | null;
             rawConfigOptionsJson: string;
@@ -3772,86 +3705,11 @@ export interface components {
             title?: string | null;
             updatedAt: string;
         };
-        /** @enum {string} */
-        ModelCatalogStatus: "candidate" | "active" | "deprecated" | "hidden";
-        /**
-         * @description The thinking/effort control surfaced per model: the values the model
-         *     supports and the observed default (the runtime joins these from the
-         *     bundled catalog's `controls.effort.{values, observedValue}`).
-         */
-        ModelEffort: {
-            default?: string | null;
-            values: string[];
-        };
-        /**
-         * @description The engine's live view of one harness. In-memory only, so a restart reports
-         *     `Idle` — which is true: nothing is running.
-         *
-         *     `Queued` is distinct from `Running` on purpose: a probe admitted to its slot but
-         *     still waiting on the machine-wide semaphore is neither "nothing is happening"
-         *     (which is what `Idle` would tell a polling UI, wrongly) nor "a harness process
-         *     exists".
-         * @example idle
-         * @enum {string}
-         */
-        ModelSnapshotLiveState: "idle" | "queued" | "running" | "backoff";
-        ModelSnapshotStatus: {
-            agent: string;
-            /** @description Provenance: the binary that answered. Diagnostics only. */
-            attestation?: Record<string, never> | null;
-            /**
-             * @description Provenance: the install the observation was recorded on, as the document
-             *     carries it. `null` when the document is absent or recorded none.
-             */
-            installIdentity?: Record<string, never> | null;
-            lastAttempt?: Record<string, never> | null;
-            /**
-             * @description `lastAttempt.detail` when the last attempt failed. Lifted to its own field
-             *     so a surface can render an error without knowing the attempt shape.
-             */
-            lastError?: string | null;
-            modeCount: number;
-            modelCount: number;
-            /**
-             * @description The full model list off the same document read as `modelCount`, so a
-             *     machineless-surface uploader (the Worker's `model_snapshot_sync`) has
-             *     something to read besides raw disk access to a document it should not
-             *     know the layout of.
-             */
-            models?: Record<string, never>[];
-            /** @description The full mode list, same rationale as `models` above. */
-            modes?: Record<string, never>[];
-            /** @description Set iff `state == backoff`. */
-            nextAttemptAt?: string | null;
-            /**
-             * @description `owner` | `readonly` — visible rather than mysterious when a second
-             *     runtime shares this home.
-             * @example owner
-             */
-            probeEngine: string;
-            /**
-             * @description Last SUCCESSFUL observation. Never regresses on failure. Absent until the
-             *     first observation lands.
-             */
-            probedAt?: string | null;
-            /** Format: int32 */
-            schemaVersion: number;
-            /**
-             * Format: int64
-             * @description Server-computed so every surface renders the same age from one clock.
-             */
-            snapshotAgeSeconds?: number | null;
-            state: components["schemas"]["ModelSnapshotLiveState"];
-            /**
-             * Format: int64
-             * @description Provenance: the `state.json` revision the observation was probed under.
-             */
-            stateRevision?: number | null;
-            warnings?: string[];
-        };
         NodeModel: {
             agentKind: string;
-            modeId?: string | null;
+            controlValues?: {
+                [key: string]: string;
+            };
             modelId?: string | null;
         };
         NodeView: {
@@ -4348,17 +4206,6 @@ export interface components {
         ReconcileJobStatus: "idle" | "queued" | "running" | "completed" | "failed";
         /** @enum {string} */
         ReconcileOutcome: "installed" | "already_installed" | "skipped" | "failed";
-        /** @description Result of a manual gateway refresh. */
-        RefreshGatewayResponse: {
-            /**
-             * @description The freshly probed model ids — exactly what the snapshot entry now
-             *     carries for the gateway context, with no client-side provider
-             *     filtering applied anywhere downstream.
-             */
-            models: string[];
-            /** @description The probe timestamp (RFC3339). */
-            probedAt: string;
-        };
         RenameWorkspaceFileEntryRequest: {
             newPath: string;
             path: string;
@@ -4471,8 +4318,10 @@ export interface components {
             modelId?: string | null;
         };
         ReviewAssignmentDetail: {
-            actualModeId?: string | null;
             agentKind: string;
+            controlValues: {
+                [key: string]: string;
+            };
             createdAt: string;
             critiqueArtifactPath?: string | null;
             deadlineAt: string;
@@ -4480,12 +4329,11 @@ export interface components {
             failureReason?: string | null;
             hasCritique: boolean;
             id: string;
-            modeVerificationStatus: components["schemas"]["ReviewModeVerificationStatus"];
+            launchVerificationStatus: components["schemas"]["ReviewLaunchVerificationStatus"];
             modelId?: string | null;
             pass?: boolean | null;
             personaId: string;
             personaLabel: string;
-            requestedModeId?: string | null;
             reviewRoundId: string;
             reviewRunId: string;
             reviewerSessionId?: string | null;
@@ -4521,11 +4369,13 @@ export interface components {
         /** @enum {string} */
         ReviewKind: "plan" | "code";
         /** @enum {string} */
-        ReviewModeVerificationStatus: "pending" | "verified" | "mismatch" | "not_checked";
+        ReviewLaunchVerificationStatus: "pending" | "verified" | "mismatch" | "not_checked";
         ReviewPersonaRequest: {
             agentKind: string;
+            controlValues?: {
+                [key: string]: string;
+            };
             label: string;
-            modeId?: string | null;
             modelId?: string | null;
             personaId: string;
             prompt: string;
@@ -4881,6 +4731,12 @@ export interface components {
             relation: string;
             sessionLinkId: string;
         };
+        SessionLiveConfigCurrent: {
+            controlValues?: {
+                [key: string]: string;
+            };
+            modelId?: string | null;
+        };
         /**
          * @description The current live session configuration snapshot persisted by AnyHarness.
          *
@@ -4888,12 +4744,23 @@ export interface components {
          *     normalized control view for convenient client rendering.
          */
         SessionLiveConfigSnapshot: {
+            /** @description Independent live controls and their exact allowed values, in harness order. */
+            controls?: components["schemas"]["HarnessLaunchControl"][];
+            /** @description Complete effective configuration for this exact native session. */
+            current?: components["schemas"]["SessionLiveConfigCurrent"];
+            /** @description Models currently advertised by this exact native session, in harness order. */
+            models?: components["schemas"]["HarnessLaunchModel"][];
             /** @description Product-normalized view of the current live controls. */
-            normalizedControls: components["schemas"]["NormalizedSessionControls"];
+            normalizedControls?: components["schemas"]["NormalizedSessionControls"];
             /** @description Content block capabilities advertised by the active ACP agent. */
             promptCapabilities?: components["schemas"]["PromptCapabilities"];
-            /** @description Exact raw ACP config options currently exposed by the active session. */
-            rawConfigOptions: components["schemas"]["RawSessionConfigOption"][];
+            /**
+             * @description Exact raw ACP config options currently exposed by the active session.
+             *
+             *     Deprecated transport compatibility. First-party active-session consumers
+             *     use `models`, `controls`, and `current` exclusively.
+             */
+            rawConfigOptions?: components["schemas"]["RawSessionConfigOption"][];
             /**
              * Format: int64
              * @description Session event sequence number from which this snapshot was produced.
@@ -5830,29 +5697,6 @@ export interface operations {
             };
         };
     };
-    get_agent_launch_options: {
-        parameters: {
-            query?: {
-                /** @description Optional workspace scope: composes the workspace env into auth-context classification */
-                workspace_id?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List launchable agents and model options */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentLaunchOptionsResponse"];
-                };
-            };
-        };
-    };
     get_agent_login_terminal: {
         parameters: {
             query?: never;
@@ -6009,79 +5853,6 @@ export interface operations {
             };
         };
     };
-    get_gateway_models: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Agent kind identifier */
-                kind: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Resolved gateway model plan (probe or seed) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GatewayModelsResponse"];
-                };
-            };
-        };
-    };
-    refresh_gateway_models: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Agent kind identifier */
-                kind: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Gateway re-probed and recorded */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RefreshGatewayResponse"];
-                };
-            };
-            /** @description Unknown agent kind or no gateway route active */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description This runtime does not own the probe engine, or its local auth config is unusable */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Gateway probe failed */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
     install_agent: {
         parameters: {
             query?: never;
@@ -6126,6 +5897,88 @@ export interface operations {
                 };
             };
             /** @description Download or registry failed */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_launch_options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Harness kind identifier */
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Target-observed harness launch options */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HarnessLaunchOptionsResponse"];
+                };
+            };
+            /** @description Unknown harness kind */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    refresh_launch_options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Harness kind identifier */
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Refresh completed */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HarnessLaunchOptionsResponse"];
+                };
+            };
+            /** @description Unknown or uninstalled harness */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Refresh cannot run on this target */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Harness probe failed */
             502: {
                 headers: {
                     [name: string]: unknown;
@@ -6226,88 +6079,6 @@ export interface operations {
             };
             /** @description Login command not found */
             409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    get_model_snapshot_status: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Agent kind identifier */
-                kind: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The harness's composed model-snapshot status */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ModelSnapshotStatus"];
-                };
-            };
-            /** @description Unknown agent kind */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    refresh_model_snapshot: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Agent kind identifier */
-                kind: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Re-probe completed; the status body reflects it */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ModelSnapshotStatus"];
-                };
-            };
-            /** @description Unknown agent kind, or the harness is not installed here */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description This runtime does not own the probe engine, or its local auth config is unusable */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description The forced probe ran and failed */
-            502: {
                 headers: {
                     [name: string]: unknown;
                 };

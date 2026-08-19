@@ -93,10 +93,12 @@ Three rules every settings page follows:
    SettingsRow (PageHeader from #product/primitives/patterns, the rest from
    the settings kit). New pages do not invent new wrappers.
 
-4. The Agents `Local` surface remains useful without a Cloud session. Its
-   model list comes directly from the local AnyHarness launch catalog; Cloud
-   sign-in gates the `Cloud` surface, gateway management, catalog overrides,
-   and other Cloud-backed mutations, not local model discovery.
+4. The Agents `Local` surface remains useful without a Cloud session. Its model
+   list comes directly from the local target's `HarnessLaunchOptions`; the
+   Cloud surface reads the exact copy for its selected sandbox and harness.
+   Cloud sign-in gates Cloud access and gateway management, not local
+   observation. Neither surface exposes an executable model-visibility or
+   catalog-override mutation.
 ```
 
 Ownership rule:

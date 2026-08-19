@@ -465,11 +465,6 @@ impl AgentOperations {
                     .current_model_id
                     .clone()
                     .or_else(|| target.record.requested_model_id.clone()),
-                mode_id: target
-                    .record
-                    .current_mode_id
-                    .clone()
-                    .or_else(|| target.record.requested_mode_id.clone()),
             },
             status,
             capabilities,

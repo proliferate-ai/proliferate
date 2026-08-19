@@ -12,7 +12,6 @@ export interface SessionCreateWithResolvedConfigRetryOptions {
   optimisticContentParts?: ContentPart[];
   agentKind: string;
   modelId: string;
-  modeId?: string;
   launchControlValues?: Record<string, string>;
   workspaceId?: string;
   latencyFlowId?: string | null;

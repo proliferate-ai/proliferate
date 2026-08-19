@@ -295,7 +295,7 @@ export const defaultLocalWorldSmokeDriver: LocalWorldSmokeDriver = {
     const deadline = Date.now() + HARNESS_READY_TIMEOUT_MS;
     let last: Awaited<ReturnType<typeof client.getAgent>> | undefined;
     let launchable = false;
-    // Launchability is judged by `GET /v1/agents/launch-options` — the exact
+    // Launchability is judged by `GET /v1/agents/{kind}/launch-options` — the exact
     // source Desktop's composer reads, and the one that resolves credentials
     // against the WORKSPACE's composed env (`resolve_launch_agent`).
     // `GET /v1/agents/{kind}` is also route-aware now, but it resolves against

@@ -2,10 +2,11 @@ import { FileReferenceBadge } from "#product/components/workspace/file-reference
 
 interface ToolFileChipProps {
   basename: string;
-  pathLabel: string;
+  /** Raw wire path; never replaced by normalized workspace metadata. */
+  rawPath: string;
   /**
-   * Known workspace-relative path. Missing nullable metadata is inferred from
-   * pathLabel by the shared file-reference resolver.
+   * Supplied structured workspace paths are authoritative; otherwise the
+   * shared file-reference resolver classifies `rawPath`.
    */
   workspacePath: string | null | undefined;
 }
@@ -18,19 +19,19 @@ interface ToolFileChipProps {
  *    target for an external file.
  *  - Actionable references expose external targets, copy, and reveal through
  *    the context menu.
- *  - An unavailable path is non-interactive text.
+ *  - A nonempty unavailable path has Copy path only; an empty path has no controls.
  *
  * Visual is intentionally a chip (border + background + file icon) so tool
  * results stay scannable; markdown prose uses the flat `FilePathLink` instead.
  */
 export function ToolFileChip({
   basename,
-  pathLabel,
+  rawPath,
   workspacePath,
 }: ToolFileChipProps) {
   return (
     <FileReferenceBadge
-      rawPath={pathLabel}
+      rawPath={rawPath}
       basename={basename}
       label={basename}
       workspacePath={workspacePath}

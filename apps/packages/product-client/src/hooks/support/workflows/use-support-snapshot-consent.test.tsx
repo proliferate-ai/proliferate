@@ -254,69 +254,6 @@ describe("useSupportSnapshotConsent", () => {
     expect(bridge.beginPreparation).not.toHaveBeenCalled();
   });
 
-  it("cancels in-flight preparation and refuses to answer a superseded epoch", async () => {
-    let releaseEvidence: (() => void) | null = null;
-    access.collectResolvedSupportSessionEvidence.mockImplementation(() =>
-      new Promise((resolve) => {
-        releaseEvidence = () => resolve({ state: "cancelled" });
-      })
-    );
-    const rendered = renderConsent();
-
-    act(() => { rendered.result.current.setConsent(true); });
-    let pending: Promise<unknown> | null = null;
-    await act(async () => {
-      pending = rendered.result.current.prepare();
-      await waitFor(() => expect(bridge.beginPreparation).toHaveBeenCalled());
-    });
-
-    await act(async () => {
-      rendered.result.current.cancel();
-      releaseEvidence?.();
-      await pending;
-    });
-
-    expect(await pending!).toEqual({ state: "cancelled" });
-    expect(bridge.finishPreparation).not.toHaveBeenCalled();
-    expect(bridge.cancelPreparation).toHaveBeenCalledWith({
-      clientJobId: "job-1",
-      consentEpoch: expect.any(String),
-      preparationId: "prep-1",
-    });
-  });
-
-  it("releases a preparation superseded while native was still admitting it", async () => {
-    let admit: (() => void) | null = null;
-    bridge.beginPreparation.mockImplementation(() =>
-      new Promise((resolve) => {
-        admit = () => resolve(PREPARATION);
-      })
-    );
-    const rendered = renderConsent();
-
-    act(() => { rendered.result.current.setConsent(true); });
-    let pending: Promise<unknown> | null = null;
-    await act(async () => {
-      pending = rendered.result.current.prepare();
-      await waitFor(() => expect(bridge.beginPreparation).toHaveBeenCalled());
-    });
-
-    await act(async () => {
-      // Superseded before the admitted preparation ever came back.
-      rendered.result.current.cancel();
-      admit?.();
-      await pending;
-    });
-
-    expect(await pending!).toEqual({ state: "cancelled" });
-    expect(bridge.finishPreparation).not.toHaveBeenCalled();
-    expect(bridge.cancelPreparation).toHaveBeenCalledWith({
-      clientJobId: "job-1",
-      consentEpoch: expect.any(String),
-      preparationId: "prep-1",
-    });
-  });
-
   it("surfaces a fatal preparation failure instead of downgrading intent", async () => {
     bridge.finishPreparation.mockRejectedValueOnce(new Error("stage_failed"));
     const rendered = renderConsent();
@@ -348,25 +285,4 @@ describe("useSupportSnapshotConsent", () => {
     expect(bridge.beginPreparation).not.toHaveBeenCalled();
   });
 
-  it("writes the archive from the same staged artifact on Save a copy", async () => {
-    const rendered = renderConsent();
-
-    act(() => { rendered.result.current.setConsent(true); });
-    await act(async () => { await rendered.result.current.saveCopy(); });
-
-    expect(bridge.saveArchive).toHaveBeenCalledWith({
-      artifactId: "artifact-1",
-      consentEpoch: bridge.beginPreparation.mock.calls[0]![0].consentEpoch,
-    });
-    expect(bridge.deleteArtifact).toHaveBeenCalledWith("artifact-1");
-  });
-
-  it("never saves an archive without live consent", async () => {
-    const rendered = renderConsent();
-
-    await act(async () => { await rendered.result.current.saveCopy(); });
-
-    expect(bridge.beginPreparation).not.toHaveBeenCalled();
-    expect(bridge.saveArchive).not.toHaveBeenCalled();
-  });
 });

@@ -142,7 +142,7 @@ const TURN_TIMEOUT_MS = 300_000;
 /**
  * Bounded wait for the composer model picker to surface the gateway model. The
  * cloud in-workspace composer's model list is the cloud v2 agent catalog MERGED
- * with the sandbox's own `GET /v1/agents/launch-options`
+ * with the sandbox's own `GET /v1/agents/{kind}/launch-options`
  * (`useWorkspaceAgentLaunchOptionsQuery` → `use-chat-launch-catalog.ts`), and
  * the desktop fetches that launch-options menu ONCE per workspace open with no
  * refetch interval (plain `useQuery`, no `refetchInterval`). If the workspace
@@ -184,7 +184,8 @@ const GATEWAY_PROBE_POLL_TIMEOUT_MS = 120_000;
 const GATEWAY_PROBE_POLL_INTERVAL_MS = 5_000;
 
 /**
- * Bounded wait for the sandbox runtime's OWN `GET /v1/agents/launch-options`
+ * Bounded wait for the sandbox runtime's OWN
+ * `GET /v1/agents/{kind}/launch-options`
  * to list the harness with models before the browser turn opens. The runtime
  * derives launch-options per request (no runtime-side cache —
  * `resolved_workspace_launch_options`, sessions/service/launch_options.rs), so
@@ -665,7 +666,7 @@ function curlWithBearerArgs(token: string, url: string): string[] {
 
 /**
  * Same shape as `curlWithBearerArgs`, but issues an authenticated POST with no
- * body (used for `POST /v1/agents/{kind}/catalog/refresh-gateway`, which takes
+ * body (used for `POST /v1/agents/{kind}/launch-options/refresh`, which takes
  * no request body — only a path param) and CAPTURES the response body even on a
  * 4xx/5xx.
  *
@@ -725,19 +726,18 @@ function splitBodyAndStatus(raw: string): { status: number; body: string } {
   return { status: Number.isFinite(status) ? status : Number.NaN, body: raw.slice(0, nl) };
 }
 
-/** One agent row of `GET /v1/agents/launch-options` (contract `AgentLaunchOption`, camelCase wire). */
-interface SandboxLaunchOptionsAgent {
-  kind?: string;
-  models?: Array<{ id?: string }>;
+/** Target-observed launch-options response (camelCase wire). */
+interface SandboxHarnessLaunchOptionsResponse {
+  harnessKind?: string;
+  state?: string;
+  options?: { models?: Array<{ id?: string }> } | null;
 }
 
 /**
- * Bounded wait for the sandbox runtime's `GET /v1/agents/launch-options` to
- * list `harnessKind` with at least one model. The runtime computes this menu
- * per request — joining the active catalog, `resolve_launch_agent` readiness
- * (which a gateway route in `agent-auth/state.json` upgrades to Ready), and
- * the classified auth contexts — so polling converges the moment readiness
- * flips; there is no runtime-side refresh to trigger. Each distinct
+ * Bounded wait for the sandbox runtime's per-harness launch-options endpoint
+ * to observe `harnessKind` with at least one model. The runtime serves the
+ * durable target-scoped probe snapshot, so polling converges after refresh.
+ * Each distinct
  * non-launchable response is surfaced raw under `[cloud-launch-options]` (the
  * runner log, not evidence; the bearer token rides only in the request
  * header). On timeout, dumps the per-agent `GET /v1/agents` readiness summary
@@ -754,7 +754,8 @@ export async function waitForSandboxLaunchOptions(
   pollTimeoutMs: number,
   pollIntervalMs: number,
 ): Promise<void> {
-  const url = `http://127.0.0.1:${SANDBOX_RUNTIME_PORT}/v1/agents/launch-options`;
+  const url =
+    `http://127.0.0.1:${SANDBOX_RUNTIME_PORT}/v1/agents/${encodeURIComponent(harnessKind)}/launch-options`;
   const deadline = Date.now() + pollTimeoutMs;
   let lastFailure = "no attempt";
   let lastSurfaced = "";
@@ -769,13 +770,12 @@ export async function waitForSandboxLaunchOptions(
     const probe = await exec(providerSandboxId, curlWithBearerArgs(token, url));
     if (probe.exitCode === 0) {
       try {
-        const parsed = JSON.parse(probe.stdout) as { agents?: SandboxLaunchOptionsAgent[] };
-        const agent = (parsed.agents ?? []).find((entry) => entry.kind === harnessKind);
-        if (agent && (agent.models?.length ?? 0) > 0) {
+        const parsed = JSON.parse(probe.stdout) as SandboxHarnessLaunchOptionsResponse;
+        if (parsed.harnessKind === harnessKind && (parsed.options?.models?.length ?? 0) > 0) {
           return;
         }
-        lastFailure = `launch-options does not list a launchable "${harnessKind}"`;
-        surface(`no launchable "${harnessKind}" yet: ${probe.stdout.trim().slice(0, 600)}`);
+        lastFailure = `launch-options has no observed models for "${harnessKind}"`;
+        surface(`no observed models for "${harnessKind}" yet: ${probe.stdout.trim().slice(0, 600)}`);
       } catch {
         lastFailure = "launch-options response was not valid JSON";
         surface(`invalid JSON: ${probe.stdout.trim().slice(0, 300)}`);
@@ -787,8 +787,8 @@ export async function waitForSandboxLaunchOptions(
     if (Date.now() >= deadline) {
       await dumpSandboxAgentReadiness(exec, providerSandboxId, token).catch(() => undefined);
       throw new Error(
-        `waitForSandboxLaunchOptions: the sandbox runtime never listed "${harnessKind}" with models at ` +
-          `GET /v1/agents/launch-options within ${pollTimeoutMs}ms (last: ${lastFailure}). The per-agent ` +
+        `waitForSandboxLaunchOptions: the sandbox runtime never observed "${harnessKind}" with models at ` +
+          `GET /v1/agents/${harnessKind}/launch-options within ${pollTimeoutMs}ms (last: ${lastFailure}). The per-agent ` +
           "readiness summary was surfaced to the runner log under [cloud-agents-readiness]; " +
           "installState/readiness there names the failing precondition (a gateway route clears only " +
           "login/credential gaps — never install_required/unsupported).",
@@ -1428,41 +1428,16 @@ export function createCloudProvision1Driver(
       );
     }
     const token = await resolveRuntimeBearerToken(world.box, convergence.cloudSandboxId);
-    // `POST /v1/agents/{kind}/catalog/refresh-gateway` — NOT the read-only
-    // `GET .../catalog/gateway-models` (that endpoint can still answer
-    // `source: "seed"`, the catalog's static defaults, when no probe row has
-    // ever been recorded). A live probe is normally triggered by the desktop
-    // pushing state via `PUT /agent-auth/state`
-    // (`schedule_gateway_probes`, api/http/agent_auth.rs) — but the cloud
-    // materializer writes `agent-auth/state.json` straight to the sandbox
-    // filesystem (`materialize_agent_auth`), bypassing that endpoint entirely,
-    // so nothing ever probes the gateway for a fresh cloud sandbox unless this
-    // scenario forces it. `refresh-gateway` probes synchronously and returns
-    // the raw, unfiltered model ids the gateway itself reports (`GET
-    // {base_url}/v1/models`) — the exact ids-space the qualification allowlist
-    // is drawn from, so the intersection in `selectCheapestEligibleClaudeModel`
-    // is a plain exact-string match, not a format problem.
+    // Refresh the selected target's per-harness observation synchronously. The
+    // cloud materializer writes agent-auth state asynchronously, so the probe
+    // can remain unavailable until that write lands. Poll bounded and return
+    // only the exact target-observed model IDs from the response.
     //
-    // Verified against the real route handler (RefreshGatewayResponse in
-    // anyharness-lib/src/api/http/agent_gateway_catalog.rs): the body is a FLAT
-    // `{ "models": ["<id>", ...], "probedAt": "<rfc3339>" }` — `models` is
-    // `Vec<String>` (bare ids, NOT objects, NOT nested under `catalog`/`data`,
-    // and there is no `source` field on this POST — that only exists on the GET
-    // gateway-models plan). So `{models: string[]}` is the exact shape.
-    //
-    // It 400s (GATEWAY_REFRESH_NO_SELECTION / GATEWAY_REFRESH_NO_STATE) until
-    // the materializer has written a gateway source into state.json, which runs
-    // as part of the ASYNC `schedule_materialize_sandbox` background task
-    // (github creds, secrets, per-repo preclone, THEN agent-auth, in that
-    // order), and 502s (GATEWAY_REFRESH_PROBE_FAILED) if the probe itself
-    // errors — so poll bounded rather than assume the sync already landed just
-    // because the provider sandbox is "running".
-    //
-    // Surface the RAW refresh-gateway response (HTTP status + body, or a hard
+    // Surface the raw refresh response (HTTP status + body, or a hard
     // curl exit) to the runner's stderr stream (the make log, NOT persisted
     // evidence) on each distinct non-returning attempt, so a probe that 400s,
     // 502s, returns 0 models, or an unexpected shape names itself — including
-    // the exact runtime error CODE (`GATEWAY_REFRESH_NO_SELECTION` etc.) —
+    // the exact runtime error code —
     // instead of being sanitized into the timeout `reason`. The bearer token
     // rides ONLY in the request header (`curlPostCaptureArgs`), never the
     // response body/stderr, so this cannot leak it. Deduplicated by signature so
@@ -1471,7 +1446,8 @@ export function createCloudProvision1Driver(
     // an `[e2b-verify]` line — the e2b probe subprocess exits 0 and reports the
     // inner curl's exit in `exitCode`, so its own error surfacing never fires
     // for a 400/502.
-    const url = `http://127.0.0.1:${SANDBOX_RUNTIME_PORT}/v1/agents/${harnessKind}/catalog/refresh-gateway`;
+    const url =
+      `http://127.0.0.1:${SANDBOX_RUNTIME_PORT}/v1/agents/${encodeURIComponent(harnessKind)}/launch-options/refresh`;
     const deadline = Date.now() + gatewayProbePollTimeoutMs;
     let lastFailure = "no attempt";
     let lastSurfaced = "";
@@ -1489,14 +1465,16 @@ export function createCloudProvision1Driver(
         // failure), distinct from an HTTP error status. Surface the exit +
         // stderr and retry.
         lastFailure = `curl exited ${probe.exitCode}`;
-        surface(`refresh-gateway exit=${probe.exitCode} stderr=${probe.stderr.trim().slice(0, 200)}`);
+        surface(`launch-options refresh exit=${probe.exitCode} stderr=${probe.stderr.trim().slice(0, 200)}`);
       } else {
         const { status, body } = splitBodyAndStatus(probe.stdout);
         if (status >= 200 && status < 300) {
           try {
-            const parsed = JSON.parse(body) as { models?: unknown };
-            if (Array.isArray(parsed.models)) {
-              const models = parsed.models.filter((id): id is string => typeof id === "string");
+            const parsed = JSON.parse(body) as SandboxHarnessLaunchOptionsResponse;
+            if (Array.isArray(parsed.options?.models)) {
+              const models = parsed.options.models
+                .map((model) => model.id)
+                .filter((id): id is string => typeof id === "string");
               if (models.length > 0) {
                 return models;
               }
@@ -1504,25 +1482,25 @@ export function createCloudProvision1Driver(
               // gateway. Retry (the sync may still be settling) and surface the
               // raw body so a persistent empty result is visible, not silently
               // blocked.
-              lastFailure = "refresh-gateway returned 0 models";
+              lastFailure = "launch-options refresh returned 0 models";
             } else {
-              lastFailure = 'refresh-gateway 2xx response had no "models" array';
+              lastFailure = 'launch-options refresh 2xx response had no "options.models" array';
             }
           } catch {
-            lastFailure = "refresh-gateway 2xx response was not valid JSON";
+            lastFailure = "launch-options refresh 2xx response was not valid JSON";
           }
-          surface(`refresh-gateway http=${status} body=${body.trim().slice(0, 600)}`);
+          surface(`launch-options refresh http=${status} body=${body.trim().slice(0, 600)}`);
         } else {
           // 400 (NO_SELECTION / NO_STATE / INCOMPLETE) or 502 (PROBE_FAILED):
           // the body carries the exact error code — surface it verbatim.
-          lastFailure = `refresh-gateway http=${Number.isNaN(status) ? "?" : status}`;
-          surface(`refresh-gateway http=${Number.isNaN(status) ? "?" : status} body=${body.trim().slice(0, 600)}`);
+          lastFailure = `launch-options refresh http=${Number.isNaN(status) ? "?" : status}`;
+          surface(`launch-options refresh http=${Number.isNaN(status) ? "?" : status} body=${body.trim().slice(0, 600)}`);
         }
       }
       if (Date.now() >= deadline) {
         throw new Error(
-          `liveProbeModels: POST /v1/agents/${harnessKind}/catalog/refresh-gateway never returned a non-empty ` +
-            `model list within ${gatewayProbePollTimeoutMs}ms (last: ${lastFailure}). The raw refresh-gateway ` +
+          `liveProbeModels: POST /v1/agents/${harnessKind}/launch-options/refresh never returned a non-empty ` +
+            `model list within ${gatewayProbePollTimeoutMs}ms (last: ${lastFailure}). The raw refresh ` +
             "response was surfaced to the runner log under [cloud-model-probe]. Either the cloud materialization " +
             "worker never synced the actor's gateway selection into the sandbox's agent-auth state (400), or the " +
             "gateway virtual key resolves to zero models (200 with an empty list).",

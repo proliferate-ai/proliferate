@@ -91,7 +91,7 @@ pub struct PlanHandoffInput {
     pub target_session_id: Option<String>,
     pub agent_kind: Option<String>,
     pub model_id: Option<String>,
-    pub mode_id: Option<String>,
+    pub control_values: std::collections::BTreeMap<String, String>,
     pub instruction: Option<String>,
     pub origin: Option<OriginContext>,
 }

@@ -12,7 +12,7 @@ export type StartSessionPayload = {
   workspaceId: string;
   agentKind: string;
   modelId?: string | null;
-  modeId?: string | null;
+  controlValues: Record<string, string>;
   subagentsEnabled: boolean;
   origin: {
     kind: "system";

@@ -50,6 +50,7 @@ describe("runWorkspaceSelection agent-catalog parallelization", () => {
       workspaceConnection: {
         runtimeUrl: "http://runtime.test",
         anyharnessWorkspaceId: "ah-workspace",
+        runtimeGeneration: 0,
       },
     });
   });
@@ -63,6 +64,7 @@ describe("runWorkspaceSelection agent-catalog parallelization", () => {
         workspaceConnection: {
           runtimeUrl: "http://runtime.test",
           anyharnessWorkspaceId: "ah-workspace",
+          runtimeGeneration: 0,
         },
       };
     });

@@ -129,6 +129,7 @@ describe("runWorkspaceSelection", () => {
       workspaceConnection: {
         runtimeUrl: "http://runtime.test",
         anyharnessWorkspaceId: "ah-fresh-local",
+        runtimeGeneration: 0,
       },
     });
     const knownWorkspace = {
@@ -276,6 +277,7 @@ describe("runWorkspaceSelection", () => {
       workspaceConnection: {
         runtimeUrl: "http://runtime.test",
         anyharnessWorkspaceId: "ah-workspace-1",
+        runtimeGeneration: 0,
       },
     });
     useWorkspaceUiStore.setState({
@@ -319,6 +321,7 @@ describe("runWorkspaceSelection", () => {
       workspaceConnection: {
         runtimeUrl: "http://runtime.test",
         anyharnessWorkspaceId: "ah-workspace-1",
+        runtimeGeneration: 0,
       },
     });
     const staleSlotId = buildLocalSlotLogicalWorkspaceId("workspace-1");
@@ -358,6 +361,7 @@ describe("runWorkspaceSelection", () => {
       workspaceConnection: {
         runtimeUrl: "http://runtime.test",
         anyharnessWorkspaceId: "ah-workspace-1",
+        runtimeGeneration: 0,
       },
     });
     useWorkspaceUiStore.setState({
@@ -397,6 +401,7 @@ describe("runWorkspaceSelection", () => {
       workspaceConnection: {
         runtimeUrl: "http://runtime.test",
         anyharnessWorkspaceId: "ah-workspace-1",
+        runtimeGeneration: 0,
       },
     });
 
@@ -428,6 +433,7 @@ describe("runWorkspaceSelection", () => {
       workspaceConnection: {
         runtimeUrl: "http://runtime.test",
         anyharnessWorkspaceId: "ah-workspace-1",
+        runtimeGeneration: 0,
       },
     });
     const bootstrapWorkspace = vi.fn().mockResolvedValue({ sessions: [] });
@@ -466,6 +472,7 @@ describe("runWorkspaceSelection", () => {
       workspaceConnection: {
         runtimeUrl: "http://runtime.test",
         anyharnessWorkspaceId: "ah-workspace-1",
+        runtimeGeneration: 0,
       },
     });
     const pendingEntry = {

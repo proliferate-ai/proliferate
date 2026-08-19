@@ -1,12 +1,12 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type {
+  CloudHarnessLaunchOptionsResponse,
   CloudSessionProjection,
   CloudTranscriptItem,
   CloudWorkspaceDetail,
   ProliferateCloudClient,
 } from "@proliferate/cloud-sdk";
 import {
-  buildLaunchSessionConfigUpdates,
   resolveCloudLaunchSelection,
   type CloudLaunchComposerSelection,
 } from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
@@ -22,9 +22,6 @@ import {
 } from "../../../lib/access/anyharness/cloud-sandbox-runtime";
 import type { OptimisticPrompt } from "../../../lib/domain/chat/mobile-chat-transcript";
 
-type CloudLaunchCatalog = Parameters<typeof resolveCloudLaunchSelection>[0]["catalog"];
-type CloudLaunchableAgentKinds = Parameters<typeof resolveCloudLaunchSelection>[0]["launchableAgentKinds"];
-
 export function useMobileChatPromptActions({
   ownerUserId,
   client,
@@ -38,9 +35,8 @@ export function useMobileChatPromptActions({
   isUnclaimed,
   canStartNewSession,
   workspaceHarnessAvailabilityMessage,
-  workspaceLaunchableAgentKinds,
   resolvedLaunchSelection,
-  catalog,
+  launchOptions,
   transcriptItems,
   transcriptRows,
   setDraft,
@@ -63,9 +59,8 @@ export function useMobileChatPromptActions({
   isUnclaimed: boolean;
   canStartNewSession: boolean;
   workspaceHarnessAvailabilityMessage?: string | null;
-  workspaceLaunchableAgentKinds: CloudLaunchableAgentKinds;
   resolvedLaunchSelection: CloudLaunchComposerSelection;
-  catalog: CloudLaunchCatalog;
+  launchOptions: CloudHarnessLaunchOptionsResponse | null | undefined;
   transcriptItems: readonly CloudTranscriptItem[];
   transcriptRows: readonly CloudChatTranscriptRowView[];
   setDraft: Dispatch<SetStateAction<string>>;
@@ -123,8 +118,7 @@ export function useMobileChatPromptActions({
       return;
     }
     const promptSelection = resolveCloudLaunchSelection({
-      catalog,
-      launchableAgentKinds: workspaceLaunchableAgentKinds,
+      launchOptions,
       selection: resolvedLaunchSelection,
     });
     directPromptDispatchingRef.current = true;
@@ -133,12 +127,7 @@ export function useMobileChatPromptActions({
       text,
       agentKind: promptSelection.agentKind,
       modelId: promptSelection.modelId,
-      modeId: promptSelection.modeId,
-      sessionConfigUpdates: buildLaunchSessionConfigUpdates({
-        catalog,
-        launchableAgentKinds: workspaceLaunchableAgentKinds,
-        selection: promptSelection,
-      }),
+      controlValues: promptSelection.controlValues,
       createdAt: Date.now(),
     };
     setDraft("");

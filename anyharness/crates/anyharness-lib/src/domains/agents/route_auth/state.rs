@@ -99,9 +99,9 @@ pub struct HarnessAuth {
     pub harness_kind: String,
     #[serde(default)]
     pub sources: Vec<AuthSource>,
-    /// Per-harness advanced settings (persisted toggle values). Keys are
-    /// setting keys declared in the agent catalog; values are JSON primitives
-    /// (booleans for v1). Absent/null when no settings are configured.
+    /// Retired per-harness settings retained only for state-file wire
+    /// compatibility. Route-auth does not read this field; executable controls
+    /// come from target-observed launch options and live session snapshots.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings: Option<serde_json::Map<String, serde_json::Value>>,
 }

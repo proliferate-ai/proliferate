@@ -188,9 +188,9 @@ required MCPs are ALWAYS connected at launch; required_mcp_servers is a hint, no
 **Model switch in place:**
 ```text
 SetConfigOption(model) → ensure live actor → attempt live apply (same session)
-  catalog-authorized immediate rejection → persist selection
-    → retire live agent process → relaunch under the same session
-  queued replay rejection → remains an actor-level gap; no runtime relaunch
+  exact live readback → persist the new canonical session snapshot
+  acknowledgement/rejection without exact readback → SESSION_CONFIG_REJECTED
+  queued replay → revalidate latest live-snapshot membership before apply
 ```
 
 ---

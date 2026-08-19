@@ -70,11 +70,10 @@ impl RenderedRouteAuth {
 /// isolated-config paths are computed by deterministic joins and the writes are
 /// described in [`RenderedRouteAuth::files`] for the launcher to apply.
 ///
-/// `harness_kind` is needed even for [`AgentRuntimeAuthProfile::Native`]: native
-/// is not always an empty delta. Codex reads its model and provider settings from
-/// `CODEX_HOME/config.toml`, so a native codex launch needs a rendered config
-/// too — see [`render_native`]. This is what lets the native recipe live in the
-/// same table as the routed ones instead of in a second, divergent code path.
+/// `harness_kind` is validated even for [`AgentRuntimeAuthProfile::Native`]. A
+/// native profile always renders an empty delta: the harness's own login and
+/// configuration remain authoritative. Model and control intent travel through
+/// the session launch/configuration path, not route-auth materialization.
 pub fn render_profile(
     profile: &AgentRuntimeAuthProfile,
     harness_kind: &str,
@@ -82,49 +81,19 @@ pub fn render_profile(
     runtime_home: &Path,
 ) -> Result<RenderedRouteAuth, RouteAuthError> {
     match profile {
-        AgentRuntimeAuthProfile::Native => render_native(harness_kind, plan, runtime_home),
+        AgentRuntimeAuthProfile::Native => {
+            parse_harness(harness_kind)?;
+            Ok(RenderedRouteAuth::default())
+        }
         AgentRuntimeAuthProfile::Sources(sources) => render_sources(sources, plan, runtime_home),
     }
 }
 
-/// The NATIVE recipe table — "the user's own login owns auth", per harness.
-///
-/// For four of five harnesses this is genuinely an empty delta: the CLI finds its
-/// own credentials and its own config, and injecting anything would be a lie
-/// about what the user chose.
-///
-/// Codex is the exception, and folding it in here is the point of this function.
-/// Codex takes its model and provider configuration from
-/// `CODEX_HOME/config.toml` rather than from env, so *something* has to render
-/// that file. Before this, a second isolated home (`agent-auth/codex-local/`) was
-/// written on EVERY codex launch — including gateway-routed ones, where
-/// route-auth's own `CODEX_HOME` then shadowed it — from a Rust constant pinning
-/// `model = "gpt-5.5"`. That violated the catalog-owns-model-names law and left
-/// a copy of the user's `auth.json` on disk for launches that never read it.
-///
-/// Now the native codex home is one arm of this table, sourced from the catalog
-/// like every other model value, and it is rendered only when the launch is
-/// actually native.
-fn render_native(
-    harness_kind: &str,
-    plan: &GatewayModelPlan,
-    runtime_home: &Path,
-) -> Result<RenderedRouteAuth, RouteAuthError> {
-    let mut rendered = RenderedRouteAuth::default();
-    match parse_harness(harness_kind)? {
-        AgentKind::Codex => render_codex_native(plan, runtime_home, &mut rendered)?,
-        // claude/opencode/cursor/grok read their own credentials and their own
-        // config on a native launch; there is nothing honest to inject.
-        AgentKind::Claude | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Grok => {}
-    }
-    Ok(rendered)
-}
-
 /// Compose a harness's enabled sources into one additive launch delta. Each
 /// `api_key` source rides its free-form env var; each `gateway` source runs the
-/// per-harness recipe (consuming the catalog-resolved [`GatewayModelPlan`] for
-/// model values, spec §3). The server validated legality, so ordering/count are
-/// trusted here.
+/// per-harness recipe. OpenCode consumes a live-fetched [`GatewayModelPlan`]
+/// because its provider config must enumerate exact gateway models before spawn.
+/// The server validated source legality, so ordering/count are trusted here.
 /// Sanitize claude's ambient provider env on EVERY non-native route, after the
 /// sources have composed.
 ///
@@ -245,13 +214,7 @@ fn render_claude_gateway(
     // root (the CLI hits POST /v1/messages under ANTHROPIC_BASE_URL).
     rendered.set("ANTHROPIC_BASE_URL", trim_trailing_slash(&profile.base_url));
     rendered.set("ANTHROPIC_AUTH_TOKEN", &profile.key);
-    // Small/fast sidecar model: the catalog's `gatewayPolicy.roles.small_fast`
-    // pin (HARNESS-MATRIX.md §3: the CLI's ambient small-fast model is otherwise
-    // not in the gateway config and 400s). Skip the var entirely when the
-    // catalog carries no pin — an absent override lets the CLI use its default.
-    if let Some(small_fast) = plan.small_fast_model.as_deref() {
-        rendered.set("ANTHROPIC_SMALL_FAST_MODEL", small_fast);
-    }
+    let _ = plan;
     // Point CLAUDE_CONFIG_DIR at an isolated dir (materialized) so the CLI does
     // not read an ambient `~/.claude` that could carry stale provider/auth
     // settings and defeat the env sanitization below. Not revision-keyed — it
@@ -339,18 +302,7 @@ fn render_codex_gateway(
     runtime_home: &Path,
     rendered: &mut RenderedRouteAuth,
 ) -> Result<(), RouteAuthError> {
-    // Codex refuses to launch without a `model` and otherwise falls back to a
-    // codex-native id the gateway cannot serve, so the catalog MUST carry the
-    // gateway default (`defaults["gateway"]`, spec §3). Error rather than write
-    // a config the CLI will reject.
-    let default_model = plan.default_model.as_deref().ok_or_else(|| {
-        RouteAuthError::SelectionIncomplete {
-            harness_kind: harness_kind.to_string(),
-            detail: "codex gateway requires a default model from the catalog \
-                     gatewayPolicy (defaults[\"gateway\"])"
-                .to_string(),
-        }
-    })?;
+    let _ = (harness_kind, plan);
     // Isolated CODEX_HOME with a config.toml pointing at the proliferate
     // provider (wire_api=responses). The provider config references
     // PROLIFERATE_GATEWAY_KEY via env_key, so no `codex login` is needed.
@@ -371,75 +323,9 @@ fn render_codex_gateway(
         contents: Some(
             codex_config_toml(CodexConfigRecipe::Gateway {
                 base_url: &profile.base_url,
-                default_model,
             })
             .into_bytes(),
         ),
-    });
-    Ok(())
-}
-
-/// The NATIVE codex recipe: an isolated `CODEX_HOME` holding TWO files — a
-/// `config.toml` pinning the catalog's native default model, and the user's own
-/// `auth.json`.
-///
-/// Why isolate at all when the credential is the user's own? Because codex reads
-/// `~/.codex/config.toml`, and the runtime must not silently inherit whatever
-/// model, provider or feature flags a developer left there — a session launched
-/// from the product would then run a different configuration than the product
-/// believes. Isolation also keeps the native and routed launch paths symmetric:
-/// one home per route, rendered from the catalog, never edited in place.
-///
-/// **And why the credential must be delivered here.** Relocating `CODEX_HOME`
-/// relocates where codex looks for its login: it resolves credentials at
-/// `$CODEX_HOME/auth.json`, NOT at `~/.codex/auth.json`
-/// ([`anyharness_credential_discovery::codex`]). So an isolated home that carries
-/// only `config.toml` launches a natively-logged-in user UNAUTHENTICATED, and
-/// nothing later fixes it: the login terminal runs `codex login` with only `PATH`
-/// adjusted, so it writes `~/.codex` — never this home. The credential copy is
-/// therefore not a leftover of the old implementation, it is what makes an
-/// isolated native home usable at all.
-///
-/// Two files, one recipe: [`PathFamily::CodexNativeHome`] carries the rendered
-/// config bytes; [`PathFamily::CodexNativeAuth`] carries no bytes because the
-/// credential is read from the user's real codex home at APPLY time (render stays
-/// pure — see [`materialize::apply_file_spec`], which also handles the
-/// no-credential case by removing a stale copy).
-fn render_codex_native(
-    plan: &GatewayModelPlan,
-    runtime_home: &Path,
-    rendered: &mut RenderedRouteAuth,
-) -> Result<(), RouteAuthError> {
-    // No catalog default for a native codex launch → render nothing and let the
-    // CLI use its own config. This is the honest degradation: a missing catalog
-    // value must not become a hardcoded model id (the exact violation this
-    // replaces), and unlike the gateway route a native launch CAN proceed
-    // without our config file.
-    //
-    // Rendering nothing also leaves `CODEX_HOME` ambient, which is what keeps
-    // this branch safe: the CLI reads its own `~/.codex` — config AND credential
-    // together — so a missing catalog value degrades to "unmanaged" rather than
-    // to "authenticated against nothing".
-    let Some(default_model) = plan.native_default_model.as_deref() else {
-        tracing::debug!(
-            "codex native launch has no catalog default model; leaving the CLI's own config"
-        );
-        return Ok(());
-    };
-    let codex_home = materialize::codex_native_home_path(runtime_home);
-    rendered.set("CODEX_HOME", path_string(&codex_home));
-    rendered.files.push(FileSpec {
-        path_family: PathFamily::CodexNativeHome,
-        revision: 0,
-        contents: Some(codex_config_toml(CodexConfigRecipe::Native { default_model }).into_bytes()),
-    });
-    // The credential that makes the relocated home usable. Its bytes are the
-    // user's own codex login, resolved at apply time rather than here so this
-    // function stays pure (contract §4 two-phase render).
-    rendered.files.push(FileSpec {
-        path_family: PathFamily::CodexNativeAuth,
-        revision: 0,
-        contents: None,
     });
     Ok(())
 }
@@ -450,12 +336,12 @@ fn render_codex_native(
 /// comparable and stops a new route from inventing its own TOML.
 ///
 /// Track D (typed provider configs) adds two variants:
-/// - `Bedrock { default_model }` → `model_provider = "amazon-bedrock"`,
+/// - `Bedrock` → `model_provider = "amazon-bedrock"`,
 ///   codex's BUILT-IN upstream provider, so NO `[model_providers.*]` block at
 ///   all — the one variant that adds a provider without adding a table
-///   (confirmed against catalog_probe.rs's corrected comment: the probe's own
-///   custom `[model_providers.bedrock]` table is a PROBE-specific choice for
-///   /v1/responses enumeration, not a statement about codex's real needs).
+///   The launch-options probe may use its own temporary provider table for
+///   `/v1/responses` enumeration; that is probe scaffolding, not Codex's launch
+///   configuration.
 ///   `region`/credential ride as plain env from `profile.env`, never
 ///   interpolated into the TOML body.
 /// - `Azure { base_url, deployment, env_key }` → a `[model_providers.azure]`
@@ -470,19 +356,14 @@ fn render_codex_native(
 /// Adding either is a new arm here plus a new `ResolvedSource::ProviderConfig`
 /// arm in `render_sources`; no existing arm changes.
 enum CodexConfigRecipe<'a> {
-    /// The user's own login. Pins only the model — codex owns the credential.
-    Native { default_model: &'a str },
     /// The managed gateway: a custom OpenAI-compatible provider whose key comes
     /// from `PROLIFERATE_GATEWAY_KEY` in the launch env.
     Gateway {
         base_url: &'a str,
-        default_model: &'a str,
     },
     /// Track D: the user's own AWS Bedrock account, via codex's built-in
-    /// `amazon-bedrock` provider. `default_model` is catalog-resolved from
-    /// `session.defaults["bedrock"]` ([`GatewayModelPlan::bedrock_default_model`]),
-    /// never a Rust constant.
-    Bedrock { default_model: &'a str },
+    /// `amazon-bedrock` provider. The harness owns its no-override default.
+    Bedrock,
     /// Track D, UNVERIFIED (see enum doc): the user's own Azure OpenAI
     /// account via codex's `[model_providers.azure]` config.toml injection.
     Azure {
@@ -495,21 +376,13 @@ enum CodexConfigRecipe<'a> {
 /// Build a codex `config.toml`. Written by hand (small, deterministic) so the
 /// snapshot tests can assert exact content without a toml serializer.
 ///
-/// Every `model` value is catalog-resolved (`session.defaults[<context>]`),
-/// never a Rust constant — that law is why the native arm exists at all.
+/// The route selects a provider only. It does not author an executable model.
 fn codex_config_toml(recipe: CodexConfigRecipe<'_>) -> String {
     match recipe {
-        CodexConfigRecipe::Native { default_model } => {
-            format!("model = \"{default_model}\"\n")
-        }
-        CodexConfigRecipe::Gateway {
-            base_url,
-            default_model,
-        } => {
+        CodexConfigRecipe::Gateway { base_url } => {
             let base_url = format!("{}/v1", trim_trailing_slash(base_url));
             format!(
                 "model_provider = \"proliferate\"\n\
-                 model = \"{default_model}\"\n\
                  \n\
                  [model_providers.proliferate]\n\
                  name = \"Proliferate Gateway\"\n\
@@ -518,15 +391,11 @@ fn codex_config_toml(recipe: CodexConfigRecipe<'_>) -> String {
                  wire_api = \"responses\"\n"
             )
         }
-        CodexConfigRecipe::Bedrock { default_model } => {
+        CodexConfigRecipe::Bedrock => {
             // codex's BUILT-IN amazon-bedrock upstream: no [model_providers.*]
-            // table at all (D3 brief §9, confirmed against catalog_probe.rs's
-            // corrected comment). Credential + region ride as plain env from
+            // table at all. Credential + region ride as plain env from
             // profile.env, set by the caller — never interpolated here.
-            format!(
-                "model_provider = \"amazon-bedrock\"\n\
-                 model = \"{default_model}\"\n"
-            )
+            "model_provider = \"amazon-bedrock\"\n".to_string()
         }
         CodexConfigRecipe::Azure {
             base_url,
@@ -558,15 +427,13 @@ fn render_opencode_gateway(
     runtime_home: &Path,
     rendered: &mut RenderedRouteAuth,
 ) -> Result<(), RouteAuthError> {
-    // opencode requires an explicit models map in-config; the catalog-resolved
-    // plan supplies it (latest probe rows else gatewayPolicy.seedModels, spec
-    // §3). An empty list means the harness has no launchable model — error
+    // opencode requires an explicit models map in-config; only a live gateway
+    // observation may supply it. An empty list means the route cannot launch — error
     // rather than write a config with an empty provider.
     if plan.models.is_empty() {
         return Err(RouteAuthError::SelectionIncomplete {
             harness_kind: harness_kind.to_string(),
-            detail: "opencode gateway requires at least one model (catalog \
-                     gatewayPolicy.seedModels or a live gateway probe)"
+            detail: "opencode gateway requires a live target model observation"
                 .to_string(),
         });
     }
@@ -604,9 +471,8 @@ fn render_opencode_gateway(
     Ok(())
 }
 
-/// Build the opencode gateway config JSON. The models map is the catalog-resolved
-/// plan list (latest probe rows else `gatewayPolicy.seedModels`, spec §3), never
-/// a Rust constant. Contains ONLY our provider so opencode's config-layer merge
+/// Build the opencode gateway config JSON. The models map is the exact live
+/// gateway list, never a seed or Rust constant. Contains ONLY our provider so opencode's config-layer merge
 /// ADDS it to the user's own local providers.
 fn opencode_config_json(base_url: &str, models: &[String]) -> Result<Vec<u8>, RouteAuthError> {
     let base_url = format!("{}/v1", trim_trailing_slash(base_url));
@@ -709,18 +575,7 @@ fn render_provider_config(
             Ok(())
         }
         (AgentKind::Codex, "aws_bedrock") => {
-            // codex requires a model id in config.toml even on Bedrock, and
-            // the native/gateway defaults are wrong contexts for it (see
-            // GatewayModelPlan::bedrock_default_model's doc) — error rather
-            // than invent one.
-            let default_model = plan.bedrock_default_model.as_deref().ok_or_else(|| {
-                RouteAuthError::SelectionIncomplete {
-                    harness_kind: harness_kind.to_string(),
-                    detail: "codex aws_bedrock requires a default model from the catalog \
-                             (defaults[\"bedrock\"])"
-                        .to_string(),
-                }
-            })?;
+            let _ = plan;
             let codex_home = materialize::revision_dir_path(
                 runtime_home,
                 materialize::CODEX_HOME_PREFIX,
@@ -744,7 +599,7 @@ fn render_provider_config(
                 path_family: PathFamily::CodexHome,
                 revision,
                 contents: Some(
-                    codex_config_toml(CodexConfigRecipe::Bedrock { default_model }).into_bytes(),
+                    codex_config_toml(CodexConfigRecipe::Bedrock).into_bytes(),
                 ),
             });
             Ok(())

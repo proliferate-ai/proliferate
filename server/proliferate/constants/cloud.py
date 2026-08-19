@@ -327,6 +327,10 @@ CLOUD_INTEGRATION_ACTION_APPROVAL_TTL_SECONDS: Final = 600
 # A ready tools/list cache is also considered stale once its fetched_at is
 # older than this, so provider-side tool changes surface within a day.
 CLOUD_INTEGRATION_TOOL_CACHE_TTL_SECONDS: Final = 86_400
+# Disconnect may retain only the encrypted token needed for upstream
+# revocation, and the deadline sweeper destroys it after one day regardless of
+# provider availability.
+CLOUD_INTEGRATION_REVOCATION_DEADLINE_SECONDS: Final = 86_400
 
 
 # ---------------------------------------------------------------------------

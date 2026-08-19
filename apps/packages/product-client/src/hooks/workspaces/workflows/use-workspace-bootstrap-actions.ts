@@ -1,7 +1,6 @@
 import { useCallback } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useWorkspaceBootstrapCache } from "#product/hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache";
-import { useCloudAgentCatalogCache } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import type { WorkspaceSession } from "#product/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useWorkspaceFileActions } from "#product/hooks/workspaces/facade/files/use-workspace-file-actions";
@@ -67,13 +66,11 @@ export function useWorkspaceBootstrapActions() {
     getWorkspaceSessionsCacheDecision,
     loadWorkspaceSessions,
   } = useWorkspaceBootstrapCache();
-  const { ensureCloudAgentCatalog } = useCloudAgentCatalogCache();
   const { agentsByKind } = useAgentCatalog();
   const workspaceCollections = useWorkspaces().data;
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
-    chatModelVisibilityOverridesByAgentKind: state.chatModelVisibilityOverridesByAgentKind,
   })));
   const lastViewedSessionByWorkspace = useWorkspaceUiStore(
     (state) => state.lastViewedSessionByWorkspace,
@@ -184,7 +181,6 @@ export function useWorkspaceBootstrapActions() {
       const emptyWorkspaceBootstrapDeps = {
         clearLastViewedSession,
         createEmptySessionWithResolvedConfig,
-        ensureCloudAgentCatalog,
         fetchWorkspaceSessions,
         getActiveSessionId: () => useSessionSelectionStore.getState().activeSessionId,
         getSessionRecord,
@@ -380,7 +376,6 @@ export function useWorkspaceBootstrapActions() {
     agentsByKind,
     prepareFileWorkspace,
     preferences,
-    ensureCloudAgentCatalog,
     fetchWorkspaceSessions,
     getWorkspaceSessionsCacheDecision,
     scheduleDeferredFileTreePrefetch,

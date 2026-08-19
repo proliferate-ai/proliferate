@@ -315,6 +315,8 @@ pub struct MobilitySessionLiveConfigSnapshotRecord {
     pub normalized_controls_json: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt_capabilities_json: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub full_snapshot_json: Option<String>,
     pub updated_at: String,
 }
 

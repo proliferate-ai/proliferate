@@ -4,7 +4,7 @@ import { useCloudWorkspaceConnectionCache } from "#product/hooks/access/cloud/us
 import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 import {
   resolveWorkspaceConnection,
-  type AnyHarnessDesktopResolvedConnection,
+  type ProductAnyHarnessResolvedConnection,
 } from "#product/lib/access/anyharness/resolve-workspace-connection";
 import { parseCloudWorkspaceSyntheticId } from "#product/lib/domain/workspaces/cloud/cloud-ids";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
@@ -14,7 +14,7 @@ export interface TerminalWorkspaceConnectionController {
   getWorkspaceRuntimeBlockReason(workspaceId: string): string | null;
   resolveTerminalWorkspaceConnection(
     workspaceId: string,
-  ): Promise<AnyHarnessDesktopResolvedConnection>;
+  ): Promise<ProductAnyHarnessResolvedConnection>;
   triggerSelectedCloudReconnect(workspaceId: string): void;
 }
 
@@ -29,7 +29,7 @@ export function useTerminalWorkspaceConnection(): TerminalWorkspaceConnectionCon
 
   const resolveTerminalWorkspaceConnection = useCallback(async (
     workspaceId: string,
-  ): Promise<AnyHarnessDesktopResolvedConnection> => {
+  ): Promise<ProductAnyHarnessResolvedConnection> => {
     if (
       selectedCloudRuntime.workspaceId === workspaceId
       && selectedCloudRuntime.state?.phase === "ready"
@@ -43,11 +43,12 @@ export function useTerminalWorkspaceConnection(): TerminalWorkspaceConnectionCon
         authToken: connectionInfo.accessToken,
         webSocketAuthTransport: connectionInfo.webSocketAuthTransport,
         anyharnessWorkspaceId: connectionInfo.anyharnessWorkspaceId ?? "",
-        runtimeGeneration: connectionInfo.runtimeGeneration,
+        runtimeGeneration: connectionInfo.runtimeGeneration ?? 0,
+        runtimeAccessKind: "proliferate-gateway",
       };
     }
 
-    return resolveWorkspaceConnection(runtimeUrl, workspaceId, ssh, cloudClient);
+    return (await resolveWorkspaceConnection(runtimeUrl, workspaceId, ssh, cloudClient)).connection;
   }, [
     runtimeUrl,
     ssh,

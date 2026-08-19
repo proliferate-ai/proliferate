@@ -12,6 +12,7 @@ describe("persisted user preference keys", () => {
       defaultChatModelId: "gpt-5",
       powersInCodingSessionsEnabled: false,
       onboardingCompletedVersion: 2,
+      defaultSessionModeByAgentKind: { codex: "plan" },
       futureBoolean: true,
       futureNested: { enabled: true },
     };

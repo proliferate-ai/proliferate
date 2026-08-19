@@ -22,7 +22,8 @@ fn openapi_registers_workspace_and_session_paths() {
         "/v1/workspaces/{workspace_id}/setup-status",
         "/v1/workspaces/{workspace_id}/setup-rerun",
         "/v1/workspaces/{workspace_id}/setup-start",
-        "/v1/agents/launch-options",
+        "/v1/agents/{kind}/launch-options",
+        "/v1/agents/{kind}/launch-options/refresh",
         "/v1/catalogs/agents/version",
         "/v1/sessions",
         "/v1/sessions/{session_id}",
@@ -75,6 +76,16 @@ fn openapi_registers_workspace_and_session_paths() {
         !paths.contains_key("/v1/sessions/{session_id}/subagents/{child_session_id}/wake"),
         "the public wake route must not remain in the contract"
     );
+    for removed in [
+        "/v1/agents/launch-options",
+        "/v1/agents/{kind}/model-snapshot",
+        "/v1/agents/{kind}/model-snapshot/refresh",
+    ] {
+        assert!(
+            !paths.contains_key(removed),
+            "removed launch-options compatibility path remains: {removed}"
+        );
+    }
 }
 
 #[test]
@@ -254,12 +265,13 @@ fn openapi_registers_workspace_session_and_event_schemas() {
         "RuntimeCapabilities",
         "AgentSeedHealth",
         "AgentSeedStatus",
-        "ModelCatalogStatus",
-        "ModelEffort",
-        "GatewayModelEntry",
-        "AgentLaunchModelOption",
-        "AgentLaunchOption",
-        "AgentLaunchOptionsResponse",
+        "HarnessLaunchModel",
+        "HarnessLaunchControlValue",
+        "HarnessLaunchControl",
+        "HarnessLaunchDefaults",
+        "HarnessLaunchOptions",
+        "HarnessLaunchOptionsState",
+        "HarnessLaunchOptionsResponse",
         "WorkspaceFileKind",
         "ReadWorkspaceFileResponse",
         "PullRequestChecksState",
@@ -343,17 +355,32 @@ fn pending_prompt_reorder_schema_requires_compare_and_swap_orders() {
 }
 
 #[test]
-fn launch_option_schema_exposes_optional_unattended_mode() {
+fn launch_option_schema_exposes_exact_models_controls_and_defaults() {
     let spec: Value = serde_json::from_str(&openapi_json()).expect("parse OpenAPI JSON");
-    let schema = &spec["components"]["schemas"]["AgentLaunchOption"];
+    let schema = &spec["components"]["schemas"]["HarnessLaunchOptions"];
+    assert!(schema["properties"].get("models").is_some());
+    assert!(schema["properties"].get("controls").is_some());
+    assert!(schema["properties"].get("defaults").is_some());
+
+    let create = &spec["components"]["schemas"]["CreateSessionRequest"];
     assert!(
-        schema["properties"].get("unattendedModeId").is_some(),
-        "launch options must expose the runtime catalog's unattended mode"
+        create["properties"].get("controlValues").is_some(),
+        "session create must expose the generic launch control map"
     );
-    assert!(
-        schema["required"]
-            .as_array()
-            .is_none_or(|required| !required.iter().any(|value| value == "unattendedModeId")),
-        "older runtime responses may omit unattendedModeId"
+
+    let handoff = &spec["components"]["schemas"]["HandoffPlanRequest"];
+    assert_eq!(
+        handoff["properties"]["controlValues"]["additionalProperties"]["type"],
+        "string",
+        "plan handoff must expose the generic launch control map"
     );
+
+    for schema_name in ["NodeModel", "ReviewPersonaRequest", "ReviewAssignmentDetail"] {
+        assert_eq!(
+            spec["components"]["schemas"][schema_name]["properties"]["controlValues"]
+                ["additionalProperties"]["type"],
+            "string",
+            "{schema_name}.controlValues must remain an open string map"
+        );
+    }
 }

@@ -16,11 +16,11 @@ describe("user preference migration", () => {
     expect(result.changed).toBe(true);
     expect(result.preferences.defaultChatAgentKind).toBe("claude");
     expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
-      claude: "sonnet[1m]",
+      claude: "claude-sonnet-4-5-1m",
     });
   });
 
-  it("sanitizes per-agent model, session mode, and live control maps", () => {
+  it("sanitizes per-agent model and live control maps", () => {
     const result = migrateUserPreferences({
       defaultChatModelIdByAgentKind: {
         " claude ": " claude-opus-4-5 ",
@@ -28,12 +28,6 @@ describe("user preference migration", () => {
         cursor: " gpt-5.3-codex[reasoning=medium,fast=false] ",
         " ": "ignored",
         empty: " ",
-      },
-      defaultSessionModeByAgentKind: {
-        codex: " default ",
-        assistant: " plan ",
-        empty: " ",
-        " ": "code",
       },
       defaultLiveSessionControlValuesByAgentKind: {
         assistant: {
@@ -52,23 +46,20 @@ describe("user preference migration", () => {
 
     expect(result.changed).toBe(true);
     expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
-      claude: "opus[1m]",
+      claude: "claude-opus-4-5",
       assistant: "gpt-5",
-      cursor: "gpt-5.3-codex",
-    });
-    expect(result.preferences.defaultSessionModeByAgentKind).toEqual({
-      codex: "auto",
-      assistant: "plan",
+      cursor: "gpt-5.3-codex[reasoning=medium,fast=false]",
     });
     expect(result.preferences.defaultLiveSessionControlValuesByAgentKind).toEqual({
       assistant: {
         effort: "high",
         reasoning: "medium",
+        ignored: "value",
       },
     });
   });
 
-  it("moves legacy Cursor Composer defaults to the current frontier Composer model", () => {
+  it("trims saved model ids without rewriting them", () => {
     const result = migrateUserPreferences({
       defaultChatModelIdByAgentKind: {
         cursor: " composer-2-fast ",
@@ -77,58 +68,14 @@ describe("user preference migration", () => {
 
     expect(result.changed).toBe(true);
     expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
-      cursor: "composer-2.5-fast",
+      cursor: "composer-2-fast",
     });
   });
 
-  it("normalizes renamed dynamic-agent model ids", () => {
+  it("keeps target-observed model ids opaque", () => {
     expect(normalizeDefaultChatModelId("cursor", "composer-2.5[fast=true]")).toBe(
-      "composer-2.5-fast",
+      "composer-2.5[fast=true]",
     );
-    expect(normalizeDefaultChatModelId("cursor", "composer-2[fast=true]")).toBe(
-      "composer-2.5-fast",
-    );
-    expect(normalizeDefaultChatModelId("cursor", "composer-2")).toBe("composer-2.5");
-    expect(normalizeDefaultChatModelId("cursor", "gpt-5.3-codex-spark-preview-low"))
-      .toBe("gpt-5.3-codex-low");
-    expect(normalizeDefaultChatModelId("cursor", "gpt-5.3-codex-spark-preview"))
-      .toBe("gpt-5.3-codex");
-    expect(normalizeDefaultChatModelId("cursor", "gpt-5.3-codex-spark-preview-high"))
-      .toBe("gpt-5.3-codex-high");
-    expect(normalizeDefaultChatModelId("cursor", "gpt-5.3-codex-spark-preview-xhigh"))
-      .toBe("gpt-5.3-codex-xhigh");
-    expect(normalizeDefaultChatModelId(
-      "cursor",
-      "claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]",
-    )).toBe("claude-opus-4-8-thinking-high");
-    expect(normalizeDefaultChatModelId("opencode", "opencode/ring-2.6-1t-free"))
-      .toBe("opencode/ring-2.6-1t-free");
-  });
-
-  it("moves misstored Codex plan defaults into live collaboration controls", () => {
-    const result = migrateUserPreferences({
-      defaultSessionModeByAgentKind: {
-        codex: " plan ",
-      },
-      defaultLiveSessionControlValuesByAgentKind: {
-        codex: {
-          effort: "xhigh",
-          fast_mode: "on",
-        },
-      },
-    });
-
-    expect(result.changed).toBe(true);
-    expect(result.preferences.defaultSessionModeByAgentKind).toEqual({
-      codex: "auto",
-    });
-    expect(result.preferences.defaultLiveSessionControlValuesByAgentKind).toEqual({
-      codex: {
-        effort: "xhigh",
-        fast_mode: "on",
-        collaboration_mode: "plan",
-      },
-    });
   });
 
   it("falls back invalid persisted values without changing new-user defaults", () => {

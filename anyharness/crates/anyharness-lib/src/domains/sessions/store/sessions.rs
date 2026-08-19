@@ -2,10 +2,16 @@ use rusqlite::{params, OptionalExtension};
 
 use super::attachments::insert_prompt_attachment_row;
 use super::events::insert_event_row;
+use super::launch_intents::insert_launch_intent_row;
 use super::live_config::{upsert_live_config_snapshot_row, upsert_pending_config_change_row};
 use super::notifications::insert_raw_notification_row;
 use super::pending_prompts::insert_pending_prompt_row;
+use super::with_launch_admission_tx;
 use super::SessionStore;
+use crate::domains::agents::launch_options::{
+    HarnessLaunchOptionStateRow, LaunchSelection, LaunchSelectionUnsupported,
+};
+use crate::domains::sessions::launch_intent::ResolvedLaunchIntent;
 use crate::domains::sessions::model::{
     PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentRecord, SessionEventRecord,
     SessionLiveConfigSnapshotRecord, SessionMcpBindingPolicy, SessionRawNotificationRecord,
@@ -19,6 +25,24 @@ impl SessionStore {
             insert_session_row(conn, record)?;
             Ok(())
         })
+    }
+
+    pub fn insert_with_launch_intent(
+        &self,
+        record: &SessionRecord,
+        intent: &ResolvedLaunchIntent,
+        harness_kind: &str,
+        basis_revision: &dyn Fn() -> String,
+        selection: &LaunchSelection,
+    ) -> Result<HarnessLaunchOptionStateRow, LaunchSelectionUnsupported> {
+        let ((), validated) =
+            with_launch_admission_tx(&self.db, harness_kind, basis_revision, selection, |conn| {
+                insert_session_row(conn, record)?;
+                insert_launch_intent_row(conn, &record.id, intent)?;
+                Ok(())
+            })
+            .map_err(super::LaunchAdmissionTxError::into_selection)?;
+        Ok(validated)
     }
 
     /// Deletes only session-store-owned rows. Use the session delete workflow
@@ -209,21 +233,6 @@ impl SessionStore {
         })
     }
 
-    pub fn update_model_selection(
-        &self,
-        id: &str,
-        model_id: &str,
-        now: &str,
-    ) -> anyhow::Result<()> {
-        self.db.with_conn(|conn| {
-            conn.execute(
-                "UPDATE sessions SET requested_model_id = ?1, current_model_id = ?1, updated_at = ?2 WHERE id = ?3",
-                params![model_id, now, id],
-            )?;
-            Ok(())
-        })
-    }
-
     pub fn update_last_prompt_at(&self, id: &str, now: &str) -> anyhow::Result<()> {
         self.db.with_conn(|conn| {
             conn.execute(
@@ -378,6 +387,20 @@ impl SessionStore {
     ) -> anyhow::Result<()> {
         self.db.with_tx(|conn| {
             insert_session_row(conn, session)?;
+            // Same emptiness rule as the 0076 backfill: the source runtime's
+            // requested values were validated against the source target's
+            // observations, which do not authorize launches on this target.
+            // Live values restore from the carried live snapshot; the intent
+            // must stay startable here.
+            insert_launch_intent_row(
+                conn,
+                &session.id,
+                &ResolvedLaunchIntent {
+                    model_id: None,
+                    control_values: Default::default(),
+                    created_at: session.created_at.clone(),
+                },
+            )?;
             super::mobility::restore_pending_prompt_seq_cursor(
                 conn,
                 &session.id,

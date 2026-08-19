@@ -25,6 +25,29 @@ fn send_message_start_failure_codes_do_not_expose_details() {
             "agent_not_ready",
         ),
         (
+            StartSessionError::LaunchOptionsUnavailable {
+                agent_kind: "codex".into(),
+                state: None,
+            },
+            "launch_options_unavailable",
+        ),
+        (
+            StartSessionError::LaunchValueUnsupported {
+                agent_kind: "codex".into(),
+                key: "mode".into(),
+                value: "obsolete".into(),
+                state: crate::domains::agents::launch_options::HarnessLaunchOptionsState::Observed,
+            },
+            "launch_value_unsupported",
+        ),
+        (
+            StartSessionError::AgentEnvOverrideUnsupported {
+                agent_kind: "codex".into(),
+                env_var_name: "CODEX_HOME".into(),
+            },
+            "agent_env_override_unsupported",
+        ),
+        (
             StartSessionError::Internal(anyhow::anyhow!("secret")),
             "internal",
         ),

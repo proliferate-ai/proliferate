@@ -1,6 +1,7 @@
 import type { WorkflowNodeV2 } from "@proliferate/cloud-sdk";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
 import {
+  workflowBuilderControlOptions,
   workflowBuilderModelOptions,
   type WorkflowBuilderHarnessOption,
 } from "#product/lib/domain/workflows/workflow-builder-authoring";
@@ -180,14 +181,9 @@ export function WorkflowBuilderNodeCard({
 }
 
 /**
- * The optional per-step model. Both selects offer a blank default because
- * `WorkflowNodeV2.model` is optional on the wire: leaving them alone saves no
- * model at all, and the run resolves one.
- *
- * `modeId` is deliberately not offered. The catalog's mode vocabulary is
- * resolved per agent AND per model through the launch-controls projection the
- * composer owns, and guessing a mode id here would write a value the run may
- * reject at session creation.
+ * The optional per-step launch selection. Every executable row and default is
+ * copied from this target's observed launch options; saved raw IDs are
+ * revalidated by session creation when the workflow executes.
  */
 function WorkflowBuilderNodeModelFields({
   fieldPrefix,
@@ -205,6 +201,7 @@ function WorkflowBuilderNodeModelFields({
   const agentKind = node.model?.agentKind ?? "";
   const modelId = node.model?.modelId ?? "";
   const modelOptions = workflowBuilderModelOptions(harnesses, agentKind);
+  const controlOptions = workflowBuilderControlOptions(harnesses, agentKind);
   const harnessUnavailable = agentKind.length > 0
     && !harnesses.some((harness) => harness.agentKind === agentKind);
   const modelUnavailable = modelId.length > 0
@@ -222,10 +219,21 @@ function WorkflowBuilderNodeModelFields({
           disabled={disabled}
           onChange={(event) => {
             const nextAgentKind = event.currentTarget.value;
+            const nextHarness = harnesses.find(
+              (harness) => harness.agentKind === nextAgentKind,
+            );
             // Clearing the harness clears the whole model: a modelId without
             // the harness that names it is not a resolvable selection.
             onChange({
-              model: nextAgentKind.length > 0 ? { agentKind: nextAgentKind } : null,
+              model: nextAgentKind.length > 0 ? {
+                agentKind: nextAgentKind,
+                modelId: null,
+                controlValues: Object.fromEntries(
+                  (nextHarness?.controls ?? [])
+                    .filter((control) => control.defaultValue !== null)
+                    .map((control) => [control.key, control.defaultValue as string]),
+                ),
+              } : null,
             });
           }}
         >
@@ -247,7 +255,11 @@ function WorkflowBuilderNodeModelFields({
           value={modelId}
           disabled={disabled || agentKind.length === 0}
           onChange={(event) => onChange({
-            model: { agentKind, modelId: event.currentTarget.value || null },
+            model: {
+              agentKind,
+              modelId: event.currentTarget.value || null,
+              controlValues: node.model?.controlValues ?? {},
+            },
           })}
         >
           <option value="">{WORKFLOW_BUILDER_COPY.modelDefaultOption}</option>
@@ -261,6 +273,42 @@ function WorkflowBuilderNodeModelFields({
           ))}
         </Select>
       </div>
+      {controlOptions.map((control) => {
+        const selectedValue = node.model?.controlValues?.[control.key]
+          ?? control.defaultValue
+          ?? "";
+        const unavailable = selectedValue.length > 0
+          && !control.values.some((value) => value.value === selectedValue);
+        return (
+          <div key={control.key}>
+            <Label htmlFor={`${fieldPrefix}-control-${control.key}`}>{control.label}</Label>
+            <Select
+              id={`${fieldPrefix}-control-${control.key}`}
+              value={selectedValue}
+              disabled={disabled || agentKind.length === 0}
+              onChange={(event) => {
+                const nextValue = event.currentTarget.value;
+                const nextControlValues = { ...(node.model?.controlValues ?? {}) };
+                if (nextValue) nextControlValues[control.key] = nextValue;
+                else delete nextControlValues[control.key];
+                onChange({
+                  model: {
+                    agentKind,
+                    modelId: node.model?.modelId ?? null,
+                    controlValues: nextControlValues,
+                  },
+                });
+              }}
+            >
+              <option value="">Harness default</option>
+              {unavailable ? <option value={selectedValue}>{selectedValue} (unavailable)</option> : null}
+              {control.values.map((value) => (
+                <option key={value.value} value={value.value}>{value.label}</option>
+              ))}
+            </Select>
+          </div>
+        );
+      })}
     </div>
   );
 }

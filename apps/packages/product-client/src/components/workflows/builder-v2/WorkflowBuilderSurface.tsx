@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRepoRootsQuery } from "@anyharness/sdk-react";
+import { useCloudHarnessLaunchOptions, useCloudSandbox } from "@proliferate/cloud-sdk-react";
 import type { WorkflowStarterTemplateV2 } from "#product/config/workflows/starter-templates";
 import { WORKFLOW_BUILDER_COPY } from "#product/copy/workflows/workflow-builder-copy";
-import { useCloudLaunchModelRegistries } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { useWorkflowBuilder } from "#product/hooks/workflows/facade/use-workflow-builder";
 import { useWorkflowNodeLayout } from "#product/hooks/workflows/workflows/use-workflow-node-layout";
 import { workflowBuilderHarnessOptions } from "#product/lib/domain/workflows/workflow-builder-authoring";
@@ -50,10 +50,36 @@ export function WorkflowBuilderSurface({
   const availableRepoRootIds = repoRootsQuery.data
     ? repoRootsQuery.data.map((repoRoot) => repoRoot.id)
     : null;
-  const registriesQuery = useCloudLaunchModelRegistries();
+  const cloudSandbox = useCloudSandbox();
+  const claudeOptions = useCloudHarnessLaunchOptions({
+    cloudSandboxId: cloudSandbox.data?.id,
+    harnessKind: "claude",
+  });
+  const codexOptions = useCloudHarnessLaunchOptions({
+    cloudSandboxId: cloudSandbox.data?.id,
+    harnessKind: "codex",
+  });
+  const opencodeOptions = useCloudHarnessLaunchOptions({
+    cloudSandboxId: cloudSandbox.data?.id,
+    harnessKind: "opencode",
+  });
+  const grokOptions = useCloudHarnessLaunchOptions({
+    cloudSandboxId: cloudSandbox.data?.id,
+    harnessKind: "grok",
+  });
+  const observedResponses = [
+    claudeOptions.data,
+    codexOptions.data,
+    opencodeOptions.data,
+    grokOptions.data,
+  ];
+  const registriesQuery = {
+    isError: observedResponses.every((response) => !response)
+      && [claudeOptions, codexOptions, opencodeOptions, grokOptions].some((query) => query.isError),
+  };
   const harnesses = useMemo(
-    () => workflowBuilderHarnessOptions(registriesQuery.data),
-    [registriesQuery.data],
+    () => workflowBuilderHarnessOptions(observedResponses),
+    [claudeOptions.data, codexOptions.data, grokOptions.data, opencodeOptions.data],
   );
   const availableModelSelections = useMemo(() => harnesses.map((harness) => ({
     agentKind: harness.agentKind,

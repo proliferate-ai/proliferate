@@ -18,6 +18,7 @@ class AuthorizationServerMetadata:
     token_endpoint: str
     registration_endpoint: str | None
     token_endpoint_auth_methods_supported: tuple[str, ...]
+    revocation_endpoint: str | None = None
 
 
 @dataclass(frozen=True)

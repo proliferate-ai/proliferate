@@ -13,6 +13,18 @@ These standards apply to all frontend app logic and shared frontend packages:
 ProductClient and Mobile use the layered folder logic below. Desktop and Web
 are thin hosts: Desktop keeps Tauri and local-runtime adapters, Web keeps
 browser adapters, and both mount the connected product owned by ProductClient.
+
+## Launch configuration authority
+
+Every pre-launch surface reads the selected target's
+`HarnessLaunchOptionsResponse` and may only decorate exact keys. It must not
+import static executable membership, seed missing values, filter unknown IDs,
+or apply a first-model fallback. Pickers submit the raw `modelId` plus one
+`controlValues` entry for each selected rendered control.
+
+Once a session exists, all model/control rendering and mutation reads that
+session's `SessionLiveConfigSnapshot` only. Target launch options and catalog
+state may not add to, remove from, or invalidate active-session choices.
 Mobile keeps native navigation, native styling, and React Native UI while
 sharing only concrete ProductClient domain modules.
 

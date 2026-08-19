@@ -55,10 +55,6 @@ export function buildSessionStreamPatch({
   };
   const currentPendingInteractions = slot.executionSummary?.pendingInteractions ?? [];
 
-  if (event.type === "current_mode_update") {
-    patch.modeId = event.currentModeId;
-  }
-
   if (event.type === "session_state_update") {
     if (event.modelId !== undefined) {
       patch.modelId = event.modelId ?? null;
@@ -66,22 +62,16 @@ export function buildSessionStreamPatch({
     if (event.requestedModelId !== undefined) {
       patch.requestedModelId = event.requestedModelId ?? null;
     }
-    if (event.modeId !== undefined) {
-      patch.modeId = event.modeId ?? null;
-    }
   }
 
   if (event.type === "config_option_update") {
     patch.liveConfig = event.liveConfig;
     patch.modelId =
       event.liveConfig.normalizedControls.model?.currentValue ?? slot.modelId;
-    patch.modeId =
-      event.liveConfig.normalizedControls.mode?.currentValue ?? slot.modeId;
+    patch.modeId = event.liveConfig.normalizedControls.mode?.currentValue ?? null;
     patch.transcript = {
       ...nextTranscript,
-      currentModeId:
-        event.liveConfig.normalizedControls.mode?.currentValue
-        ?? nextTranscript.currentModeId,
+      currentModeId: event.liveConfig.normalizedControls.mode?.currentValue ?? null,
     };
   }
 

@@ -87,7 +87,7 @@ pub struct SelectionFact {
 }
 
 /// The probe engine's live phase for this harness. Mirrors
-/// `model_snapshot::status::LiveState` vocabulary so a later rung can map one to
+/// `launch_probe::status::LiveState` vocabulary so a later rung can map one to
 /// the other without a translation table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProbePhase {
@@ -411,7 +411,7 @@ pub fn derive_agent_auth_state(facts: &AgentAuthFacts) -> DerivedState {
 
 /// A tier-1 credential trial verdict, folded into the facts by
 /// [`facts_from_resolved_with_runtime`] (ADR FR-2). Kept in this
-/// dependency-free module so `model_snapshot` (which depends on this module)
+/// dependency-free module so `launch_probe` (which depends on this module)
 /// maps its own trial result onto this shape rather than the reverse.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tier1TrialFact {

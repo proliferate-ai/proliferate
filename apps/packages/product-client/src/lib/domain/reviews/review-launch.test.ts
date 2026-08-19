@@ -27,7 +27,7 @@ describe("resolveOneClickReviewRequest", () => {
               prompt: "Review the plan.",
               agentKind: "claude",
               modelId: "sonnet",
-              modeId: "",
+              controlValues: {},
             }],
           },
         },
@@ -40,7 +40,7 @@ describe("resolveOneClickReviewRequest", () => {
     expect(result.request?.reviewers[0]).toMatchObject({
       agentKind: "claude",
       modelId: "sonnet",
-      modeId: "bypassPermissions",
+      controlValues: { mode: "bypassPermissions" },
     });
   });
 });
@@ -48,25 +48,37 @@ describe("resolveOneClickReviewRequest", () => {
 function launchAgent(
   kind: string,
   modelId: string,
-  unattendedModeId: string,
+  defaultModeId: string,
   defaultModelId = modelId,
 ): DesktopAgentLaunchAgent {
   return {
     kind,
     displayName: kind,
     defaultModelId,
-    unattendedModeId,
     models: [
-      launchModel(modelId, unattendedModeId, modelId === defaultModelId),
+      launchModel(modelId, modelId === defaultModelId),
       ...(defaultModelId === modelId
         ? []
-        : [launchModel(defaultModelId, unattendedModeId, true)]),
+        : [launchModel(defaultModelId, true)]),
     ],
-    launchControls: [],
+    launchControls: [{
+      key: "mode",
+      label: "Access",
+      type: "select",
+      defaultValue: defaultModeId,
+      phase: "create_session",
+      surfaces: { start: true, session: true, automation: true, settings: true },
+      apply: { queueBeforeMaterialized: false },
+      missingLiveConfigPolicy: "block_prompt",
+      valueSource: "inline",
+      values: [{ value: defaultModeId, label: defaultModeId, isDefault: true }],
+      queueWhileMaterializing: false,
+      mutableAfterMaterialized: true,
+    }],
   };
 }
 
-function launchModel(modelId: string, unattendedModeId: string, isDefault: boolean) {
+function launchModel(modelId: string, isDefault: boolean) {
   return {
     id: modelId,
     displayName: modelId,
@@ -75,7 +87,7 @@ function launchModel(modelId: string, unattendedModeId: string, isDefault: boole
     isDefault,
     availability: null,
     sessionDefaultControls: [],
-    modeValues: [unattendedModeId],
+    modeValues: null,
     tuningControlValues: null,
   };
 }

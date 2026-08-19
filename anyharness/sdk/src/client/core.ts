@@ -1,13 +1,11 @@
 import type { ProblemDetails } from "../types/runtime.js";
 import { requestBoundedJson } from "./bounded-json.js";
 import { AgentAuthClient } from "./agent-auth.js";
-import { AgentGatewayCatalogClient } from "./agent-gateway-catalog.js";
 import { AgentsClient } from "./agents.js";
 import { CoworkClient } from "./cowork.js";
 import { FilesClient } from "./files.js";
 import { GitClient } from "./git.js";
 import { MobilityClient } from "./mobility.js";
-import { ModelSnapshotClient } from "./model-snapshot.js";
 import { PlansClient } from "./plans.js";
 import {
   normalizeProblemDetails,
@@ -305,7 +303,11 @@ export class AnyHarnessTransport {
   readonly fetch: typeof globalThis.fetch;
 
   constructor(options: AnyHarnessClientOptions) {
-    this.baseUrl = options.baseUrl.replace(/\/+$/, "");
+    let baseUrl = options.baseUrl;
+    while (baseUrl.endsWith("/")) {
+      baseUrl = baseUrl.slice(0, -1);
+    }
+    this.baseUrl = baseUrl;
     this.authToken = options.authToken;
     this.fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
@@ -527,9 +529,7 @@ export class AnyHarnessClient {
   readonly runtime: RuntimeClient;
   readonly agents: AgentsClient;
   readonly agentAuth: AgentAuthClient;
-  readonly agentGatewayCatalog: AgentGatewayCatalogClient;
   readonly mobility: MobilityClient;
-  readonly modelSnapshot: ModelSnapshotClient;
   readonly plans: PlansClient;
   readonly repoRoots: RepoRootsClient;
   readonly replay: ReplayClient;
@@ -550,9 +550,7 @@ export class AnyHarnessClient {
     this.runtime = new RuntimeClient(transport);
     this.agents = new AgentsClient(transport);
     this.agentAuth = new AgentAuthClient(transport);
-    this.agentGatewayCatalog = new AgentGatewayCatalogClient(transport);
     this.mobility = new MobilityClient(transport);
-    this.modelSnapshot = new ModelSnapshotClient(transport);
     this.plans = new PlansClient(transport);
     this.repoRoots = new RepoRootsClient(transport);
     this.replay = new ReplayClient(transport);

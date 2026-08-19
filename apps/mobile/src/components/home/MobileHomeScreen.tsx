@@ -66,8 +66,7 @@ export function MobileHomeScreen({
     : null;
   const launchActions = useMobileHomeLaunchActions({
     ownerUserId,
-    catalog: launchModel.agentCatalog.data,
-    launchableAgentKinds: launchModel.launchableAgentKinds,
+    launchOptions: launchModel.launchOptions.data,
     selectedRepo: launchModel.selectedRepo,
     selectedBaseBranch: launchModel.selectedBaseBranch,
     selectedRuntime: launchModel.selectedRuntime,

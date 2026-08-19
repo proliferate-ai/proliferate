@@ -1,39 +1,43 @@
 // @vitest-environment jsdom
 
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { AnyHarnessError } from "@anyharness/sdk";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ReactNode } from "react";
-import { WorkspacePathProvider } from "#product/providers/WorkspacePathProvider";
 import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
 
-const editorMocks = vi.hoisted(() => ({
-  openInDefaultEditor: vi.fn(async () => true),
+const pathMocks = vi.hoisted(() => ({
+  value: {
+    materializedWorkspaceId: "workspace-1" as string | null,
+    filesystemOrigin: { status: "settled" as const, origin: "desktop-local" as const },
+    workspaceRoot: { status: "settled" as const, path: "/repo" as string | null },
+  },
+}));
+
+const selectionMocks = vi.hoisted(() => ({
+  selectedWorkspaceId: "workspace-1",
+  selectedLogicalWorkspaceId: "workspace-1",
 }));
 
 const statMocks = vi.hoisted(() => ({
-  kind: "file" as "file" | "directory" | "symlink" | null,
-  sizeBytes: undefined as number | undefined,
+  calls: vi.fn(),
+  data: { kind: "file" as "file" | "directory" | "symlink" },
+  error: null as unknown,
+  isPending: false,
   isFetching: false,
-  error: null as Error | null,
-  refetch: vi.fn(async (): Promise<{
-    data?: { kind: "file" | "directory" | "symlink"; sizeBytes?: number };
-  }> => ({ data: { kind: "file" } })),
 }));
 
 const fuzzyMocks = vi.hoisted(() => ({
-  resolve: vi.fn(async (): Promise<string | null> => null),
+  resolve: vi.fn(async () => ({ status: "no-match" as const })),
 }));
 
-const anyHarnessMocks = vi.hoisted(() => ({
-  stat: vi.fn(async (_workspaceId: string, path: string) => ({
-    path,
-    kind: "file" as const,
-    sizeBytes: 1,
-  })),
-  resolveWorkspaceConnection: vi.fn(async () => ({
-    runtimeUrl: "http://runtime.test",
-    anyharnessWorkspaceId: "runtime-workspace-1",
-  })),
+const lookupMocks = vi.hoisted(() => ({
+  statFile: vi.fn(async ({ path }: { path: string }) => ({ path, kind: "file" as const })),
+}));
+
+const editorMocks = vi.hoisted(() => ({
+  kinds: vi.fn(),
+  openInDefaultEditor: vi.fn(async () => true),
+  targets: [{ id: "cursor", label: "Cursor", kind: "editor" as const }],
 }));
 
 const viewerMocks = vi.hoisted(() => ({
@@ -41,55 +45,49 @@ const viewerMocks = vi.hoisted(() => ({
   activateViewerTarget: vi.fn(),
 }));
 
-const hostMocks = vi.hoisted(() => ({
+const bridgeMocks = vi.hoisted(() => ({
   desktopAvailable: true,
   writeText: vi.fn(async () => undefined),
   getHomeDirectory: vi.fn(async () => "/Users/pablo"),
-  openTarget: vi.fn(async () => undefined),
   inspectPath: vi.fn(async () => ({ kind: "file" as const })),
+  openTarget: vi.fn(async () => undefined),
   reveal: vi.fn(async () => undefined),
-  files: null as unknown as {
-    getHomeDirectory: ReturnType<typeof vi.fn>;
-    inspectPath: ReturnType<typeof vi.fn>;
-    openTarget: ReturnType<typeof vi.fn>;
-    reveal: ReturnType<typeof vi.fn>;
-  },
+  files: null as unknown as Record<string, unknown>,
 }));
 
-hostMocks.files = {
-  getHomeDirectory: hostMocks.getHomeDirectory,
-  inspectPath: hostMocks.inspectPath,
-  openTarget: hostMocks.openTarget,
-  reveal: hostMocks.reveal,
-};
-
-vi.mock("#product/hooks/editor/workflows/use-open-in-default-editor", () => ({
-  useOpenInDefaultEditor: () => ({
-    defaultTarget: null,
-    openInDefaultEditor: editorMocks.openInDefaultEditor,
-    targets: [],
-  }),
+vi.mock("#product/providers/WorkspacePathProvider", () => ({
+  useWorkspacePath: () => pathMocks.value,
 }));
 
 vi.mock("@anyharness/sdk-react", () => ({
-  getAnyHarnessClient: () => ({ files: { stat: anyHarnessMocks.stat } }),
-  resolveWorkspaceConnectionFromContext: async () => ({
-    workspaceId: "workspace-1",
-    connection: {
-      runtimeUrl: "http://runtime.test",
-      anyharnessWorkspaceId: "runtime-workspace-1",
-    },
-  }),
-  useAnyHarnessWorkspaceContext: () => ({
-    workspaceId: "workspace-1",
-    resolveConnection: anyHarnessMocks.resolveWorkspaceConnection,
-  }),
-  useStatWorkspaceFileQuery: () => ({
-    data: statMocks.kind ? { kind: statMocks.kind, sizeBytes: statMocks.sizeBytes } : undefined,
-    isFetching: statMocks.isFetching,
-    error: statMocks.error,
-    refetch: statMocks.refetch,
-  }),
+  useStatWorkspaceFileQuery: (input: unknown) => {
+    statMocks.calls(input);
+    return {
+      data: statMocks.data,
+      error: statMocks.error,
+      isPending: statMocks.isPending,
+      isFetching: statMocks.isFetching,
+    };
+  },
+}));
+
+vi.mock("#product/hooks/access/anyharness/files/use-workspace-file-lookup", () => ({
+  useWorkspaceFileLookup: () => ({ statFile: lookupMocks.statFile }),
+}));
+
+vi.mock("#product/hooks/workspaces/workflows/files/use-fuzzy-file-resolver", () => ({
+  useFuzzyFileResolver: () => fuzzyMocks.resolve,
+}));
+
+vi.mock("#product/hooks/editor/workflows/use-open-in-default-editor", () => ({
+  useOpenInDefaultEditor: (kind: "file" | "directory" | null) => {
+    editorMocks.kinds(kind);
+    return {
+      defaultTarget: kind ? editorMocks.targets[0] : null,
+      openInDefaultEditor: editorMocks.openInDefaultEditor,
+      targets: kind ? editorMocks.targets : [],
+    };
+  },
 }));
 
 vi.mock("#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation", () => ({
@@ -99,476 +97,504 @@ vi.mock("#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation
 }));
 
 vi.mock("#product/stores/editor/workspace-viewer-tabs-store", () => ({
-  useWorkspaceViewerTabsStore: (selector: (state: { openTarget: typeof viewerMocks.openTarget }) => unknown) =>
-    selector({ openTarget: viewerMocks.openTarget }),
+  useWorkspaceViewerTabsStore: (
+    selector: (state: { openTarget: typeof viewerMocks.openTarget }) => unknown,
+  ) => selector({ openTarget: viewerMocks.openTarget }),
 }));
 
 vi.mock("#product/stores/sessions/session-selection-store", () => ({
-  useSessionSelectionStore: (selector: (state: {
-    selectedWorkspaceId: string;
-    selectedLogicalWorkspaceId: string;
-  }) => unknown) => selector({
-    selectedWorkspaceId: "workspace-1",
-    selectedLogicalWorkspaceId: "workspace-1",
-  }),
+  useSessionSelectionStore: (
+    selector: (state: {
+      selectedWorkspaceId: string;
+      selectedLogicalWorkspaceId: string;
+    }) => unknown,
+  ) => selector(selectionMocks),
 }));
 
 vi.mock("@proliferate/product-client/host/ProductHostProvider", () => ({
   useProductHost: () => ({
-    clipboard: { writeText: hostMocks.writeText },
-    desktop: hostMocks.desktopAvailable ? {
-      files: hostMocks.files,
-    } : null,
+    clipboard: { writeText: bridgeMocks.writeText },
+    desktop: bridgeMocks.desktopAvailable ? { files: bridgeMocks.files } : null,
   }),
 }));
 
-vi.mock("#product/hooks/workspaces/workflows/files/use-fuzzy-file-resolver", () => ({
-  useFuzzyFileResolver: () => fuzzyMocks.resolve,
-}));
-
 afterEach(() => {
-  hostMocks.desktopAvailable = true;
-  hostMocks.getHomeDirectory.mockResolvedValue("/Users/pablo");
-  hostMocks.inspectPath.mockResolvedValue({ kind: "file" });
-  editorMocks.openInDefaultEditor.mockResolvedValue(true);
-  statMocks.kind = "file";
-  statMocks.sizeBytes = undefined;
-  statMocks.isFetching = false;
-  statMocks.error = null;
-  statMocks.refetch.mockResolvedValue({ data: { kind: "file" } });
-  fuzzyMocks.resolve.mockResolvedValue(null);
-  anyHarnessMocks.stat.mockImplementation(async (_workspaceId, path) => ({
-    path,
-    kind: "file",
-    sizeBytes: 1,
-  }));
+  cleanup();
   vi.clearAllMocks();
-  hostMocks.files = {
-    getHomeDirectory: hostMocks.getHomeDirectory,
-    inspectPath: hostMocks.inspectPath,
-    openTarget: hostMocks.openTarget,
-    reveal: hostMocks.reveal,
+  pathMocks.value = {
+    materializedWorkspaceId: "workspace-1",
+    filesystemOrigin: { status: "settled", origin: "desktop-local" },
+    workspaceRoot: { status: "settled", path: "/repo" },
+  };
+  selectionMocks.selectedWorkspaceId = "workspace-1";
+  selectionMocks.selectedLogicalWorkspaceId = "workspace-1";
+  statMocks.data = { kind: "file" };
+  statMocks.error = null;
+  statMocks.isPending = false;
+  statMocks.isFetching = false;
+  fuzzyMocks.resolve.mockResolvedValue({ status: "no-match" });
+  lookupMocks.statFile.mockImplementation(async ({ path }) => ({ path, kind: "file" }));
+  editorMocks.openInDefaultEditor.mockResolvedValue(true);
+  bridgeMocks.desktopAvailable = true;
+  bridgeMocks.getHomeDirectory.mockResolvedValue("/Users/pablo");
+  bridgeMocks.inspectPath.mockResolvedValue({ kind: "file" });
+  bridgeMocks.files = {
+    getHomeDirectory: bridgeMocks.getHomeDirectory,
+    inspectPath: bridgeMocks.inspectPath,
+    openTarget: bridgeMocks.openTarget,
+    reveal: bridgeMocks.reveal,
   };
 });
 
 describe("useFileReferenceActions", () => {
   it.each([
-    ["relative", "src/App.tsx", "src/App.tsx"],
-    ["absolute", "/repo/src/App.tsx", "src/App.tsx"],
-  ])("opens a resolved %s file in the workspace viewer", async (_label, rawPath, expectedPath) => {
-    const { result } = renderHook(
-      () => useFileReferenceActions({ rawPath }),
-      { wrapper: workspaceWrapper("/repo") },
-    );
+    ["src/App.tsx", "src/App.tsx"],
+    ["/repo/src/App.tsx", "src/App.tsx"],
+  ])("stats and opens workspace file %s only in the viewer", async (rawPath, expectedPath) => {
+    const { result } = renderHook(() => useFileReferenceActions({ rawPath }));
 
-    await act(async () => {
-      await result.current.openPrimary();
-    });
-
-    expect(viewerMocks.openTarget).toHaveBeenCalledWith({ kind: "file", path: expectedPath });
-    expect(hostMocks.reveal).not.toHaveBeenCalled();
-    expect(hostMocks.inspectPath).not.toHaveBeenCalled();
-    expect(editorMocks.openInDefaultEditor).not.toHaveBeenCalled();
-  });
-
-  it("infers a workspace file when nullable path metadata is missing", async () => {
-    const { result } = renderHook(
-      () => useFileReferenceActions({
-        rawPath: "src/App.tsx",
-        workspacePath: null,
-      }),
-      { wrapper: workspaceWrapper("/repo") },
-    );
-
-    expect(result.current.reference.workspacePath).toBe("src/App.tsx");
     await expect(result.current.openPrimary()).resolves.toBe("open-viewer");
-    expect(viewerMocks.openTarget).toHaveBeenCalledWith({
-      kind: "file",
-      path: "src/App.tsx",
-    });
-  });
 
-  it("reveals a workspace directory in Finder instead of opening it as a file", async () => {
-    statMocks.kind = "directory";
-    const { result } = renderHook(
-      () => useFileReferenceActions({ rawPath: "apps/packages" }),
-      { wrapper: workspaceWrapper("/repo") },
-    );
-
-    await act(async () => {
-      await result.current.openPrimary();
-    });
-
-    expect(hostMocks.reveal).toHaveBeenCalledWith("/repo/apps/packages");
-    expect(viewerMocks.openTarget).not.toHaveBeenCalled();
-  });
-
-  it("resolves and reveals an external directory on Desktop", async () => {
-    statMocks.kind = null;
-    hostMocks.inspectPath.mockResolvedValue({ kind: "directory" });
-    const { result } = renderHook(
-      () => useFileReferenceActions({ rawPath: "/Users/pablo/landing" }),
-      { wrapper: workspaceWrapper("/repo") },
-    );
-
-    await act(async () => {
-      await result.current.openPrimary();
-    });
-
-    expect(hostMocks.reveal).toHaveBeenCalledWith("/Users/pablo/landing");
-    expect(viewerMocks.openTarget).not.toHaveBeenCalled();
-  });
-
-  it("keeps pending actions inert while the imperative primary shares the inspection", async () => {
-    statMocks.kind = null;
-    let resolveInspection!: (inspection: { kind: "file" }) => void;
-    hostMocks.inspectPath.mockImplementationOnce(() => new Promise((resolve) => {
-      resolveInspection = resolve;
+    expect(statMocks.calls).toHaveBeenLastCalledWith(expect.objectContaining({
+      workspaceId: "workspace-1",
+      path: expectedPath,
+      enabled: true,
     }));
-    const { result } = renderHook(
-      () => useFileReferenceActions({ rawPath: "/tmp/pending.txt" }),
-      { wrapper: workspaceWrapper("/repo") },
-    );
+    expect(viewerMocks.openTarget).toHaveBeenCalledWith({ kind: "file", path: expectedPath });
+    expect(bridgeMocks.inspectPath).not.toHaveBeenCalled();
+    expect(bridgeMocks.openTarget).not.toHaveBeenCalled();
+    expect(bridgeMocks.reveal).not.toHaveBeenCalled();
+  });
 
-    await waitFor(() => expect(hostMocks.inspectPath).toHaveBeenCalledTimes(1));
-    expect(result.current.pathKindPending).toBe(true);
+  it("stats root as an empty workspace path and exposes reveal only as a secondary action", async () => {
+    statMocks.data = { kind: "directory" };
+    const { result } = renderHook(() => useFileReferenceActions({
+      rawPath: ".",
+      workspacePath: ".",
+    }));
+
+    expect(statMocks.calls).toHaveBeenLastCalledWith(expect.objectContaining({ path: "" }));
+    expect(result.current.reference.locator).toEqual({
+      authority: "workspace",
+      workspacePath: "",
+      localCompanionPath: "/repo",
+    });
     expect(result.current.canOpenPrimary).toBe(false);
+    expect(result.current.canOpenExternal).toBe(false);
+    expect(result.current.canReveal).toBe(true);
     expect(result.current.openTargets).toEqual([]);
-    expect(result.current.defaultOpenTarget).toBeNull();
+    expect(editorMocks.kinds).toHaveBeenLastCalledWith(null);
+    await expect(result.current.openPrimary()).resolves.toBe("unavailable");
     await expect(result.current.openDefault()).resolves.toBe(false);
     await result.current.openWithTarget("cursor");
     await result.current.reveal();
-    expect(hostMocks.openTarget).not.toHaveBeenCalled();
-    expect(hostMocks.reveal).not.toHaveBeenCalled();
+    expect(bridgeMocks.reveal).toHaveBeenCalledWith("/repo");
+    expect(editorMocks.openInDefaultEditor).not.toHaveBeenCalled();
+    expect(bridgeMocks.openTarget).not.toHaveBeenCalled();
+    expect(viewerMocks.openTarget).not.toHaveBeenCalled();
+  });
 
-    const primary = result.current.openPrimary();
-    expect(hostMocks.inspectPath).toHaveBeenCalledTimes(1);
-    await act(async () => {
-      resolveInspection({ kind: "file" });
-      await expect(primary).resolves.toBe("open-external");
-    });
-    expect(hostMocks.inspectPath).toHaveBeenCalledTimes(1);
-    expect(editorMocks.openInDefaultEditor)
-      .toHaveBeenCalledWith("/tmp/pending.txt", "file");
+  it("allows explicit header-owned workspace root target discovery", () => {
+    statMocks.data = { kind: "directory" };
+    const { result } = renderHook(() => useFileReferenceActions({
+      rawPath: ".",
+      workspacePath: ".",
+      nativeCapabilityKind: "directory",
+    }));
+
+    expect(result.current.canOpenExternal).toBe(true);
+    expect(result.current.canReveal).toBe(true);
+    expect(result.current.openTargets).toEqual(editorMocks.targets);
+    expect(editorMocks.kinds).toHaveBeenLastCalledWith("directory");
+  });
+
+  it("opens a remote workspace file while forbidding every native operation", async () => {
+    pathMocks.value = {
+      ...pathMocks.value,
+      filesystemOrigin: { status: "settled", origin: "remote" },
+    };
+    const { result } = renderHook(() => useFileReferenceActions({ rawPath: "README.md" }));
+
+    expect(result.current.nativePathKind).toBeNull();
+    await expect(result.current.openPrimary()).resolves.toBe("open-viewer");
+    await result.current.openDefault();
+    await result.current.openWithTarget("cursor");
+    await result.current.reveal();
+    expect(viewerMocks.openTarget).toHaveBeenCalledOnce();
+    expect(bridgeMocks.getHomeDirectory).not.toHaveBeenCalled();
+    expect(bridgeMocks.inspectPath).not.toHaveBeenCalled();
+    expect(bridgeMocks.openTarget).not.toHaveBeenCalled();
+    expect(bridgeMocks.reveal).not.toHaveBeenCalled();
   });
 
   it.each([
-    [{ kind: "missing" }, "This path was not found."],
-    [{ kind: "unavailable", reason: "invalid_path" }, "This path is invalid."],
-    [
-      { kind: "unavailable", reason: "permission_denied" },
-      "Permission denied for this path.",
-    ],
-    [
-      { kind: "unavailable", reason: "unsupported_type" },
-      "This path type is not supported.",
-    ],
-    [{ kind: "unavailable", reason: "io_error" }, "This path is unavailable."],
-  ] as const)(
-    "keeps a settled refusal inert: %#",
-    async (inspection, expectedCopy) => {
-      statMocks.kind = null;
-      hostMocks.inspectPath.mockResolvedValue(inspection);
-      const rawPath = "/tmp/refused.txt";
-      const { result } = renderHook(
-        () => useFileReferenceActions({ rawPath }),
-        { wrapper: workspaceWrapper("/repo") },
-      );
+    ["remote", { status: "settled", origin: "remote" }],
+    ["pending", { status: "pending", origin: null }],
+    ["rejected", { status: "rejected", origin: null }],
+  ] as const)("rejects an outside absolute path with %s origin before native access", async (_label, origin) => {
+    pathMocks.value = { ...pathMocks.value, filesystemOrigin: origin };
+    const { result } = renderHook(() => useFileReferenceActions({ rawPath: "/tmp/outside" }));
 
-      await waitFor(() => expect(result.current.pathKindPending).toBe(false));
-      expect(result.current.pathKind).toBeNull();
-      expect(result.current.canOpenExternal).toBe(false);
-      expect(result.current.canReveal).toBe(false);
+    expect(result.current.accessState.status).toBe("unavailable");
+    expect(statMocks.calls).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false }));
+    expect(bridgeMocks.inspectPath).not.toHaveBeenCalled();
+    expect(editorMocks.kinds).toHaveBeenLastCalledWith(null);
+  });
+
+  it.each(["file:///tmp/a", "//server/a", "\\\\server\\a", "#fragment", "C:/a", "~user/a", "a/../b"])(
+    "keeps rejected syntax %s inert",
+    async (rawPath) => {
+      const { result } = renderHook(() => useFileReferenceActions({ rawPath }));
       expect(result.current.canOpenPrimary).toBe(false);
-      expect(result.current.openTargets).toEqual([]);
-      expect(result.current.defaultOpenTarget).toBeNull();
-      expect(result.current.primaryUnavailableReason).toBe(expectedCopy);
-
-      await expect(result.current.openDefault()).resolves.toBe(false);
-      await result.current.openWithTarget("cursor");
-      await result.current.reveal();
-      await expect(result.current.openPrimary()).resolves.toBe("unavailable");
-      await result.current.copyPath();
-
-      expect(hostMocks.inspectPath).toHaveBeenCalledTimes(1);
-      expect(hostMocks.openTarget).not.toHaveBeenCalled();
-      expect(hostMocks.reveal).not.toHaveBeenCalled();
-      expect(editorMocks.openInDefaultEditor).not.toHaveBeenCalled();
-      expect(hostMocks.writeText).toHaveBeenCalledWith(rawPath);
+      await result.current.openPrimary();
+      expect(statMocks.calls).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false }));
+      expect(fuzzyMocks.resolve).not.toHaveBeenCalled();
+      expect(bridgeMocks.getHomeDirectory).not.toHaveBeenCalled();
+      expect(bridgeMocks.inspectPath).not.toHaveBeenCalled();
+      expect(bridgeMocks.openTarget).not.toHaveBeenCalled();
+      expect(bridgeMocks.reveal).not.toHaveBeenCalled();
     },
   );
 
-  it("keeps a Web directory unavailable without invoking a native action", async () => {
-    hostMocks.desktopAvailable = false;
-    statMocks.kind = "directory";
-    const { result } = renderHook(
-      () => useFileReferenceActions({ rawPath: "apps/packages" }),
-      { wrapper: workspaceWrapper("/repo") },
-    );
-
-    expect(result.current.canOpenPrimary).toBe(false);
-    expect(result.current.primaryUnavailableReason).toBe("This path is unavailable.");
-    await expect(result.current.openPrimary()).resolves.toBe("unavailable");
-    expect(hostMocks.inspectPath).not.toHaveBeenCalled();
-    expect(hostMocks.reveal).not.toHaveBeenCalled();
-    expect(viewerMocks.openTarget).not.toHaveBeenCalled();
+  it.each(["", "   "])("keeps supplied structured value %j authoritative and inert", async (workspacePath) => {
+    const { result } = renderHook(() => useFileReferenceActions({
+      rawPath: "src/visible.ts",
+      workspacePath,
+    }));
+    expect(result.current.reference.displayPath).toBe("src/visible.ts");
+    expect(result.current.reference.locator).toEqual({ authority: "unavailable", reason: "invalid" });
+    expect(statMocks.calls).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false }));
+    expect(bridgeMocks.getHomeDirectory).not.toHaveBeenCalled();
+    expect(bridgeMocks.inspectPath).not.toHaveBeenCalled();
   });
 
-  it("still opens a resolved workspace file in the viewer on Web", async () => {
-    hostMocks.desktopAvailable = false;
-    const { result } = renderHook(
-      () => useFileReferenceActions({ rawPath: "README.md" }),
-      { wrapper: workspaceWrapper("/repo") },
-    );
+  it("inspects and opens an authority-proven Desktop file", async () => {
+    const { result } = renderHook(() => useFileReferenceActions({ rawPath: "/tmp/outside.txt" }));
+    await waitFor(() => expect(result.current.accessState.status).toBe("settled"));
 
-    await act(async () => {
-      await result.current.openPrimary();
-    });
+    expect(result.current.nativePathKind).toBe("file");
+    await expect(result.current.openPrimary()).resolves.toBe("open-external");
+    await result.current.openWithTarget("cursor");
+    await result.current.openWithTarget("removed-target");
 
-    expect(viewerMocks.openTarget).toHaveBeenCalledWith({ kind: "file", path: "README.md" });
-    expect(hostMocks.reveal).not.toHaveBeenCalled();
+    expect(bridgeMocks.inspectPath).toHaveBeenCalledWith("/tmp/outside.txt");
+    expect(editorMocks.openInDefaultEditor).toHaveBeenCalledWith("/tmp/outside.txt", "file");
+    expect(bridgeMocks.openTarget).toHaveBeenCalledTimes(1);
+    expect(bridgeMocks.openTarget).toHaveBeenCalledWith("cursor", "/tmp/outside.txt");
   });
 
-  it("opens the uniquely corrected viewer target after an exact stat miss", async () => {
-    statMocks.kind = null;
-    statMocks.error = new Error("not found");
-    statMocks.refetch.mockResolvedValue({ data: undefined });
-    fuzzyMocks.resolve.mockResolvedValue("apps/product/src/App.tsx");
-    const { result } = renderHook(
-      () => useFileReferenceActions({ rawPath: "src/App.tsx" }),
-      { wrapper: workspaceWrapper("/repo") },
+  it("uses reveal as the Desktop directory primary action", async () => {
+    bridgeMocks.inspectPath.mockResolvedValue({ kind: "directory" });
+    const { result } = renderHook(() => useFileReferenceActions({ rawPath: "/tmp/folder" }));
+    await waitFor(() => expect(result.current.nativePathKind).toBe("directory"));
+
+    expect(result.current.canOpenExternal).toBe(true);
+    expect(result.current.openTargets).toEqual(editorMocks.targets);
+    await expect(result.current.openPrimary()).resolves.toBe("reveal");
+    await result.current.openWithTarget("cursor");
+    expect(bridgeMocks.reveal).toHaveBeenCalledWith("/tmp/folder");
+    expect(bridgeMocks.openTarget).toHaveBeenCalledWith("cursor", "/tmp/folder");
+    expect(editorMocks.openInDefaultEditor).not.toHaveBeenCalled();
+  });
+
+  it("expands a gated home reference and rejects an invalid native home without inspection", async () => {
+    const { result, rerender } = renderHook(
+      ({ rawPath }) => useFileReferenceActions({ rawPath }),
+      { initialProps: { rawPath: "~/notes/file.md" } },
     );
+    await waitFor(() => expect(result.current.nativePathKind).toBe("file"));
+    expect(bridgeMocks.inspectPath).toHaveBeenCalledWith("/Users/pablo/notes/file.md");
 
-    await act(async () => {
-      await result.current.openPrimary();
+    bridgeMocks.files = {
+      ...bridgeMocks.files,
+      getHomeDirectory: vi.fn(async () => "relative-home"),
+    };
+    rerender({ rawPath: "~/other.md" });
+    await waitFor(() => expect(result.current.pathKindPending).toBe(false));
+    expect(result.current.reference.locator).toEqual({
+      authority: "unavailable",
+      reason: "home_unavailable",
     });
+    expect(bridgeMocks.inspectPath).toHaveBeenCalledTimes(1);
+  });
 
-    expect(fuzzyMocks.resolve).toHaveBeenCalledWith({
-      workspacePath: "src/App.tsx",
+  it("offers one bounded recovery only for an exact typed missing error", async () => {
+    statMocks.data = undefined as never;
+    statMocks.error = problem("FILE_NOT_FOUND", 404);
+    fuzzyMocks.resolve.mockResolvedValue({
+      status: "match",
+      workspacePath: "Apps/Web/SRC/App.tsx",
+    });
+    const { result } = renderHook(() => useFileReferenceActions({ rawPath: "src/App.tsx" }));
+
+    expect(result.current.accessState.status).toBe("exact-missing");
+    await act(async () => {
+      await expect(result.current.openPrimary()).resolves.toBe("open-viewer");
+    });
+    await waitFor(() => expect(result.current.accessState.status).toBe("settled"));
+    await expect(result.current.openPrimary()).resolves.toBe("open-viewer");
+
+    expect(fuzzyMocks.resolve).toHaveBeenCalledTimes(1);
+    expect(lookupMocks.statFile).toHaveBeenCalledTimes(1);
+    expect(lookupMocks.statFile).toHaveBeenCalledWith({
       materializedWorkspaceId: "workspace-1",
+      path: "Apps/Web/SRC/App.tsx",
     });
-    expect(anyHarnessMocks.stat).toHaveBeenCalledWith(
-      "runtime-workspace-1",
-      "apps/product/src/App.tsx",
-    );
-    expect(viewerMocks.openTarget).toHaveBeenCalledWith({
-      kind: "file",
-      path: "apps/product/src/App.tsx",
-    });
-  });
-
-  it("keeps primary opening retryable after exact stat and correction both fail", async () => {
-    statMocks.kind = null;
-    statMocks.error = new Error("not found");
-    statMocks.refetch.mockResolvedValue({ data: undefined });
-    const { result } = renderHook(
-      () => useFileReferenceActions({ rawPath: "missing/App.tsx" }),
-      { wrapper: workspaceWrapper("/repo") },
-    );
-
-    expect(result.current.canOpenPrimary).toBe(true);
-    await act(async () => {
-      await expect(result.current.openPrimary()).resolves.toBe("unavailable");
-    });
-
-    await waitFor(() => {
-      expect(result.current.primaryUnavailableReason)
-        .toBe("This path was not found.");
-    });
-    expect(result.current.canOpenPrimary).toBe(true);
-    expect(viewerMocks.openTarget).not.toHaveBeenCalled();
+    expect(viewerMocks.openTarget).toHaveBeenCalledTimes(2);
   });
 
   it.each([
-    ["file", 0, true],
-    ["directory", undefined, false],
-  ])("resolves a workspace symlink to its %s target on Web", async (_target, sizeBytes, opensViewer) => {
-    hostMocks.desktopAvailable = false;
-    statMocks.kind = "symlink";
-    statMocks.sizeBytes = sizeBytes;
-    const { result } = renderHook(
-      () => useFileReferenceActions({ rawPath: "linked-entry" }),
-      { wrapper: workspaceWrapper("/repo") },
-    );
+    [{ status: "no-match" }, "not_found"],
+    [{ status: "ambiguous" }, "ambiguous_match"],
+    [{ status: "search-error" }, "runtime_unavailable"],
+  ] as const)("makes %s recovery terminal and non-repeatable", async (outcome, reason) => {
+    statMocks.data = undefined as never;
+    statMocks.error = problem("FILE_NOT_FOUND", 404);
+    fuzzyMocks.resolve.mockResolvedValue(outcome);
+    const { result } = renderHook(() => useFileReferenceActions({ rawPath: "missing.ts" }));
 
-    await expect(result.current.openPrimary()).resolves.toBe(
-      opensViewer ? "open-viewer" : "unavailable",
-    );
-    expect(viewerMocks.openTarget).toHaveBeenCalledTimes(opensViewer ? 1 : 0);
+    await act(async () => {
+      await expect(result.current.openPrimary()).resolves.toBe("unavailable");
+    });
+    await waitFor(() => expect(result.current.accessState).toEqual({ status: "unavailable", reason }));
+    await expect(result.current.openPrimary()).resolves.toBe("unavailable");
+    expect(fuzzyMocks.resolve).toHaveBeenCalledTimes(1);
+    expect(lookupMocks.statFile).not.toHaveBeenCalled();
   });
 
-  it("opens an external file with the configured Desktop target", async () => {
-    statMocks.kind = null;
-    const { result } = renderHook(
-      () => useFileReferenceActions({ rawPath: "/tmp/outside.txt" }),
-      { wrapper: workspaceWrapper("/repo") },
-    );
+  it("does not recover a missing lookalike or any stable nonmissing runtime refusal", () => {
+    for (const error of [
+      Object.assign(new Error("missing"), { problem: { code: "FILE_NOT_FOUND" } }),
+      problem("PATH_OUTSIDE_WORKSPACE", 400),
+      problem("INVALID_FILE_PATH", 400),
+      problem("FILE_PERMISSION_DENIED", 403),
+      problem("NOT_A_DIRECTORY", 400),
+      problem("UNEXPECTED", 500),
+    ]) {
+      statMocks.data = undefined as never;
+      statMocks.error = error;
+      const { result, unmount } = renderHook(() => useFileReferenceActions({ rawPath: "missing.ts" }));
+      expect(result.current.accessState.status).toBe("unavailable");
+      expect(result.current.canOpenPrimary).toBe(false);
+      unmount();
+    }
+    expect(fuzzyMocks.resolve).not.toHaveBeenCalled();
+  });
 
-    await waitFor(() => expect(result.current.pathKind).toBe("file"));
-    expect(result.current.canOpenPrimary).toBe(true);
-    expect(result.current.canOpenExternal).toBe(true);
-    expect(result.current.canReveal).toBe(false);
-    await expect(result.current.openPrimary()).resolves.toBe("open-external");
-    await result.current.openWithTarget("cursor");
-    await result.current.reveal();
-    expect(editorMocks.openInDefaultEditor).toHaveBeenCalledWith("/tmp/outside.txt", "file");
-    expect(hostMocks.openTarget).toHaveBeenCalledWith("cursor", "/tmp/outside.txt");
-    expect(hostMocks.reveal).not.toHaveBeenCalled();
+  it.each([
+    ["directory", { kind: "directory" }, "unsupported_type"],
+    ["refusal", problem("FILE_PERMISSION_DENIED", 403), "permission_denied"],
+    ["transport", new Error("offline"), "runtime_unavailable"],
+  ] as const)("makes a corrected %s terminal", async (_label, corrected, reason) => {
+    statMocks.data = undefined as never;
+    statMocks.error = problem("FILE_NOT_FOUND", 404);
+    fuzzyMocks.resolve.mockResolvedValue({ status: "match", workspacePath: "actual.ts" });
+    if (corrected instanceof Error) lookupMocks.statFile.mockRejectedValue(corrected);
+    else lookupMocks.statFile.mockResolvedValue({ path: "actual.ts", ...corrected });
+    const { result } = renderHook(() => useFileReferenceActions({ rawPath: "missing.ts" }));
+
+    await act(async () => void await result.current.openPrimary());
+    await waitFor(() => expect(result.current.accessState).toEqual({ status: "unavailable", reason }));
+    await result.current.openPrimary();
+    expect(fuzzyMocks.resolve).toHaveBeenCalledTimes(1);
+    expect(lookupMocks.statFile).toHaveBeenCalledTimes(1);
     expect(viewerMocks.openTarget).not.toHaveBeenCalled();
   });
 
-  it("keeps a rejected home lookup unavailable without a /tmp fallback", async () => {
-    statMocks.kind = null;
-    hostMocks.getHomeDirectory.mockRejectedValue(new Error("home unavailable"));
-    const { result } = renderHook(
-      () => useFileReferenceActions({ rawPath: "~/.config/secret.txt" }),
-      { wrapper: workspaceWrapper("/repo") },
+  it("resets consumed recovery when locator identity changes", async () => {
+    statMocks.data = undefined as never;
+    statMocks.error = problem("FILE_NOT_FOUND", 404);
+    const { result, rerender } = renderHook(
+      ({ rawPath }) => useFileReferenceActions({ rawPath }),
+      { initialProps: { rawPath: "one.ts" } },
     );
+    await consumeMissingRecovery(result);
+    await result.current.openPrimary();
+    expect(fuzzyMocks.resolve).toHaveBeenCalledTimes(1);
 
-    await waitFor(() => expect(result.current.pathKindPending).toBe(false));
-    expect(result.current.reference.absolutePath).toBeNull();
-    expect(result.current.pathKind).toBeNull();
+    rerender({ rawPath: "two.ts" });
+    expect(result.current.accessState.status).toBe("exact-missing");
+    await act(async () => void await result.current.openPrimary());
+    expect(fuzzyMocks.resolve).toHaveBeenCalledTimes(2);
+  });
+
+  it("resets consumed recovery when the materialized workspace changes", async () => {
+    statMocks.data = undefined as never;
+    statMocks.error = problem("FILE_NOT_FOUND", 404);
+    const { result, rerender } = renderHook(() => (
+      useFileReferenceActions({ rawPath: "missing.ts" })
+    ));
+    await consumeMissingRecovery(result);
+
+    selectionMocks.selectedWorkspaceId = "workspace-2";
+    selectionMocks.selectedLogicalWorkspaceId = "workspace-2";
+    rerender();
+    expect(result.current.accessState.status).toBe("exact-missing");
+    await act(async () => void await result.current.openPrimary());
+    expect(fuzzyMocks.resolve).toHaveBeenCalledTimes(2);
+    expect(fuzzyMocks.resolve).toHaveBeenLastCalledWith({
+      materializedWorkspaceId: "workspace-2",
+      workspacePath: "missing.ts",
+    });
+  });
+
+  it("resets consumed recovery when runtime-root state or path changes", async () => {
+    statMocks.data = undefined as never;
+    statMocks.error = problem("FILE_NOT_FOUND", 404);
+    pathMocks.value = {
+      ...pathMocks.value,
+      filesystemOrigin: { status: "settled", origin: "remote" },
+      workspaceRoot: { status: "pending", path: null },
+    };
+    const { result, rerender } = renderHook(() => (
+      useFileReferenceActions({ rawPath: "missing.ts" })
+    ));
+    await consumeMissingRecovery(result);
+
+    pathMocks.value = {
+      ...pathMocks.value,
+      workspaceRoot: { status: "settled", path: "/repo" },
+    };
+    rerender();
+    expect(result.current.accessState.status).toBe("exact-missing");
+    await act(async () => void await result.current.openPrimary());
+    pathMocks.value = {
+      ...pathMocks.value,
+      workspaceRoot: { status: "settled", path: "/other" },
+    };
+    rerender();
+    expect(result.current.accessState.status).toBe("exact-missing");
+    await act(async () => void await result.current.openPrimary());
+
+    expect(fuzzyMocks.resolve).toHaveBeenCalledTimes(3);
+  });
+
+  it("resets consumed recovery when filesystem-origin state or value changes", async () => {
+    statMocks.data = undefined as never;
+    statMocks.error = problem("FILE_NOT_FOUND", 404);
+    pathMocks.value = {
+      ...pathMocks.value,
+      filesystemOrigin: { status: "pending", origin: null },
+      workspaceRoot: { status: "unavailable", path: null },
+    };
+    const { result, rerender } = renderHook(() => (
+      useFileReferenceActions({ rawPath: "missing.ts" })
+    ));
+    await consumeMissingRecovery(result);
+
+    pathMocks.value = {
+      ...pathMocks.value,
+      filesystemOrigin: { status: "rejected", origin: null },
+    };
+    rerender();
+    expect(result.current.accessState.status).toBe("exact-missing");
+    await act(async () => void await result.current.openPrimary());
+
+    pathMocks.value = {
+      ...pathMocks.value,
+      filesystemOrigin: { status: "settled", origin: "remote" },
+    };
+    rerender();
+    expect(result.current.accessState.status).toBe("exact-missing");
+    await act(async () => void await result.current.openPrimary());
+
+    pathMocks.value = {
+      ...pathMocks.value,
+      filesystemOrigin: { status: "settled", origin: "desktop-local" },
+    };
+    rerender();
+    expect(result.current.accessState.status).toBe("exact-missing");
+    await act(async () => void await result.current.openPrimary());
+
+    expect(fuzzyMocks.resolve).toHaveBeenCalledTimes(4);
+  });
+
+  it("does not reset consumed recovery for rerenders, bridge replacement, or native kind", async () => {
+    statMocks.data = undefined as never;
+    statMocks.error = problem("FILE_NOT_FOUND", 404);
+    const { result, rerender } = renderHook(
+      ({ nativeCapabilityKind, renderKey }: {
+        nativeCapabilityKind?: "file" | "directory";
+        renderKey: number;
+      }) => {
+        void renderKey;
+        return useFileReferenceActions({ rawPath: "missing.ts", nativeCapabilityKind });
+      },
+      { initialProps: { nativeCapabilityKind: undefined, renderKey: 0 } },
+    );
+    await consumeMissingRecovery(result);
+
+    rerender({ nativeCapabilityKind: undefined, renderKey: 1 });
+    await result.current.openPrimary();
+    bridgeMocks.files = { ...bridgeMocks.files };
+    rerender({ nativeCapabilityKind: undefined, renderKey: 2 });
+    await result.current.openPrimary();
+    rerender({ nativeCapabilityKind: "directory", renderKey: 3 });
+    await result.current.openPrimary();
+
+    expect(result.current.accessState).toEqual({ status: "unavailable", reason: "not_found" });
+    expect(fuzzyMocks.resolve).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats an unexpected symlink kind as terminal without size inference", () => {
+    statMocks.data = { kind: "symlink" };
+    const { result } = renderHook(() => useFileReferenceActions({ rawPath: "linked" }));
+    expect(result.current.accessState).toEqual({ status: "unavailable", reason: "unexpected_kind" });
     expect(result.current.canOpenPrimary).toBe(false);
-    expect(result.current.primaryUnavailableReason).toBe("This path is unavailable.");
+  });
 
-    await expect(result.current.openPrimary()).resolves.toBe("unavailable");
-    await expect(result.current.openPrimary()).resolves.toBe("unavailable");
-    expect(hostMocks.getHomeDirectory).toHaveBeenCalledTimes(1);
-    expect(hostMocks.inspectPath).not.toHaveBeenCalled();
-    expect(hostMocks.openTarget).not.toHaveBeenCalled();
-    expect(hostMocks.reveal).not.toHaveBeenCalled();
+  it("uses a stable current-copy handler and no-ops a captured callback after the path becomes empty", async () => {
+    const { result, rerender } = renderHook(
+      ({ rawPath }) => useFileReferenceActions({ rawPath }),
+      { initialProps: { rawPath: "src/App.tsx" } },
+    );
+    const captured = result.current.copyCurrentPath;
+    await captured();
+    expect(bridgeMocks.writeText).toHaveBeenCalledWith("/repo/src/App.tsx");
+
+    rerender({ rawPath: "   " });
+    expect(result.current.copyPath).toBeNull();
+    await captured();
+    expect(bridgeMocks.writeText).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed for stale native callbacks after provenance changes", async () => {
+    const { result, rerender } = renderHook(() => useFileReferenceActions({ rawPath: "/tmp/a" }));
+    await waitFor(() => expect(result.current.nativePathKind).toBe("file"));
+    const staleOpen = result.current.openDefault;
+    const staleTarget = result.current.openWithTarget;
+    const staleReveal = result.current.reveal;
+
+    pathMocks.value = {
+      ...pathMocks.value,
+      filesystemOrigin: { status: "settled", origin: "remote" },
+    };
+    rerender();
+    await staleOpen();
+    await staleTarget("cursor");
+    await staleReveal();
+
     expect(editorMocks.openInDefaultEditor).not.toHaveBeenCalled();
-    expect(hostMocks.inspectPath).not.toHaveBeenCalledWith(
-      expect.stringContaining("/tmp"),
-    );
-  });
-
-  it("expands a home-relative hidden file before opening it on Desktop", async () => {
-    statMocks.kind = null;
-    let resolveHomeDirectory!: (path: string) => void;
-    hostMocks.getHomeDirectory.mockImplementationOnce(() => new Promise((resolve) => {
-      resolveHomeDirectory = resolve;
-    }));
-    const rawPath = "~/.proliferate-local/dev/profiles/wf2pablo/app/diagnostics-dev.env";
-    const absolutePath = "/Users/pablo/.proliferate-local/dev/profiles/wf2pablo/app/diagnostics-dev.env";
-    const { result } = renderHook(
-      () => useFileReferenceActions({ rawPath }),
-      { wrapper: workspaceWrapper("/repo") },
-    );
-
-    expect(result.current.canOpenPrimary).toBe(false);
-    await act(async () => {
-      const openPromise = result.current.openPrimary();
-      resolveHomeDirectory("/Users/pablo");
-      await expect(openPromise).resolves.toBe("open-external");
-    });
-    await waitFor(() => {
-      expect(result.current.reference.absolutePath).toBe(absolutePath);
-      expect(result.current.pathKind).toBe("file");
-    });
-
-    expect(hostMocks.getHomeDirectory).toHaveBeenCalledTimes(1);
-    expect(hostMocks.inspectPath).toHaveBeenCalledWith(absolutePath);
-    expect(editorMocks.openInDefaultEditor).toHaveBeenCalledWith(absolutePath, "file");
-  });
-
-  it("keeps an external file retryable when its Desktop target fails", async () => {
-    statMocks.kind = null;
-    editorMocks.openInDefaultEditor
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true);
-    const { result } = renderHook(
-      () => useFileReferenceActions({ rawPath: "/tmp/outside.txt" }),
-      { wrapper: workspaceWrapper("/repo") },
-    );
-
-    await waitFor(() => expect(result.current.pathKind).toBe("file"));
-    await act(async () => {
-      await expect(result.current.openPrimary()).resolves.toBe("unavailable");
-    });
-
-    await waitFor(() => {
-      expect(result.current.primaryUnavailableReason)
-        .toBe("Could not open this path. Click to retry.");
-    });
-    expect(result.current.canOpenPrimary).toBe(true);
-
-    await act(async () => {
-      await expect(result.current.openPrimary()).resolves.toBe("open-external");
-    });
-    await waitFor(() => {
-      expect(result.current.primaryUnavailableReason).toBeNull();
-    });
-    expect(editorMocks.openInDefaultEditor).toHaveBeenCalledTimes(2);
-    expect(hostMocks.inspectPath).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps a rejected Desktop inspection terminal for the candidate revision", async () => {
-    statMocks.kind = null;
-    hostMocks.inspectPath.mockRejectedValue(new Error("bridge unavailable"));
-    const { result } = renderHook(
-      () => useFileReferenceActions({ rawPath: "/tmp/outside.txt" }),
-      { wrapper: workspaceWrapper("/repo") },
-    );
-
-    await waitFor(() => {
-      expect(hostMocks.inspectPath).toHaveBeenCalled();
-      expect(result.current.pathKindPending).toBe(false);
-    });
-    expect(result.current.canOpenPrimary).toBe(false);
-    await act(async () => {
-      await expect(result.current.openPrimary()).resolves.toBe("unavailable");
-      await expect(result.current.openPrimary()).resolves.toBe("unavailable");
-      await expect(result.current.openDefault()).resolves.toBe(false);
-      await result.current.openWithTarget("cursor");
-      await result.current.reveal();
-    });
-
-    expect(result.current.primaryUnavailableReason).toBe("This path is unavailable.");
-    expect(hostMocks.inspectPath).toHaveBeenCalledTimes(1);
-    expect(hostMocks.openTarget).not.toHaveBeenCalled();
-    expect(hostMocks.reveal).not.toHaveBeenCalled();
-    expect(editorMocks.openInDefaultEditor).not.toHaveBeenCalled();
-  });
-
-  it("keeps an external file unavailable on Web", async () => {
-    hostMocks.desktopAvailable = false;
-    statMocks.kind = null;
-    const { result } = renderHook(
-      () => useFileReferenceActions({ rawPath: "/tmp/outside.txt" }),
-      { wrapper: workspaceWrapper("/repo") },
-    );
-
-    expect(result.current.canOpenPrimary).toBe(false);
-    expect(result.current.pathKindPending).toBe(false);
-    expect(result.current.primaryUnavailableReason).toBe("This path is unavailable.");
-    await expect(result.current.openPrimary()).resolves.toBe("unavailable");
-    expect(editorMocks.openInDefaultEditor).not.toHaveBeenCalled();
-    expect(hostMocks.reveal).not.toHaveBeenCalled();
-    expect(viewerMocks.openTarget).not.toHaveBeenCalled();
-  });
-
-  it("keeps a home-relative file unavailable on Web", async () => {
-    hostMocks.desktopAvailable = false;
-    statMocks.kind = null;
-    const { result } = renderHook(
-      () => useFileReferenceActions({ rawPath: "~/.config/proliferate/settings.json" }),
-      { wrapper: workspaceWrapper("/repo") },
-    );
-
-    expect(result.current.canOpenPrimary).toBe(false);
-    expect(result.current.primaryUnavailableReason).toBe("This path is unavailable.");
-    await expect(result.current.openPrimary()).resolves.toBe("unavailable");
-    expect(hostMocks.getHomeDirectory).not.toHaveBeenCalled();
+    expect(bridgeMocks.openTarget).not.toHaveBeenCalled();
+    expect(bridgeMocks.reveal).not.toHaveBeenCalled();
   });
 });
 
-function workspaceWrapper(workspacePath: string | null) {
-  return function Wrapper({ children }: { children: ReactNode }) {
-    return (
-      <WorkspacePathProvider workspacePath={workspacePath}>
-        {children}
-      </WorkspacePathProvider>
-    );
-  };
+function problem(code: string, status: number): AnyHarnessError {
+  return new AnyHarnessError({
+    type: "about:blank",
+    title: "File request failed",
+    status,
+    code,
+  });
+}
+
+async function consumeMissingRecovery(result: {
+  readonly current: ReturnType<typeof useFileReferenceActions>;
+}) {
+  await act(async () => void await result.current.openPrimary());
+  await waitFor(() => expect(result.current.accessState).toEqual({
+    status: "unavailable",
+    reason: "not_found",
+  }));
 }

@@ -74,7 +74,7 @@ describe("launch selection availability", () => {
     });
   });
 
-  it("returns a canonical launch id for config-shaped Cursor live model values", () => {
+  it("rejects a config-shaped Cursor value absent from exact launch rows", () => {
     const agents = [
       launchAgent(
         "cursor",
@@ -88,15 +88,12 @@ describe("launch selection availability", () => {
     expect(launchSelectionIsAvailable(agents, {
       kind: "cursor",
       modelId: "composer-2.5[fast=true]",
-    })).toBe(true);
+    })).toBe(false);
     expect(resolveAvailableLaunchSelection(
       agents,
       { kind: "cursor", modelId: "composer-2.5[fast=true]" },
       null,
-    )).toEqual({
-      kind: "cursor",
-      modelId: "composer-2.5-fast",
-    });
+    )).toBeNull();
   });
 
   it("rejects model ids that do not map to the catalog menu", () => {
@@ -114,7 +111,7 @@ describe("launch selection availability", () => {
     )).toBeNull();
   });
 
-  it("keeps Claude Opus 4.8 base and 1M aliases on separate launch rows", () => {
+  it("does not authorize Claude presentation aliases as launch rows", () => {
     const agents = [
       launchAgent("claude", [
         model("us.anthropic.claude-opus-4-8", "Opus 4.8", false, ["claude-opus-4-8"]),
@@ -131,17 +128,11 @@ describe("launch selection availability", () => {
       agents,
       { kind: "claude", modelId: "claude-opus-4-8" },
       null,
-    )).toEqual({
-      kind: "claude",
-      modelId: "us.anthropic.claude-opus-4-8",
-    });
+    )).toBeNull();
     expect(resolveAvailableLaunchSelection(
       agents,
       { kind: "claude", modelId: "opus[1m]" },
       null,
-    )).toEqual({
-      kind: "claude",
-      modelId: "us.anthropic.claude-opus-4-8[1m]",
-    });
+    )).toBeNull();
   });
 });

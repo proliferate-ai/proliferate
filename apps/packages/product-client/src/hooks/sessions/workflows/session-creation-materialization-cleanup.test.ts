@@ -30,7 +30,6 @@ import {
 } from "#product/hooks/sessions/workflows/session-creation-supersession";
 
 const mocks = vi.hoisted(() => ({
-  applySessionLaunchDefaults: vi.fn(),
   createSession: vi.fn(),
   dismissSession: vi.fn(() => new Promise<void>(() => undefined)),
   resolveDesktopRuntimeUrlForWorkspace: vi.fn(async () => "http://runtime.test"),
@@ -60,10 +59,6 @@ vi.mock("#product/lib/access/anyharness/sessions", async (importOriginal) => ({
   ...await importOriginal<typeof import("#product/lib/access/anyharness/sessions")>(),
   createSession: mocks.createSession,
   dismissSession: mocks.dismissSession,
-}));
-
-vi.mock("#product/lib/workflows/sessions/session-launch-defaults", () => ({
-  applySessionLaunchDefaults: mocks.applySessionLaunchDefaults,
 }));
 
 vi.mock("#product/lib/access/anyharness/runtime-target", () => ({
@@ -97,7 +92,6 @@ beforeEach(() => {
   mocks.dismissSession.mockImplementation(() => new Promise<void>(() => undefined));
   mocks.writeTombstones.mockReset();
   mocks.writeTombstones.mockReturnValue(true);
-  mocks.applySessionLaunchDefaults.mockReset();
   mocks.createSession.mockReset();
   mocks.resolveDesktopRuntimeUrlForWorkspace.mockClear();
   mocks.shouldDiscardSupersededSessionCreationOverride = null;
@@ -164,60 +158,6 @@ describe("created runtime cleanup", () => {
     expect(isReplacedSessionTombstoned("workspace-1", "client-created")).toBe(false);
   });
 
-  it("publishes a created runtime when launch failure cleanup cannot retire it", async () => {
-    const pendingSessionId = "pending-retained-runtime";
-    const projectedRecord = createEmptySessionRecord(pendingSessionId, "claude", {
-      workspaceId: "workspace-1",
-      materializedSessionId: null,
-      modelId: "sonnet",
-    });
-    putSessionRecord(projectedRecord);
-    mocks.createSession.mockResolvedValue({
-      id: "runtime-retained",
-      workspaceId: "workspace-1",
-      agentKind: "claude",
-      modelId: "sonnet",
-      status: "idle",
-    });
-    mocks.applySessionLaunchDefaults.mockRejectedValue(new Error("defaults failed"));
-    mocks.writeTombstones.mockReturnValue(false);
-    mocks.dismissSession.mockRejectedValue(new Error("runtime unavailable"));
-    const upsertWorkspaceSessionRecord = vi.fn();
-    const localRuntime = { getConnection: vi.fn(), restart: vi.fn() };
-
-    await expect(materializeSessionCreation({
-      trackProductEvent: vi.fn(),
-      captureException: vi.fn(),
-      ensureCloudAgentCatalog: vi.fn(async () => ({ agents: [] })),
-      existingProjectedRecord: projectedRecord,
-      frozenDefaultLiveSessionControlValuesByAgentKind: {},
-      localRuntime,
-      cloudClient: null,
-      options: {
-        text: "",
-        agentKind: "claude",
-        modelId: "sonnet",
-        workspaceId: "workspace-1",
-      },
-      pendingSessionId,
-      resolvedModeId: null,
-      upsertWorkspaceSessionRecord,
-      workspaceId: "workspace-1",
-    })).resolves.toBe(pendingSessionId);
-
-    expect(mocks.resolveDesktopRuntimeUrlForWorkspace).toHaveBeenCalledWith(
-      "workspace-1",
-      localRuntime,
-    );
-    expect(getSessionRecord(pendingSessionId)?.materializedSessionId)
-      .toBe("runtime-retained");
-    expect(upsertWorkspaceSessionRecord).toHaveBeenCalledWith(
-      "workspace-1",
-      expect.objectContaining({ id: "runtime-retained" }),
-    );
-    removeSessionRecord(pendingSessionId);
-  });
-
   it("recreates a removed superseded shell when its runtime cannot be retired", async () => {
     const pendingSessionId = "pending-superseded-runtime";
     const projectedRecord = createEmptySessionRecord(pendingSessionId, "claude", {
@@ -253,7 +193,6 @@ describe("created runtime cleanup", () => {
         workspaceId: "workspace-1",
       },
       pendingSessionId,
-      resolvedModeId: null,
       upsertWorkspaceSessionRecord,
       workspaceId: "workspace-1",
     });
@@ -276,73 +215,8 @@ describe("created runtime cleanup", () => {
       "workspace-1",
       expect.objectContaining({ id: "runtime-superseded-retained" }),
     );
-    expect(mocks.applySessionLaunchDefaults).not.toHaveBeenCalled();
     unregister();
     removeSessionRecord(pendingSessionId);
-  });
-
-  it("retires a superseded runtime while launch defaults are still pending", async () => {
-    const pendingSessionId = "pending-blocked-defaults";
-    const projectedRecord = createEmptySessionRecord(pendingSessionId, "claude", {
-      workspaceId: "workspace-1",
-      materializedSessionId: null,
-      modelId: "sonnet",
-    });
-    const runtimeSession = {
-      id: "runtime-blocked-defaults",
-      workspaceId: "workspace-1",
-      agentKind: "claude",
-      modelId: "sonnet",
-      status: "idle",
-    };
-    const defaultsGate = deferred<{
-      session: typeof runtimeSession;
-      liveConfig: null;
-    }>();
-    putSessionRecord(projectedRecord);
-    mocks.createSession.mockResolvedValue(runtimeSession);
-    mocks.applySessionLaunchDefaults.mockReturnValue(defaultsGate.promise);
-    const unregister = registerSessionCreation(pendingSessionId);
-    const materialization = materializeSessionCreation({
-      trackProductEvent: vi.fn(),
-      captureException: vi.fn(),
-      ensureCloudAgentCatalog: vi.fn(async () => ({ agents: [] })),
-      existingProjectedRecord: projectedRecord,
-      frozenDefaultLiveSessionControlValuesByAgentKind: {},
-      localRuntime: null,
-      cloudClient: null,
-      options: {
-        text: "",
-        agentKind: "claude",
-        modelId: "sonnet",
-        workspaceId: "workspace-1",
-      },
-      pendingSessionId,
-      resolvedModeId: null,
-      upsertWorkspaceSessionRecord: vi.fn(),
-      workspaceId: "workspace-1",
-    });
-    await vi.waitFor(() => {
-      expect(mocks.applySessionLaunchDefaults).toHaveBeenCalledTimes(1);
-    });
-
-    supersedeInFlightSessionCreation(pendingSessionId);
-    commitSupersededSessionCreation(pendingSessionId);
-    removeSessionRecord(pendingSessionId);
-
-    await expect(materialization).resolves.toBe(pendingSessionId);
-    expect(committedReplacedSessionTombstonesForWorkspace("workspace-1"))
-      .toContain("runtime-blocked-defaults");
-    await vi.waitFor(() => {
-      expect(mocks.dismissSession).toHaveBeenCalledWith(
-        expect.anything(),
-        "runtime-blocked-defaults",
-      );
-    });
-    expect(getSessionRecord(pendingSessionId)).toBeNull();
-
-    defaultsGate.resolve({ session: runtimeSession, liveConfig: null });
-    unregister();
   });
 
   it("cleans a late runtime without publishing it when replacement wins the final-check race", async () => {
@@ -362,10 +236,6 @@ describe("created runtime cleanup", () => {
     putSessionRecord(projectedRecord);
     const createGate = deferred<typeof runtimeSession>();
     mocks.createSession.mockReturnValueOnce(createGate.promise);
-    mocks.applySessionLaunchDefaults.mockResolvedValue({
-      session: runtimeSession,
-      liveConfig: null,
-    });
     const closeSessionSlotStream = vi.fn();
     const removeWorkspaceSessionRecord = vi.fn();
     const replacementDismiss = vi.fn(async () => undefined);
@@ -401,7 +271,6 @@ describe("created runtime cleanup", () => {
         workspaceId: "workspace-1",
       },
       pendingSessionId,
-      resolvedModeId: null,
       upsertWorkspaceSessionRecord,
       workspaceId: "workspace-1",
     });
@@ -490,10 +359,6 @@ describe("created runtime cleanup", () => {
     };
     putSessionRecord(projectedRecord);
     mocks.createSession.mockResolvedValue(runtimeSession);
-    mocks.applySessionLaunchDefaults.mockResolvedValue({
-      session: runtimeSession,
-      liveConfig: null,
-    });
     const closeSessionSlotStream = vi.fn();
     const replacementDismiss = vi.fn(async () => undefined);
     let replacement: EmptySessionReplacementTransaction | null = null;
@@ -527,7 +392,6 @@ describe("created runtime cleanup", () => {
         workspaceId: "workspace-1",
       },
       pendingSessionId,
-      resolvedModeId: null,
       upsertWorkspaceSessionRecord,
       workspaceId: "workspace-1",
     });

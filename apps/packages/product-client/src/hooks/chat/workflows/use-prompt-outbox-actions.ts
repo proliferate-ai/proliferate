@@ -48,7 +48,7 @@ export function usePromptOutboxActions() {
       optimisticContentParts: retryEntry.contentParts,
       agentKind: slot.agentKind,
       modelId: slot.requestedModelId ?? slot.modelId ?? slot.agentKind,
-      ...(slot.modeId ? { modeId: slot.modeId } : {}),
+      launchControlValues: {},
       workspaceId,
       promptId: retryPromptId,
       clientSessionId: entry.clientSessionId,

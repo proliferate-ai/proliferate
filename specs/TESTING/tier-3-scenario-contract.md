@@ -273,13 +273,13 @@ harness tests do not encode unrelated provider-specific behavior.
 
 #### `LOCAL-4` — live configuration matrix
 
-After the harness has completed its cheap baseline turn, iterate the controls
-advertised by its live probe:
+After the harness has completed its cheap baseline turn, read its full
+`SessionLiveConfigSnapshot` and iterate its exact executable statement:
 
-- visible models eligible for qualification;
-- visible modes;
-- visible reasoning options and levels; and
-- other mutable ACP configuration controls.
+- every advertised model;
+- every generic control and allowed value, including unknown keys;
+- the complete current model/control values; and
+- both Codex `collaboration_mode` and execution-access `mode` independently.
 
 For each value, select it through the product UI, wait beyond the normal
 rejection window, and assert that the UI still shows the accepted value. A

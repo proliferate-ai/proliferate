@@ -67,6 +67,7 @@ function isConfiguredModeControl(
 function ToggleControl({ control }: { control: LiveSessionControlDescriptor }) {
   const nextValue = control.isEnabled ? control.disabledValue : control.enabledValue;
   const selectedOption = control.options.find((option) => option.selected) ?? null;
+  const accessibleName = control.detail ? `${control.label}: ${control.detail}` : control.label;
 
   if (control.key === "reasoning" || control.key === "fast_mode") {
     const presentation = resolveSessionToggleControlPresentation(control.key);
@@ -109,6 +110,7 @@ function ToggleControl({ control }: { control: LiveSessionControlDescriptor }) {
       active={!!control.isEnabled}
       label={control.label}
       detail={control.detail}
+      aria-label={accessibleName}
       trailing={showsPendingConfigIndicator(control.pendingState)
         ? <PendingConfigIndicator pendingState={control.pendingState} />
         : null}
@@ -126,6 +128,7 @@ function ToggleControl({ control }: { control: LiveSessionControlDescriptor }) {
 
 function SelectControl({ control }: { control: LiveSessionControlDescriptor }) {
   const selectedOption = control.options.find((option) => option.selected) ?? null;
+  const accessibleName = control.detail ? `${control.label}: ${control.detail}` : control.label;
 
   if (!control.settable) {
     return (
@@ -133,6 +136,7 @@ function SelectControl({ control }: { control: LiveSessionControlDescriptor }) {
         disabled
         label={control.label}
         detail={control.detail}
+        aria-label={accessibleName}
         data-session-config-control={control.key}
         data-session-config-selected={selectedOption?.value ?? ""}
       />
@@ -145,6 +149,7 @@ function SelectControl({ control }: { control: LiveSessionControlDescriptor }) {
         <ComposerControlButton
           label={control.label}
           detail={control.detail}
+          aria-label={accessibleName}
           trailing={showsPendingConfigIndicator(control.pendingState)
         ? <PendingConfigIndicator pendingState={control.pendingState} />
         : null}

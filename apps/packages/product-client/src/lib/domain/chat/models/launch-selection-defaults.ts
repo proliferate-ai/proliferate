@@ -2,10 +2,8 @@ import type {
   DesktopAgentLaunchAgent,
   DesktopAgentLaunchModel,
 } from "#product/lib/domain/agents/cloud-launch-catalog";
-import { agentsWithVisibleModels, agentWithVisibleModels } from "#product/lib/domain/chat/models/launch-visible-agents";
 import {
-  findLaunchModelByIdOrAlias,
-  resolveSavedLaunchModelId,
+  findLaunchModelById,
 } from "#product/lib/domain/chat/models/model-selection-ids";
 import type {
   ChatLaunchPreferences,
@@ -15,33 +13,13 @@ import type {
 export function resolveEffectiveLaunchSelection(
   agents: DesktopAgentLaunchAgent[],
   preferences: ChatLaunchPreferences,
-  catalogDefaultAgentKind?: string | null,
+  requestedAgentKind?: string | null,
 ): ModelSelectorSelection | null {
-  const visibleAgents = agentsWithVisibleModels(agents, {
-    selected: null,
-    visibilityOverrides: preferences.chatModelVisibilityOverridesByAgentKind,
-  });
-
-  // Resolution ladder: user preference ?? catalog default ?? first available.
-  const effectiveDefaultKind = preferences.defaultChatAgentKind || catalogDefaultAgentKind || "";
-  const preferredAgent = effectiveDefaultKind
-    ? visibleAgents.find((agent) => agent.kind === effectiveDefaultKind)
+  const effectiveKind = requestedAgentKind || preferences.defaultChatAgentKind || "";
+  const preferredAgent = effectiveKind
+    ? agents.find((agent) => agent.kind === effectiveKind && agent.models.length > 0)
     : undefined;
-  if (preferredAgent) {
-    const selection = resolveAgentLaunchSelection(preferredAgent, preferences);
-    if (selection) {
-      return selection;
-    }
-  }
-
-  for (const agent of visibleAgents) {
-    const selection = resolveAgentLaunchSelection(agent, preferences);
-    if (selection) {
-      return selection;
-    }
-  }
-
-  return null;
+  return preferredAgent ? resolveAgentLaunchSelection(preferredAgent, preferences) : null;
 }
 
 export function launchSelectionIsAvailable(
@@ -64,7 +42,7 @@ export function resolveLaunchableModelSelection(
     return null;
   }
 
-  const catalogModel = findLaunchModelByIdOrAlias(agent, selection.modelId);
+  const catalogModel = findLaunchModelById(agent, selection.modelId);
   if (catalogModel) {
     return {
       kind: selection.kind,
@@ -72,13 +50,7 @@ export function resolveLaunchableModelSelection(
     };
   }
 
-  const resolvedModelId = resolveSavedLaunchModelId(agent, selection.modelId.trim());
-  return resolvedModelId
-    ? {
-      kind: selection.kind,
-      modelId: resolvedModelId,
-    }
-    : null;
+  return null;
 }
 
 export function resolveAvailableLaunchSelection(
@@ -104,13 +76,7 @@ export function resolveConfiguredLaunchAgentSelection(
 
   const preferredAgent = agents.find((agent) => agent.kind === preferences.defaultChatAgentKind);
   if (preferredAgent) {
-    return resolveAgentLaunchSelection(
-      agentWithVisibleModels(preferredAgent, {
-        selected: null,
-        visibilityOverrides: preferences.chatModelVisibilityOverridesByAgentKind,
-      }),
-      preferences,
-    );
+    return resolveAgentLaunchSelection(preferredAgent, preferences);
   }
 
   return null;
@@ -122,18 +88,11 @@ function resolveAgentLaunchSelection(
 ): ModelSelectorSelection | null {
   const preferredModelId = preferences.defaultChatModelIdByAgentKind[agent.kind]?.trim();
   if (preferredModelId) {
-    const preferredModel = findLaunchModelByIdOrAlias(agent, preferredModelId);
+    const preferredModel = findLaunchModelById(agent, preferredModelId);
     if (preferredModel) {
       return {
         kind: agent.kind,
         modelId: preferredModel.id,
-      };
-    }
-    const resolvedModelId = resolveSavedLaunchModelId(agent, preferredModelId);
-    if (resolvedModelId) {
-      return {
-        kind: agent.kind,
-        modelId: resolvedModelId,
       };
     }
   }
@@ -150,7 +109,5 @@ function resolveAgentLaunchSelection(
 function resolveDefaultAgentModel(
   agent: DesktopAgentLaunchAgent,
 ): DesktopAgentLaunchModel | undefined {
-  return agent.models.find((model) =>
-    model.id === agent.defaultModelId || model.isDefault,
-  ) ?? agent.models[0];
+  return agent.models.find((model) => model.id === agent.defaultModelId);
 }

@@ -1,59 +1,125 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { useWorkspaceQuery } from "@anyharness/sdk-react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  normalizeRuntimeWorkspaceRoot,
+  type RuntimeWorkspaceRootState,
+  type WorkspaceFilesystemOriginState,
+} from "#product/lib/domain/files/path-references";
+import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
+import { useProductWorkspaceConnectionResolver } from "#product/providers/ProductWorkspaceConnectionProvider";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 
-interface WorkspacePathContextValue {
-  /** Absolute filesystem root of the active workspace, or null if none. */
-  workspacePath: string | null;
-  /**
-   * Resolve a raw path string (relative or absolute) to an absolute path on
-   * disk, or `null` if no workspace is active and the input is relative.
-   *
-   * - Absolute paths (`/…`) are returned unchanged.
-   * - `~/…` is left unresolved (callers that need home expansion should do
-   *   it themselves; we don't import the Tauri home helper here to keep this
-   *   provider sync + workspace-agnostic).
-   * - Relative paths are joined to `workspacePath`.
-   * - An optional `:line` or `:line:col` suffix is preserved on the result.
-   */
-  resolveAbsolute: (rawPath: string) => string | null;
+export interface WorkspacePathContextValue {
+  materializedWorkspaceId: string | null;
+  filesystemOrigin: WorkspaceFilesystemOriginState;
+  workspaceRoot: RuntimeWorkspaceRootState;
 }
 
+const PENDING_FILESYSTEM_ORIGIN: WorkspaceFilesystemOriginState = {
+  status: "pending",
+  origin: null,
+};
+const PENDING_WORKSPACE_ROOT: RuntimeWorkspaceRootState = {
+  status: "pending",
+  path: null,
+};
+
 const WorkspacePathContext = createContext<WorkspacePathContextValue>({
-  workspacePath: null,
-  resolveAbsolute: () => null,
+  materializedWorkspaceId: null,
+  filesystemOrigin: PENDING_FILESYSTEM_ORIGIN,
+  workspaceRoot: PENDING_WORKSPACE_ROOT,
 });
 
-export function WorkspacePathProvider({
-  workspacePath,
-  children,
-}: {
-  workspacePath: string | null;
-  children: ReactNode;
-}) {
-  const value = useMemo<WorkspacePathContextValue>(() => {
-    return {
-      workspacePath,
-      resolveAbsolute: (rawPath: string) => {
-        const trimmed = rawPath.trim();
-        if (trimmed.length === 0) return null;
+interface OriginResolution {
+  materializedWorkspaceId: string | null;
+  state: WorkspaceFilesystemOriginState;
+}
 
-        // Absolute — return as-is.
-        if (trimmed.startsWith("/")) return trimmed;
+export function WorkspacePathProvider({ children }: { children: ReactNode }) {
+  const resolveConnection = useProductWorkspaceConnectionResolver();
+  const selectedWorkspaceId = useSessionSelectionStore(
+    (state) => state.selectedWorkspaceId,
+  );
+  const selectedLogicalWorkspaceId = useSessionSelectionStore(
+    (state) => state.selectedLogicalWorkspaceId,
+  );
+  const { materializedWorkspaceId } = resolveSelectedWorkspaceIdentity({
+    selectedLogicalWorkspaceId,
+    materializedWorkspaceId: selectedWorkspaceId,
+  });
+  const workspaceQuery = useWorkspaceQuery({
+    workspaceId: materializedWorkspaceId,
+    enabled: materializedWorkspaceId !== null,
+  });
+  const [originResolution, setOriginResolution] = useState<OriginResolution>({
+    materializedWorkspaceId: null,
+    state: PENDING_FILESYSTEM_ORIGIN,
+  });
 
-        // ~ paths — leave for caller / shell layer to expand.
-        if (trimmed.startsWith("~/") || trimmed === "~") return null;
+  useEffect(() => {
+    let current = true;
+    setOriginResolution({
+      materializedWorkspaceId,
+      state: PENDING_FILESYSTEM_ORIGIN,
+    });
+    if (materializedWorkspaceId === null) {
+      return () => {
+        current = false;
+      };
+    }
 
-        // Relative — needs an active workspace.
-        if (!workspacePath) return null;
-
-        // Strip leading "./".
-        const cleaned = trimmed.startsWith("./") ? trimmed.slice(2) : trimmed;
-        const root = workspacePath.endsWith("/")
-          ? workspacePath.slice(0, -1)
-          : workspacePath;
-        return `${root}/${cleaned}`;
+    void resolveConnection(materializedWorkspaceId).then(
+      (resolved) => {
+        if (!current) return;
+        setOriginResolution({
+          materializedWorkspaceId,
+          state: {
+            status: "settled",
+            origin: resolved.filesystemOrigin,
+          },
+        });
       },
+      () => {
+        if (!current) return;
+        setOriginResolution({
+          materializedWorkspaceId,
+          state: { status: "rejected", origin: null },
+        });
+      },
+    );
+
+    return () => {
+      current = false;
     };
-  }, [workspacePath]);
+  }, [materializedWorkspaceId, resolveConnection]);
+
+  const filesystemOrigin = originResolution.materializedWorkspaceId === materializedWorkspaceId
+    ? originResolution.state
+    : PENDING_FILESYSTEM_ORIGIN;
+  const workspaceRoot = useMemo<RuntimeWorkspaceRootState>(() => {
+    if (materializedWorkspaceId === null || workspaceQuery.isPending) {
+      return PENDING_WORKSPACE_ROOT;
+    }
+    if (workspaceQuery.isError) {
+      return { status: "unavailable", path: null };
+    }
+    const path = normalizeRuntimeWorkspaceRoot(workspaceQuery.data?.path);
+    return path === null
+      ? { status: "unavailable", path: null }
+      : { status: "settled", path };
+  }, [materializedWorkspaceId, workspaceQuery.data?.path, workspaceQuery.isError, workspaceQuery.isPending]);
+  const value = useMemo<WorkspacePathContextValue>(() => ({
+    materializedWorkspaceId,
+    filesystemOrigin,
+    workspaceRoot,
+  }), [filesystemOrigin, materializedWorkspaceId, workspaceRoot]);
 
   return (
     <WorkspacePathContext.Provider value={value}>

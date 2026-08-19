@@ -1,5 +1,4 @@
 import type { PendingSessionConfigChangeStatus } from "#product/domain/sessions/pending-config";
-import type { ChatModelVisibilityOverridesByAgentKind } from "#product/lib/domain/preferences/user/session-defaults";
 
 export interface ModelSelectorSelection {
   kind: string;
@@ -9,7 +8,6 @@ export interface ModelSelectorSelection {
 export interface ChatLaunchPreferences {
   defaultChatAgentKind: string;
   defaultChatModelIdByAgentKind: Record<string, string>;
-  chatModelVisibilityOverridesByAgentKind?: ChatModelVisibilityOverridesByAgentKind;
 }
 
 export type ModelSelectionActionKind =

@@ -28,6 +28,7 @@ class ActionApprovalResponse(_CamelModel):
     provider: str
     tool: str
     integration_account_id: UUID
+    integration_account_grant_version: int
     integration_account_auth_version: int
     organization_id: UUID | None
     execution_session_id: UUID
@@ -64,7 +65,10 @@ def action_approval_response(record: ActionApprovalRecord) -> ActionApprovalResp
         provider=record.provider,
         tool=record.tool,
         integration_account_id=record.integration_account_id,
-        integration_account_auth_version=record.integration_account_auth_version,
+        integration_account_grant_version=record.integration_account_grant_version,
+        # Deprecated compatibility alias for N-1 clients. It is intentionally
+        # equal to the grant snapshot and can be removed after the client window.
+        integration_account_auth_version=record.integration_account_grant_version,
         organization_id=record.organization_id,
         execution_session_id=record.gateway_session_id,
         workspace_id=record.workspace_id,

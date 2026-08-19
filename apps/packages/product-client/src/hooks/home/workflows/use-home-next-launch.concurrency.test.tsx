@@ -240,7 +240,6 @@ describe("useHomeNextLaunch concurrent launches", () => {
       firstLaunch = result.current.launch({
         text: "first prompt",
         modelSelection: { kind: "codex", modelId: "gpt-5.4" },
-        modeId: null,
         launchControlValues: {},
         target: worktreeTarget,
       });
@@ -248,7 +247,6 @@ describe("useHomeNextLaunch concurrent launches", () => {
       secondLaunch = result.current.launch({
         text: "second prompt",
         modelSelection: { kind: "codex", modelId: "gpt-5.4" },
-        modeId: null,
         launchControlValues: {},
         target: worktreeTarget,
       });
@@ -301,7 +299,6 @@ describe("useHomeNextLaunch concurrent launches", () => {
       outcome = await result.current.launch({
         text: "one too many",
         modelSelection: { kind: "codex", modelId: "gpt-5.4" },
-        modeId: null,
         launchControlValues: {},
         target: worktreeTarget,
       });
@@ -354,7 +351,6 @@ describe("useHomeNextLaunch concurrent launches", () => {
       outcome = await result.current.launch({
         text: "launch in cloud",
         modelSelection: { kind: "codex", modelId: "gpt-5.4" },
-        modeId: null,
         launchControlValues: {},
         target: {
           kind: "cloud",
@@ -395,7 +391,6 @@ describe("useHomeNextLaunch concurrent launches", () => {
       await result.current.launch({
         text: "fail out of sight",
         modelSelection: { kind: "codex", modelId: "gpt-5.4" },
-        modeId: null,
         launchControlValues: {},
         target: worktreeTarget,
       });
@@ -423,7 +418,6 @@ describe("useHomeNextLaunch concurrent launches", () => {
       await result.current.launch({
         text: "fail while watching",
         modelSelection: { kind: "codex", modelId: "gpt-5.4" },
-        modeId: null,
         launchControlValues: {},
         target: worktreeTarget,
       });
@@ -454,7 +448,6 @@ describe("useHomeNextLaunch concurrent launches", () => {
       result.current.launch({
         text,
         modelSelection: { kind: "codex" as const, modelId: "gpt-5.4" },
-        modeId: null,
         launchControlValues: {},
         target,
       });

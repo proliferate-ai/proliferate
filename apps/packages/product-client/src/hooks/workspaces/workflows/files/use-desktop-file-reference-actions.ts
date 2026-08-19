@@ -3,17 +3,19 @@ import type {
   DesktopFilesBridge,
   OpenTarget,
 } from "@proliferate/product-client/host/desktop-bridge";
-import type {
-  FileReferencePathKind,
-  ResolvedFileReference,
-} from "#product/lib/domain/files/path-references";
-import type { DesktopPathInspectionState } from "#product/hooks/workspaces/workflows/files/use-desktop-path-inspection";
+import type { FileReferencePathKind } from "#product/lib/domain/files/path-references";
+
+export interface NativeFileReferenceCapability {
+  source: "desktop" | "workspace-companion";
+  absolutePath: string;
+  kind: FileReferencePathKind;
+  routeRevision: object;
+}
 
 interface UseDesktopFileReferenceActionsInput {
   files: DesktopFilesBridge | null;
-  reference: Pick<ResolvedFileReference, "absolutePath" | "workspacePath">;
-  pathKind: FileReferencePathKind | null;
-  desktopInspectionState: DesktopPathInspectionState;
+  capability: NativeFileReferenceCapability | null;
+  externalOpenCapability: NativeFileReferenceCapability | null;
   routeRevision: object;
   targets: readonly OpenTarget[];
   openInDefaultEditor: (
@@ -22,81 +24,74 @@ interface UseDesktopFileReferenceActionsInput {
   ) => Promise<boolean>;
 }
 
+/** Invocation-time native capability checks shared by DOM and native menus. */
 export function useDesktopFileReferenceActions({
   files,
-  reference,
-  pathKind,
-  desktopInspectionState,
+  capability,
+  externalOpenCapability,
   routeRevision,
   targets,
   openInDefaultEditor,
 }: UseDesktopFileReferenceActionsInput) {
-  const currentRouteRevisionRef = useRef(routeRevision);
-  currentRouteRevisionRef.current = routeRevision;
+  const currentRef = useRef({ files, capability, externalOpenCapability, targets });
+  currentRef.current = { files, capability, externalOpenCapability, targets };
   const openTargets = useMemo(
-    () => targets.filter((target) => target.kind !== "copy"),
-    [targets],
+    () => externalOpenCapability
+      ? targets.filter((target) => target.kind !== "copy")
+      : [],
+    [externalOpenCapability, targets],
   );
 
-  const currentNativePathKind = useCallback((
-    absolutePath: string,
-  ): FileReferencePathKind | null => {
+  const currentNativePathKind = useCallback((): FileReferencePathKind | null => {
+    const current = currentRef.current;
     if (
-      currentRouteRevisionRef.current !== routeRevision
-      || absolutePath !== reference.absolutePath
-      || !files
-      || pathKind === null
+      !current.files
+      || !current.capability
+      || current.capability.routeRevision !== routeRevision
+      || current.capability.routeRevision !== capability?.routeRevision
     ) {
       return null;
     }
-    if (reference.workspacePath) {
-      return pathKind;
-    }
-    return desktopInspectionState.status === "settled"
-      && desktopInspectionState.inspection.kind === pathKind
-      ? pathKind
-      : null;
-  }, [
-    desktopInspectionState,
-    files,
-    pathKind,
-    reference.absolutePath,
-    reference.workspacePath,
-    routeRevision,
-  ]);
+    return current.capability.kind;
+  }, [capability?.routeRevision, routeRevision]);
 
-  const openDefault = useCallback(async (
-    absolutePath: string | null = reference.absolutePath,
-  ) => {
-    if (!absolutePath) {
-      return false;
+  const currentExternalOpenCapability = useCallback(() => {
+    const current = currentRef.current;
+    if (
+      !current.files
+      || !current.externalOpenCapability
+      || current.externalOpenCapability.routeRevision !== routeRevision
+      || current.externalOpenCapability.routeRevision !== externalOpenCapability?.routeRevision
+    ) {
+      return null;
     }
-    const imperativePathKind = currentNativePathKind(absolutePath);
-    if (!imperativePathKind) {
-      return false;
-    }
-    return openInDefaultEditor(absolutePath, imperativePathKind);
-  }, [currentNativePathKind, openInDefaultEditor, reference.absolutePath]);
+    return current.externalOpenCapability;
+  }, [externalOpenCapability?.routeRevision, routeRevision]);
 
-  const reveal = useCallback(async (
-    absolutePath: string | null = reference.absolutePath,
-  ) => {
-    if (!absolutePath || currentNativePathKind(absolutePath) !== "directory" || !files) {
-      return;
-    }
-    await files.reveal(absolutePath);
-  }, [currentNativePathKind, files, reference.absolutePath]);
+  const openDefault = useCallback(async () => {
+    const current = currentExternalOpenCapability();
+    if (!current) return false;
+    return openInDefaultEditor(current.absolutePath, current.kind);
+  }, [currentExternalOpenCapability, openInDefaultEditor]);
+
+  const reveal = useCallback(async () => {
+    const current = currentRef.current;
+    if (!current.files || !current.capability || !currentNativePathKind()) return;
+    await current.files.reveal(current.capability.absolutePath);
+  }, [currentNativePathKind]);
 
   const openWithTarget = useCallback(async (targetId: string) => {
+    const current = currentRef.current;
+    const openCapability = currentExternalOpenCapability();
     if (
-      !reference.absolutePath
-      || currentNativePathKind(reference.absolutePath) === null
-      || !files
+      !current.files
+      || !openCapability
+      || !current.targets.some((target) => target.kind !== "copy" && target.id === targetId)
     ) {
       return;
     }
-    await files.openTarget(targetId, reference.absolutePath);
-  }, [currentNativePathKind, files, reference.absolutePath]);
+    await current.files.openTarget(targetId, openCapability.absolutePath);
+  }, [currentExternalOpenCapability]);
 
-  return { openDefault, openTargets, openWithTarget, reveal };
+  return { currentNativePathKind, openDefault, openTargets, openWithTarget, reveal };
 }

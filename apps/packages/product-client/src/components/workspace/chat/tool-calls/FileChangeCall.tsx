@@ -55,10 +55,22 @@ export function FileChangeCall({
 }: FileChangeCallProps) {
   const hasDiff = !!patch;
   const actionLabel = getOperationLabel(operation, status);
-  const displayPath = newWorkspacePath || workspacePath || newPath || path;
+  const rawReferencePath = newPath ?? path;
+  // A move whose destination lives outside the workspace has no structured
+  // path of its own; falling back to the source workspacePath would silently
+  // route file-reference actions to the pre-move location.
+  const structuredWorkspacePath = newPath != null
+    ? (typeof newWorkspacePath === "string" ? newWorkspacePath : null)
+    : workspacePath;
+  const displayPath = firstNonblankPath(
+    newWorkspacePath,
+    newPath,
+    workspacePath,
+    path,
+  );
   const fileReferenceActions = useFileReferenceActions({
-    rawPath: displayPath,
-    workspacePath: newWorkspacePath || workspacePath,
+    rawPath: rawReferencePath,
+    workspacePath: structuredWorkspacePath,
   });
   const handleOpenFile = useCallback(() => {
     void fileReferenceActions.openPrimary();
@@ -201,17 +213,19 @@ function buildLabel(
 ): ReactNode {
   const resolvedBasename = basename || extractBasename(path);
   const resolvedNewBasename = newBasename || (newPath ? extractBasename(newPath) : null);
+  const hasMoveDestination = typeof newPath === "string"
+    || typeof newWorkspacePath === "string"
+    || resolvedNewBasename !== null;
 
   const primaryChip = (
     <ToolFileChip
       basename={resolvedBasename}
-      pathLabel={workspacePath ?? path}
+      rawPath={path}
       workspacePath={workspacePath}
     />
   );
 
-  if (operation === "move" && (newPath || newWorkspacePath || resolvedNewBasename)) {
-    const nextPathLabel = newWorkspacePath ?? newPath ?? path;
+  if (operation === "move" && hasMoveDestination) {
     return (
       <div className="flex min-w-0 items-center gap-2">
         <span className="shrink-0 text-inherit">{actionLabel}</span>
@@ -219,7 +233,7 @@ function buildLabel(
         <ArrowRight className="icon-compact shrink-0 text-muted-foreground" />
         <ToolFileChip
           basename={resolvedNewBasename ?? resolvedBasename}
-          pathLabel={nextPathLabel}
+          rawPath={newPath ?? path}
           workspacePath={newWorkspacePath}
         />
       </div>
@@ -249,6 +263,10 @@ function buildStatsHint(
 function extractBasename(path: string): string {
   const segments = path.split(/[\\/]/).filter(Boolean);
   return segments[segments.length - 1] ?? path;
+}
+
+function firstNonblankPath(...paths: Array<string | null | undefined>): string {
+  return paths.find((candidate) => candidate?.trim()) ?? "";
 }
 
 function getOperationIcon(operation: FileChangeOperation) {

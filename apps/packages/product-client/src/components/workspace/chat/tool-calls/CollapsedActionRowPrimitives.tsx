@@ -99,12 +99,12 @@ export function ActionDisclosureRow({
 }
 
 export function ActionFileLink({
-  pathLabel,
+  rawPath,
   workspacePath,
   displayName,
 }: {
-  pathLabel: string;
-  /** A known workspace-relative path, or absent to infer from pathLabel. */
+  rawPath: string;
+  /** An explicitly supplied workspace-relative path; absent to classify rawPath. */
   workspacePath: string | null | undefined;
   displayName: string;
 }) {
@@ -112,7 +112,7 @@ export function ActionFileLink({
     // Keep FileReferenceBadge's semantic link color: the surrounding activity
     // row is intentionally muted, but this child is an actionable file target.
     <FileReferenceBadge
-      rawPath={pathLabel}
+      rawPath={rawPath}
       label={displayName}
       workspacePath={workspacePath}
       variant="inline"

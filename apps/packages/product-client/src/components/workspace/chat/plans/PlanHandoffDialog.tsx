@@ -5,22 +5,20 @@ import { ArrowRight, ExternalLink } from "#product/primitives/icons/core";
 import { FileText } from "#product/primitives/icons/workspace";
 import { ModalShell } from "#product/primitives/patterns/ModalShell";
 import { Textarea } from "#product/primitives/Textarea";
-import {
-  PlanHandoffModePicker,
-  type PlanHandoffModePickerProps,
-} from "#product/components/workspace/chat/plans/PlanHandoffModePicker";
 import { PlanReferencePreviewDialog } from "#product/components/workspace/chat/plans/PlanReferencePreviewDialog";
 import { ComposerModelSelectorControl } from "#product/components/workspace/chat/input/ComposerModelSelectorControl";
+import { SessionConfigControls } from "#product/components/workspace/chat/input/SessionConfigControls";
 import type { PromptDisplayPlanPart } from "#product/domain/chats/composer/prompt-display-parts";
 import type { PromptPlanAttachmentDescriptor } from "#product/domain/chats/composer/prompt-plan-attachments";
 import type { ModelSelectorProps } from "#product/lib/domain/chat/models/model-selector-types";
+import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
 
 interface PlanHandoffDialogProps {
   open: boolean;
   plan: PromptPlanAttachmentDescriptor | null;
   promptText: string;
   modelSelectorProps: ModelSelectorProps;
-  modePickerProps: PlanHandoffModePickerProps;
+  launchControls: LiveSessionControlDescriptor[];
   isSubmitting: boolean;
   onPromptTextChange: (value: string) => void;
   onClose: () => void;
@@ -32,7 +30,7 @@ export function PlanHandoffDialog({
   plan,
   promptText,
   modelSelectorProps,
-  modePickerProps,
+  launchControls,
   isSubmitting,
   onPromptTextChange,
   onClose,
@@ -137,16 +135,13 @@ export function PlanHandoffDialog({
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2">
               <ComposerModelSelectorControl modelSelectorProps={modelSelectorProps} />
-              <PlanHandoffModePicker
-                options={modePickerProps.options}
-                value={modePickerProps.value}
-                disabled={isSubmitting}
-                showHelperText={false}
-                onChange={modePickerProps.onChange}
+              <SessionConfigControls
+                agentKind={modelSelectorProps.currentModel?.kind ?? null}
+                controls={launchControls}
               />
             </div>
             <div className="text-ui-sm text-muted-foreground">
-              Model and handoff mode apply to this session only.
+              Model and target-observed launch controls apply to this session only.
             </div>
           </div>
         </div>

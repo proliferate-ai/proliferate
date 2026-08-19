@@ -17,6 +17,6 @@ without meeting that bar is how doc trees rot — don't.
 | [`BILLING.md`](BILLING.md) | Stripe ↔ server ↔ gateway ↔ meters |
 | [`MANAGED_RUNTIME.md`](MANAGED_RUNTIME.md) | Server ↔ supervisor ↔ worker: the one convergence story |
 | [`AGENT_AUTH.md`](AGENT_AUTH.md) | Client ↔ server ↔ runtime ↔ credential vaults |
-| [`MODELS.md`](MODELS.md) | Catalog + gateway: probes ↔ server ↔ LiteLLM ↔ providers |
+| [`MODELS.md`](MODELS.md) | Target launch options + session live configuration + model gateway |
 | [`WORKFLOWS.md`](WORKFLOWS.md) | Server ↔ runtime ↔ workspace placement |
 | [`DESKTOP_HOST.md`](DESKTOP_HOST.md) | Web bundle ↔ native shell ↔ sidecar seam |

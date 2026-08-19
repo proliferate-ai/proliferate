@@ -18,7 +18,7 @@ export interface ReviewPersonaPreference {
   prompt: string;
   agentKind: string;
   modelId: string;
-  modeId: string;
+  controlValues: Record<string, string>;
 }
 
 export type ReviewKindPreference = StoredReviewKindDefaults;
@@ -96,7 +96,7 @@ function sanitizeReviewKindPreference(value: unknown): ReviewKindPreference | nu
         : true,
     agentKind: typeof raw.agentKind === "string" ? raw.agentKind.trim() : "",
     modelId: typeof raw.modelId === "string" ? raw.modelId.trim() : "",
-    modeId: typeof raw.modeId === "string" ? raw.modeId.trim() : "",
+    controlValues: sanitizeControlValues(raw.controlValues),
     reviewers,
   };
 }
@@ -150,8 +150,20 @@ function sanitizeReviewPersonaPreference(value: unknown): ReviewPersonaPreferenc
     prompt,
     agentKind: typeof raw.agentKind === "string" ? raw.agentKind.trim() : "",
     modelId: typeof raw.modelId === "string" ? raw.modelId.trim() : "",
-    modeId: typeof raw.modeId === "string" ? raw.modeId.trim() : "",
+    controlValues: sanitizeControlValues(raw.controlValues),
   }];
+}
+
+function sanitizeControlValues(
+  value: unknown,
+): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return Object.fromEntries(Object.entries(value)
+    .filter((entry): entry is [string, string] => typeof entry[1] === "string")
+    .map(([key, entry]) => [key.trim(), entry.trim()])
+    .filter(([key, entry]) => Boolean(key && entry)));
 }
 
 function dedupeReviewPersonaPreferences(

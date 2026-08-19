@@ -16,6 +16,7 @@ use crate::persistence::Db;
 
 mod pending_prompt_protection_tests;
 mod subagent_lifecycle_tests;
+
 pub(crate) struct EnvVarGuard {
     name: &'static str,
     previous: Option<std::ffi::OsString>,
@@ -64,7 +65,6 @@ async fn send_message_real_actor_executes_idle_running_fifo_and_ignores_a_stale_
         .await
         .expect("start real target actor");
     assert_eq!(resumed.native_session_id.as_deref(), Some("native-target"));
-
     let idle = send_message(&state, "idle agent message")
         .await
         .expect("idle send");
@@ -72,7 +72,6 @@ async fn send_message_real_actor_executes_idle_running_fifo_and_ignores_a_stale_
     wait_for_queue_len(&state, 0).await;
     wait_for_actor_idle(&state).await;
     assert_eq!(prompt_texts(&script.request_log), ["idle agent message"]);
-
     let handle = state
         .acp_manager
         .get_ready_handle("target")
@@ -320,6 +319,7 @@ pub(crate) fn build_state(runtime_home: &Path, db: Db, seed: bool) -> AppState {
         AgentSeedStore::not_configured_dev(),
     )
     .expect("app state");
+    test_support::seed_scripted_claude_launch_options(&state.launch_options_service);
     if seed {
         let caller = session("caller", "workspace-a", "idle", "Exact Sender");
         let mut target = session("target", "workspace-b", "idle", "Target");
@@ -334,6 +334,8 @@ pub(crate) fn build_state(runtime_home: &Path, db: Db, seed: bool) -> AppState {
             .store()
             .insert(&target)
             .expect("target");
+        state.session_service.store().seed_empty_launch_intent("caller");
+        state.session_service.store().seed_empty_launch_intent("target");
     }
     state
 }
@@ -392,12 +394,7 @@ pub(crate) fn install_scripted_agent_env(script: &ScriptedAgent) -> (EnvVarGuard
 }
 
 pub(crate) fn write_scripted_agent(runtime_home: &Path) -> ScriptedAgent {
-    std::fs::create_dir_all(runtime_home.join("secrets")).expect("secrets directory");
-    std::fs::write(
-        runtime_home.join("secrets/global.env"),
-        "ANTHROPIC_API_KEY=test-not-a-real-key\nCLAUDE_CODE_USE_BEDROCK=0\n",
-    )
-    .expect("test credentials");
+    test_support::install_scripted_claude_auth(runtime_home);
     let native = runtime_home.join("agents/claude/native/claude");
     std::fs::create_dir_all(native.parent().expect("native parent")).expect("native directory");
     std::fs::write(&native, "#!/bin/sh\nexit 0\n").expect("native stub");
@@ -439,11 +436,10 @@ for raw_line in sys.stdin:
         })
     elif method == "session/new":
         native_session_id = "native-target"
-        emit({
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {"sessionId": native_session_id},
-        })
+        emit({"jsonrpc": "2.0", "id": request_id, "result": {
+            "sessionId": native_session_id, "configOptions": [{"id": "model", "name": "Model",
+            "category": "model", "type": "select", "currentValue": "haiku",
+            "options": [{"value": "haiku", "name": "Haiku"}]}]}})
     elif method == "session/load":
         native_session_id = message["params"]["sessionId"]
         open(control("load-seen"), "w", encoding="utf-8").close()

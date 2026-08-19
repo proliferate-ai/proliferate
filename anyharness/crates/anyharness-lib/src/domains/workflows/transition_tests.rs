@@ -973,7 +973,7 @@ fn fail_and_redo_on_paused_adhoc_mints_an_adhoc_replacement() {
         state.nodes[3].model = Some(super::definition::NodeModel {
             agent_kind: "codex".into(),
             model_id: Some("adhoc-pick".into()),
-            mode_id: None,
+            control_values: Default::default(),
         });
         let transition = expect_transition(next(
             &state,

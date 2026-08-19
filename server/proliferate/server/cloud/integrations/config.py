@@ -139,6 +139,7 @@ class IntegrationConfig:
     oauth_scopes: tuple[str, ...] = ()
     oauth_scopes_required: bool = False
     oauth_scope_policy: OAuthScopePolicy = "provider"
+    oauth_revocation_endpoint: str | None = None
     credential_validation: CredentialValidation | None = None
     headers: tuple[HeaderTemplate, ...] = ()
     query: tuple[QueryTemplate, ...] = ()
@@ -227,6 +228,11 @@ def serialize_definition_config(cfg: IntegrationConfig) -> str:
         "args": [_arg_to_json(a) for a in cfg.args],
         "env": [_env_to_json(e) for e in cfg.env],
     }
+    # Keep existing definition-security snapshots byte-stable when revocation
+    # is unsupported. Only providers with an endpoint gain a new security
+    # shape and require a new revision.
+    if cfg.oauth_revocation_endpoint is not None:
+        payload["oauthRevocationEndpoint"] = cfg.oauth_revocation_endpoint
     return json.dumps(payload, separators=(",", ":"), sort_keys=True)
 
 
@@ -369,6 +375,9 @@ def parse_definition_config(config_json_str: str) -> IntegrationConfig:
         oauth_scopes=tuple(str(scope) for scope in raw.get("oauthScopes", ())),
         oauth_scopes_required=bool(raw.get("oauthScopesRequired", False)),
         oauth_scope_policy=_oauth_scope_policy_from_json(raw.get("oauthScopePolicy", "provider")),
+        oauth_revocation_endpoint=(
+            str(raw["oauthRevocationEndpoint"]) if raw.get("oauthRevocationEndpoint") else None
+        ),
         credential_validation=_credential_validation_from_json(raw.get("credentialValidation")),
         headers=tuple(_header_from_json(h) for h in raw.get("headers", ())),
         query=tuple(_query_from_json(q) for q in raw.get("query", ())),

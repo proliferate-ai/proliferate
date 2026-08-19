@@ -35,12 +35,20 @@ export async function resolveSelectionConnection(
 
   const connectionStartedAt = startLatencyTimer();
   const workspaceConnection = cloudReadiness.kind === "local"
-    ? await resolveWorkspaceConnection(desktopRuntimeUrl, localWorkspaceId, deps.ssh ?? null, deps.cloudClient)
+    ? (await resolveWorkspaceConnection(
+      desktopRuntimeUrl,
+      localWorkspaceId,
+      deps.ssh ?? null,
+      deps.cloudClient,
+    )).connection
     : await deps.cache.refreshCloudWorkspaceConnection(cloudReadiness.cloudWorkspaceId)
       .then((connection) => ({
         runtimeUrl: connection.runtimeUrl,
         authToken: connection.accessToken ?? undefined,
         anyharnessWorkspaceId: connection.anyharnessWorkspaceId ?? "",
+        runtimeGeneration: connection.runtimeGeneration,
+        runtimeAccessKind: "proliferate-gateway" as const,
+        webSocketAuthTransport: connection.webSocketAuthTransport,
       }));
   logLatency("workspace.select.connection_resolved", {
     workspaceId: context.workspaceId,

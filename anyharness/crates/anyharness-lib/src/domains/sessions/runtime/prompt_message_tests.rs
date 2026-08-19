@@ -287,12 +287,7 @@ fn state_with_sessions(sessions: &[SessionRecord]) -> (AppState, AgentProgramGua
     let workspace_b = runtime_home.join("workspace-b");
     std::fs::create_dir_all(&workspace_a).expect("workspace A");
     std::fs::create_dir_all(&workspace_b).expect("workspace B");
-    std::fs::create_dir_all(runtime_home.join("secrets")).expect("secrets directory");
-    std::fs::write(
-        runtime_home.join("secrets/global.env"),
-        "ANTHROPIC_API_KEY=test-not-a-real-key\n",
-    )
-    .expect("test credential");
+    test_support::install_scripted_claude_auth(&runtime_home);
     let agent_program = runtime_home.join("claude-agent-stub");
     std::fs::write(&agent_program, "#!/bin/sh\nexit 0\n").expect("agent stub");
     crate::integrations::agent_cli::executable::make_executable(&agent_program)

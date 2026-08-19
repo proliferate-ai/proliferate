@@ -3,12 +3,15 @@ use crate::domains::agent_operations::model::{
     AgentConfigChoiceError, AgentLaunchSelectionError, RuntimeIdentity,
 };
 use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
-use crate::domains::agents::readiness::launch_options::ResolvedModelEffort;
+use crate::domains::agents::launch_options::{
+    HarnessLaunchControl, HarnessLaunchControlValue, HarnessLaunchDefaults, HarnessLaunchModel,
+    HarnessLaunchOptions, HarnessLaunchOptionsResponse, HarnessLaunchOptionsState,
+};
 use crate::domains::sessions::live_config::EffectiveLiveConfigValue;
 
 fn effective_fixture() -> (
     ActiveCatalog,
-    ResolvedWorkspaceLaunchOptions,
+    Vec<HarnessLaunchOptionsResponse>,
     String,
     String,
 ) {
@@ -16,150 +19,100 @@ fn effective_fixture() -> (
     let catalog_agent = catalog
         .agents()
         .iter()
-        .find(|agent| agent.session.models.len() > 1)
-        .expect("bundled agent with multiple models");
-    let catalog_model = &catalog_agent.session.models[0];
+        .find(|agent| agent.session.presentation_models.len() > 1)
+        .expect("bundled agent with presentation metadata");
+    let catalog_model = &catalog_agent.session.presentation_models[0];
     let agent_kind = catalog_agent.kind.clone();
     let model_id = catalog_model.id.clone();
-    let resolved = ResolvedWorkspaceLaunchOptions {
-        agents: vec![ResolvedLaunchAgentOption {
-            kind: agent_kind.clone(),
-            display_name: catalog_agent.display_name.clone(),
-            default_model_id: Some(model_id.clone()),
-            unattended_mode_id: catalog_agent.session.unattended_mode_id.clone(),
-            models: vec![ResolvedLaunchModelOption {
-                id: model_id.clone(),
-                display_name: catalog_model.display_name.clone(),
-                aliases: catalog_model.aliases.clone(),
-                is_default: true,
-                default_opt_in: None,
-                description: catalog_model.description.clone(),
-                provider: None,
-                status: Some(catalog_model.status),
-                effort: Some(ResolvedModelEffort {
-                    values: vec!["high".to_string()],
-                    default: Some("high".to_string()),
-                }),
-                live_effort_candidates: Vec::new(),
-                fast_mode: false,
-                modes: Some(vec!["mode-a".to_string()]),
+    let launch_options = vec![HarnessLaunchOptionsResponse {
+        harness_kind: agent_kind.clone(),
+        basis_revision: "basis-1".to_string(),
+        revision: 1,
+        state: HarnessLaunchOptionsState::Observed,
+        options: Some(HarnessLaunchOptions {
+            controls: vec![HarnessLaunchControl {
+                id: "mode".to_string(),
+                observed_label: Some("Mode".to_string()),
+                observed_description: None,
+                values: vec![HarnessLaunchControlValue {
+                    value: "mode-a".to_string(),
+                    observed_label: Some("Mode A".to_string()),
+                    observed_description: None,
+                }],
             }],
-        }],
-    };
-    (catalog, resolved, agent_kind, model_id)
+            defaults: HarnessLaunchDefaults {
+                model_id: Some(model_id.clone()),
+                control_values: Default::default(),
+            },
+            models: vec![HarnessLaunchModel {
+                id: model_id.clone(),
+                observed_name: None,
+                observed_description: None,
+            }],
+        }),
+        observed_at: Some("2026-08-19T00:00:00Z".to_string()),
+        probe_attempted_at: "2026-08-19T00:00:00Z".to_string(),
+        probe_failure_code: None,
+    }];
+    (catalog, launch_options, agent_kind, model_id)
 }
 
 #[test]
-fn effective_launch_view_preserves_catalog_universe_and_validates_only_executable_rows() {
-    let (catalog, resolved, agent_kind, model_id) = effective_fixture();
+fn launch_view_contains_only_observed_membership_with_exact_presentation_join() {
+    let (catalog, launch_options, agent_kind, model_id) = effective_fixture();
     let workspace = WorkspaceIdentity {
         runtime_id: RuntimeIdentity::new("runtime-1"),
         workspace_id: "workspace-target".to_string(),
     };
-    let mut view = project_launch_options(workspace.clone(), &catalog, resolved);
+    let view = project_launch_options(workspace.clone(), &catalog, launch_options);
 
     assert_eq!(view.workspace, workspace);
-    assert_eq!(view.agents.len(), catalog.agents().len());
-    let agent = view
-        .agents
+    assert_eq!(view.launch_options.len(), 1);
+    let response = view
+        .launch_options
         .iter()
-        .find(|agent| agent.agent_kind == agent_kind)
-        .expect("effective agent");
-    assert!(agent.executable);
-    assert!(
-        agent
+        .find(|response| response.harness_kind == agent_kind)
+        .expect("observed harness");
+    assert_eq!(
+        response
+            .options
+            .as_ref()
+            .expect("observed options")
             .models
             .iter()
-            .find(|model| model.id == model_id)
-            .expect("effective model")
-            .executable
+            .map(|model| model.id.as_str())
+            .collect::<Vec<_>>(),
+        vec![model_id.as_str()]
     );
-    let unavailable_model_id = agent
-        .models
+    let presentation = view
+        .presentation
         .iter()
-        .find(|model| model.id != model_id)
-        .expect("catalog-only unavailable model")
-        .id
-        .clone();
-    assert!(
-        !agent
-            .models
-            .iter()
-            .find(|model| model.id == unavailable_model_id)
-            .expect("unavailable model")
-            .executable
-    );
-    assert!(view
-        .validate_selection(&agent_kind, Some(&model_id), Some("mode-a"))
-        .is_ok());
-    assert_eq!(
-        view.validate_selection(&agent_kind, Some(&unavailable_model_id), None),
-        Err(AgentLaunchSelectionError::ModelUnavailable)
-    );
-    let unavailable_agent = view
-        .agents
-        .iter()
-        .find(|candidate| !candidate.executable)
-        .expect("catalog-only unavailable agent");
-    assert_eq!(
-        view.validate_selection(&unavailable_agent.agent_kind, None, None),
-        Err(AgentLaunchSelectionError::AgentUnavailable)
-    );
-
-    let effective_agent = view
-        .agents
-        .iter_mut()
-        .find(|agent| agent.agent_kind == agent_kind)
-        .expect("effective agent");
-    effective_agent.models[0]
-        .aliases
-        .push("model-alias".to_string());
-    let alternate = effective_agent
-        .models
-        .iter_mut()
-        .find(|model| model.id == unavailable_model_id)
-        .expect("alternate model");
-    alternate.executable = true;
-    alternate.unavailable_reason = None;
-    alternate.modes = Some(vec!["alternate-mode".to_string()]);
-    assert_eq!(
-        view.validate_selection(&agent_kind, None, Some("alternate-mode")),
-        Err(AgentLaunchSelectionError::ModeUnknown)
-    );
+        .find(|entry| entry.harness_kind == agent_kind)
+        .expect("exact-key presentation");
+    assert_eq!(presentation.models.len(), 1);
+    assert_eq!(presentation.models[0].id, model_id);
     assert!(view
         .validate_selection(
             &agent_kind,
-            Some(&unavailable_model_id),
-            Some("alternate-mode"),
+            Some(&model_id),
+            &[("mode".to_string(), "mode-a".to_string())].into(),
         )
         .is_ok());
     assert_eq!(
-        view.validate_selection(&agent_kind, Some("model-alias"), None)
-            .expect("alias selection")
-            .model_id
-            .as_deref(),
-        Some(model_id.as_str())
+        view.validate_selection(&agent_kind, Some("presentation-only"), &Default::default()),
+        Err(AgentLaunchSelectionError::ModelUnknown)
     );
 }
 
 #[test]
 fn legacy_session_without_auth_contexts_keeps_every_settable_acp_model_token() {
-    let (catalog, resolved, agent_kind, model_id) = effective_fixture();
+    let (catalog, _, _, _) = effective_fixture();
     let workspace = WorkspaceIdentity {
         runtime_id: RuntimeIdentity::new("runtime-1"),
         workspace_id: "workspace-target".to_string(),
     };
-    let mut launch = project_launch_options(workspace.clone(), &catalog, resolved);
     let raw_alias = "acp/live-alias-token".to_string();
     let raw_uncataloged = "provider/session-only-token".to_string();
-    launch
-        .agents
-        .iter_mut()
-        .find(|agent| agent.agent_kind == agent_kind)
-        .and_then(|agent| agent.models.iter_mut().find(|model| model.id == model_id))
-        .expect("launch model")
-        .aliases
-        .push(raw_alias.clone());
     let snapshot = EffectiveLiveConfigSnapshot {
         controls: vec![
             EffectiveLiveConfigControl {
@@ -198,14 +151,8 @@ fn legacy_session_without_auth_contexts_keeps_every_settable_acp_model_token() {
     let view = project_config_options(
         AgentIdentity::new(RuntimeIdentity::new("runtime-1"), "target-agent"),
         workspace.clone(),
-        agent_kind,
-        Some(model_id),
         catalog.catalog_version().to_string(),
         Some(snapshot),
-        &launch.agents,
-        // A legacy record with no agent_auth_contexts authorizes no
-        // catalog-only additions. Its live ACP vocabulary still governs.
-        &HashSet::new(),
     );
 
     assert_eq!(view.workspace, workspace);
@@ -239,22 +186,13 @@ fn legacy_session_without_auth_contexts_keeps_every_settable_acp_model_token() {
 }
 
 #[test]
-fn acp_alias_write_token_and_catalog_foreign_choice_are_kept_separate() {
-    let (catalog, resolved, agent_kind, model_id) = effective_fixture();
+fn live_snapshot_does_not_gain_target_launch_models() {
+    let (catalog, _, _, model_id) = effective_fixture();
     let workspace = WorkspaceIdentity {
         runtime_id: RuntimeIdentity::new("runtime-1"),
         workspace_id: "workspace-target".to_string(),
     };
-    let mut launch = project_launch_options(workspace.clone(), &catalog, resolved);
     let raw_alias = "vendor/model-alias".to_string();
-    launch
-        .agents
-        .iter_mut()
-        .find(|agent| agent.agent_kind == agent_kind)
-        .and_then(|agent| agent.models.iter_mut().find(|model| model.id == model_id))
-        .expect("launch model")
-        .aliases
-        .push(raw_alias.clone());
     let snapshot = EffectiveLiveConfigSnapshot {
         controls: vec![EffectiveLiveConfigControl {
             key: "model".to_string(),
@@ -279,12 +217,8 @@ fn acp_alias_write_token_and_catalog_foreign_choice_are_kept_separate() {
     let view = project_config_options(
         AgentIdentity::new(RuntimeIdentity::new("runtime-1"), "target-agent"),
         workspace,
-        agent_kind,
-        Some(raw_alias.clone()),
         catalog.catalog_version().to_string(),
         Some(snapshot),
-        &launch.agents,
-        &HashSet::from([model_id.clone()]),
     );
     let model = view
         .options
@@ -295,10 +229,7 @@ fn acp_alias_write_token_and_catalog_foreign_choice_are_kept_separate() {
         .values
         .iter()
         .any(|value| value.value == raw_alias && value.executable));
-    assert!(model
-        .values
-        .iter()
-        .any(|value| value.value == model_id && value.executable));
+    assert!(!model.values.iter().any(|value| value.value == model_id));
     assert_eq!(
         view.validate_choice("model_selector", &raw_alias)
             .expect("raw ACP alias")
@@ -306,21 +237,18 @@ fn acp_alias_write_token_and_catalog_foreign_choice_are_kept_separate() {
         raw_alias
     );
     assert_eq!(
-        view.validate_choice("model_selector", &model_id)
-            .expect("catalog-authorized foreign token")
-            .value,
-        model_id
+        view.validate_choice("model_selector", &model_id),
+        Err(AgentConfigChoiceError::ValueUnknown)
     );
 }
 
 #[test]
 fn non_settable_acp_values_stay_visible_but_unavailable() {
-    let (catalog, resolved, agent_kind, model_id) = effective_fixture();
+    let (catalog, _, _, model_id) = effective_fixture();
     let workspace = WorkspaceIdentity {
         runtime_id: RuntimeIdentity::new("runtime-1"),
         workspace_id: "workspace-target".to_string(),
     };
-    let launch = project_launch_options(workspace.clone(), &catalog, resolved);
     let raw_value = "live/current-only".to_string();
     let snapshot = EffectiveLiveConfigSnapshot {
         controls: vec![EffectiveLiveConfigControl {
@@ -339,12 +267,8 @@ fn non_settable_acp_values_stay_visible_but_unavailable() {
     let view = project_config_options(
         AgentIdentity::new(RuntimeIdentity::new("runtime-1"), "target-agent"),
         workspace,
-        agent_kind,
-        Some(raw_value.clone()),
         catalog.catalog_version().to_string(),
         Some(snapshot),
-        &launch.agents,
-        &HashSet::from([model_id.clone()]),
     );
 
     let model = view.options.first().expect("model control");
@@ -354,12 +278,10 @@ fn non_settable_acp_values_stay_visible_but_unavailable() {
         .any(|value| value.value == raw_value && !value.executable));
     assert_eq!(
         view.validate_choice("model", &raw_value),
-        Err(AgentConfigChoiceError::ValueUnavailable)
+        Err(AgentConfigChoiceError::ConfigUnavailable)
     );
     assert_eq!(
-        view.validate_choice("model", &model_id)
-            .expect("separate catalog choice")
-            .value,
-        model_id
+        view.validate_choice("model", &model_id),
+        Err(AgentConfigChoiceError::ConfigUnavailable)
     );
 }

@@ -2,9 +2,7 @@ use serde_json::{json, Value};
 
 use super::calls_helpers::{
     coding_session_workspace_id, cowork_agent_search_response_json,
-    cowork_agent_turns_response_json, initial_config_string, launch_agents_to_json,
-    mode_options_to_json, prompt_outcome_label, recommended_modes_by_agent_kind_json,
-    unattended_mode_for_agent,
+    cowork_agent_turns_response_json, launch_options_to_json, prompt_outcome_label,
 };
 use super::context::CoworkMcpContext;
 use super::tools::{
@@ -205,7 +203,7 @@ fn get_coding_workspace_launch_options(
     let workspaces = options
         .into_iter()
         .map(|option| {
-            let catalog = cowork_runtime.resolved_workspace_launch_options(&option.workspace.id)?;
+            let launch_options = cowork_runtime.harness_launch_options()?;
             let base_branch = cowork_runtime
                 .repo_default_branch_for_workspace(&option.workspace)?
                 .or(option.workspace.original_branch.clone())
@@ -219,7 +217,7 @@ fn get_coding_workspace_launch_options(
                 "currentBranch": option.workspace.current_branch,
                 "baseBranch": base_branch,
                 "createBlockReason": option.create_block_reason,
-                "agents": launch_agents_to_json(catalog),
+                "launchOptions": launch_options_to_json(launch_options),
             }))
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
@@ -289,36 +287,30 @@ fn get_coding_session_launch_options(
         args.cowork_workspace_id.as_deref(),
         None,
     )?;
-    let live_config = cowork_runtime.live_config_snapshot(parent_session_id)?;
-    let live_mode_control = live_config
-        .as_ref()
-        .and_then(|snapshot| snapshot.normalized_controls.mode.as_ref());
     let default_agent_kind = parent.agent_kind.clone();
-    let default_model_id = parent
-        .current_model_id
-        .clone()
-        .or(parent.requested_model_id.clone());
-    let catalog = cowork_runtime.resolved_workspace_launch_options(&managed.workspace_id)?;
-    let default_mode_id = unattended_mode_for_agent(&catalog, &default_agent_kind);
-    let recommended_modes_by_agent_kind = recommended_modes_by_agent_kind_json(&catalog);
+    let launch_options = cowork_runtime.harness_launch_options()?;
+    let target_defaults = launch_options
+        .iter()
+        .find(|response| response.harness_kind == default_agent_kind)
+        .and_then(|response| response.options.as_ref())
+        .map(|options| {
+            (
+                options.defaults.model_id.clone(),
+                options.defaults.control_values.clone(),
+            )
+        })
+        .unwrap_or_default();
     Ok(json!({
         "parentSessionId": parent_session_id,
         "coworkWorkspaceId": managed.public_id,
         "workspaceId": managed.workspace_id,
         "defaults": {
             "agentKind": default_agent_kind,
-            "modelId": default_model_id,
-            "modeId": default_mode_id,
-            "source": "cowork_parent_session_with_catalog_unattended_fallback"
+            "modelId": target_defaults.0,
+            "controlValues": target_defaults.1,
+            "source": "target_observed_harness_launch_options"
         },
-        "agents": launch_agents_to_json(catalog),
-        "mode": {
-            "recommendedModeId": default_mode_id,
-            "recommendedModeByAgentKind": recommended_modes_by_agent_kind,
-            "recommendedModeSource": "active catalog unattended modes; explicit modeId overrides this",
-            "acceptedModeIdSource": "modeId is stored as a launch hint on the coding session and applied by the child agent when supported",
-            "options": mode_options_to_json(live_mode_control),
-        },
+        "launchOptions": launch_options_to_json(launch_options),
     }))
 }
 
@@ -345,8 +337,11 @@ async fn create_coding_session(
     let workspace_id = managed.workspace_id.clone();
     let cowork_workspace_id = managed.public_id.clone();
     let harness_id = args.harness_id;
-    let model_id = initial_config_string(args.initial_config.as_ref(), &["modelId", "model"]);
-    let mode_id = initial_config_string(args.initial_config.as_ref(), &["modeId", "mode"]);
+    let (model_id, control_values) = args
+        .initial_config
+        .map(|config| (config.model_id, config.control_values))
+        .unwrap_or_default();
+    let selected_control_values = control_values.clone();
     let result = cowork_runtime
         .create_coding_session(
             parent_session_id,
@@ -356,7 +351,7 @@ async fn create_coding_session(
                 label: args.label,
                 harness_id,
                 model_id,
-                mode_id,
+                control_values,
                 wake_on_completion: args.wake_on_completion,
             },
         )
@@ -368,11 +363,6 @@ async fn create_coding_session(
         .current_model_id
         .clone()
         .or(result.session.requested_model_id.clone());
-    let applied_mode_id = result
-        .session
-        .current_mode_id
-        .clone()
-        .or(result.session.requested_mode_id.clone());
     Ok(json!({
         "coworkWorkspaceId": cowork_workspace_id,
         "workspaceId": workspace_id,
@@ -383,7 +373,7 @@ async fn create_coding_session(
         "appliedInitialConfig": {
             "harnessId": applied_harness_id,
             "modelId": applied_model_id,
-            "modeId": applied_mode_id,
+            "controlValues": selected_control_values,
         },
         "promptStatus": result.prompt_status,
         "wake": {
@@ -467,6 +457,15 @@ async fn get_coding_status(
     let status = cowork_runtime
         .coding_status_for_target(parent_session_id, args.cowork_agent_id.as_deref(), None)
         .await?;
+    let live_config = cowork_runtime.live_config_snapshot(&status.session.id)?;
+    let current_model_id = live_config
+        .as_ref()
+        .and_then(|snapshot| snapshot.current.model_id.clone())
+        .or(status.session.current_model_id)
+        .or(status.session.requested_model_id);
+    let current_control_values = live_config
+        .map(|snapshot| snapshot.current.control_values)
+        .unwrap_or_default();
     Ok(json!({
         "coworkAgentId": status.session_link.public_id,
         "codingSessionId": status.session.id,
@@ -475,8 +474,8 @@ async fn get_coding_status(
         "label": status.session_link.label,
         "status": status.session.status,
         "agentKind": status.session.agent_kind,
-        "modelId": status.session.current_model_id.or(status.session.requested_model_id),
-        "modeId": status.session.current_mode_id.or(status.session.requested_mode_id),
+        "modelId": current_model_id,
+        "controlValues": current_control_values,
         "wakeScheduled": status.wake_scheduled,
         "latestCompletion": status.latest_completion.map(|completion| json!({
             "completionId": completion.completion_id,

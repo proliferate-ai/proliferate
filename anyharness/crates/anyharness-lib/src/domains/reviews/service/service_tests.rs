@@ -4,7 +4,7 @@ use crate::app::test_support;
 use crate::domains::plans::service::PlanService;
 use crate::domains::plans::store::PlanStore;
 use crate::domains::reviews::model::{
-    ReviewAssignmentStatus, ReviewFeedbackJobState, ReviewKind, ReviewModeVerificationStatus,
+    ReviewAssignmentStatus, ReviewFeedbackJobState, ReviewKind, ReviewLaunchVerificationStatus,
     ReviewRoundStatus, ReviewRunStatus,
 };
 use crate::domains::reviews::service::{
@@ -83,7 +83,7 @@ fn reviewer() -> ReviewPersonaInput {
         prompt: "Find plan gaps.".to_string(),
         agent_kind: "claude".to_string(),
         model_id: Some("opus".to_string()),
-        mode_id: Some("bypassPermissions".to_string()),
+        control_values: [("mode".to_string(), "bypassPermissions".to_string())].into(),
     }
 }
 
@@ -180,8 +180,7 @@ fn link_reviewer_session_makes_reviewer_role_visible_immediately() {
             "parent-1",
             "child-1",
             Some("Plan skeptic".to_string()),
-            None,
-            ReviewModeVerificationStatus::Pending,
+            ReviewLaunchVerificationStatus::Pending,
         )
         .expect("link reviewer");
 
@@ -194,8 +193,8 @@ fn link_reviewer_session_makes_reviewer_role_visible_immediately() {
     assert_eq!(visible.session_link_id.as_deref(), Some(link_id.as_str()));
     assert_eq!(visible.status, ReviewAssignmentStatus::Reviewing);
     assert_eq!(
-        visible.mode_verification_status,
-        ReviewModeVerificationStatus::Pending
+        visible.launch_verification_status,
+        ReviewLaunchVerificationStatus::Pending
     );
 }
 
@@ -228,8 +227,7 @@ fn stop_active_run_for_parent_stops_review_and_returns_reviewer_sessions() {
             "parent-1",
             "child-1",
             Some("Plan skeptic".to_string()),
-            None,
-            ReviewModeVerificationStatus::Pending,
+            ReviewLaunchVerificationStatus::Pending,
         )
         .expect("link reviewer");
 
@@ -314,8 +312,7 @@ fn approved_terminal_round_creates_final_feedback_job() {
             "parent-1",
             "child-1",
             Some("Plan skeptic".to_string()),
-            None,
-            ReviewModeVerificationStatus::Pending,
+            ReviewLaunchVerificationStatus::Pending,
         )
         .expect("link reviewer");
 
@@ -407,8 +404,7 @@ fn final_round_revision_ready_closes_run_instead_of_error() {
             "parent-1",
             "child-1",
             Some("Plan skeptic".to_string()),
-            None,
-            ReviewModeVerificationStatus::Pending,
+            ReviewLaunchVerificationStatus::Pending,
         )
         .expect("link reviewer");
     let job = service
@@ -464,8 +460,7 @@ fn requested_changes_stay_feedback_ready_until_feedback_turn_is_recorded() {
             "parent-1",
             "child-1",
             Some("Plan skeptic".to_string()),
-            None,
-            ReviewModeVerificationStatus::Pending,
+            ReviewLaunchVerificationStatus::Pending,
         )
         .expect("link reviewer");
     let job = service
@@ -539,8 +534,7 @@ fn manual_feedback_jobs_are_not_due_until_delivery_has_been_attempted() {
             "parent-1",
             "child-1",
             Some("Plan skeptic".to_string()),
-            None,
-            ReviewModeVerificationStatus::Pending,
+            ReviewLaunchVerificationStatus::Pending,
         )
         .expect("link reviewer");
     let job = service
@@ -612,8 +606,7 @@ fn reviewer_session_can_be_reused_after_terminal_assignment() {
             "parent-1",
             "child-1",
             Some("Plan skeptic".to_string()),
-            None,
-            ReviewModeVerificationStatus::Pending,
+            ReviewLaunchVerificationStatus::Pending,
         )
         .expect("link reviewer");
     let job = service
@@ -651,8 +644,7 @@ fn reviewer_session_can_be_reused_after_terminal_assignment() {
             &next_assignment.id,
             "child-1",
             &link_id,
-            None,
-            ReviewModeVerificationStatus::Pending,
+            ReviewLaunchVerificationStatus::Pending,
         )
         .expect("reuse reviewer session");
     assert!(launched);
@@ -694,8 +686,7 @@ fn retry_launch_failure_restores_retryable_assignment_after_system_failure() {
             "parent-1",
             "child-1",
             Some("Plan skeptic".to_string()),
-            None,
-            ReviewModeVerificationStatus::Pending,
+            ReviewLaunchVerificationStatus::Pending,
         )
         .expect("link reviewer");
     service
@@ -798,8 +789,7 @@ fn retry_prompt_failure_restores_retryable_assignment_and_blocks_late_submission
             "parent-1",
             "child-1",
             Some("Plan skeptic".to_string()),
-            None,
-            ReviewModeVerificationStatus::Pending,
+            ReviewLaunchVerificationStatus::Pending,
         )
         .expect("link reviewer");
     service
@@ -829,8 +819,7 @@ fn retry_prompt_failure_restores_retryable_assignment_and_blocks_late_submission
             "parent-1",
             "child-retry-1",
             Some("Plan skeptic".to_string()),
-            None,
-            ReviewModeVerificationStatus::Pending,
+            ReviewLaunchVerificationStatus::Pending,
         )
         .expect("link retry reviewer");
 
@@ -906,8 +895,7 @@ fn retry_launch_update_does_not_resurrect_stopped_assignment() {
             "parent-1",
             "child-1",
             Some("Plan skeptic".to_string()),
-            None,
-            ReviewModeVerificationStatus::Pending,
+            ReviewLaunchVerificationStatus::Pending,
         )
         .expect("link reviewer");
     service
@@ -941,8 +929,7 @@ fn retry_launch_update_does_not_resurrect_stopped_assignment() {
             "parent-1",
             "child-retry-1",
             Some("Plan skeptic".to_string()),
-            Some("bypassPermissions"),
-            ReviewModeVerificationStatus::Verified,
+            ReviewLaunchVerificationStatus::Verified,
         )
         .expect_err("stopped review must reject retry reviewer link");
     assert!(matches!(link_after_stop, ReviewError::RetryNotAllowed));
@@ -962,8 +949,7 @@ fn retry_launch_update_does_not_resurrect_stopped_assignment() {
             &assignment.id,
             "child-retry-1",
             "retry-link-1",
-            Some("bypassPermissions"),
-            ReviewModeVerificationStatus::Verified,
+            ReviewLaunchVerificationStatus::Verified,
         )
         .expect("attempt launch update after stop");
     service
@@ -1029,8 +1015,7 @@ fn auto_feedback_turn_claim_starts_next_round_once() {
             "parent-1",
             "child-1",
             Some("Plan skeptic".to_string()),
-            None,
-            ReviewModeVerificationStatus::Pending,
+            ReviewLaunchVerificationStatus::Pending,
         )
         .expect("link reviewer");
     let job = service
@@ -1098,8 +1083,7 @@ fn stale_feedback_turn_cannot_advance_later_active_round() {
             "parent-1",
             "child-1",
             Some("Plan skeptic".to_string()),
-            None,
-            ReviewModeVerificationStatus::Pending,
+            ReviewLaunchVerificationStatus::Pending,
         )
         .expect("link reviewer");
     let first_job = service
@@ -1140,8 +1124,7 @@ fn stale_feedback_turn_cannot_advance_later_active_round() {
             &second_assignment.id,
             "child-1",
             &link_id,
-            None,
-            ReviewModeVerificationStatus::Pending,
+            ReviewLaunchVerificationStatus::Pending,
         )
         .expect("launch second assignment"));
     let second_job = service
@@ -1276,8 +1259,7 @@ fn deleted_queued_feedback_prompt_is_reset_for_retry_without_seq_misattribution(
             "parent-1",
             "child-1",
             Some("Plan skeptic".to_string()),
-            None,
-            ReviewModeVerificationStatus::Pending,
+            ReviewLaunchVerificationStatus::Pending,
         )
         .expect("link reviewer");
     let job = service
@@ -1476,8 +1458,7 @@ fn final_feedback_turn_stops_run_when_max_rounds_reached() {
             "parent-1",
             "child-1",
             Some("Plan skeptic".to_string()),
-            None,
-            ReviewModeVerificationStatus::Pending,
+            ReviewLaunchVerificationStatus::Pending,
         )
         .expect("link reviewer");
     let job = service

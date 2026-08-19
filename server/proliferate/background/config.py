@@ -34,6 +34,8 @@ CLOUD_SANDBOX_ORPHAN_REAP_TASK = "cloud_sandboxes.orphan_reap"
 WORKFLOW_DELIVER_TASK = "workflows.deliver"
 WORKFLOW_OBSERVE_TASK = "workflows.observe"
 WORKFLOW_CANCEL_TASK = "workflows.cancel"
+INTEGRATION_REVOCATION_PROCESS_TASK = "integrations.revocation.process"
+INTEGRATION_REVOCATION_SWEEP_TASK = "integrations.revocation.sweep"
 
 TASK_ROUTES: dict[str, dict[str, str]] = {
     HEALTH_NOOP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
@@ -44,6 +46,8 @@ TASK_ROUTES: dict[str, dict[str, str]] = {
     WORKFLOW_DELIVER_TASK: {"queue": DEFAULT_QUEUE},
     WORKFLOW_OBSERVE_TASK: {"queue": DEFAULT_QUEUE},
     WORKFLOW_CANCEL_TASK: {"queue": DEFAULT_QUEUE},
+    INTEGRATION_REVOCATION_PROCESS_TASK: {"queue": DEFAULT_QUEUE},
+    INTEGRATION_REVOCATION_SWEEP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
 }
 
 

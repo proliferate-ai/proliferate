@@ -181,7 +181,7 @@ export interface WaitForDesktopByokSyncOptions {
  * Waits (bounded) until the Desktop renderer has fetched `GET /state?surface=local`
  * and pushed the api_key source into the controller-local candidate AnyHarness —
  * observed as the selected harness becoming LAUNCHABLE in the runtime (a
- * non-empty `models` list on `GET /v1/agents/launch-options`). The world scrubs
+ * non-empty `models` list on `GET /v1/agents/{kind}/launch-options`). The world scrubs
  * all ambient provider/gateway keys, so the ONLY way the harness becomes
  * launchable is the api_key push — observing launchability IS observing the
  * BYOK sync. Fixtures NEVER push AnyHarness state directly; this only reads the

@@ -20,18 +20,15 @@ import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-st
 import { useCoworkUiStore } from "#product/stores/cowork/cowork-ui-store";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
-import { WorkspacePathProvider } from "#product/providers/WorkspacePathProvider";
 
 interface CoworkWorkspaceShellProps {
   workspaceId: string | null;
-  workspacePath: string | null;
   visible?: boolean;
   fallbackTitle?: string | null;
 }
 
 export function CoworkWorkspaceShell({
   workspaceId,
-  workspacePath,
   visible = true,
   fallbackTitle,
 }: CoworkWorkspaceShellProps) {
@@ -114,11 +111,10 @@ export function CoworkWorkspaceShell({
   });
 
   return (
-    <WorkspacePathProvider workspacePath={workspacePath}>
-      <div
-        className={`h-screen flex overflow-hidden ${chromeClasses.root}`}
-        data-telemetry-block
-      >
+    <div
+      className={`h-screen flex overflow-hidden ${chromeClasses.root}`}
+      data-telemetry-block
+    >
         <div
           id="cowork-sidebar"
           className={`flex shrink-0 flex-col overflow-hidden bg-sidebar ${
@@ -223,7 +219,6 @@ export function CoworkWorkspaceShell({
             </div>
           </div>
         </div>
-      </div>
-    </WorkspacePathProvider>
+    </div>
   );
 }

@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearWorktreeAutoDeleteLimitAdoption,
-  hasAppliedModelVisibilityDefaultsReset,
   hasPendingWorktreeAutoDeleteLimitAdoption,
   selectPersistedUserPreferencesSlice,
 } from "#product/lib/domain/preferences/persisted-metadata";
@@ -89,11 +88,13 @@ describe("user preference migration", () => {
     const preferences = useUserPreferencesStore.getState();
     expect(preferences.defaultChatAgentKind).toBe("claude");
     expect(preferences.defaultChatModelIdByAgentKind).toEqual({
-      claude: "sonnet",
+      claude: "claude-sonnet-4-5",
     });
 
     const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
-    expect(persisted.defaultChatModelIdByAgentKind).toEqual({ claude: "sonnet" });
+    expect(persisted.defaultChatModelIdByAgentKind).toEqual({
+      claude: "claude-sonnet-4-5",
+    });
     expect(persisted).not.toHaveProperty("defaultChatModelId");
   });
 
@@ -202,7 +203,7 @@ describe("user preference migration", () => {
     expect(persisted.acknowledgedAvailableVersion).toBeUndefined();
   });
 
-  it("preserves unrelated unknown keys while marking model visibility defaults reset", async () => {
+  it("preserves unrelated unknown keys without adding retired model-visibility metadata", async () => {
     memory.values.set("user_preferences", {
       ...USER_PREFERENCE_DEFAULTS,
       futurePreference: true,
@@ -211,7 +212,8 @@ describe("user preference migration", () => {
     await bootstrapUserPreferencesForTest();
     const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
     expect(persisted.futurePreference).toBe(true);
-    expect(hasAppliedModelVisibilityDefaultsReset(persisted)).toBe(true);
+    expect(persisted.futurePreference).toBe(true);
+    expect(persisted.modelVisibilityDefaultsReset).toBeUndefined();
   });
 
   it("preserves unrelated unknown keys when hydration rewrites known preferences", async () => {
@@ -290,11 +292,11 @@ describe("user preference migration", () => {
 
     expect(result.changed).toBe(true);
     expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
-      claude: "haiku",
+      claude: "claude-haiku-4-5",
     });
   });
 
-  it("normalizes Claude legacy model IDs in model maps", () => {
+  it("preserves exact Claude model IDs in model maps", () => {
     const result = migrateUserPreferences({
       ...USER_PREFERENCE_DEFAULTS,
       defaultChatModelIdByAgentKind: {
@@ -303,9 +305,9 @@ describe("user preference migration", () => {
       },
     });
 
-    expect(result.changed).toBe(true);
+    expect(result.changed).toBe(false);
     expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
-      claude: "opus[1m]",
+      claude: "claude-opus-4-5",
       codex: "gpt-5.4",
     });
   });
@@ -332,6 +334,7 @@ describe("user preference migration", () => {
       claude: {
         reasoning: "extended",
         fast_mode: "enabled",
+        temperature: "1",
       },
     });
   });
@@ -477,7 +480,7 @@ describe("user preference migration", () => {
               prompt: "Find planning gaps.",
               agentKind: "codex",
               modelId: "gpt-5.4",
-              modeId: "read-only",
+              controlValues: { mode: "read-only" },
             },
           ],
         },
@@ -496,7 +499,7 @@ describe("user preference migration", () => {
           prompt: "Find planning gaps.",
           agentKind: "codex",
           modelId: "gpt-5.4",
-          modeId: "read-only",
+          controlValues: { mode: "read-only" },
         },
       ],
     });

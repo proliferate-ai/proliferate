@@ -67,13 +67,13 @@ fn the_node_rows_own_pick_beats_the_definition() {
     let definition = definition_with_model(Some(NodeModel {
         agent_kind: "codex".into(),
         model_id: Some("definition-model".into()),
-        mode_id: None,
+        control_values: Default::default(),
     }));
     let node = node(
         Some(NodeModel {
             agent_kind: "claude".into(),
             model_id: Some("row-model".into()),
-            mode_id: Some("row-mode".into()),
+            control_values: [("mode".to_string(), "row-mode".to_string())].into(),
         }),
         Some("plan"),
     );
@@ -82,7 +82,7 @@ fn the_node_rows_own_pick_beats_the_definition() {
         (
             "claude".to_string(),
             Some("row-model".to_string()),
-            Some("row-mode".to_string())
+            [("mode".to_string(), "row-mode".to_string())].into()
         )
     );
 }
@@ -92,11 +92,11 @@ fn a_defined_row_resolves_through_the_frozen_definition() {
     let definition = definition_with_model(Some(NodeModel {
         agent_kind: "codex".into(),
         model_id: None,
-        mode_id: None,
+        control_values: Default::default(),
     }));
     assert_eq!(
         launch_model(&node(None, Some("plan")), &definition),
-        ("codex".to_string(), None, None)
+        ("codex".to_string(), None, Default::default())
     );
 }
 
@@ -104,11 +104,11 @@ fn a_defined_row_resolves_through_the_frozen_definition() {
 fn no_pick_anywhere_falls_back_to_the_app_default() {
     assert_eq!(
         launch_model(&node(None, None), &definition_with_model(None)),
-        (DEFAULT_WORKFLOW_AGENT_KIND.to_string(), None, None)
+        (DEFAULT_WORKFLOW_AGENT_KIND.to_string(), None, Default::default())
     );
     assert_eq!(
         launch_model(&node(None, Some("plan")), &definition_with_model(None)),
-        (DEFAULT_WORKFLOW_AGENT_KIND.to_string(), None, None)
+        (DEFAULT_WORKFLOW_AGENT_KIND.to_string(), None, Default::default())
     );
 }
 

@@ -78,21 +78,20 @@ export function createAgentsPlaygroundRuntimeTransport({
       });
     }
 
-    if (method === "GET" && path === "/v1/agents/launch-options") {
-      return jsonResponse({ agents: [launchOptions(agent)] });
-    }
-
-    // The composed observation surface (model-catalog.md "Runtime routes"):
-    // GET is the polled status, POST .../refresh is the param-less manual
-    // poke — both answer with the same composed status body.
-    const modelSnapshotMatch = path.match(
-      /^\/v1\/agents\/([^/]+)\/model-snapshot(\/refresh)?$/,
+    const launchOptionsMatch = path.match(
+      /^\/v1\/agents\/([^/]+)\/launch-options(\/refresh)?$/,
     );
-    if (modelSnapshotMatch && method === "GET" && !modelSnapshotMatch[2]) {
-      return jsonResponse(modelSnapshotStatus(agent.kind));
-    }
-    if (modelSnapshotMatch && method === "POST" && modelSnapshotMatch[2]) {
-      return jsonResponse(modelSnapshotStatus(agent.kind), 202);
+    if (launchOptionsMatch) {
+      const kind = decodeURIComponent(launchOptionsMatch[1] ?? "");
+      if (kind !== agent.kind) {
+        return jsonResponse({ detail: `Unknown playground agent: ${kind}` }, 404);
+      }
+      if (method === "GET" && !launchOptionsMatch[2]) {
+        return jsonResponse(harnessLaunchOptions(agent));
+      }
+      if (method === "POST" && launchOptionsMatch[2]) {
+        return jsonResponse(harnessLaunchOptions(agent));
+      }
     }
 
     throw new Error(
@@ -143,38 +142,24 @@ function runningReconcile(kind: string): ReconcileAgentsResponse {
   };
 }
 
-function launchOptions(agent: AgentSummary) {
+function harnessLaunchOptions(agent: AgentSummary) {
   return {
-    kind: agent.kind,
-    displayName: agent.displayName,
-    defaultModelId: "model-default",
-    models: [
-      { id: "model-default", displayName: "Recommended", provider: "provider", isDefault: true },
-      { id: "model-fast", displayName: "Fast", provider: "provider", isDefault: false },
-    ],
-  };
-}
-
-function modelSnapshotStatus(kind: string) {
-  return {
-    agent: kind,
-    schemaVersion: 2,
-    probeEngine: "owner",
-    state: "idle",
-    probedAt: "2026-07-18T18:00:00Z",
-    snapshotAgeSeconds: 120,
-    modelCount: 2,
-    modeCount: 1,
-    models: [
-      { id: "model-default", name: "Recommended", provider: "provider" },
-      { id: "model-fast", name: "Fast", provider: "provider" },
-    ],
-    modes: [{ id: "build", name: "Build" }],
-    attestation: { name: kind, version: "playground" },
-    installIdentity: { role: "agent_process", version: "playground", source: "pinned_archive" },
-    lastAttempt: { at: "2026-07-18T18:00:00Z", outcome: "ok", detail: null },
-    lastError: null,
-    warnings: [],
+    harnessKind: agent.kind,
+    basisRevision: "playground-basis",
+    revision: 1,
+    state: "observed",
+    options: {
+      models: [
+        { id: "model-default", observedName: "Recommended", observedDescription: null },
+        { id: "model-fast", observedName: "Fast", observedDescription: null },
+      ],
+      controls: [],
+      defaults: { modelId: null, controlValues: {} },
+    },
+    observedAt: "2026-07-18T18:00:00Z",
+    probeAttemptedAt: "2026-07-18T18:00:00Z",
+    probeFailureCode: null,
+    readiness: "ready",
   };
 }
 

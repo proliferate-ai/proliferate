@@ -196,11 +196,10 @@ pub(in crate::live::sessions) enum SessionCommand {
     SetConfigOption {
         config_id: String,
         value: String,
-        /// The catalog validated this value as a model for the session's
-        /// recorded auth contexts; model requests may then bypass the
-        /// harness-advertised value list (post-set verification still
-        /// decides the outcome).
-        catalog_authorized_model: bool,
+        /// This exact session's latest canonical live snapshot includes the
+        /// requested model. Model requests may then bypass a stale raw ACP
+        /// select list; exact post-set confirmation still decides the outcome.
+        live_snapshot_authorized_model: bool,
         respond_to: oneshot::Sender<Result<ConfigApplyState, SetConfigOptionCommandError>>,
     },
     ResolveInteraction {

@@ -20,15 +20,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings as app_settings
 from proliferate.db.store import organizations as organization_store
+from proliferate.db.store.integrations import action_approvals as action_approvals_store
 from proliferate.db.store.integrations.accounts import (
     IntegrationAccountRecord,
     delete_account,
     get_account,
+    get_account_for_owner_locked,
     get_account_for_user_definition,
 )
 from proliferate.db.store.integrations.authorization_attempts import (
+    acquire_authorization_attempt_lock,
     commit_authorization_attempt,
     create_authorization_attempt,
+    supersede_authorization_attempts,
     terminalize_authorization_attempt,
 )
 from proliferate.db.store.integrations.definition_security_revisions import (
@@ -41,6 +45,7 @@ from proliferate.db.store.integrations.definitions import (
     list_definitions_visible_to_org,
     list_seed_definitions,
 )
+from proliferate.db.store.integrations.oauth_flows import cancel_active_oauth_flows
 from proliferate.db.store.integrations.policies import (
     get_policy,
     list_policies_for_org,
@@ -83,6 +88,9 @@ from proliferate.server.cloud.integrations.oauth import (
     complete_oauth_callback,
     get_oauth_flow_status,
     start_oauth_flow,
+)
+from proliferate.server.cloud.integrations.revocation import (
+    stage_revocation_for_disconnect,
 )
 from proliferate.server.organizations.domain.policy import organization_admin_roles
 
@@ -467,10 +475,60 @@ async def remove_integration_account(
     user_id: UUID,
     account_id: UUID,
 ) -> None:
-    """Delete an integration account (and its tool-schema cache) owned by ``user_id``."""
-    account = await get_account(db, account_id)
-    if account is None or account.owner_user_id != user_id:
+    """Commit an immediate local cutoff and stage bounded upstream revocation."""
+
+    identity = await get_account(db, account_id)
+    if identity is None or identity.owner_user_id != user_id:
         raise CloudApiError("not_found", "Integration account was not found.", status_code=404)
+    await acquire_authorization_attempt_lock(
+        db,
+        owner_user_id=user_id,
+        definition_id=identity.definition_id,
+    )
+    account = await get_account_for_owner_locked(
+        db,
+        account_id=account_id,
+        owner_user_id=user_id,
+    )
+    if account is None:
+        raise CloudApiError("not_found", "Integration account was not found.", status_code=404)
+    definition = await get_definition(db, account.definition_id)
+    if definition is None:
+        raise CloudApiError("not_found", "Integration was not found.", status_code=404)
+
+    await supersede_authorization_attempts(
+        db,
+        owner_user_id=user_id,
+        definition_id=account.definition_id,
+        failure_code="disconnected",
+    )
+    await cancel_active_oauth_flows(
+        db,
+        owner_user_id=user_id,
+        definition_id=account.definition_id,
+        failure_code="disconnected",
+    )
+    revoked_approvals = await action_approvals_store.revoke_active_for_account(
+        db,
+        integration_account_id=account_id,
+    )
+    for transition in revoked_approvals:
+        await action_approvals_store.record_event(
+            db,
+            approval_id=transition.approval.id,
+            event_type="revoked",
+            from_status=transition.from_status,
+            to_status="revoked",
+            actor_type="user",
+            actor_user_id=user_id,
+            actor_runtime_worker_id=None,
+            safe_action_summary=transition.approval.safe_summary,
+        )
+    await stage_revocation_for_disconnect(
+        db,
+        account=account,
+        definition=definition,
+    )
     await delete_tool_cache(db, account_id)
     await delete_account(db, account_id)
 

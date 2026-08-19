@@ -8,11 +8,7 @@ import type {
   ModelSelectorSelection,
 } from "#product/lib/domain/chat/models/model-selector-types";
 import type { LiveSessionControlDescriptor } from "#product/lib/domain/chat/session-controls/session-controls";
-import type { ConfiguredSessionControlValue } from "#product/lib/domain/chat/session-controls/presentation";
-import type {
-  HomeNextDestination,
-  ModelAvailabilityState,
-} from "#product/lib/domain/home/home-next-launch";
+import type { ModelAvailabilityState } from "#product/lib/domain/home/home-next-launch";
 
 /**
  * Adapters that let the home screen drive the SAME composer controls the chat
@@ -65,9 +61,9 @@ export function buildHomeModelSelectorProps({
         displayName: model.displayName,
         actionKind: "select" as const,
         isSelected: model.isSelected,
-        // Never marked here: Home is pre-session, so no target has had the
-        // chance to refuse anything yet. A refusal is a fact about one target,
-        // and Home has not picked one.
+        // Never marked here: every row already came from the selected target's
+        // launch-option observation. Create revalidates the exact selection;
+        // refusal state remains a fact about an attempted session launch.
         isUnsupported: false,
       })),
     })),
@@ -77,66 +73,10 @@ export function buildHomeModelSelectorProps({
   };
 }
 
-export function buildHomeModeControlDescriptor({
-  modes,
-  selectedModeId,
-  label = "Mode",
-  onSelect,
-}: {
-  modes: ConfiguredSessionControlValue[];
-  selectedModeId: string | null;
-  label?: string;
-  onSelect: (modeId: string) => void;
-}): (LiveSessionControlDescriptor & { key: "mode" }) | null {
-  if (modes.length === 0 || selectedModeId === null) {
-    return null;
-  }
-  return {
-    key: "mode",
-    label,
-    detail: null,
-    rawConfigId: "mode",
-    settable: true,
-    pendingState: null,
-    kind: "select",
-    options: modes.map((mode) => ({
-      value: mode.value,
-      label: mode.label,
-      description: mode.description ?? null,
-      selected: mode.value === selectedModeId,
-    })),
-    onSelect,
-  };
-}
-
 export function buildHomeSessionConfigControls({
-  destination,
-  agentKind,
-  modes,
-  selectedModeId,
   launchControls,
-  onSelectMode,
 }: {
-  destination: HomeNextDestination;
-  agentKind: string | null;
-  modes: ConfiguredSessionControlValue[];
-  selectedModeId: string | null;
   launchControls: LiveSessionControlDescriptor[];
-  onSelectMode: (modeId: string) => void;
 }): LiveSessionControlDescriptor[] {
-  if (destination === "cowork") {
-    return launchControls.filter((control) => control.key !== "mode");
-  }
-
-  const hasCollaborationMode = launchControls.some(
-    (control) => control.key === "collaboration_mode",
-  );
-  const modeControl = buildHomeModeControlDescriptor({
-    modes,
-    selectedModeId,
-    label: hasCollaborationMode || agentKind === "codex" ? "Permissions" : "Mode",
-    onSelect: onSelectMode,
-  });
-
-  return modeControl ? [modeControl, ...launchControls] : launchControls;
+  return launchControls;
 }

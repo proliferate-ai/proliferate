@@ -9,7 +9,7 @@ Start with the product task you intend to change:
 | Change messages, streaming, replay, rows, or long-history behavior | [Transcript](transcript.md) |
 | Change contextual actions for selected assistant text | [Transcript](transcript.md) and [Composer](composer.md) |
 | Change tab ordering, restoration, or projected-shell mechanics | [Workspaces](../workspaces/README.md) |
-| Change model identity, availability, or selection action classification | [Model Catalog](../../../../FEATURE_DOCS/MODELS.md) |
+| Change model/control identity, pre-launch availability, or live-session configuration authority | [Models and harness launch options](../../../../FEATURE_DOCS/MODELS.md) |
 | Change session actors, live config, process retirement, or relaunch | [AnyHarness sessions](../../../../anyharness/sessions.md) |
 | Change the workspace-status/session-loading wait treatment | [UX Latency + Transitions](../ux-latency-transitions.md) |
 | Decide where frontend source belongs | [Frontend structure](../../../../frontend/README.md) |

@@ -11,8 +11,8 @@ linked document is the authority.
 | --- | --- | --- |
 | [agent-distribution.md](../../../platforms/product/agent-distribution.md) | What a harness *is* and how it gets onto a machine: the registry/catalog document pair, pinned auto-installs, binary-carried catalog convergence, supervisor-owned runtime swaps, the probe pipeline, readiness projection. | target |
 | [AGENT_AUTH.md](../../../../FEATURE_DOCS/AGENT_AUTH.md) | How a harness gets *credentials* at launch: auth source selections, the key vault, `state.json` delivery, per-harness application recipes, fail-closed launch. | target |
-| [MODELS.md](../../../../FEATURE_DOCS/MODELS.md) | The managed inference proxy: LiteLLM artifact and deployment, enrollment/teams/virtual keys, access-group model gating, budgets, usage import. | target |
-| [MODELS.md](../../../../FEATURE_DOCS/MODELS.md) | Which *models* a ready, authenticated harness can run: probe-generated per-user snapshots, projection to pickers, availability. | target |
+| [MODELS.md](../../../../FEATURE_DOCS/MODELS.md) | The managed inference proxy: LiteLLM artifact and deployment, enrollment/teams/virtual keys, access-group model gating, budgets, usage import. | current |
+| [MODELS.md](../../../../FEATURE_DOCS/MODELS.md) | Which models and generic controls one execution target currently advertises before launch, plus the session-local live authority after launch. | current |
 
 Two lifecycle documents ride along:
 
@@ -38,7 +38,7 @@ user picks an auth source per harness ──────────────
      minted by enrollment ─────────────────────────────► model-gateway
 state.json delivers resolved key material ─────────────► agent-auth
 readiness projects install + credential state ─────────► agent-distribution
-model probe snapshots what this auth context serves ───► model-catalog
+override-free harness probe records target launch options ─► models/launch options
 session launch: route_auth builds the harness's world,
   fail-closed; the harness calls the proxy or provider ► agent-auth / model-gateway
 ```
@@ -53,12 +53,15 @@ The fences that keep one fact in one document:
 - **Key vs models**: agent-auth delivers the gateway key as an opaque
   value; which models that key can see is proxy-side access-group
   enforcement owned by model-gateway.
-- **Harness truth vs model truth**: agent-distribution's catalog pins
-  harness versions and ships in the binary; model-catalog's snapshots are
-  probed per user at runtime and never ship in a binary.
-- **One transport each**: the agent catalog's only transport is the
-  runtime binary; auth's only transport is `state.json`; neither has a
-  live mid-session push — changes land at the next restart or launch.
+- **Harness distribution vs executable truth**: agent-distribution's catalog
+  pins harness versions and ships in the binary; one target-local
+  `HarnessLaunchOptions` state per harness is observed at runtime from that
+  installed harness under product-owned auth/route state and never ships in a
+  binary.
+- **One transport each**: the agent catalog's only transport is the runtime
+  binary; auth's only transport is `state.json`; a Worker's cloud copy is
+  verbatim target state. None changes a running session, whose
+  `SessionLiveConfigSnapshot` is authoritative.
 
 ## Agent-experience systems in this folder
 

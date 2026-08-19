@@ -13,7 +13,6 @@ import {
   reviewerMatchesReviewPersonaTemplate,
   reviewerPersonalityLabel,
   resolveReviewDefaultReviewerRows,
-  resolveReviewExecutionModeIdForAgent,
   type ReviewSessionDefaults,
   type ReviewSetupReviewerDraft,
 } from "#product/lib/domain/reviews/review-config";
@@ -41,14 +40,13 @@ const SESSION_DEFAULTS: ReviewSessionDefaults = {
 function launchAgent(
   kind: string,
   modelId: string,
-  unattendedModeId: string | null,
+  defaultModeId: string | null,
   modeValues: string[] | null,
 ): DesktopAgentLaunchAgent {
   return {
     kind,
     displayName: kind,
     defaultModelId: modelId,
-    unattendedModeId,
     models: [{
       id: modelId,
       displayName: modelId,
@@ -60,7 +58,24 @@ function launchAgent(
       modeValues,
       tuningControlValues: null,
     }],
-    launchControls: [],
+    launchControls: modeValues ? [{
+      key: "mode",
+      label: "Access",
+      type: "select",
+      defaultValue: defaultModeId,
+      phase: "create_session",
+      surfaces: { start: true, session: true, automation: true, settings: true },
+      apply: { queueBeforeMaterialized: false },
+      missingLiveConfigPolicy: "block_prompt",
+      valueSource: "inline",
+      values: modeValues.map((value) => ({
+        value,
+        label: value,
+        isDefault: value === defaultModeId,
+      })),
+      queueWhileMaterializing: false,
+      mutableAfterMaterialized: true,
+    }] : [],
   };
 }
 
@@ -71,7 +86,7 @@ function reviewer(overrides: Partial<ReviewSetupReviewerDraft>): ReviewSetupRevi
     prompt: "Review the plan.",
     agentKind: "codex",
     modelId: "gpt-5.4",
-    modeId: "read-only",
+    controlValues: { mode: "read-only" },
     ...overrides,
   };
 }
@@ -129,7 +144,7 @@ describe("review setup config", () => {
       label: "Correctness reviewer",
       agentKind: "codex",
       modelId: "gpt-5.4",
-      modeId: "full-access",
+      controlValues: { mode: "full-access" },
     });
   });
 
@@ -175,7 +190,7 @@ describe("review setup config", () => {
       ...createStoredReviewKindDefaults(),
       agentKind: "codex",
       modelId: "gpt-5.4",
-      modeId: "full-access",
+      controlValues: { mode: "full-access" },
     };
     const rows = resolveReviewDefaultReviewerRows({
       kind: "plan",
@@ -187,7 +202,7 @@ describe("review setup config", () => {
     expect(rows[0]).toMatchObject({
       agentKind: "codex",
       modelId: "gpt-5.4",
-      modeId: "full-access",
+      controlValues: { mode: "full-access" },
     });
   });
 
@@ -223,21 +238,6 @@ describe("review setup config", () => {
     expect(nextAvailableReviewPersonaTemplate(templates, reviewers)?.id).toBe("plan-skeptic");
   });
 
-  it("keeps explicit review choices ahead of unattended catalog defaults", () => {
-    expect(resolveReviewExecutionModeIdForAgent(
-      "codex",
-      "read-only",
-      "full-access",
-    )).toBe("read-only");
-    expect(resolveReviewExecutionModeIdForAgent(
-      "claude",
-      null,
-      "bypassPermissions",
-    )).toBe("bypassPermissions");
-    expect(resolveReviewExecutionModeIdForAgent("cursor", "ask", null)).toBe("ask");
-    expect(resolveReviewExecutionModeIdForAgent("cursor", null, null)).toBe("");
-  });
-
   it("hydrates initial reviewer personalities with inherited harness defaults", () => {
     const draft = createReviewSetupDraft({
       kind: "plan",
@@ -251,7 +251,7 @@ describe("review setup config", () => {
       label: "Plan skeptic",
       agentKind: "codex",
       modelId: "gpt-5.4",
-      modeId: "full-access",
+      controlValues: { mode: "full-access" },
     });
   });
 
@@ -263,11 +263,11 @@ describe("review setup config", () => {
         ...createStoredReviewKindDefaults(),
         agentKind: "codex",
         modelId: "gpt-5.4",
-        modeId: "read-only",
+        controlValues: { mode: "read-only" },
       },
     });
 
-    expect(draft.reviewers[0]?.modeId).toBe("read-only");
+    expect(draft.reviewers[0]?.controlValues.mode).toBe("read-only");
   });
 
   it("resolves each stored reviewer against its own target catalog agent", () => {
@@ -276,23 +276,23 @@ describe("review setup config", () => {
       sessionDefaults: SESSION_DEFAULTS,
       storedDefaults: {
         ...createStoredReviewKindDefaults(),
-        modeId: "full-access",
+        controlValues: { mode: "full-access" },
         reviewers: {
           mode: "custom",
           items: [
-            reviewer({ modeId: "" }),
+            reviewer({ controlValues: {} }),
             reviewer({
               id: "implementation-readiness",
               agentKind: "claude",
               modelId: "sonnet",
-              modeId: "",
+              controlValues: {},
             }),
           ],
         },
       },
     });
 
-    expect(draft.reviewers.map((item) => item.modeId)).toEqual([
+    expect(draft.reviewers.map((item) => item.controlValues.mode)).toEqual([
       "full-access",
       "bypassPermissions",
     ]);
@@ -304,19 +304,19 @@ describe("review setup config", () => {
       sessionDefaults: SESSION_DEFAULTS,
       storedDefaults: {
         ...createStoredReviewKindDefaults(),
-        modeId: "full-access",
+        controlValues: { mode: "full-access" },
         reviewers: {
           mode: "custom",
           items: [reviewer({
             agentKind: "claude",
             modelId: "sonnet",
-            modeId: "acceptEdits",
+            controlValues: { mode: "acceptEdits" },
           })],
         },
       },
     });
 
-    expect(draft.reviewers[0]?.modeId).toBe("acceptEdits");
+    expect(draft.reviewers[0]?.controlValues.mode).toBe("acceptEdits");
   });
 
   it("omits mode for an uncurated reviewer instead of fabricating one", () => {
@@ -325,13 +325,13 @@ describe("review setup config", () => {
       sessionDefaults: SESSION_DEFAULTS,
       storedDefaults: {
         ...createStoredReviewKindDefaults(),
-        modeId: "full-access",
+        controlValues: { mode: "full-access" },
         reviewers: {
           mode: "custom",
           items: [reviewer({
             agentKind: "grok",
             modelId: "grok-4",
-            modeId: "",
+            controlValues: {},
           })],
         },
       },
@@ -339,7 +339,7 @@ describe("review setup config", () => {
     const { request, error } = buildReviewRequest(draft, "parent-session");
 
     expect(error).toBeNull();
-    expect(draft.reviewers[0]?.modeId).toBe("");
+    expect(draft.reviewers[0]?.controlValues.mode).toBeUndefined();
     expect(request?.reviewers[0]).not.toHaveProperty("modeId");
   });
 
@@ -361,7 +361,7 @@ describe("review setup config", () => {
         autoIterate: true,
         agentKind: "",
         modelId: "",
-        modeId: "",
+        controlValues: {},
         reviewers: {
           mode: "custom",
           items: [
@@ -378,7 +378,7 @@ describe("review setup config", () => {
     expect(draft.reviewers[0]).toMatchObject({
       label: "Strict plan reviewer",
       prompt: "Use the stricter saved prompt.",
-      modeId: "read-only",
+      controlValues: { mode: "read-only" },
     });
   });
 

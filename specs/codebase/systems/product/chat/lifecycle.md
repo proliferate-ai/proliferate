@@ -30,8 +30,9 @@ session tab; it does not guarantee the new tab's immediate-right placement.
 
 ## Related Owners
 
-- [Model Catalog](../../../../FEATURE_DOCS/MODELS.md) owns model
-  identity, availability, and action classification.
+- [Models and harness launch options](../../../../FEATURE_DOCS/MODELS.md) owns
+  pre-launch executable identity and the active session's live configuration
+  authority.
 - [Composer](composer.md) owns input, controls, picker presentation, panels,
   and badges.
 - [Workspaces](../workspaces/README.md) owns tab ordering, restoration, and

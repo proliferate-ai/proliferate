@@ -178,7 +178,7 @@ impl PlanRuntime {
                     &plan.workspace_id,
                     agent_kind,
                     input.model_id.as_deref(),
-                    input.mode_id.as_deref(),
+                    &input.control_values,
                     None,
                     Vec::new(),
                     None,

@@ -1,5 +1,6 @@
 use super::model::{ReviewCodeTargetManifest, ReviewRunRecord, ReviewRunStatus};
 use super::store::ReviewStore;
+use std::collections::BTreeMap;
 use crate::domains::plans::model::PlanRecord;
 use crate::domains::plans::service::PlanService;
 use crate::domains::sessions::deletion::SessionDeleteWorkflow;
@@ -26,7 +27,7 @@ pub struct ReviewPersonaInput {
     pub prompt: String,
     pub agent_kind: String,
     pub model_id: Option<String>,
-    pub mode_id: Option<String>,
+    pub control_values: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
