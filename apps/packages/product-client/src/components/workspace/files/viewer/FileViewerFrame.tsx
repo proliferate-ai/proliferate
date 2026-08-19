@@ -1,5 +1,6 @@
-import { useEffect, type ReactNode, type Ref } from "react";
+import { useCallback, useEffect, useRef, type ReactNode, type Ref } from "react";
 import { POPOVER_FRAME_CLASS, PopoverButton } from "#product/primitives/PopoverButton";
+import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
 import {
   useFileViewerNativeContextMenu,
   type FileViewerNativeMenuActions,
@@ -22,13 +23,20 @@ export function FileViewerFrame({
   onToggleRichPreview,
   onCopyContent,
   onCopyPath,
-  onOpenExternal,
-  canOpenExternal,
+  openInEligible,
+  openInDefaultTarget,
+  openInTargets,
+  onOpenDefault,
+  onOpenWithTarget,
+  openInRevision,
+  openInFailed,
   onOpenContentSearch,
   filesAvailable,
   filesRequestedOpen,
   onToggleFiles,
   onRevealFilesPath,
+  focusRequestToken,
+  onFocusRequestHandled,
   fileTreeDock,
   children,
 }: {
@@ -39,25 +47,69 @@ export function FileViewerFrame({
   richPreviewEnabled: boolean;
   canCopyContent: boolean;
   canFindInFile: boolean;
-  canOpenExternal: boolean;
+  openInEligible: boolean;
+  openInDefaultTarget: OpenTarget | null;
+  openInTargets: OpenTarget[];
+  onOpenDefault: () => void;
+  onOpenWithTarget: (target: OpenTarget) => void;
+  openInRevision: number;
+  openInFailed: boolean;
   onToggleWordWrap: () => void;
   onToggleRichPreview: () => void;
   onCopyContent: () => void;
   onCopyPath: () => void;
-  onOpenExternal: () => void;
   onOpenContentSearch: () => void;
   filesAvailable: boolean;
   filesRequestedOpen: boolean;
   onToggleFiles: () => void;
   onRevealFilesPath: (path: string) => void;
+  /**
+   * Non-zero while a `viewer`-focus activation request for this frame's target
+   * is outstanding. Session-only number; it carries no path.
+   */
+  focusRequestToken: number;
+  onFocusRequestHandled: (token: number) => void;
   fileTreeDock: ReactNode | null;
   children: ReactNode;
 }) {
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const setFrameRef = useCallback((node: HTMLDivElement | null) => {
+    frameRef.current = node;
+    if (typeof rootRef === "function") {
+      rootRef(node);
+    } else if (rootRef) {
+      (rootRef as { current: HTMLDivElement | null }).current = node;
+    }
+  }, [rootRef]);
+
+  // One-shot consumption of a `viewer` activation focus request. Readiness is
+  // this root being mounted, deliberately independent of the file read: a
+  // later loading or error body stays inside the already-focused frame rather
+  // than bouncing focus back to the origin.
+  const handledFocusRequestRef = useRef(0);
+  useEffect(() => {
+    if (focusRequestToken <= 0 || handledFocusRequestRef.current === focusRequestToken) {
+      return;
+    }
+    const node = frameRef.current;
+    if (!node) {
+      return;
+    }
+    handledFocusRequestRef.current = focusRequestToken;
+    node.focus({ preventScroll: true });
+    onFocusRequestHandled(focusRequestToken);
+  }, [focusRequestToken, onFocusRequestHandled]);
+
+  // Availability tracks the same eligibility the Find button uses
+  // (`canFindInFile`: settled, text, not-too-large, never a diff target) —
+  // never unconditionally true. A `fileDiff`/binary/too-large/loading target
+  // must not advertise the `file` surface, so the shortcut can't open file
+  // search on it.
   const setSurfaceAvailability = useContentSearchStore((state) => state.setSurfaceAvailability);
   useEffect(() => {
-    setSurfaceAvailability("file", true);
+    setSurfaceAvailability("file", canFindInFile);
     return () => setSurfaceAvailability("file", false);
-  }, [setSurfaceAvailability]);
+  }, [canFindInFile, setSurfaceAvailability]);
 
   // Unavailable dominates any stale requested value: a workspace that lost
   // file-context availability while a dock was requested open must not show
@@ -73,7 +125,7 @@ export function FileViewerFrame({
     // `w-full`: without it the body measures max-content (380 + dock) and the
     // responsive auto-collapse threshold can never be crossed.
     <div
-      ref={rootRef}
+      ref={setFrameRef}
       tabIndex={-1}
       className="relative flex h-full w-full min-w-0 flex-col overflow-hidden bg-background outline-none"
       data-file-viewer-frame
@@ -91,8 +143,13 @@ export function FileViewerFrame({
         onToggleRichPreview={onToggleRichPreview}
         onCopyContent={onCopyContent}
         onCopyPath={onCopyPath}
-        onOpenExternal={onOpenExternal}
-        canOpenExternal={canOpenExternal}
+        openInEligible={openInEligible}
+        openInDefaultTarget={openInDefaultTarget}
+        openInTargets={openInTargets}
+        onOpenDefault={onOpenDefault}
+        onOpenWithTarget={onOpenWithTarget}
+        openInRevision={openInRevision}
+        openInFailed={openInFailed}
         onOpenContentSearch={onOpenContentSearch}
         toggleLabel={toggleLabel}
         toggleActive={effectiveRequestedOpen}

@@ -63,4 +63,46 @@ describe("workspace viewer tabs store", () => {
     expect(useWorkspaceViewerTabsStore.getState().activeTargetKey)
       .toBe(viewerTargetKey(readmeTarget));
   });
+
+  it("mints monotonic focus requests and consumes them exactly once", () => {
+    const store = useWorkspaceViewerTabsStore.getState();
+    const key = store.openTarget(fileViewerTarget("src/app.ts"));
+
+    store.requestViewerFocus(key);
+    const first = useWorkspaceViewerTabsStore.getState().viewerFocusRequest;
+    expect(first).toEqual({ targetKey: key, token: 1 });
+
+    store.consumeViewerFocusRequest(first!.token);
+    expect(useWorkspaceViewerTabsStore.getState().viewerFocusRequest).toBeNull();
+
+    // A retrigger on the already-selected target still mints a new number.
+    store.requestViewerFocus(key);
+    expect(useWorkspaceViewerTabsStore.getState().viewerFocusRequest)
+      .toEqual({ targetKey: key, token: 2 });
+  });
+
+  it("invalidates an unconsumed request when the active target changes", () => {
+    const store = useWorkspaceViewerTabsStore.getState();
+    const first = store.openTarget(fileViewerTarget("src/first.ts"));
+    store.requestViewerFocus(first);
+
+    const second = store.openTarget(fileViewerTarget("src/second.ts"));
+    expect(useWorkspaceViewerTabsStore.getState().viewerFocusRequest).toBeNull();
+
+    // A stale consume for the invalidated token is inert.
+    store.requestViewerFocus(second);
+    const live = useWorkspaceViewerTabsStore.getState().viewerFocusRequest!;
+    store.consumeViewerFocusRequest(live.token - 1);
+    expect(useWorkspaceViewerTabsStore.getState().viewerFocusRequest).toEqual(live);
+  });
+
+  it("drops a pending request when its target is closed", () => {
+    const store = useWorkspaceViewerTabsStore.getState();
+    const key = store.openTarget(fileViewerTarget("src/app.ts"));
+    store.requestViewerFocus(key);
+
+    store.closeTarget(key);
+
+    expect(useWorkspaceViewerTabsStore.getState().viewerFocusRequest).toBeNull();
+  });
 });

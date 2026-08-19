@@ -47,9 +47,14 @@ vi.mock("#product/hooks/ui/highlighting/use-highlighted-lines", () => ({
 
 vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
   useFileReferenceActions: () => ({
+    reference: { locator: { authority: "unavailable", reason: "runtime_unavailable" } },
+    nativePathKind: null,
+    openTargets: [],
+    defaultOpenTarget: null,
     canOpenExternal: false,
     copyCurrentPath: vi.fn(),
     openDefault: vi.fn(),
+    openWithTarget: vi.fn(),
   }),
 }));
 
@@ -382,7 +387,7 @@ describe("FileEditorView dock controller", () => {
     await waitFor(() => expect(dock(container)).toBeTruthy());
 
     fireEvent.click(screen.getByRole("treeitem", { name: /README\.md/ }));
-    expect(openFileMock).toHaveBeenCalledWith("README.md");
+    expect(openFileMock).toHaveBeenCalledWith("README.md", { focus: "preserve-origin" });
   });
 
   it("focuses the filter on a toolbar open and restores toolbar focus on Escape close", async () => {

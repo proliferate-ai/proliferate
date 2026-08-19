@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { FILE_VIEWER_CONTENT_MIN_WIDTH } from "#product/hooks/workspaces/ui/files/use-docked-file-tree-resize";
 import { FILE_TREE_DOCK_MIN_WIDTH } from "#product/lib/domain/files/file-tree-dock-state";
 import type { WorkspaceShellActions } from "#product/hooks/workspaces/workflows/use-workspace-shell-actions";
+import type { ViewerActivationFocus } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-activation-types";
 import {
   selectFileTreeDesiredWidth,
   selectFileTreeExpandedPaths,
@@ -28,7 +29,7 @@ interface UseFileEditorDockControllerArgs {
   fileContext: FileContext;
   targetKey: string;
   shellActions: WorkspaceShellActions | null;
-  openFile: (path: string) => void;
+  openFile: (path: string, options?: { focus?: ViewerActivationFocus }) => void;
 }
 
 /**
@@ -249,10 +250,10 @@ export function useFileEditorDockController({
   const toggleExpanded = useCallback((path: string) => {
     if (expansionScope) { storeTogglePathExpanded(expansionScope, path); }
   }, [expansionScope, storeTogglePathExpanded]);
-  const openTreeFile = useCallback((path: string) => {
+  const openTreeFile = useCallback((path: string, options?: { focus?: ViewerActivationFocus }) => {
     // The existing canonical workspace viewer-target action; tree rows never
     // use `useFileReferenceActions`, fuzzy recovery, or a native target.
-    void openFile(path);
+    void openFile(path, options);
   }, [openFile]);
 
   return {

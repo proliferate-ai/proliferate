@@ -16,6 +16,7 @@ import {
   type FileTreeRootBoundary,
 } from "#product/hooks/workspaces/ui/files/use-file-tree-keyboard";
 import { useDockedFileTreeResize } from "#product/hooks/workspaces/ui/files/use-docked-file-tree-resize";
+import type { ViewerActivationFocus } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-activation-types";
 
 export const FILE_TREE_FILTER_LABEL = "Filter files";
 export const FILE_TREE_FILTER_PLACEHOLDER = "Filter files…";
@@ -33,7 +34,11 @@ interface DockedFileTreeProps {
   expandedPaths: ReadonlySet<string>;
   setExpanded: (path: string, expanded: boolean) => void;
   toggleExpanded: (path: string) => void;
-  onOpenFile: (path: string) => void;
+  /**
+   * Row activation. The dock always states its own origin intent so the
+   * activated row, not the incoming viewer, keeps keyboard focus.
+   */
+  onOpenFile: (path: string, options: { focus: ViewerActivationFocus }) => void;
   /** Effective (geometry-clamped) tree width in pixels. */
   width: number;
   /** Measured `[data-file-viewer-body]` width, which bounds the separator. */
@@ -112,6 +117,11 @@ export function DockedFileTree({
     boundaryRef.current = model;
   }, []);
 
+  // Selection changes; focus does not leave the tree row the user activated.
+  const openFileFromTreeRow = useCallback((path: string) => {
+    onOpenFile(path, { focus: "preserve-origin" });
+  }, [onOpenFile]);
+
   const controller = useMemo<FileTreeController>(() => ({
     workspaceId,
     selectedPath,
@@ -119,7 +129,7 @@ export function DockedFileTree({
     expandedPaths,
     setExpanded,
     toggleExpanded,
-    openFile: onOpenFile,
+    openFile: openFileFromTreeRow,
     isRoving: (key) => key === rovingKey,
     requestRowFocus,
     captureRequest,
@@ -130,8 +140,8 @@ export function DockedFileTree({
     changedPaths,
     expandedPaths,
     isCurrent,
-    onOpenFile,
     onRootModel,
+    openFileFromTreeRow,
     requestRowFocus,
     rovingKey,
     selectedPath,

@@ -13,6 +13,7 @@ import {
   rightPanelViewerHeaderKey,
 } from "#product/lib/domain/workspaces/shell/right-panel-model";
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
+import { useContentSearchStore } from "#product/stores/search/content-search-store";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import {
   cancelPendingDeferredChatActivation,
@@ -22,9 +23,11 @@ import {
 import { resolveCurrentShellStateKey } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-state-key";
 import type {
   SelectSessionOptionsWithoutGuard,
+  ViewerActivationFocus,
 } from "#product/hooks/workspaces/workflows/tabs/workspace-shell-activation-types";
 
 export type { SelectSessionOptionsWithoutGuard };
+export type { ViewerActivationFocus };
 
 export type ShellActivationOutcome =
   | { result: "completed"; surface: "viewer" | "chat-shell"; shellActivationEpoch: number }
@@ -32,6 +35,7 @@ export type ShellActivationOutcome =
 
 export function useWorkspaceShellActivation() {
   const setActiveViewerTarget = useWorkspaceViewerTabsStore((state) => state.setActiveTarget);
+  const requestViewerFocus = useWorkspaceViewerTabsStore((state) => state.requestViewerFocus);
   const writeShellIntent = useWorkspaceUiStore((state) => state.writeShellIntent);
   const activateChatTab = useChatTabActivation();
 
@@ -39,13 +43,21 @@ export function useWorkspaceShellActivation() {
     workspaceId,
     shellWorkspaceId,
     target,
+    focus = "viewer",
   }: {
     workspaceId: string;
     shellWorkspaceId?: string | null;
     target: ViewerTarget;
-    mode?: "focus-existing" | "open-or-focus";
+    focus?: ViewerActivationFocus;
   }): ShellActivationOutcome => {
     const shellStateKey = resolveCurrentShellStateKey(workspaceId, shellWorkspaceId);
+    // Dismiss any open content search before the target changes, with
+    // restoration suppressed: the outgoing file's still-connected Find control
+    // must not reclaim focus from the tree row, tab, or incoming viewer.
+    const searchStore = useContentSearchStore.getState();
+    if (searchStore.open) {
+      searchStore.closeSearch({ restoreFocus: false });
+    }
     invalidateSessionActivationIntent(workspaceId);
     const targetKey = viewerWorkspaceShellTabKey(target);
     setActiveViewerTarget(targetKey);
@@ -54,6 +66,11 @@ export function useWorkspaceShellActivation() {
       durableWorkspaceId: shellStateKey,
       target,
     });
+    // Only a viewer-focus intent on a frame-bearing target mints a request;
+    // `promptAttachment` and `allChanges` render no file frame to receive one.
+    if (focus === "viewer" && (target.kind === "file" || target.kind === "fileDiff")) {
+      requestViewerFocus(targetKey);
+    }
     cancelPendingDeferredChatActivation(shellStateKey, "intent-replaced");
     clearCurrentPendingForWorkspace(shellStateKey);
     return {
@@ -62,23 +79,23 @@ export function useWorkspaceShellActivation() {
       shellActivationEpoch:
         useWorkspaceUiStore.getState().shellActivationEpochByWorkspace[shellStateKey] ?? 0,
     };
-  }, [setActiveViewerTarget]);
+  }, [requestViewerFocus, setActiveViewerTarget]);
 
   const activateFileTab = useCallback(({
     workspaceId,
     shellWorkspaceId,
     path,
-    mode,
+    focus,
   }: {
     workspaceId: string;
     shellWorkspaceId?: string | null;
     path: string;
-    mode?: "focus-existing" | "open-or-focus";
+    focus?: ViewerActivationFocus;
   }) => activateViewerTarget({
     workspaceId,
     shellWorkspaceId,
     target: fileViewerTarget(path),
-    mode,
+    focus,
   }), [activateViewerTarget]);
 
   const activateChatShell = useCallback(({

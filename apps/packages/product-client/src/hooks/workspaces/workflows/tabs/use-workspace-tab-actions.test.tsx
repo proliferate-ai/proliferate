@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, render, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useShortcutDispatcher } from "#product/hooks/shortcuts/lifecycle/use-shortcut-dispatcher";
 import { useWorkspaceContentShortcuts } from "#product/hooks/workspaces/ui/use-workspace-content-shortcuts";
@@ -25,6 +25,9 @@ import {
 } from "#product/lib/domain/shortcuts/registry";
 import { useWorkspaceUiStore } from "#product/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useContentSearchStore } from "#product/stores/search/content-search-store";
+import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
+import { fileViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 const WORKSPACE_ID = "workspace-1";
 const SESSION_A: WorkspaceShellTab = { kind: "chat", sessionId: "session-a" };
@@ -196,6 +199,40 @@ function ShortcutHarness({ context }: { context: WorkspaceTabActionsContext }) {
   useShortcutDispatcher();
   return null;
 }
+
+describe("workspace header-tab viewer activation", () => {
+  beforeEach(() => {
+    useWorkspaceViewerTabsStore.getState().reset();
+    useContentSearchStore.setState({ open: false, closeSuppressRestoreToken: 0 });
+    useSessionSelectionStore.getState().clearSelection();
+    useSessionSelectionStore.setState({ _hydrated: true });
+    resetWorkspaceUi([SESSION_A], SESSION_A);
+  });
+
+  afterEach(cleanup);
+
+  it("selects a viewer tab as preserve-origin and dismisses search without restoration", () => {
+    const target = fileViewerTarget("src/index.tsx");
+    const context = createContext({ orderedTabs: [SESSION_A], activeTab: SESSION_A });
+    const { result } = renderHook(() => useWorkspaceTabActions(context));
+    act(() => {
+      useContentSearchStore.getState().openSearch("file");
+    });
+
+    act(() => {
+      result.current.activateWorkspaceTab({ kind: "viewer", target });
+    });
+
+    // Selection moved, but the tab — not the incoming frame — keeps focus.
+    expect(useWorkspaceViewerTabsStore.getState().activeTargetKey)
+      .toBe(getWorkspaceShellTabKey({ kind: "viewer", target }));
+    expect(useWorkspaceViewerTabsStore.getState().viewerFocusRequest).toBeNull();
+    // The outgoing file's Find control cannot reclaim focus from the tab.
+    const search = useContentSearchStore.getState();
+    expect(search.open).toBe(false);
+    expect(search.closeSuppressRestoreToken).toBe(1);
+  });
+});
 
 function createContext({
   orderedTabs,

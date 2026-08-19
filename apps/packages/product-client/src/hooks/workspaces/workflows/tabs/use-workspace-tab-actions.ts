@@ -77,7 +77,9 @@ export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {
         workspaceId: headerTabs.selectedWorkspaceId,
         shellWorkspaceId: headerTabs.workspaceUiKey,
         target: tab.target,
-        mode: "focus-existing",
+        // A header-tab click changes the selection only; the tab keeps
+        // keyboard focus so arrow/shortcut cycling stays where the user is.
+        focus: "preserve-origin",
       });
     }
     return true;

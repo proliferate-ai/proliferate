@@ -132,6 +132,7 @@ export function useRightPanelController({
   const newTabMenuRequest = useRightPanelNewTabMenuRequest();
   const actions = useRightPanelEntryActions({
     workspaceId,
+    shellWorkspaceId: workspaceUiKey,
     shouldRenderContent,
     isCloudWorkspaceSelected,
     state,

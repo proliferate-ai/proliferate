@@ -101,7 +101,7 @@ interface HarnessOverrides {
   bodyWidth?: number;
   width?: number;
   changedPaths?: Set<string>;
-  onOpenFile?: (path: string) => void;
+  onOpenFile?: (path: string, options: { focus: "viewer" | "preserve-origin" }) => void;
   onRequestClose?: () => void;
   onDesiredWidthChange?: (width: number) => void;
   initialFilter?: string;
@@ -286,7 +286,7 @@ describe("DockedFileTree", () => {
 
     fireEvent.keyDown(tree(), { key: "Enter" });
     expect(onOpenFile).toHaveBeenCalledTimes(1);
-    expect(onOpenFile).toHaveBeenCalledWith("README.md");
+    expect(onOpenFile).toHaveBeenCalledWith("README.md", { focus: "preserve-origin" });
 
     fireEvent.keyDown(tree(), { key: " " });
     expect(onOpenFile).toHaveBeenCalledTimes(2);
@@ -405,7 +405,7 @@ describe("DockedFileTree", () => {
     expect(onOpenFile).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("treeitem", { name: /file-link\.ts/ }));
-    await waitFor(() => expect(onOpenFile).toHaveBeenCalledWith("file-link.ts"));
+    await waitFor(() => expect(onOpenFile).toHaveBeenCalledWith("file-link.ts", { focus: "preserve-origin" }));
   });
 
   it("fails closed on an unexpected symlink stat kind and never infers from size", async () => {

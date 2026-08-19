@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type SetStateAction } from "react";
 import { FileReferenceBadge } from "#product/components/workspace/file-references/FileReferenceBadge";
+import { ContentSearchPill } from "#product/components/workspace/search/ContentSearchPill";
 import { WorkspaceShellActionsProvider } from "#product/components/workspace/shell/providers/WorkspaceShellActionsContext";
 import { WorkspaceShellRightRail } from "#product/components/workspace/shell/screen/WorkspaceShellRightRail";
 import type { WorkspaceShellActions } from "#product/hooks/workspaces/workflows/use-workspace-shell-actions";
@@ -74,7 +75,7 @@ const INERT_SHELL_ACTIONS_BASE: Omit<WorkspaceShellActions, "ensureRightPanelWid
  */
 export function FileViewerPlayground() {
   const [params] = useSearchParams();
-  const scenario = resolveScenario(params.get("case"));
+  const scenario = resolveScenario(params.get("case"), params.get("path"));
   const activeTargetKey = useWorkspaceViewerTabsStore((state) => state.activeTargetKey);
   const activeTarget = activeTargetKey ? parseViewerTargetKey(activeTargetKey) : null;
   const activeFileTarget = activeTarget?.kind === "file" ? activeTarget : null;
@@ -180,7 +181,13 @@ export function FileViewerPlayground() {
           ref={ancestorRef}
           data-workspace-shell
           data-file-reference-viewer={activeFileTarget ? "active" : "idle"}
-          className="flex min-h-0 min-w-0 flex-1"
+          // `relative`: mirrors `StandardWorkspaceShell`'s own
+          // `relative h-screen` root, which is `ContentSearchPill`'s nearest
+          // positioned ancestor in production. Without it here, the pill's
+          // `position: absolute` falls back to the viewport as its
+          // containing block, and this fixture's own "File reference" debug
+          // bar above this shell would throw off the 90px/16px placement math.
+          className="relative flex min-h-0 min-w-0 flex-1"
           style={{ "--workspace-right-width": `${rightPanelWidth}px` } as CSSProperties}
         >
           <div
@@ -207,13 +214,17 @@ export function FileViewerPlayground() {
             terminalActivationRequest={null}
             onTerminalActivationRequestHandled={() => {}}
           />
+          <ContentSearchPill
+            rightPanelOpen
+            rightPanelWidth={rightPanelWidth}
+          />
         </div>
       </WorkspaceShellActionsProvider>
     </main>
   );
 }
 
-function resolveScenario(value: string | null): FileReferenceScenario {
+function resolveScenario(value: string | null, pathOverride: string | null): FileReferenceScenario {
   switch (value) {
     case "desktop-file":
       return { caseName: value, rawPath: "/outside/reference.txt" };
@@ -224,11 +235,13 @@ function resolveScenario(value: string | null): FileReferenceScenario {
     case "whitespace":
       return { caseName: value, rawPath: "   " };
     case "workspace-file":
-    default:
-      return {
-        caseName: "workspace-file",
-        rawPath: WORKSPACE_FILE_PATH,
-        workspacePath: WORKSPACE_FILE_PATH,
-      };
+    default: {
+      // `path` lets qualification open a different deterministic workspace
+      // file (long-path breadcrumb truncation, markdown rendering, search
+      // matches, too-large/binary) through the same production chain without
+      // a new fixture case per file.
+      const path = pathOverride && pathOverride.length > 0 ? pathOverride : WORKSPACE_FILE_PATH;
+      return { caseName: "workspace-file", rawPath: path, workspacePath: path };
+    }
   }
 }

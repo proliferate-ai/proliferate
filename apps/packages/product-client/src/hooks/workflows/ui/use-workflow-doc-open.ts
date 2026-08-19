@@ -51,7 +51,6 @@ export function useWorkflowDocOpen(workspaceId: string): (doc: WorkflowRunDocV2)
       workspaceId,
       shellWorkspaceId: identity.workspaceUiKey,
       target,
-      mode: "open-or-focus",
     });
   }, [activateViewerTarget, openTarget, selectedLogicalWorkspaceId, workspaceId]);
 }

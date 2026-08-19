@@ -20,7 +20,7 @@ import { ProductWorkspaceConnectionProvider } from "#product/providers/ProductWo
 import { WorkspacePathProvider } from "#product/providers/WorkspacePathProvider";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
-import { createFileTreeFixture } from "./file-tree-fixture";
+import { createFileTreeFixture, FIXTURE_FILE_CONTENTS } from "./file-tree-fixture";
 
 type FixtureHost = "desktop" | "web";
 type FixtureOrigin = "local" | "remote";
@@ -70,6 +70,7 @@ const FIXED_TIME = "2026-08-19T12:00:00.000Z";
 const params = new URLSearchParams(window.location.search);
 const fixtureHost: FixtureHost = params.get("host") === "web" ? "web" : "desktop";
 const fixtureOrigin: FixtureOrigin = params.get("origin") === "remote" ? "remote" : "local";
+if (params.get("appearance") === "light" || params.get("appearance") === "dark") document.documentElement.dataset.mode = params.get("appearance")!; // overrides index.html's hard-coded data-mode="dark"
 
 const counters: FixtureCounters = {
   clipboard: 0,
@@ -267,15 +268,16 @@ const fixtureFetch: typeof globalThis.fetch = async (input) => {
   }
   if (url.pathname.endsWith("/files/file")) {
     const path = url.searchParams.get("path") ?? "src/example.ts";
+    const scripted = FIXTURE_FILE_CONTENTS[path];
     return jsonResponse({
-      content: "export const fixture = 'file reference routing';\n",
+      content: scripted?.content ?? "export const fixture = 'file reference routing';\n",
       encoding: "utf-8",
-      isText: true,
+      isText: scripted?.isText ?? true,
       kind: "file",
       modifiedAt: FIXED_TIME,
       path,
-      sizeBytes: 49,
-      tooLarge: false,
+      sizeBytes: scripted?.content.length ?? 49,
+      tooLarge: scripted?.tooLarge ?? false,
       versionToken: "fixture-v1",
     });
   }

@@ -5,7 +5,6 @@ import {
   Check,
   ChevronRight,
   Copy,
-  ExternalLink,
   MoreHorizontal,
   Search,
 } from "#product/primitives/icons/core";
@@ -17,6 +16,8 @@ import {
   PopoverButton,
 } from "#product/primitives/PopoverButton";
 import { PaneOptionsMenuSeparator } from "#product/components/workspace/pane/PaneOptionsMenu";
+import { SplitButton } from "#product/components/workspace/open-target/SplitButton";
+import type { OpenTarget } from "@proliferate/product-client/host/desktop-bridge";
 import {
   useFileViewerNativeMenu,
   type FileViewerNativeMenuActions,
@@ -153,8 +154,7 @@ export function FileViewerMenuBody({
       <PaneOptionsMenuItem
         reserveIconSlot
         icon={wordWrap ? <Check /> : null}
-        label="Word wrap"
-        trailing={wordWrap ? "On" : "Off"}
+        label={wordWrap ? "Disable word wrap" : "Enable word wrap"}
         onClick={() => {
           onToggleWordWrap();
         }}
@@ -163,8 +163,7 @@ export function FileViewerMenuBody({
         <PaneOptionsMenuItem
           reserveIconSlot
           icon={richPreviewEnabled ? <Check /> : null}
-          label="Rich preview"
-          trailing={richPreviewEnabled ? "On" : "Off"}
+          label={richPreviewEnabled ? "Disable rich preview" : "Enable rich preview"}
           onClick={() => {
             onToggleRichPreview();
           }}
@@ -235,8 +234,13 @@ export function FileViewerToolbar({
   onToggleRichPreview,
   onCopyContent,
   onCopyPath,
-  onOpenExternal,
-  canOpenExternal,
+  openInEligible,
+  openInDefaultTarget,
+  openInTargets,
+  onOpenDefault,
+  onOpenWithTarget,
+  openInRevision,
+  openInFailed,
   onOpenContentSearch,
   toggleLabel,
   toggleActive,
@@ -248,8 +252,15 @@ export function FileViewerToolbar({
   onRevealFilesPath: (path: string) => void;
   canRenderRichPreview: boolean;
   canFindInFile: boolean;
-  onOpenExternal: () => void;
-  canOpenExternal: boolean;
+  /** Fail-closed 01D eligibility — never re-derived from path syntax here. */
+  openInEligible: boolean;
+  openInDefaultTarget: OpenTarget | null;
+  openInTargets: OpenTarget[];
+  onOpenDefault: () => void;
+  onOpenWithTarget: (target: OpenTarget) => void;
+  /** Keys the split-button subtree so a capability change remounts a closed popover. */
+  openInRevision: number;
+  openInFailed: boolean;
   onOpenContentSearch: () => void;
   toggleLabel: string;
   toggleActive: boolean;
@@ -277,13 +288,24 @@ export function FileViewerToolbar({
           onCopyContent={onCopyContent}
           onCopyPath={onCopyPath}
         />
-        <FileViewerToolbarButton
-          label="Open in default editor"
-          disabled={!canOpenExternal}
-          onClick={onOpenExternal}
-        >
-          <ExternalLink className="icon-paired" />
-        </FileViewerToolbarButton>
+        {openInEligible && openInDefaultTarget && (
+          <div data-open-in-status={openInFailed ? "failed" : "idle"}>
+            <SplitButton
+              key={openInRevision}
+              showLabel={false}
+              label={`Open in ${openInDefaultTarget.label}`}
+              preferredTarget={openInDefaultTarget}
+              onClick={onOpenDefault}
+              targets={openInTargets}
+              onTargetClick={onOpenWithTarget}
+            />
+            {openInFailed && (
+              <span role="status" className="sr-only">
+                Could not open the file. Click to retry.
+              </span>
+            )}
+          </div>
+        )}
         {canFindInFile && (
           <FileViewerToolbarButton
             label="Find in file"

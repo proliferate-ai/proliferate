@@ -112,6 +112,50 @@ export const FIXTURE_RETRY_DIR_PATH = "retry-dir";
 export const FIXTURE_BROKEN_SYMLINK_PATH = "broken-link";
 export const FIXTURE_EMPTY_DIR_PATH = "empty-dir";
 
+/**
+ * Path-keyed `/files/file` read content used by "02B - Viewer Header Search
+ * Focus and Open In" qualification (`file-viewer.spec.ts`). Deliberately
+ * outside `DIRECTORY_ENTRIES` above: 02A's dock qualification suite
+ * enumerates and screenshots that tree, so adding root/child entries there
+ * would perturb its snapshots. Every path below is opened directly via
+ * `?path=…`, never by browsing the docked tree.
+ */
+export const FIXTURE_MARKDOWN_PATH = "docs/rendered-preview.md";
+export const FIXTURE_SEARCH_MATCHES_PATH = "src/search-fixture.ts";
+export const FIXTURE_TOO_LARGE_PATH = "fixtures/too-large.ts";
+export const FIXTURE_BINARY_PATH = "fixtures/binary.png";
+export const FIXTURE_LONG_PATH = "src/components/nested/deep/very/long/breadcrumb-truncation-target.ts";
+
+export interface FixtureFileContent {
+  content: string;
+  isText?: boolean;
+  tooLarge?: boolean;
+}
+
+export const FIXTURE_FILE_CONTENTS: Record<string, FixtureFileContent> = {
+  // Exactly two "needle" occurrences, used by the rendered-Markdown search
+  // qualification test.
+  [FIXTURE_MARKDOWN_PATH]: {
+    content: "# Rendered preview\n\nThe needle word appears here. And again: needle.\n",
+  },
+  // Exactly three "needle" occurrences, used by the match-navigation
+  // qualification test.
+  [FIXTURE_SEARCH_MATCHES_PATH]: {
+    content: "const needle = 1;\nconst other = 2;\nexport { needle, needle };\n",
+  },
+  [FIXTURE_LONG_PATH]: {
+    content: "export const truncationTarget = 'breadcrumb truncation fixture';\n",
+  },
+  [FIXTURE_TOO_LARGE_PATH]: {
+    content: "export const large = true;\n",
+    tooLarge: true,
+  },
+  [FIXTURE_BINARY_PATH]: {
+    content: "",
+    isText: false,
+  },
+};
+
 interface FileTreeFixtureCounters {
   scripted: number;
   unscripted: number;
