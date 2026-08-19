@@ -55,22 +55,8 @@ fn none_when_no_usable_models() {
 
 #[test]
 fn init_meta_model_setter_requires_exact_effective_readback() {
-    let confirmed = agent_client_protocol::AgentResponse::ExtMethodResponse(
-        agent_client_protocol::schema::ExtResponse::new(
-            serde_json::value::RawValue::from_string(
-                r#"{"_meta":{"model":{"Ok":"grok-4.6"}}}"#.to_string(),
-            )
-            .expect("valid response")
-            .into(),
-        ),
-    );
-    let acknowledgement_only = agent_client_protocol::AgentResponse::ExtMethodResponse(
-        agent_client_protocol::schema::ExtResponse::new(
-            serde_json::value::RawValue::from_string(r#"{"ok":true}"#.to_string())
-                .expect("valid response")
-                .into(),
-        ),
-    );
+    let confirmed = json!({ "_meta": { "model": { "Ok": "grok-4.6" } } });
+    let acknowledgement_only = json!({ "ok": true });
 
     assert_eq!(
         confirmed_model_from_ext_response(&confirmed).as_deref(),

@@ -124,37 +124,23 @@ fn legacy_mode_state() -> SessionStartupState {
 
 #[test]
 fn direct_setter_confirmation_requires_matching_agent_readback() {
-    let confirmed_model = acp::AgentResponse::ExtMethodResponse(acp::schema::ExtResponse::new(
-        serde_json::value::to_raw_value(&serde_json::json!({
-            "_meta": { "model": { "Ok": "grok-4.5" } }
-        }))
-        .expect("model response")
-        .into(),
-    ));
+    let confirmed_model = serde_json::json!({
+        "_meta": { "model": { "Ok": "grok-4.5" } }
+    });
     assert_eq!(
         confirmed_model_id_from_ext_response(&confirmed_model).as_deref(),
         Some("grok-4.5")
     );
 
-    let mismatched_model =
-        acp::AgentResponse::ExtMethodResponse(acp::schema::ExtResponse::new(
-            serde_json::value::to_raw_value(&serde_json::json!({
-                "_meta": { "model": { "Ok": "grok-4.6" } }
-            }))
-            .expect("mismatched model response")
-            .into(),
-        ));
+    let mismatched_model = serde_json::json!({
+        "_meta": { "model": { "Ok": "grok-4.6" } }
+    });
     assert_ne!(
         confirmed_model_id_from_ext_response(&mismatched_model).as_deref(),
         Some("grok-4.5")
     );
 
-    let acknowledgement_only =
-        acp::AgentResponse::ExtMethodResponse(acp::schema::ExtResponse::new(
-            serde_json::value::to_raw_value(&serde_json::json!({ "ok": true }))
-                .expect("acknowledgement response")
-                .into(),
-        ));
+    let acknowledgement_only = serde_json::json!({ "ok": true });
     assert_eq!(
         confirmed_model_id_from_ext_response(&acknowledgement_only),
         None

@@ -491,12 +491,8 @@ pub(in crate::live::sessions::actor) async fn apply_model_via_direct_setter(
 }
 
 pub(in crate::live::sessions::actor) fn confirmed_model_id_from_ext_response(
-    response: &acp::AgentResponse,
+    response: &serde_json::Value,
 ) -> Option<String> {
-    let acp::AgentResponse::ExtMethodResponse(response) = response else {
-        return None;
-    };
-    let value: serde_json::Value = serde_json::from_str(response.0.get()).ok()?;
     [
         "/_meta/model/Ok",
         "/_meta/modelState/currentModelId",
@@ -504,7 +500,7 @@ pub(in crate::live::sessions::actor) fn confirmed_model_id_from_ext_response(
         "/modelId",
     ]
     .into_iter()
-    .find_map(|pointer| value.pointer(pointer)?.as_str().map(str::to_string))
+    .find_map(|pointer| response.pointer(pointer)?.as_str().map(str::to_string))
 }
 
 pub(in crate::live::sessions::actor) fn should_apply_model_via_direct_setter(

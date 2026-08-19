@@ -48,11 +48,7 @@ pub(super) async fn set_init_meta_model_and_confirm(
     Ok(confirmed_model_from_ext_response(&response).as_deref() == Some(model_id))
 }
 
-fn confirmed_model_from_ext_response(response: &acp::AgentResponse) -> Option<String> {
-    let acp::AgentResponse::ExtMethodResponse(response) = response else {
-        return None;
-    };
-    let value: serde_json::Value = serde_json::from_str(response.0.get()).ok()?;
+fn confirmed_model_from_ext_response(response: &serde_json::Value) -> Option<String> {
     [
         "/_meta/model/Ok",
         "/_meta/modelState/currentModelId",
@@ -60,7 +56,7 @@ fn confirmed_model_from_ext_response(response: &acp::AgentResponse) -> Option<St
         "/modelId",
     ]
     .into_iter()
-    .find_map(|pointer| value.pointer(pointer)?.as_str().map(str::to_string))
+    .find_map(|pointer| response.pointer(pointer)?.as_str().map(str::to_string))
 }
 
 #[cfg(test)]
