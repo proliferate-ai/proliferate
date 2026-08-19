@@ -228,10 +228,17 @@ impl SessionStore {
                 operation_changed == 1,
                 "process-local fork failure transition missed expected phase"
             );
+            // The live actor's own exit disposition may already have errored the
+            // child by the time this durable transition runs (both observe the
+            // same failed startup). `errored` is the state this transition
+            // establishes, so accepting it keeps the phase transition from being
+            // rolled back by a benign race; any other status is a real mismatch.
             let session_changed = conn.execute(
                 "UPDATE sessions
                  SET status = 'errored', updated_at = ?2
-                 WHERE id = ?1 AND status = 'starting' AND closed_at IS NULL",
+                 WHERE id = ?1
+                   AND status IN ('starting', 'errored')
+                   AND closed_at IS NULL",
                 params![child_session_id, now],
             )?;
             anyhow::ensure!(
