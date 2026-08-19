@@ -12,11 +12,11 @@
       "displayName": "Claude",
       "harness": {
         "agentProcess": {
-          "version": "0.66.0-proliferate.2",
+          "version": "0.66.0-proliferate.3",
           "source": {
             "kind": "git",
             "repo": "https://github.com/proliferate-ai/claude-agent-acp.git",
-            "gitRef": "65f6205329daea4a521ee0f0c042722b0feb306a",
+            "gitRef": "bf364c5495edba729f7b3a90b37dff04cee75b51",
             "executableRelpath": "node_modules/.bin/claude-agent-acp"
           }
         },
