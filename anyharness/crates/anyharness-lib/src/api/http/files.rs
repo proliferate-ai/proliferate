@@ -110,6 +110,9 @@ pub(super) fn map_service_error(e: FileServiceError) -> ApiError {
 fn map_safety_error(error: SafetyError) -> ApiError {
     match error {
         SafetyError::NotFound => ApiError::not_found("file not found", "FILE_NOT_FOUND"),
+        SafetyError::NotADirectory => {
+            ApiError::bad_request("path component is not a directory", "NOT_A_DIRECTORY")
+        }
         SafetyError::PermissionDenied => {
             ApiError::forbidden("file access denied", "FILE_PERMISSION_DENIED")
         }
@@ -527,6 +530,28 @@ mod tests {
         let safety_error = map_safety_error(SafetyError::PermissionDenied);
         assert_eq!(safety_error.status(), StatusCode::FORBIDDEN);
         assert_eq!(safety_error.code(), Some("FILE_PERMISSION_DENIED"));
+    }
+
+    #[test]
+    fn non_directory_component_has_stable_bad_request_problem() {
+        let error = map_service_error(FileServiceError::NotADirectory(
+            "parent-file/missing/child.txt".to_string(),
+        ));
+
+        assert_eq!(error.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(error.code(), Some("NOT_A_DIRECTORY"));
+        assert_eq!(
+            error.detail(),
+            Some("not a directory: parent-file/missing/child.txt")
+        );
+
+        let safety_error = map_safety_error(SafetyError::NotADirectory);
+        assert_eq!(safety_error.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(safety_error.code(), Some("NOT_A_DIRECTORY"));
+        assert_eq!(
+            safety_error.detail(),
+            Some("path component is not a directory")
+        );
     }
 
     #[test]

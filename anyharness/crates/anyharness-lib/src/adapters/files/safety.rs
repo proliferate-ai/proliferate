@@ -20,12 +20,24 @@ pub fn resolve_safe_path(
     let canonical_root = workspace_root.canonicalize().map_err(map_safety_io_error)?;
 
     match candidate.symlink_metadata() {
-        Ok(_) => {
+        Ok(metadata) => {
             // An occupied final entry is resolved through its target. A
             // dangling final symlink is therefore distinct from an ordinary
             // absent entry and maps to NotFound rather than write/create
             // compatibility behavior.
-            let canonical = candidate.canonicalize().map_err(map_safety_io_error)?;
+            let canonical = match candidate.canonicalize() {
+                Ok(path) => path,
+                Err(error)
+                    if metadata.file_type().is_symlink()
+                        && matches!(
+                            classify_io_error(&error),
+                            ClassifiedIoError::NotFound | ClassifiedIoError::NotADirectory
+                        ) =>
+                {
+                    return Err(SafetyError::NotFound);
+                }
+                Err(error) => return Err(map_safety_io_error(error)),
+            };
             validate_canonical_target(&canonical, &canonical_root)?;
             Ok(canonical)
         }
@@ -172,6 +184,7 @@ pub fn content_version_token(data: &[u8]) -> String {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClassifiedIoError {
     NotFound,
+    NotADirectory,
     PermissionDenied,
     Unexpected,
 }
@@ -179,6 +192,7 @@ pub enum ClassifiedIoError {
 pub fn classify_io_error(error: &io::Error) -> ClassifiedIoError {
     match error.kind() {
         io::ErrorKind::NotFound => ClassifiedIoError::NotFound,
+        io::ErrorKind::NotADirectory => ClassifiedIoError::NotADirectory,
         io::ErrorKind::PermissionDenied => ClassifiedIoError::PermissionDenied,
         _ => ClassifiedIoError::Unexpected,
     }
@@ -187,6 +201,7 @@ pub fn classify_io_error(error: &io::Error) -> ClassifiedIoError {
 fn map_safety_io_error(error: io::Error) -> SafetyError {
     match classify_io_error(&error) {
         ClassifiedIoError::NotFound => SafetyError::NotFound,
+        ClassifiedIoError::NotADirectory => SafetyError::NotADirectory,
         ClassifiedIoError::PermissionDenied => SafetyError::PermissionDenied,
         ClassifiedIoError::Unexpected => SafetyError::IoError,
     }
@@ -200,6 +215,7 @@ pub enum SafetyError {
     GitDirectory,
     OutsideWorkspace,
     NotFound,
+    NotADirectory,
     PermissionDenied,
     IoError,
 }
@@ -213,6 +229,7 @@ impl std::fmt::Display for SafetyError {
             Self::GitDirectory => write!(f, ".git directory access is not allowed"),
             Self::OutsideWorkspace => write!(f, "resolved path is outside the workspace"),
             Self::NotFound => write!(f, "path target was not found"),
+            Self::NotADirectory => write!(f, "path component is not a directory"),
             Self::PermissionDenied => write!(f, "permission denied during path resolution"),
             Self::IoError => write!(f, "path resolution failed"),
         }

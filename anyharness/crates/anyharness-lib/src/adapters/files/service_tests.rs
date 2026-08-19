@@ -78,15 +78,20 @@ fn create_entry_fails_when_parent_is_a_file() {
     let dir = TestWorkspace::new();
     std::fs::write(dir.path().join("parent-file"), "parent").expect("seed file parent");
 
-    let error = WorkspaceFilesService::create_entry(
-        dir.path(),
-        "parent-file/child",
-        CreateWorkspaceFileEntryKind::File,
-        None,
-    )
-    .expect_err("file parent should fail as not a directory");
+    for path in ["parent-file/child", "parent-file/missing/child"] {
+        let error = WorkspaceFilesService::create_entry(
+            dir.path(),
+            path,
+            CreateWorkspaceFileEntryKind::File,
+            None,
+        )
+        .expect_err("file parent should fail as not a directory");
 
-    assert!(matches!(error, FileServiceError::NotADirectory(_)));
+        assert!(matches!(
+            error,
+            FileServiceError::NotADirectory(error_path) if error_path == path
+        ));
+    }
 }
 
 #[test]
@@ -192,10 +197,15 @@ fn rename_entry_fails_when_destination_parent_is_a_file() {
     std::fs::write(dir.path().join("source.txt"), "source").expect("seed source");
     std::fs::write(dir.path().join("parent-file"), "parent").expect("seed file parent");
 
-    let error = WorkspaceFilesService::rename_entry(dir.path(), "source.txt", "parent-file/child")
-        .expect_err("file destination parent should fail as not a directory");
+    for path in ["parent-file/child", "parent-file/missing/child"] {
+        let error = WorkspaceFilesService::rename_entry(dir.path(), "source.txt", path)
+            .expect_err("file destination parent should fail as not a directory");
 
-    assert!(matches!(error, FileServiceError::NotADirectory(_)));
+        assert!(matches!(
+            error,
+            FileServiceError::NotADirectory(error_path) if error_path == path
+        ));
+    }
     assert_eq!(
         std::fs::read_to_string(dir.path().join("source.txt")).expect("source remains"),
         "source"
@@ -500,6 +510,48 @@ fn ordinary_missing_paths_keep_operation_specific_behavior() {
 }
 
 #[test]
+fn regular_file_ancestor_is_not_a_directory_for_file_operations() {
+    let dir = TestWorkspace::new();
+    std::fs::write(dir.path().join("parent-file"), "parent").expect("seed file ancestor");
+    let nested_path = "parent-file/missing/child.txt";
+
+    assert!(matches!(
+        WorkspaceFilesService::stat_file(dir.path(), nested_path)
+            .expect_err("stat below a file ancestor"),
+        FileServiceError::NotADirectory(path) if path == nested_path
+    ));
+    assert!(matches!(
+        WorkspaceFilesService::read_file(dir.path(), nested_path)
+            .expect_err("read below a file ancestor"),
+        FileServiceError::NotADirectory(path) if path == nested_path
+    ));
+    assert!(matches!(
+        WorkspaceFilesService::list_entries(dir.path(), nested_path)
+            .expect_err("list below a file ancestor"),
+        FileServiceError::NotADirectory(path) if path == nested_path
+    ));
+    assert!(matches!(
+        WorkspaceFilesService::write_file(dir.path(), nested_path, "nope", "")
+            .expect_err("write below a file ancestor"),
+        FileServiceError::NotADirectory(path) if path == nested_path
+    ));
+    assert!(matches!(
+        WorkspaceFilesService::rename_entry(dir.path(), nested_path, "renamed.txt")
+            .expect_err("rename below a file ancestor"),
+        FileServiceError::NotADirectory(path) if path == nested_path
+    ));
+    assert!(matches!(
+        WorkspaceFilesService::delete_entry(dir.path(), nested_path)
+            .expect_err("delete below a file ancestor"),
+        FileServiceError::NotADirectory(path) if path == nested_path
+    ));
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("parent-file")).expect("ancestor remains"),
+        "parent"
+    );
+}
+
+#[test]
 fn unsafe_public_paths_are_rejected_before_filesystem_access() {
     let dir = TestWorkspace::new();
 
@@ -533,7 +585,7 @@ fn git_named_workspace_ancestor_does_not_poison_contained_paths() {
 }
 
 #[test]
-fn io_classifier_keeps_missing_permission_and_unexpected_distinct() {
+fn io_classifier_keeps_missing_wrong_kind_permission_and_unexpected_distinct() {
     let missing = FileServiceError::from_io(
         std::io::Error::from(std::io::ErrorKind::NotFound),
         "missing.txt",
@@ -542,16 +594,31 @@ fn io_classifier_keeps_missing_permission_and_unexpected_distinct() {
         std::io::Error::from(std::io::ErrorKind::PermissionDenied),
         "secret.txt",
     );
+    let not_a_directory = FileServiceError::from_io(
+        std::io::Error::from(std::io::ErrorKind::NotADirectory),
+        "parent-file/missing/child.txt",
+    );
     let unexpected = FileServiceError::from_io(
         std::io::Error::from(std::io::ErrorKind::Other),
         "seeded/private/path.txt",
     );
 
     assert!(matches!(missing, FileServiceError::NotFound(path) if path == "missing.txt"));
+    assert!(matches!(
+        not_a_directory,
+        FileServiceError::NotADirectory(path) if path == "parent-file/missing/child.txt"
+    ));
     assert!(matches!(denied, FileServiceError::PermissionDenied));
     assert!(matches!(unexpected, FileServiceError::Io));
     assert_eq!(unexpected.to_string(), "file operation failed");
 
+    assert!(matches!(
+        FileServiceError::from_safety(
+            SafetyError::NotADirectory,
+            "parent-file/missing/child.txt"
+        ),
+        FileServiceError::NotADirectory(path) if path == "parent-file/missing/child.txt"
+    ));
     assert!(matches!(
         FileServiceError::from_safety(SafetyError::PermissionDenied, "secret.txt"),
         FileServiceError::PermissionDenied
@@ -711,6 +778,51 @@ fn dangling_symlink_is_missing_for_target_operations_but_occupied_for_create() {
     let deleted = WorkspaceFilesService::delete_entry(dir.path(), "renamed-link")
         .expect("delete dangling link");
     assert_eq!(deleted.kind, WorkspaceFileKind::Symlink);
+}
+
+#[cfg(unix)]
+#[test]
+fn symlink_target_below_regular_file_is_still_dangling() {
+    let dir = TestWorkspace::new();
+    std::fs::write(dir.path().join("target-file"), "target").expect("seed target file");
+    std::os::unix::fs::symlink(
+        "target-file/missing",
+        dir.path().join("dangling-through-file"),
+    )
+    .expect("seed dangling link through file");
+
+    for error in [
+        WorkspaceFilesService::stat_file(dir.path(), "dangling-through-file")
+            .expect_err("dangling stat"),
+        WorkspaceFilesService::read_file(dir.path(), "dangling-through-file")
+            .expect_err("dangling read"),
+        WorkspaceFilesService::list_entries(dir.path(), "dangling-through-file")
+            .expect_err("dangling list"),
+        WorkspaceFilesService::write_file(dir.path(), "dangling-through-file", "nope", "")
+            .expect_err("dangling write"),
+    ] {
+        assert!(matches!(
+            error,
+            FileServiceError::NotFound(path) if path == "dangling-through-file"
+        ));
+    }
+    assert!(matches!(
+        WorkspaceFilesService::create_entry(
+            dir.path(),
+            "dangling-through-file",
+            CreateWorkspaceFileEntryKind::File,
+            None,
+        )
+        .expect_err("dangling link occupies its entry"),
+        FileServiceError::AlreadyExists(path) if path == "dangling-through-file"
+    ));
+    assert!(dir
+        .path()
+        .join("dangling-through-file")
+        .symlink_metadata()
+        .expect("link remains")
+        .file_type()
+        .is_symlink());
 }
 
 #[cfg(unix)]

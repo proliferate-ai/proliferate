@@ -104,6 +104,7 @@ impl FileServiceError {
     pub fn from_io(error: std::io::Error, relative_path: &str) -> Self {
         match classify_io_error(&error) {
             ClassifiedIoError::NotFound => Self::NotFound(relative_path.to_string()),
+            ClassifiedIoError::NotADirectory => Self::NotADirectory(relative_path.to_string()),
             ClassifiedIoError::PermissionDenied => Self::PermissionDenied,
             ClassifiedIoError::Unexpected => Self::Io,
         }
@@ -112,6 +113,7 @@ impl FileServiceError {
     pub fn from_safety(error: SafetyError, relative_path: &str) -> Self {
         match error {
             SafetyError::NotFound => Self::NotFound(relative_path.to_string()),
+            SafetyError::NotADirectory => Self::NotADirectory(relative_path.to_string()),
             SafetyError::PermissionDenied => Self::PermissionDenied,
             SafetyError::IoError => Self::Io,
             error => Self::Safety(error),

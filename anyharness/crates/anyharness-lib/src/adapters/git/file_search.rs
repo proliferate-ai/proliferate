@@ -132,7 +132,9 @@ fn run_scoped_git_file_list(workspace_path: &Path) -> Result<String, FileService
 fn map_git_invocation_error(error: std::io::Error) -> FileServiceError {
     match classify_io_error(&error) {
         ClassifiedIoError::PermissionDenied => FileServiceError::PermissionDenied,
-        ClassifiedIoError::NotFound | ClassifiedIoError::Unexpected => FileServiceError::Io,
+        ClassifiedIoError::NotFound
+        | ClassifiedIoError::NotADirectory
+        | ClassifiedIoError::Unexpected => FileServiceError::Io,
     }
 }
 
@@ -148,6 +150,7 @@ fn build_candidate(
         Ok(path) => path,
         Err(
             SafetyError::NotFound
+            | SafetyError::NotADirectory
             | SafetyError::OutsideWorkspace
             | SafetyError::GitDirectory
             | SafetyError::AbsolutePath
@@ -160,7 +163,7 @@ fn build_candidate(
     let metadata = match resolved_path.metadata() {
         Ok(metadata) => metadata,
         Err(error) => match FileServiceError::from_io(error, relative_path) {
-            FileServiceError::NotFound(_) => return Ok(None),
+            FileServiceError::NotFound(_) | FileServiceError::NotADirectory(_) => return Ok(None),
             error => return Err(error),
         },
     };
@@ -378,6 +381,24 @@ mod tests {
         assert!(paths
             .iter()
             .all(|path| !path.starts_with("nested-workspace/")));
+    }
+
+    #[test]
+    fn snapshot_omits_tracked_candidate_below_regular_file() {
+        let repo = TestRepo::new();
+        repo.write("parent-file/missing/child.txt", "tracked child");
+        repo.git(&["add", "."]);
+        fs::remove_dir_all(repo.root.join("parent-file")).expect("replace tracked directory");
+        fs::write(repo.root.join("parent-file"), "regular file").expect("seed file ancestor");
+
+        let snapshot = build_snapshot(&repo.root).expect("expected safe snapshot");
+        let paths = snapshot
+            .entries
+            .iter()
+            .map(|entry| entry.path.as_str())
+            .collect::<Vec<_>>();
+
+        assert!(!paths.contains(&"parent-file/missing/child.txt"));
     }
 
     #[test]

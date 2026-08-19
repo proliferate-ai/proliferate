@@ -92,6 +92,7 @@ boundary:
 | Filesystem outcome | Service result | HTTP problem |
 | --- | --- | --- |
 | Missing target, including a dangling final symlink | `NotFound` | `404 FILE_NOT_FOUND` |
+| Intermediate component is not a directory | `NotADirectory` | `400 NOT_A_DIRECTORY` |
 | Permission denied | `PermissionDenied` | `403 FILE_PERMISSION_DENIED` |
 | Canonical target outside the workspace | `OutsideWorkspace` | `400 PATH_OUTSIDE_WORKSPACE` |
 | Absolute, traversal, invalid, or `.git` path | safety refusal | `400 INVALID_FILE_PATH` |
@@ -232,8 +233,9 @@ scoped to that root, even when the workspace is nested below a larger
 repository. Results are workspace-relative. Every Git candidate passes through
 the Files safe-target resolver and must resolve to a regular file. Contained
 file symlinks retain their link path; directory, dangling, escaping, and
-`.git`-target symlinks are omitted. Permission and unexpected-I/O outcomes are
-propagated rather than converted to an empty result.
+`.git`-target symlinks are omitted. A stale Git candidate beneath a
+regular-file component is also omitted. Permission and unexpected-I/O outcomes
+are propagated rather than converted to an empty result.
 
 ## Boundaries
 
@@ -258,7 +260,7 @@ propagated rather than converted to an empty result.
 
 - File access must remain inside the workspace.
 - `.git` must stay hidden and inaccessible through this surface.
-- Missing, denied, and unexpected-I/O states must remain distinct.
+- Missing, wrong-kind, denied, and unexpected-I/O states must remain distinct.
 - Search must not advertise a path that safe file operations refuse.
 - Writes must stay atomic.
 - Create-only operations must not create missing parents or overwrite existing
