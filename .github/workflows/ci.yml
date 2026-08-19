@@ -596,3 +596,58 @@ jobs:
           name: workflow-definition-lifecycle-traces
           path: tests/intent/test-results/
           retention-days: 7
+
+  # Temporary workflow-dispatch-only owner for AnyHarness SDK generation.
+  # Removed after its checksummed artifacts are committed unchanged.
+  diagnostic-anyharness-sdk-artifacts:
+    name: Diagnostic AnyHarness SDK artifacts
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.11.0
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate repository-owned AnyHarness SDK artifacts
+        run: pnpm -C anyharness/sdk generate
+
+      - name: Prepare checksummed artifacts and provenance
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          artifact_dir="$RUNNER_TEMP/anyharness-sdk-artifacts"
+          mkdir -p "$artifact_dir/generated" "$artifact_dir/src/generated"
+          cp anyharness/sdk/generated/openapi.json "$artifact_dir/generated/openapi.json"
+          cp anyharness/sdk/src/generated/openapi.ts "$artifact_dir/src/generated/openapi.ts"
+          sha256sum "$artifact_dir/generated/openapi.json" > "$artifact_dir/openapi.json.sha256"
+          sha256sum "$artifact_dir/src/generated/openapi.ts" > "$artifact_dir/openapi.ts.sha256"
+          base_commit="$(git merge-base "$SOURCE_COMMIT" origin/main)"
+          printf 'source_commit=%s\nbase_commit=%s\ncommand=%s\n' \
+            "$SOURCE_COMMIT" \
+            "$base_commit" \
+            'pnpm -C anyharness/sdk generate' \
+            > "$artifact_dir/provenance.txt"
+
+      - name: Upload generated AnyHarness SDK artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: anyharness-sdk-${{ github.sha }}
+          path: ${{ runner.temp }}/anyharness-sdk-artifacts/
+          if-no-files-found: error
+          retention-days: 1
