@@ -1,12 +1,18 @@
 use rusqlite::{params, OptionalExtension};
 
 use super::model::{
-    SessionLinkParseError, SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
-    SubagentLinkCloseOutcome, SubagentLinkCloseResult, SubagentLinkOpenOutcome,
-    SubagentLinkOpenResult,
+    SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation, SubagentLinkCloseOutcome,
+    SubagentLinkCloseResult, SubagentLinkOpenOutcome, SubagentLinkOpenResult,
 };
+use super::row::map_session_link;
+use crate::domains::agents::launch_options::{
+    HarnessLaunchOptionStateRow, LaunchSelection, LaunchSelectionUnsupported,
+};
+use crate::domains::sessions::launch_intent::ResolvedLaunchIntent;
 use crate::domains::sessions::model::SessionRecord;
+use crate::domains::sessions::store::launch_intents::insert_launch_intent_row;
 use crate::domains::sessions::store::sessions::insert_session_row;
+use crate::domains::sessions::store::{with_launch_admission_tx, LaunchAdmissionTxError};
 use crate::persistence::Db;
 
 #[derive(Clone)]
@@ -18,6 +24,12 @@ pub struct SessionLinkStore {
 pub enum InsertSubagentLinkOutcome {
     Inserted,
     FanoutLimit,
+}
+
+#[derive(Debug)]
+pub enum InsertSubagentSessionError {
+    FanoutLimit,
+    LaunchSelection(LaunchSelectionUnsupported),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -105,13 +117,20 @@ impl SessionLinkStore {
     pub fn insert_subagent_session_with_child_limit(
         &self,
         session: &SessionRecord,
+        intent: &ResolvedLaunchIntent,
         record: &SessionLinkRecord,
         max_children: usize,
-    ) -> anyhow::Result<InsertSubagentLinkOutcome> {
-        let result = self.db.with_tx_anyhow(|conn| {
-            insert_session_row(conn, session)?;
-            let inserted = conn.execute(
-                "INSERT INTO session_links (
+        harness_kind: &str,
+        basis_revision: &dyn Fn() -> String,
+        selection: &LaunchSelection,
+    ) -> Result<(InsertSubagentLinkOutcome, HarnessLaunchOptionStateRow), InsertSubagentSessionError>
+    {
+        let result =
+            with_launch_admission_tx(&self.db, harness_kind, basis_revision, selection, |conn| {
+                insert_session_row(conn, session)?;
+                insert_launch_intent_row(conn, &session.id, intent)?;
+                let inserted = conn.execute(
+                    "INSERT INTO session_links (
                     id, public_id, relation, parent_session_id, child_session_id,
                     workspace_relation, label, created_by_turn_id,
                     created_by_tool_call_id, created_at, subagent_closed_at, closed_at
@@ -123,33 +142,37 @@ impl SessionLinkStore {
                     WHERE relation = 'subagent' AND parent_session_id = ?4
                       AND closed_at IS NULL
                  ) < ?13",
-                params![
-                    record.id,
-                    record.public_id,
-                    record.relation.as_str(),
-                    record.parent_session_id,
-                    record.child_session_id,
-                    record.workspace_relation.as_str(),
-                    record.label,
-                    record.created_by_turn_id,
-                    record.created_by_tool_call_id,
-                    record.created_at,
-                    record.subagent_closed_at,
-                    record.closed_at,
-                    max_children as i64,
-                ],
-            )?;
-            if inserted == 0 {
-                return Err(AtomicSubagentFanoutLimit.into());
-            }
-            Ok(())
-        });
+                    params![
+                        record.id,
+                        record.public_id,
+                        record.relation.as_str(),
+                        record.parent_session_id,
+                        record.child_session_id,
+                        record.workspace_relation.as_str(),
+                        record.label,
+                        record.created_by_turn_id,
+                        record.created_by_tool_call_id,
+                        record.created_at,
+                        record.subagent_closed_at,
+                        record.closed_at,
+                        max_children as i64,
+                    ],
+                )?;
+                if inserted == 0 {
+                    return Err(AtomicSubagentFanoutLimit.into());
+                }
+                Ok(())
+            });
         match result {
-            Ok(()) => Ok(InsertSubagentLinkOutcome::Inserted),
-            Err(error) if error.downcast_ref::<AtomicSubagentFanoutLimit>().is_some() => {
-                Ok(InsertSubagentLinkOutcome::FanoutLimit)
+            Ok(((), validated)) => Ok((InsertSubagentLinkOutcome::Inserted, validated)),
+            Err(LaunchAdmissionTxError::Store(error))
+                if error.downcast_ref::<AtomicSubagentFanoutLimit>().is_some() =>
+            {
+                Err(InsertSubagentSessionError::FanoutLimit)
             }
-            Err(error) => Err(error),
+            Err(error) => Err(InsertSubagentSessionError::LaunchSelection(
+                error.into_selection(),
+            )),
         }
     }
 
@@ -555,35 +578,4 @@ pub(crate) fn delete_session_link_rows_for_session_in_tx(
         [session_id],
     )?;
     Ok(())
-}
-
-pub(crate) fn map_session_link(row: &rusqlite::Row) -> rusqlite::Result<SessionLinkRecord> {
-    let relation: String = row.get("relation")?;
-    let workspace_relation: String = row.get("workspace_relation")?;
-    Ok(SessionLinkRecord {
-        id: row.get("id")?,
-        public_id: row.get("public_id")?,
-        relation: parse_relation_for_row(&relation)?,
-        parent_session_id: row.get("parent_session_id")?,
-        child_session_id: row.get("child_session_id")?,
-        workspace_relation: parse_workspace_relation_for_row(&workspace_relation)?,
-        label: row.get("label")?,
-        created_by_turn_id: row.get("created_by_turn_id")?,
-        created_by_tool_call_id: row.get("created_by_tool_call_id")?,
-        created_at: row.get("created_at")?,
-        subagent_closed_at: row.get("subagent_closed_at")?,
-        closed_at: row.get("closed_at")?,
-    })
-}
-
-fn parse_relation_for_row(value: &str) -> rusqlite::Result<SessionLinkRelation> {
-    SessionLinkRelation::parse(value).map_err(map_parse_error)
-}
-
-fn parse_workspace_relation_for_row(value: &str) -> rusqlite::Result<SessionLinkWorkspaceRelation> {
-    SessionLinkWorkspaceRelation::parse(value).map_err(map_parse_error)
-}
-
-fn map_parse_error(error: SessionLinkParseError) -> rusqlite::Error {
-    rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(error))
 }

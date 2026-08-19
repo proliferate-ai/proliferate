@@ -5,20 +5,17 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::SessionExecutionPhase;
 use tokio::sync::{mpsc, Mutex};
 
-use crate::domains::sessions::model::RequestedModeApplyError as ModeApplyError;
 use crate::domains::sessions::prompt::capabilities::capabilities_from_acp;
 use crate::live::sessions::actor::capabilities::{
     action_capabilities_from_acp, persist_session_action_capabilities,
 };
-use crate::live::sessions::actor::config::apply::restore_persisted_live_config_if_needed;
-use crate::live::sessions::actor::config::diagnostics::{fixed_config_failure, ConfigFailureStage};
-use crate::live::sessions::actor::config::handle::{
-    apply_requested_mode_preference, apply_requested_model_preference,
-};
+use crate::live::sessions::actor::config::diagnostics::ConfigFailureStage;
+use crate::live::sessions::actor::config::handle::apply_resolved_launch_intent;
 use crate::live::sessions::actor::config::persist::{
     emit_live_config_update, emit_startup_state, load_startup_restore_snapshot,
     log_config_stage_result,
 };
+use crate::live::sessions::actor::config::restore::restore_persisted_live_config_if_needed;
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
 use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
 use crate::live::sessions::actor::state::{SessionActor, SessionActorConfig, SessionStartupState};
@@ -294,7 +291,6 @@ impl SessionActor {
         let startup_restore_snapshot = load_startup_restore_snapshot(
             config.caps.state.as_ref(),
             &session_id,
-            &source_agent_kind,
             startup_strategy.resumes_durable_history(),
         )?;
         {
@@ -304,32 +300,13 @@ impl SessionActor {
             }
             emit_startup_state(&mut sink, &startup_state);
         }
-        let initial_live_config_started = Instant::now();
-        let result = emit_live_config_update(
-            &source_agent_kind,
-            &session_id,
-            config.caps.state.as_ref(),
-            &event_sink,
-            &mut persisted_config_state,
-            &mut startup_state,
-            chrono::Utc::now().to_rfc3339(),
-        )
-        .await;
-        log_config_stage_result(
-            &session_id,
-            &workspace_id,
-            &result,
-            initial_live_config_started.elapsed(),
-            "failed to persist initial live config snapshot",
-            ConfigFailureStage::InitialLiveConfig,
-        );
-        apply_requested_model_preference(
-            &conn,
-            &native_session_id,
-            &config.launch.session,
-            &mut startup_state,
-        )
-        .await;
+        let launch_intent = config
+            .caps
+            .state
+            .find_launch_intent(&session_id)?
+            .ok_or_else(|| {
+                anyhow::anyhow!("session {session_id} has no persisted launch intent")
+            })?;
         let restore_live_config_started = Instant::now();
         let result = restore_persisted_live_config_if_needed(
             &conn,
@@ -351,32 +328,38 @@ impl SessionActor {
             "failed to restore persisted live config",
             ConfigFailureStage::RestoreLiveConfig,
         );
-        if let Err(error) = apply_requested_mode_preference(
-            &conn,
-            &native_session_id,
-            &config.launch.session,
-            &mut startup_state,
-        )
-        .await
-        {
-            let failure = fixed_config_failure(&error, ConfigFailureStage::RequestedMode);
-            tracing::warn!(
-                session_id = %session_id,
-                failure_class = failure.failure_class,
-                failure_stage = failure.failure_stage,
-                "failed to apply requested session mode"
-            );
-            if matches!(
-                &startup_strategy,
-                crate::live::sessions::model::SessionStartupStrategy::ForkFromNative { .. }
-            ) {
-                let detail = "process-local fork session configuration failed";
-                let _ = ready_tx.send(Err(anyhow::anyhow!(detail)));
-                return Err(anyhow::anyhow!(detail));
-            }
-            let _ = ready_tx.send(Err(ModeApplyError::clone_for_readiness(&error)));
+        if let Err(error) = result {
+            queue_launch_observation_refresh(&config.caps, &source_agent_kind, &session_id);
+            let _ = ready_tx.send(Err(startup_config_failure(&startup_strategy, &error)));
             return Err(error);
         }
+        // A newly-created session has no durable live authority until its
+        // complete immutable intent is applied and confirmed. Persisting the
+        // handshake before this point would let a failed attempt promote its
+        // defaults into a resume snapshot and skip the intent on retry.
+        // Established sessions instead restore their already-confirmed full
+        // snapshot so later live mutations remain authoritative.
+        if startup_restore_snapshot.is_none() {
+            if let Err(error) = apply_resolved_launch_intent(
+                &conn,
+                &native_session_id,
+                &session_id,
+                &source_agent_kind,
+                &launch_intent,
+                &mut startup_state,
+            )
+            .await
+            {
+                tracing::warn!(session_id = %session_id, error = %error, "failed to apply and confirm launch intent");
+                queue_launch_observation_refresh(&config.caps, &source_agent_kind, &session_id);
+                let _ = ready_tx.send(Err(startup_config_failure(&startup_strategy, &error)));
+                return Err(error);
+            }
+        }
+        // This is the first snapshot write for a newly-created session. At this
+        // point either the complete launch intent or every saved current value
+        // has passed membership, setter confirmation, and final aggregate
+        // equality. A persistence failure is therefore fatal before readiness.
         let post_preferences_live_config_started = Instant::now();
         let result = emit_live_config_update(
             &source_agent_kind,
@@ -396,6 +379,10 @@ impl SessionActor {
             "failed to persist post-preference live config snapshot",
             ConfigFailureStage::PostPreferencesLiveConfig,
         );
+        if let Err(error) = result {
+            let _ = ready_tx.send(Err(anyhow::anyhow!(error.to_string())));
+            return Err(error);
+        }
 
         if let crate::live::sessions::model::SessionStartupStrategy::ForkFromNative {
             fork_operation_id,
@@ -493,5 +480,49 @@ impl SessionActor {
             pending_stop_response: None,
         };
         Ok((actor, notification_rx, background_work_rx))
+    }
+}
+
+pub(in crate::live::sessions::actor) fn queue_launch_observation_refresh(
+    caps: &crate::live::sessions::model::ActorCapabilities,
+    harness_kind: &str,
+    session_id: &str,
+) {
+    let Some(invalidator) = caps.launch_observation_invalidator.as_ref() else {
+        return;
+    };
+    if invalidator.queue_refresh(harness_kind) {
+        tracing::info!(
+            session_id,
+            harness_kind,
+            event = "session.launch_observation.contradiction",
+            "queued a deduplicated target launch-options refresh"
+        );
+    } else {
+        tracing::warn!(
+            session_id,
+            harness_kind,
+            event = "session.launch_observation.contradiction_queue_closed",
+            "could not queue target launch-options refresh"
+        );
+    }
+}
+
+/// Process-local fork children report a fork-shaped startup failure (Lane D):
+/// the fork dispatcher classifies the child by this readiness error, so a
+/// configuration failure during a `ForkFromNative` start must not surface as an
+/// ordinary config error. Every other startup keeps the launch-options
+/// cutover's exact error text.
+fn startup_config_failure(
+    startup_strategy: &crate::live::sessions::model::SessionStartupStrategy,
+    error: &anyhow::Error,
+) -> anyhow::Error {
+    if matches!(
+        startup_strategy,
+        crate::live::sessions::model::SessionStartupStrategy::ForkFromNative { .. }
+    ) {
+        anyhow::anyhow!("process-local fork session configuration failed")
+    } else {
+        anyhow::anyhow!(error.to_string())
     }
 }

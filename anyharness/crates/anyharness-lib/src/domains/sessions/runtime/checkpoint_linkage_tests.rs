@@ -61,6 +61,10 @@ async fn checkpoint_linkage_stamps_the_boundary_checkpoint_id_onto_the_fork_oper
         .store()
         .insert(&parent)
         .expect("insert OpenCode parent");
+    state
+        .session_service
+        .store()
+        .seed_empty_launch_intent(&parent.id);
 
     for event in [
         SessionEventRecord {

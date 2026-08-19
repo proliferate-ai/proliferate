@@ -345,11 +345,15 @@ impl SessionActor {
                             Some(SessionCommand::SetConfigOption {
                                 config_id,
                                 value,
-                                catalog_authorized_model,
+                                live_snapshot_authorized_model,
                                 respond_to,
                             }) => {
                                 let result = self
-                                    .handle_busy_config_command(&config_id, &value, catalog_authorized_model)
+                                    .handle_busy_config_command(
+                                        &config_id,
+                                        &value,
+                                        live_snapshot_authorized_model,
+                                    )
                                     .await;
                                 let _ = respond_to.send(result);
                             }

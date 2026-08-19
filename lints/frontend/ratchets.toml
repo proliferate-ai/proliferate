@@ -33,7 +33,7 @@ reason = "home screen suite: unified-composer/target-persistence coverage joined
 
 [[max_lines]]
 path = "apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessPane.test.tsx"
-max_lines = 1208
+max_lines = 1203
 reason = "C-train composition: C-2 ack-status UI coverage joins the B-4 cut; P3 runtime catalog extends All-Models coverage + add-key modal flow + switch disambiguation + surface store mock + ProductHost test-host wiring + authenticated-without-cloud-compute BYOK gating cases + C3 model-snapshot status mock stub + review-fix refresh mutation stub + C1 cursor api_key/CLI method + CURSOR_API_KEY persistence cases; F-040 dropped the client-refresh-with-payload cases (no callable cloud refresh remains); agent-auth.md §5 provider-picker two-write assertion (vault api_key + one selection row) replaces the prefill-only case; the §1–§7 pane rebuild adds the collapsed-model-list expansion helper; review-fix non-orphaning provider-picker cases (PUT-failure revoke + rollback, close-only-after-PUT, bound-env-var pass-through, key-shaped env var for multi-field providers); PR-review fixes add the P0 anonymous-local Authenticate-gate regression, the P1-a supportsLogin&&canRunLogin regression, and the P1-b gateway-capabilities-pending loading-state regression; design-handoff v2 rewrite (cards + merged header badge + providers section + saved-keys segment)"
 
 [[max_lines]]
@@ -179,19 +179,24 @@ max_lines = 447
 reason = "blocked-status composer takeover branch (textarea/control-row swap + focus restore); split on next growth"
 
 [[frontend_structure]]
-path = "apps/packages/product-client/src/hooks/home/workflows/use-home-next-launch.ts"
-max_lines = 404
-reason = "PRO-230's full launch-outcome/attemptId machinery merged with main's attachmentSnapshots plumbing threaded through every target-kind branch; split on next growth"
-
-[[frontend_structure]]
 path = "apps/packages/product-client/src/lib/infra/terminals/terminal-stream-registry.ts"
 max_lines = 417
 reason = "terminal/feed stream registry (+open/close/error records woven into the existing callbacks; no seam short of splitting the registry itself)"
 
 [[frontend_structure]]
 path = "apps/packages/product-client/src/components/workspace/chat/transcript/VirtualizedTranscriptRowList.tsx"
-max_lines = 407
-reason = "Background Work R2: reports the stick-to-bottom engine's own isPinnedToBottom state upward via a new onIsPinnedToBottomChange callback prop, so the background-work transcript row can hide itself when the user scrolls away from bottom instead of floating over mid-transcript content; split deferred. Bumped 403->405 by the current-main merge: the chat-scroll refold's single-writer / frame-pipeline landing (PRO-187) plus r2's pin-state wiring net two more lines in this host. Re-trued 405->407 by the r9 refold composition (PRO-187): the byte-identical r9 diff composed to 400 lines on its old base but 407 on post-r8 main; r10-r12 compose to 406 under this ceiling."
+max_lines = 424
+reason = "Background Work R2: reports the stick-to-bottom engine's own isPinnedToBottom state upward via a new onIsPinnedToBottomChange callback prop, so the background-work transcript row can hide itself when the user scrolls away from bottom instead of floating over mid-transcript content; split deferred. Bumped 403->405 by the current-main merge: the chat-scroll refold's single-writer / frame-pipeline landing (PRO-187) plus r2's pin-state wiring net two more lines in this host. Re-trued 405->407 by the r9 refold composition (PRO-187): the byte-identical r9 diff composed to 400 lines on its old base but 407 on post-r8 main; r10-r12 compose to 406 under this ceiling. Bumped 407->424 by the shared WebKit older-history prepend regression: the pending prepend anchor may no longer be discarded while its request is merely in flight (loading-window tracking + release-on-resolution in the stale-anchor cleanup), because an unrelated commit in the request->prepend gap otherwise drops the seat before the compensation anchor ever installs; the anchor's lifecycle is owned end-to-end by this host, so the guard cannot live elsewhere."
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/hooks/chat/ui/use-transcript-frame-pipeline-lifecycle.ts"
+max_lines = 434
+reason = "Shared WebKit older-history prepend regression: the sole transcript writer's prepend-seat lifecycle now requires a scroll-quiet frame before it acknowledges a seat and releases the non-cancelable owner, because a seated read taken while a native wheel/momentum continuation is still delivering proves only the main-thread DOM value at that callback. The rule is stated once as a module contract and applied at both the pre-deadline and ordinary-deadline returns; the bound is the unchanged three-second absolute ceiling. Split deferred deliberately — the seat math, the monotonic height floor, and this proof rule are one state machine over the same anchor, and separating them would put the single-writer invariant across a module seam during an active hosted-only investigation."
+
+[[frontend_structure]]
+path = "apps/packages/product-client/src/hooks/chat/ui/use-transcript-stick-to-bottom.ts"
+max_lines = 411
+reason = "Same regression: the engine is where scroll events are classified, so it is the only place that can tell native scroll activity from its own writes. Adds one counter ref, its increment past marker precedence in onViewportScroll, a per-session reset, and the wiring into the frame-pipeline lifecycle that consumes it. Split deferred; this hook is the single owner of pin state and event classification."
 
 [[frontend_structure]]
 path = "apps/packages/product-client/src/components/workspace/chat/transcript/MessageList.tsx"

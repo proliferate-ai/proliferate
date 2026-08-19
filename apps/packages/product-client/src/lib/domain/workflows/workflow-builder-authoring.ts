@@ -1,42 +1,60 @@
-import type { DesktopLaunchModelRegistry } from "#product/lib/domain/agents/cloud-launch-catalog-types";
+import type { CloudHarnessLaunchOptionsResponse } from "@proliferate/cloud-sdk";
 
 export interface WorkflowBuilderModelOption {
   id: string;
   label: string;
 }
 
+export interface WorkflowBuilderControlOption {
+  key: string;
+  label: string;
+  values: Array<{ value: string; label: string }>;
+  defaultValue: string | null;
+}
+
 export interface WorkflowBuilderHarnessOption {
   agentKind: string;
   label: string;
   models: WorkflowBuilderModelOption[];
+  controls: WorkflowBuilderControlOption[];
 }
 
 /**
  * The harness/model vocabulary a gen-2 node's optional `model` picks from.
  *
- * Sourced from the cloud agent catalog's launch-model registries — the same
- * projection the composer's model picker reads — because that projection is
- * what `useCloudAgentCatalog` actually returns. Gen-1's authoring helpers
- * (`workflowModelOptions` in `domain/workflows/definition.ts`) read
- * `agent.session.models`, a shape the projection does not carry; reusing them
- * here would reproduce that mismatch rather than the model catalog.
- *
- * Harnesses with no models are dropped: a harness row that offers nothing to
- * pick is a dead option, and the node's `model` stays optional anyway.
+ * Sourced directly from copied target-observed launch options. This mapper is
+ * presentation-only: it preserves exact executable IDs and supplies no seed,
+ * filter, alias, or fallback.
  */
 export function workflowBuilderHarnessOptions(
-  registries: readonly DesktopLaunchModelRegistry[] | null | undefined,
+  responses: readonly (CloudHarnessLaunchOptionsResponse | null | undefined)[],
 ): WorkflowBuilderHarnessOption[] {
-  return (registries ?? [])
-    .filter((registry) => registry.models.length > 0)
-    .map((registry) => ({
-      agentKind: registry.kind,
-      label: registry.displayName || registry.kind,
-      models: registry.models.map((model) => ({
+  return responses
+    .filter((response): response is CloudHarnessLaunchOptionsResponse => Boolean(response?.options))
+    .map((response) => ({
+      agentKind: response.harnessKind,
+      label: response.harnessKind,
+      models: (response.options?.models ?? []).map((model) => ({
         id: model.id,
-        label: model.displayName || model.id,
+        label: model.observedName ?? model.id,
+      })),
+      controls: (response.options?.controls ?? []).map((control) => ({
+        key: control.id,
+        label: control.observedLabel ?? control.id,
+        values: control.values.map((value) => ({
+          value: value.value,
+          label: value.observedLabel ?? value.value,
+        })),
+        defaultValue: response.options?.defaults.controlValues[control.id] ?? null,
       })),
     }));
+}
+
+export function workflowBuilderControlOptions(
+  harnesses: readonly WorkflowBuilderHarnessOption[],
+  agentKind: string | null | undefined,
+): WorkflowBuilderControlOption[] {
+  return harnesses.find((harness) => harness.agentKind === agentKind)?.controls ?? [];
 }
 
 /** The models a chosen harness offers; `[]` for an unknown or unset harness. */

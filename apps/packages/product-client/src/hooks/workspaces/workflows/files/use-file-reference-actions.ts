@@ -1,397 +1,365 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  getAnyHarnessClient,
-  resolveWorkspaceConnectionFromContext,
-  useAnyHarnessWorkspaceContext,
-  useStatWorkspaceFileQuery,
-} from "@anyharness/sdk-react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useStatWorkspaceFileQuery } from "@anyharness/sdk-react";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useOpenInDefaultEditor } from "#product/hooks/editor/workflows/use-open-in-default-editor";
+import { useWorkspaceFileLookup } from "#product/hooks/access/anyharness/files/use-workspace-file-lookup";
 import {
-  resolveInspectionPathKind,
-  resolveInspectionUnavailableCopy,
-  useDesktopPathInspection,
-} from "#product/hooks/workspaces/workflows/files/use-desktop-path-inspection";
-import { useDesktopFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-desktop-file-reference-actions";
+  useDesktopFileReferenceActions,
+} from "#product/hooks/workspaces/workflows/files/use-desktop-file-reference-actions";
+import { useDesktopPathInspection } from "#product/hooks/workspaces/workflows/files/use-desktop-path-inspection";
+import {
+  fileReferenceAccessReason,
+  fileReferenceUnavailableCopy,
+  resolveFileReferenceAccessState,
+  resolveNativeFileReferenceCapability,
+  type AccessibleFileLocator,
+  type FileReferenceRecoveryState,
+} from "#product/hooks/workspaces/workflows/files/file-reference-access-state";
 import { useFuzzyFileResolver } from "#product/hooks/workspaces/workflows/files/use-fuzzy-file-resolver";
 import { useHomeRelativeFileReference } from "#product/hooks/workspaces/workflows/files/use-home-relative-file-reference";
 import { useWorkspaceShellActivation } from "#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
-import { useWorkspacePath } from "#product/providers/WorkspacePathProvider";
 import {
+  fileReferenceCopyPath,
+  isHomeRelativeFileReference,
   resolveFileReference,
-  resolveFileReferencePrimaryAction,
   resolveWorkspaceStatPathKind,
+  type FileReferencePrimaryAction,
 } from "#product/lib/domain/files/path-references";
 import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
 import { fileViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
+import { useWorkspacePath } from "#product/providers/WorkspacePathProvider";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
 
 interface UseFileReferenceActionsInput {
   rawPath: string;
   workspacePath?: string | null;
+  /** Narrow native discovery for callers whose UI owns one exact path kind. */
+  nativeCapabilityKind?: "file" | "directory";
 }
 
 export function useFileReferenceActions({
   rawPath,
   workspacePath,
+  nativeCapabilityKind,
 }: UseFileReferenceActionsInput) {
   const host = useProductHost();
   const files = host.desktop?.files ?? null;
-  const {
-    homeDirectory,
-    needsHomeDirectory,
-    pending: homeDirectoryPending,
-    rejected: homeDirectoryRejected,
-    resolveHomeDirectory,
-  } = useHomeRelativeFileReference(files, rawPath);
   const openTarget = useWorkspaceViewerTabsStore((state) => state.openTarget);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
   const { activateViewerTarget } = useWorkspaceShellActivation();
-  const selectedWorkspaceIdentity = useMemo(
-    () => resolveSelectedWorkspaceIdentity({
-      selectedLogicalWorkspaceId,
-      materializedWorkspaceId: selectedWorkspaceId,
-    }),
-    [selectedLogicalWorkspaceId, selectedWorkspaceId],
-  );
-  const materializedWorkspaceId = selectedWorkspaceIdentity.materializedWorkspaceId;
-  const workspaceUiKey = selectedWorkspaceIdentity.workspaceUiKey;
-  const { workspacePath: workspaceRoot, resolveAbsolute } = useWorkspacePath();
-  const anyHarnessWorkspace = useAnyHarnessWorkspaceContext();
-  const fuzzyResolveFilePath = useFuzzyFileResolver();
+  const identity = useMemo(() => resolveSelectedWorkspaceIdentity({
+    selectedLogicalWorkspaceId,
+    materializedWorkspaceId: selectedWorkspaceId,
+  }), [selectedLogicalWorkspaceId, selectedWorkspaceId]);
+  const materializedWorkspaceId = identity.materializedWorkspaceId;
+  const workspaceUiKey = identity.workspaceUiKey;
+  const { filesystemOrigin, workspaceRoot } = useWorkspacePath();
 
+  const unresolvedReference = useMemo(() => resolveFileReference({
+    rawPath,
+    workspacePathOverride: workspacePath,
+    workspaceRoot,
+    filesystemOrigin,
+    desktopBridgeAvailable: files !== null,
+  }), [files, filesystemOrigin, rawPath, workspacePath, workspaceRoot]);
+  const homeCandidate = typeof workspacePath !== "string"
+    && isHomeRelativeFileReference(rawPath)
+    && unresolvedReference.locator.authority === "unavailable"
+    && unresolvedReference.locator.reason === "home_unavailable"
+    ? unresolvedReference.parsedPath
+    : null;
+  const home = useHomeRelativeFileReference({ files, candidatePath: homeCandidate });
   const reference = useMemo(() => resolveFileReference({
     rawPath,
-    workspaceRoot,
-    resolveAbsolute,
-    homeDirectory,
     workspacePathOverride: workspacePath,
-  }), [homeDirectory, rawPath, resolveAbsolute, workspacePath, workspaceRoot]);
+    workspaceRoot,
+    filesystemOrigin,
+    desktopBridgeAvailable: files !== null,
+    homeDirectory: home.homeDirectory,
+  }), [files, filesystemOrigin, home.homeDirectory, rawPath, workspacePath, workspaceRoot]);
 
-  const statQuery = useStatWorkspaceFileQuery({
-    workspaceId: materializedWorkspaceId,
-    path: reference.workspacePath,
-    enabled: Boolean(materializedWorkspaceId && reference.workspacePath),
-  });
   const routeRevision = useMemo(() => ({}), [
     files,
-    rawPath,
-    resolveAbsolute,
-    workspacePath,
-    workspaceRoot,
+    filesystemOrigin.origin,
+    filesystemOrigin.status,
+    materializedWorkspaceId,
+    nativeCapabilityKind,
+    reference.locator,
+    workspaceRoot.path,
+    workspaceRoot.status,
+  ]);
+  const recoveryLocatorWorkspacePath = reference.locator.authority === "workspace"
+    ? reference.locator.workspacePath
+    : null;
+  const recoveryLocatorCompanionPath = reference.locator.authority === "workspace"
+    ? reference.locator.localCompanionPath
+    : null;
+  const recoveryLocatorAbsolutePath = reference.locator.authority === "desktop"
+    ? reference.locator.absolutePath
+    : null;
+  const recoveryLocatorUnavailableReason = reference.locator.authority === "unavailable"
+    ? reference.locator.reason
+    : null;
+  const recoveryRevision = useMemo(() => ({}), [
+    filesystemOrigin.origin,
+    filesystemOrigin.status,
+    materializedWorkspaceId,
+    recoveryLocatorAbsolutePath,
+    recoveryLocatorCompanionPath,
+    recoveryLocatorUnavailableReason,
+    recoveryLocatorWorkspacePath,
+    reference.locator.authority,
+    workspaceRoot.path,
+    workspaceRoot.status,
   ]);
   const currentRouteRevisionRef = useRef(routeRevision);
   currentRouteRevisionRef.current = routeRevision;
-  const [pathResolutionFailed, setPathResolutionFailed] = useState(false);
-  const [primaryOpenFailed, setPrimaryOpenFailed] = useState(false);
-
-  const desktopCandidatePath = reference.workspacePath ? null : reference.absolutePath;
-  const {
-    ensureInspection: ensureDesktopPathInspection,
-    state: desktopInspectionState,
-  } = useDesktopPathInspection({
+  const currentRecoveryRevisionRef = useRef(recoveryRevision);
+  currentRecoveryRevisionRef.current = recoveryRevision;
+  const workspaceLocator = reference.locator.authority === "workspace"
+    ? reference.locator
+    : null;
+  const statQuery = useStatWorkspaceFileQuery({
+    workspaceId: materializedWorkspaceId,
+    path: workspaceLocator?.workspacePath ?? null,
+    enabled: workspaceLocator !== null && materializedWorkspaceId !== null,
+  });
+  const desktopCandidatePath = reference.locator.authority === "desktop"
+    ? reference.locator.absolutePath
+    : null;
+  const desktopInspection = useDesktopPathInspection({
     candidatePath: desktopCandidatePath,
     files,
     routeRevision,
   });
-
-  const workspacePathKind = resolveWorkspaceStatPathKind(statQuery.data);
-  const externalPathKind = resolveInspectionPathKind(desktopInspectionState);
-  const pathKind = reference.workspacePath ? workspacePathKind : externalPathKind;
-
-  useEffect(() => {
-    setPathResolutionFailed(false);
-    setPrimaryOpenFailed(false);
-  }, [materializedWorkspaceId, reference.absolutePath, reference.workspacePath]);
-
-  const {
-    defaultTarget: defaultOpenTarget,
-    openInDefaultEditor,
-    targets,
-  } = useOpenInDefaultEditor(pathKind);
-  const { openDefault, openTargets, openWithTarget, reveal } = useDesktopFileReferenceActions({
+  const [recoveryState, setRecoveryState] = useState<FileReferenceRecoveryState>(null);
+  const recoveryRef = useRef<FileReferenceRecoveryState>(recoveryState);
+  recoveryRef.current = recoveryState;
+  const setRecovery = useCallback((next: FileReferenceRecoveryState) => {
+    recoveryRef.current = next;
+    setRecoveryState(next);
+  }, []);
+  const activeRecovery = recoveryState?.recoveryRevision === recoveryRevision
+    ? recoveryState
+    : null;
+  const accessState = resolveFileReferenceAccessState({
+    locator: reference.locator,
+    materializedWorkspaceId,
+    statData: statQuery.data,
+    statError: statQuery.error,
+    statPending: statQuery.isPending || statQuery.isFetching,
+    desktopInspectionState: desktopInspection.state,
+    recovery: activeRecovery,
+  });
+  const pathKind = accessState.status === "settled" ? accessState.kind : null;
+  const resolvedNativeCapability = resolveNativeFileReferenceCapability(accessState, routeRevision);
+  const nativeCapability = resolvedNativeCapability
+    && (!nativeCapabilityKind || resolvedNativeCapability.kind === nativeCapabilityKind)
+    ? resolvedNativeCapability
+    : null;
+  const externalOpenCapability = nativeCapability
+    && (
+      nativeCapability.source === "desktop"
+      || nativeCapability.kind === "file"
+      || nativeCapabilityKind === "directory"
+    )
+    ? nativeCapability
+    : null;
+  const nativePathKind = nativeCapability?.kind ?? null;
+  const { defaultTarget: defaultOpenTarget, openInDefaultEditor, targets } =
+    useOpenInDefaultEditor(externalOpenCapability?.kind ?? null);
+  const nativeActions = useDesktopFileReferenceActions({
     files,
-    reference,
-    pathKind,
-    desktopInspectionState,
+    capability: nativeCapability,
+    externalOpenCapability,
     routeRevision,
     targets,
     openInDefaultEditor,
   });
+  const fuzzyResolve = useFuzzyFileResolver();
+  const { statFile } = useWorkspaceFileLookup();
+  const [failedPrimaryRoute, setFailedPrimaryRoute] = useState<object | null>(null);
 
-  const canOpenInSidebar = pathKind === "file" && Boolean(reference.workspacePath);
-  const canOpenExternal = Boolean(files && reference.absolutePath && pathKind);
-  const canReveal = Boolean(
-    files
-    && reference.absolutePath
-    && pathKind === "directory",
-  );
-  const resolvedPrimaryAction = resolveFileReferencePrimaryAction({
-    pathKind,
-    canOpenViewer: canOpenInSidebar,
-    canOpenExternal,
-    canReveal,
+  const latestRef = useRef({
+    accessState,
+    materializedWorkspaceId,
+    recoveryRevision,
+    reference,
+    routeRevision,
+    workspaceUiKey,
   });
-  const canOpenPrimary = resolvedPrimaryAction !== "unavailable"
-    || Boolean(reference.workspacePath && materializedWorkspaceId && pathKind === null);
-  const desktopInspectionPending = Boolean(
-    files
-    && desktopCandidatePath
-    && (desktopInspectionState.status === "idle"
-      || desktopInspectionState.status === "pending"),
-  );
-  const homeResolutionPending = Boolean(
-    needsHomeDirectory
-    && files
-    && !homeDirectory
-    && !homeDirectoryRejected,
-  );
-  const pathKindPending = homeDirectoryPending
-    || homeResolutionPending
-    || desktopInspectionPending
-    || statQuery.isFetching;
-  const desktopInspectionUnavailableReason = files && desktopCandidatePath
-    ? resolveInspectionUnavailableCopy(desktopInspectionState)
-    : null;
-  const primaryUnavailableReason = pathKindPending
-    ? "Checking whether this path is a file or folder…"
-    : primaryOpenFailed
-      ? "Could not open this path. Click to retry."
-      : desktopInspectionUnavailableReason
-        ?? (homeDirectoryRejected
-          ? "This path is unavailable."
-          : pathKind === "directory" && !canReveal
-            ? "This path is unavailable."
-            : needsHomeDirectory && !files
-              ? "This path is unavailable."
-              : !reference.workspacePath && reference.absolutePath && !files
-                ? "This path is unavailable."
-                : pathKind === "file" && !canOpenInSidebar && !canOpenExternal
-                  ? "This path is unavailable."
-                  : pathKind === null && pathResolutionFailed
-                    ? "This path was not found."
-                    : pathKind === null
-                      ? "This path is unavailable."
-                      : null);
-  const copyPath = useCallback(async () => {
-    await host.clipboard.writeText(reference.absolutePath ?? reference.path);
-  }, [host.clipboard, reference.absolutePath, reference.path]);
+  latestRef.current = {
+    accessState,
+    materializedWorkspaceId,
+    recoveryRevision,
+    reference,
+    routeRevision,
+    workspaceUiKey,
+  };
+  const copyPath = fileReferenceCopyPath(reference);
+  const copyPathRef = useRef(copyPath);
+  copyPathRef.current = copyPath;
+  const clipboardRef = useRef(host.clipboard);
+  clipboardRef.current = host.clipboard;
+  const copyCurrentPath = useCallback(async () => {
+    const current = copyPathRef.current;
+    if (current === null) return;
+    await clipboardRef.current.writeText(current);
+  }, []);
+
+  const openViewer = useCallback((path: string, snapshot: typeof latestRef.current) => {
+    if (
+      currentRouteRevisionRef.current !== snapshot.routeRevision
+      || !snapshot.materializedWorkspaceId
+    ) return false;
+    const target = fileViewerTarget(path);
+    openTarget(target);
+    activateViewerTarget({
+      workspaceId: snapshot.materializedWorkspaceId,
+      shellWorkspaceId: snapshot.workspaceUiKey,
+      target,
+      mode: "open-or-focus",
+    });
+    return true;
+  }, [activateViewerTarget, openTarget]);
 
   const openInSidebar = useCallback(async () => {
-    if (!reference.workspacePath) {
-      return;
-    }
-    const openViewer = (path: string) => {
-      const target = fileViewerTarget(path);
-      openTarget(target);
-      if (materializedWorkspaceId) {
-        activateViewerTarget({
-          workspaceId: materializedWorkspaceId,
-          shellWorkspaceId: workspaceUiKey,
-          target,
-          mode: "open-or-focus",
-        });
-      }
-    };
-    // Open optimistically so the common (correct-path) case has zero latency.
-    // Then, best-effort and non-blocking, correct a partial/abbreviated path
-    // and re-open if it actually pointed elsewhere (the viewer would otherwise
-    // just show "file not found").
-    openViewer(reference.workspacePath);
-    const corrected = await fuzzyResolveFilePath({
-      workspacePath: reference.workspacePath,
-      materializedWorkspaceId,
+    const snapshot = latestRef.current;
+    if (
+      snapshot.routeRevision !== routeRevision
+      || snapshot.accessState.status !== "settled"
+      || snapshot.accessState.kind !== "file"
+      || snapshot.accessState.locator.authority !== "workspace"
+    ) return;
+    openViewer(snapshot.accessState.locator.workspacePath, snapshot);
+  }, [openViewer, routeRevision]);
+
+  const recoverMissing = useCallback(async (
+    locator: Extract<AccessibleFileLocator, { authority: "workspace" }>,
+    snapshot: typeof latestRef.current,
+  ): Promise<FileReferencePrimaryAction> => {
+    if (!snapshot.materializedWorkspaceId || locator.workspacePath === "") return "unavailable";
+    setRecovery({ recoveryRevision: snapshot.recoveryRevision, status: "recovering" });
+    const outcome = await fuzzyResolve({
+      workspacePath: locator.workspacePath,
+      materializedWorkspaceId: snapshot.materializedWorkspaceId,
     });
-    if (corrected && corrected !== reference.workspacePath) {
-      openViewer(corrected);
-    }
-  }, [
-    activateViewerTarget,
-    fuzzyResolveFilePath,
-    openTarget,
-    reference.workspacePath,
-    materializedWorkspaceId,
-    workspaceUiKey,
-  ]);
-
-  const statWorkspacePath = useCallback(async (path: string) => {
-    if (!materializedWorkspaceId) {
-      return null;
-    }
-    const resolved = await resolveWorkspaceConnectionFromContext(
-      anyHarnessWorkspace,
-      materializedWorkspaceId,
-    );
-    const client = getAnyHarnessClient(resolved.connection);
-    return client.files.stat(resolved.connection.anyharnessWorkspaceId, path);
-  }, [anyHarnessWorkspace, materializedWorkspaceId]);
-
-  const openPrimary = useCallback(async () => {
-    let resolvedPathKind = pathKind;
-    let resolvedWorkspacePath = reference.workspacePath;
-    let resolvedAbsolutePath = reference.absolutePath;
-    if (!resolvedAbsolutePath && needsHomeDirectory && files) {
-      const resolvedHomeDirectory = await resolveHomeDirectory();
-      if (currentRouteRevisionRef.current !== routeRevision) {
-        return "unavailable";
-      }
-      if (resolvedHomeDirectory) {
-        resolvedAbsolutePath = resolveFileReference({
-          rawPath,
-          workspaceRoot,
-          resolveAbsolute,
-          homeDirectory: resolvedHomeDirectory,
-          workspacePathOverride: workspacePath,
-        }).absolutePath;
-      } else {
-        setPathResolutionFailed(true);
-        return "unavailable";
-      }
-    }
-    if (!resolvedPathKind && reference.workspacePath && materializedWorkspaceId) {
-      const result = await statQuery.refetch();
-      resolvedPathKind = resolveWorkspaceStatPathKind(result.data);
-      if (!resolvedPathKind) {
-        const corrected = await fuzzyResolveFilePath({
-          workspacePath: reference.workspacePath,
-          materializedWorkspaceId,
-        });
-        if (corrected) {
-          try {
-            const correctedStat = await statWorkspacePath(corrected);
-            resolvedPathKind = resolveWorkspaceStatPathKind(correctedStat ?? undefined);
-            resolvedWorkspacePath = resolvedPathKind ? corrected : null;
-          } catch {
-            resolvedPathKind = null;
-            resolvedWorkspacePath = null;
-          }
-        }
-        if (!resolvedPathKind || !resolvedWorkspacePath) {
-          setPathResolutionFailed(true);
-          return "unavailable";
-        }
-      }
-    }
-    if (!resolvedWorkspacePath && resolvedAbsolutePath && files) {
-      const inspection = await ensureDesktopPathInspection(resolvedAbsolutePath);
-      if (currentRouteRevisionRef.current !== routeRevision) {
-        return "unavailable";
-      }
-      resolvedPathKind = inspection?.kind === "file" || inspection?.kind === "directory"
-        ? inspection.kind
-        : null;
-      if (!resolvedPathKind) {
-        return "unavailable";
-      }
-    }
-
-    if (currentRouteRevisionRef.current !== routeRevision) {
+    if (currentRecoveryRevisionRef.current !== snapshot.recoveryRevision) return "unavailable";
+    if (outcome.status !== "match") {
+      setRecovery({
+        recoveryRevision: snapshot.recoveryRevision,
+        status: "terminal",
+        reason: outcome.status === "ambiguous"
+          ? "ambiguous_match"
+          : outcome.status === "search-error" ? "runtime_unavailable" : "not_found",
+      });
       return "unavailable";
     }
+    try {
+      const correctedStat = await statFile({
+        materializedWorkspaceId: snapshot.materializedWorkspaceId,
+        path: outcome.workspacePath,
+      });
+      if (currentRecoveryRevisionRef.current !== snapshot.recoveryRevision) return "unavailable";
+      const correctedKind = resolveWorkspaceStatPathKind(correctedStat);
+      if (correctedKind !== "file") {
+        setRecovery({
+          recoveryRevision: snapshot.recoveryRevision,
+          status: "terminal",
+          reason: "unsupported_type",
+        });
+        return "unavailable";
+      }
+      const corrected = resolveFileReference({
+        rawPath: snapshot.reference.rawPath,
+        workspacePathOverride: outcome.workspacePath,
+        workspaceRoot,
+        filesystemOrigin,
+        desktopBridgeAvailable: files !== null,
+      }).locator;
+      if (corrected.authority !== "workspace") {
+        setRecovery({
+          recoveryRevision: snapshot.recoveryRevision,
+          status: "terminal",
+          reason: "unexpected_kind",
+        });
+        return "unavailable";
+      }
+      setRecovery({
+        recoveryRevision: snapshot.recoveryRevision,
+        status: "settled",
+        locator: corrected,
+      });
+      return openViewer(corrected.workspacePath, snapshot) ? "open-viewer" : "unavailable";
+    } catch (error) {
+      setRecovery({
+        recoveryRevision: snapshot.recoveryRevision,
+        status: "terminal",
+        reason: fileReferenceAccessReason(error),
+      });
+      return "unavailable";
+    }
+  }, [files, filesystemOrigin, fuzzyResolve, openViewer, setRecovery, statFile, workspaceRoot]);
 
-    const action = resolveFileReferencePrimaryAction({
-      pathKind: resolvedPathKind,
-      canOpenViewer: Boolean(resolvedWorkspacePath),
-      canOpenExternal: Boolean(files && resolvedAbsolutePath),
-      canReveal: Boolean(files && resolvedAbsolutePath),
-    });
-    if (action === "reveal") {
-      try {
-        if (
-          !files
-          || !resolvedAbsolutePath
-          || resolvedPathKind !== "directory"
-          || currentRouteRevisionRef.current !== routeRevision
-        ) {
-          return "unavailable";
-        }
-        await files.reveal(resolvedAbsolutePath);
-      } catch {
-        setPrimaryOpenFailed(true);
+  const openPrimary = useCallback(async (): Promise<FileReferencePrimaryAction> => {
+    const snapshot = latestRef.current;
+    if (snapshot.routeRevision !== routeRevision) return "unavailable";
+    const state = snapshot.accessState;
+    if (state.status === "exact-missing") {
+      if (recoveryRef.current?.recoveryRevision === snapshot.recoveryRevision) {
         return "unavailable";
       }
-      setPathResolutionFailed(false);
-      setPrimaryOpenFailed(false);
-      return action;
+      return recoverMissing(state.locator, snapshot);
     }
-    if (action === "open-viewer") {
-      if (resolvedWorkspacePath) {
-        const target = fileViewerTarget(resolvedWorkspacePath);
-        openTarget(target);
-        if (materializedWorkspaceId) {
-          activateViewerTarget({
-            workspaceId: materializedWorkspaceId,
-            shellWorkspaceId: workspaceUiKey,
-            target,
-            mode: "open-or-focus",
-          });
-        }
-      }
-      setPathResolutionFailed(false);
-      setPrimaryOpenFailed(false);
-      return action;
+    if (state.status !== "settled") return "unavailable";
+    if (state.locator.authority === "workspace") {
+      if (state.kind !== "file") return "unavailable";
+      return openViewer(state.locator.workspacePath, snapshot) ? "open-viewer" : "unavailable";
     }
-    if (action === "open-external") {
-      if (
-        !resolvedAbsolutePath
-        || !resolvedPathKind
-        || currentRouteRevisionRef.current !== routeRevision
-      ) {
-        return "unavailable";
-      }
-      const opened = await openInDefaultEditor(resolvedAbsolutePath, resolvedPathKind);
-      if (!opened) {
-        setPrimaryOpenFailed(true);
-        return "unavailable";
-      }
-      setPathResolutionFailed(false);
-      setPrimaryOpenFailed(false);
-      return action;
+    if (state.kind === "directory") {
+      await nativeActions.reveal();
+      return "reveal";
     }
-    return action;
-  }, [
-    files,
-    activateViewerTarget,
-    fuzzyResolveFilePath,
-    ensureDesktopPathInspection,
-    materializedWorkspaceId,
-    needsHomeDirectory,
-    openInDefaultEditor,
-    openTarget,
-    pathKind,
-    rawPath,
-    reference.absolutePath,
-    reference.workspacePath,
-    resolveAbsolute,
-    resolveHomeDirectory,
-    routeRevision,
-    statWorkspacePath,
-    statQuery,
-    workspacePath,
-    workspaceRoot,
-    workspaceUiKey,
-  ]);
+    const opened = await nativeActions.openDefault();
+    setFailedPrimaryRoute(opened ? null : routeRevision);
+    return opened ? "open-external" : "unavailable";
+  }, [nativeActions, openViewer, recoverMissing, routeRevision]);
+
+  const canOpenInSidebar = accessState.status === "settled"
+    && accessState.kind === "file"
+    && accessState.locator.authority === "workspace";
+  const canOpenPrimary = canOpenInSidebar
+    || (accessState.status === "settled" && accessState.locator.authority === "desktop")
+    || accessState.status === "exact-missing";
+  const pathKindPending = home.pending
+    || accessState.status === "pending"
+    || accessState.status === "recovering";
 
   return {
     reference,
-    openTargets,
+    accessState,
+    nativePathKind,
+    openTargets: nativeActions.openTargets,
     defaultOpenTarget,
     pathKind,
     pathKindPending,
     canOpenInSidebar,
-    canOpenExternal,
+    canOpenExternal: externalOpenCapability !== null,
     canOpenPrimary,
-    canReveal,
-    primaryUnavailableReason,
+    canReveal: nativeCapability !== null,
+    primaryUnavailableReason: failedPrimaryRoute === routeRevision
+      ? "Could not open this path. Click to retry."
+      : fileReferenceUnavailableCopy(accessState),
     copyPath,
+    copyCurrentPath,
     openInSidebar,
-    openDefault,
+    openDefault: nativeActions.openDefault,
     openPrimary,
-    openWithTarget,
-    reveal,
+    openWithTarget: nativeActions.openWithTarget,
+    reveal: nativeActions.reveal,
   };
 }

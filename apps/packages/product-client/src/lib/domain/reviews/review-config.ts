@@ -5,7 +5,6 @@ import type {
   StartPlanReviewRequest,
 } from "@anyharness/sdk";
 import type { DesktopAgentLaunchAgent } from "#product/lib/domain/agents/cloud-launch-catalog";
-import { resolveUnattendedModeId } from "#product/lib/domain/agents/unattended-mode";
 import {
   findReviewPersonaTemplateForReviewer,
   isBuiltInReviewPersonaId,
@@ -23,7 +22,7 @@ export interface ReviewSetupReviewerDraft {
   prompt: string;
   agentKind: string;
   modelId: string;
-  modeId: string;
+  controlValues: Record<string, string>;
 }
 
 export interface ReviewSetupDraft {
@@ -42,7 +41,7 @@ export interface StoredReviewKindDefaults {
   autoIterate: boolean;
   agentKind: string;
   modelId: string;
-  modeId: string;
+  controlValues: Record<string, string>;
   reviewers: StoredReviewKindReviewers;
 }
 
@@ -60,7 +59,7 @@ export function createStoredReviewKindDefaults(): StoredReviewKindDefaults {
     autoIterate: true,
     agentKind: "",
     modelId: "",
-    modeId: "",
+    controlValues: {},
     reviewers: { mode: "inherit" },
   };
 }
@@ -86,14 +85,10 @@ export function createReviewSetupReviewerDraft(args: {
     prompt: template.prompt,
     agentKind: args.sessionDefaults.agentKind,
     modelId: args.sessionDefaults.modelId ?? "",
-    modeId: resolveReviewExecutionModeIdForAgent(
+    controlValues: resolveReviewerControlValues(
+      args.sessionDefaults,
       args.sessionDefaults.agentKind,
-      null,
-      resolveReviewerUnattendedModeId(
-        args.sessionDefaults,
-        args.sessionDefaults.agentKind,
-        args.sessionDefaults.modelId,
-      ),
+      {},
     ),
   };
 }
@@ -137,9 +132,9 @@ export function createReviewSetupDraft(args: {
   );
   const defaultAgentKind = stored?.agentKind || args.sessionDefaults.agentKind;
   const defaultModelId = stored?.modelId || args.sessionDefaults.modelId || "";
-  const explicitDefaultModeId = stored?.reviewers.mode === "custom"
-    ? null
-    : stored?.modeId || null;
+  const inheritedControlValues = stored?.reviewers.mode === "custom"
+    ? {}
+    : stored?.controlValues ?? {};
 
   return {
     kind: args.kind,
@@ -157,14 +152,13 @@ export function createReviewSetupDraft(args: {
           prompt: template?.prompt ?? reviewer.prompt,
           agentKind: reviewerAgentKind,
           modelId: reviewerModelId,
-          modeId: resolveReviewExecutionModeIdForAgent(
+          controlValues: resolveReviewerControlValues(
+            args.sessionDefaults,
             reviewerAgentKind,
-            reviewer.modeId || explicitDefaultModeId,
-            resolveReviewerUnattendedModeId(
-              args.sessionDefaults,
-              reviewerAgentKind,
-              reviewerModelId,
-            ),
+            {
+              ...inheritedControlValues,
+              ...reviewer.controlValues,
+            },
           ),
         };
       }),
@@ -192,7 +186,7 @@ export function resolveReviewDefaultReviewerRows(args: {
     prompt: template.prompt,
     agentKind: args.defaults.agentKind,
     modelId: args.defaults.modelId,
-    modeId: args.defaults.modeId,
+    controlValues: { ...args.defaults.controlValues },
   }));
 }
 
@@ -247,33 +241,25 @@ function resolveStoredReviewers(
     prompt: template.prompt,
     agentKind: "",
     modelId: "",
-    modeId: "",
+    controlValues: {},
   }));
 }
 
-export function resolveReviewExecutionModeIdForAgent(
-  agentKind: string,
-  explicitModeId: string | null | undefined,
-  unattendedModeId: string | null | undefined,
-): string {
-  if (!agentKind.trim()) {
-    return "";
-  }
-  return explicitModeId?.trim()
-    || unattendedModeId?.trim()
-    || "";
-}
-
-function resolveReviewerUnattendedModeId(
+function resolveReviewerControlValues(
   sessionDefaults: ReviewSessionDefaults,
   agentKind: string,
-  modelId: string | null | undefined,
-): string | undefined {
+  explicit: Record<string, string>,
+): Record<string, string> {
   const normalizedAgentKind = agentKind.trim();
   const agent = sessionDefaults.launchAgents.find(
     (candidate) => candidate.kind === normalizedAgentKind,
   );
-  return resolveUnattendedModeId({ agent, modelId });
+  return {
+    ...Object.fromEntries((agent?.launchControls ?? [])
+      .filter((control) => control.defaultValue !== null)
+      .map((control) => [control.key, control.defaultValue as string])),
+    ...explicit,
+  };
 }
 
 export function buildReviewRequest(
@@ -297,7 +283,6 @@ export function buildReviewRequest(
     const prompt = reviewer.prompt.trim();
     const agentKind = reviewer.agentKind.trim();
     const modelId = reviewer.modelId.trim();
-    const modeId = reviewer.modeId.trim();
     if (!label || !prompt) {
       return { request: null, error: "Every reviewer needs a label and prompt." };
     }
@@ -313,7 +298,9 @@ export function buildReviewRequest(
       prompt,
       agentKind,
       modelId,
-      ...(modeId ? { modeId } : {}),
+      controlValues: Object.fromEntries(Object.entries(reviewer.controlValues)
+        .map(([key, value]) => [key.trim(), value.trim()])
+        .filter(([key, value]) => Boolean(key && value))),
     });
   }
 
@@ -338,7 +325,7 @@ export function draftToStoredReviewDefaults(
     autoIterate: draft.autoIterate,
     agentKind: firstReviewer?.agentKind.trim() ?? "",
     modelId: firstReviewer?.modelId.trim() ?? "",
-    modeId: firstReviewer?.modeId.trim() ?? "",
+    controlValues: { ...(firstReviewer?.controlValues ?? {}) },
     reviewers: {
       mode: "custom",
       items: draft.reviewers.slice(0, MAX_REVIEWERS_PER_RUN).map((reviewer) => {
@@ -349,7 +336,9 @@ export function draftToStoredReviewDefaults(
           prompt: (template?.prompt ?? reviewer.prompt).trim(),
           agentKind: reviewer.agentKind.trim(),
           modelId: reviewer.modelId.trim(),
-          modeId: reviewer.modeId.trim(),
+          controlValues: Object.fromEntries(Object.entries(reviewer.controlValues)
+            .map(([key, value]) => [key.trim(), value.trim()])
+            .filter(([key, value]) => Boolean(key && value))),
         };
       }),
     },

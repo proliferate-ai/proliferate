@@ -19,6 +19,7 @@ import proliferate.background.task_metrics  # noqa: E402,F401
 import proliferate.background.tasks.cloud_sandboxes  # noqa: E402,F401
 import proliferate.background.tasks.customerio_sync  # noqa: E402,F401
 import proliferate.background.tasks.health  # noqa: E402,F401
+import proliferate.background.tasks.integration_revocation  # noqa: E402,F401
 import proliferate.background.tasks.notifications  # noqa: E402,F401
 import proliferate.background.tasks.relay  # noqa: E402,F401
 import proliferate.background.tasks.workflows  # noqa: E402,F401

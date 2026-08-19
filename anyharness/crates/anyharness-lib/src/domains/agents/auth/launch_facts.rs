@@ -218,10 +218,6 @@ pub(crate) fn collect_launch_env_facts_with_ambient(
 }
 
 #[cfg(test)]
-#[path = "launch_facts_route_transition_tests.rs"]
-mod route_transition_tests;
-
-#[cfg(test)]
 #[path = "launch_facts_provider_config_tests.rs"]
 mod provider_config_tests;
 
@@ -597,20 +593,16 @@ mod tests {
         );
     }
 
-    /// End-to-end proof of the BYOK fix: an enrolled api_key source's `Env`
-    /// fact activates the catalog's `anthropic-api` context and populates the
-    /// model menu — the exact path that returned ZERO models before the fix
-    /// (self-host/local BYOK users saw an empty menu and could not launch).
+    /// An enrolled api_key source's `Env` fact activates the route/auth context
+    /// used to materialize an override-free probe.
     #[test]
-    fn api_key_env_fact_activates_anthropic_api_and_unlocks_models() {
+    fn api_key_env_fact_activates_anthropic_api() {
         use crate::domains::agents::auth::context::classify;
         use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
-        use crate::domains::agents::catalog::service::ActiveCatalog;
         use crate::domains::agents::model::AgentKind;
         use crate::domains::agents::registry::built_in_registry;
-        use std::sync::Arc;
 
-        let document = Arc::new(bundled_agent_catalog_document().clone());
+        let document = bundled_agent_catalog_document();
         let contexts = document
             .agents
             .iter()
@@ -635,23 +627,10 @@ mod tests {
             active.ids()
         );
 
-        let catalog = ActiveCatalog::new(Arc::clone(&document));
-        let visible = catalog.visible_models("claude", &active);
-        assert!(
-            !visible.is_empty(),
-            "the BYOK model menu must be non-empty once anthropic-api is active"
-        );
-
-        // And the empty-fact baseline still yields no api_key-gated menu, so the
-        // fact is doing the unlocking (guards against a vacuous assertion).
         let baseline = classify(&descriptor, contexts, &[]);
-        let baseline_visible = catalog.visible_models("claude", &baseline);
         assert!(
-            baseline_visible.len() < visible.len(),
-            "the api_key fact must unlock strictly more models than baseline; \
-             baseline={:?} active={:?}",
-            baseline_visible.iter().map(|m| &m.id).collect::<Vec<_>>(),
-            visible.iter().map(|m| &m.id).collect::<Vec<_>>()
+            !baseline.is_active("anthropic-api"),
+            "the Env fact, rather than the baseline, must activate the route"
         );
     }
 }

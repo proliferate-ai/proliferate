@@ -309,7 +309,7 @@ fn reviewers_from_contract(
             prompt: reviewer.prompt,
             agent_kind: reviewer.agent_kind,
             model_id: reviewer.model_id,
-            mode_id: reviewer.mode_id,
+            control_values: reviewer.control_values,
         })
         .collect()
 }

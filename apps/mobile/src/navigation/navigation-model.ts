@@ -27,8 +27,7 @@ export interface MobilePendingPrompt {
   text: string;
   agentKind?: string | null;
   modelId: string | null;
-  modeId: string | null;
-  sessionConfigUpdates?: { configId: string; value: string }[];
+  controlValues?: Record<string, string>;
   selectedRepo?: string | null;
   selectedRuntimeTargetId?: string | null;
   createdAt: number;

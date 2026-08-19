@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
     DateTime,
     Enum,
@@ -109,4 +110,21 @@ class CloudSandbox(Base):
         DateTime(timezone=True),
         default=utcnow,
         onupdate=utcnow,
+    )
+
+
+class HarnessLaunchOptionState(Base):
+    """Latest runtime-owned launch-option evidence for one execution target."""
+
+    __tablename__ = "harness_launch_option_state"
+
+    cloud_sandbox_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cloud_sandbox.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    harness_kind: Mapped[str] = mapped_column(String(64), primary_key=True)
+    source_revision: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    copied_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, server_default=text("now()")
     )

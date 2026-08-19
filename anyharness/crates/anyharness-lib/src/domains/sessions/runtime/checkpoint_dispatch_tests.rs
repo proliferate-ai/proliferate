@@ -510,6 +510,7 @@ fn enable_image_prompts(state: &AppState) {
                 })
                 .expect("serialize prompt capabilities"),
             ),
+            full_snapshot_json: None,
             updated_at: "2026-08-19T00:00:00Z".into(),
         })
         .expect("enable image prompts");

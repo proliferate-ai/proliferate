@@ -2,13 +2,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
-use crate::domains::agents::catalog::settings::resolve_settings_deltas;
+use crate::domains::agents::launch_options::environment::find_capability_affecting_env_override;
+use crate::domains::agents::launch_options::LaunchSelectionUnsupported;
 use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::readiness::service::resolve_launch_agent;
 use crate::domains::agents::registry;
 use crate::domains::agents::route_auth::resolve_launch_route_auth;
-use crate::domains::agents::route_auth::state::load_state_file;
 use crate::domains::sessions::extensions::{
     SessionInteractionRequestedContext, SessionInteractionResolvedContext, SessionStartedContext,
     SessionTurnFinishedContext,
@@ -26,14 +25,25 @@ use crate::live::sessions::SessionStartupStrategy;
 
 use super::launch_policy::{assemble_session_launch, session_is_closed, SessionLaunchContext};
 use super::startup_errors::{
-    map_encrypt_bindings_error_to_start, map_mcp_launch_assembly_error_to_start,
-    map_mcp_summary_error_to_start, map_start_session_error_to_create,
+    map_encrypt_bindings_error_to_start, map_launch_selection_unsupported,
+    map_mcp_launch_assembly_error_to_start, map_mcp_summary_error_to_start,
+    map_start_session_error_to_create, map_start_session_error_to_ensure,
 };
 use super::startup_facts::choose_session_startup_strategy;
 use super::{
     launch_env::build_session_launch_env, CreateAndStartSessionError, EnsureLiveSessionError,
     SessionLifecycleError, SessionMcpRefresh, SessionRuntime, StartSessionError,
 };
+
+fn require_prepared_basis_unchanged(
+    prepared_basis_revision: &str,
+    current_basis_revision: &str,
+) -> Result<(), LaunchSelectionUnsupported> {
+    if prepared_basis_revision != current_basis_revision {
+        return Err(LaunchSelectionUnsupported::ObservationUnavailable { state: None });
+    }
+    Ok(())
+}
 
 impl SessionRuntime {
     #[tracing::instrument(skip_all, fields(session_id = %record.id))]
@@ -117,40 +127,7 @@ impl SessionRuntime {
 
         self.ensure_live_session_handle(&record, mcp_refresh)
             .await
-            .map_err(|error| match error {
-                StartSessionError::WorkspaceNotFound => EnsureLiveSessionError::Internal(
-                    anyhow::anyhow!("workspace not found for session"),
-                ),
-                StartSessionError::WorkspaceDirectoryMissing { path } => {
-                    EnsureLiveSessionError::WorkspaceDirectoryMissing { path }
-                }
-                StartSessionError::AgentDescriptorNotFound(agent_kind) => {
-                    EnsureLiveSessionError::Internal(anyhow::anyhow!(
-                        "agent descriptor not found: {agent_kind}"
-                    ))
-                }
-                StartSessionError::Closed => EnsureLiveSessionError::SessionClosed,
-                StartSessionError::MissingDataKey => EnsureLiveSessionError::MissingDataKey,
-                StartSessionError::RestartRequired(detail) => {
-                    EnsureLiveSessionError::RestartRequired(detail)
-                }
-                StartSessionError::WorkspaceMcpAttachmentFailed(error) => {
-                    EnsureLiveSessionError::WorkspaceMcpAttachmentFailed(error)
-                }
-                StartSessionError::RouteAuth(error) => EnsureLiveSessionError::RouteAuth(error),
-                StartSessionError::AgentNotReady {
-                    agent_kind,
-                    status,
-                    detail,
-                } => EnsureLiveSessionError::AgentNotReady {
-                    agent_kind,
-                    status,
-                    detail,
-                },
-                StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
-                    EnsureLiveSessionError::Internal(error)
-                }
-            })?;
+            .map_err(map_start_session_error_to_ensure)?;
 
         self.session_service
             .get_session(session_id)
@@ -252,6 +229,22 @@ impl SessionRuntime {
             "[workspace-latency] session.runtime.start_live_session.start"
         );
 
+        let validated_state = self
+            .session_service
+            .validate_persisted_launch_intent(record)
+            .map_err(|unsupported| {
+                map_launch_selection_unsupported(&record.agent_kind, unsupported)
+            })?;
+        let prepared_basis_revision = validated_state.basis_revision.clone();
+        tracing::info!(
+            session_id = %record.id,
+            agent_kind = %record.agent_kind,
+            harness_basis_revision = %validated_state.basis_revision,
+            source_revision = validated_state.revision,
+            event = "session.launch_selection.prevalidated",
+            "persisted launch intent validated before start preparation"
+        );
+
         let workspace_lookup_started = Instant::now();
         let workspace = self
             .workspace_runtime
@@ -290,6 +283,14 @@ impl SessionRuntime {
             .workspace_runtime
             .workspace_env(&workspace)
             .map_err(StartSessionError::Internal)?;
+        if let Some(env_var_name) =
+            find_capability_affecting_env_override(&descriptor, &workspace_env)
+        {
+            return Err(StartSessionError::AgentEnvOverrideUnsupported {
+                agent_kind: record.agent_kind.clone(),
+                env_var_name,
+            });
+        }
         let readiness_env = workspace_env.clone();
         // Fail closed BEFORE the readiness gate, mirroring create_session
         // (service/create.rs): an unsatisfiable selection must be reported as
@@ -372,41 +373,17 @@ impl SessionRuntime {
             );
             StartSessionError::RouteAuth(error)
         })?;
-        // Non-auth launch wiring only. Codex's CODEX_HOME + config.toml now comes
-        // from `route_auth` above (its native recipe for a native launch, its
-        // gateway recipe for a routed one), so this no longer needs the selected
-        // key — the route layer already carries the credential to the harness the
-        // way that harness expects it.
+        // Non-auth launch wiring only. A routed Codex CODEX_HOME + config.toml
+        // comes from `route_auth` above; a native profile emits no delta and
+        // inherits the user's own Codex home. This layer never authors either.
         let session_launch_env =
             build_session_launch_env(&resolved_agent, record.requested_model_id.as_deref())
                 .map_err(StartSessionError::Internal)?;
-        // No probe poke here, deliberately (model-catalog.md, "Freshness is
-        // event-driven"): a session launch is not one of the closed trigger set.
+        // No launch-options probe poke here, deliberately: a session launch is
+        // not one of the target-observation service's closed trigger set.
         // The gate-driven launch backstop of the superseded design deleted with
         // the staleness machinery; anything a machine missed while the runtime
         // was down is the unconditional startup pass's job.
-        // Catalog settings: resolve persisted toggle values into launch-time
-        // deltas (extra CLI args, extra env vars). The surface is always "local"
-        // for local runtime launches (cloud sandboxes use their own surface).
-        let settings_deltas = {
-            let catalog = bundled_agent_catalog_document();
-            let catalog_settings = catalog
-                .agents
-                .iter()
-                .find(|a| a.kind == record.agent_kind)
-                .map(|a| a.settings.as_slice())
-                .unwrap_or(&[]);
-            let state = load_state_file(&self.runtime_home).ok().flatten();
-            let persisted_settings = state
-                .as_ref()
-                .and_then(|s| {
-                    s.harnesses
-                        .iter()
-                        .find(|h| h.harness_kind == record.agent_kind)
-                })
-                .and_then(|h| h.settings.as_ref());
-            resolve_settings_deltas(catalog_settings, persisted_settings, "local")
-        };
         let mcp_launch = match assemble_session_mcp_launch(
             self.session_data_cipher.as_ref(),
             &self.session_extensions,
@@ -464,7 +441,6 @@ impl SessionRuntime {
             workspace_env,
             session_env: session_launch_env,
             route_auth,
-            settings_deltas,
             mcp_servers: mcp_launch.mcp_servers,
             startup: startup_strategy,
             every_prompt_append: mcp_launch.system_prompt_append,
@@ -517,6 +493,31 @@ impl SessionRuntime {
             })),
             on_exit: None,
         };
+        // Re-read the current basis and exact observed membership at the last
+        // common point before every ACP process start. The earlier validation
+        // avoids doing start preparation for a stale intent; this one closes
+        // the preparation window for create/replay/resume/prompt/fork/config.
+        let validated_state = self
+            .session_service
+            .validate_persisted_launch_intent(record)
+            .map_err(|unsupported| {
+                map_launch_selection_unsupported(&record.agent_kind, unsupported)
+            })?;
+        require_prepared_basis_unchanged(
+            &prepared_basis_revision,
+            &validated_state.basis_revision,
+        )
+        .map_err(|unsupported| {
+            map_launch_selection_unsupported(&record.agent_kind, unsupported)
+        })?;
+        tracing::info!(
+            session_id = %record.id,
+            agent_kind = %record.agent_kind,
+            harness_basis_revision = %validated_state.basis_revision,
+            source_revision = validated_state.revision,
+            event = "session.launch_selection.revalidated",
+            "persisted launch intent revalidated immediately before real start"
+        );
         let (handle, ready) = self
             .acp_manager
             .start_session(launch, hooks)
@@ -540,5 +541,21 @@ impl SessionRuntime {
         }
 
         Ok((handle, ready.native_session_id))
+    }
+}
+
+#[cfg(test)]
+mod basis_continuity_tests {
+    use super::require_prepared_basis_unchanged;
+    use crate::domains::agents::launch_options::LaunchSelectionUnsupported;
+
+    #[test]
+    fn prepared_launch_rejects_a_newly_validated_different_basis() {
+        let error = require_prepared_basis_unchanged("basis-a", "basis-b")
+            .expect_err("prepared launch facts cannot cross a basis transition");
+        assert!(matches!(
+            error,
+            LaunchSelectionUnsupported::ObservationUnavailable { state: None }
+        ));
     }
 }

@@ -12,91 +12,6 @@ fn session_model_options(ids: &[&str]) -> Vec<SessionModelOption> {
 }
 
 #[test]
-fn persisted_control_values_orders_standard_controls_before_extras() {
-    let controls = NormalizedSessionControls {
-        model: Some(NormalizedSessionControl {
-            key: "model".into(),
-            raw_config_id: "model".into(),
-            label: "Model".into(),
-            current_value: Some("default".into()),
-            settable: true,
-            values: vec![NormalizedSessionControlValue {
-                value: "default".into(),
-                label: "Default".into(),
-                description: None,
-            }],
-        }),
-        collaboration_mode: Some(NormalizedSessionControl {
-            key: "collaboration_mode".into(),
-            raw_config_id: "collaboration_mode".into(),
-            label: "Mode".into(),
-            current_value: Some("plan".into()),
-            settable: true,
-            values: vec![],
-        }),
-        mode: Some(NormalizedSessionControl {
-            key: "mode".into(),
-            raw_config_id: "mode".into(),
-            label: "Mode".into(),
-            current_value: Some("default".into()),
-            settable: true,
-            values: vec![],
-        }),
-        reasoning: Some(NormalizedSessionControl {
-            key: "reasoning".into(),
-            raw_config_id: "thinking".into(),
-            label: "Thinking".into(),
-            current_value: Some("off".into()),
-            settable: true,
-            values: vec![],
-        }),
-        effort: Some(NormalizedSessionControl {
-            key: "effort".into(),
-            raw_config_id: "reasoning_effort".into(),
-            label: "Reasoning Effort".into(),
-            current_value: Some("xhigh".into()),
-            settable: true,
-            values: vec![],
-        }),
-        fast_mode: Some(NormalizedSessionControl {
-            key: "fast_mode".into(),
-            raw_config_id: "fast_mode".into(),
-            label: "Fast Mode".into(),
-            current_value: Some("on".into()),
-            settable: true,
-            values: vec![],
-        }),
-        extras: vec![NormalizedSessionControl {
-            key: "extra:foo".into(),
-            raw_config_id: "foo".into(),
-            label: "Foo".into(),
-            current_value: Some("bar".into()),
-            settable: true,
-            values: vec![],
-        }],
-    };
-
-    let values = persisted_control_values(&controls);
-    let ids = values
-        .into_iter()
-        .map(|(_, config_id, value)| format!("{config_id}={value}"))
-        .collect::<Vec<_>>();
-
-    assert_eq!(
-        ids,
-        vec![
-            "model=default",
-            "collaboration_mode=plan",
-            "thinking=off",
-            "reasoning_effort=xhigh",
-            "fast_mode=on",
-            "mode=default",
-            "foo=bar",
-        ]
-    );
-}
-
-#[test]
 fn pending_config_rank_keeps_collaboration_mode_in_standard_order() {
     let mut collaboration_mode = acp::schema::SessionConfigOption::select(
         "collaboration_mode",
@@ -147,8 +62,8 @@ fn pending_config_rank_treats_synthetic_acp_model_control_as_model() {
 fn direct_model_setter_engages_only_without_live_model_control() {
     // Harnesses that report no live model control (neither a model config
     // option nor available_models) route a switch through the legacy
-    // `session/set_model` ext call; the agent is the sole authority on
-    // validity.
+    // `session/set_model` ext call; its response must still carry an exact
+    // current-model readback before the actor accepts it.
     let no_model_control = SessionStartupState {
         current_mode_id: None,
         legacy_mode_state: None,
@@ -209,7 +124,7 @@ fn model_config_request_without_raw_option_rejects_values_outside_acp_models() {
 }
 
 #[test]
-fn queue_accepts_catalog_authorized_model_value_outside_live_options() {
+fn queue_accepts_live_snapshot_authorized_model_value_outside_raw_options() {
     let db = Db::open_in_memory().expect("open db");
     test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace");
     let store = SessionStore::new(db.clone());
@@ -262,9 +177,9 @@ fn queue_accepts_catalog_authorized_model_value_outside_live_options() {
         prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
     };
 
-    // Same value and option list: only the recorded-context catalog
-    // authorization differs. Catalog authorization allows this value beyond
-    // the harness-advertised list while preserving the same session.
+    // Same value and raw option list: only the current canonical live-snapshot
+    // authorization differs. That exact-session statement can admit a value
+    // while the raw ACP select list is stale.
     queue_pending_config_change(
         &store,
         "session-1",
@@ -273,7 +188,7 @@ fn queue_accepts_catalog_authorized_model_value_outside_live_options() {
         "claude-fable-5",
         true,
     )
-    .expect("catalog-authorized model value must queue");
+    .expect("live-snapshot-authorized model value must queue");
 
     queue_pending_config_change(
         &store,
@@ -283,7 +198,62 @@ fn queue_accepts_catalog_authorized_model_value_outside_live_options() {
         "claude-fable-5",
         false,
     )
-    .expect_err("the same value without catalog authorization stays rejected");
+    .expect_err("the same value without live snapshot authorization stays rejected");
+
+    let fable_snapshot = SessionLiveConfigSnapshot {
+        models: vec![HarnessLaunchModel {
+            id: "claude-fable-5".to_string(),
+            observed_name: Some("Fable".to_string()),
+            observed_description: None,
+        }],
+        controls: Vec::new(),
+        current: SessionLiveConfigCurrent {
+            model_id: Some("claude-fable-5".to_string()),
+            control_values: Default::default(),
+        },
+        raw_config_options: Vec::new(),
+        normalized_controls: NormalizedSessionControls::default(),
+        prompt_capabilities: Default::default(),
+        source_seq: 1,
+        updated_at: "2026-03-25T00:00:01Z".to_string(),
+    };
+    store
+        .upsert_live_config_snapshot(
+            &snapshot_to_record("session-1", &fable_snapshot).expect("serialize snapshot"),
+        )
+        .expect("persist Fable live snapshot");
+    assert!(pending_model_is_in_latest_live_snapshot(
+        &store,
+        "session-1",
+        "claude-fable-5"
+    )
+    .expect("read latest snapshot"));
+
+    let sonnet_snapshot = SessionLiveConfigSnapshot {
+        models: vec![HarnessLaunchModel {
+            id: "sonnet".to_string(),
+            observed_name: Some("Sonnet".to_string()),
+            observed_description: None,
+        }],
+        current: SessionLiveConfigCurrent {
+            model_id: Some("sonnet".to_string()),
+            control_values: Default::default(),
+        },
+        source_seq: 2,
+        updated_at: "2026-03-25T00:00:02Z".to_string(),
+        ..fable_snapshot
+    };
+    store
+        .upsert_live_config_snapshot(
+            &snapshot_to_record("session-1", &sonnet_snapshot).expect("serialize snapshot"),
+        )
+        .expect("replace live snapshot without Fable");
+    assert!(!pending_model_is_in_latest_live_snapshot(
+        &store,
+        "session-1",
+        "claude-fable-5"
+    )
+    .expect("read replacement snapshot"));
 }
 
 #[test]
@@ -456,4 +426,123 @@ fn collaboration_mode_option_is_not_treated_as_mode_request() {
     assert!(!is_mode_config_request("collaboration_mode", resolved));
     assert_eq!(tracked_config_purpose("collaboration_mode", resolved), None);
     assert!(find_select_option_for_request(&options, "mode").is_none());
+}
+
+#[test]
+fn final_whole_intent_rejects_a_later_setter_resetting_the_model() {
+    let mut model = acp::schema::SessionConfigOption::select(
+        "model",
+        "Model",
+        "m-old",
+        vec![
+            acp::schema::SessionConfigSelectOption::new("m-old", "Old"),
+            acp::schema::SessionConfigSelectOption::new("m-new", "New"),
+        ],
+    );
+    model.category = Some(acp::schema::SessionConfigOptionCategory::Model);
+    let later_control = acp::schema::SessionConfigOption::select(
+        "effort",
+        "Effort",
+        "high",
+        vec![
+            acp::schema::SessionConfigSelectOption::new("low", "Low"),
+            acp::schema::SessionConfigSelectOption::new("high", "High"),
+        ],
+    );
+    let startup_state = SessionStartupState {
+        current_mode_id: None,
+        legacy_mode_state: None,
+        // This is the adversarial full response after setting `effort`: the
+        // later setter confirmed itself but reset the previously confirmed model.
+        config_options: vec![model, later_control],
+        current_model_id: Some("m-new".to_string()),
+        available_models: session_model_options(&["m-old", "m-new"]),
+        prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+    };
+    let intent = ResolvedLaunchIntent {
+        model_id: Some("m-new".to_string()),
+        control_values: [("effort".to_string(), "high".to_string())]
+            .into_iter()
+            .collect(),
+        created_at: "2026-08-19T00:00:00Z".to_string(),
+    };
+
+    let error = ensure_resolved_launch_intent_confirmed(&startup_state, &intent)
+        .expect_err("the final aggregate must notice the reset model");
+    assert!(error.to_string().contains("final live model"));
+}
+
+#[test]
+fn generic_setter_noop_response_is_not_authoritative() {
+    let option = acp::schema::SessionConfigOption::select(
+        "fast_mode",
+        "Fast Mode",
+        "off",
+        vec![
+            acp::schema::SessionConfigSelectOption::new("off", "Off"),
+            acp::schema::SessionConfigSelectOption::new("on", "On"),
+        ],
+    );
+    let startup_state = SessionStartupState {
+        current_mode_id: None,
+        legacy_mode_state: None,
+        config_options: vec![option],
+        current_model_id: None,
+        available_models: Vec::new(),
+        prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+    };
+
+    assert_eq!(
+        select_setter_response_outcome(&startup_state, "fast_mode", "on"),
+        ConfigApplyOutcome::NotApplied,
+        "a valid full response that keeps the old current value is a refusal"
+    );
+}
+
+#[test]
+fn restore_rejects_a_saved_value_missing_from_the_live_statement() {
+    let startup_state = SessionStartupState {
+        current_mode_id: None,
+        legacy_mode_state: None,
+        config_options: Vec::new(),
+        current_model_id: None,
+        available_models: Vec::new(),
+        prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+    };
+    let saved = vec![(
+        normalized_key_rank(NormalizedControlKind::Extra),
+        "removed-control".to_string(),
+        "saved-value".to_string(),
+    )];
+
+    let error = ensure_config_values_confirmed(&startup_state, &saved, "saved")
+        .expect_err("a missing saved value must fail resume");
+    assert!(error.to_string().contains("removed-control"));
+}
+
+#[test]
+fn every_reported_live_contradiction_reaches_the_refresh_port() {
+    struct RecordingInvalidator(std::sync::atomic::AtomicUsize);
+
+    impl LaunchObservationInvalidator for RecordingInvalidator {
+        fn queue_refresh(&self, _harness_kind: &str) -> bool {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            true
+        }
+    }
+
+    let db = Db::open_in_memory().expect("open db");
+    let store = SessionStore::new(db);
+    let recorder = Arc::new(RecordingInvalidator(std::sync::atomic::AtomicUsize::new(0)));
+    let mut caps = test_support::actor_capabilities_for_store(&store);
+    caps.launch_observation_invalidator = Some(recorder.clone());
+
+    queue_launch_observation_refresh(&caps, "codex", "session-1");
+    queue_launch_observation_refresh(&caps, "codex", "session-2");
+
+    assert_eq!(
+        recorder.0.load(std::sync::atomic::Ordering::SeqCst),
+        2,
+        "the actor must not suppress any contradiction before the queue deduplicates it"
+    );
 }

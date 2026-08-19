@@ -9,13 +9,15 @@ from proliferate.server.cloud.agent_gateway.api import (
     organization_router as agent_auth_organization_router,
 )
 from proliferate.server.cloud.agent_gateway.api import router as agent_auth_router
-from proliferate.server.cloud.agent_models.api import router as agent_models_router
 from proliferate.server.cloud.agent_run_config.api import router as agent_run_config_router
 from proliferate.server.cloud.cloud_sandboxes.api import router as cloud_sandboxes_router
 from proliferate.server.cloud.github_app.api import (
     organization_router as github_app_organization_router,
 )
 from proliferate.server.cloud.github_app.api import router as github_app_router
+from proliferate.server.cloud.harness_launch_options.api import (
+    router as harness_launch_options_router,
+)
 from proliferate.server.cloud.integration_gateway.api import router as integration_gateway_router
 from proliferate.server.cloud.integrations.action_approvals.api import (
     router as integration_action_approvals_router,
@@ -54,8 +56,8 @@ router.include_router(worktree_policy_router)
 router.include_router(agent_auth_router)
 router.include_router(agent_auth_organization_router)
 router.include_router(agent_gateway_router)
-router.include_router(agent_models_router)
 router.include_router(agent_run_config_router)
+router.include_router(harness_launch_options_router)
 router.include_router(runtime_workers_router)
 router.include_router(runtime_worker_router)
 router.include_router(runtime_workers_admin_router)

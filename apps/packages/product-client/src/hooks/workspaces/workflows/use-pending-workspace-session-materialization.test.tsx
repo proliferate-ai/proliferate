@@ -11,6 +11,7 @@ import {
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 import {
   EMPTY_PENDING_WORKSPACE_REGISTRY,
   upsertPendingWorkspaceEntry,
@@ -37,6 +38,7 @@ vi.mock("#product/hooks/sessions/workflows/use-session-creation-actions", () => 
 }));
 
 vi.mock("#product/lib/infra/measurement/measurement-port", () => ({
+  isDebugMeasurementEnabled: () => false,
   logLatency: vi.fn(),
 }));
 
@@ -45,6 +47,7 @@ describe("usePendingWorkspaceSessionMaterialization", () => {
     mocks.createEmptySessionWithResolvedConfig.mockClear();
     useSessionDirectoryStore.getState().clearEntries();
     useSessionTranscriptStore.getState().clearEntries();
+    useSessionIntentStore.getState().clear();
     useSessionSelectionStore.setState({
       pendingWorkspaces: EMPTY_PENDING_WORKSPACE_REGISTRY,
       selectedLogicalWorkspaceId: null,
@@ -65,8 +68,21 @@ describe("usePendingWorkspaceSessionMaterialization", () => {
       workspaceId: pendingWorkspaceUiKey,
       materializedSessionId: null,
       modelId: "gpt-5.5",
-      modeId: "full-access",
     }));
+    useSessionIntentStore.getState().enqueueConfig({
+      clientSessionId: "client-session:codex:1",
+      workspaceId: pendingWorkspaceUiKey,
+      configId: "mode",
+      value: "agent-full-access",
+      persistDefaultPreference: false,
+    });
+    useSessionIntentStore.getState().enqueueConfig({
+      clientSessionId: "client-session:codex:1",
+      workspaceId: pendingWorkspaceUiKey,
+      configId: "collaboration_mode",
+      value: "plan",
+      persistDefaultPreference: false,
+    });
 
     const materializePendingWorkspaceSessions = usePendingWorkspaceSessionMaterialization();
     const materializationResult = materializePendingWorkspaceSessions(entry, "workspace-real", {
@@ -87,7 +103,10 @@ describe("usePendingWorkspaceSessionMaterialization", () => {
       workspaceId: "workspace-real",
       agentKind: "codex",
       modelId: "gpt-5.5",
-      modeId: "full-access",
+      launchControlValues: {
+        mode: "agent-full-access",
+        collaboration_mode: "plan",
+      },
       reuseInFlightEmptySession: false,
       preserveProjectedSessionOnCreateFailure: true,
       activateOnCreate: false,
@@ -107,7 +126,6 @@ describe("usePendingWorkspaceSessionMaterialization", () => {
       workspaceId: buildPendingWorkspaceUiKey(entry),
       materializedSessionId: null,
       modelId: "gpt-5.5",
-      modeId: "full-access",
     }));
     useSessionSelectionStore.setState({
       pendingWorkspaces: upsertPendingWorkspaceEntry(EMPTY_PENDING_WORKSPACE_REGISTRY, entry),
@@ -127,10 +145,16 @@ describe("usePendingWorkspaceSessionMaterialization", () => {
       workspaceId: "workspace-real",
       materializedSessionId: null,
       modelId: "opus",
-      modeId: "default",
       hasAttemptedPrompt: true,
       sessionRelationship: { kind: "root" },
     }));
+    useSessionIntentStore.getState().enqueueConfig({
+      clientSessionId: "client-session:claude:1",
+      workspaceId: "workspace-real",
+      configId: "collaboration_mode",
+      value: "default",
+      persistDefaultPreference: false,
+    });
 
     const materializeReadyWorkspaceProjectedSessions =
       useReadyWorkspaceProjectedSessionMaterialization();
@@ -150,7 +174,7 @@ describe("usePendingWorkspaceSessionMaterialization", () => {
       workspaceId: "workspace-real",
       agentKind: "claude",
       modelId: "opus",
-      modeId: "default",
+      launchControlValues: { collaboration_mode: "default" },
       reuseInFlightEmptySession: false,
       preserveProjectedSessionOnCreateFailure: true,
       activateOnCreate: undefined,

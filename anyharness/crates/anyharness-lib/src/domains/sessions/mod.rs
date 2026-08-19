@@ -10,6 +10,7 @@ pub mod execution_summary;
 pub mod extensions;
 pub mod fork_operation;
 pub mod links;
+pub mod launch_intent;
 pub mod live_config;
 pub mod live_ports;
 pub mod mcp_bindings;

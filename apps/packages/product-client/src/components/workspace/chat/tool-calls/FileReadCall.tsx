@@ -59,7 +59,7 @@ export function FileReadCall({
       </span>
       <ToolFileChip
         basename={resolvedBasename}
-        pathLabel={workspacePath || path}
+        rawPath={path}
         workspacePath={workspacePath}
       />
       {scopeLabel && <span className="truncate text-ui-sm text-faint">{scopeLabel}</span>}

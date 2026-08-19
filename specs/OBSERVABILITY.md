@@ -7,6 +7,23 @@ in the PR description. System depth lives in
 [`specs/codebase/systems/engineering/observability/`](codebase/systems/engineering/observability/README.md);
 this page is the per-PR decision layer over it.
 
+## Harness launch-option authority events
+
+The observation → create → actor → live-mutation chain emits these bounded
+records:
+
+| Event | Required safe fields |
+| --- | --- |
+| `agent.launch_options_probe.completed` | harness kind, basis/revision, result/state, counts, duration, bounded failure code |
+| `agent.launch_options.served` | harness kind, basis/revision, state, counts |
+| `session.launch_selection.validated` | session/correlation identity, harness kind, result, selected key names/counts, bounded rejection code |
+| `session.initial_config.apply` | session identity, config key, membership/apply/confirmation result |
+| `session.live_config.changed` | session identity, source sequence, changed key, apply result |
+
+These events never contain selected values, model IDs, descriptions, provider
+output, credentials, prompts, environment values, or filesystem paths. Probe
+materialization errors use bounded codes rather than error bodies.
+
 ## The model
 
 Four signal surfaces, deliberately separate:
@@ -133,9 +150,13 @@ change sits on:
 - **Structural, not length, bounds:** client payload scrubbing bounds depth,
   array positions, and object properties (`[circular]`, `[truncated]`) but
   does not truncate strings by length — what you put in a string field ships.
-- **Replay:** Web and Mobile set both replay rates to zero. Desktop sets
-  normal session replay to zero; masked error replay can still retain
-  identifier-bearing route metadata (known gap). PostHog replay is off by
+- **Replay:** Web and Mobile set both replay rates to zero.
+  Desktop renderer replay is source-disabled and absent; no build configuration
+  can enable it.
+  Re-enablement requires a separately reviewed synthetic privacy proof of the
+  exact route/surface block-and-mask policy, metadata policy, provider arrival,
+  and absence of prompt, transcript, terminal, file, repository, path, token,
+  workspace, session, and workflow identifiers. PostHog replay is off by
   default; when explicitly enabled, recorded page metadata can contain route
   ids even though capture-event URL properties are stripped. A new surface
   that can display prompts, files, paths, or credentials gets

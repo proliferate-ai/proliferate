@@ -15,8 +15,6 @@ from proliferate.db.store import workflow_managed_execution as managed_execution
 from proliferate.db.store.workflow_definitions import WorkflowDefinitionSnapshot
 from proliferate.db.store.workflow_invocations import WorkflowInvocationSnapshot
 from proliferate.lib.infra.time.wall_clock import utcnow
-from proliferate.server.catalogs.models import AgentCatalogResponse
-from proliferate.server.catalogs.service import read_agent_catalog
 from proliferate.server.workflows.domain.invocation import (
     EligibilityBlocker,
     ScalarValue,
@@ -33,7 +31,6 @@ from proliferate.server.workflows.domain.validation import (
 from proliferate.server.workflows.errors import (
     InvalidWorkflowDefinition,
     InvalidWorkflowInvocation,
-    UnavailableWorkflowCatalogSelection,
     WorkflowDefinitionNotFound,
     WorkflowDefinitionRevisionConflict,
     WorkflowInvocationConflict,
@@ -46,6 +43,8 @@ from proliferate.server.workflows.models import (
     WorkflowInvocationCreateRequest,
     workflow_invocation_response,
 )
+
+_TARGET_OBSERVED_AUTHORITY = "target-observed"
 
 
 @dataclass(frozen=True)
@@ -73,14 +72,13 @@ async def create_workflow_definition(
         user_id=user_id,
         repo_config_id=body.default_repo_config_id,
     )
-    catalog = read_agent_catalog().catalog
-    document = _validate_document(catalog, body)
+    document = _validate_document(body)
     return await workflow_store.create_workflow_definition(
         db,
         user_id=user_id,
         title=body.title,
         description=_normalized_description(body.description),
-        validated_catalog_version=catalog.catalogVersion,
+        validated_catalog_version=_TARGET_OBSERVED_AUTHORITY,
         default_repo_config_id=body.default_repo_config_id,
         inputs_json=document.inputs,
         stages_json=document.stages,
@@ -108,8 +106,7 @@ async def update_workflow_definition(
         user_id=current.user_id,
         repo_config_id=body.default_repo_config_id,
     )
-    catalog = read_agent_catalog().catalog
-    document = _validate_document(catalog, body)
+    document = _validate_document(body)
     updated = await workflow_store.update_workflow_definition_if_revision(
         db,
         user_id=current.user_id,
@@ -117,7 +114,7 @@ async def update_workflow_definition(
         expected_revision=body.expected_revision,
         title=body.title,
         description=_normalized_description(body.description),
-        validated_catalog_version=catalog.catalogVersion,
+        validated_catalog_version=_TARGET_OBSERVED_AUTHORITY,
         default_repo_config_id=body.default_repo_config_id,
         inputs_json=document.inputs,
         stages_json=document.stages,
@@ -168,7 +165,6 @@ async def workflow_run_eligibility(
     return await _workflow_run_eligibility(
         db,
         definition=definition,
-        catalog=read_agent_catalog().catalog,
     )
 
 
@@ -176,7 +172,6 @@ async def _workflow_run_eligibility(
     db: AsyncSession,
     *,
     definition: WorkflowDefinitionSnapshot,
-    catalog: AgentCatalogResponse,
 ) -> tuple[EligibilityBlocker, ...]:
     default_repository_available = True
     if definition.default_repo_config_id is not None:
@@ -189,7 +184,6 @@ async def _workflow_run_eligibility(
             is not None
         )
     return collect_run_eligibility_blockers(
-        catalog,
         stages=definition.stages_json,
         default_repo_config_id=definition.default_repo_config_id,
         default_repository_available=default_repository_available,
@@ -248,11 +242,9 @@ async def put_workflow_invocation(
             current_revision=definition.revision,
         )
 
-    catalog = read_agent_catalog().catalog
     blockers = await _workflow_run_eligibility(
         db,
         definition=definition,
-        catalog=catalog,
     )
     if blockers:
         raise WorkflowInvocationIneligible(
@@ -263,7 +255,6 @@ async def put_workflow_invocation(
         )
 
     portable_definition = build_portable_definition(
-        catalog,
         inputs=definition.inputs_json,
         stages=definition.stages_json,
     )
@@ -376,11 +367,9 @@ async def _validate_default_repository(
 
 
 def _validate_document(
-    catalog: AgentCatalogResponse,
     body: WorkflowDefinitionCreateRequest,
 ) -> ValidatedDefinitionDocument:
     result = validate_definition_document(
-        catalog,
         inputs=cast(
             list[dict[str, object]],
             body.model_dump(by_alias=True, exclude_none=True)["inputs"],
@@ -391,12 +380,7 @@ def _validate_document(
         ),
     )
     if isinstance(result, DefinitionIssue):
-        error_type = (
-            UnavailableWorkflowCatalogSelection
-            if result.kind == "catalog_selection_unavailable"
-            else InvalidWorkflowDefinition
-        )
-        raise error_type(result.message, path=result.path)
+        raise InvalidWorkflowDefinition(result.message, path=result.path)
     return result
 
 

@@ -140,6 +140,15 @@ Rules:
 
 - Detection happens at render time from raw markdown; do not store parsed file
   references in transcript items.
+- File-read and file-change callers keep raw wire paths separate from structured
+  workspace-path metadata. Any structured string, including empty or
+  whitespace, is supplied and authoritative; `null`/`undefined` alone permits
+  raw classification. Human-readable labels may fall back to a nonblank raw
+  path without changing that access decision.
+- Streaming file-change identity uses only the raw `path` and `newPath`
+  channels. A later supplied `workspacePath` or `newWorkspacePath` string is
+  merged verbatim, so structured refinement—including an invalid blank
+  value—updates one logical part instead of splitting it.
 - A leading `~/` is an external Desktop file reference, not a workspace-relative
   path. Resolve it through the Desktop host's home-directory bridge before
   classifying or opening it; Web keeps the reference unavailable. Hidden path
@@ -152,7 +161,9 @@ Rules:
   subtitle to `Open preview`. It remains completion chrome: never expose it
   while transport text is still buffered or its final opacity is settling. Its
   trigger consumes the file-reference action's `canOpenPrimary` capability and
-  stays disabled, with a guarded handler, until that capability is true.
+  stays disabled, with a guarded handler, until that capability is true. It
+  forwards the resource's raw path through the same canonical locator hook and
+  never opens an optimistic preview before exact access settles.
 - While prose is streaming, a trailing incomplete local-file link is closed
   only in the Markdown render copy so its file mention appears as soon as the
   destination begins. Never persist the synthetic delimiter or expose the raw
@@ -560,6 +571,19 @@ would bump the viewport as the 360px estimate corrects. The virtualized list
 holds the anchored content with the measured `scrollHeight` delta in a
 stability-gated loop; the non-virtualized list relies on native browser scroll
 anchoring (`overflow-anchor`, left at its default) for the small seam.
+
+An older-history prepend installs the same kind of anchor, but as a
+non-cancelable owner: it holds the reading row's seat against upward intent and
+against the frame scheduler draining. That seat is acknowledged, and the owner
+released, only when a writer pass observes the seat held in a frame that saw no
+native scroll activity. A seated read taken while a native scroll is still
+delivering proves only the main-thread `scrollTop` at that callback — a wheel or
+momentum continuation queued before the prepend can keep eroding the position
+afterwards, and releasing on that read both stops the writer and drops the
+protection that would have re-armed it, stranding the reader at the top. Erosion
+is re-corrected through the same single writer; the retention is bounded by the
+existing quiet-extension and absolute compensation deadlines, which release the
+anchor regardless.
 
 Cards mounted above the composer (permission/question panels, slash-command
 trays, queued messages, goals, and similar dock slots) are overlays, not a

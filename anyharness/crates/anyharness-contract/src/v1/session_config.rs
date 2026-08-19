@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::{HarnessLaunchControl, HarnessLaunchModel};
+
 /// A raw selectable value exposed by an active ACP session configuration option.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -137,9 +139,23 @@ pub struct PromptCapabilities {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionLiveConfigSnapshot {
+    /// Models currently advertised by this exact native session, in harness order.
+    #[serde(default)]
+    pub models: Vec<HarnessLaunchModel>,
+    /// Independent live controls and their exact allowed values, in harness order.
+    #[serde(default)]
+    pub controls: Vec<HarnessLaunchControl>,
+    /// Complete effective configuration for this exact native session.
+    #[serde(default)]
+    pub current: SessionLiveConfigCurrent,
     /// Exact raw ACP config options currently exposed by the active session.
+    ///
+    /// Deprecated transport compatibility. First-party active-session consumers
+    /// use `models`, `controls`, and `current` exclusively.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub raw_config_options: Vec<RawSessionConfigOption>,
     /// Product-normalized view of the current live controls.
+    #[serde(default)]
     pub normalized_controls: NormalizedSessionControls,
     /// Content block capabilities advertised by the active ACP agent.
     #[serde(default)]
@@ -148,6 +164,14 @@ pub struct SessionLiveConfigSnapshot {
     pub source_seq: i64,
     /// Timestamp when this snapshot was last updated.
     pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionLiveConfigCurrent {
+    pub model_id: Option<String>,
+    #[serde(default)]
+    pub control_values: std::collections::BTreeMap<String, String>,
 }
 
 /// Response payload for fetching the current live session config snapshot.

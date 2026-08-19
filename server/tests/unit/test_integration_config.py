@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from proliferate.server.cloud.integrations.config import (
@@ -18,6 +20,9 @@ def test_all_seeds_round_trip_through_the_config_codec() -> None:
 
     for seed in SEED_DEFINITIONS:
         raw = serialize_definition_config(seed.config)
+        payload = json.loads(raw)
+        if seed.config.oauth_revocation_endpoint is None:
+            assert "oauthRevocationEndpoint" not in payload
         reparsed = parse_definition_config(raw)
         # Serializing the reparsed config is stable.
         assert serialize_definition_config(reparsed) == raw
@@ -58,11 +63,17 @@ def test_slack_seed_has_exact_required_oauth_scopes() -> None:
     assert slack.config.oauth_scopes == expected_scopes
     assert slack.config.oauth_scopes_required is True
     assert slack.config.oauth_scope_policy == "exact"
+    assert slack.config.oauth_revocation_endpoint == "https://slack.com/api/auth.revoke"
 
-    reparsed = parse_definition_config(serialize_definition_config(slack.config))
+    serialized = serialize_definition_config(slack.config)
+    assert json.loads(serialized)["oauthRevocationEndpoint"] == (
+        "https://slack.com/api/auth.revoke"
+    )
+    reparsed = parse_definition_config(serialized)
     assert reparsed.oauth_scopes == expected_scopes
     assert reparsed.oauth_scopes_required is True
     assert reparsed.oauth_scope_policy == "exact"
+    assert reparsed.oauth_revocation_endpoint == "https://slack.com/api/auth.revoke"
 
 
 def test_parse_rejects_unknown_oauth_scope_policy() -> None:

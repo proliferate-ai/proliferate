@@ -10,8 +10,19 @@ import { resolveEasedFollowStep } from "#product/hooks/chat/ui/transcript-eased-
 // Each fresh measured-height growth extends prepend compensation by one quiet
 // window so throttled corrections remain anchored after the initial deadline.
 const ABOVE_CHANGE_COMPENSATION_QUIET_EXTENSION_MS = 1_000;
-// A pathological never-quiet source must still release the reader.
+// A pathological never-quiet source must still release the reader. Also the
+// bound on the seat-proof rule: native scroll activity can extend seat
+// ownership only up to this ceiling, never indefinitely.
 const ABOVE_CHANGE_COMPENSATION_ABSOLUTE_MAX_MS = 3_000;
+
+// PREPEND SEAT LIFECYCLE CONTRACT. The seat a non-cancelable prepend owner
+// establishes is acknowledged only when a writer pass observes it HELD in a
+// frame that saw NO native scroll activity. A held read taken while a native
+// scroll is still delivering proves only the main-thread DOM value at that
+// callback: on WebKit a wheel/momentum continuation queued BEFORE the prepend
+// keeps eroding scrollTop afterwards. Erosion is re-corrected through the one
+// existing writer (the corrective continuation re-arms; no second writer, no
+// timer, no retry policy), bounded by the two deadlines above.
 
 export interface UseTranscriptFramePipelineLifecycleOptions {
   /** The single owned per-frame pipeline instance (stable ref). */
@@ -31,6 +42,13 @@ export interface UseTranscriptFramePipelineLifecycleOptions {
     anchor: ContentHeightScrollAnchor | null;
     deadline: number;
   }>;
+  /**
+   * Count of scroll events the engine could NOT attribute to one of its own
+   * writes, i.e. observed native scroll activity. Read AND reset by every
+   * writer pass: nonzero means a native scroll was still delivering as of this
+   * frame, so a seated read is not yet seat proof (see the contract above).
+   */
+  nativeScrollActivityRef: RefObject<number>;
   /**
    * FR-2 restore (rung 6): while unpinned on a finalized-session revisit, this
    * resolves the saved reading anchor to a scrollTop (or null when the saved
@@ -92,6 +110,7 @@ export function useTranscriptFramePipelineLifecycle({
   compensationAnchorRef,
   compensationDeadlineRef,
   compensationAbsoluteDeadlineRef,
+  nativeScrollActivityRef,
   restoreResolverRef,
   restoreDeadlineRef,
   scrollToBottom,
@@ -130,6 +149,10 @@ export function useTranscriptFramePipelineLifecycle({
 
   const runFramePass = useCallback((): TranscriptFramePassOutcome => {
     const viewport = scrollRef.current;
+    // Consumed by EVERY pass, not just the compensation branch, so activity
+    // seen while pinned or restoring cannot leak into a later seat proof.
+    const nativeScrollSinceLastPass = nativeScrollActivityRef.current > 0;
+    nativeScrollActivityRef.current = 0;
     if (!viewport) {
       return "settled";
     }
@@ -264,17 +287,24 @@ export function useTranscriptFramePipelineLifecycle({
           }
         });
       }
-      const outcome = viewport.scrollTop > topBeforeCorrection
-        ? "corrective_position_write"
-        : "settled";
-      // A clamped no-advance attempt is settled as a writer outcome, but it did
-      // not observe the established seat held. Retain ownership until height
-      // recovery makes the seat reachable, unless the absolute ceiling wins.
-      if (!displacedAboveTarget || now >= floor.absoluteDeadline) {
+      // Seat proof (module contract). Releasing on a seated read taken while a
+      // momentum continuation is still delivering is the shared WebKit prepend
+      // regression: the release makes the owner dormant AND drops the
+      // non-cancelable protection that would have re-armed glue from the
+      // erosion's later events, so the reader rides the decay to the top.
+      const unproven = displacedAboveTarget || nativeScrollSinceLastPass;
+      const retained = unproven && now < floor.absoluteDeadline;
+      if (!retained) {
         compensationAnchorRef.current = null;
         compensationAbsoluteDeadlineRef.current = { anchor: null, deadline: 0 };
       }
-      return outcome;
+      // A retained unproven seat is NOT settled even with no read-back advance:
+      // a native scroll's latch (or a dip's clamp) can swallow the write, and
+      // no later scroll/resize signal is guaranteed. Stay scheduled until a
+      // scroll-quiet pass observes the seat held, or the ceiling releases.
+      return viewport.scrollTop > topBeforeCorrection || retained
+        ? "corrective_position_write"
+        : "settled";
     }
     // A fresh above-anchor growth this pass is a late estimate-to-measured
     // correction still arriving; keep the compensation window open past the
@@ -308,13 +338,20 @@ export function useTranscriptFramePipelineLifecycle({
         viewport.scrollTop = target;
       }
     });
+    // Same seat-proof rule as the deadline branch: a write left short of the
+    // seat, or a seated read in a frame that saw native scroll activity, has
+    // not settled. Corrective keeps the one writer scheduled one more frame so
+    // erosion landing after this callback is re-corrected by the same writer.
     return viewport.scrollTop > topBeforeCorrection
+      || target - viewport.scrollTop > 1
+      || nativeScrollSinceLastPass
       ? "corrective_position_write"
       : "settled";
   }, [
     compensationAnchorRef,
     compensationAbsoluteDeadlineRef,
     compensationDeadlineRef,
+    nativeScrollActivityRef,
     restoreResolverRef,
     restoreDeadlineRef,
     notifyProgrammaticScroll,

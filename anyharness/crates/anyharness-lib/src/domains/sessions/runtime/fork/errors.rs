@@ -44,6 +44,25 @@ pub(super) fn map_start_error_to_fork(error: StartSessionError) -> ForkSessionEr
         StartSessionError::AgentDescriptorNotFound(agent_kind) => {
             ForkSessionError::Internal(anyhow::anyhow!("agent descriptor not found: {agent_kind}"))
         }
+        StartSessionError::LaunchOptionsUnavailable { agent_kind, state } => {
+            ForkSessionError::Invalid(format!(
+                "launch options are not available for agent '{agent_kind}' (state: {state:?})"
+            ))
+        }
+        StartSessionError::LaunchValueUnsupported {
+            agent_kind,
+            key,
+            value,
+            state,
+        } => ForkSessionError::Invalid(format!(
+            "launch value '{value}' for '{key}' is no longer supported for agent '{agent_kind}' (state: {state:?})"
+        )),
+        StartSessionError::AgentEnvOverrideUnsupported {
+            agent_kind,
+            env_var_name,
+        } => ForkSessionError::Invalid(format!(
+            "workspace/session environment cannot override agent-owned key '{env_var_name}' for '{agent_kind}'"
+        )),
         StartSessionError::Closed => ForkSessionError::Invalid("session is closed".to_string()),
         StartSessionError::MissingDataKey => ForkSessionError::MissingDataKey,
         StartSessionError::RestartRequired(detail) => ForkSessionError::Invalid(detail),

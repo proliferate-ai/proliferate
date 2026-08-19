@@ -12,7 +12,6 @@ fn draft_catalog_parses_with_expected_shape() {
     let catalog = parse_draft();
 
     assert_eq!(catalog.schema_version, 2);
-    assert_eq!(catalog.default_agent_kind.as_deref(), Some("claude"));
     assert_eq!(catalog.catalog_version, draft_catalog_version().as_str());
     let probed_against = catalog.probed_against.as_ref().expect("probedAgainst");
     assert_eq!(
@@ -56,96 +55,20 @@ fn draft_catalog_parses_with_expected_shape() {
         gateway_context.signals,
         Some(AgentCatalogAuthSignal::Route("gateway".to_string()))
     );
-    // gatewayPolicy carries the small-fast role pin that used to be a Rust const.
-    let policy = claude
-        .session
-        .gateway_policy
-        .as_ref()
-        .expect("claude gatewayPolicy");
-    assert_eq!(
-        policy.roles.get("small_fast").map(String::as_str),
-        Some("claude-haiku-4-5-20251001")
-    );
-    let first = &claude.session.models[0];
+    let first = &claude.session.presentation_models[0];
     assert_eq!(first.id, "default");
-    // Bare ids are never Bedrock-servable (Bedrock takes only us.anthropic.*
-    // inference-profile ids), so `default` is api/oauth only — a Bedrock-routed
-    // account gets the us.anthropic.* rows, never this bare id.
-    assert_eq!(
-        first.availability.any_of,
-        vec!["anthropic-api", "anthropic-oauth"]
-    );
-    assert!(first.default_visible);
-    let effort = first.controls.get("effort").expect("effort control");
-    assert_eq!(
-        effort.values,
-        vec!["default", "low", "medium", "high", "xhigh", "max"]
-    );
-    assert_eq!(effort.observed_value.as_deref(), Some("default"));
-    assert_eq!(effort.default, None);
-
-    let codex = &catalog.agents[1];
-    let model_control = codex
-        .session
-        .controls
-        .iter()
-        .find(|control| control.key == "model")
-        .expect("model control");
-    let mapping = model_control.mapping.as_ref().expect("model mapping");
-    assert_eq!(mapping.switch_via.as_deref(), Some("configOption"));
-    assert_eq!(mapping.variant_syntax.as_deref(), None);
 
     let cursor = &catalog.agents[2];
     assert!(cursor.provenance.attestation.is_none());
     assert!(cursor.harness.native.is_none());
-    // Cursor is the variant-carrying agent: its model control declares the
-    // bracket-params syntax and its models carry probe-observed variant ids.
-    let cursor_model_control = cursor
-        .session
-        .controls
-        .iter()
-        .find(|control| control.key == "model")
-        .expect("cursor model control");
-    let cursor_mapping = cursor_model_control
-        .mapping
-        .as_ref()
-        .expect("cursor model mapping");
-    assert_eq!(
-        cursor_mapping.variant_syntax.as_deref(),
-        Some("bracket-params")
-    );
-    // Variant families are draft data — anchor on the stable shape, not a
-    // fixed model id (the probed model list moves between catalog runs).
-    let with_variants = cursor
-        .session
-        .models
-        .iter()
-        .find(|model| {
-            model
-                .provenance
-                .as_ref()
-                .is_some_and(|provenance| !provenance.variant_ids.is_empty())
-        })
-        .expect("some cursor model carries variant ids");
-    let provenance = with_variants.provenance.as_ref().expect("provenance");
-    assert!(provenance
-        .variant_ids
-        .iter()
-        .any(|variant| variant.starts_with(&format!("{}[", with_variants.id))));
+    assert!(!cursor.session.presentation_models.is_empty());
 
     let opencode = &catalog.agents[4];
     assert!(opencode
         .auth_contexts
         .iter()
         .any(|context| context.id == "baseline" && context.auth_slot_id.is_none()));
-    assert_eq!(
-        opencode
-            .session
-            .observed_defaults
-            .get("baseline")
-            .map(String::as_str),
-        Some("opencode/big-pickle")
-    );
+    assert!(!opencode.session.presentation_models.is_empty());
 }
 
 #[test]
@@ -287,122 +210,4 @@ fn registry_gateway_capability_matches_render_assumption() {
         !gateway_capable.contains("cursor"),
         "cursor must never be gateway-capable (render.rs returns UnsupportedRoute)"
     );
-}
-
-/// PRO-318: claude's fast-mode option is `fast`, not codex's `fast_mode`.
-/// The control must carry an apply mapping and every model that declares it
-/// must report the capability, or Opus ships a Fast toggle nothing can apply.
-#[test]
-fn claude_fast_control_is_mapped_and_reported() {
-    let catalog = crate::domains::agents::catalog::bundled::bundled_agent_catalog_document();
-    let claude = catalog
-        .agents
-        .iter()
-        .find(|agent| agent.kind == "claude")
-        .expect("claude agent");
-    let fast = claude
-        .session
-        .controls
-        .iter()
-        .find(|control| control.key == "fast")
-        .expect("claude declares a `fast` control");
-
-    assert_eq!(
-        fast.mapping
-            .as_ref()
-            .and_then(|mapping| mapping.live_config_id.as_deref()),
-        Some("fast"),
-        "the fast control needs a live-apply path or no surface can set it"
-    );
-    for (id, name, description_prefix) in [
-        ("opus", "Opus 5", Some("Opus 5")),
-        ("opus[1m]", "Opus 5 (1M context)", Some("Opus 5")),
-        ("claude-opus-4-8", "Opus 4.8", None),
-    ] {
-        let model = claude
-            .session
-            .models
-            .iter()
-            .find(|model| model.id == id)
-            .unwrap_or_else(|| panic!("missing {name} model"));
-        if let Some(prefix) = description_prefix {
-            assert!(model
-                .description
-                .as_deref()
-                .is_some_and(|value| value.starts_with(prefix)));
-        }
-        assert!(model.supports_fast_mode(), "{name} supports fast mode");
-    }
-}
-
-/// The rung-1 codex fork renamed its fast option `fast_mode` -> `fast-mode`.
-/// The bundled control must stay mapped and the models that declare it must
-/// report the capability, mirroring the claude coverage above.
-#[test]
-fn codex_fast_mode_control_is_mapped_and_reported() {
-    let catalog = crate::domains::agents::catalog::bundled::bundled_agent_catalog_document();
-    let codex = catalog
-        .agents
-        .iter()
-        .find(|agent| agent.kind == "codex")
-        .expect("codex agent");
-    let fast = codex
-        .session
-        .controls
-        .iter()
-        .find(|control| control.key == "fast-mode")
-        .expect("codex declares a `fast-mode` control");
-
-    assert_eq!(
-        fast.mapping
-            .as_ref()
-            .and_then(|mapping| mapping.live_config_id.as_deref()),
-        Some("fast-mode"),
-        "the fast-mode control needs a live-apply path or no surface can set it"
-    );
-    let carriers: Vec<_> = codex
-        .session
-        .models
-        .iter()
-        .filter(|model| model.controls.contains_key("fast-mode"))
-        .collect();
-    assert!(
-        !carriers.is_empty(),
-        "at least one codex model carries fast-mode"
-    );
-    for model in carriers {
-        assert!(
-            model.supports_fast_mode(),
-            "{} supports fast mode",
-            model.id
-        );
-    }
-}
-
-/// Cursor's `fast` entry is a probe-observed bracket-param variant dimension
-/// with a single value per model — not a switchable control. It must not be
-/// classified as fast-mode capability.
-#[test]
-fn cursor_single_value_fast_is_not_fast_mode_capability() {
-    let catalog = crate::domains::agents::catalog::bundled::bundled_agent_catalog_document();
-    let cursor = catalog
-        .agents
-        .iter()
-        .find(|agent| agent.kind == "cursor")
-        .expect("cursor agent");
-    let carriers: Vec<_> = cursor
-        .session
-        .models
-        .iter()
-        .filter(|model| model.controls.contains_key("fast"))
-        .collect();
-    assert!(!carriers.is_empty(), "cursor models carry a `fast` variant");
-    for model in carriers {
-        assert_eq!(model.controls["fast"].values.len(), 1);
-        assert!(
-            !model.supports_fast_mode(),
-            "{} must not report fast-mode capability",
-            model.id
-        );
-    }
 }

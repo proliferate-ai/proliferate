@@ -84,6 +84,7 @@ impl SessionStore {
 
         self.db.with_tx(|conn| {
             insert_session_row(conn, record)?;
+            copy_launch_intent_row(conn, &link.parent_session_id, &record.id)?;
             insert_session_link_row(conn, link)?;
             let copied = if snapshot_events {
                 conn.execute(
@@ -200,6 +201,26 @@ impl SessionStore {
             .map_err(Into::into)
         })
     }
+}
+
+fn copy_launch_intent_row(
+    conn: &rusqlite::Connection,
+    parent_session_id: &str,
+    child_session_id: &str,
+) -> rusqlite::Result<()> {
+    let inserted = conn.execute(
+        "INSERT INTO session_launch_intents (
+            session_id, requested_model_id, requested_controls_json, created_at
+         )
+         SELECT ?1, requested_model_id, requested_controls_json, created_at
+         FROM session_launch_intents
+         WHERE session_id = ?2",
+        params![child_session_id, parent_session_id],
+    )?;
+    if inserted != 1 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
 }
 
 fn insert_session_link_row(

@@ -35,14 +35,6 @@ function updateDefaultLaunchControlPreference(
   value: string,
 ): void {
   const state = useUserPreferencesStore.getState();
-  if (controlKey === "mode") {
-    state.set("defaultSessionModeByAgentKind", {
-      ...state.defaultSessionModeByAgentKind,
-      [agentKind]: value,
-    });
-    return;
-  }
-
   state.set("defaultLiveSessionControlValuesByAgentKind", {
     ...state.defaultLiveSessionControlValuesByAgentKind,
     [agentKind]: {

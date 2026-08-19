@@ -9,6 +9,7 @@ import {
   getSessionRecord,
   patchSessionRecord,
   putSessionRecord,
+  removeSessionRecord,
 } from "#product/stores/sessions/session-records";
 import { useSessionDirectoryStore } from "#product/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
@@ -36,12 +37,13 @@ describe("handleEmptyWorkspaceBootstrap", () => {
       workspaceSessionRecovery: null,
     });
     mocks.getAgentLaunchOptions.mockReset().mockResolvedValue(null);
+    removeSessionRecord(resolveWorkspaceSetupSessionId("materialized-workspace-1"));
+    removeSessionRecord("client-session:claude:recovery");
   });
 
   it("clears remembered sessions with the logical workspace key", async () => {
     const clearLastViewedSession = vi.fn();
     const createEmptySessionWithResolvedConfig = vi.fn();
-    const ensureCloudAgentCatalog = vi.fn().mockResolvedValue(null);
     const fetchWorkspaceSessions = vi.fn().mockResolvedValue([session("dismissed-session")]);
     const markWorkspaceBootstrappedInSession = vi.fn();
 
@@ -65,7 +67,6 @@ describe("handleEmptyWorkspaceBootstrap", () => {
     }, {
       clearLastViewedSession,
       createEmptySessionWithResolvedConfig: createEmptySessionWithResolvedConfig as never,
-      ensureCloudAgentCatalog: ensureCloudAgentCatalog as never,
       fetchWorkspaceSessions: fetchWorkspaceSessions as never,
       getActiveSessionId: () => null,
       getPendingWorkspaceEntry: () => null,
@@ -75,7 +76,6 @@ describe("handleEmptyWorkspaceBootstrap", () => {
 
     expect(clearLastViewedSession).toHaveBeenCalledWith("logical-workspace-1");
     expect(clearLastViewedSession).not.toHaveBeenCalledWith("materialized-workspace-1");
-    expect(ensureCloudAgentCatalog).toHaveBeenCalled();
     expect(createEmptySessionWithResolvedConfig).not.toHaveBeenCalled();
     expect(result.shouldReturn).toBe(false);
     expect(markWorkspaceBootstrappedInSession).not.toHaveBeenCalled();
@@ -85,7 +85,6 @@ describe("handleEmptyWorkspaceBootstrap", () => {
     const deps = {
       clearLastViewedSession: vi.fn(),
       createEmptySessionWithResolvedConfig: vi.fn() as never,
-      ensureCloudAgentCatalog: vi.fn().mockResolvedValue(null) as never,
       fetchWorkspaceSessions: vi.fn().mockResolvedValue([]) as never,
       getActiveSessionId: () => useSessionSelectionStore.getState().activeSessionId,
       getPendingWorkspaceEntry: () => null,
@@ -131,25 +130,9 @@ describe("handleEmptyWorkspaceBootstrap", () => {
 
   it("promotes the same setup surface through the creation owner after configuration appears", async () => {
     const setupSessionId = resolveWorkspaceSetupSessionId("materialized-workspace-1");
-    const launchAgent = {
-      kind: "claude",
-      displayName: "Claude Code",
-      description: null,
-      defaultModelId: "sonnet",
-      unattendedModeId: null,
-      models: [{
-        id: "sonnet",
-        displayName: "Sonnet",
-        description: null,
-        aliases: [],
-        status: "active",
-        isDefault: true,
-      }],
-      launchControls: [],
-    };
-    const ensureCloudAgentCatalog = vi.fn()
+    mocks.getAgentLaunchOptions
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ agents: [launchAgent] });
+      .mockResolvedValueOnce(launchOptionsResponse());
     const createEmptySessionWithResolvedConfig = vi.fn(async (options: {
       clientSessionId: string;
     }) => {
@@ -165,7 +148,6 @@ describe("handleEmptyWorkspaceBootstrap", () => {
     const deps = {
       clearLastViewedSession: vi.fn(),
       createEmptySessionWithResolvedConfig: createEmptySessionWithResolvedConfig as never,
-      ensureCloudAgentCatalog: ensureCloudAgentCatalog as never,
       fetchWorkspaceSessions: vi.fn().mockResolvedValue([]) as never,
       getActiveSessionId: () => useSessionSelectionStore.getState().activeSessionId,
       getPendingWorkspaceEntry: () => null,
@@ -240,22 +222,6 @@ describe("handleEmptyWorkspaceBootstrap", () => {
         });
         return options.clientSessionId;
       });
-    const launchAgent = {
-      kind: "claude",
-      displayName: "Claude Code",
-      description: null,
-      defaultModelId: "sonnet",
-      unattendedModeId: null,
-      models: [{
-        id: "sonnet",
-        displayName: "Sonnet",
-        description: null,
-        aliases: [],
-        status: "active",
-        isDefault: true,
-      }],
-      launchControls: [],
-    };
     const input = {
       agentsByKind: new Map([["claude", { readiness: "ready" }]]),
       latencyFlowId: null,
@@ -281,13 +247,13 @@ describe("handleEmptyWorkspaceBootstrap", () => {
     const deps = {
       clearLastViewedSession: vi.fn(),
       createEmptySessionWithResolvedConfig: createEmptySessionWithResolvedConfig as never,
-      ensureCloudAgentCatalog: vi.fn().mockResolvedValue({ agents: [launchAgent] }) as never,
       fetchWorkspaceSessions: vi.fn().mockResolvedValue([]) as never,
       getActiveSessionId: () => useSessionSelectionStore.getState().activeSessionId,
       getPendingWorkspaceEntry: () => null,
       getSessionRecord,
       markWorkspaceBootstrappedInSession: vi.fn(),
     };
+    mocks.getAgentLaunchOptions.mockResolvedValue(launchOptionsResponse());
 
     const failed = await handleEmptyWorkspaceBootstrapWithRecovery(input as never, deps);
 
@@ -324,3 +290,21 @@ describe("handleEmptyWorkspaceBootstrap", () => {
     expect(useSessionSelectionStore.getState().workspaceSessionRecovery).toBeNull();
   });
 });
+
+function launchOptionsResponse() {
+  return {
+    harnessKind: "claude",
+    basisRevision: "basis-1",
+    revision: 1,
+    state: "observed",
+    options: {
+      models: [{ id: "sonnet", observedName: "Sonnet", observedDescription: null }],
+      controls: [],
+      defaults: { modelId: "sonnet", controlValues: {} },
+    },
+    observedAt: null,
+    probeAttemptedAt: null,
+    probeFailureCode: null,
+    readiness: "ready",
+  };
+}

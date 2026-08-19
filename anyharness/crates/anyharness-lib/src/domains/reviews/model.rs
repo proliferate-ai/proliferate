@@ -211,14 +211,14 @@ impl From<ReviewAssignmentStatus> for v1::ReviewAssignmentStatus {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ReviewModeVerificationStatus {
+pub enum ReviewLaunchVerificationStatus {
     Pending,
     Verified,
     Mismatch,
     NotChecked,
 }
 
-impl ReviewModeVerificationStatus {
+impl ReviewLaunchVerificationStatus {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Pending => "pending",
@@ -234,20 +234,20 @@ impl ReviewModeVerificationStatus {
             "verified" => Ok(Self::Verified),
             "mismatch" => Ok(Self::Mismatch),
             "not_checked" => Ok(Self::NotChecked),
-            other => Err(ReviewParseError::UnknownModeVerificationStatus(
+            other => Err(ReviewParseError::UnknownLaunchVerificationStatus(
                 other.to_string(),
             )),
         }
     }
 }
 
-impl From<ReviewModeVerificationStatus> for v1::ReviewModeVerificationStatus {
-    fn from(value: ReviewModeVerificationStatus) -> Self {
+impl From<ReviewLaunchVerificationStatus> for v1::ReviewLaunchVerificationStatus {
+    fn from(value: ReviewLaunchVerificationStatus) -> Self {
         match value {
-            ReviewModeVerificationStatus::Pending => Self::Pending,
-            ReviewModeVerificationStatus::Verified => Self::Verified,
-            ReviewModeVerificationStatus::Mismatch => Self::Mismatch,
-            ReviewModeVerificationStatus::NotChecked => Self::NotChecked,
+            ReviewLaunchVerificationStatus::Pending => Self::Pending,
+            ReviewLaunchVerificationStatus::Verified => Self::Verified,
+            ReviewLaunchVerificationStatus::Mismatch => Self::Mismatch,
+            ReviewLaunchVerificationStatus::NotChecked => Self::NotChecked,
         }
     }
 }
@@ -345,9 +345,8 @@ pub struct ReviewAssignmentRecord {
     pub persona_prompt: String,
     pub agent_kind: String,
     pub model_id: Option<String>,
-    pub requested_mode_id: Option<String>,
-    pub actual_mode_id: Option<String>,
-    pub mode_verification_status: ReviewModeVerificationStatus,
+    pub control_values: std::collections::BTreeMap<String, String>,
+    pub launch_verification_status: ReviewLaunchVerificationStatus,
     pub status: ReviewAssignmentStatus,
     pub pass: Option<bool>,
     pub summary: Option<String>,
@@ -423,7 +422,7 @@ pub enum ReviewParseError {
     #[error("unknown review assignment status: {0}")]
     UnknownAssignmentStatus(String),
     #[error("unknown review mode verification status: {0}")]
-    UnknownModeVerificationStatus(String),
+    UnknownLaunchVerificationStatus(String),
     #[error("unknown review feedback job state: {0}")]
     UnknownFeedbackJobState(String),
 }

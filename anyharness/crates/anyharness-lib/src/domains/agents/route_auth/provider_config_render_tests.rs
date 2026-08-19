@@ -11,27 +11,6 @@
 
 use super::*;
 
-/// A resolver carrying a codex `bedrock_default_model` (Track D's own catalog
-/// default key, distinct from `default_model`/`native_default_model` — see
-/// `GatewayModelPlan::bedrock_default_model`'s doc for why it is not folded
-/// into the native precedence chain).
-struct BedrockPlanResolver {
-    bedrock_default_model: Option<String>,
-}
-
-impl GatewayModelResolve for BedrockPlanResolver {
-    fn resolve_gateway_models(&self, _harness_kind: &str, _revision: i64) -> GatewayModelPlan {
-        GatewayModelPlan {
-            bedrock_default_model: self.bedrock_default_model.clone(),
-            // Deliberately set, and deliberately different: if the bedrock arm
-            // ever reads one of these instead, the assertions below catch it.
-            default_model: Some("gateway-model-must-not-appear".to_string()),
-            native_default_model: Some("native-model-must-not-appear".to_string()),
-            ..Default::default()
-        }
-    }
-}
-
 fn provider_config_source(config_kind: &str, env: Vec<(&str, &str)>) -> Value {
     json!({
         "kind": "provider_config",
@@ -290,11 +269,8 @@ fn codex_provider_config_aws_bedrock_materializes_config_toml_and_sets_env() {
             )],
         )],
     ));
-    let resolver = BedrockPlanResolver {
-        bedrock_default_model: Some("openai.gpt-oss-120b".to_string()),
-    };
-
-    let rendered = resolve_launch_route_auth(home.path(), "codex", &resolver).expect("render");
+    let rendered = resolve_launch_route_auth(home.path(), "codex", &HarnessPlanResolver)
+        .expect("render");
 
     let codex_home = rendered.set.get("CODEX_HOME").expect("CODEX_HOME");
     assert!(codex_home.contains("codex-home-7"));
@@ -303,46 +279,17 @@ fn codex_provider_config_aws_bedrock_materializes_config_toml_and_sets_env() {
         Some("bedrock-raw")
     );
     assert_eq!(rendered.set.get("AWS_REGION").map(String::as_str), Some("us-east-1"));
-    // The model comes from bedrock_default_model, NOT default_model/native_default_model
-    // (the resolver deliberately poisons both of those to catch a wrong read).
-    assert!(!rendered.set.contains_key("gateway-model-must-not-appear"));
-
     let config = std::fs::read_to_string(std::path::Path::new(codex_home).join("config.toml"))
         .expect("read config.toml");
     assert_eq!(
         config,
-        "model_provider = \"amazon-bedrock\"\nmodel = \"openai.gpt-oss-120b\"\n",
+        "model_provider = \"amazon-bedrock\"\n",
         "codex's built-in amazon-bedrock upstream needs no [model_providers.*] table"
     );
     assert!(
         !config.contains("model_providers"),
         "the ONE variant that adds a provider without adding a table, got:\n{config}"
     );
-    assert!(!config.contains("gateway-model-must-not-appear"));
-    assert!(!config.contains("native-model-must-not-appear"));
-}
-
-#[test]
-fn codex_provider_config_aws_bedrock_without_a_catalog_default_is_selection_incomplete() {
-    // Missing catalog key -> typed error, no fallback (D3 brief §9's explicit rule).
-    let home = TempHome::new("codex-pc-bedrock-no-default");
-    home.write_state_json(&v2_state(
-        1,
-        vec![harness(
-            "codex",
-            vec![provider_config_source(
-                "aws_bedrock",
-                vec![("AWS_BEARER_TOKEN_BEDROCK", "bedrock-raw"), ("AWS_REGION", "us-east-1")],
-            )],
-        )],
-    ));
-    let resolver = BedrockPlanResolver {
-        bedrock_default_model: None,
-    };
-
-    let error = resolve_launch_route_auth(home.path(), "codex", &resolver)
-        .expect_err("missing bedrock default model");
-    assert_eq!(error.code(), "AGENT_ROUTE_SELECTION_INCOMPLETE");
 }
 
 // --- codex x azure_openai (UNVERIFIED, unit-tested only) -------------------

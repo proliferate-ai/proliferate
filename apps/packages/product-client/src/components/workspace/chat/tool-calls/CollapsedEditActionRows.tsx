@@ -57,14 +57,25 @@ function EditActionRow({
   contentSearchUnitId: string;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const pathLabel = part.newWorkspacePath ?? part.workspacePath ?? part.newPath ?? part.path;
+  const rawPath = part.newPath ?? part.path;
+  // A move whose destination lives outside the workspace has no structured
+  // path of its own; falling back to the source workspacePath would silently
+  // route file-reference actions to the pre-move location.
+  const workspacePath = part.newPath != null
+    ? (typeof part.newWorkspacePath === "string" ? part.newWorkspacePath : null)
+    : part.workspacePath;
+  const pathLabel = firstNonblankPath(
+    part.newWorkspacePath,
+    part.newPath,
+    part.workspacePath,
+    part.path,
+  );
   const displayName = part.newBasename ?? part.basename ?? basename(pathLabel);
   const additions = part.additions ?? 0;
   const deletions = part.deletions ?? 0;
-  const workspacePath = part.newWorkspacePath ?? part.workspacePath ?? null;
   const patch = part.patch?.trim() ? part.patch : null;
   const canExpand = Boolean(patch);
-  const fileActions = useFileReferenceActions({ rawPath: pathLabel, workspacePath });
+  const fileActions = useFileReferenceActions({ rawPath, workspacePath });
   const nativeContextMenu = useFileReferenceNativeContextMenu(fileActions);
   const canOpenFile = fileActions.canOpenPrimary;
   const displayPolicy = patch
@@ -206,4 +217,8 @@ function formatFailedEditActionTitle(operation: FileChangeContentPart["operation
     default:
       return "Failed editing";
   }
+}
+
+function firstNonblankPath(...paths: Array<string | null | undefined>): string {
+  return paths.find((candidate) => candidate?.trim()) ?? "";
 }

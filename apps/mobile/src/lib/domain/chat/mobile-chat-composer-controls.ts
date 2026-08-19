@@ -1,11 +1,10 @@
 import type {
-  CloudAgentCatalogResponse,
+  CloudHarnessLaunchOptionsResponse,
   CloudSessionProjection,
   CloudWorkspaceDetail,
 } from "@proliferate/cloud-sdk";
 import {
   buildCloudChatComposerControls,
-  DEFAULT_DIRECT_PROMPT_MODEL_ID,
   getLiveConfigControlValue,
   readSessionLiveConfig,
   resolveCloudLaunchSelection,
@@ -41,14 +40,16 @@ export function buildMobileChatComposerControlsModel(input: {
   pendingConfigChanges: Record<string, PendingConfigChange>;
   launchSelection: CloudLaunchComposerSelection;
   runtimeLabel: string;
-  catalog: CloudAgentCatalogResponse | null | undefined;
+  launchOptions: CloudHarnessLaunchOptionsResponse | null | undefined;
   updateLaunchSelection: MobileChatLaunchSelectionUpdater;
   onSubmitSessionConfig: (rawConfigId: string, value: string) => void;
   onStartNewSession: (selection?: CloudLaunchComposerSelection) => void;
 }): MobileChatComposerControlsModel {
-  const catalogAgentKinds = input.catalog?.agents.map((agent) => agent.kind);
+  const observedAgentKinds = input.launchOptions?.options
+    ? [input.launchOptions.harnessKind]
+    : [];
   const workspaceHarnessAvailability = resolveCloudHarnessAvailability({
-    catalogAgentKinds,
+    catalogAgentKinds: observedAgentKinds,
     allowedAgentKinds: input.workspace?.allowedAgentKinds,
   });
   const workspaceLaunchableAgentKinds = workspaceHarnessAvailability.launchableAgentKinds;
@@ -57,31 +58,25 @@ export function buildMobileChatComposerControlsModel(input: {
     ? getLiveConfigControlValue(liveConfig, "model")
     : null;
   const resolvedLaunchSelection = resolveCloudLaunchSelection({
-    catalog: input.catalog,
-    launchableAgentKinds: workspaceLaunchableAgentKinds,
+    launchOptions: input.launchOptions,
     selection: input.launchSelection,
   });
   const composerControls = buildCloudChatComposerControls({
     session: input.session,
     liveConfig,
     pendingConfigChanges: input.pendingConfigChanges,
-    launchCatalog: input.catalog,
-    launchableAgentKinds: workspaceLaunchableAgentKinds,
+    launchOptions: input.launchOptions,
     launchSelection: resolvedLaunchSelection,
-    launchModelId: resolvedLaunchSelection.modelId ?? DEFAULT_DIRECT_PROMPT_MODEL_ID,
+    launchModelId: resolvedLaunchSelection.modelId,
     onLaunchAgentModelSelect: (agentKind, modelId) => {
       input.updateLaunchSelection((current) => ({
         agentKind,
         modelId,
-        modeId: current.agentKind === agentKind ? current.modeId : null,
         controlValues: current.agentKind === agentKind ? current.controlValues : {},
       }));
     },
     onLaunchControlSelect: ({ controlKey, value }) => {
       input.updateLaunchSelection((current) => {
-        if (controlKey === "mode") {
-          return { ...current, modeId: value };
-        }
         return {
           ...current,
           controlValues: {
@@ -99,7 +94,6 @@ export function buildMobileChatComposerControlsModel(input: {
       input.onStartNewSession({
         agentKind,
         modelId,
-        modeId: null,
         controlValues: {},
       });
     },
@@ -108,7 +102,8 @@ export function buildMobileChatComposerControlsModel(input: {
   return {
     workspaceHarnessAvailability,
     workspaceLaunchableAgentKinds,
-    canStartNewSession: workspaceLaunchableAgentKinds.length > 0,
+    canStartNewSession: Boolean(input.launchOptions?.options)
+      && workspaceLaunchableAgentKinds.includes(resolvedLaunchSelection.agentKind),
     liveConfig,
     sessionModelId,
     resolvedLaunchSelection,

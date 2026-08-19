@@ -173,6 +173,7 @@ test("creates, reloads, reopens, edits, and deletes a durable gen-2 definition",
   // retained as invalid source, block save, and do not replace the last graph.
   await page.getByRole("radio", { name: "JSON", exact: true }).click();
   const jsonEditor = page.getByRole("textbox", { name: "Workflow definition JSON", exact: true });
+  await expect(jsonEditor).toHaveValue(new RegExp(NODE1_TITLE));
   const validJson = await jsonEditor.inputValue();
   // Add the unknown field to the decoded document rather than to its text: the
   // pane's formatting (trailing newline included) is not what is under test.

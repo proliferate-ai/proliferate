@@ -12,6 +12,15 @@ focused [domain](domains.md), [database](database.md), [auth](auth.md),
 [background](background.md) guides own the detail for their rows. Product
 behavior remains in the owning platform or system document.
 
+## Target-observed harness launch options
+
+Cloud launch-option state is a thin copied-state domain under
+`proliferate/server/cloud/harness_launch_options/`. It stores and reads one
+verbatim state by `(cloud_sandbox_id, harness_kind)` and rejects stale source
+revisions. Authorization is target-scoped. The server does not reconstruct
+membership, apply add/remove overrides, or seed missing state from static
+catalog data.
+
 ## Purpose And Ownership
 
 The server is the **control plane**: an HTTP API plus background workers over

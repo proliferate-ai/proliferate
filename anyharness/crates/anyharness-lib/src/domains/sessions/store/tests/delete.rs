@@ -39,6 +39,7 @@ fn delete_session_removes_session_owned_rows() {
             raw_config_options_json: "{}".to_string(),
             normalized_controls_json: "{}".to_string(),
             prompt_capabilities_json: None,
+            full_snapshot_json: None,
             updated_at: "2026-03-25T00:01:02Z".to_string(),
         })
         .expect("upsert snapshot");

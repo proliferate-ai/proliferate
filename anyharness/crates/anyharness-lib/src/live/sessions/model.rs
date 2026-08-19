@@ -271,6 +271,10 @@ pub trait BackgroundWorkDurable: Send + Sync {
 /// Durable session-row state: status/title/activity, config snapshots and the
 /// pending-config queue, capabilities, turn repair.
 pub trait SessionStateDurable: Send + Sync {
+    fn find_launch_intent(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Option<crate::domains::sessions::launch_intent::ResolvedLaunchIntent>>;
     fn update_status(&self, id: &str, status: &str, now: &str) -> anyhow::Result<()>;
     fn update_title_if_absent(&self, id: &str, title: &str, now: &str) -> anyhow::Result<bool>;
     fn update_last_prompt_at(&self, id: &str, now: &str) -> anyhow::Result<()>;
@@ -325,6 +329,12 @@ pub trait SessionStateDurable: Send + Sync {
     ) -> anyhow::Result<()>;
 }
 
+/// Queues target re-observation after a live contradiction; app wiring owns
+/// the long-lived refresh mechanism behind this live/domain boundary.
+pub trait LaunchObservationInvalidator: Send + Sync {
+    fn queue_refresh(&self, harness_kind: &str) -> bool;
+}
+
 /// The never-varies capability set the actor runs against; wired once at
 /// manager construction and shared by every session the manager starts.
 #[derive(Clone)]
@@ -343,6 +353,8 @@ pub struct ActorCapabilities {
     pub observers: Vec<Arc<dyn SessionEventObserver>>,
     /// Consulted by the inbound permission door before parking.
     pub permission_advisor: Option<Arc<dyn PermissionAdvisor>>,
+    /// Queues a deduplicated target re-observation after a live contradiction.
+    pub launch_observation_invalidator: Option<Arc<dyn LaunchObservationInvalidator>>,
 }
 
 /// Per-call powers: hooks and context that vary per session start.

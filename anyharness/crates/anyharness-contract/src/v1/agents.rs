@@ -257,79 +257,72 @@ pub struct AgentAuthStateSummary {
     pub facts: AgentAuthFactsSummary,
 }
 
-// --- Launch options ---
+// --- Target-observed harness launch options ---
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum ModelCatalogStatus {
-    Candidate,
-    Active,
-    Deprecated,
-    Hidden,
-}
-
-/// The thinking/effort control surfaced per model: the values the model
-/// supports and the observed default (the runtime joins these from the
-/// bundled catalog's `controls.effort.{values, observedValue}`).
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct ModelEffort {
-    pub values: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub default: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentLaunchModelOption {
+pub struct HarnessLaunchModel {
     pub id: String,
-    pub display_name: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub aliases: Vec<String>,
-    pub is_default: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub default_opt_in: Option<bool>,
-    // --- Enriched catalog fields (joined from the bundled catalog-v2 entry
-    // with the same id, so cloud snapshots stored from this payload carry the
-    // same richness as the gateway-models endpoint). All optional. ---
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub provider: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<ModelCatalogStatus>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub effort: Option<ModelEffort>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub fast_mode: Option<bool>,
-    /// The permission/agent modes the model supports (joined from the bundled
-    /// catalog's `controls.mode.values`); absent when the model has no mode
-    /// control (contract §5).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub modes: Option<Vec<String>>,
+    pub observed_name: Option<String>,
+    pub observed_description: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct HarnessLaunchControlValue {
+    pub value: String,
+    pub observed_label: Option<String>,
+    pub observed_description: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct HarnessLaunchControl {
+    pub id: String,
+    pub observed_label: Option<String>,
+    pub observed_description: Option<String>,
+    pub values: Vec<HarnessLaunchControlValue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct HarnessLaunchDefaults {
+    pub model_id: Option<String>,
+    #[serde(default)]
+    pub control_values: std::collections::BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct HarnessLaunchOptions {
+    pub models: Vec<HarnessLaunchModel>,
+    pub controls: Vec<HarnessLaunchControl>,
+    pub defaults: HarnessLaunchDefaults,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum HarnessLaunchOptionsState {
+    Detecting,
+    Refreshing,
+    Observed,
+    ObservedEmpty,
+    LastGoodAfterFailure,
+    FailedWithoutObservation,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentLaunchOption {
-    pub kind: String,
-    pub display_name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub default_model_id: Option<String>,
-    /// Curated unattended mode from the selected runtime's active catalog.
-    /// This field intentionally serializes as `null` when no mode is vetted,
-    /// allowing clients to distinguish that declaration from an older runtime
-    /// that omitted the field entirely.
-    pub unattended_mode_id: Option<String>,
-    pub models: Vec<AgentLaunchModelOption>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentLaunchOptionsResponse {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub workspace_id: Option<String>,
-    pub agents: Vec<AgentLaunchOption>,
+pub struct HarnessLaunchOptionsResponse {
+    pub harness_kind: String,
+    pub basis_revision: String,
+    pub revision: i64,
+    pub state: HarnessLaunchOptionsState,
+    pub options: Option<HarnessLaunchOptions>,
+    pub observed_at: Option<String>,
+    pub probe_attempted_at: String,
+    pub probe_failure_code: Option<String>,
+    pub readiness: AgentReadinessState,
 }
 
 // --- Install ---
@@ -542,23 +535,17 @@ pub struct AgentReconcileSummary {
 
 #[cfg(test)]
 mod tests {
-    use super::AgentLaunchOption;
+    use super::{HarnessLaunchDefaults, HarnessLaunchOptions};
 
     #[test]
-    fn launch_option_keeps_an_explicit_null_unattended_mode() {
-        let value = serde_json::to_value(AgentLaunchOption {
-            kind: "grok".to_string(),
-            display_name: "Grok".to_string(),
-            default_model_id: None,
-            unattended_mode_id: None,
+    fn empty_observation_is_not_absent_options() {
+        let value = serde_json::to_value(HarnessLaunchOptions {
             models: Vec::new(),
+            controls: Vec::new(),
+            defaults: HarnessLaunchDefaults::default(),
         })
-        .expect("launch option serializes");
-
-        assert!(value.get("defaultModelId").is_none());
-        assert_eq!(
-            value.get("unattendedModeId"),
-            Some(&serde_json::Value::Null)
-        );
+        .expect("launch options serialize");
+        assert_eq!(value["models"], serde_json::json!([]));
+        assert_eq!(value["controls"], serde_json::json!([]));
     }
 }

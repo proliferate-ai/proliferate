@@ -1,4 +1,5 @@
 use std::time::Instant;
+use std::collections::BTreeMap;
 
 use anyharness_contract::v1::SessionMcpBindingSummary;
 
@@ -21,7 +22,7 @@ pub(crate) struct InternalSessionCreateInput {
     pub workspace_id: String,
     pub agent_kind: String,
     pub model_id: Option<String>,
-    pub mode_id: Option<String>,
+    pub control_values: BTreeMap<String, String>,
     pub origin: OriginContext,
     /// Ruling 2b-1: the workflow executor preselects the id so it can reserve
     /// the session's mutation gate before this row exists. `None` keeps the
@@ -48,7 +49,7 @@ impl SessionRuntime {
         workspace_id: &str,
         agent_kind: &str,
         model_id: Option<&str>,
-        mode_id: Option<&str>,
+        control_values: &BTreeMap<String, String>,
         system_prompt_append: Option<Vec<String>>,
         mcp_servers: Vec<SessionMcpServer>,
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
@@ -60,7 +61,7 @@ impl SessionRuntime {
             agent_kind,
             None,
             model_id,
-            mode_id,
+            control_values,
             system_prompt_append,
             mcp_servers,
             mcp_binding_summaries,
@@ -79,7 +80,7 @@ impl SessionRuntime {
         agent_kind: &str,
         preselected_session_id: Option<&str>,
         model_id: Option<&str>,
-        mode_id: Option<&str>,
+        control_values: &BTreeMap<String, String>,
         system_prompt_append: Option<Vec<String>>,
         mcp_servers: Vec<SessionMcpServer>,
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
@@ -99,7 +100,7 @@ impl SessionRuntime {
             workspace_id = %workspace_id,
             agent_kind = %agent_kind,
             model_id = ?model_id,
-            mode_id = ?mode_id,
+            control_ids = ?control_values.keys().collect::<Vec<_>>(),
             system_prompt_append_count,
             "[workspace-latency] session.runtime.create_and_start.start"
         );
@@ -110,7 +111,7 @@ impl SessionRuntime {
             preselected_session_id,
             preselected_session_id.is_some(),
             model_id,
-            mode_id,
+            control_values,
             system_prompt_append,
             mcp_servers,
             mcp_binding_summaries,
@@ -156,7 +157,7 @@ impl SessionRuntime {
         agent_kind: &str,
         preselected_session_id: Option<&str>,
         model_id: Option<&str>,
-        mode_id: Option<&str>,
+        control_values: &BTreeMap<String, String>,
         system_prompt_append: Option<Vec<String>>,
         mcp_servers: Vec<SessionMcpServer>,
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
@@ -170,7 +171,7 @@ impl SessionRuntime {
             preselected_session_id,
             false,
             model_id,
-            mode_id,
+            control_values,
             system_prompt_append,
             mcp_servers,
             mcp_binding_summaries,
@@ -188,7 +189,7 @@ impl SessionRuntime {
         preselected_session_id: Option<&str>,
         reuse_existing: bool,
         model_id: Option<&str>,
-        mode_id: Option<&str>,
+        control_values: &BTreeMap<String, String>,
         system_prompt_append: Option<Vec<String>>,
         mcp_servers: Vec<SessionMcpServer>,
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
@@ -209,7 +210,7 @@ impl SessionRuntime {
                 preselected_session_id,
                 reuse_existing,
                 model_id,
-                mode_id,
+                control_values,
                 mcp_bindings_ciphertext,
                 mcp_binding_summaries_json,
                 mcp_binding_policy,
@@ -296,7 +297,7 @@ impl SessionRuntime {
             &input.agent_kind,
             input.preselected_session_id.as_deref(),
             input.model_id.as_deref(),
-            input.mode_id.as_deref(),
+            &input.control_values,
             None,   // no system-prompt append
             vec![], // no supplied MCP servers
             None,   // no binding summaries
@@ -340,21 +341,27 @@ pub(super) fn map_create_session_service_error(
         crate::domains::sessions::service::CreateSessionError::SessionIdConflict { session_id } => {
             CreateAndStartSessionError::SessionIdConflict { session_id }
         }
-        crate::domains::sessions::service::CreateSessionError::ModelUnsupported {
+        crate::domains::sessions::service::CreateSessionError::LaunchOptionsUnavailable {
             agent_kind,
-            model_id,
-            active_universe,
-        } => CreateAndStartSessionError::ModelUnsupported {
+            state,
+        } => CreateAndStartSessionError::LaunchOptionsUnavailable { agent_kind, state },
+        crate::domains::sessions::service::CreateSessionError::LaunchValueUnsupported {
             agent_kind,
-            model_id,
-            active_universe,
+            key,
+            value,
+            state,
+        } => CreateAndStartSessionError::LaunchValueUnsupported {
+            agent_kind,
+            key,
+            value,
+            state,
         },
-        crate::domains::sessions::service::CreateSessionError::ModeUnsupported {
+        crate::domains::sessions::service::CreateSessionError::AgentEnvOverrideUnsupported {
             agent_kind,
-            mode_id,
-        } => CreateAndStartSessionError::ModeUnsupported {
+            env_var_name,
+        } => CreateAndStartSessionError::AgentEnvOverrideUnsupported {
             agent_kind,
-            mode_id,
+            env_var_name,
         },
         crate::domains::sessions::service::CreateSessionError::RouteAuth(error) => {
             CreateAndStartSessionError::RouteAuth(error)

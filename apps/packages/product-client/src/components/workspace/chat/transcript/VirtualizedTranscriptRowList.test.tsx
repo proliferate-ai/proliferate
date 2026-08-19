@@ -417,6 +417,94 @@ describe("VirtualizedTranscriptRowList", () => {
     expect(completedTurnAnchorObservations.at(-1)).toBeNull();
   });
 
+  // Third regression, found after the previous two fixes when the identical CI
+  // webkit failure (scrollTop Received 0) recurred on two independent product
+  // heads: the stale-anchor cleanup effect treats "not loading and rows
+  // unchanged" as a request that resolved with no rows, but an IN-FLIGHT
+  // request looks exactly the same until its answer commits — the fixture (and
+  // the real client before its loading flag's own commit lands) never raises
+  // isLoadingOlderHistory. Any unrelated commit that re-runs the cleanup in
+  // that window (hosted trace: several hundred ms of native-scroll flood
+  // between request and answer) silently discards the pending anchor; the
+  // prepend then lands with no anchor, no compensation write runs, and the
+  // reader is left wherever the native scroll ended (0). Negative control:
+  // revert the cleanup to clear on `!isLoadingOlderHistory` alone and this
+  // fails with scrollTop 464 instead of the compensated 1820.
+  it("keeps an in-flight prepend anchor through unrelated commits until its answer lands", () => {
+    const props = { ...makeProps(), hasOlderHistory: true, olderHistoryCursor: 1 };
+    const { container, rerender } = render(<VirtualizedTranscriptRowList {...props} />);
+    const viewport = getViewport(container);
+    Object.defineProperty(viewport, "clientHeight", { value: 400, configurable: true });
+    Object.defineProperty(viewport, "scrollHeight", { value: 5_552, configurable: true });
+    viewport.scrollTop = 464;
+
+    // Cross the prefetch threshold: arms the pending anchor, fires the request.
+    act(() => {
+      fireEvent.scroll(viewport);
+    });
+    expect(props.onLoadOlderHistory).toHaveBeenCalledTimes(1);
+
+    // An unrelated commit while the request is still in flight: same rows, not
+    // loading, but a fresh onLoadOlderHistory identity (the real parent passes
+    // an inline closure, so any parent render produces one). This re-runs the
+    // stale-anchor cleanup, which must NOT discard the in-flight anchor.
+    act(() => {
+      rerender(
+        <VirtualizedTranscriptRowList {...props} onLoadOlderHistory={vi.fn()} />,
+      );
+    });
+
+    // The answer commits: rows grow and the DOM is taller. The prepend effect
+    // must still hold the anchor and write the compensated position.
+    Object.defineProperty(viewport, "scrollHeight", { value: 6_908, configurable: true });
+    act(() => {
+      rerender(
+        <VirtualizedTranscriptRowList
+          {...props}
+          rows={[{ kind: "pending_prompt", key: "pending-prompt:session-1-older" }, ...ROWS]}
+        />,
+      );
+    });
+
+    expect(viewport.scrollTop).toBe(464 + (6_908 - 5_552));
+  });
+
+  // The cleanup's legitimate job stays intact: a request that RESOLVED with no
+  // rows (loading observed true, then false, rows unchanged) releases the
+  // pending anchor so the settled-probe can run again.
+  it("releases a prepend anchor whose request resolved without rows", () => {
+    const props = { ...makeProps(), hasOlderHistory: true, olderHistoryCursor: 1 };
+    const { container, rerender } = render(<VirtualizedTranscriptRowList {...props} />);
+    const viewport = getViewport(container);
+    Object.defineProperty(viewport, "clientHeight", { value: 400, configurable: true });
+    Object.defineProperty(viewport, "scrollHeight", { value: 5_552, configurable: true });
+    viewport.scrollTop = 464;
+    act(() => {
+      fireEvent.scroll(viewport);
+    });
+    expect(props.onLoadOlderHistory).toHaveBeenCalledTimes(1);
+
+    // The request's loading window opens, then closes with no rows.
+    act(() => {
+      rerender(<VirtualizedTranscriptRowList {...props} isLoadingOlderHistory={true} />);
+    });
+    act(() => {
+      rerender(<VirtualizedTranscriptRowList {...props} isLoadingOlderHistory={false} />);
+    });
+
+    // A later prepend commit finds no lingering anchor: no compensation write.
+    Object.defineProperty(viewport, "scrollHeight", { value: 6_908, configurable: true });
+    act(() => {
+      rerender(
+        <VirtualizedTranscriptRowList
+          {...props}
+          rows={[{ kind: "pending_prompt", key: "pending-prompt:session-1-older" }, ...ROWS]}
+        />,
+      );
+    });
+    expect(viewport.scrollTop).toBe(464);
+  });
+
   it("adds an overlay spacer without changing the current scroll position", () => {
     const props = makeProps();
     const { container, rerender } = render(

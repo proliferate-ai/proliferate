@@ -12,40 +12,22 @@ function fixture() {
   const root = mkdtempSync(path.join(tmpdir(), "agent-catalog-validator-"));
   mkdirSync(path.join(root, "catalogs/agents"), { recursive: true });
   mkdirSync(path.join(root, "scripts/agent-catalog/generated"), { recursive: true });
-
   const catalog = {
     schemaVersion: 2,
     catalogVersion: "test.1",
     probedAgainst: { registryVersion: "registry.1" },
-    defaultAgentKind: "claude",
+    generatedAt: "2026-08-19T00:00:00Z",
     agents: [{
       kind: "claude",
       displayName: "Claude",
       harness: {
-        agentProcess: {
-          version: "0.59.0-proliferate.1",
-          source: { kind: "git" },
-        },
+        agentProcess: { version: "0.59.0-proliferate.1", source: { kind: "git" } },
         native: { version: "2.1.212" },
       },
       authContexts: [{ id: "anthropic-api", authSlotId: "anthropic" }],
       session: {
-        unattendedModeId: "bypassPermissions",
-        controls: [{
-          key: "mode",
-          values: ["default", "bypassPermissions"],
-        }],
-        models: [{
-          id: "default",
-          displayName: "Default",
-          status: "active",
-          defaultVisible: true,
-          availability: { anyOf: ["anthropic-api"] },
-          controls: {
-            mode: { values: ["default", "bypassPermissions"] },
-          },
-        }],
-        defaults: { "anthropic-api": "default" },
+        supportsGoals: true,
+        presentationModels: [{ id: "default", displayName: "Default" }],
       },
       provenance: {
         runs: [{
@@ -65,14 +47,9 @@ function fixture() {
     nativeCli: { version: "2.1.212 (Claude Code)" },
     attestation: { version: "0.59.0-proliferate.1" },
   };
-
-  writeFileSync(path.join(root, "catalogs/agents/catalog.json"), JSON.stringify(catalog));
-  writeFileSync(path.join(root, "scripts/agent-catalog/catalog.draft.json"), JSON.stringify(catalog));
+  writeCatalogLockfile(root, catalog);
   writeFileSync(path.join(root, "catalogs/agents/registry.json"), JSON.stringify(registry));
-  const snapshotPath = path.join(
-    root,
-    "scripts/agent-catalog/generated/claude.anthropic-api.probe.json",
-  );
+  const snapshotPath = path.join(root, "scripts/agent-catalog/generated/claude.anthropic-api.probe.json");
   writeFileSync(snapshotPath, JSON.stringify(snapshot));
   return { root, catalog, snapshot, snapshotPath };
 }
@@ -83,13 +60,10 @@ function writeCatalogLockfile(root, catalog) {
   writeFileSync(path.join(root, "scripts/agent-catalog/catalog.draft.json"), raw);
 }
 
-test("accepts probe evidence matching the catalog lockfile", () => {
+test("accepts a matching distribution and presentation catalog", () => {
   const { root } = fixture();
   try {
-    const output = execFileSync(process.execPath, [validatorPath], {
-      cwd: root,
-      encoding: "utf8",
-    });
+    const output = execFileSync(process.execPath, [validatorPath], { cwd: root, encoding: "utf8" });
     assert.match(output, /agent catalog OK: test\.1/);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -103,35 +77,35 @@ test("rejects stale adapter attestation in committed probe evidence", () => {
     writeFileSync(snapshotPath, JSON.stringify(snapshot));
     assert.throws(
       () => execFileSync(process.execPath, [validatorPath], { cwd: root, encoding: "utf8" }),
-      /attests process version '0\.44\.0', expected '0\.59\.0-proliferate\.1'/,
+      /attests '0\.44\.0', expected '0\.59\.0-proliferate\.1'/,
     );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
 
-test("rejects an unattended default outside the agent mode vocabulary", () => {
+test("rejects executable catalog fields", () => {
   const { root, catalog } = fixture();
   try {
-    catalog.agents[0].session.unattendedModeId = "missing";
+    catalog.agents[0].session.controls = [{ id: "mode", values: ["unsafe"] }];
     writeCatalogLockfile(root, catalog);
     assert.throws(
       () => execFileSync(process.execPath, [validatorPath], { cwd: root, encoding: "utf8" }),
-      /session\.unattendedModeId 'missing' is not in the session mode vocabulary/,
+      /forbidden executable session field 'controls'/,
     );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
 
-test("rejects an unattended default outside an explicit model mode vocabulary", () => {
+test("rejects executable metadata on presentation models", () => {
   const { root, catalog } = fixture();
   try {
-    catalog.agents[0].session.models[0].controls.mode.values = ["default"];
+    catalog.agents[0].session.presentationModels[0].defaultVisible = true;
     writeCatalogLockfile(root, catalog);
     assert.throws(
       () => execFileSync(process.execPath, [validatorPath], { cwd: root, encoding: "utf8" }),
-      /claude\.default: session\.unattendedModeId 'bypassPermissions' is not in the model mode vocabulary/,
+      /presentation model contains executable metadata/,
     );
   } finally {
     rmSync(root, { recursive: true, force: true });

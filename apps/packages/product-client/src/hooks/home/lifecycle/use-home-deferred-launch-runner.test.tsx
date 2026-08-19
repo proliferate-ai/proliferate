@@ -325,7 +325,6 @@ function deferredLaunch(
     cloudAttemptId: "attempt-1",
     agentKind: "claude",
     modelId: "claude-sonnet-4.5",
-    modeId: null,
     promptText: "run the migration",
     promptId: "prompt-1",
     launchIntentId: "intent-1",

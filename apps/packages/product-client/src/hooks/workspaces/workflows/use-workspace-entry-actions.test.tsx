@@ -134,7 +134,6 @@ describe("useWorkspaceEntryActions", () => {
     useUserPreferencesStore.setState({
       defaultChatAgentKind: "",
       defaultChatModelIdByAgentKind: {},
-      defaultSessionModeByAgentKind: {},
     });
     useSessionDirectoryStore.getState().clearEntries();
     useSessionTranscriptStore.getState().clearEntries();
@@ -347,9 +346,6 @@ describe("useWorkspaceEntryActions", () => {
       defaultChatModelIdByAgentKind: {
         claude: "us.anthropic.claude-sonnet-4-6",
       },
-      defaultSessionModeByAgentKind: {
-        claude: "default",
-      },
     });
     let finishCreate: (value: { workspace: Workspace; setupScript: null }) => void =
       () => {
@@ -394,7 +390,7 @@ describe("useWorkspaceEntryActions", () => {
       workspaceId: pendingWorkspaceUiKey,
       agentKind: "claude",
       modelId: "us.anthropic.claude-sonnet-4-6",
-      modeId: "default",
+      modeId: null,
       title: "Sonnet 4.6",
       materializedSessionId: null,
     });

@@ -1,13 +1,16 @@
 use std::sync::Arc;
 
 use agent_client_protocol as acp;
-use anyharness_contract::v1::{ConfigApplyState, SessionLiveConfigSnapshot};
+use anyharness_contract::v1::ConfigApplyState;
 use tokio::sync::Mutex;
 
 use crate::live::sessions::actor::command::SetConfigOptionCommandError;
+use crate::live::sessions::actor::config::confirmation::{
+    select_option_current_value_matches, select_setter_response_outcome,
+};
 use crate::live::sessions::actor::config::diagnostics;
 use crate::live::sessions::actor::config::persist::{
-    emit_live_config_update, persist_requested_config_value_if_changed, persisted_control_values,
+    emit_live_config_update, persist_requested_config_value_if_changed,
 };
 use crate::live::sessions::actor::config::queue::config_request_matches_current_state;
 use crate::live::sessions::actor::config::selection::{
@@ -32,8 +35,9 @@ pub(in crate::live::sessions::actor) async fn try_apply_model_preference(
     {
         let config_id = option.id.to_string();
         let option_contains_desired = select_option_contains_value(option, desired_model_id);
-        // Create validated this model via the catalog; the harness proved it
-        // launchable (probe trial), so an unadvertised id is still sent.
+        // Create validated this model against the target-observed launch
+        // statement, so an id absent from a stale raw ACP select list is still
+        // sent. Exact live readback below remains authoritative.
         let outcome = apply_select_config_option_with_policy(
             conn,
             native_session_id,
@@ -118,10 +122,10 @@ pub(in crate::live::sessions::actor) async fn apply_select_config_option(
 }
 
 /// `allow_foreign_value`: send a value the option does not advertise (model
-/// switches authorized by the catalog, startup model preferences proven by
-/// the probe). The post-set verification below still decides the outcome —
-/// `AppliedAuthoritative` only when the harness confirms the value, so a
-/// refusing adapter degrades to `NotApplied`, never to a lie.
+/// switches authorized by the exact session snapshot, startup model
+/// preferences proven by the target probe). Post-set verification below still
+/// decides the outcome — `AppliedAuthoritative` only when the harness confirms
+/// the value, so a refusing adapter degrades to `NotApplied`, never to a lie.
 pub(in crate::live::sessions::actor) async fn apply_select_config_option_with_policy(
     conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
@@ -177,13 +181,13 @@ pub(in crate::live::sessions::actor) async fn apply_specific_config_option(
     startup_state: &mut SessionStartupState,
     config_id: &str,
     desired_value: &str,
-    catalog_authorized_model: bool,
+    live_snapshot_authorized_model: bool,
 ) -> Result<ConfigApplyState, SetConfigOptionCommandError> {
     let option = find_select_option_for_request(&startup_state.config_options, config_id);
     let is_model_request = is_model_config_request(config_id, option);
     let is_mode_request = is_mode_config_request(config_id, option);
     let tracked_purpose = tracked_config_purpose(config_id, option);
-    let model_value_authorized = is_model_request && catalog_authorized_model;
+    let model_value_authorized = is_model_request && live_snapshot_authorized_model;
 
     // Resolve before validation so validation, ACP, and persistence agree.
     let resolved_value = option.map_or_else(
@@ -300,57 +304,6 @@ pub(in crate::live::sessions::actor) async fn apply_specific_config_option(
     Ok(ConfigApplyState::Applied)
 }
 
-pub(in crate::live::sessions::actor) async fn restore_persisted_live_config_if_needed(
-    conn: &acp::ConnectionTo<acp::Agent>,
-    native_session_id: &str,
-    source_agent_kind: &str,
-    session_id: &str,
-    store: &dyn SessionStateDurable,
-    event_sink: &Arc<Mutex<SessionEventSink>>,
-    persisted_config_state: &mut PersistedSessionConfigState,
-    startup_state: &mut SessionStartupState,
-    persisted_snapshot: Option<&SessionLiveConfigSnapshot>,
-) -> anyhow::Result<()> {
-    let Some(snapshot) = persisted_snapshot else {
-        return Ok(());
-    };
-    let desired = persisted_control_values(&snapshot.normalized_controls);
-    if desired.is_empty() {
-        return Ok(());
-    }
-
-    let mut changed = false;
-    for (_, config_id, value) in desired {
-        if apply_config_option_if_possible(
-            conn,
-            native_session_id,
-            startup_state,
-            &config_id,
-            &value,
-        )
-        .await?
-            == ConfigApplyOutcome::AppliedAuthoritative
-        {
-            changed = true;
-        }
-    }
-
-    if changed {
-        emit_live_config_update(
-            source_agent_kind,
-            session_id,
-            store,
-            event_sink,
-            persisted_config_state,
-            startup_state,
-            chrono::Utc::now().to_rfc3339(),
-        )
-        .await?;
-    }
-
-    Ok(())
-}
-
 pub(in crate::live::sessions::actor) async fn apply_config_option_if_possible(
     conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
@@ -446,7 +399,11 @@ pub(in crate::live::sessions::actor) async fn apply_config_option_if_possible_wi
         .block_task()
         .await?;
     startup_state.config_options = response.config_options;
-    Ok(ConfigApplyOutcome::AppliedAuthoritative)
+    Ok(select_setter_response_outcome(
+        startup_state,
+        config_id,
+        desired_value,
+    ))
 }
 
 /// Wire method for the legacy `session/set_model` RPC. ACP 0.14 dropped the
@@ -461,8 +418,8 @@ const ACP_SET_SESSION_MODEL_METHOD: &str = "session/set_model";
 /// (so `set_session_config_option` has no target). Mirrors
 /// [`apply_mode_via_direct_setter_legacy`], but the typed request was removed in
 /// ACP 0.14, so we send the legacy `session/set_model` as an extension method.
-/// The agent is the sole authority: a rejection comes back as an error and
-/// surfaces cleanly (the session stays Idle, the connection intact).
+/// A transport acknowledgement is insufficient: the extension response must
+/// also report the exact effective model before this becomes authoritative.
 pub(in crate::live::sessions::actor) async fn apply_model_via_direct_setter(
     conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
@@ -490,28 +447,41 @@ pub(in crate::live::sessions::actor) async fn apply_model_via_direct_setter(
         model_id = desired_model_id,
         "[model-switch] sending session/set_model"
     );
-    if let Err(error) = conn
+    let response = match conn
         .send_request(acp::AgentRequest::ExtMethodRequest(ext))
         .block_task()
         .await
     {
-        let failure = diagnostics::fixed_config_failure(
-            &error,
-            diagnostics::ConfigFailureStage::DirectModelSetter,
-        );
+        Ok(response) => response,
+        Err(error) => {
+            let failure = diagnostics::fixed_config_failure(
+                &error,
+                diagnostics::ConfigFailureStage::DirectModelSetter,
+            );
+            tracing::warn!(
+                native_session_id,
+                model_id = desired_model_id,
+                failure_class = failure.failure_class,
+                failure_stage = failure.failure_stage,
+                "[model-switch] agent rejected session/set_model"
+            );
+            return Err(error.into());
+        }
+    };
+    let confirmed_model_id = confirmed_model_id_from_ext_response(&response);
+    if confirmed_model_id.as_deref() != Some(desired_model_id) {
         tracing::warn!(
             native_session_id,
             model_id = desired_model_id,
-            failure_class = failure.failure_class,
-            failure_stage = failure.failure_stage,
-            "[model-switch] agent rejected session/set_model"
+            confirmed = confirmed_model_id.as_deref(),
+            "[model-switch] session/set_model returned no matching model readback"
         );
-        return Err(error.into());
+        return Ok(ConfigApplyOutcome::NotApplied);
     }
     tracing::info!(
         native_session_id,
         model_id = desired_model_id,
-        "[model-switch] agent accepted session/set_model"
+        "[model-switch] agent confirmed session/set_model"
     );
 
     startup_state.current_model_id = Some(desired_model_id.to_string());
@@ -522,6 +492,19 @@ pub(in crate::live::sessions::actor) async fn apply_model_via_direct_setter(
     );
 
     Ok(ConfigApplyOutcome::AppliedAuthoritative)
+}
+
+pub(in crate::live::sessions::actor) fn confirmed_model_id_from_ext_response(
+    response: &serde_json::Value,
+) -> Option<String> {
+    [
+        "/_meta/model/Ok",
+        "/_meta/modelState/currentModelId",
+        "/currentModelId",
+        "/modelId",
+    ]
+    .into_iter()
+    .find_map(|pointer| response.pointer(pointer)?.as_str().map(str::to_string))
 }
 
 pub(in crate::live::sessions::actor) fn should_apply_model_via_direct_setter(
@@ -551,12 +534,18 @@ pub(in crate::live::sessions::actor) async fn apply_mode_via_direct_setter_legac
         return Ok(ConfigApplyOutcome::NotApplied);
     }
 
-    conn.send_request(acp::schema::SetSessionModeRequest::new(
-        native_session_id.to_string(),
-        desired_mode_id.to_string(),
-    ))
-    .block_task()
-    .await?;
+    let response = conn
+        .send_request(acp::schema::SetSessionModeRequest::new(
+            native_session_id.to_string(),
+            desired_mode_id.to_string(),
+        ))
+        .block_task()
+        .await?;
+
+    let confirmed_mode_id = confirmed_mode_id_from_meta(response.meta.as_ref());
+    if confirmed_mode_id.as_deref() != Some(desired_mode_id) {
+        return Ok(ConfigApplyOutcome::NotApplied);
+    }
 
     startup_state.set_current_mode_id(desired_mode_id.to_string());
     set_select_option_current_value_for_purpose(
@@ -566,6 +555,20 @@ pub(in crate::live::sessions::actor) async fn apply_mode_via_direct_setter_legac
     );
 
     Ok(ConfigApplyOutcome::AppliedAuthoritative)
+}
+
+pub(in crate::live::sessions::actor) fn confirmed_mode_id_from_meta(
+    meta: Option<&acp::schema::Meta>,
+) -> Option<String> {
+    let value = serde_json::Value::Object(meta?.clone());
+    [
+        "/mode/Ok",
+        "/modeState/currentModeId",
+        "/currentModeId",
+        "/modeId",
+    ]
+    .into_iter()
+    .find_map(|pointer| value.pointer(pointer)?.as_str().map(str::to_string))
 }
 
 pub(in crate::live::sessions::actor) fn set_select_option_current_value_for_purpose(
@@ -586,15 +589,4 @@ pub(in crate::live::sessions::actor) fn set_select_option_current_value_for_purp
 
     select.current_value = desired_value.to_string().into();
     true
-}
-
-pub(in crate::live::sessions::actor) fn select_option_current_value_matches(
-    config_options: &[acp::schema::SessionConfigOption],
-    config_id: &str,
-    desired_value: &str,
-) -> bool {
-    find_select_option_for_request(config_options, config_id)
-        .and_then(current_select_value)
-        .as_deref()
-        .is_some_and(|current| current == desired_value)
 }

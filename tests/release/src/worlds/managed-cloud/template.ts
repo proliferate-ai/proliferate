@@ -146,7 +146,7 @@ export const MANAGED_CLOUD_TEMPLATE_DESTINATIONS = {
  * does NOT update `$HOME` — an unpinned bake-time `install-agents` can resolve a
  * different default home, leaving the agents installed where the serving
  * runtime never looks (readiness then reports InstallRequired and
- * `GET /v1/agents/launch-options` returns zero launchable agents).
+ * `GET /v1/agents/{kind}/launch-options` returns no observed options).
  */
 export const MANAGED_CLOUD_ANYHARNESS_RUNTIME_HOME = "/home/user/.proliferate/anyharness";
 

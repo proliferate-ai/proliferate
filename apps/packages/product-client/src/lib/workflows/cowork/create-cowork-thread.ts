@@ -20,8 +20,6 @@ export interface CreateCoworkThreadWorkflowInput {
   attemptId?: string;
   agentKind: string;
   modelId: string;
-  modeId?: string | null;
-  unattendedModeId?: string | null;
   launchControlValues?: Record<string, string>;
   draftText?: string | null;
   sourceWorkspaceId?: string | null;
@@ -51,8 +49,7 @@ export interface CreateCoworkThreadWorkflowDeps {
         kind: "session";
         agentKind: string;
         modelId: string;
-        modeId?: string | null;
-        launchControlValues?: Record<string, string>;
+        launchControlValues: Record<string, string>;
         displayTitle: string;
       };
     },
@@ -61,11 +58,6 @@ export interface CreateCoworkThreadWorkflowDeps {
   createCoworkThread(
     input: CreateCoworkThreadRequest,
   ): Promise<CreateCoworkThreadResponse>;
-  applyLaunchDefaults(input: {
-    session: Session;
-    agentKind: string;
-    launchControlValues?: Record<string, string>;
-  }): Promise<Session>;
   upsertLocalWorkspace(workspace: CreateCoworkThreadResponse["workspace"]): void;
   upsertWorkspaceSessionRecord(
     workspaceId: string,
@@ -77,7 +69,6 @@ export interface CreateCoworkThreadWorkflowDeps {
     workspaceId: string;
     agentKind: string;
     modelId: string;
-    modeId: string | null;
   }): void;
   setDraftText(workspaceId: string, text: string): void;
   clearDraft(workspaceId: string): void;
@@ -115,11 +106,10 @@ export async function createCoworkThreadWorkflow(
   deps: CreateCoworkThreadWorkflowDeps,
 ): Promise<CreateCoworkThreadWorkflowResult | null> {
   const totalStartedAt = deps.startLatencyTimer();
-  const modeId = input.modeId?.trim() || input.unattendedModeId?.trim() || undefined;
   const pendingRequest: PendingCoworkRequestInput = {
     agentKind: input.agentKind,
     modelId: input.modelId,
-    ...(modeId ? { modeId } : {}),
+    controlValues: { ...(input.launchControlValues ?? {}) },
     draftText: input.draftText ?? null,
     sourceWorkspaceId: input.sourceWorkspaceId ?? null,
   };
@@ -151,8 +141,7 @@ export async function createCoworkThreadWorkflow(
       kind: "session",
       agentKind: input.agentKind,
       modelId: input.modelId,
-      modeId,
-      launchControlValues: input.launchControlValues,
+      launchControlValues: { ...(input.launchControlValues ?? {}) },
       displayTitle: input.modelId,
     },
   });
@@ -168,7 +157,7 @@ export async function createCoworkThreadWorkflow(
       attemptId: entry.attemptId,
       agentKind: input.agentKind,
       modelId: input.modelId,
-      modeId: modeId ?? null,
+      controlValues: input.launchControlValues ?? {},
       workspaceDelegationEnabled: input.coworkWorkspaceDelegationEnabled,
       elapsedSincePendingMs: deps.elapsedSince(entry.createdAt),
     });
@@ -176,8 +165,10 @@ export async function createCoworkThreadWorkflow(
     const result = await deps.createCoworkThread({
       agentKind: input.agentKind,
       modelId: input.modelId,
+      controlValues: {
+        ...(input.launchControlValues ?? {}),
+      },
       coworkWorkspaceDelegationEnabled: input.coworkWorkspaceDelegationEnabled,
-      ...(modeId ? { modeId } : {}),
     });
 
     deps.logLatency("workspace.cowork.create.request.success", {
@@ -193,10 +184,9 @@ export async function createCoworkThreadWorkflow(
     }
 
     // Materialization must preserve the pending projection's identity. The
-    // create mutation invalidates the real thread list immediately, while
-    // launch-default application can still be in flight. Associate the real
-    // workspace before that await so the sidebar can suppress the duplicate
-    // query row throughout the handoff.
+    // create mutation invalidates the real thread list immediately. Associate
+    // the real workspace before publication so the sidebar suppresses the
+    // duplicate query row throughout the handoff.
     const materializedEntry: PendingWorkspaceEntry = {
       ...entry,
       workspaceId: result.workspace.id,
@@ -204,11 +194,7 @@ export async function createCoworkThreadWorkflow(
     };
     deps.setPendingWorkspaceEntry(materializedEntry);
 
-    const launchedSession = await deps.applyLaunchDefaults({
-      session: result.session,
-      agentKind: input.agentKind,
-      launchControlValues: input.launchControlValues,
-    });
+    const launchedSession = result.session;
 
     if (!deps.isAttemptLive(entry.attemptId)) {
       return null;
@@ -223,7 +209,6 @@ export async function createCoworkThreadWorkflow(
       workspaceId: result.workspace.id,
       agentKind: input.agentKind,
       modelId: input.modelId,
-      modeId: modeId ?? null,
     });
     if (input.draftText?.length) {
       deps.setDraftText(result.workspace.id, input.draftText);

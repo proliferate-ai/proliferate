@@ -8,7 +8,6 @@ from pydantic import ValidationError
 from starlette.requests import Request
 
 from proliferate.main import _validation_error_handler, create_app
-from proliferate.server.catalogs.models import AgentCatalogResponse
 from proliferate.server.workflows.domain.invocation import (
     build_portable_definition,
     canonical_json,
@@ -33,46 +32,6 @@ CANONICAL_NUMBER_CASES = [
     {"source": "9007199254740992.0", "canonical": "9007199254740992", "portable": False},
     {"source": "9.007199254740992e15", "canonical": "9007199254740992", "portable": False},
 ]
-
-
-def _catalog() -> AgentCatalogResponse:
-    return AgentCatalogResponse.model_validate(
-        {
-            "schemaVersion": 2,
-            "catalogVersion": "workflow-invocation-test",
-            "generatedAt": "2026-07-14T00:00:00Z",
-            "agents": [
-                {
-                    "kind": "claude",
-                    "displayName": "Claude",
-                    "harness": {"agentProcess": {"version": "test"}},
-                    "authContexts": [{"id": "baseline"}],
-                    "session": {
-                        "supportsGoals": True,
-                        "controls": [
-                            {
-                                "key": "effort",
-                                "values": ["low", "high"],
-                                "mapping": {"liveConfigId": "effort"},
-                            }
-                        ],
-                        "models": [
-                            {
-                                "id": "sonnet",
-                                "displayName": "Sonnet",
-                                "aliases": ["claude-sonnet"],
-                                "availability": {"anyOf": ["baseline"]},
-                                "defaultVisible": True,
-                                "controls": {"effort": {"values": ["low", "high"]}},
-                                "status": "active",
-                            }
-                        ],
-                    },
-                    "provenance": {"probedAt": "2026-07-14T00:00:00Z"},
-                }
-            ],
-        }
-    )
 
 
 def _number_definition() -> dict[str, object]:
@@ -150,7 +109,6 @@ def test_eligibility_collects_every_closed_blocker_in_stable_order() -> None:
         },
     )
     blockers = collect_run_eligibility_blockers(
-        _catalog(),
         stages=stages,
         default_repo_config_id="repo",
         default_repository_available=False,
@@ -158,19 +116,15 @@ def test_eligibility_collects_every_closed_blocker_in_stable_order() -> None:
     assert [blocker.code for blocker in blockers] == [
         "default_repository_unavailable",
         "stage_count_not_supported",
-        "effort_catalog_selection_unavailable",
-        "model_catalog_selection_unavailable",
         "step_count_not_supported",
         "goal_not_supported",
-        "agent_catalog_selection_unavailable",
         "step_count_not_supported",
     ]
     assert list(blockers) == sorted(blockers, key=lambda blocker: (blocker.path, blocker.code))
 
 
-def test_portable_definition_omits_effort_and_canonicalizes_exact_model() -> None:
+def test_portable_definition_preserves_exact_model_id() -> None:
     definition = build_portable_definition(
-        _catalog(),
         inputs=(),
         stages=(
             {
@@ -182,14 +136,13 @@ def test_portable_definition_omits_effort_and_canonicalizes_exact_model() -> Non
     harness = definition["stages"][0]["harnessConfig"]  # type: ignore[index]
     assert harness == {
         "agentKind": "claude",
-        "modelSelection": {"kind": "exact", "modelId": "sonnet"},
+        "modelSelection": {"kind": "exact", "modelId": "claude-sonnet"},
         "permissionPolicy": "workflowDefault",
     }
 
 
 def test_portable_definition_preserves_exact_model_effort() -> None:
     definition = build_portable_definition(
-        _catalog(),
         inputs=(),
         stages=(
             {
@@ -204,7 +157,7 @@ def test_portable_definition_preserves_exact_model_effort() -> None:
     )
     assert definition["stages"][0]["harnessConfig"] == {  # type: ignore[index]
         "agentKind": "claude",
-        "modelSelection": {"kind": "exact", "modelId": "sonnet"},
+        "modelSelection": {"kind": "exact", "modelId": "claude-sonnet"},
         "effort": "high",
         "permissionPolicy": "workflowDefault",
     }

@@ -333,6 +333,7 @@ fn from_contract_live_config_snapshot(
         raw_config_options_json: record.raw_config_options_json,
         normalized_controls_json: record.normalized_controls_json,
         prompt_capabilities_json: record.prompt_capabilities_json,
+        full_snapshot_json: record.full_snapshot_json,
         updated_at: record.updated_at,
     }
 }

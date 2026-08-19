@@ -121,26 +121,21 @@ pub struct HeartbeatResponse {
     /// snapshot (REL-10). The server owns `runtime_kind`, sandbox existence and
     /// destruction, and the owner the ingest route derives, so it — not the
     /// Worker — decides eligibility; the Worker only consumes the bit as
-    /// admission to `model_snapshot_sync::maybe_sync`.
+    /// admission to `launch_options_sync::maybe_sync`.
     ///
     /// `#[serde(default)]` is load-bearing compatibility, not tidiness: a server
     /// that predates this field cannot promise the upload is legal, so its
     /// omission must fail CLOSED to `false` and pause snapshot sync before any
     /// local read or network call. Never treat absent as permission.
     #[serde(default)]
-    pub model_snapshot_upload_allowed: bool,
+    pub launch_options_upload_allowed: bool,
 }
 
-/// A Worker's upload of one changed model-snapshot document (model-catalog.md
-/// "Write path"/"Storage"): `snapshot_json` carries the machine document's
-/// verbatim wire shape — the composed observation plus its provenance fields.
-/// There is no `authContextId`: one observation per harness, keyed server-side
-/// by (harness_kind, owner).
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct IngestModelSnapshotRequest {
-    pub snapshot_json: String,
-    pub probed_at: String,
+pub struct IngestHarnessLaunchOptionsRequest {
+    pub source_revision: i64,
+    pub payload_json: String,
 }
 
 /// Server-delivered D5 bridge inputs (R9R-002). Carried on the heartbeat ack so
@@ -215,24 +210,16 @@ impl CloudClient {
         parse_json_response(response).await
     }
 
-    /// Upload one changed model-snapshot entry to the cloud ingest route
-    /// (model-catalog.md "Cloud routes": `POST /v1/cloud/agent-models/{harness}/refresh`).
-    /// The server resolves the owner from the Worker's own sandbox row, so the
-    /// request body carries no user identity — only the Worker's bearer proves
-    /// which sandbox this is. Non-2xx (including a 403 from a desktop worker,
-    /// or a 404 against a server that predates this route) surfaces as
-    /// `WorkerError::Cloud` for the caller to log-and-swallow; this method
-    /// itself never retries.
-    pub async fn ingest_model_snapshot(
+    pub async fn ingest_harness_launch_options(
         &self,
         worker_token: &str,
         harness_kind: &str,
-        request: &IngestModelSnapshotRequest,
+        request: &IngestHarnessLaunchOptionsRequest,
     ) -> Result<(), WorkerError> {
         let response = self
             .http
             .post(format!(
-                "{}/v1/cloud/agent-models/{harness_kind}/refresh",
+                "{}/v1/cloud/harness-launch-options/{harness_kind}",
                 self.base_url
             ))
             .header(
@@ -244,8 +231,10 @@ impl CloudClient {
             .await?;
         let status = response.status();
         if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            return Err(WorkerError::Cloud { status, body });
+            return Err(WorkerError::Cloud {
+                status,
+                body: response.text().await.unwrap_or_default(),
+            });
         }
         Ok(())
     }

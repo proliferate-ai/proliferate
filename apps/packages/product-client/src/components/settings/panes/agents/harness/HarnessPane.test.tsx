@@ -76,24 +76,6 @@ const state = vi.hoisted(() => ({
     data: undefined as Record<string, unknown> | undefined,
     isLoading: false,
   },
-  launchOptions: {
-    data: undefined as
-      | {
-        agents: Array<{
-          kind: string;
-          displayName: string;
-          defaultModelId: string | null;
-          models: Array<{
-            id: string;
-            displayName: string;
-            aliases?: string[];
-            isDefault: boolean;
-          }>;
-        }>;
-      }
-      | undefined,
-    isLoading: false,
-  },
 }));
 const putMutate = vi.hoisted(() => vi.fn());
 const createKeyMutate = vi.hoisted(() => vi.fn());
@@ -106,6 +88,29 @@ const handleTerminalExit = vi.hoisted(() => vi.fn());
 const showToast = vi.hoisted(() => vi.fn());
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
+  useCloudSandbox: () => ({ data: { id: "sandbox-1" }, isLoading: false }),
+  useCloudHarnessLaunchOptions: ({ harnessKind }: { harnessKind: string }) => ({
+    data: state.agentModels.data ? {
+      harnessKind,
+      basisRevision: "cloud-basis",
+      revision: 1,
+      state: "observed",
+      options: {
+        models: state.agentModels.data.models.map((model) => ({
+          id: String(model.id),
+          observedName: typeof model.displayName === "string" ? model.displayName : null,
+          observedDescription: null,
+        })),
+        controls: [],
+        defaults: { modelId: null, controlValues: {} },
+      },
+      observedAt: state.agentModels.data.probedAt,
+      probeAttemptedAt: "2026-08-19T00:00:00Z",
+      probeFailureCode: null,
+      readiness: "ready",
+    } : undefined,
+    isLoading: false,
+  }),
   useAgentGatewayCapabilities: () => state.capabilities,
   useAgentGatewayEnrollment: () => state.enrollment,
   useAuthSelections: () => state.selections,
@@ -124,14 +129,44 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
 // SDK hooks standing in for that runtime call.
 vi.mock("@anyharness/sdk-react", () => ({
   useAnyHarnessRuntimeContext: () => ({ runtimeUrl: "http://127.0.0.1:8457" }),
-  // Pre-first-observation seed: the runtime's resolved launch catalog (the
-  // session model picker's data source) — mock stands in for that runtime read.
-  useAgentLaunchOptionsQuery: () => state.launchOptions,
+  useAgentLaunchOptionsQuery: ({ harnessKind }: { harnessKind: string }) => {
+    const sourceModels = state.modelSnapshotStatus.data?.models ?? null;
+    return {
+      data: sourceModels ? {
+        harnessKind,
+        basisRevision: "local-basis",
+        revision: 1,
+        state: "observed",
+        options: {
+          models: sourceModels.map((model) => ({
+            id: String(model.id),
+            observedName: typeof model.name === "string"
+              ? model.name
+              : typeof model.displayName === "string" ? model.displayName : null,
+            observedDescription: null,
+          })),
+          controls: [],
+          defaults: { modelId: null, controlValues: {} },
+        },
+        observedAt: typeof state.modelSnapshotStatus.data?.probedAt === "string"
+          ? state.modelSnapshotStatus.data.probedAt
+          : null,
+        probeAttemptedAt: "2026-08-19T00:00:00Z",
+        probeFailureCode: null,
+        readiness: "ready",
+      } : undefined,
+      isLoading: false,
+    };
+  },
   // The composed observation (one status document per harness): an absent
   // document keeps HarnessAllModelsSection on the unverified seed path.
   useModelSnapshotStatusQuery: () => state.modelSnapshotStatus,
   // The param-less manual-refresh poke.
   useRefreshModelSnapshotMutation: () => ({
+    mutate: refreshModelSnapshotMutate,
+    isPending: false,
+  }),
+  useRefreshHarnessLaunchOptionsMutation: () => ({
     mutate: refreshModelSnapshotMutate,
     isPending: false,
   }),
@@ -361,8 +396,6 @@ afterEach(() => {
   state.loginSessions = {};
   state.modelSnapshotStatus.data = undefined;
   state.modelSnapshotStatus.isLoading = false;
-  state.launchOptions.data = undefined;
-  state.launchOptions.isLoading = false;
 });
 
 describe("HarnessPane authentication", () => {
@@ -1061,11 +1094,8 @@ describe("HarnessPane authentication", () => {
   });
 });
 
-// The layered read (observation-else-seed with the override patch) serves
-// machineless picking, so it is the CLOUD surface's source; the local surface
-// reads the composed observation instead (next describe).
 describe("HarnessPane all models", () => {
-  it("renders the layered catalog grid in the All Models section", () => {
+  it("renders the target-observed model grid without visibility controls", () => {
     state.agentSurface = "cloud";
     state.agentModels.data = {
       harnessKind: "claude",
@@ -1085,8 +1115,7 @@ describe("HarnessPane all models", () => {
 
     expandModelList();
     expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
-    // 2 model toggles + 1 settings switch (Pass model).
-    expect(screen.getAllByRole("switch").length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByRole("switch")).toBeNull();
   });
 
   // The cloud-snapshot ingest route (POST /agent-models/{h}/refresh) is
@@ -1109,7 +1138,7 @@ describe("HarnessPane all models", () => {
     expect(screen.queryByRole("button", { name: /^Refresh$/ })).toBeNull();
   });
 
-  it("upserts an override patch when a model is toggled off", () => {
+  it("does not expose a server-side model-membership override", () => {
     state.agentSurface = "cloud";
     state.agentModels.data = {
       harnessKind: "claude",
@@ -1127,30 +1156,13 @@ describe("HarnessPane all models", () => {
 
 
     expandModelList();
-    // First switch(es) are settings switches; model switches come later in DOM.
-    const allSwitches = screen.getAllByRole("switch");
-    const sonnetSwitch = allSwitches[allSwitches.length - 2]; // Second-to-last is first model
-    fireEvent.click(sonnetSwitch);
-
-    expect(overrideMutate).toHaveBeenCalledWith(
-      {
-        harnessKind: "claude",
-        body: {
-          patchJson: JSON.stringify({
-            update: { haiku: { enabled: false }, sonnet: { enabled: false } },
-          }),
-        },
-      },
-      expect.anything(),
-    );
+    expect(screen.queryByRole("switch")).toBeNull();
+    expect(overrideMutate).not.toHaveBeenCalled();
   });
 });
 
-// The picker is the observation (model-catalog.md "Serving"): the local
-// surface renders the harness's ONE composed observation off the runtime's
-// status route — no per-context branching by route.
 describe("HarnessPane all models (local composed observation)", () => {
-  it("reads the composed observation instead of the cloud catalog", () => {
+  it("reads the runtime launch-option observation", () => {
     state.modelSnapshotStatus.data = {
       agent: "claude",
       schemaVersion: 2,
@@ -1165,37 +1177,20 @@ describe("HarnessPane all models (local composed observation)", () => {
     };
     renderPane("claude");
 
-    // Freshness is now folded into the collapsed content-line suffix, not a
-    // standalone badge — the count is foreground, the age is the muted suffix.
     expect(screen.queryByText("1 model")).not.toBeNull();
-    expect(screen.queryByText(/refreshed 1m ago/)).not.toBeNull();
+    expect(screen.queryByText(/Last refreshed/)).not.toBeNull();
     expandModelList();
     expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
-    // No override capability for observation rows: the model switch is
-    // present (all observed models are "on") but disabled.
-    const allSwitches = screen.getAllByRole("switch") as HTMLButtonElement[];
-    const modelSwitch = allSwitches[allSwitches.length - 1]; // Last switch is the model toggle
-    expect(modelSwitch.getAttribute("aria-checked")).toBe("true");
-    expect(modelSwitch.disabled).toBe(true);
+    expect(screen.queryByRole("switch")).toBeNull();
   });
 
-  it("marks the shipped-catalog seed as unverified before the first observation", () => {
+  it("does not seed model choices before the first observation", () => {
     state.modelSnapshotStatus.data = undefined;
-    state.launchOptions.data = {
-      agents: [{
-        kind: "claude",
-        displayName: "Claude Code",
-        defaultModelId: "claude-sonnet-4-5",
-        models: [{ id: "claude-sonnet-4-5", displayName: "Sonnet 4.6", isDefault: true }],
-      }],
-    };
     renderPane("claude");
 
-    expect(screen.queryByText("1 model")).not.toBeNull();
-    // The unverified seed suffix replaces the standalone "unverified" badge.
-    expect(screen.queryByText(/shipped catalog, not probed yet/)).not.toBeNull();
+    expect(screen.queryByText("0 models")).not.toBeNull();
     expandModelList();
-    expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
+    expect(screen.queryByText("Sonnet 4.6")).toBeNull();
   });
 
   it("hits the param-less runtime refresh endpoint for the local surface", () => {

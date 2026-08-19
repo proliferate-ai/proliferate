@@ -25,6 +25,10 @@ import type {
 } from "../types/reducer.js";
 import { reducePendingPrompts } from "./pending-prompts.js";
 import {
+  chooseWorkspacePathString,
+  fileChangeIdentity,
+} from "./file-change-path-presence.js";
+import {
   ensureMutableContextItem as ensureMutableKnownItem,
   ensureMutableContextTurn,
   reduceTranscriptEventBatch,
@@ -36,7 +40,6 @@ import {
 } from "./transcript-reduction-context.js";
 
 export type { ReduceOptions } from "./transcript-reduction-context.js";
-
 export function createTranscriptState(sessionId: string): TranscriptState {
   return {
     sessionMeta: {
@@ -1185,12 +1188,6 @@ function mergeFileChangeParts(
   return [...merged, ...remainingCurrent];
 }
 
-function fileChangeIdentity(part: FileChangeContentPart): string {
-  const currentPath = part.workspacePath ?? part.path;
-  const nextPath = part.newWorkspacePath ?? part.newPath ?? "";
-  return `${currentPath}\u0000${nextPath}`;
-}
-
 function mergeFileChangePart(
   previous: FileChangeContentPart,
   next: FileChangeContentPart,
@@ -1206,10 +1203,13 @@ function mergeFileChangePart(
     type: "file_change",
     operation: next.operation,
     path: chooseString(next.path, previous.path),
-    workspacePath: chooseNullableString(next.workspacePath, previous.workspacePath),
+    workspacePath: chooseWorkspacePathString(
+      next.workspacePath,
+      previous.workspacePath,
+    ),
     basename: chooseNullableString(next.basename, previous.basename),
     newPath: chooseNullableString(next.newPath, previous.newPath),
-    newWorkspacePath: chooseNullableString(
+    newWorkspacePath: chooseWorkspacePathString(
       next.newWorkspacePath,
       previous.newWorkspacePath,
     ),

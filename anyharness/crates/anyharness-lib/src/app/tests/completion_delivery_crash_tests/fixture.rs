@@ -35,6 +35,7 @@ pub(super) fn capture_delivery(state: &AppState, terminal_id: &str) -> Completio
     child.title = Some("Completion child".into());
     child.last_prompt_at = None;
     store.insert(&child).expect("insert completion child");
+    store.seed_empty_launch_intent(CHILD_ID);
     let link = state
         .subagent_service
         .link_child(

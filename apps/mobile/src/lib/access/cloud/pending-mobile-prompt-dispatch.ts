@@ -48,12 +48,6 @@ export async function dispatchPendingMobilePrompt(args: {
   if (!args.pendingPrompt.dispatchedSessionId) {
     args.onSessionStarted?.(activeSession.sessionId);
   }
-  const updates = args.pendingPrompt.sessionConfigUpdates ?? [];
-  for (const update of updates) {
-    assertStillCurrent(args.shouldContinue);
-    args.onStatus("Applying session configuration.");
-    await anyharness.sessions.setConfigOption(activeSession.sessionId, update);
-  }
   assertStillCurrent(args.shouldContinue);
   args.onStatus("Sending queued prompt.");
   await anyharness.sessions.prompt(activeSession.sessionId, {
@@ -75,11 +69,14 @@ async function createSession(input: {
   onStatus: (status: string) => void;
 }): Promise<CloudSessionProjection> {
   input.onStatus("Starting a session for this prompt.");
+  const controlValues = {
+    ...(input.pendingPrompt.controlValues ?? {}),
+  };
   const session = await input.anyharness.sessions.create({
     workspaceId: input.anyharnessWorkspaceId,
     agentKind: input.pendingPrompt.agentKind ?? "codex",
     ...(input.pendingPrompt.modelId ? { modelId: input.pendingPrompt.modelId } : {}),
-    ...(input.pendingPrompt.modeId ? { modeId: input.pendingPrompt.modeId } : {}),
+    controlValues,
     subagentsEnabled: false,
     origin: { kind: "system", entrypoint: "cloud" },
   });

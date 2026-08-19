@@ -1,4 +1,4 @@
-import type { AgentLaunchOptionsResponse } from "@anyharness/sdk";
+import type { HarnessLaunchOptionsResponse } from "@anyharness/sdk";
 import {
   anyHarnessAgentLaunchOptionsKey,
   useAgentLaunchOptionsQuery,
@@ -10,15 +10,16 @@ import type { CloudConnectionInfo } from "@proliferate/cloud-sdk/types";
 import { withFreshCloudSandboxGatewayAccessToken } from "#product/lib/access/cloud/cloud-sandbox-gateway";
 
 export function useWorkspaceAgentLaunchOptionsQuery({
-  workspaceId,
+  harnessKind,
   cloudConnectionInfo,
 }: {
   workspaceId: string | null;
+  harnessKind: string | null;
   cloudConnectionInfo?: CloudConnectionInfo | null;
-}): UseQueryResult<AgentLaunchOptionsResponse> {
+}): UseQueryResult<HarnessLaunchOptionsResponse> {
   const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const localQuery = useAgentLaunchOptionsQuery({
-    workspaceId,
+    harnessKind,
     enabled: !cloudConnectionInfo,
   });
   const gatewayRuntimeUrl = cloudConnectionInfo?.runtimeUrl ?? "";
@@ -26,10 +27,10 @@ export function useWorkspaceAgentLaunchOptionsQuery({
   const gatewayQuery = useQuery({
     queryKey: anyHarnessAgentLaunchOptionsKey(
       gatewayRuntimeUrl,
-      gatewayWorkspaceId,
+      harnessKind,
       cacheScopeKey,
     ),
-    enabled: Boolean(cloudConnectionInfo && gatewayRuntimeUrl && gatewayWorkspaceId),
+    enabled: Boolean(cloudConnectionInfo && gatewayRuntimeUrl && gatewayWorkspaceId && harnessKind),
     queryFn: async ({ signal }) => {
       if (!cloudConnectionInfo) {
         throw new Error("Cloud workspace connection is unavailable.");
@@ -42,7 +43,7 @@ export function useWorkspaceAgentLaunchOptionsQuery({
           runtimeUrl: freshConnection.runtimeUrl,
           authToken: freshConnection.accessToken ?? undefined,
         },
-        freshConnection.anyharnessWorkspaceId,
+        harnessKind ?? "",
         { signal },
       );
     },

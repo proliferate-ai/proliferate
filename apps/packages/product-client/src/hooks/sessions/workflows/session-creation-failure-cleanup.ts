@@ -37,7 +37,7 @@ interface SessionCreationFailureCleanupInput {
   hadExistingProjectedRecord: boolean;
   hasPrompt: boolean;
   launchIntentId?: string | null;
-  modeId: string | null;
+  controlValues: Record<string, string>;
   modelId: string;
   pendingSessionId: string;
   preserveProjectedSessionOnCreateFailure: boolean;
@@ -190,7 +190,7 @@ export function cleanupSessionCreationFailure(
 function moveOutboxPromptsToRecovery(
   input: Pick<
     SessionCreationFailureCleanupInput,
-    "agentKind" | "error" | "modeId" | "modelId" | "pendingSessionId"
+    "agentKind" | "controlValues" | "error" | "modelId" | "pendingSessionId"
     | "recoveryWorkspaceUiKey" | "workspaceId"
   >,
 ): void {
@@ -213,7 +213,7 @@ function moveOutboxPromptsToRecovery(
       workspaceId: input.workspaceId,
       agentKind: input.agentKind,
       modelId: input.modelId,
-      modeId: input.modeId,
+      controlValues: { ...input.controlValues },
       errorMessage,
       prompt,
     })),

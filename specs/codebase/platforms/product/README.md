@@ -24,10 +24,10 @@ expectations, but it is not the owner of a full user workflow.
 | Sandbox GitHub auth | GitHub App authorization, the sandbox credential lease (server-push at materialization), and the git credential helper. | [github-auth.md](../../../FEATURE_DOCS/SANDBOX/github-auth.md) (Status: target) |
 | Model gateway | LiteLLM proxy artifact and deployment, enrollment/teams/virtual keys, budgets, access-group model gating, usage import. | [MODELS.md](../../../FEATURE_DOCS/MODELS.md) (Status: target) |
 | Billing | Credit authorization, Stripe subscription/refill behavior, budget reconciliation, billing state in product responses, and billing QA. | [BILLING.md](../../../FEATURE_DOCS/BILLING.md) |
-| Model catalog | Probe-first model truth: machine snapshots, cloud snapshots, shipped-catalog fallback, launch validation universe, visibility, and model identity. | [MODELS.md](../../../FEATURE_DOCS/MODELS.md) (Status: target) |
+| Harness launch options | Target-observed executable models and generic controls before launch, exact launch intent, copied cloud target state, and session-local live configuration after launch. | [MODELS.md](../../../FEATURE_DOCS/MODELS.md) (Status: current) |
 | Agent distribution | Registry/catalog document contract, pinned auto-install and seed topology, binary-carried catalog convergence, supervisor-owned runtime binary convergence, the probe pipeline, and readiness projection. | [agent-distribution.md](agent-distribution.md) (Status: target) |
-| Agent run config | Centralized cloud agent configuration: catalog-validated named configs (`cloud_agent_run_config`), three-phase catalog intersection, per-owner defaults and system starter presets, and the run-time snapshot pattern. | [agent-run-config.md](agent-run-config.md) |
-| Agent systems overview | No contract — the narrative map of how agent distribution, agent auth, the model gateway, and the model catalog compose; read first when orienting. | [../../systems/product/agents/README.md](../../systems/product/agents/README.md) |
+| Agent run config | Centralized cloud agent intent: opaque exact model/control values, target-observed validation at execution, per-owner defaults and system starter presets, and the run-time snapshot pattern. | [agent-run-config.md](agent-run-config.md) |
+| Agent systems overview | No contract — the narrative map of how agent distribution, agent auth, the model gateway, and target-observed launch options compose; read first when orienting. | [../../systems/product/agents/README.md](../../systems/product/agents/README.md) |
 
 ## Naming Notes
 

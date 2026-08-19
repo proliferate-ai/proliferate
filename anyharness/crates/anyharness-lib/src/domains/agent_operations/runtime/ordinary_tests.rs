@@ -11,9 +11,9 @@ use crate::domains::agent_operations::model::{
 };
 use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
 use crate::domains::agents::catalog::service::ActiveCatalog;
-use crate::domains::agents::readiness::launch_options::{
-    ResolvedLaunchAgentOption, ResolvedLaunchModelOption, ResolvedModelEffort,
-    ResolvedWorkspaceLaunchOptions,
+use crate::domains::agents::launch_options::{
+    HarnessLaunchControl, HarnessLaunchControlValue, HarnessLaunchDefaults, HarnessLaunchModel,
+    HarnessLaunchOptions, HarnessLaunchOptionsResponse, HarnessLaunchOptionsState,
 };
 use crate::domains::sessions::admission::{NoControllerPolicy, SessionMutationAdmission};
 use crate::domains::sessions::links::model::{
@@ -144,13 +144,10 @@ impl AgentWorkspaceOperations for Workspaces {
     }
 }
 
-struct LaunchOptions(ResolvedWorkspaceLaunchOptions);
+struct LaunchOptions(Vec<HarnessLaunchOptionsResponse>);
 
 impl AgentLaunchOptionReads for LaunchOptions {
-    fn resolved_workspace_launch_options(
-        &self,
-        _workspace_id: &str,
-    ) -> anyhow::Result<ResolvedWorkspaceLaunchOptions> {
+    fn harness_launch_options(&self) -> anyhow::Result<Vec<HarnessLaunchOptionsResponse>> {
         Ok(self.0.clone())
     }
 }
@@ -211,13 +208,13 @@ impl AgentSessionMutations for Mutations {
         workspace_id: &str,
         agent_kind: &str,
         model_id: Option<&str>,
-        mode_id: Option<&str>,
+        control_values: &std::collections::BTreeMap<String, String>,
         task: Option<String>,
         source_session_id: &str,
         source_label: &str,
     ) -> Result<SessionRecord, CreateOrdinaryAgentSessionError> {
         self.record(format!(
-            "create:{workspace_id}:{agent_kind}:{model_id:?}:{mode_id:?}:{task:?}:{source_session_id}:{source_label}"
+            "create:{workspace_id}:{agent_kind}:{model_id:?}:{control_values:?}:{task:?}:{source_session_id}:{source_label}"
         ));
         let mut created = session("created", workspace_id, &self.agent_kind, &self.model_id);
         created.native_session_id = Some("native-created".into());
@@ -309,36 +306,41 @@ fn fixture(closed_child: bool) -> Fixture {
     let catalog_agent = active
         .agents()
         .iter()
-        .find(|agent| !agent.session.models.is_empty())
+        .find(|agent| !agent.session.presentation_models.is_empty())
         .unwrap();
-    let catalog_model = &catalog_agent.session.models[0];
+    let catalog_model = &catalog_agent.session.presentation_models[0];
     let agent_kind = catalog_agent.kind.clone();
     let model_id = catalog_model.id.clone();
-    let launch = ResolvedWorkspaceLaunchOptions {
-        agents: vec![ResolvedLaunchAgentOption {
-            kind: agent_kind.clone(),
-            display_name: catalog_agent.display_name.clone(),
-            default_model_id: Some(model_id.clone()),
-            unattended_mode_id: catalog_agent.session.unattended_mode_id.clone(),
-            models: vec![ResolvedLaunchModelOption {
+    let launch = vec![HarnessLaunchOptionsResponse {
+        harness_kind: agent_kind.clone(),
+        basis_revision: "basis-1".into(),
+        revision: 1,
+        state: HarnessLaunchOptionsState::Observed,
+        options: Some(HarnessLaunchOptions {
+            models: vec![HarnessLaunchModel {
                 id: model_id.clone(),
-                display_name: catalog_model.display_name.clone(),
-                aliases: catalog_model.aliases.clone(),
-                is_default: true,
-                default_opt_in: None,
-                description: catalog_model.description.clone(),
-                provider: None,
-                status: Some(catalog_model.status),
-                effort: Some(ResolvedModelEffort {
-                    values: vec!["high".into()],
-                    default: Some("high".into()),
-                }),
-                live_effort_candidates: Vec::new(),
-                fast_mode: false,
-                modes: Some(vec!["mode-a".into()]),
+                observed_name: None,
+                observed_description: None,
             }],
-        }],
-    };
+            controls: vec![HarnessLaunchControl {
+                id: "mode".to_string(),
+                observed_label: Some("Mode".to_string()),
+                observed_description: None,
+                values: vec![HarnessLaunchControlValue {
+                    value: "mode-a".to_string(),
+                    observed_label: Some("Mode A".to_string()),
+                    observed_description: None,
+                }],
+            }],
+            defaults: HarnessLaunchDefaults {
+                model_id: Some(model_id.clone()),
+                control_values: Default::default(),
+            },
+        }),
+        observed_at: Some("2026-08-19T00:00:00Z".into()),
+        probe_attempted_at: "2026-08-19T00:00:00Z".into(),
+        probe_failure_code: None,
+    }];
     let sessions = Arc::new(Sessions(vec![
         session("parent", "workspace-a", &agent_kind, &model_id),
         session("peer", "workspace-b", &agent_kind, &model_id),
@@ -463,7 +465,7 @@ async fn cross_workspace_create_uses_current_launch_choice_and_stays_unlinked() 
                 task: Some("implement the change".into()),
                 agent_kind: Some(fixture.agent_kind.clone()),
                 model_id: Some(fixture.model_id.clone()),
-                mode_id: Some("mode-a".into()),
+                control_values: [("mode".to_string(), "mode-a".to_string())].into(),
             },
         )
         .await
@@ -494,7 +496,7 @@ async fn subagent_caller_is_denied_for_both_kinds_before_any_owner_effect() {
                     task: Some("task".into()),
                     agent_kind: Some(fixture.agent_kind.clone()),
                     model_id: Some(fixture.model_id.clone()),
-                    mode_id: None,
+                    control_values: Default::default(),
                 },
             )
             .await;
@@ -526,7 +528,7 @@ async fn stale_launch_and_config_choices_are_typed_and_side_effect_free() {
                 task: None,
                 agent_kind: Some(fixture.agent_kind.clone()),
                 model_id: Some("stale-model".into()),
-                mode_id: None,
+                control_values: Default::default(),
             },
         )
         .await;

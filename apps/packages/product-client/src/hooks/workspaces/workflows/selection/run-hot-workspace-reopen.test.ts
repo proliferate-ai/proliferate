@@ -29,6 +29,7 @@ describe("runHotWorkspaceReopen", () => {
       workspaceConnection: {
         runtimeUrl: "http://runtime.test",
         anyharnessWorkspaceId: "workspace-1",
+        runtimeGeneration: 0,
       },
     });
     useSessionSelectionStore.setState({

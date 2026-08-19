@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { executePlanHandoff } from "#product/hooks/plans/workflows/use-plan-handoff-workflow";
 
 describe("executePlanHandoff", () => {
-  it("applies pre-prompt config changes before sending the first prompt", async () => {
+  it("creates with the complete target-observed control map before prompting", async () => {
     const calls: string[] = [];
     const promptSession = vi.fn(async () => {
       calls.push("prompt");
@@ -11,7 +11,7 @@ describe("executePlanHandoff", () => {
     await executePlanHandoff({
       launchSelection: { kind: "codex", modelId: "gpt-5.4" },
       selectedWorkspaceId: "workspace-1",
-      selectedModeId: "full-access",
+      launchControlValues: { access: "full-access", collaboration: "default" },
       text: "Use the attached plan and continue the work.",
       blocks: [{ type: "plan_reference", planId: "plan-1", snapshotHash: "hash-1" }],
       optimisticContentParts: [],
@@ -19,9 +19,6 @@ describe("executePlanHandoff", () => {
       createEmptySessionWithResolvedConfig: vi.fn(async () => {
         calls.push("create");
         return "session-new";
-      }),
-      applyPrePromptConfigChanges: vi.fn(async () => {
-        calls.push("apply-config");
       }),
       promptSession,
       dismissSession: vi.fn(),
@@ -34,14 +31,14 @@ describe("executePlanHandoff", () => {
       retry: vi.fn(),
     });
 
-    expect(calls).toEqual(["create", "apply-config", "prompt", "completed"]);
+    expect(calls).toEqual(["create", "prompt", "completed"]);
     expect(promptSession).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: "session-new",
       workspaceId: "workspace-1",
     }));
   });
 
-  it("dismisses the half-created session and restores the previous session when override fails", async () => {
+  it("dismisses the half-created session and restores the previous session when prompting fails", async () => {
     const calls: string[] = [];
     const dismissSession = vi.fn(async (sessionId: string) => {
       calls.push(`dismiss:${sessionId}`);
@@ -59,7 +56,7 @@ describe("executePlanHandoff", () => {
     await executePlanHandoff({
       launchSelection: { kind: "codex", modelId: "gpt-5.4" },
       selectedWorkspaceId: "workspace-1",
-      selectedModeId: "full-access",
+      launchControlValues: { access: "full-access", collaboration: "default" },
       text: "Use the attached plan and continue the work.",
       blocks: [{ type: "plan_reference", planId: "plan-1", snapshotHash: "hash-1" }],
       optimisticContentParts: [],
@@ -68,12 +65,9 @@ describe("executePlanHandoff", () => {
         calls.push("create");
         return "session-new";
       }),
-      applyPrePromptConfigChanges: vi.fn(async () => {
-        calls.push("apply-config");
-        throw new Error("The session could not leave plan mode before the first prompt.");
-      }),
       promptSession: vi.fn(async () => {
         calls.push("prompt");
+        throw new Error("The prompt could not start.");
       }),
       dismissSession,
       selectSession,
@@ -85,14 +79,14 @@ describe("executePlanHandoff", () => {
 
     expect(calls).toEqual([
       "create",
-      "apply-config",
+      "prompt",
       "dismiss:session-new",
       "select:session-old",
       "toast:Plan not handed off",
     ]);
     expect(showErrorToast).toHaveBeenCalledWith(expect.objectContaining({
       consequence: "No new chat was started and you are back in the session you were in.",
-      cause: "The session could not leave plan mode before the first prompt.",
+      cause: "The prompt could not start.",
     }));
     expect(dismissSession).toHaveBeenCalledWith("session-new");
     expect(selectSession).toHaveBeenCalledWith("session-old");

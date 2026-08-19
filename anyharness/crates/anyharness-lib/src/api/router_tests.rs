@@ -1477,17 +1477,15 @@ async fn get_agent_catalog_version_succeeds_with_valid_bearer_auth() {
     assert_eq!(payload["catalogVersion"], json!(expected_version));
 }
 
-/// The model-snapshot status route is the reusable PULL-status pattern: shaped
-/// after `GET /v1/agents/reconcile`, polled rather than pushed. Asserted through
-/// the real router so the wiring, the auth gate and the wire shape are pinned in
-/// one pass.
+/// The target-observed launch-options route is asserted through the real router
+/// so the wiring, auth gate, and wire shape are pinned in one pass.
 ///
 /// The body is one composed observation per harness: no `contexts` array, no
 /// `authFingerprint`, no `authContextId`, no staleness fields — asserted against
 /// the SERIALIZED bytes, not against the projection type, because the leak this
 /// guards against would be a serde-attribute change.
 #[tokio::test]
-async fn model_snapshot_status_route_serves_one_composed_observation() {
+async fn launch_probe_status_route_serves_one_composed_observation() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))
         .lock()
@@ -1500,7 +1498,7 @@ async fn model_snapshot_status_route_serves_one_composed_observation() {
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri("/v1/agents/opencode/model-snapshot")
+                .uri("/v1/agents/opencode/launch-options")
                 .header(header::AUTHORIZATION, "Bearer secret-token")
                 .body(Body::empty())
                 .expect("expected request"),
@@ -1515,23 +1513,19 @@ async fn model_snapshot_status_route_serves_one_composed_observation() {
     let raw = String::from_utf8(body.to_vec()).expect("utf8 body");
     let payload: Value = serde_json::from_slice(&body).expect("parse response json");
 
-    assert_eq!(payload["agent"], json!("opencode"));
-    assert_eq!(payload["schemaVersion"], json!(2));
+    assert_eq!(payload["harnessKind"], json!("opencode"));
+    assert!(payload["basisRevision"].as_str().is_some_and(|value| !value.is_empty()));
+    assert_eq!(payload["revision"], json!(0));
     assert!(
         matches!(
             payload["state"].as_str(),
-            Some("idle") | Some("queued") | Some("running") | Some("backoff")
+            Some("detecting") | Some("refreshing") | Some("observed")
+                | Some("observed_empty") | Some("last_good_after_failure")
+                | Some("failed_without_observation")
         ),
-        "state must be the engine's live state"
+        "state must be the launch-options service's live state"
     );
-    assert!(
-        matches!(
-            payload["probeEngine"].as_str(),
-            Some("owner") | Some("readonly")
-        ),
-        "probeEngine must report the engine's ownership mode"
-    );
-    for banned in ["contexts", "authFingerprint", "authContextId", "stale"] {
+    for banned in ["contexts", "authFingerprint", "authContextId", "models", "modes"] {
         assert!(
             !raw.contains(banned),
             "the composed status body must not carry '{banned}': {raw}"
@@ -1543,7 +1537,7 @@ async fn model_snapshot_status_route_serves_one_composed_observation() {
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri("/v1/agents/not-a-harness/model-snapshot")
+                .uri("/v1/agents/not-a-harness/launch-options")
                 .header(header::AUTHORIZATION, "Bearer secret-token")
                 .body(Body::empty())
                 .expect("expected request"),
@@ -1557,12 +1551,12 @@ async fn model_snapshot_status_route_serves_one_composed_observation() {
 /// so `authContextId` has no meaning and the route accepts a bare POST.
 ///
 /// On this test runtime no harness is installed, so the honest engine answer is
-/// 404 (`MODEL_SNAPSHOT_NOT_INSTALLED`) — the point is that the request reached
+/// 404 (`HARNESS_LAUNCH_OPTIONS_NOT_INSTALLED`) — the point is that the request reached
 /// the engine rather than being rejected at the parameter layer, and that a
 /// stale client still sending `?authContextId=` is not broken by it (unknown
 /// query parameters are ignored).
 #[tokio::test]
-async fn model_snapshot_refresh_takes_no_context_parameter() {
+async fn launch_probe_refresh_takes_no_context_parameter() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))
         .lock()
@@ -1575,7 +1569,7 @@ async fn model_snapshot_refresh_takes_no_context_parameter() {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/v1/agents/opencode/model-snapshot/refresh")
+                .uri("/v1/agents/opencode/launch-options/refresh")
                 .header(header::AUTHORIZATION, "Bearer secret-token")
                 .body(Body::empty())
                 .expect("expected request"),
@@ -1592,7 +1586,7 @@ async fn model_snapshot_refresh_takes_no_context_parameter() {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/v1/agents/opencode/model-snapshot/refresh?authContextId=gateway")
+                .uri("/v1/agents/opencode/launch-options/refresh?authContextId=gateway")
                 .header(header::AUTHORIZATION, "Bearer secret-token")
                 .body(Body::empty())
                 .expect("expected request"),
@@ -1606,11 +1600,11 @@ async fn model_snapshot_refresh_takes_no_context_parameter() {
     );
 }
 
-/// Both model-snapshot routes sit behind the same bearer gate as every other `/v1`
+/// Both launch-options routes sit behind the same bearer gate as every other `/v1`
 /// route: a harness's observation and probe state are machine information, not
 /// public.
 #[tokio::test]
-async fn model_snapshot_routes_require_bearer_auth() {
+async fn launch_probe_routes_require_bearer_auth() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))
         .lock()
@@ -1619,8 +1613,8 @@ async fn model_snapshot_routes_require_bearer_auth() {
     let app = build_router(test_state(false));
 
     for (method, uri) in [
-        ("GET", "/v1/agents/opencode/model-snapshot"),
-        ("POST", "/v1/agents/opencode/model-snapshot/refresh"),
+        ("GET", "/v1/agents/opencode/launch-options"),
+        ("POST", "/v1/agents/opencode/launch-options/refresh"),
     ] {
         let response = app
             .clone()
@@ -1735,7 +1729,7 @@ async fn agent_auth_state_routes_keep_their_contract_while_poking_the_probe_engi
 ///
 /// The complementary case — the handler poking for a harness that ended up not
 /// installed — is asserted in the engine suite
-/// (`model_snapshot::wiring_tests::poking_an_uninstalled_harness_records_nothing`),
+/// (`launch_probe::wiring_tests::poking_an_uninstalled_harness_records_nothing`),
 /// where the outcome is observable: nothing written, not even a failed attempt.
 #[tokio::test]
 async fn the_install_endpoint_keeps_its_error_contract_while_poking() {
@@ -1769,11 +1763,11 @@ async fn the_install_endpoint_keeps_its_error_contract_while_poking() {
 /// **Guards against the poke-suppression seam regressing silently.**
 /// `automatic_poke_engine` is the ONE handle that decides whether an automatic
 /// poke may ever spawn a real harness process — `None` under `#[cfg(test)]`, the
-/// always-live engine in production. `model_snapshot_service` is the always-present
+/// always-live engine in production. `launch_probe_service` is the always-present
 /// sibling used for reads and the manual refresh. A handler that quietly swapped
 /// from the former to the latter would keep every OTHER router test in this file
 /// green, because those only assert status codes — they cannot distinguish "poked"
-/// from "silently did nothing" (see `model_snapshot::wiring_tests`'s doc comment on
+/// from "silently did nothing" (see `launch_probe::wiring_tests`'s doc comment on
 /// `the_optional_poke_seam_pokes_when_wired_and_no_ops_when_suppressed`, which makes
 /// the identical point one layer down).
 ///
@@ -1783,7 +1777,7 @@ async fn the_install_endpoint_keeps_its_error_contract_while_poking() {
 /// unmissable proof on disk — and asserts the marker stays untouched. Confirmed to
 /// fail against the regression it guards: swapping either handler's
 /// `&state.automatic_poke_engine` argument for
-/// `&Some(state.model_snapshot_service.clone())` turns this red (verified locally,
+/// `&Some(state.launch_probe_service.clone())` turns this red (verified locally,
 /// then reverted; see the PR body / commit message for the exact mutation and its
 /// failure output).
 #[tokio::test]

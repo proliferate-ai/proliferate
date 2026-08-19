@@ -8,8 +8,6 @@ const USER_PREFERENCE_KEYS = [
   "windowZoomId",
   "defaultChatAgentKind",
   "defaultChatModelIdByAgentKind",
-  "chatModelVisibilityOverridesByAgentKind",
-  "defaultSessionModeByAgentKind",
   "defaultLiveSessionControlValuesByAgentKind",
   "defaultOpenInTargetId",
   "branchPrefixType",
@@ -38,6 +36,7 @@ const MIGRATED_USER_PREFERENCE_KEYS = [
 const MIGRATED_USER_PREFERENCE_KEY_SET = new Set<string>(MIGRATED_USER_PREFERENCE_KEYS);
 
 const DEPRECATED_USER_PREFERENCE_KEYS = [
+  "chatModelVisibilityOverridesByAgentKind",
   "onboardingCompletedVersion",
   "onboardingPrimaryGoalId",
   "pluginsInCodingSessionsEnabled",
@@ -45,6 +44,7 @@ const DEPRECATED_USER_PREFERENCE_KEYS = [
   "cloudRuntimeInputSyncEnabled",
   "dismissedAvailableVersion",
   "acknowledgedAvailableVersion",
+  "defaultSessionModeByAgentKind",
 ] as const;
 
 const DEPRECATED_USER_PREFERENCE_KEY_SET = new Set<string>(DEPRECATED_USER_PREFERENCE_KEYS);

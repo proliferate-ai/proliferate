@@ -242,6 +242,9 @@ async def test_slack_refresh_preserves_scopes_when_provider_omits_them(
         credential_ciphertext=encrypt_json(bundle, secret=settings.cloud_secret_key),
         credential_format="oauth-bundle-v1",
     )
+    original_auth_version = account.auth_version
+    original_grant_version = account.grant_version
+    original_credential_version = account.credential_version
 
     async def _refresh_token(**_kwargs: object) -> TokenResponse:
         return TokenResponse(
@@ -267,6 +270,9 @@ async def test_slack_refresh_preserves_scopes_when_provider_omits_them(
     )
     assert refreshed_bundle["scopes"] == list(SLACK_SCOPES)
     assert refreshed_bundle["accessToken"] == "replacement-access-token"
+    assert refreshed.auth_version == original_auth_version + 1
+    assert refreshed.grant_version == original_grant_version
+    assert refreshed.credential_version == original_credential_version + 1
 
 
 @pytest.mark.asyncio
@@ -350,56 +356,6 @@ async def test_oauth_refresh_uses_account_pinned_retiring_client(
     assert access.headers.get("Authorization") == "Bearer replacement-access-token"
     assert refresh_kwargs["client_id"] == "old-client"
     assert refresh_kwargs["client_secret"] == "old-secret"
-
-
-@pytest.mark.asyncio
-async def test_slack_refresh_accepts_nonempty_scope_subset_below_ceiling(
-    db_session: AsyncSession,
-    client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    bundle = {
-        "issuer": "https://slack.com",
-        "resource": "https://mcp.slack.com/mcp",
-        "clientId": "slack-client",
-        "accessToken": "expired-access-token",
-        "refreshToken": "slack-refresh-token",
-        "expiresAt": (datetime.now(UTC) - timedelta(minutes=5)).isoformat(),
-        "scopes": list(SLACK_SCOPES),
-        "tokenEndpoint": "https://slack.com/api/oauth.v2.user.access",
-        "redirectUri": "https://api.example.com/v1/cloud/integrations/oauth/callback",
-    }
-    definition, account = await _account_for(
-        db_session,
-        namespace="slack",
-        auth_kind="oauth2",
-        credential_ciphertext=encrypt_json(bundle, secret=settings.cloud_secret_key),
-        credential_format="oauth-bundle-v1",
-    )
-
-    async def _refresh_token(**_kwargs: object) -> TokenResponse:
-        return TokenResponse(
-            access_token="subset-access-token",
-            refresh_token=None,
-            expires_at=datetime.now(UTC) + timedelta(hours=1),
-            scopes=("search:read.private", "search:read.public"),
-        )
-
-    monkeypatch.setattr(integration_access, "refresh_token", _refresh_token)
-
-    access = await ensure_provider_access(
-        db_session, account_record=account, definition_record=definition
-    )
-
-    assert access.headers.get("Authorization") == "Bearer subset-access-token"
-    await db_session.rollback()
-    refreshed = await accounts_store.get_account(db_session, account.id)
-    assert refreshed is not None
-    assert refreshed.credential_ciphertext is not None
-    refreshed_bundle = decrypt_json(
-        refreshed.credential_ciphertext, secret=settings.cloud_secret_key
-    )
-    assert refreshed_bundle["scopes"] == ["search:read.public", "search:read.private"]
 
 
 @pytest.mark.asyncio

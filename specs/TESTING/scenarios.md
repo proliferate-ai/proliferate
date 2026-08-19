@@ -473,10 +473,9 @@ a new runtime-dependent spec, respectively:
   `seedIncompleteEnabledOrgSsoConnection` helper (`tests/intent/stack/seed.ts`).
 - `tests/intent/specs/gateway-eligibility.spec.ts` (new): after pushing a
   gateway-only agent-auth state (no native credential), session creation
-  REJECTS a bare native model selector (`"default"`) and ACCEPTS a real
-  gateway-catalog id — the runtime-level half of `catalog::service_tests::
-  gateway_context_gates_native_ids_and_offers_only_gateway_models`, proven
-  against the real AnyHarness HTTP API with no LLM call ever made. Needs the
+  REJECTS an ID absent from the target's current `HarnessLaunchOptions` and
+  ACCEPTS an exact observed ID, proven against the real AnyHarness HTTP API
+  with no LLM call ever made. Needs the
   local runtime, which the CURRENT CI profile skips
   (`TIER2_INTENT_SKIP_RUNTIME=1`) — self-skips (not fails) when unreachable,
   matching `workspace-entry.spec.ts`'s documented precedent for the identical
@@ -549,10 +548,11 @@ Budget (ruled 2026-07-08): on an already-running sandbox, worktree creation
 completes in **≤ 1 s** measured at the runtime operation (sandbox wake time,
 if any, is T3-PROV-2's budget, not this one).
 
-### T3-CHAT-1: every harness × its cheapest model, via the gateway
-For **each cataloged harness**, in **both lanes**, using the harness's
-cheapest model served through the gateway (dedicated test key; model set
-below): create session, send one message, await turn end.
+### T3-CHAT-1: every harness × an observed qualification model, via the gateway
+For **each cataloged harness**, in **both lanes**, use a qualification model
+whose exact ID is present in that target's current `HarnessLaunchOptions`
+(dedicated test key; provider candidates below): create session, send one
+message, await turn end.
 Assert (outcomes, not transcripts):
 - non-empty assistant reply arrives;
 - **installed harness CLI version == catalog pin, asserted before the chat**
@@ -562,9 +562,10 @@ Assert (outcomes, not transcripts):
 Per-harness failure = per-harness red (feeds the catalog-bump gate), not
 whole-suite red.
 
-Gateway test-model set — one cheapest model per provider family the harnesses
-need, pinned in the test key's allowlist (exact IDs resolved against the
-catalog at build time):
+Gateway qualification candidates — one low-cost model per provider family the
+harnesses need, pinned in the test key's allowlist. The test selects a candidate
+only after the target probe reports that exact ID; an absent candidate blocks
+that qualification cell rather than being aliased or replaced:
 - Anthropic: Haiku-class (Claude Code; also OpenCode's default lane)
 - OpenAI: exact `gpt-5.2` for Codex qualification (no fallback)
 - Google: Flash-class (Gemini CLI)
@@ -580,15 +581,15 @@ totals. Its `T3-AUTHROUTE-1` user-key coverage remains required.
 
 ### T3-CFG-1: live config options apply in an existing session
 Added 2026-07-08 (Pablo: "occasionally this breaks"). In an **existing** chat
-session (not a fresh one), per harness: enumerate the harness's exposed
-configuration options from the catalog/harness contract and cycle each one —
-every selectable model (switch → send a message → the reply is attributed to
-the switched model), every mode/approval-policy-style enum (switch → the
-session accepts it and behaves accordingly, asserted at the harness-contract
-level, e.g. the option readback/state event — not by interpreting prose).
-Assert: each option value round-trips (set → readback matches) and the session
-survives every switch. Options are **enumerated from the catalog at build
-time, never hardcoded**, so a new option is automatically in scope.
+session (not a fresh one), per harness: enumerate the complete current
+`SessionLiveConfigSnapshot` and cycle every advertised model and generic
+control value. A model switch must apply before the next turn; each control
+must be confirmed by exact live readback rather than prose interpretation.
+Assert: each value round-trips (set → current value matches), the returned
+snapshot continues to include all available options, and the session survives
+every switch. Values are enumerated from the live snapshot at run time, never
+from a catalog or hardcoded table, so a newly observed option is automatically
+in scope.
 Per-harness × per-option red. Runs in the local lane by default (cheap);
 sandbox lane on the release train.
 
@@ -751,8 +752,9 @@ template (`apps/packages/product-client/src/config/workflows/
 starter-templates.ts`) verbatim: one `agent` node ("research") whose prompt
 uses `@input:question` and writes findings into `@doc:findings`, then one
 `human_in_loop` node ("review") gating completion. Model resolution reuses
-T3-CHAT-1's catalog-driven cheapest-Anthropic-family picker against the fixed
-starting harness `claude` (T3-SESSION-1's single-fixed-harness-cell pattern).
+T3-CHAT-1's cheapest eligible model from the selected target's exact
+`HarnessLaunchOptions` against the fixed starting harness `claude`
+(T3-SESSION-1's single-fixed-harness-cell pattern).
 Steps: `PUT /v1/workflow-runs/{run_id}` with the frozen invocation body
 (`{schemaVersion: 2, workflowDefinitionId, definition, arguments,
 placement}`) → node 1 (research) runs a real turn → the review gate parks the

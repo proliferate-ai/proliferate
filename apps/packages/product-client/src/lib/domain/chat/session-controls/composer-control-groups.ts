@@ -3,14 +3,14 @@ import type {
   SupportedLiveControlKey,
 } from "#product/lib/domain/chat/session-controls/session-controls";
 import type { ConfiguredSessionControlKey } from "#product/lib/domain/chat/session-controls/presentation";
-import type { WorkspaceSurface } from "@anyharness/sdk";
 
-export type ComposerModeControlDescriptor = LiveSessionControlDescriptor & {
+export type ComposerConfiguredControlDescriptor = LiveSessionControlDescriptor & {
   key: ConfiguredSessionControlKey;
 };
 
 export interface ComposerSessionControlGroups {
-  modeControl: ComposerModeControlDescriptor | null;
+  modeControl: ComposerConfiguredControlDescriptor | null;
+  accessControl: ComposerConfiguredControlDescriptor | null;
   reasoningEffortControl: LiveSessionControlDescriptor | null;
   fastModeControl: LiveSessionControlDescriptor | null;
   overflowControls: LiveSessionControlDescriptor[];
@@ -30,36 +30,25 @@ export function buildComposerSessionControlGroups(
 ): ComposerSessionControlGroups {
   const uniqueControls = uniqueSessionControls(controls);
   const modeControl = resolveComposerModeControl(uniqueControls);
+  const accessControl = resolveComposerAccessControl(uniqueControls, modeControl);
   const reasoningEffortControl = resolveReasoningEffortControl(uniqueControls);
   const fastModeControl = uniqueControls.find((control) =>
     control.key === "fast_mode" && control.kind === "toggle"
   ) ?? null;
   const promotedControls = new Set<LiveSessionControlDescriptor>([
     ...(modeControl ? [modeControl] : []),
+    ...(accessControl ? [accessControl] : []),
     ...(reasoningEffortControl ? [reasoningEffortControl] : []),
     ...(fastModeControl ? [fastModeControl] : []),
   ]);
 
   return {
     modeControl,
+    accessControl,
     reasoningEffortControl,
     fastModeControl,
     overflowControls: uniqueControls.filter((control) => !promotedControls.has(control)),
   };
-}
-
-export function filterComposerSessionControlsForSurface(
-  controls: LiveSessionControlDescriptor[],
-  surface: WorkspaceSurface | null | undefined,
-): LiveSessionControlDescriptor[] {
-  if (surface !== "cowork") {
-    return controls;
-  }
-
-  // Cowork owns its access policy, so the raw approval preset remains hidden.
-  // Working mode (`collaboration_mode`) and independent tuning dimensions such
-  // as reasoning and fast mode still belong in the composer.
-  return controls.filter((control) => control.key !== "mode");
 }
 
 export function uniqueSessionControls(
@@ -82,20 +71,32 @@ export function uniqueSessionControls(
 
 function resolveComposerModeControl(
   controls: LiveSessionControlDescriptor[],
-): ComposerModeControlDescriptor | null {
+): ComposerConfiguredControlDescriptor | null {
   const collaborationMode = controls.find((control) =>
-    control.key === "collaboration_mode" && control.options.length >= 2
+    control.key === "collaboration_mode"
   );
   if (collaborationMode) {
-    return collaborationMode as ComposerModeControlDescriptor;
+    return collaborationMode as ComposerConfiguredControlDescriptor;
   }
 
   const legacyMode = controls.find((control) => control.key === "mode");
   if (legacyMode && hasWorkingModeChoice(legacyMode)) {
-    return legacyMode as ComposerModeControlDescriptor;
+    return legacyMode as ComposerConfiguredControlDescriptor;
   }
 
   return null;
+}
+
+function resolveComposerAccessControl(
+  controls: LiveSessionControlDescriptor[],
+  modeControl: ComposerConfiguredControlDescriptor | null,
+): ComposerConfiguredControlDescriptor | null {
+  const accessControl = controls.find((control) =>
+    control.key === "mode" && control !== modeControl
+  );
+  return accessControl
+    ? accessControl as ComposerConfiguredControlDescriptor
+    : null;
 }
 
 function resolveReasoningEffortControl(

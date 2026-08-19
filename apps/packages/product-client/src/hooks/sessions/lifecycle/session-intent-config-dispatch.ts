@@ -146,15 +146,12 @@ export async function dispatchConfigIntent(
             ?? null,
           modeId:
             effectiveLiveConfig.normalizedControls.mode?.currentValue
-            ?? response.session.modeId
-            ?? latestSlot.modeId
             ?? null,
           transcript: {
             ...latestSlot.transcript,
             currentModeId:
               effectiveLiveConfig.normalizedControls.mode?.currentValue
-              ?? response.session.modeId
-              ?? latestSlot.transcript.currentModeId,
+              ?? null,
           },
         });
       } else {

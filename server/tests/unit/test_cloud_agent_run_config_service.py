@@ -12,11 +12,8 @@ from proliferate.constants.cloud_agent_run_config import (
     CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_SYSTEM,
 )
 from proliferate.db.store.cloud_agent_run_config import CloudAgentRunConfigRecord
-from proliferate.server.catalogs.models import AgentCatalogResponse
-from proliferate.server.catalogs.service import read_agent_catalog
 from proliferate.server.cloud.agent_run_config.domain.resolve import (
     ResolvedAgentRunConfig,
-    canonical_model_id_for_config,
     resolve_runtime_values,
     validate_config_execution_scope,
     validate_config_values,
@@ -69,107 +66,25 @@ def _run_config_record(**overrides: object) -> CloudAgentRunConfigRecord:
     return CloudAgentRunConfigRecord(**values)  # type: ignore[arg-type]
 
 
-def _alias_catalog() -> AgentCatalogResponse:
-    """Synthetic v2 catalog exercising alias resolution (the shipped document has none)."""
-    return AgentCatalogResponse.model_validate(
-        {
-            "schemaVersion": 2,
-            "catalogVersion": "2026-06-10.0",
-            "generatedAt": "2026-06-10T00:00:00Z",
-            "agents": [
-                {
-                    "kind": "cursor",
-                    "displayName": "Cursor",
-                    "harness": {"agentProcess": {"version": "1.0.0"}},
-                    "authContexts": [{"id": "cursor-login", "authSlotId": "cursor-login"}],
-                    "session": {
-                        "controls": [
-                            {"key": "model", "mapping": {"createField": "modelId"}},
-                            {"key": "mode", "values": ["agent", "plan"]},
-                        ],
-                        "models": [
-                            {
-                                "id": "composer-2.5",
-                                "displayName": "composer-2.5",
-                                "aliases": ["composer-2", "composer-2-fast"],
-                                "availability": {"anyOf": ["cursor-login"]},
-                                "defaultVisible": True,
-                                "controls": {
-                                    "mode": {"values": ["agent", "plan"], "default": "agent"}
-                                },
-                                "status": "active",
-                            }
-                        ],
-                    },
-                    "provenance": {"probedAt": "2026-06-10T00:00:00Z"},
-                }
-            ],
-        }
+def test_saved_intent_preserves_raw_ids_without_catalog_canonicalization() -> None:
+    assert (
+        validate_config_values(
+            agent_kind="future-harness",
+            model_id="future/model",
+            control_values={"future_control": "future-value"},
+        )
+        is None
     )
-
-
-def test_model_aliases_resolve_to_canonical_ids_and_fill_model_defaults() -> None:
-    catalog = _alias_catalog()
-
-    for alias in ("composer-2", "composer-2-fast"):
-        assert (
-            validate_config_values(
-                catalog,
-                agent_kind="cursor",
-                model_id=alias,
-                control_values={},
-            )
-            is None
-        )
-        assert (
-            canonical_model_id_for_config(catalog, agent_kind="cursor", model_id=alias)
-            == "composer-2.5"
-        )
-
     resolved = resolve_runtime_values(
-        catalog,
-        _run_config_record(agent_kind="cursor", model_id="composer-2"),
+        _run_config_record(
+            agent_kind="future-harness",
+            model_id="future/model",
+            control_values_json={"future_control": "future-value"},
+        )
     )
     assert isinstance(resolved, ResolvedAgentRunConfig)
-    assert resolved.model_id == "composer-2.5"
-    assert resolved.control_values == {"mode": "agent"}
-
-
-def test_model_ids_validate_and_resolve_against_served_catalog() -> None:
-    catalog = read_agent_catalog().catalog
-    cases = [
-        ("cursor", "composer-2.5", "composer-2.5"),
-        ("cursor", "gpt-5.3-codex", "gpt-5.3-codex"),
-        ("claude", "sonnet", "sonnet"),
-        ("codex", "gpt-5.5", "gpt-5.5"),
-    ]
-
-    for agent_kind, legacy_model_id, canonical_model_id in cases:
-        assert (
-            validate_config_values(
-                catalog,
-                agent_kind=agent_kind,
-                model_id=legacy_model_id,
-                control_values={},
-            )
-            is None
-        )
-        assert (
-            canonical_model_id_for_config(
-                catalog,
-                agent_kind=agent_kind,
-                model_id=legacy_model_id,
-            )
-            == canonical_model_id
-        )
-
-        resolved = resolve_runtime_values(
-            catalog,
-            _run_config_record(agent_kind=agent_kind, model_id=legacy_model_id),
-        )
-
-        assert isinstance(resolved, ResolvedAgentRunConfig)
-        assert resolved.model_id == canonical_model_id
+    assert resolved.model_id == "future/model"
+    assert resolved.control_values == {"future_control": "future-value"}
 
 
 @pytest.mark.asyncio

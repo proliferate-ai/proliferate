@@ -2,7 +2,6 @@ import type {
   DesktopAgentCatalogStatus,
   DesktopSessionDefaultControl,
 } from "#product/lib/domain/agents/cloud-launch-catalog";
-import { resolveSavedModelId } from "#product/lib/domain/agents/saved-model-intent";
 
 export interface SessionConfigModel {
   id: string;
@@ -37,7 +36,7 @@ export function defaultModelIdForAgentKind(
 ): string | undefined {
   if (!agentKind) return undefined;
   const registry = resolveModelRegistry(modelRegistries, agentKind);
-  return registry?.defaultModelId ?? registry?.models.find((model) => model.isDefault)?.id ?? registry?.models[0]?.id;
+  return registry?.defaultModelId ?? undefined;
 }
 
 export function resolveModelRegistry(
@@ -57,39 +56,11 @@ export function resolveModelForRegistry(
   const normalizedModelId = modelId?.trim();
   return (
     (normalizedModelId
-      ? resolveSavedRegistryModel(registry, normalizedModelId)
+      ? registry.models.find((model) => model.id === normalizedModelId) ?? null
       : null)
     ?? registry.models.find((model) => model.id === registry.defaultModelId)
-    ?? registry.models.find((model) => model.isDefault)
-    ?? registry.models[0]
     ?? null
   );
-}
-
-/**
- * Saved-id resolution against the registry's catalog ids: exact > alias >
- * variant-prefix ("gpt-x/high" lands on "gpt-x") via `resolveSavedModelId`,
- * so a re-keyed v2 catalog still honors stored preferences.
- */
-function resolveSavedRegistryModel(
-  registry: SessionConfigModelRegistry,
-  savedModelId: string,
-): SessionConfigModel | null {
-  const aliases: Record<string, string> = {};
-  for (const model of registry.models) {
-    for (const alias of model.aliases ?? []) {
-      aliases[alias] ??= model.id;
-    }
-  }
-
-  const resolvedId = resolveSavedModelId(
-    savedModelId,
-    registry.models.map((model) => model.id),
-    aliases,
-  );
-  return resolvedId
-    ? registry.models.find((model) => model.id === resolvedId) ?? null
-    : null;
 }
 
 export function resolveModelInfo(

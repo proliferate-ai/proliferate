@@ -8,7 +8,7 @@ export interface ChatPromptRecovery {
   workspaceId: string;
   agentKind: string;
   modelId: string;
-  modeId: string | null;
+  controlValues: Record<string, string>;
   errorMessage: string;
   prompt: PromptOutboxEntry;
 }
@@ -61,6 +61,7 @@ export const useChatPromptRecoveryStore = create<ChatPromptRecoveryState>((set) 
 function cloneRecovery(recovery: ChatPromptRecovery): ChatPromptRecovery {
   return {
     ...recovery,
+    controlValues: { ...recovery.controlValues },
     prompt: {
       ...recovery.prompt,
       blocks: recovery.prompt.blocks.map((block) => ({ ...block })),

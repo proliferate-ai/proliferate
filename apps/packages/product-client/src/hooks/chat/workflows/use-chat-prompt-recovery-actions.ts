@@ -31,7 +31,7 @@ export function useChatPromptRecoveryActions(workspaceUiKey: string | null) {
         optimisticContentParts: recovery.prompt.contentParts.map((part) => ({ ...part })),
         agentKind: recovery.agentKind,
         modelId: recovery.modelId,
-        ...(recovery.modeId ? { modeId: recovery.modeId } : {}),
+        launchControlValues: recovery.controlValues,
         workspaceId: recovery.workspaceId,
         promptId: recovery.prompt.clientPromptId,
       });

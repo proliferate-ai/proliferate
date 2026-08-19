@@ -9,11 +9,6 @@ from proliferate.db.store.agent_gateway.api_keys import (
     list_agent_api_keys,
     revoke_agent_api_key,
 )
-from proliferate.db.store.agent_gateway.catalog_overrides import (
-    delete_catalog_override,
-    get_catalog_override,
-    upsert_catalog_override,
-)
 from proliferate.db.store.agent_gateway.credits import (
     count_topup_grants,
     create_llm_credit_grant,
@@ -60,10 +55,6 @@ from proliferate.db.store.agent_gateway.harness_settings import (
     list_harness_settings_for_surface,
     put_harness_settings,
 )
-from proliferate.db.store.agent_gateway.model_snapshots import (
-    create_model_snapshot,
-    get_active_model_snapshot,
-)
 from proliferate.db.store.agent_gateway.policy import (
     OrgMemberRouteSelectionRecord,
     get_org_agent_policy,
@@ -74,11 +65,9 @@ from proliferate.db.store.agent_gateway.records import (
     AgentApiKeyRecord,
     AgentAuthDeliveryAckRecord,
     AgentAuthSelectionRecord,
-    AgentCatalogOverrideRecord,
     AgentGatewayEnrollmentKeyRecord,
     AgentGatewayEnrollmentRecord,
     AgentLlmUsageImportCursorRecord,
-    AgentModelSnapshotRecord,
     DesiredAuthSource,
     LlmCreditBalanceRecord,
     LlmCreditGrantRecord,
@@ -110,11 +99,9 @@ __all__ = [
     "AgentApiKeyRecord",
     "AgentAuthDeliveryAckRecord",
     "AgentAuthSelectionRecord",
-    "AgentCatalogOverrideRecord",
     "AgentGatewayEnrollmentKeyRecord",
     "AgentGatewayEnrollmentRecord",
     "AgentLlmUsageImportCursorRecord",
-    "AgentModelSnapshotRecord",
     "DesiredAuthSource",
     "LlmCreditBalanceRecord",
     "LlmCreditGrantRecord",
@@ -127,14 +114,10 @@ __all__ = [
     "create_agent_api_key",
     "create_agent_provider_config",
     "create_llm_credit_grant",
-    "create_model_snapshot",
-    "delete_catalog_override",
     "ensure_enrollment_row",
     "get_active_enrollment_key",
-    "get_active_model_snapshot",
     "get_agent_api_key_decrypted",
     "get_agent_provider_config_decrypted",
-    "get_catalog_override",
     "get_delivery_ack",
     "get_enrollment_by_id",
     "get_enrollment_by_virtual_key_id",
@@ -182,6 +165,5 @@ __all__ = [
     "sum_active_grants_usd",
     "sum_usage_cost_usd",
     "touch_auth_selection_revisions",
-    "upsert_catalog_override",
     "upsert_enrollment_key",
 ]

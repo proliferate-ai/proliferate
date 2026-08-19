@@ -83,6 +83,18 @@ pub(super) fn session_record(agent_kind: &str) -> SessionRecord {
     }
 }
 
+/// Insert a startable session row: a current observation for its harness plus
+/// the empty launch intent every persisted session row must carry.
+fn insert_startable_session(state: &crate::app::AppState, record: &SessionRecord) {
+    test_support::seed_observed_launch_options(&state.launch_options_service, &record.agent_kind);
+    state
+        .session_service
+        .store()
+        .insert(record)
+        .expect("insert session");
+    state.session_service.store().seed_empty_launch_intent(&record.id);
+}
+
 pub(super) fn link_record(
     id: &str,
     relation: SessionLinkRelation,
@@ -496,7 +508,7 @@ async fn create_and_start_session_rejects_missing_checkout_without_inserting_row
             "workspace-missing",
             "claude",
             None,
-            None,
+            &std::collections::BTreeMap::new(),
             None,
             vec![],
             None,
@@ -574,7 +586,7 @@ async fn create_persisted_internal_session_rejects_missing_checkout_without_inse
             workspace_id: "workspace-missing".to_string(),
             agent_kind: "claude".to_string(),
             model_id: None,
-            mode_id: None,
+            control_values: Default::default(),
             origin: OriginContext::api_local_runtime(),
             preselected_session_id: None,
         })
@@ -649,11 +661,7 @@ async fn ensure_live_session_rejects_missing_checkout_for_existing_session() {
     // Persist a dormant session row for that workspace directly in the store.
     let mut record = session_record("claude");
     record.workspace_id = "workspace-missing".to_string();
-    state
-        .session_service
-        .store()
-        .insert(&record)
-        .expect("insert session");
+    insert_startable_session(&state, &record);
 
     let error = state
         .session_runtime
@@ -776,11 +784,7 @@ exit 0
 
     let mut record = session_record("opencode");
     record.workspace_id = "workspace-revoked".to_string();
-    state
-        .session_service
-        .store()
-        .insert(&record)
-        .expect("insert session");
+    insert_startable_session(&state, &record);
 
     let error = state
         .session_runtime
@@ -887,11 +891,7 @@ exit 0
 
     let mut record = session_record("opencode");
     record.workspace_id = "workspace-selection-missing".to_string();
-    state
-        .session_service
-        .store()
-        .insert(&record)
-        .expect("insert session");
+    insert_startable_session(&state, &record);
 
     let error = state
         .session_runtime
@@ -981,11 +981,7 @@ exit 0
     record.workspace_id = "workspace-fork-revoked".to_string();
     record.last_prompt_at = Some("2026-03-25T00:05:00Z".to_string());
     record.action_capabilities_json = Some(r#"{"fork":true}"#.to_string());
-    state
-        .session_service
-        .store()
-        .insert(&record)
-        .expect("insert session");
+    insert_startable_session(&state, &record);
 
     let error = state
         .session_runtime

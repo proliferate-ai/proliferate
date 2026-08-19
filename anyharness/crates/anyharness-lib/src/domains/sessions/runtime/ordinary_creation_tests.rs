@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use super::*;
@@ -36,12 +37,7 @@ fn test_state(label: &str, program: &str) -> (AppState, AgentProgramGuard) {
     ));
     let workspace_path = runtime_home.join("workspace");
     std::fs::create_dir_all(&workspace_path).unwrap();
-    std::fs::create_dir_all(runtime_home.join("secrets")).unwrap();
-    std::fs::write(
-        runtime_home.join("secrets/global.env"),
-        "ANTHROPIC_API_KEY=test-not-a-real-key\n",
-    )
-    .unwrap();
+    test_support::install_scripted_claude_auth(&runtime_home);
     let agent_program = runtime_home.join("claude-agent-stub");
     std::fs::write(&agent_program, program).unwrap();
     crate::integrations::agent_cli::executable::make_executable(&agent_program).unwrap();
@@ -54,6 +50,7 @@ fn test_state(label: &str, program: &str) -> (AppState, AgentProgramGuard) {
         AgentSeedStore::not_configured_dev(),
     )
     .unwrap();
+    test_support::seed_scripted_claude_launch_options(&state.launch_options_service);
     test_support::seed_workspace_with_repo_root(
         &state.db,
         "workspace-1",
@@ -70,7 +67,7 @@ fn create_known_record(runtime: &SessionRuntime, session_id: &str) -> SessionRec
             "claude",
             Some(session_id),
             None,
-            None,
+            &BTreeMap::new(),
             None,
             Vec::new(),
             None,
@@ -97,7 +94,7 @@ async fn start_failure_retires_only_new_handle_and_deletes_new_row() {
             "workspace-1",
             "claude",
             None,
-            None,
+            &BTreeMap::new(),
             None,
             "caller-session".into(),
             "Caller".into(),
@@ -132,7 +129,7 @@ async fn subagent_start_failure_compensates_both_child_and_relationship() {
             "workspace-1",
             "claude",
             None,
-            None,
+            &BTreeMap::new(),
             "initial subagent task".into(),
             parent_id,
             "Parent",
@@ -186,7 +183,7 @@ async fn subagent_fanout_failure_rolls_back_the_atomic_child_insert() {
             "workspace-1",
             "claude",
             None,
-            None,
+            &BTreeMap::new(),
             "must not survive".into(),
             parent_id,
             "Parent",

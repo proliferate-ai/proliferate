@@ -71,13 +71,11 @@ fn build_session_launch_env_sets_requested_model_for_claude() {
     );
 }
 
-/// The catalog's `"default"` model row (`catalogs/agents/catalog.json`,
-/// claude's `models[]`) is a sentinel meaning "use the harness's own
-/// default", not a real model name — the claude CLI rejects
-/// `ANTHROPIC_MODEL=default` with `model_not_found`. Launch env must omit the
-/// var entirely so the CLI falls back to its own default.
+/// Claude can observe `default` as a selector meaning "use the harness's own
+/// default". The CLI rejects `ANTHROPIC_MODEL=default`, so spawn env must omit
+/// it; the session still retains the exact selected value for live apply/readback.
 #[test]
-fn build_session_launch_env_omits_model_for_claude_default_sentinel() {
+fn build_session_launch_env_omits_anthropic_model_for_claude_default_selector() {
     let env = build_session_launch_env(
         &resolved_agent(AgentKind::Claude, Some("/tmp/managed/claude")),
         Some("default"),
@@ -86,7 +84,7 @@ fn build_session_launch_env_omits_model_for_claude_default_sentinel() {
 
     assert!(
         !env.contains_key("ANTHROPIC_MODEL"),
-        "sentinel \"default\" must not be forwarded as ANTHROPIC_MODEL, got {env:?}"
+        "selector \"default\" must not be forwarded as ANTHROPIC_MODEL, got {env:?}"
     );
 }
 
@@ -104,12 +102,12 @@ fn build_session_launch_env_sets_requested_model_for_real_claude_model_id() {
     );
 }
 
-/// The sentinel filter is an exact (case-insensitive) match, not a
+/// The selector filter is an exact (case-insensitive) match, not a
 /// contains-match. A real model id that merely happens to contain the word
 /// "default" is a legitimate model name and must still be forwarded — this
 /// guards against the filter ever widening to `.contains(..)`.
 #[test]
-fn build_session_launch_env_forwards_model_id_that_merely_contains_the_sentinel_word() {
+fn build_session_launch_env_forwards_model_id_that_merely_contains_default() {
     let env = build_session_launch_env(
         &resolved_agent(AgentKind::Claude, Some("/tmp/managed/claude")),
         Some("default-ish-model"),
@@ -122,11 +120,11 @@ fn build_session_launch_env_forwards_model_id_that_merely_contains_the_sentinel_
     );
 }
 
-/// The sentinel filter only ever skips inserting `ANTHROPIC_MODEL`; it must
+/// The selector filter only ever skips inserting `ANTHROPIC_MODEL`; it must
 /// not disturb any other env this layer contributes (e.g.
 /// `CLAUDE_CODE_EXECUTABLE`).
 #[test]
-fn build_session_launch_env_keeps_other_env_when_sentinel_is_filtered() {
+fn build_session_launch_env_keeps_other_env_when_default_selector_is_filtered() {
     let env = build_session_launch_env(
         &resolved_agent(AgentKind::Claude, Some("/tmp/managed/claude")),
         Some("default"),

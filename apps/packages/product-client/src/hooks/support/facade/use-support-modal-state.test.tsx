@@ -97,6 +97,9 @@ const PREPARED_ARTIFACT = {
 /** Put the hook on a host that can actually prepare a snapshot. */
 function enableSupportSnapshotHost() {
   diagnosticsMocks.supportSnapshot = snapshotBridge;
+  snapshotBridge.cancelPreparation.mockResolvedValue(undefined);
+  snapshotBridge.saveArchive.mockResolvedValue("diagnostics.zip");
+  snapshotBridge.deleteArtifact.mockResolvedValue(undefined);
   snapshotBridge.beginPreparation.mockResolvedValue({
     preparationId: "prep-1",
     preparationOperationId: "op-1",
@@ -341,21 +344,22 @@ describe("useSupportModalState", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("holds Send while a Save a copy preparation owns the admission slot", async () => {
+  it("holds Send through Save preparation, archive, and cleanup", async () => {
     enableSupportSnapshotHost();
-    let releaseEvidence: (() => void) | null = null;
-    access.collectResolvedSupportSessionEvidence.mockImplementation(() =>
-      new Promise((resolve) => {
-        releaseEvidence = () => resolve({
-          state: "omitted",
-          sessionEvidenceJson: null,
-          sessionCollection: {
-            state: "omitted",
-            reason: "no_selected_bundled_local_workspace",
-          },
-        });
-      })
-    );
+    const evidence = deferred<{
+      state: "omitted";
+      sessionEvidenceJson: null;
+      sessionCollection: {
+        state: "omitted";
+        reason: "no_selected_bundled_local_workspace";
+      };
+    }>();
+    const archive = deferred<string | null>();
+    const deletion = deferred<void>();
+    access.collectResolvedSupportSessionEvidence.mockReturnValue(evidence.promise);
+    snapshotBridge.saveArchive.mockReturnValue(archive.promise);
+    snapshotBridge.deleteArtifact.mockReturnValue(deletion.promise);
+    const captured = captureDispatchedJob();
     const rendered = renderHook(() =>
       useSupportModalState({ kind: "bug", onClose: vi.fn() })
     );
@@ -365,8 +369,9 @@ describe("useSupportModalState", () => {
       rendered.result.current.snapshotConsent.setConsent(true);
     });
     expect(rendered.result.current.canSend).toBe(true);
+    const staleSend = rendered.result.current.handleSend;
 
-    let saving: Promise<void> | null = null;
+    let saving: Promise<unknown> | null = null;
     act(() => {
       saving = rendered.result.current.snapshotConsent.saveCopy();
     });
@@ -376,12 +381,69 @@ describe("useSupportModalState", () => {
     expect(rendered.result.current.canSend).toBe(false);
 
     await act(async () => {
-      releaseEvidence?.();
-      await saving;
+      await staleSend();
     });
+    expect(snapshotBridge.beginPreparation).toHaveBeenCalledTimes(1);
+    expect(snapshotBridge.finishPreparation).not.toHaveBeenCalled();
+    expect(captured.current).toBeNull();
+    expect(rendered.result.current.message).toBe("It broke");
+
+    evidence.resolve({
+      state: "omitted",
+      sessionEvidenceJson: null,
+      sessionCollection: {
+        state: "omitted",
+        reason: "no_selected_bundled_local_workspace",
+      },
+    });
+    await waitFor(() => expect(snapshotBridge.saveArchive).toHaveBeenCalledTimes(1));
+    expect(rendered.result.current.snapshotConsent.isPreparing).toBe(false);
+    expect(rendered.result.current.snapshotConsent.isBusy).toBe(true);
+    expect(rendered.result.current.canSend).toBe(false);
+
+    archive.resolve("diagnostics.zip");
+    await waitFor(() => expect(snapshotBridge.deleteArtifact).toHaveBeenCalledTimes(1));
+    expect(rendered.result.current.canSend).toBe(false);
+
+    deletion.resolve();
+    await act(async () => { await saving; });
 
     expect(snapshotBridge.saveArchive).toHaveBeenCalledTimes(1);
+    expect(snapshotBridge.deleteArtifact).toHaveBeenCalledTimes(1);
     expect(rendered.result.current.canSend).toBe(true);
+  });
+
+  it("blocks consented Send after unconfirmed cleanup but permits text-only Send", async () => {
+    enableSupportSnapshotHost();
+    snapshotBridge.deleteArtifact.mockRejectedValue(new Error("directory sync failed"));
+    const captured = captureDispatchedJob();
+    const onClose = vi.fn();
+    const rendered = renderHook(() =>
+      useSupportModalState({ kind: "bug", onClose })
+    );
+
+    act(() => {
+      rendered.result.current.setMessage("It broke");
+      rendered.result.current.snapshotConsent.setConsent(true);
+    });
+    await act(async () => {
+      expect(await rendered.result.current.snapshotConsent.saveCopy()).toEqual({
+        state: "saved",
+        cleanup: "unconfirmed",
+      });
+    });
+
+    expect(rendered.result.current.snapshotConsent.snapshotActionsBlocked).toBe(true);
+    expect(rendered.result.current.canSend).toBe(false);
+    const beginCount = snapshotBridge.beginPreparation.mock.calls.length;
+    act(() => { rendered.result.current.snapshotConsent.setConsent(false); });
+    expect(rendered.result.current.canSend).toBe(true);
+
+    await act(async () => { await rendered.result.current.handleSend(); });
+    expect(captured.current).toMatchObject({ supportSnapshot: { kind: "none" } });
+    expect(snapshotBridge.beginPreparation).toHaveBeenCalledTimes(beginCount);
+    expect(snapshotBridge.finishPreparation).toHaveBeenCalledTimes(beginCount);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("supersedes an in-flight preparation when the modal is cancelled", async () => {
@@ -425,3 +487,13 @@ describe("useSupportModalState", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}

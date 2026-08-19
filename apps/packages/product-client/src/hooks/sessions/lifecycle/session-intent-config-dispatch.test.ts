@@ -228,7 +228,7 @@ describe("dispatchConfigIntent", () => {
     expect(
       useUserPreferencesStore.getState().defaultLiveSessionControlValuesByAgentKind,
     ).toEqual({
-      codex: { effort: "xhigh" },
+      codex: { reasoning_effort: "xhigh" },
     });
   });
 

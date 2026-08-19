@@ -97,6 +97,44 @@ export function buildLiveSessionControlDescriptors(
     });
   }
 
+  // Preserve every additional control from the full session snapshot. The
+  // semantic union predates arbitrary ACP controls, so the view type is cast
+  // at this boundary; the raw id, values, order, and current value stay exact.
+  const representedRawIds = new Set(controls.map((control) => control.rawConfigId));
+  for (const control of normalized.extras) {
+    if (representedRawIds.has(control.rawConfigId)) {
+      continue;
+    }
+    const displayedState = resolveDisplayedSessionControlState(control, pendingConfigChanges);
+    const toggleState = resolveToggleState(control, displayedState.currentValue);
+    const descriptorBase = {
+      key: control.key as SupportedLiveControlKey,
+      label: control.label,
+      detail: currentValueLabel(control, displayedState.currentValue),
+      rawConfigId: control.rawConfigId,
+      settable: control.settable,
+      pendingState: displayedState.pendingState,
+      options: control.values.map((value) => ({
+        value: value.value,
+        label: value.label,
+        description: value.description,
+        selected: value.value === displayedState.currentValue,
+      })),
+      onSelect: (value: string) => {
+        void onSelect(control.key as SupportedLiveControlKey, control.rawConfigId, value);
+      },
+    };
+    controls.push(toggleState
+      ? {
+          ...descriptorBase,
+          kind: "toggle",
+          enabledValue: toggleState.enabledValue,
+          disabledValue: toggleState.disabledValue,
+          isEnabled: toggleState.isEnabled,
+        }
+      : { ...descriptorBase, kind: "select" });
+  }
+
   return controls;
 }
 

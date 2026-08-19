@@ -87,6 +87,12 @@ export function useTranscriptStickToBottom({
   const restoreResolverRef = useRef<((viewport: HTMLElement) => TranscriptRestoreResolution | null) | null>(null);
   const restoreDeadlineRef = useRef(0);
   const userScrollIntentUntilRef = useRef(0);
+  // Monotonic count of scroll events NOT attributable to one of our own writes,
+  // i.e. observed native scroll activity. The frame writer reads and resets it
+  // each pass to tell "the seat is held" apart from "the seat is held so far,
+  // with a native scroll lifecycle still running" — see
+  // use-transcript-frame-pipeline-lifecycle.ts.
+  const nativeScrollActivityRef = useRef(0);
 
   // `cause` labels diagnostics only; it never changes pin behavior.
   const setPinned = useCallback((next: boolean, cause: TranscriptPinTransitionCause = "unspecified") => {
@@ -203,6 +209,11 @@ export function useTranscriptStickToBottom({
       onScrollSample({ programmatic: true });
       return;
     }
+    // Past marker precedence this event is native scroll activity: a wheel or
+    // its momentum continuation, a touch fling, or a compositor-side position
+    // change. Record it so the frame writer knows a native scroll lifecycle was
+    // still running as of this frame and a seated read is not yet proof.
+    nativeScrollActivityRef.current += 1;
     resolveNonCancelableCompensationProtection(true);
 
     // No live marker: user scroll (intent-attributed below) or unattributed; the
@@ -327,6 +338,7 @@ export function useTranscriptStickToBottom({
     resetNewContentSignal();
     dispatchInsetEvent({ type: "reset" });
     userScrollIntentUntilRef.current = 0;
+    nativeScrollActivityRef.current = 0;
     // FR-2 (rung 6): restore a finalized session's saved reading position before
     // first paint; a streaming session / missing plan / vanished row bottom-pins
     // (conservative default). The frame writer re-resolves the anchor each glued
@@ -366,6 +378,7 @@ export function useTranscriptStickToBottom({
     compensationAnchorRef,
     compensationDeadlineRef,
     compensationAbsoluteDeadlineRef,
+    nativeScrollActivityRef,
     restoreResolverRef,
     restoreDeadlineRef,
     scrollToBottom,

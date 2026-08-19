@@ -1,5 +1,4 @@
 import { useEffect, useMemo } from "react";
-import { useShallow } from "zustand/react/shallow";
 import { CHAT_MODEL_SELECTOR_LABELS } from "#product/copy/chat/chat-copy";
 import { getProviderDisplayName } from "#product/lib/domain/agents/provider-display";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
@@ -9,7 +8,6 @@ import {
   resolveMatchingModelControlLabel,
 } from "#product/lib/domain/chat/models/model-display";
 import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
-import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
 import { useShellLaunchIntent } from "#product/hooks/chat/derived/use-shell-launch-intent";
 import { useActiveSessionLaunchState } from "#product/hooks/chat/derived/use-active-session-config-state";
 import { useConfiguredLaunchReadiness } from "#product/hooks/chat/derived/use-configured-launch-readiness";
@@ -87,12 +85,6 @@ export function useChatModelSelectorState(options?: {
       : null,
   });
   const { hasAgents, isLoading: agentsLoading } = useAgentCatalog();
-  const launchControlPreferences = useUserPreferencesStore(useShallow((state) => ({
-    defaultSessionModeByAgentKind: state.defaultSessionModeByAgentKind,
-    defaultLiveSessionControlValuesByAgentKind:
-      state.defaultLiveSessionControlValuesByAgentKind,
-  })));
-
   const pendingModelChange = getPendingSessionConfigChange(
     scopedPendingConfigChanges,
     scopedModelControl?.rawConfigId ?? null,
@@ -172,18 +164,17 @@ export function useChatModelSelectorState(options?: {
   const selectLaunchControl = useChatLaunchControlActions({ activeLaunchAgentKind });
 
   const launchControls = useMemo(
-    () => buildLaunchControlDescriptors({
+    () => scopedActiveSessionId ? [] : buildLaunchControlDescriptors({
       selection: currentSelection,
       launchAgents: launchCatalog.launchAgents,
       pendingConfigChanges: scopedPendingConfigChanges,
-      preferences: launchControlPreferences,
       onSelect: selectLaunchControl,
     }),
     [
       currentSelection,
       launchCatalog.launchAgents,
-      launchControlPreferences,
       selectLaunchControl,
+      scopedActiveSessionId,
       scopedPendingConfigChanges,
     ],
   );

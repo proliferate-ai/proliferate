@@ -153,7 +153,7 @@ export function serializeDraft(draft: WorkflowBuilderDraft): string {
       node.prompt,
       node.model?.agentKind ?? null,
       node.model?.modelId ?? null,
-      node.model?.modeId ?? null,
+      Object.entries(node.model?.controlValues ?? {}).sort(([a], [b]) => a.localeCompare(b)),
     ]),
     edges: draft.edges.map((edge) => [edge.from, edge.to]),
     inputConnectedTo: draft.inputConnectedTo,

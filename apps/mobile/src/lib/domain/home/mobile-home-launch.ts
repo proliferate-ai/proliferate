@@ -1,10 +1,7 @@
 import type {
-  CloudAgentCatalogResponse,
+  CloudHarnessLaunchOptionsResponse,
 } from "@proliferate/cloud-sdk";
-import {
-  buildLaunchSessionConfigUpdates,
-  type CloudLaunchComposerSelection,
-} from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
+import type { CloudLaunchComposerSelection } from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
 
 import type { MobilePendingPrompt } from "../../../navigation/navigation-model";
 import type { MobileIconName } from "../../../components/primitives/MobileIcon";
@@ -78,8 +75,7 @@ export function buildMobileRuntimeOptions(
 export function buildMobilePendingPrompt(input: {
   text: string;
   selection: CloudLaunchComposerSelection;
-  catalog?: CloudAgentCatalogResponse | null;
-  launchableAgentKinds?: readonly string[] | null;
+  launchOptions?: CloudHarnessLaunchOptionsResponse | null;
   repo: MobileRepoOption;
   runtime: MobileRuntimeOption;
 }): MobilePendingPrompt {
@@ -88,12 +84,7 @@ export function buildMobilePendingPrompt(input: {
     text: input.text,
     agentKind: input.selection.agentKind,
     modelId: input.selection.modelId,
-    modeId: input.selection.modeId,
-    sessionConfigUpdates: buildLaunchSessionConfigUpdates({
-      catalog: input.catalog,
-      launchableAgentKinds: input.launchableAgentKinds,
-      selection: input.selection,
-    }),
+    controlValues: input.selection.controlValues,
     selectedRepo: input.repo.id,
     selectedRuntimeTargetId: input.runtime.targetId,
     createdAt: Date.now(),

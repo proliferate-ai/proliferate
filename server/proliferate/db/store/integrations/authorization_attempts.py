@@ -6,6 +6,7 @@ here makes the additive schema observable without enabling lifecycle behavior.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -29,6 +30,25 @@ NONTERMINAL_ATTEMPT_STATUSES = frozenset({"active", "exchanging", "validating"})
 TERMINAL_ATTEMPT_STATUSES = frozenset(
     {"succeeded", "failed", "cancelled", "expired", "superseded"}
 )
+
+
+def effective_scope_authority_matches(current: str | None, candidate: str | None) -> bool:
+    """Compare OAuth authority as scope sets, without trusting malformed legacy data."""
+
+    if current == candidate:
+        return True
+    if current is None or candidate is None:
+        return False
+    try:
+        current_value = json.loads(current)
+        candidate_value = json.loads(candidate)
+    except (json.JSONDecodeError, TypeError):
+        return False
+    if not isinstance(current_value, list) or not isinstance(candidate_value, list):
+        return False
+    if not all(isinstance(scope, str) for scope in current_value + candidate_value):
+        return False
+    return set(current_value) == set(candidate_value)
 
 
 @dataclass(frozen=True)
@@ -241,6 +261,46 @@ async def create_authorization_attempt(
     await db.flush()
     await db.refresh(created)
     return _record(created)
+
+
+async def supersede_authorization_attempts(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID,
+    definition_id: UUID,
+    failure_code: str,
+) -> tuple[IntegrationAuthorizationAttemptRecord, ...]:
+    """Close all current work while holding the shared lifecycle lock."""
+
+    await acquire_authorization_attempt_lock(
+        db,
+        owner_user_id=owner_user_id,
+        definition_id=definition_id,
+    )
+    rows = list(
+        (
+            await db.scalars(
+                select(CloudIntegrationAuthorizationAttempt)
+                .where(
+                    CloudIntegrationAuthorizationAttempt.owner_user_id == owner_user_id,
+                    CloudIntegrationAuthorizationAttempt.definition_id == definition_id,
+                    CloudIntegrationAuthorizationAttempt.status.in_(NONTERMINAL_ATTEMPT_STATUSES),
+                )
+                .order_by(CloudIntegrationAuthorizationAttempt.generation)
+                .with_for_update()
+            )
+        ).all()
+    )
+    now = utcnow()
+    for row in rows:
+        _terminalize(
+            row,
+            status="superseded",
+            failure_code=failure_code,
+            now=now,
+        )
+    await db.flush()
+    return tuple(_record(row) for row in rows)
 
 
 async def claim_authorization_attempt(
@@ -483,17 +543,31 @@ async def commit_authorization_attempt(
             )
             await db.flush()
             return None
+        scopes_match = effective_scope_authority_matches(
+            account.effective_scopes_json,
+            attempt.effective_scopes_json,
+        )
+        grant_changed = (
+            account.auth_kind != attempt.method
+            or account.definition_security_revision_id != attempt.definition_security_revision_id
+            or account.provider_client_id != attempt.provider_client_id
+            or account.credential_audience != attempt.credential_audience
+            or not scopes_match
+            or account.settings_json != attempt.settings_json
+        )
         account.auth_kind = attempt.method
         account.credential_ciphertext = attempt.staged_credential_ciphertext
         account.credential_format = attempt.staged_credential_format
         account.status = "ready"
         account.auth_version += 1
-        account.grant_version += 1
+        if grant_changed:
+            account.grant_version += 1
         account.credential_version += 1
         account.definition_security_revision_id = attempt.definition_security_revision_id
         account.provider_client_id = attempt.provider_client_id
         account.credential_audience = attempt.credential_audience
-        account.effective_scopes_json = attempt.effective_scopes_json
+        if not scopes_match:
+            account.effective_scopes_json = attempt.effective_scopes_json
         account.settings_json = attempt.settings_json
         account.token_expires_at = token_expires_at
         account.last_error_code = None

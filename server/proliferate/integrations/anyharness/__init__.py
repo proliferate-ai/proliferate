@@ -35,9 +35,7 @@ from proliferate.integrations.anyharness.runtime import (
     probe_runtime_health,
 )
 from proliferate.integrations.anyharness.sessions import (
-    apply_runtime_reasoning_effort,
     close_runtime_session,
-    create_runtime_session,
     prompt_runtime_session,
 )
 from proliferate.integrations.anyharness.workflow_runs import (
@@ -88,14 +86,12 @@ __all__ = [
     "WorkflowRunProjection",
     "WorkflowWorkspaceAcceptance",
     "apply_runtime_config",
-    "apply_runtime_reasoning_effort",
     "auth_headers",
     "check_runtime_auth_enforcement",
     "get_runtime_config_status",
     "get_execution_store_identity",
     "get_workflow_run",
     "close_runtime_session",
-    "create_runtime_session",
     "create_remote_worktree_workspace",
     "get_remote_terminal_command_run",
     "get_runtime_git_status",

@@ -3,7 +3,6 @@ import type {
   SessionLiveConfigSnapshot,
 } from "@anyharness/sdk";
 import type {
-  CloudAgentCatalogResponse,
   CloudSessionProjection,
 } from "@proliferate/cloud-sdk";
 import {
@@ -15,20 +14,13 @@ import {
 import {
   agentModelIcon,
   controlDisplayLabel,
-  modelMatchesSelectedValue,
 } from "./composer-control-identity";
 import type {
   CloudChatComposerControlGroupView,
   CloudChatComposerControlView,
-  CloudSessionAgentModelSelection,
   PendingConfigChange,
 } from "./composer-control-model";
 import { DEFAULT_DIRECT_PROMPT_AGENT_KIND } from "./composer-launch-defaults";
-import {
-  launchableCatalogAgents,
-  parseLaunchAgentModelOptionId,
-  visibleComposerModels,
-} from "./composer-launch-catalog";
 
 export function readSessionLiveConfig(
   session: CloudSessionProjection | null,
@@ -44,10 +36,7 @@ export function buildCloudSessionComposerControls(input: {
   session: CloudSessionProjection;
   liveConfig: SessionLiveConfigSnapshot | null;
   pendingConfigChanges: Record<string, PendingConfigChange>;
-  launchCatalog?: CloudAgentCatalogResponse | null;
-  launchableAgentKinds?: readonly string[] | null;
   onSessionConfigSelect: (rawConfigId: string, value: string) => void;
-  onSessionAgentModelSelect?: (selection: CloudSessionAgentModelSelection) => void;
 }): CloudChatComposerControlView[] {
   const controls = collectNormalizedControls(input.liveConfig);
   const leadingModeControl = controls.find(isLeadingModeControl) ?? null;
@@ -57,12 +46,9 @@ export function buildCloudSessionComposerControls(input: {
       sessionId: input.session.sessionId,
       agentKind: input.session.sourceAgentKind ?? null,
       control,
-      catalog: input.launchCatalog ?? null,
-      launchableAgentKinds: input.launchableAgentKinds,
       placement: control.rawConfigId === leadingModeControl?.rawConfigId ? "leading" : "trailing",
       pendingConfigChanges: input.pendingConfigChanges,
       onSelect: input.onSessionConfigSelect,
-      onAgentModelSelect: input.onSessionAgentModelSelect,
     })
   );
 }
@@ -113,12 +99,9 @@ function buildSessionConfigComposerControl(input: {
   sessionId: string;
   agentKind: string | null;
   control: NormalizedSessionControl;
-  catalog?: CloudAgentCatalogResponse | null;
-  launchableAgentKinds?: readonly string[] | null;
   placement: "leading" | "trailing";
   pendingConfigChanges: Record<string, PendingConfigChange>;
   onSelect: (rawConfigId: string, value: string) => void;
-  onAgentModelSelect?: (selection: CloudSessionAgentModelSelection) => void;
 }): CloudChatComposerControlView {
   const pendingChange =
     input.pendingConfigChanges[pendingConfigChangeKey(input.sessionId, input.control.rawConfigId)]
@@ -129,36 +112,17 @@ function buildSessionConfigComposerControl(input: {
     ?? null;
   const agentKind = input.agentKind
     ?? agentKindForSessionConfig(input.control)
-    ?? (input.control.key === "model"
-      ? agentKindForSessionModelValue({
-        catalog: input.catalog ?? null,
-        selectedLabel: selectedOption?.label ?? null,
-        selectedValue,
-      })
-      : null);
+    ?? null;
   const controlKey = isConfiguredSessionControlKey(input.control.key) ? input.control.key : null;
   const selectedPresentation = controlKey
     ? resolveSessionControlPresentation(agentKind, controlKey, selectedValue)
     : null;
-  const groups = input.control.key === "model"
-    ? sessionModelGroupsFromCatalog({
-      agentKind,
-      catalog: input.catalog ?? null,
-      launchableAgentKinds: input.launchableAgentKinds,
-      selectedLabel: selectedOption?.label ?? null,
-      selectedValue,
-    }) ?? sessionControlGroups({
-      agentKind,
-      control: input.control,
-      controlKey,
-      selectedValue,
-    })
-    : sessionControlGroups({
-      agentKind,
-      control: input.control,
-      controlKey,
-      selectedValue,
-    });
+  const groups = sessionControlGroups({
+    agentKind,
+    control: input.control,
+    controlKey,
+    selectedValue,
+  });
 
   return {
     id: input.control.rawConfigId,
@@ -174,21 +138,8 @@ function buildSessionConfigComposerControl(input: {
     pendingState: pendingChange?.status ?? null,
     groups,
     onSelect: (value) => {
-      const selectedModel = input.control.key === "model"
-        ? parseLaunchAgentModelOptionId(value)
-        : null;
-      if (
-        selectedModel
-        && agentKind
-        && selectedModel.agentKind !== agentKind
-        && input.onAgentModelSelect
-      ) {
-        input.onAgentModelSelect(selectedModel);
-        return;
-      }
-      const configValue = selectedModel?.modelId ?? value;
-      if (configValue !== selectedValue) {
-        input.onSelect(input.control.rawConfigId, configValue);
+      if (value !== selectedValue) {
+        input.onSelect(input.control.rawConfigId, value);
       }
     },
   };
@@ -223,48 +174,6 @@ function sessionControlGroups(input: {
   ];
 }
 
-function sessionModelGroupsFromCatalog(input: {
-  agentKind: string | null;
-  catalog: CloudAgentCatalogResponse | null;
-  launchableAgentKinds?: readonly string[] | null;
-  selectedLabel: string | null;
-  selectedValue: string | null;
-}): CloudChatComposerControlGroupView[] | null {
-  const agents = launchableCatalogAgents({
-    agents: input.catalog?.agents ?? [],
-    launchableAgentKinds: input.launchableAgentKinds,
-    includeAgentKind: input.agentKind,
-  });
-  const groups = agents.flatMap((agent) => {
-    const options = visibleComposerModels({
-      agent,
-      selectedLabel: agent.kind === input.agentKind ? input.selectedLabel : null,
-      selectedValue: agent.kind === input.agentKind ? input.selectedValue : null,
-    })
-      .map((model) => ({
-        id: `${encodeURIComponent(agent.kind)}:${encodeURIComponent(model.id)}`,
-        label: model.displayName,
-        description: model.description ?? null,
-        icon: agentModelIcon(agent.kind),
-        selected: agent.kind === input.agentKind && modelMatchesSelectedValue({
-          displayName: model.displayName,
-          id: model.id,
-          selectedLabel: input.selectedLabel,
-          selectedValue: input.selectedValue,
-        }),
-      }));
-    return options.length > 0
-      ? [{
-        id: agent.kind,
-        label: agent.displayName,
-        options,
-      }]
-      : [];
-  });
-
-  return groups.length > 0 ? groups : null;
-}
-
 function controlLabel(control: NormalizedSessionControl): string {
   return controlDisplayLabel(control.key, control.label);
 }
@@ -291,29 +200,6 @@ function agentKindForSessionConfig(control: NormalizedSessionControl): string | 
   const source = control.rawConfigId || control.key;
   const separator = source.indexOf(".");
   return separator > 0 ? source.slice(0, separator) : null;
-}
-
-function agentKindForSessionModelValue(input: {
-  catalog: CloudAgentCatalogResponse | null;
-  selectedLabel: string | null;
-  selectedValue: string | null;
-}): string | null {
-  const selectedValue = input.selectedValue?.trim().toLowerCase() ?? "";
-  const selectedLabel = input.selectedLabel?.trim().toLowerCase() ?? "";
-  if (!selectedValue && !selectedLabel) {
-    return null;
-  }
-  for (const agent of input.catalog?.agents ?? []) {
-    if (
-      agent.session.models.some((model) =>
-        model.id.toLowerCase() === selectedValue
-        || model.displayName.toLowerCase() === selectedLabel
-      )
-    ) {
-      return agent.kind;
-    }
-  }
-  return null;
 }
 
 function isLeadingModeControl(control: NormalizedSessionControl): boolean {

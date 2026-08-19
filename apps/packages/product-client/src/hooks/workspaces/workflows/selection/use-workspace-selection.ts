@@ -2,7 +2,6 @@ import { useCallback } from "react";
 import type { Workspace } from "@anyharness/sdk";
 import { useProductHost } from "@proliferate/product-client/host/ProductHostProvider";
 import { useWorkspaceBootstrapActions } from "#product/hooks/workspaces/workflows/use-workspace-bootstrap-actions";
-import { useCloudAgentCatalogCache } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { useCloudWorkspaceConnectionCache } from "#product/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useWorkspaceSelectionCache } from "#product/hooks/workspaces/cache/use-workspace-selection-cache";
 import { buildLogicalWorkspaces } from "#product/lib/domain/workspaces/cloud/logical-workspaces";
@@ -39,7 +38,6 @@ export function useWorkspaceSelection() {
     (state) => state.setSelectedLogicalWorkspaceId,
   );
   const { bootstrapWorkspace, reconcileHotWorkspace } = useWorkspaceBootstrapActions();
-  const { ensureCloudAgentCatalog } = useCloudAgentCatalogCache();
 
   return {
     selectWorkspace: useCallback(async (
@@ -88,13 +86,6 @@ export function useWorkspaceSelection() {
         },
         logicalWorkspaces,
         rawWorkspaces: workspaceCollections?.localWorkspaces ?? [],
-        // Background catalog warm (UX Latency ADR §4.6, Rung 10 / Q12). Swallow
-        // errors: a failed prefetch must never surface at selection; the
-        // composer-submit gate re-ensures readiness (and falls back to the
-        // bundled catalog) at send time.
-        prefetchAgentCatalog: () => {
-          void ensureCloudAgentCatalog().catch(() => undefined);
-        },
         setSelectedLogicalWorkspaceId,
         setSelectedWorkspace: (
           id: string,
@@ -121,7 +112,6 @@ export function useWorkspaceSelection() {
       });
     }, [
       bootstrapWorkspace,
-      ensureCloudAgentCatalog,
       cancelPreviousWorkspaceDisplayQueries,
       clearSelection,
       getWorkspaceSelectionSnapshot,

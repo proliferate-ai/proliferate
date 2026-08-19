@@ -35,12 +35,6 @@
 
 [[exception]]
 rule = "FE-ACCESS-2"
-path = "apps/packages/product-client/src/hooks/workspaces/workflows/files/use-file-reference-actions.ts"
-site = "getAnyHarnessClient"
-reason = "workflow imports raw AnyHarness client"
-
-[[exception]]
-rule = "FE-ACCESS-2"
 path = "apps/packages/product-client/src/hooks/workspaces/workflows/use-materialization-health-pass.ts"
 site = "getAnyHarnessClient"
 reason = "workflow imports raw AnyHarness client"

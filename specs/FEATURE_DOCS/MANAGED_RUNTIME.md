@@ -74,7 +74,7 @@ The interval is `heartbeat_interval_seconds` from local configuration with a 10-
 
 **Binary versions are all the heartbeat carries as desired state.** The agent catalog ships inside the runtime binary, so there is no catalog version on the wire. A runtime binary update delivers new catalog pins by definition.
 
-The response also transports one server-owned verdict that is **not** desired state: `modelSnapshotUploadAllowed`, a required boolean on every successful authenticated 200 saying whether this Worker may upload an agent-model snapshot. The server owns it because the server alone knows the Worker's `runtime_kind`, whether its sandbox still exists and is undestroyed, and the owner the ingest route would derive; it is decided by one pure Agent Models rule ([`agent_models/domain/snapshot_upload.py`](../../server/proliferate/server/cloud/agent_models/domain/snapshot_upload.py)) that the ingest route also enforces, so the ack can never promise an upload ingest would refuse. Absent means `false`: a server too old to state a verdict cannot promise the upload is legal, so the Worker fails closed. The bit alters nothing else — Supervisor ownership, mailbox convergence, and binary convergence are unchanged by it, and it never appears in a request. Authentication remains a separate boundary: a missing, malformed, unknown, or revoked Worker credential gets `401 cloud_worker_unauthorized` and no response body at all, never a 200 whose verdict happens to be `false`. See [MODELS.md "Write path"](MODELS.md#write-path) for what the Worker does with it.
+The response also transports one server-owned verdict that is **not** desired state: `launchOptionsUploadAllowed`, a required boolean on every successful authenticated 200 saying whether this Worker may upload target launch-option state. The server owns it because only the server knows the Worker's runtime kind and whether its sandbox still exists and is undestroyed. The launch-option ingest route enforces the same target rule, so the acknowledgement cannot promise an upload the route would refuse. Absent means `false`: a server too old to state a verdict cannot promise the upload is legal, so the Worker fails closed. The bit alters nothing else and never appears in a request. Authentication remains a separate boundary: an invalid Worker credential gets `401 cloud_worker_unauthorized` and no response body. See [MODELS.md "Cloud copy"](MODELS.md#cloud-copy).
 
 The pin's provenance: release CI stamps `RUNTIME_VERSION` (and `WORKER_VERSION`) into the server image at build time ([`server/proliferate/server/version.py`](../../server/proliferate/server/version.py)); every heartbeat ack advertises them as `desired_versions`. A server deploy is therefore the fleet trigger — each sandbox converges within one heartbeat interval (~30s). A per-sandbox override column exists for targeted pinning ahead of or behind the fleet.
 
@@ -294,7 +294,7 @@ Failure mode: Self-updating the supervisor would require it to restart itself wh
 | Separate catalog document push | Would break catalog immutability — pins could change mid-session. Would also require reasoning about two versions (runtime + catalog) and handling their divergence/rollback independently. Binary-only transport eliminated the problem. | Before 2026-07 (agent-distribution design) |
 | Automatic re-enrollment on credential failure | Security risk: a compromised worker could re-authenticate indefinitely. Enrollment is one-time bootstrap; revocation must stick. | Ruled in worker identity design |
 | Random/UUID mailbox request IDs | Would queue unbounded duplicates for a stuck heartbeat. Deterministic IDs (hash of component + version) make replays idempotent. | Mailbox protocol design (2026-07) |
-| Gateway model names in catalog | Made the catalog mutable (model lists change independently of harness versions). Gateway models now discovered live via `GET /v1/models` with the harness key; the catalog is purely per-pin facts. | Ongoing gap (see below) |
+| Gateway model names in catalog | Made the catalog mutable (model lists change independently of harness versions). Gateway models are discovered live with the harness key only to materialize the route needed for an override-free harness probe; Product sees the resulting target observation. The catalog is purely distribution and presentation. | Removed in the target-observed launch-options cutover |
 
 ## Gaps
 
@@ -304,13 +304,7 @@ Failure mode: Self-updating the supervisor would require it to restart itself wh
 
 **Issue:** Follow-up after supervisor fleet convergence is verified.
 
-### G2: Catalog still carries gateway model names
-
-`catalog.json` still carries gateway model names in `session.gatewayPolicy` (`seedModels` pre-probe fallback, `roles`) and gateway entries in `session.defaults`. These leave the catalog once gateway model discovery is a live `GET /v1/models` with the harness key; role choices move gateway-side.
-
-**Issue:** Blocked on live gateway model discovery.
-
-### G3: Binary swaps don't wait for live sessions
+### G2: Binary swaps don't wait for live sessions
 
 The supervisor kills and restarts the runtime even mid-conversation. Desktop updates happen at app startup when no sessions exist, and in cloud the disruption window is one process restart on a fleet that updates at most daily. Deferring swaps around long-running work is a known UX gap to revisit, not an accident.
 

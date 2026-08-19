@@ -9,7 +9,6 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use crate::domains::agents::catalog::settings::ResolvedSettingsDeltas;
 use crate::domains::agents::model::{AgentKind, ResolvedAgent};
 use crate::domains::agents::route_auth::RenderedRouteAuth;
 use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
@@ -174,9 +173,6 @@ pub(super) struct SessionLaunchContext {
     /// Rendered agent-auth route layer for this launch (empty for
     /// native/legacy). See `domains::agents::route_auth`.
     pub route_auth: RenderedRouteAuth,
-    /// Catalog settings deltas (extra CLI args and env vars from persisted
-    /// per-harness settings). See `domains::agents::catalog::settings`.
-    pub settings_deltas: ResolvedSettingsDeltas,
     pub mcp_servers: Vec<SessionMcpServer>,
     pub startup: SessionStartupStrategy,
     pub every_prompt_append: Option<String>,
@@ -185,12 +181,6 @@ pub(super) struct SessionLaunchContext {
 
 /// Pure assembly of the launch bundle from already-resolved facts.
 pub(super) fn assemble_session_launch(ctx: SessionLaunchContext) -> SessionLaunch {
-    // Merge settings env deltas into the route_auth layer (settings env wins
-    // over nothing, but route_auth is a good home — it lands after session env).
-    let mut route_auth_set = ctx.route_auth.set;
-    for (key, value) in ctx.settings_deltas.extra_env {
-        route_auth_set.insert(key, value);
-    }
     SessionLaunch {
         session: ctx.record,
         agent: ctx.agent,
@@ -198,9 +188,12 @@ pub(super) fn assemble_session_launch(ctx: SessionLaunchContext) -> SessionLaunc
         env: LaunchEnv {
             workspace: ctx.workspace_env,
             session: ctx.session_env,
-            route_auth: route_auth_set,
+            route_auth: ctx.route_auth.set,
             route_auth_remove: ctx.route_auth.remove,
-            settings_extra_args: ctx.settings_deltas.extra_args,
+            // Catalog-authored launch settings were an executable authority.
+            // Product-owned route/auth and exact target-observed controls are
+            // now the only agent-specific launch inputs.
+            settings_extra_args: Vec::new(),
         },
         mcp_servers: ctx.mcp_servers,
         startup: ctx.startup,

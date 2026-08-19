@@ -11,8 +11,7 @@ export interface DeferredHomeLaunch {
   cloudAttemptId: string;
   agentKind: string;
   modelId: string;
-  modeId: string | null;
-  launchControlValues?: Record<string, string>;
+  launchControlValues: Record<string, string>;
   promptText: string;
   /** In-memory only (holds Files); this store must never gain persistence. */
   attachmentSnapshots?: PromptAttachmentSnapshot[];

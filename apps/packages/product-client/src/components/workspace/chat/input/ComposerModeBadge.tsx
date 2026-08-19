@@ -29,8 +29,9 @@ interface ComposerModeBadgeProps {
 }
 
 /**
- * The composer's working-mode control: the mode's glyph and nothing else,
- * stepping to the next mode on click. Replaces SessionModeControl's
+ * A configured composer control: its current value's glyph and nothing else,
+ * stepping to the next value on click. Used independently for collaboration
+ * mode and execution access. Replaces SessionModeControl's
  * `triggerStyle="value"` trigger in the composer row; the full-menu
  * SessionModeControl survives for the settings surfaces.
  *
@@ -57,10 +58,8 @@ export function ComposerModeBadge({
     ?? control.label;
   const nextValue = getNextSessionModeValue(control.options, currentValue);
   const previousValue = getPreviousSessionModeValue(control.options, currentValue);
-  // `control.label`, not a literal "Permissions": SESSION_CONTROL_LABELS
-  // already spells the permissions control "Permissions" and the
-  // collaboration control "Mode", so the descriptor's own word is the ruled
-  // copy for the one and stays honest for the other.
+  // The descriptor owns the control noun (for example, "Mode" or "Access"),
+  // so the same compact trigger remains honest for both independent axes.
   // The accessible name carries the mode itself; the pointer hint is a mouse
   // affordance, so it rides only the tooltip and title — same split as
   // ComposerEffortStepper's aria-label.

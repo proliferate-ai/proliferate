@@ -1,15 +1,12 @@
-//! Agent catalog schema (schemaVersion 2): the probe-generated WHICH
-//! document — harness version pins, model rows, per-model option matrices,
-//! and ordered auth contexts with observed availability. Shapes mirror the
-//! build-catalog output (`scripts/agent-catalog/catalog.draft.json`);
-//! cross-field invariants live in `validation.rs`, parse entry in
-//! `loader.rs`.
+//! Distribution, auth-signature, and presentation catalog schema.
+//!
+//! Executable model/control/default membership is deliberately absent. The
+//! target-observed launch-options store is the only authority for those
+//! values; presentation rows join by exact id and cannot add membership.
 
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-
-use crate::domains::agents::model::ModelCatalogStatus;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,9 +22,6 @@ pub struct AgentCatalogDocument {
     #[serde(default)]
     pub probed_against: Option<AgentCatalogProbedAgainst>,
     pub generated_at: String,
-    /// The shipped default agent kind when the user has no stored preference.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub default_agent_kind: Option<String>,
     #[serde(default)]
     pub agents: Vec<AgentCatalogAgent>,
 }
@@ -54,10 +48,6 @@ pub struct AgentCatalogAgent {
     #[serde(default)]
     pub auth_contexts: Vec<AgentCatalogAuthContext>,
     pub session: AgentCatalogSession,
-    /// Per-harness advanced settings (v1: boolean toggles mapped to CLI flags or
-    /// env vars). Absent when a harness declares no settings.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub settings: Vec<AgentCatalogSetting>,
     pub provenance: AgentCatalogAgentProvenance,
 }
 
@@ -221,149 +211,18 @@ pub struct AgentCatalogSession {
     /// initialize `_meta.anyharness.goals` advertisement.
     #[serde(default)]
     pub supports_goals: bool,
-    /// Curation-owned mode for product surfaces that deliberately run the
-    /// harness unattended (for example cowork delegation and workflows).
-    /// Absent means no unattended mode has been vetted for this agent, so
-    /// consumers must omit `mode_id` rather than infer one.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub unattended_mode_id: Option<String>,
-    /// The control universe: every key/value any model of this harness might
-    /// support. Per-model matrices are subsets of this.
+    /// Optional display-only metadata keyed by exact observed model id.
     #[serde(default)]
-    pub controls: Vec<AgentCatalogSessionControl>,
-    #[serde(default)]
-    pub models: Vec<AgentCatalogModel>,
-    /// Curation-owned default model per auth-context id.
-    #[serde(default)]
-    pub defaults: BTreeMap<String, String>,
-    /// Probe-owned: the model actually selected at session start per probed
-    /// auth context. Curation input only, never consumed by the runtime.
-    #[serde(default)]
-    pub observed_defaults: BTreeMap<String, String>,
-    /// Per-harness gateway curation (present on gateway-capable agents). Carries
-    /// model-role pins (`roles`, e.g. `small_fast`) that used to live in Rust
-    /// consts, and `seedModels` — the pre-probe fallback model list. The
-    /// gateway model default itself lives in `defaults["gateway"]`. Consumed by
-    /// the runtime gateway resolver.
-    #[serde(default)]
-    pub gateway_policy: Option<AgentCatalogGatewayPolicy>,
-}
-
-/// Gateway-route curation for one harness (spec §1). All fields optional:
-/// `roles` and `seed_models` default empty.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentCatalogGatewayPolicy {
-    /// Model-role pins formerly hard-coded in Rust (currently only claude's
-    /// `small_fast`). Keyed by role name.
-    #[serde(default)]
-    pub roles: BTreeMap<String, String>,
-    /// The fallback model ids used before the first live gateway probe
-    /// succeeds (opencode's four-entry Anthropic fallback list).
-    #[serde(default)]
-    pub seed_models: Vec<String>,
+    pub presentation_models: Vec<AgentCatalogPresentationModel>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentCatalogSessionControl {
-    pub key: String,
-    #[serde(default)]
-    pub label: Option<String>,
-    #[serde(default)]
-    pub values: Vec<String>,
-    #[serde(default)]
-    pub mapping: Option<AgentCatalogControlMapping>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentCatalogControlMapping {
-    #[serde(default)]
-    pub create_field: Option<String>,
-    #[serde(default)]
-    pub live_config_id: Option<String>,
-    /// Model control only: `setSessionModel` | `configOption`, as observed
-    /// by the probe.
-    #[serde(default)]
-    pub switch_via: Option<String>,
-    /// e.g. `"slash-effort"` (codex) or `"bracket-params"` (cursor).
-    #[serde(default)]
-    pub variant_syntax: Option<String>,
-    #[serde(default)]
-    pub missing_live_config_policy: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentCatalogModel {
+pub struct AgentCatalogPresentationModel {
     pub id: String,
     pub display_name: String,
     #[serde(default)]
     pub description: Option<String>,
-    #[serde(default)]
-    pub aliases: Vec<String>,
-    /// Display-only grouping tag; never used for resolution or fallback.
-    #[serde(default)]
-    pub family: Option<String>,
-    pub availability: AgentCatalogAvailability,
-    #[serde(default)]
-    pub default_visible: bool,
-    /// The per-model option matrix: control key -> exactly the values this
-    /// model supports. A key absent here means the model lacks that control.
-    #[serde(default)]
-    pub controls: BTreeMap<String, AgentCatalogModelControl>,
-    pub status: ModelCatalogStatus,
-    #[serde(default)]
-    pub provenance: Option<AgentCatalogModelProvenance>,
-}
-
-impl AgentCatalogModel {
-    /// Whether this model carries a toggleable fast-mode control. Harnesses
-    /// name it differently — claude's option is `fast`, codex's is `fast-mode`
-    /// (`fast_mode` before the rung-1 fork) — and all mean the same capability.
-    /// A single-value entry is a probe-observed variant dimension (cursor's
-    /// bracket-param `fast`), not a switchable control, so it does not count.
-    pub fn supports_fast_mode(&self) -> bool {
-        ["fast_mode", "fast", "fast-mode"].iter().any(|key| {
-            self.controls
-                .get(*key)
-                .is_some_and(|control| control.values.len() >= 2)
-        })
-    }
-}
-
-/// Observed-set availability: exactly the auth contexts (incl. `"baseline"`)
-/// whose probe runs contained this model. No monotonicity inference.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentCatalogAvailability {
-    pub any_of: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentCatalogModelControl {
-    pub values: Vec<String>,
-    /// Curation-owned product default.
-    #[serde(default)]
-    pub default: Option<String>,
-    /// Probe-owned session state captured after switching to this model.
-    #[serde(default)]
-    pub observed_value: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentCatalogModelProvenance {
-    #[serde(default)]
-    pub observed_in: Vec<String>,
-    #[serde(default)]
-    pub observed_in_all_contexts: Option<bool>,
-    #[serde(default)]
-    pub via_trial_only: Option<bool>,
-    #[serde(default)]
-    pub variant_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -393,41 +252,6 @@ pub struct AgentCatalogProbeRun {
     pub id: String,
     #[serde(default)]
     pub snapshot_path: Option<String>,
-}
-
-/// A declared per-harness setting (v1: boolean toggles). Applied at spawn
-/// according to the mapping kind: `cli_flag` appends the flag to argv when
-/// the value is `true`; `env` sets an env var to the string form of the value.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentCatalogSetting {
-    pub key: String,
-    /// v1: only `"boolean"` is supported.
-    #[serde(rename = "type")]
-    pub setting_type: String,
-    pub label: String,
-    #[serde(default)]
-    pub description: Option<String>,
-    /// The default value for this setting (JSON-typed: bool for boolean settings).
-    #[serde(default)]
-    pub default: serde_json::Value,
-    /// Which delivery surfaces this setting is relevant to (subset of `{local, cloud}`).
-    #[serde(default)]
-    pub surfaces: Vec<String>,
-    pub mapping: AgentCatalogSettingMapping,
-}
-
-/// How a setting value maps to the harness spawn. Externally tagged by `kind`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentCatalogSettingMapping {
-    pub kind: String,
-    /// For `cli_flag`: the flag to append (e.g. `"--chrome"`).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub flag: Option<String>,
-    /// For `env`: the env var name.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub env: Option<String>,
 }
 
 #[cfg(test)]

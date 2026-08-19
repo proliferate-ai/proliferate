@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type {
-  CloudAgentCatalogResponse,
+  CloudHarnessLaunchOptionsResponse,
 } from "@proliferate/cloud-sdk";
 import {
   useCreateCloudWorkspace,
@@ -19,8 +19,7 @@ import type { MobileCloudChat } from "../../../navigation/navigation-model";
 
 export function useMobileHomeLaunchActions(input: {
   ownerUserId: string | null;
-  catalog?: CloudAgentCatalogResponse | null;
-  launchableAgentKinds?: readonly string[] | null;
+  launchOptions?: CloudHarnessLaunchOptionsResponse | null;
   selectedRepo: MobileRepoOption | null;
   selectedBaseBranch: string | null;
   selectedRuntime: MobileRuntimeOption | null;
@@ -58,8 +57,7 @@ export function useMobileHomeLaunchActions(input: {
     const pendingPrompt = buildMobilePendingPrompt({
       text: prompt,
       selection: input.selection,
-      catalog: input.catalog,
-      launchableAgentKinds: input.launchableAgentKinds,
+      launchOptions: input.launchOptions,
       repo: input.selectedRepo,
       runtime: input.selectedRuntime,
     });

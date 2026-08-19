@@ -89,6 +89,23 @@ async def get_account(
     return _record(account) if account is not None else None
 
 
+async def get_account_for_owner_locked(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    owner_user_id: UUID,
+) -> IntegrationAccountRecord | None:
+    account = await db.scalar(
+        select(CloudIntegrationAccount)
+        .where(
+            CloudIntegrationAccount.id == account_id,
+            CloudIntegrationAccount.owner_user_id == owner_user_id,
+        )
+        .with_for_update()
+    )
+    return _record(account) if account is not None else None
+
+
 async def get_account_for_user_definition(
     db: AsyncSession,
     user_id: UUID,
@@ -142,7 +159,7 @@ class ReadyAccountIdentityRow:
 
     account_id: UUID
     owner_user_id: UUID
-    auth_version: int
+    grant_version: int
     provider: str
     display_name: str
     definition_enabled_by_default: bool
@@ -211,15 +228,15 @@ async def get_ready_account_for_provider(
     namespace: str,
     *,
     organization_id: UUID | None = None,
+    for_update: bool = False,
 ) -> ReadyAccountRow | None:
     """The user's enabled, ready account whose non-archived definition matches ``namespace``."""
-    row = (
-        await db.execute(
-            _ready_accounts_stmt(user_id, organization_id)
-            .where(CloudIntegrationDefinition.namespace == namespace)
-            .limit(1)
-        )
-    ).first()
+    statement = _ready_accounts_stmt(user_id, organization_id).where(
+        CloudIntegrationDefinition.namespace == namespace
+    )
+    if for_update:
+        statement = statement.with_for_update(of=CloudIntegrationAccount)
+    row = (await db.execute(statement.limit(1))).first()
     return _ready_account_row(row, organization_id) if row is not None else None
 
 
@@ -242,7 +259,7 @@ async def get_ready_account_identity_for_provider(
         select(
             CloudIntegrationAccount.id,
             CloudIntegrationAccount.owner_user_id,
-            CloudIntegrationAccount.auth_version,
+            CloudIntegrationAccount.grant_version,
             CloudIntegrationDefinition.namespace,
             CloudIntegrationDefinition.display_name,
             CloudIntegrationDefinition.enabled_by_default,
@@ -286,7 +303,7 @@ async def get_ready_account_identity_for_provider(
     return ReadyAccountIdentityRow(
         account_id=row[0],
         owner_user_id=row[1],
-        auth_version=row[2],
+        grant_version=row[2],
         provider=row[3],
         display_name=row[4],
         definition_enabled_by_default=row[5],
@@ -369,6 +386,53 @@ async def set_account_credentials(
     # additive migration and the stage-and-swap cutover.
     account.grant_version = account.auth_version
     account.credential_version = account.auth_version
+    account.last_error_code = None
+    account.updated_at = now
+    await db.flush()
+    await db.refresh(account)
+    return _record(account)
+
+
+async def compare_and_swap_oauth_refresh(
+    db: AsyncSession,
+    *,
+    account_id: UUID,
+    expected_grant_version: int,
+    expected_credential_version: int,
+    expected_definition_security_revision_id: UUID | None,
+    expected_provider_client_id: UUID | None,
+    credential_ciphertext: str,
+    token_expires_at: datetime | None,
+    effective_scopes_json: str,
+    advance_grant: bool,
+) -> IntegrationAccountRecord | None:
+    """Persist one OAuth refresh winner without conflating grant authority."""
+
+    account = await db.scalar(
+        select(CloudIntegrationAccount)
+        .where(CloudIntegrationAccount.id == account_id)
+        .with_for_update()
+    )
+    if account is None:
+        return None
+    if (
+        not account.enabled
+        or account.status != "ready"
+        or account.grant_version != expected_grant_version
+        or account.credential_version != expected_credential_version
+        or account.definition_security_revision_id != expected_definition_security_revision_id
+        or account.provider_client_id != expected_provider_client_id
+    ):
+        return None
+    now = utcnow()
+    account.credential_ciphertext = credential_ciphertext
+    account.credential_format = "oauth-bundle-v1"
+    account.token_expires_at = token_expires_at
+    account.effective_scopes_json = effective_scopes_json
+    account.auth_version += 1
+    account.credential_version += 1
+    if advance_grant:
+        account.grant_version += 1
     account.last_error_code = None
     account.updated_at = now
     await db.flush()

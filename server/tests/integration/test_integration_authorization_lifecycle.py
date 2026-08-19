@@ -33,6 +33,23 @@ from tests.e2e.cloud.helpers.github import seed_linked_github_account
 from tests.e2e.cloud.helpers.shared import AuthSession
 
 
+@pytest.mark.parametrize(
+    ("current", "candidate", "matches"),
+    [
+        ('["scope.one","scope.two"]', '["scope.two","scope.one"]', True),
+        ('["scope.one"]', '["scope.one","scope.two"]', False),
+        (None, "[]", False),
+        ("not-json", "[]", False),
+    ],
+)
+def test_effective_scope_authority_comparison_ignores_order(
+    current: str | None,
+    candidate: str | None,
+    matches: bool,
+) -> None:
+    assert attempts_store.effective_scope_authority_matches(current, candidate) is matches
+
+
 async def _authed_user(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -476,3 +493,89 @@ async def test_commit_rejects_starting_version_mismatch_without_swapping_candida
     assert current.auth_version == original.auth_version
     assert current.grant_version == original.grant_version
     assert current.credential_version == original.credential_version + 1
+
+
+@pytest.mark.asyncio
+async def test_replacement_advances_credential_but_only_authority_change_advances_grant(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth = await _authed_user(client, db_session, prefix="lifecycle-version-separation")
+    definition = await _definition(db_session, "context7")
+
+    async def _accept_candidate(**_kwargs: object) -> list[dict[str, object]]:
+        return []
+
+    monkeypatch.setattr(integrations_service, "list_remote_tools", _accept_candidate)
+    connected = await client.post(
+        "/v1/cloud/integrations/authentications",
+        headers=auth.headers,
+        json={
+            "definitionId": str(definition.id),
+            "authKind": "api_key",
+            "apiKey": "first-key",
+        },
+    )
+    assert connected.status_code == 200, connected.text
+    await db_session.rollback()
+    initial = await accounts_store.get_account_for_user_definition(
+        db_session,
+        uuid.UUID(auth.user_id),
+        definition.id,
+    )
+    assert initial is not None
+
+    rotated = await client.post(
+        "/v1/cloud/integrations/authentications",
+        headers=auth.headers,
+        json={
+            "definitionId": str(definition.id),
+            "authKind": "api_key",
+            "apiKey": "rotated-key",
+        },
+    )
+    assert rotated.status_code == 200, rotated.text
+    await db_session.rollback()
+    credential_only = await accounts_store.get_account(db_session, initial.id)
+    assert credential_only is not None
+    assert credential_only.auth_version == initial.auth_version + 1
+    assert credential_only.grant_version == initial.grant_version
+    assert credential_only.credential_version == initial.credential_version + 1
+
+    revision = await ensure_current_definition_security_revision(db_session, definition.id)
+    assert revision is not None
+    authority_attempt = await attempts_store.create_authorization_attempt(
+        db_session,
+        owner_user_id=uuid.UUID(auth.user_id),
+        definition_id=definition.id,
+        account_id=credential_only.id,
+        purpose="rotate",
+        method="api_key",
+        starting_grant_version=credential_only.grant_version,
+        starting_credential_version=credential_only.credential_version,
+        definition_security_revision_id=revision.id,
+        provider_client_id=None,
+        credential_audience=credential_only.credential_audience or "https://mcp.context7.com/mcp",
+        settings_json='{"authorityMode":"changed"}',
+        requested_scopes_json="[]",
+        effective_scopes_json="[]",
+        staged_credential_ciphertext=encrypt_json(
+            {"secretFields": {"api_key": "authority-change-key"}},
+            secret=settings.cloud_secret_key,
+        ),
+        staged_credential_format="secret-fields-v1",
+        status="validating",
+        expires_at=datetime.now(UTC) + timedelta(minutes=10),
+    )
+    committed = await attempts_store.commit_authorization_attempt(
+        db_session,
+        attempt_id=authority_attempt.id,
+        token_expires_at=None,
+    )
+    await db_session.commit()
+
+    assert committed is not None
+    assert committed.auth_version == credential_only.auth_version + 1
+    assert committed.grant_version == credential_only.grant_version + 1
+    assert committed.credential_version == credential_only.credential_version + 1

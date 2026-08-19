@@ -33,6 +33,7 @@ class IntegrationOAuthFlowRecord:
     resource: str | None
     client_id: str
     token_endpoint: str | None
+    revocation_endpoint: str | None
     requested_scopes: str
     redirect_uri: str
     authorization_url: str
@@ -61,6 +62,7 @@ def _record(flow: CloudIntegrationOAuthFlow) -> IntegrationOAuthFlowRecord:
         resource=flow.resource,
         client_id=flow.client_id,
         token_endpoint=flow.token_endpoint,
+        revocation_endpoint=flow.revocation_endpoint,
         requested_scopes=flow.requested_scopes,
         redirect_uri=flow.redirect_uri,
         authorization_url=flow.authorization_url,
@@ -90,6 +92,7 @@ async def create_oauth_flow_canceling_existing(
     resource: str | None,
     client_id: str,
     token_endpoint: str | None,
+    revocation_endpoint: str | None,
     requested_scopes: str,
     redirect_uri: str,
     authorization_url: str,
@@ -130,6 +133,7 @@ async def create_oauth_flow_canceling_existing(
         resource=resource,
         client_id=client_id,
         token_endpoint=token_endpoint,
+        revocation_endpoint=revocation_endpoint,
         requested_scopes=requested_scopes,
         redirect_uri=redirect_uri,
         authorization_url=authorization_url,
@@ -173,6 +177,36 @@ async def get_oauth_flow_for_user(
         )
     ).scalar_one_or_none()
     return _record(flow) if flow is not None else None
+
+
+async def cancel_active_oauth_flows(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID,
+    definition_id: UUID,
+    failure_code: str,
+) -> tuple[IntegrationOAuthFlowRecord, ...]:
+    rows = list(
+        (
+            await db.scalars(
+                select(CloudIntegrationOAuthFlow)
+                .where(
+                    CloudIntegrationOAuthFlow.owner_user_id == owner_user_id,
+                    CloudIntegrationOAuthFlow.definition_id == definition_id,
+                    CloudIntegrationOAuthFlow.status.in_({"active", "exchanging"}),
+                )
+                .with_for_update()
+            )
+        ).all()
+    )
+    now = utcnow()
+    for row in rows:
+        row.status = "cancelled"
+        row.cancelled_at = now
+        row.failure_code = failure_code
+        row.updated_at = now
+    await db.flush()
+    return tuple(_record(row) for row in rows)
 
 
 async def get_oauth_flow_for_attempt(

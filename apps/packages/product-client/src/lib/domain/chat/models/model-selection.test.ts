@@ -34,7 +34,7 @@ function model(
 }
 
 describe("resolveEffectiveLaunchSelection", () => {
-  it("falls back to the catalog default when a stored dynamic id no longer resolves", () => {
+  it("falls back to the observed default when a stored id no longer resolves", () => {
     const selection = resolveEffectiveLaunchSelection(
       [
         launchAgent(
@@ -48,7 +48,6 @@ describe("resolveEffectiveLaunchSelection", () => {
         defaultChatModelIdByAgentKind: {
           opencode: "anthropic/claude-sonnet-4-6",
         },
-        chatModelVisibilityOverridesByAgentKind: {},
       },
     );
 
@@ -58,7 +57,7 @@ describe("resolveEffectiveLaunchSelection", () => {
     });
   });
 
-  it("resolves a variant-suffixed stored id onto its catalog base model", () => {
+  it("does not canonicalize a variant-suffixed stored id", () => {
     const selection = resolveEffectiveLaunchSelection(
       [
         launchAgent(
@@ -74,17 +73,16 @@ describe("resolveEffectiveLaunchSelection", () => {
         defaultChatModelIdByAgentKind: {
           codex: "gpt-5.5-codex/high",
         },
-        chatModelVisibilityOverridesByAgentKind: {},
       },
     );
 
     expect(selection).toEqual({
       kind: "codex",
-      modelId: "gpt-5.5-codex",
+      modelId: "gpt-5.5",
     });
   });
 
-  it("does not restore a hidden known model through saved-id fallback", () => {
+  it("keeps an exact saved id because retired visibility overrides cannot hide observed values", () => {
     const selection = resolveEffectiveLaunchSelection(
       [
         launchAgent(
@@ -101,17 +99,12 @@ describe("resolveEffectiveLaunchSelection", () => {
         defaultChatModelIdByAgentKind: {
           cursor: "cursor/gpt-5.4",
         },
-        chatModelVisibilityOverridesByAgentKind: {
-          cursor: {
-            "cursor/gpt-5.4": false,
-          },
-        },
       },
     );
 
     expect(selection).toEqual({
       kind: "cursor",
-      modelId: "cursor/auto",
+      modelId: "cursor/gpt-5.4",
     });
   });
 });

@@ -26,7 +26,6 @@ export interface LaunchHomeCloudTargetInput {
   promptId: string;
   launchIntentId: string;
   modelSelection: HomeNextModelSelection;
-  modeId: string | null;
   launchControlValues: Record<string, string>;
   initialSession: PendingWorkspaceInitialSession;
   createdAt: number;
@@ -53,7 +52,6 @@ export interface LaunchHomeCloudTargetDeps {
     workspaceId: string;
     projectedSessionId: string | null | undefined;
     modelSelection: HomeNextModelSelection;
-    modeId: string | null;
     launchControlValues?: Record<string, string>;
     text: string;
     attachmentSnapshots?: PromptAttachmentSnapshot[];
@@ -150,7 +148,6 @@ export async function launchHomeCloudTarget(
         workspaceId: result.workspaceId,
         projectedSessionId,
         modelSelection: input.modelSelection,
-        modeId: input.modeId,
         launchControlValues: input.launchControlValues,
         text: input.prompt,
         attachmentSnapshots: input.attachmentSnapshots,
@@ -179,7 +176,6 @@ export async function launchHomeCloudTarget(
     cloudAttemptId: result.attemptId,
     agentKind: input.modelSelection.kind,
     modelId: input.modelSelection.modelId,
-    modeId: input.modeId,
     launchControlValues: input.launchControlValues,
     promptText: input.prompt,
     attachmentSnapshots: input.attachmentSnapshots,
