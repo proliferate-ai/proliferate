@@ -217,12 +217,6 @@ reason = "3 wire type imports (one inside the inline cfg(test) mod) + 4 inline w
 
 [[exception]]
 rule = "AH-CONTRACT-1"
-path = "anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs"
-site = "mod tests::anyharness_contract::v1::Loop"
-reason = "3 wire type imports (one inside the inline cfg(test) mod) + 4 inline wire paths (:490/:491 match arms, :536 comparison, :754 fn param) below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"
-
-[[exception]]
-rule = "AH-CONTRACT-1"
 path = "anyharness/crates/anyharness-lib/src/domains/loops/schedule.rs"
 site = "anyharness_contract::v1::LoopSchedule"
 reason = "1 wire type import below the mapper boundary; target = loops domain twins (grid plan PR 10.x)"

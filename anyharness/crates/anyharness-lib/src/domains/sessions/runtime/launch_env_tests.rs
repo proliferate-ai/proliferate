@@ -96,7 +96,10 @@ fn build_session_launch_env_sets_requested_model_for_real_claude_model_id() {
     )
     .expect("build env");
 
-    assert_eq!(env.get("ANTHROPIC_MODEL").map(String::as_str), Some("haiku"));
+    assert_eq!(
+        env.get("ANTHROPIC_MODEL").map(String::as_str),
+        Some("haiku")
+    );
 }
 
 /// The selector filter is an exact (case-insensitive) match, not a

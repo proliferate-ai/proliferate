@@ -71,15 +71,16 @@ pub fn resolve_targeted_boundary(
     // gate this always holds; the check keeps the invariant explicit and guards
     // the boundary if the gate ever loosens.
     let turn_committed = events.iter().any(|event| {
-        event.event_type == TURN_ENDED
-            && event.turn_id.as_deref() == Some(target.turn_id.as_str())
+        event.event_type == TURN_ENDED && event.turn_id.as_deref() == Some(target.turn_id.as_str())
     });
     if !turn_committed {
         return Err(ForkTargetError::BoundaryNotCommitted);
     }
 
-    let prefix: Vec<&SessionEventRecord> =
-        events.iter().filter(|event| event.seq < anchor.seq).collect();
+    let prefix: Vec<&SessionEventRecord> = events
+        .iter()
+        .filter(|event| event.seq < anchor.seq)
+        .collect();
     let prefix_terminal_seq = prefix.last().map(|event| event.seq).unwrap_or(0);
     Ok(ResolvedForkBoundary {
         anchor_turn_id: target.turn_id.clone(),
@@ -134,7 +135,13 @@ mod tests {
     use super::*;
     use anyharness_contract::v1::ForkSessionTargetType;
 
-    fn event(seq: i64, event_type: &str, turn: &str, item: &str, payload: &str) -> SessionEventRecord {
+    fn event(
+        seq: i64,
+        event_type: &str,
+        turn: &str,
+        item: &str,
+        payload: &str,
+    ) -> SessionEventRecord {
         SessionEventRecord {
             id: seq,
             session_id: "parent".to_string(),
@@ -172,10 +179,28 @@ mod tests {
     fn sample() -> Vec<SessionEventRecord> {
         vec![
             user_message(1, "t1", "u1", "first"),
-            event(2, "item_completed", "t1", "a1", r#"{"type":"item_completed","item":{"kind":"assistant_message","status":"completed","sourceAgentKind":"claude","contentParts":[]}}"#),
-            event(3, TURN_ENDED, "t1", "", r#"{"type":"turn_ended","turnId":"t1"}"#),
+            event(
+                2,
+                "item_completed",
+                "t1",
+                "a1",
+                r#"{"type":"item_completed","item":{"kind":"assistant_message","status":"completed","sourceAgentKind":"claude","contentParts":[]}}"#,
+            ),
+            event(
+                3,
+                TURN_ENDED,
+                "t1",
+                "",
+                r#"{"type":"turn_ended","turnId":"t1"}"#,
+            ),
             user_message(4, "t2", "u2", "second"),
-            event(5, TURN_ENDED, "t2", "", r#"{"type":"turn_ended","turnId":"t2"}"#),
+            event(
+                5,
+                TURN_ENDED,
+                "t2",
+                "",
+                r#"{"type":"turn_ended","turnId":"t2"}"#,
+            ),
         ]
     }
 
@@ -187,8 +212,7 @@ mod tests {
 
     #[test]
     fn unknown_anchor_is_target_not_found() {
-        let error =
-            resolve_targeted_boundary(&sample(), &target("t2", Some("nope"))).unwrap_err();
+        let error = resolve_targeted_boundary(&sample(), &target("t2", Some("nope"))).unwrap_err();
         assert_eq!(error, ForkTargetError::TargetNotFound);
     }
 
@@ -202,7 +226,9 @@ mod tests {
     #[test]
     fn uncommitted_turn_is_rejected() {
         let mut events = sample();
-        events.retain(|event| !(event.event_type == TURN_ENDED && event.turn_id.as_deref() == Some("t2")));
+        events.retain(|event| {
+            !(event.event_type == TURN_ENDED && event.turn_id.as_deref() == Some("t2"))
+        });
         let error = resolve_targeted_boundary(&events, &target("t2", Some("u2"))).unwrap_err();
         assert_eq!(error, ForkTargetError::BoundaryNotCommitted);
     }

@@ -18,6 +18,7 @@ use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionError, RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
 use crate::live::sessions::actor::command::SessionCommand;
+mod fork;
 mod sidedoor;
 #[derive(Debug)]
 pub enum LiveSessionCommandError<E> {
@@ -439,20 +440,6 @@ impl LiveSessionHandle {
             respond_to,
         })
         .await
-    }
-
-    pub async fn verify_fork_ready(
-        &self,
-    ) -> Result<(), LiveSessionCommandError<ForkSessionCommandError>> {
-        self.send_request(|respond_to| SessionCommand::VerifyForkReady { respond_to })
-            .await
-    }
-
-    pub async fn fork(
-        &self,
-    ) -> Result<ForkSessionCommandResult, LiveSessionCommandError<ForkSessionCommandError>> {
-        self.send_request(|respond_to| SessionCommand::Fork { respond_to })
-            .await
     }
 
     pub async fn close_native_session(&self, native_session_id: String) -> anyhow::Result<()> {

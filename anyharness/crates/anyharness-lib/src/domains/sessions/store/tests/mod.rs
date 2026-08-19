@@ -78,6 +78,7 @@ mod notifications;
 mod opencode_message_ids;
 mod pending_prompt_events;
 mod pending_prompts;
+mod process_local_fork;
 mod runtime_event_idempotency;
 mod sessions;
 mod support_windows;

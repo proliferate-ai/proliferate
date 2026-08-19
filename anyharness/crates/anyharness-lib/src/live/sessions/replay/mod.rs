@@ -389,13 +389,13 @@ async fn handle_non_replay_command(
             )));
             None
         }
-        SessionCommand::VerifyForkReady { respond_to } => {
+        SessionCommand::VerifyForkReady { respond_to, .. } => {
             let _ = respond_to.send(Err(ForkSessionCommandError::Unsupported(
                 "replay sessions cannot be forked".to_string(),
             )));
             None
         }
-        SessionCommand::Fork { respond_to } => {
+        SessionCommand::Fork { respond_to, .. } => {
             let _ = respond_to.send(Err(ForkSessionCommandError::Unsupported(
                 "replay sessions cannot be forked".to_string(),
             )));

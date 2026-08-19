@@ -40,7 +40,7 @@ impl Drop for EnvVarGuard {
 }
 
 pub(crate) struct ScriptedAgent {
-    program: PathBuf,
+    pub(crate) program: PathBuf,
     pub(crate) request_log: PathBuf,
     pub(crate) control_dir: PathBuf,
 }

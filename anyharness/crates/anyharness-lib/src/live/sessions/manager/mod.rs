@@ -14,6 +14,8 @@ mod runtime_events;
 mod startup;
 
 #[cfg(test)]
+mod fork_test_support;
+#[cfg(test)]
 mod tests;
 
 type StartupReadinessState = Option<Result<String, String>>;

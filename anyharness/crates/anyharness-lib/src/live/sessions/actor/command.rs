@@ -223,9 +223,11 @@ pub(in crate::live::sessions) enum SessionCommand {
         respond_to: oneshot::Sender<anyhow::Result<serde_json::Value>>,
     },
     VerifyForkReady {
+        requires_targeted_fork: bool,
         respond_to: oneshot::Sender<Result<(), ForkSessionCommandError>>,
     },
     Fork {
+        provider_anchor: Option<crate::domains::sessions::runtime::fork_anchor::ProviderForkAnchor>,
         respond_to: oneshot::Sender<Result<ForkSessionCommandResult, ForkSessionCommandError>>,
     },
     /// OpenCode side-door targeted fork. Validated and dispatched

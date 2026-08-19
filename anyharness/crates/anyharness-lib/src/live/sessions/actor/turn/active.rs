@@ -326,10 +326,10 @@ impl SessionActor {
                                 // permission before the goal write can land.
                                 self.spawn_agent_ext_method(method, params, respond_to);
                             }
-                            Some(SessionCommand::VerifyForkReady { respond_to }) => {
+                            Some(SessionCommand::VerifyForkReady { respond_to, .. }) => {
                                 let _ = respond_to.send(Err(ForkSessionCommandError::Busy));
                             }
-                            Some(SessionCommand::Fork { respond_to }) => {
+                            Some(SessionCommand::Fork { respond_to, .. }) => {
                                 let _ = respond_to.send(Err(ForkSessionCommandError::Busy));
                             }
                             Some(SessionCommand::SidedoorTargetedFork { respond_to, .. }) => {

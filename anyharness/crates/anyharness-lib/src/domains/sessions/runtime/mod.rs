@@ -40,8 +40,19 @@ mod creation;
 #[cfg(test)]
 mod dispatch_classification_tests;
 mod fork;
+pub(crate) mod fork_anchor;
+#[cfg(test)]
+mod fork_anchor_gate_tests;
 pub(crate) mod fork_boundary;
+#[cfg(test)]
+mod fork_dispatch_and_restart_tests;
+#[cfg(test)]
+mod fork_process_local_lifecycle_tests;
+#[cfg(test)]
+mod fork_prompt_terminal_protection_tests;
 pub(crate) mod fork_qualification;
+#[cfg(test)]
+mod fork_scenario_fixtures_tests;
 #[cfg(test)]
 mod idempotent_creation_tests;
 mod interactions;
@@ -67,6 +78,7 @@ mod prompt_queue;
 mod replay;
 mod startup;
 mod startup_errors;
+mod startup_facts;
 mod subagent_lifecycle;
 #[cfg(test)]
 mod tests;

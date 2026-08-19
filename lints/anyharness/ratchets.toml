@@ -50,8 +50,8 @@ reason = "goal service regression tests for pending_op idempotency"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs"
-max_lines = 802
-reason = "loops runtime — native write path + emulated Codex scheduler (+2b derived-safe classification comment at the fire seam; fire executor moved to its owning module in PR5)"
+max_lines = 706
+reason = "loops runtime — native write path + emulated Codex scheduler (+2b derived-safe classification comment at the fire seam; fire executor moved to its owning module in PR5; unit tests split to runtime_tests.rs to fit the extension-response decode diagnostic)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/plans/service.rs"
@@ -65,8 +65,8 @@ reason = "existing AnyHarness oversized test file"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs"
-max_lines = 1214
-reason = "existing AnyHarness oversized test file (launch-env tests moved to their owning module) + A9 Scope C resume/fork revoked-credentials regression tests (AgentNotReady at the common live-start seam) + a review-fix pin (unsatisfiable selection reports RouteAuth, not AgentNotReady, on resume) + Forks ADR rung 2 targeted-fork plumbing tests (item-less rejection, fail-closed no-child downgrade guard, idempotency conflict, unknown-outcome redispatch block; the same-payload resume test moved to checkpoint_linkage_tests.rs with the Lane H NULL-linkage pins, -65)"
+max_lines = 1155
+reason = "existing AnyHarness oversized test file (launch-env tests moved to their owning module) + A9 Scope C resume/fork revoked-credentials regression tests (AgentNotReady at the common live-start seam) + a review-fix pin (unsatisfiable selection reports RouteAuth, not AgentNotReady, on resume) + Forks ADR rung 2 targeted-fork plumbing tests (item-less rejection, fail-closed no-child downgrade guard, idempotency conflict, unknown-outcome redispatch block); the same-payload resume lives in checkpoint_linkage_tests.rs with the Lane H NULL-linkage pins, and the rung-3 provider-anchor gates plus shared fixtures live in fork_anchor_gate_tests.rs"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/sessions/actor/tests/workspace_stop.rs"

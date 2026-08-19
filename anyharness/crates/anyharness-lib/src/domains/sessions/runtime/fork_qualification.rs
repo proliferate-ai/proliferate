@@ -41,8 +41,9 @@ fn parsed_qualifications() -> &'static [QualificationEntry] {
 /// `agentKind` is very likely a typo that would otherwise silently qualify
 /// nothing.
 fn parse_qualifications(raw: &str) -> anyhow::Result<Vec<QualificationEntry>> {
-    let entries: Vec<QualificationEntry> = serde_json::from_str(raw)
-        .map_err(|error| anyhow::anyhow!("targeted-fork-sidedoor registry: invalid JSON: {error}"))?;
+    let entries: Vec<QualificationEntry> = serde_json::from_str(raw).map_err(|error| {
+        anyhow::anyhow!("targeted-fork-sidedoor registry: invalid JSON: {error}")
+    })?;
 
     let mut seen: HashSet<(String, String)> = HashSet::new();
     for entry in &entries {
@@ -72,9 +73,9 @@ fn parse_qualifications(raw: &str) -> anyhow::Result<Vec<QualificationEntry>> {
 /// native_version)` pair -- including an unknown agent kind entirely -- is
 /// unqualified: fail closed, never assume.
 pub fn sidedoor_fork_qualified(agent_kind: &str, native_version: &str) -> bool {
-    parsed_qualifications()
-        .iter()
-        .any(|entry| entry.agent_kind == agent_kind && entry.native_version == native_version && entry.qualified)
+    parsed_qualifications().iter().any(|entry| {
+        entry.agent_kind == agent_kind && entry.native_version == native_version && entry.qualified
+    })
 }
 
 #[cfg(test)]
@@ -83,7 +84,8 @@ mod tests {
 
     #[test]
     fn bundled_registry_parses_and_matches_opencode_pin() {
-        let entries = parse_qualifications(BUNDLED_QUALIFICATIONS).expect("bundled registry parses");
+        let entries =
+            parse_qualifications(BUNDLED_QUALIFICATIONS).expect("bundled registry parses");
         assert!(entries
             .iter()
             .any(|entry| entry.agent_kind == "opencode" && entry.native_version == "1.18.3"));
@@ -118,7 +120,8 @@ mod tests {
 
     #[test]
     fn empty_agent_kind_fails_closed() {
-        let raw = r#"[{"agentKind": "", "nativeVersion": "1.0.0", "qualified": true, "evidence": "a"}]"#;
+        let raw =
+            r#"[{"agentKind": "", "nativeVersion": "1.0.0", "qualified": true, "evidence": "a"}]"#;
         let error = parse_qualifications(raw).expect_err("empty agentKind must fail to parse");
         assert!(error.to_string().contains("empty agentKind"));
     }

@@ -91,6 +91,43 @@ Readiness treats a managed package whose installed source metadata does not
 match the bundled Git pin as `install_required`, so setup and startup reconcile
 can refresh older adapters before launch.
 
+## Process-Local Fork Lifecycle
+
+Claude fork ids are owned by one adapter process until the child has durable
+turn history. A new fork child therefore uses one connection for the complete
+sequence `initialize -> session/load(parent) -> session/fork(parent)`. Parent
+load uses ordinary startup metadata; the private `upToMessageId` anchor is sent
+only with `session/fork`. Hydration never prompts and never closes the parent.
+
+The connection installs its fork epoch before transport starts. Parent replay
+is quarantined during load. Notifications that race ahead of the fork response
+are held in a bounded buffer and released only when the response names that
+exact child. Requests are denied until durable child finalization; delayed
+parent and unknown traffic remain quarantined after readiness. Claude's legacy
+user-input and MCP extension requests resolve with a fixed
+cancellation-success shape on fork connections before payload parsing because
+they do not provide an accepted protocol-level session scope. Standard scoped
+ACP requests may run only for the ready child.
+
+Transport observation is unconditional, but a Claude fork connection is
+permanently header-only in both directions, including when full ACP teeing is
+enabled. Raw transport parent/child ids, extension method text, response data,
+and provider response errors are omitted from transport and startup-failure
+diagnostics. Protected input is validated before ACP dispatch, response ids
+must match a bounded single-use client request, and malformed or unowned
+envelopes terminate with fixed diagnostics. Existing structured session
+lifecycle identifiers remain intact.
+
+Durably, the operation and child stay `prepared` through child/link/prefix
+creation. The child actor claims `native_call_in_flight` at the wire seam. A
+valid result atomically assigns the native id to `sessions` and records
+`native_result_known`; `fork_operations.native_child_session_id` remains NULL.
+Only the final atomic `sessions.status = idle` + operation `completed`
+transition can publish the child ready. Explicit wire errors become `failed`;
+disconnects, malformed results, invalid child ids, and ambiguous local errors
+become `native_outcome_unknown`. Cold zero-turn recovery fails closed until an
+exact-prefix recovery proof exists; it never issues a second fork speculatively.
+
 ## Restart Semantics
 
 Pending interactions are live broker state. Durable events and session

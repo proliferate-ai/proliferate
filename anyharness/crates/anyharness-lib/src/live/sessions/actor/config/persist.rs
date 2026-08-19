@@ -215,24 +215,32 @@ pub(in crate::live::sessions::actor) fn emit_startup_state(
 /// both a short warning and the `[workspace-latency]` failure record; success
 /// logs the matching completion record. `stage` names the metric
 /// (`session.actor.<stage>.{failed,completed}`).
-pub(in crate::live::sessions::actor) fn log_config_stage_result<E: std::fmt::Display>(
+pub(in crate::live::sessions::actor) fn log_config_stage_result<E>(
     session_id: &str,
     workspace_id: &str,
     result: &Result<(), E>,
     elapsed: std::time::Duration,
     short_failure_message: &str,
-    stage: &str,
+    stage: super::diagnostics::ConfigFailureStage,
 ) {
     match result {
         Err(error) => {
-            tracing::warn!(session_id = %session_id, error = %error, "{}", short_failure_message);
+            let failure = super::diagnostics::fixed_config_failure(error, stage);
+            tracing::warn!(
+                session_id = %session_id,
+                failure_class = failure.failure_class,
+                failure_stage = failure.failure_stage,
+                "{}",
+                short_failure_message
+            );
             tracing::warn!(
                 session_id = %session_id,
                 workspace_id = %workspace_id,
-                error = %error,
+                failure_class = failure.failure_class,
+                failure_stage = failure.failure_stage,
                 elapsed_ms = elapsed.as_millis(),
                 "[workspace-latency] session.actor.{}.failed",
-                stage
+                stage.as_str()
             );
         }
         Ok(()) => {
@@ -241,7 +249,7 @@ pub(in crate::live::sessions::actor) fn log_config_stage_result<E: std::fmt::Dis
                 workspace_id = %workspace_id,
                 elapsed_ms = elapsed.as_millis(),
                 "[workspace-latency] session.actor.{}.completed",
-                stage
+                stage.as_str()
             );
         }
     }

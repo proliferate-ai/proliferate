@@ -1,5 +1,6 @@
 use super::fork::validate_fork_parent;
-use super::startup::choose_session_startup_strategy;
+use super::fork_anchor_gate_tests::{before_user_message_target, build_forkable_fork_state};
+use super::startup_facts::choose_session_startup_strategy;
 use crate::app::test_support;
 use crate::domains::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
@@ -299,11 +300,7 @@ fn choose_startup_strategy_loads_started_fork_children_without_fresh_fallback() 
 }
 
 #[test]
-fn choose_startup_strategy_reforks_zero_turn_fork_child_with_native_id() {
-    // The bug case end-to-end through the IO layer: a fork child with an
-    // eagerly-recorded native id but no first prompt resolves the parent native
-    // id (widened gating) and re-forks instead of issuing a dead no-fallback
-    // load.
+fn choose_startup_strategy_refuses_zero_turn_process_local_fork_with_native_id() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);
 
@@ -327,19 +324,13 @@ fn choose_startup_strategy_reforks_zero_turn_fork_child_with_native_id() {
         .insert_session_with_link(&child, &link)
         .expect("insert fork child and link");
 
-    let strategy =
-        choose_session_startup_strategy(&child, &store).expect("select startup strategy");
-
-    assert_eq!(
-        strategy,
-        SessionStartupStrategy::ForkFromNative {
-            parent_native_session_id: "parent-native".to_string()
-        }
-    );
+    let error = choose_session_startup_strategy(&child, &store)
+        .expect_err("cold process-local recovery must refuse");
+    assert!(error.to_string().contains("exact-prefix recovery proof"));
 }
 
 #[test]
-fn choose_startup_strategy_forks_unstarted_fork_children_from_parent_native_id() {
+fn choose_startup_strategy_refuses_unstarted_process_local_fork_children() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);
 
@@ -362,29 +353,18 @@ fn choose_startup_strategy_forks_unstarted_fork_children_from_parent_native_id()
         .insert_session_with_link(&child, &link)
         .expect("insert fork child and link");
 
-    let strategy =
-        choose_session_startup_strategy(&child, &store).expect("select startup strategy");
-
-    assert_eq!(
-        strategy,
-        SessionStartupStrategy::ForkFromNative {
-            parent_native_session_id: "parent-native".to_string()
-        }
-    );
-    assert!(
-        strategy.resumes_durable_history(),
-        "fork startup appends after the copied parent transcript snapshot"
-    );
+    let error = choose_session_startup_strategy(&child, &store)
+        .expect_err("cold process-local recovery must refuse");
+    assert!(error.to_string().contains("exact-prefix recovery proof"));
 }
 
 #[test]
-fn choose_startup_strategy_reforks_snapshot_polluted_zero_turn_fork_child() {
+fn choose_startup_strategy_refuses_snapshot_polluted_zero_turn_fork_child() {
     // End-to-end guard against the snapshot-pollution trap: build the child via
     // the real fork snapshot (which copies the parent's `turn_started` events),
     // so `has_turn_started_event(child)` is true. A zero-turn Claude child must
-    // still re-fork from the parent — proving the policy keys on `last_prompt_at`
-    // and not on the polluted `turn_started` signal. This test fails if anyone
-    // reverts the fork branch to key on `has_turn_started_event`.
+    // still refuse cold recovery — proving the policy keys on `last_prompt_at`
+    // and not on the polluted `turn_started` signal.
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);
 
@@ -428,15 +408,9 @@ fn choose_startup_strategy_reforks_snapshot_polluted_zero_turn_fork_child() {
         "snapshot should have copied the parent's turn_started into the child"
     );
 
-    let strategy =
-        choose_session_startup_strategy(&child, &store).expect("select startup strategy");
-
-    assert_eq!(
-        strategy,
-        SessionStartupStrategy::ForkFromNative {
-            parent_native_session_id: "parent-native".to_string()
-        }
-    );
+    let error = choose_session_startup_strategy(&child, &store)
+        .expect_err("cold process-local recovery must refuse");
+    assert!(error.to_string().contains("exact-prefix recovery proof"));
 }
 
 #[test]
@@ -771,12 +745,15 @@ async fn ensure_live_session_rejects_a_resume_with_revoked_credentials() {
     // No enrolled agent-auth route and no provider env for opencode: a real
     // credential gap, not the unconditional Ready the pre-fix bug produced.
     let bin = runtime_home.join("opencode-acp");
-    std::fs::write(&bin, "#!/bin/sh
+    std::fs::write(
+        &bin,
+        "#!/bin/sh
 exit 0
-").expect("write override binary");
+",
+    )
+    .expect("write override binary");
     make_executable(&bin).expect("make override binary executable");
-    let _program_guard =
-        EnvVarGuard::set("ANYHARNESS_OPENCODE_AGENT_PROGRAM", bin.as_os_str());
+    let _program_guard = EnvVarGuard::set("ANYHARNESS_OPENCODE_AGENT_PROGRAM", bin.as_os_str());
     let empty_home = std::env::temp_dir().join(format!(
         "anyharness-resume-revoked-creds-home-{}",
         uuid::Uuid::new_v4()
@@ -827,7 +804,8 @@ exit 0
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn ensure_live_session_reports_an_unsatisfiable_selection_as_route_auth_not_agent_not_ready() {
+async fn ensure_live_session_reports_an_unsatisfiable_selection_as_route_auth_not_agent_not_ready()
+{
     // Review fix (A9 Scope C, cycle 1, item A): the readiness gate added
     // above must run AFTER the route-auth selection pre-check, mirroring
     // create_session's deliberate order (service/create.rs: fail closed on
@@ -863,9 +841,13 @@ async fn ensure_live_session_reports_an_unsatisfiable_selection_as_route_auth_no
     std::fs::create_dir_all(&workspace_path).expect("create workspace directory");
 
     let bin = runtime_home.join("opencode-acp");
-    std::fs::write(&bin, "#!/bin/sh
+    std::fs::write(
+        &bin,
+        "#!/bin/sh
 exit 0
-").expect("write override binary");
+",
+    )
+    .expect("write override binary");
     make_executable(&bin).expect("make override binary executable");
     let _program_guard = EnvVarGuard::set("ANYHARNESS_OPENCODE_AGENT_PROGRAM", bin.as_os_str());
     let empty_home = std::env::temp_dir().join(format!(
@@ -919,7 +901,8 @@ exit 0
 
     match error {
         EnsureLiveSessionError::RouteAuth(RouteAuthError::SelectionMissing {
-            harness_kind, ..
+            harness_kind,
+            ..
         }) => {
             assert_eq!(harness_kind, "opencode");
         }
@@ -957,12 +940,15 @@ async fn fork_session_rejects_a_parent_with_revoked_credentials() {
     std::fs::create_dir_all(&workspace_path).expect("create workspace directory");
 
     let bin = runtime_home.join("opencode-acp");
-    std::fs::write(&bin, "#!/bin/sh
+    std::fs::write(
+        &bin,
+        "#!/bin/sh
 exit 0
-").expect("write override binary");
+",
+    )
+    .expect("write override binary");
     make_executable(&bin).expect("make override binary executable");
-    let _program_guard =
-        EnvVarGuard::set("ANYHARNESS_OPENCODE_AGENT_PROGRAM", bin.as_os_str());
+    let _program_guard = EnvVarGuard::set("ANYHARNESS_OPENCODE_AGENT_PROGRAM", bin.as_os_str());
     let empty_home = std::env::temp_dir().join(format!(
         "anyharness-fork-revoked-creds-home-{}",
         uuid::Uuid::new_v4()
@@ -1016,66 +1002,16 @@ exit 0
 
 // ---------------------------------------------------------------------------
 // Forks ADR rung 2: targeted-fork plumbing (idempotency, provenance, gating).
-//
 // These exercise the branches that short-circuit BEFORE the live-start seam
 // (`ensure_live_session_handle`), so they need no spawned agent: target
 // validation, the capability gate, and the idempotency lookup all resolve
 // against the durable store.
 // ---------------------------------------------------------------------------
 
-/// Build an `AppState` with a seeded, on-disk local workspace and a single
-/// forkable parent session. Returns `(state, parent_id, runtime_home)`.
-///
-/// `pub(super)` so `checkpoint_linkage_tests` (a sibling test module) can
-/// reuse this harness.
-pub(super) fn build_forkable_fork_state(
-    caps_json: &str,
-) -> (crate::app::AppState, String, std::path::PathBuf) {
-    use crate::domains::agents::installer::seed::AgentSeedStore;
-
-    let runtime_home = std::env::temp_dir().join(format!(
-        "anyharness-fork-rung2-{}",
-        uuid::Uuid::new_v4()
-    ));
-    let workspace_path = runtime_home.join("workspace");
-    std::fs::create_dir_all(&workspace_path).expect("create workspace directory");
-
-    let state = crate::app::AppState::new(
-        runtime_home.clone(),
-        "http://127.0.0.1:8457".to_string(),
-        Db::open_in_memory().expect("in-memory db"),
-        false,
-        AgentSeedStore::not_configured_dev(),
-    )
-    .expect("app state");
-
-    test_support::seed_workspace_with_repo_root(
-        &state.db,
-        "workspace-fork-rung2",
-        "local",
-        &workspace_path.to_string_lossy(),
-    );
-
-    let mut record = session_record("claude");
-    record.workspace_id = "workspace-fork-rung2".to_string();
-    record.last_prompt_at = Some("2026-03-25T00:05:00Z".to_string());
-    record.action_capabilities_json = Some(caps_json.to_string());
-    state
-        .session_service
-        .store()
-        .insert(&record)
-        .expect("insert parent session");
-
-    (state, record.id, runtime_home)
-}
-
-fn before_user_message_target(item_id: Option<&str>) -> anyharness_contract::v1::ForkSessionTarget {
-    anyharness_contract::v1::ForkSessionTarget {
-        target_type: anyharness_contract::v1::ForkSessionTargetType::BeforeUserMessage,
-        turn_id: "turn-1".to_string(),
-        item_id: item_id.map(str::to_string),
-    }
-}
+// The shared fork fixtures (`build_forkable_fork_state`,
+// `build_forkable_fork_state_for_agent`, `before_user_message_target`) live in
+// the sibling `fork_anchor_gate_tests` module (split for the PROD-SIZE-1
+// ratchet) and are imported at the top of this file.
 
 #[tokio::test(flavor = "current_thread")]
 async fn fork_rejects_item_less_target_with_invalid_fork_target() {
@@ -1084,7 +1020,12 @@ async fn fork_rejects_item_less_target_with_invalid_fork_target() {
 
     let error = state
         .session_runtime
-        .fork_session(&parent_id, Some(before_user_message_target(None)), None, None)
+        .fork_session(
+            &parent_id,
+            Some(before_user_message_target(None)),
+            None,
+            None,
+        )
         .await
         .expect_err("item-less target must be rejected at the product boundary");
 
