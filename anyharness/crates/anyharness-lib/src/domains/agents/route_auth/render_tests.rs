@@ -8,7 +8,7 @@ use super::materialize::PathFamily;
 use super::plan::{GatewayModelPlan, GatewayModelResolve};
 use super::render::render_profile;
 use super::state::state_file_path;
-use super::test_support::{lock_env, HomeEnvGuard, TempHome};
+use super::test_support::TempHome;
 use super::{load_state_file, resolve_launch_route_auth, resolve_profile, RouteAuthError};
 
 const GATEWAY_BASE_URL: &str = "https://llm.proliferate.ai";
@@ -359,6 +359,18 @@ fn missing_state_file_is_native_empty_delta() {
 }
 
 #[test]
+fn native_codex_inherits_its_own_home_without_materialization() {
+    let home = TempHome::new("native-codex");
+    let rendered =
+        resolve_launch_route_auth(home.path(), "codex", &HarnessPlanResolver).expect("render");
+
+    assert!(rendered.set.is_empty());
+    assert!(rendered.remove.is_empty());
+    assert!(rendered.files.is_empty());
+    assert!(!home.path().join("agent-auth").exists());
+}
+
+#[test]
 fn malformed_state_file_is_typed_error() {
     let home = TempHome::new("broken");
     home.write_state_raw(b"{{{ not json");
@@ -398,7 +410,7 @@ fn render_is_pure_and_apply_writes_0600_files() {
     home.write_state_json(&gateway_state("codex"));
     let state = load_state_file(home.path()).expect("load").expect("state");
     let profile = resolve_profile(Some(&state), "codex").expect("resolve");
-    // Pass the codex plan (default model) directly — render consumes only the plan.
+    // Route rendering consumes only the explicit plan (empty for Codex).
     let plan = HarnessPlanResolver.resolve_gateway_models("codex", 0);
     let rendered = render_profile(&profile, "codex", &plan, home.path()).expect("render");
 

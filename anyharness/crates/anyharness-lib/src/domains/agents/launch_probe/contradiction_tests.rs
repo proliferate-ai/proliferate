@@ -16,7 +16,7 @@ async fn live_contradictions_queue_and_coalesce_one_target_refresh() {
     home.write_state_json(&gateway_state(1, &[("opencode", "test-not-a-real-key")]));
 
     let (runner, release) = FakeRunner::gated();
-    let plan = Arc::new(CountingPlanProducer::new(vec!["m-1"], Vec::new()));
+    let plan = Arc::new(CountingPlanProducer::new(vec!["m-1"]));
     let targets = Arc::new(FixedTargets {
         harnesses: vec!["opencode".to_string()],
         installed: vec!["opencode".to_string()],

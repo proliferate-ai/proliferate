@@ -197,10 +197,9 @@ fn process_is_live(pid: u32) -> Option<bool> {
 ///
 /// The earlier shape returned "live" unconditionally, which read as conservative but
 /// was in fact a leak: a parseable root could then never be swept at all, no matter
-/// how old, so an abandoned scratch — which for a native-codex probe holds a copy of
-/// the user's own `auth.json` — would persist forever. Falling back to age-only keeps
-/// the reclamation alive; the age bound (three probe timeouts) is what makes it safe
-/// without the pid signal, and our own roots are already excluded above.
+/// how old. Falling back to age-only keeps reclamation alive; the age bound (three
+/// probe timeouts) is what makes it safe without the pid signal, and our own roots
+/// are already excluded above.
 #[cfg(not(unix))]
 fn process_is_live(_pid: u32) -> Option<bool> {
     None

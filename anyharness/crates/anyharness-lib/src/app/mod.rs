@@ -234,7 +234,7 @@ impl AppState {
             crate::domains::agents::runtime::RuntimeSurface::from_env(),
         );
         let (launch_options_service, launch_probe_service, gateway_model_planner) =
-            agent_launch::build_services(&db, &runtime_home, catalog_sync_service.clone());
+            agent_launch::build_services(&db, &runtime_home);
         // The one handle every AUTOMATIC poke site takes. See `AppState`'s field for
         // why it is separate; the suppression is a property of the wiring rather
         // than of which event sites happened to be threaded.

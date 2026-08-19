@@ -8,7 +8,7 @@
 use super::*;
 
 #[test]
-fn opencode_gateway_writes_config_with_static_models() {
+fn opencode_gateway_writes_config_with_live_models() {
     let home = TempHome::new("opencode-gw");
     home.write_state_json(&gateway_state("opencode"));
 
@@ -31,7 +31,7 @@ fn opencode_gateway_writes_config_with_static_models() {
         provider["options"]["apiKey"],
         "{env:PROLIFERATE_GATEWAY_KEY}"
     );
-    // P1 always uses the static fallback model list (catalog lands in P3).
+    // The resolver supplies the target gateway's exact live model list.
     let models = provider["models"].as_object().unwrap();
     assert!(!models.is_empty());
     assert!(models.contains_key("claude-haiku-4-5-20251001"));

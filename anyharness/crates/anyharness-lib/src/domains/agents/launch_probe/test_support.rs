@@ -154,7 +154,7 @@ pub(crate) struct CountingPlanProducer {
 }
 
 impl CountingPlanProducer {
-    pub(crate) fn new(models: Vec<&str>, _legacy_seed_models: Vec<&str>) -> Self {
+    pub(crate) fn new(models: Vec<&str>) -> Self {
         Self {
             models: Mutex::new(models.into_iter().map(str::to_string).collect()),
             fetch_count: AtomicUsize::new(0),
@@ -169,7 +169,7 @@ impl CountingPlanProducer {
 }
 
 impl CountingPlanProducer {
-    fn resolve_live(&self, harness_kind: &str) -> (GatewayModelPlan, bool) {
+    fn resolve_live(&self, harness_kind: &str) -> GatewayModelPlan {
         let mut memo = self.memo.lock().expect("memo poisoned");
         let fetch_fails = *self.fetch_fails.lock().expect("flag poisoned");
         let models = memo
@@ -183,18 +183,13 @@ impl CountingPlanProducer {
                 }
             })
             .clone();
-        (
-            GatewayModelPlan {
-                models,
-            },
-            false,
-        )
+        GatewayModelPlan { models }
     }
 }
 
 impl GatewayModelResolve for CountingPlanProducer {
     fn resolve_gateway_models(&self, harness_kind: &str, _revision: i64) -> GatewayModelPlan {
-        self.resolve_live(harness_kind).0
+        self.resolve_live(harness_kind)
     }
 
     fn invalidate_gateway_plan(&self, harness_kind: &str) {
@@ -208,7 +203,7 @@ impl GatewayModelResolve for CountingPlanProducer {
         &self,
         harness_kind: &str,
         _revision: i64,
-    ) -> (GatewayModelPlan, bool) {
+    ) -> GatewayModelPlan {
         self.resolve_live(harness_kind)
     }
 }

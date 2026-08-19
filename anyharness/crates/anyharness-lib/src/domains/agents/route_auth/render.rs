@@ -70,11 +70,10 @@ impl RenderedRouteAuth {
 /// isolated-config paths are computed by deterministic joins and the writes are
 /// described in [`RenderedRouteAuth::files`] for the launcher to apply.
 ///
-/// `harness_kind` is needed even for [`AgentRuntimeAuthProfile::Native`]: native
-/// is not always an empty delta. Codex reads its model and provider settings from
-/// `CODEX_HOME/config.toml`, so a native codex launch needs a rendered config
-/// too — see [`render_native`]. This is what lets the native recipe live in the
-/// same table as the routed ones instead of in a second, divergent code path.
+/// `harness_kind` is validated even for [`AgentRuntimeAuthProfile::Native`]. A
+/// native profile always renders an empty delta: the harness's own login and
+/// configuration remain authoritative. Model and control intent travel through
+/// the session launch/configuration path, not route-auth materialization.
 pub fn render_profile(
     profile: &AgentRuntimeAuthProfile,
     harness_kind: &str,
@@ -82,43 +81,19 @@ pub fn render_profile(
     runtime_home: &Path,
 ) -> Result<RenderedRouteAuth, RouteAuthError> {
     match profile {
-        AgentRuntimeAuthProfile::Native => render_native(harness_kind, plan, runtime_home),
+        AgentRuntimeAuthProfile::Native => {
+            parse_harness(harness_kind)?;
+            Ok(RenderedRouteAuth::default())
+        }
         AgentRuntimeAuthProfile::Sources(sources) => render_sources(sources, plan, runtime_home),
     }
 }
 
-/// The NATIVE recipe table — "the user's own login owns auth", per harness.
-///
-/// For four of five harnesses this is genuinely an empty delta: the CLI finds its
-/// own credentials and its own config, and injecting anything would be a lie
-/// about what the user chose.
-///
-/// Codex is the exception, and folding it in here is the point of this function.
-/// Codex takes its model and provider configuration from
-/// `CODEX_HOME/config.toml` rather than from env, so *something* has to render
-/// that file. Before this, a second isolated home (`agent-auth/codex-local/`) was
-/// written on EVERY codex launch — including gateway-routed ones, where
-/// route-auth's own `CODEX_HOME` then shadowed it — from a Rust constant pinning
-/// `model = "gpt-5.5"`. That violated the catalog-owns-model-names law and left
-/// a copy of the user's `auth.json` on disk for launches that never read it.
-///
-/// Now the native codex home is one arm of this table, sourced from the catalog
-/// like every other model value, and it is rendered only when the launch is
-/// actually native.
-fn render_native(
-    harness_kind: &str,
-    _plan: &GatewayModelPlan,
-    _runtime_home: &Path,
-) -> Result<RenderedRouteAuth, RouteAuthError> {
-    parse_harness(harness_kind)?;
-    Ok(RenderedRouteAuth::default())
-}
-
 /// Compose a harness's enabled sources into one additive launch delta. Each
 /// `api_key` source rides its free-form env var; each `gateway` source runs the
-/// per-harness recipe (consuming the catalog-resolved [`GatewayModelPlan`] for
-/// model values, spec §3). The server validated legality, so ordering/count are
-/// trusted here.
+/// per-harness recipe. OpenCode consumes a live-fetched [`GatewayModelPlan`]
+/// because its provider config must enumerate exact gateway models before spawn.
+/// The server validated source legality, so ordering/count are trusted here.
 /// Sanitize claude's ambient provider env on EVERY non-native route, after the
 /// sources have composed.
 ///
@@ -364,9 +339,9 @@ fn render_codex_gateway(
 /// - `Bedrock` → `model_provider = "amazon-bedrock"`,
 ///   codex's BUILT-IN upstream provider, so NO `[model_providers.*]` block at
 ///   all — the one variant that adds a provider without adding a table
-///   (confirmed against catalog_probe.rs's corrected comment: the probe's own
-///   custom `[model_providers.bedrock]` table is a PROBE-specific choice for
-///   /v1/responses enumeration, not a statement about codex's real needs).
+///   The launch-options probe may use its own temporary provider table for
+///   `/v1/responses` enumeration; that is probe scaffolding, not Codex's launch
+///   configuration.
 ///   `region`/credential ride as plain env from `profile.env`, never
 ///   interpolated into the TOML body.
 /// - `Azure { base_url, deployment, env_key }` → a `[model_providers.azure]`
@@ -418,8 +393,7 @@ fn codex_config_toml(recipe: CodexConfigRecipe<'_>) -> String {
         }
         CodexConfigRecipe::Bedrock => {
             // codex's BUILT-IN amazon-bedrock upstream: no [model_providers.*]
-            // table at all (D3 brief §9, confirmed against catalog_probe.rs's
-            // corrected comment). Credential + region ride as plain env from
+            // table at all. Credential + region ride as plain env from
             // profile.env, set by the caller — never interpolated here.
             "model_provider = \"amazon-bedrock\"\n".to_string()
         }

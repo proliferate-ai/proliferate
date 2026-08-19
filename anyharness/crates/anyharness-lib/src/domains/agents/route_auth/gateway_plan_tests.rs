@@ -8,8 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::gateway_plan::{GatewayModelFetch, GatewayModelPlanner, DEFAULT_PLAN_FETCH_TTL};
-use super::sync::CatalogSyncService;
-use crate::domains::agents::route_auth::GatewayModelResolve;
+use super::GatewayModelResolve;
 
 /// A self-cleaning temp runtime home carrying one gateway `state.json`.
 struct TempHome {
@@ -37,7 +36,7 @@ impl TempHome {
                 }],
             }],
         });
-        let path = crate::domains::agents::route_auth::state::state_file_path(&self.path);
+        let path = super::state::state_file_path(&self.path);
         std::fs::create_dir_all(path.parent().expect("parent")).expect("create agent-auth");
         std::fs::write(&path, serde_json::to_vec_pretty(&state).expect("serialize"))
             .expect("write state");
@@ -94,23 +93,16 @@ fn build_planner(
     fetcher: Arc<CountingFetch>,
     ttl: Duration,
 ) -> GatewayModelPlanner {
-    GatewayModelPlanner::with_parts(
-        Arc::new(CatalogSyncService::from_bundled()),
-        home.path.clone(),
-        fetcher,
-        ttl,
-    )
+    GatewayModelPlanner::with_parts(home.path.clone(), fetcher, ttl)
 }
 
-/// The headline property: a probe is planned from the LIVE list, not from the seed
-/// ids it would otherwise write into `opencode.json` and then "observe".
+/// The headline property: a probe is planned from the exact live gateway list.
 ///
-/// The tautology this prevents is why the fetch survived the snapshot cutover at all:
-/// `render_opencode_gateway` writes the plan's ids into the config, and the probe reads
-/// back whatever that config declared. With the floor as the plan, a model added on the
-/// gateway is undiscoverable forever.
+/// `render_opencode_gateway` writes the plan's ids into the config, and the probe
+/// reads back whatever that config declared. The independent live fetch prevents
+/// route materialization from manufacturing the observation it later records.
 #[test]
-fn a_probe_plan_carries_the_live_gateway_list_not_the_seed_floor() {
+fn a_probe_plan_carries_the_exact_live_gateway_list() {
     let home = TempHome::new("live-list");
     home.write_gateway_state("opencode", "https://gw.example", "sk-virtual");
     let fetcher = Arc::new(CountingFetch::new(&[
@@ -121,9 +113,7 @@ fn a_probe_plan_carries_the_live_gateway_list_not_the_seed_floor() {
     ]));
     let planner = build_planner(&home, fetcher.clone(), DEFAULT_PLAN_FETCH_TTL);
 
-    let (plan, used_floor) = planner.resolve_gateway_models_blocking("opencode", 3);
-
-    assert!(!used_floor, "a successful fetch is not a floor");
+    let plan = planner.resolve_gateway_models_blocking("opencode", 3);
     assert_eq!(
         plan.models,
         vec![
@@ -155,9 +145,8 @@ fn the_plan_is_memoized_until_its_ttl_expires() {
     let planner = build_planner(&home, fetcher.clone(), Duration::from_secs(300));
 
     for _ in 0..5 {
-        let (plan, used_floor) = planner.resolve_gateway_models_blocking("opencode", 3);
+        let plan = planner.resolve_gateway_models_blocking("opencode", 3);
         assert_eq!(plan.models, vec!["m-1", "m-2"]);
-        assert!(!used_floor);
     }
     assert_eq!(fetcher.calls(), 1, "five resolves, one fetch");
 
@@ -188,7 +177,7 @@ fn invalidation_refetches_the_named_harness_only() {
                 { "kind": "gateway", "base_url": "https://gw.example", "key": "sk-b" }] },
         ],
     });
-    let path = crate::domains::agents::route_auth::state::state_file_path(&home.path);
+    let path = super::state::state_file_path(&home.path);
     std::fs::create_dir_all(path.parent().expect("parent")).expect("create agent-auth");
     std::fs::write(&path, serde_json::to_vec_pretty(&state).expect("serialize")).expect("write");
 
@@ -213,22 +202,20 @@ fn invalidation_refetches_the_named_harness_only() {
 /// A failed or empty fetch produces no executable model rows and is never cached.
 #[test]
 fn a_failed_or_empty_fetch_produces_no_model_plan() {
-    let home = TempHome::new("floor");
+    let home = TempHome::new("fetch-failure");
     home.write_gateway_state("opencode", "https://gw.example", "sk-virtual");
 
     let failing = Arc::new(CountingFetch::new(&[]));
     *failing.fails.lock().expect("flag") = true;
     let planner_failing = build_planner(&home, failing.clone(), DEFAULT_PLAN_FETCH_TTL);
-    let (plan, used_floor) = planner_failing.resolve_gateway_models_blocking("opencode", 3);
-    assert!(!used_floor);
+    let plan = planner_failing.resolve_gateway_models_blocking("opencode", 3);
     assert!(plan.models.is_empty());
 
     // A reachable gateway serving nothing is the same answer, and for the same
     // reason: there is nothing to render and nothing was discovered.
     let empty = Arc::new(CountingFetch::new(&[]));
     let planner_empty = build_planner(&home, empty, DEFAULT_PLAN_FETCH_TTL);
-    let (plan, used_floor) = planner_empty.resolve_gateway_models_blocking("opencode", 3);
-    assert!(!used_floor);
+    let plan = planner_empty.resolve_gateway_models_blocking("opencode", 3);
     assert!(plan.models.is_empty());
 
     // A failed fetch is never memoized: the next attempt must be free to succeed.
@@ -242,7 +229,7 @@ fn a_failed_or_empty_fetch_produces_no_model_plan() {
 
 /// A harness with no gateway source has no gateway model plan.
 #[test]
-fn a_harness_with_no_gateway_source_is_not_a_fallback() {
+fn a_harness_with_no_gateway_source_has_no_model_plan() {
     let home = TempHome::new("no-gateway");
     // A state file that mentions the harness with no sources at all.
     let state = serde_json::json!({
@@ -250,16 +237,15 @@ fn a_harness_with_no_gateway_source_is_not_a_fallback() {
         "revision": 1,
         "harnesses": [{ "harness_kind": "opencode", "sources": [] }],
     });
-    let path = crate::domains::agents::route_auth::state::state_file_path(&home.path);
+    let path = super::state::state_file_path(&home.path);
     std::fs::create_dir_all(path.parent().expect("parent")).expect("create agent-auth");
     std::fs::write(&path, serde_json::to_vec_pretty(&state).expect("serialize")).expect("write");
 
     let fetcher = Arc::new(CountingFetch::new(&["never-asked"]));
     let planner = build_planner(&home, fetcher.clone(), DEFAULT_PLAN_FETCH_TTL);
 
-    let (plan, used_floor) = planner.resolve_gateway_models_blocking("opencode", 1);
+    let plan = planner.resolve_gateway_models_blocking("opencode", 1);
     assert_eq!(fetcher.calls(), 0, "no credentials, no fetch");
-    assert!(!used_floor);
     assert!(plan.models.is_empty());
 }
 
@@ -292,7 +278,7 @@ fn the_launch_path_reads_the_memo_and_never_fetches() {
 
 /// An expired memo remains exact target evidence on the launch path.
 #[test]
-fn an_expired_memo_still_beats_the_floor_for_a_launch() {
+fn an_expired_memo_remains_available_to_a_nonblocking_launch() {
     let home = TempHome::new("expired-memo");
     home.write_gateway_state("opencode", "https://gw.example", "sk-virtual");
     let fetcher = Arc::new(CountingFetch::new(&["live-1", "live-2"]));
@@ -319,9 +305,7 @@ fn a_claude_plan_preserves_the_live_list_without_static_roles() {
     let fetcher = Arc::new(CountingFetch::new(&["claude-sonnet-4-5", "gpt-5.2", "grok-4"]));
     let planner = build_planner(&home, fetcher, DEFAULT_PLAN_FETCH_TTL);
 
-    let (plan, used_floor) = planner.resolve_gateway_models_blocking("claude", 3);
-
-    assert!(!used_floor);
+    let plan = planner.resolve_gateway_models_blocking("claude", 3);
     assert_eq!(
         plan.models,
         vec!["claude-sonnet-4-5", "gpt-5.2", "grok-4"],

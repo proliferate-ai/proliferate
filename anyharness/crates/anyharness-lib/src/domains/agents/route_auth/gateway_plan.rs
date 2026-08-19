@@ -1,11 +1,10 @@
 //! Live gateway model-plan producer for route materialization.
 //!
-//! This is materialization input, never observation. model-catalog.md, "Probe
-//! mechanics" keeps exactly one `GET /v1/models` fetch alive through the snapshot
-//! cutover, and names its single job: *"harnesses whose gateway config enumerates
-//! models explicitly (opencode's provider models map) need the proxy's list to
-//! write that config before any spawn… That fetch belongs to agent-auth's route
-//! materialization (the `GatewayModelPlan` seam) … and never writes the snapshot"*.
+//! This is route-materialization input, never launch-option authority. OpenCode's
+//! provider config must enumerate the gateway's models before the harness can
+//! start, so one live `GET /v1/models` fetch feeds the `GatewayModelPlan` seam.
+//! The target-observed launch-options probe remains the only writer of executable
+//! pre-launch options.
 //!
 //! A failed or absent live fetch yields an empty plan. It never degrades to a
 //! shipped seed because that would make the subsequent probe a tautology.
@@ -30,15 +29,14 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use super::gateway_probe::probe_gateway_models;
-use super::sync::CatalogSyncService;
-use crate::domains::agents::route_auth::state::SOURCE_KIND_GATEWAY;
-use crate::domains::agents::route_auth::{load_state_file, GatewayModelPlan, GatewayModelResolve};
+use super::state::SOURCE_KIND_GATEWAY;
+use super::{load_state_file, GatewayModelPlan, GatewayModelResolve};
 
 /// How long a fetched model list stays usable before the next allowed fetch
 /// re-asks. Five minutes per the design of record: long enough that a burst of
 /// pokes across one harness's contexts asks once, short enough that a model added
 /// on the gateway shows up without a restart.
-pub const DEFAULT_PLAN_FETCH_TTL: Duration = Duration::from_secs(5 * 60);
+pub(super) const DEFAULT_PLAN_FETCH_TTL: Duration = Duration::from_secs(5 * 60);
 
 /// A memoized list plus when it was fetched.
 struct MemoEntry {
@@ -47,7 +45,7 @@ struct MemoEntry {
 }
 
 /// Produces [`GatewayModelPlan`]s from a memoized live `GET /v1/models`.
-pub struct GatewayModelPlanner {
+pub(crate) struct GatewayModelPlanner {
     runtime_home: std::path::PathBuf,
     /// Keyed by (harness kind, base URL). The base URL is part of the key because
     /// pointing a harness at a different proxy is a different model set; the KEY
@@ -61,7 +59,7 @@ pub struct GatewayModelPlanner {
 /// The `GET /v1/models` call, behind a seam so the planner's memo and TTL
 /// are testable without a network.
 #[async_trait::async_trait]
-pub trait GatewayModelFetch: Send + Sync {
+pub(super) trait GatewayModelFetch: Send + Sync {
     async fn fetch(&self, base_url: &str, key: &str) -> Result<Vec<String>, String>;
 }
 
@@ -78,17 +76,11 @@ impl GatewayModelFetch for HttpGatewayModelFetch {
 }
 
 impl GatewayModelPlanner {
-    pub fn new(catalog_sync: Arc<CatalogSyncService>, runtime_home: std::path::PathBuf) -> Self {
-        Self::with_parts(
-            catalog_sync,
-            runtime_home,
-            Arc::new(HttpGatewayModelFetch),
-            DEFAULT_PLAN_FETCH_TTL,
-        )
+    pub(crate) fn new(runtime_home: std::path::PathBuf) -> Self {
+        Self::with_parts(runtime_home, Arc::new(HttpGatewayModelFetch), DEFAULT_PLAN_FETCH_TTL)
     }
 
-    pub fn with_parts(
-        _catalog_sync: Arc<CatalogSyncService>,
+    pub(super) fn with_parts(
         runtime_home: std::path::PathBuf,
         fetcher: Arc<dyn GatewayModelFetch>,
         fetch_ttl: Duration,
@@ -116,7 +108,7 @@ impl GatewayModelPlanner {
         harness_kind: &str,
         _revision: i64,
         allow_blocking_fetch: bool,
-    ) -> (GatewayModelPlan, bool) {
+    ) -> GatewayModelPlan {
         let credentials = self.gateway_credentials(harness_kind);
 
         let raw_models = match credentials {
@@ -129,7 +121,7 @@ impl GatewayModelPlanner {
             None => Vec::new(),
         };
 
-        (GatewayModelPlan { models: raw_models }, false)
+        GatewayModelPlan { models: raw_models }
     }
 
     /// The memoized list for (harness, base URL), fetching when the caller allows it
@@ -240,19 +232,19 @@ fn block_on_fetch(
 impl GatewayModelResolve for GatewayModelPlanner {
     /// The LAUNCH path: memo only, never a fetch. See the module note.
     fn resolve_gateway_models(&self, harness_kind: &str, revision: i64) -> GatewayModelPlan {
-        self.resolve(harness_kind, revision, false).0
+        self.resolve(harness_kind, revision, false)
     }
 
     fn invalidate_gateway_plan(&self, harness_kind: &str) {
         self.invalidate(harness_kind);
     }
 
-    /// The PROBE path: may fetch, and reports when it fell back to the floor.
+    /// The PROBE path: may fetch.
     fn resolve_gateway_models_blocking(
         &self,
         harness_kind: &str,
         revision: i64,
-    ) -> (GatewayModelPlan, bool) {
+    ) -> GatewayModelPlan {
         self.resolve(harness_kind, revision, true)
     }
 }

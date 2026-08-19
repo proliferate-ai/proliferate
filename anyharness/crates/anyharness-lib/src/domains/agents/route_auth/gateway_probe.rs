@@ -3,25 +3,20 @@
 //! The runtime discovers what models the LiteLLM gateway can actually serve for
 //! a harness by asking the gateway itself, with the harness's virtual key. NO
 //! harness process is spawned. This module owns only the HTTP call and its
-//! tolerant parse; the caller decides what to do with the result — the
-//! machine-snapshot poke engine (`launch_probe`) for observation, and
-//! `catalog::gateway_plan::GatewayModelPlanner` for the render-plane's memoized
-//! plan. There is no store here any more: the old `gateway_model_probe` sqlite
-//! table (revision-keyed, so any harness's auth change invalidated every
-//! harness's probe) was deleted with the resolver chain it backed (A9); the
-//! snapshot document and the planner's in-memory memo replaced it.
+//! tolerant parse. [`super::gateway_plan::GatewayModelPlanner`] owns the
+//! in-memory memo and decides when a background probe may make the request.
+//! There is no store and no executable catalog fallback here.
 
 use std::time::Duration;
 
 use serde::Deserialize;
 
-/// How long a probe may take before we give up and fall back to seed data. Kept
-/// short so a slow/unreachable gateway never stalls the trigger that scheduled
-/// it (launch, apply, or manual refresh all run it fire-and-forget).
+/// How long a fetch may take before it fails. Kept short so an unreachable
+/// gateway cannot pin the background probe worker indefinitely.
 const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, thiserror::Error)]
-pub enum GatewayProbeError {
+pub(super) enum GatewayProbeError {
     #[error("gateway probe request failed: {0}")]
     Request(#[from] reqwest::Error),
     #[error("gateway probe returned HTTP {status}")]
@@ -32,7 +27,7 @@ pub enum GatewayProbeError {
 /// `{ "data": [ { "id": "..." }, ... ] }` shape yields the ids; anything else
 /// yields an empty list rather than an error (a gateway that answers 200 with a
 /// surprising body still counts as reachable).
-pub async fn probe_gateway_models(
+pub(super) async fn probe_gateway_models(
     base_url: &str,
     key: &str,
 ) -> Result<Vec<String>, GatewayProbeError> {

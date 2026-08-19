@@ -410,11 +410,9 @@ impl SessionRuntime {
             );
             StartSessionError::RouteAuth(error)
         })?;
-        // Non-auth launch wiring only. Codex's CODEX_HOME + config.toml now comes
-        // from `route_auth` above (its native recipe for a native launch, its
-        // gateway recipe for a routed one), so this no longer needs the selected
-        // key — the route layer already carries the credential to the harness the
-        // way that harness expects it.
+        // Non-auth launch wiring only. A routed Codex CODEX_HOME + config.toml
+        // comes from `route_auth` above; a native profile emits no delta and
+        // inherits the user's own Codex home. This layer never authors either.
         let session_launch_env =
             build_session_launch_env(&resolved_agent, record.requested_model_id.as_deref())
                 .map_err(StartSessionError::Internal)?;

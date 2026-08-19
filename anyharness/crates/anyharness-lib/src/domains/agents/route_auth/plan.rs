@@ -6,13 +6,13 @@
 //! look anything up, and the model-id constants that used to live in
 //! `render.rs` are gone.
 //!
-//! The plan is produced by the catalog-domain resolver
-//! (`agents::catalog::gateway_resolver`); this module only owns the shape and
-//! the [`GatewayModelResolve`] seam so the render plane stays free of a
-//! database/catalog dependency (and unit-testable with a stub resolver).
+//! The plan is produced by the live gateway planner; this module only owns the
+//! shape and the [`GatewayModelResolve`] seam so the render plane stays free of
+//! network/state dependencies (and unit-testable with a stub resolver).
 
-/// Resolved gateway model inputs for one harness launch. An empty list means
-/// no target observation is available; callers fail typed rather than seed.
+/// Resolved gateway model inputs for one harness launch. An empty list means no
+/// live route-materialization list is available; callers fail typed rather than
+/// seed.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct GatewayModelPlan {
     /// Exact IDs returned by this target's live gateway `/v1/models` call.
@@ -57,13 +57,12 @@ pub trait GatewayModelResolve: Send + Sync {
     /// Without the split, either every launch could stall on an unreachable gateway
     /// or every probe would observe a stale plan.
     ///
-    /// The compatibility boolean is always false; seed floors no longer exist.
     fn resolve_gateway_models_blocking(
         &self,
         harness_kind: &str,
         revision: i64,
-    ) -> (GatewayModelPlan, bool) {
-        (self.resolve_gateway_models(harness_kind, revision), false)
+    ) -> GatewayModelPlan {
+        self.resolve_gateway_models(harness_kind, revision)
     }
 }
 
@@ -98,14 +97,10 @@ mod tests {
         let plan = resolver.resolve_gateway_models("opencode", 7);
         assert_eq!(plan.models, vec!["only-what-render-needs"]);
 
-        // The two optional hooks default harmlessly for a stub: nothing to invalidate,
-        // and a fixed plan cannot degrade to a floor.
+        // The two optional hooks default harmlessly for a stub: nothing to
+        // invalidate, and the blocking read returns the same fixed plan.
         resolver.invalidate_gateway_plan("opencode");
-        let (blocking_plan, used_seed_floor) = resolver.resolve_gateway_models_blocking("opencode", 7);
+        let blocking_plan = resolver.resolve_gateway_models_blocking("opencode", 7);
         assert_eq!(blocking_plan, plan);
-        assert!(
-            !used_seed_floor,
-            "a stub's fixed plan is not a degraded fallback"
-        );
     }
 }

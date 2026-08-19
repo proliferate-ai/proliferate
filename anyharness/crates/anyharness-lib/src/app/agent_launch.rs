@@ -1,28 +1,20 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::domains::agents::catalog::gateway_plan::GatewayModelPlanner;
-use crate::domains::agents::catalog::sync::CatalogSyncService;
 use crate::domains::agents::launch_options::HarnessLaunchOptionsService;
 use crate::domains::agents::launch_probe::targets::RuntimeProbeTargets;
 use crate::domains::agents::launch_probe::LaunchProbeService;
+use crate::domains::agents::route_auth::gateway_plan::GatewayModelPlanner;
 use crate::persistence::Db;
 
-pub(super) fn build_services(
-    db: &Db,
-    runtime_home: &PathBuf,
-    catalog_sync_service: Arc<CatalogSyncService>,
-) -> (
+pub(super) fn build_services(db: &Db, runtime_home: &PathBuf) -> (
     Arc<HarnessLaunchOptionsService>,
     Arc<LaunchProbeService>,
     Arc<GatewayModelPlanner>,
 ) {
-    // The render plan uses the catalog's gateway policy plus a memoized live
-    // `GET /v1/models`, never the revision-keyed gateway probe rows.
-    let gateway_model_planner = Arc::new(GatewayModelPlanner::new(
-        catalog_sync_service,
-        runtime_home.clone(),
-    ));
+    // OpenCode route materialization uses a memoized live `GET /v1/models`.
+    // It has no catalog input and never writes executable launch options.
+    let gateway_model_planner = Arc::new(GatewayModelPlanner::new(runtime_home.clone()));
     let launch_options_service = Arc::new(HarnessLaunchOptionsService::new(
         db.clone(),
         runtime_home.clone(),
