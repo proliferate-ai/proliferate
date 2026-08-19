@@ -47,6 +47,8 @@ function renderFrame(overrides: Partial<Parameters<typeof FileViewerFrame>[0]> =
       filesRequestedOpen={false}
       onToggleFiles={noop}
       onRevealFilesPath={noop}
+      focusRequestToken={0}
+      onFocusRequestHandled={noop}
       fileTreeDock={null}
       {...overrides}
     >
@@ -243,4 +245,122 @@ function withUser(renderResult: ReturnType<typeof render>) {
       },
     },
   };
+}
+
+describe("FileViewerFrame activation focus request", () => {
+  it("focuses the frame root once per request and reports consumption", () => {
+    const onFocusRequestHandled = vi.fn();
+    const view = render(
+      <FileViewerFrameHarness focusRequestToken={7} onFocusRequestHandled={onFocusRequestHandled} />,
+    );
+
+    const root = view.container.querySelector("[data-file-viewer-frame]") as HTMLElement;
+    expect(document.activeElement).toBe(root);
+    expect(onFocusRequestHandled).toHaveBeenCalledExactlyOnceWith(7);
+
+    // A re-render carrying the same token must not re-steal focus: the
+    // request is consumed exactly once.
+    root.blur();
+    view.rerender(
+      <FileViewerFrameHarness
+        focusRequestToken={7}
+        onFocusRequestHandled={onFocusRequestHandled}
+        body={<div>later loading body</div>}
+      />,
+    );
+
+    expect(document.activeElement).not.toBe(root);
+    expect(onFocusRequestHandled).toHaveBeenCalledTimes(1);
+  });
+
+  it("takes focus even while the body is a read error, and does not restore it later", () => {
+    const onFocusRequestHandled = vi.fn();
+    const view = render(
+      <FileViewerFrameHarness
+        focusRequestToken={3}
+        onFocusRequestHandled={onFocusRequestHandled}
+        body={<div>Error: Failed to load file</div>}
+      />,
+    );
+
+    const root = view.container.querySelector("[data-file-viewer-frame]");
+    expect(root?.textContent).toContain("Error: Failed to load file");
+    // Readiness is the mounted root, not a successful read.
+    expect(document.activeElement).toBe(root);
+    expect(onFocusRequestHandled).toHaveBeenCalledExactlyOnceWith(3);
+  });
+
+  it("re-focuses when the same target mints a new request token", () => {
+    const onFocusRequestHandled = vi.fn();
+    const view = render(
+      <FileViewerFrameHarness focusRequestToken={1} onFocusRequestHandled={onFocusRequestHandled} />,
+    );
+    const root = view.container.querySelector("[data-file-viewer-frame]") as HTMLElement;
+    root.blur();
+    expect(document.activeElement).not.toBe(root);
+
+    view.rerender(
+      <FileViewerFrameHarness focusRequestToken={2} onFocusRequestHandled={onFocusRequestHandled} />,
+    );
+
+    expect(document.activeElement).toBe(root);
+    expect(onFocusRequestHandled).toHaveBeenNthCalledWith(2, 2);
+  });
+
+  it("never takes focus for a preserve-origin activation (no request)", () => {
+    const onFocusRequestHandled = vi.fn();
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    outside.focus();
+
+    renderFrame({ focusRequestToken: 0, onFocusRequestHandled });
+
+    expect(document.activeElement).toBe(outside);
+    expect(onFocusRequestHandled).not.toHaveBeenCalled();
+    outside.remove();
+  });
+});
+
+function FileViewerFrameHarness({
+  focusRequestToken,
+  onFocusRequestHandled,
+  body,
+}: {
+  focusRequestToken: number;
+  onFocusRequestHandled: (token: number) => void;
+  body?: React.ReactNode;
+}) {
+  return (
+    <FileViewerFrame
+      filePath="src/index.tsx"
+      canRenderRichPreview={false}
+      wordWrap={false}
+      richPreviewEnabled={false}
+      canCopyContent={false}
+      canFindInFile={false}
+      openInEligible={false}
+      openInDefaultTarget={null}
+      openInTargets={[]}
+      onOpenDefault={noop}
+      onOpenWithTarget={noop}
+      openInRevision={0}
+      openInFailed={false}
+      onToggleWordWrap={noop}
+      onToggleRichPreview={noop}
+      onCopyContent={noop}
+      onCopyPath={noop}
+      onOpenContentSearch={noop}
+      filesAvailable
+      filesRequestedOpen={false}
+      onToggleFiles={noop}
+      onRevealFilesPath={noop}
+      focusRequestToken={focusRequestToken}
+      // Deliberately a fresh identity per render: the frame's one-shot guard,
+      // not effect-dependency stability, is what must stop a re-focus.
+      onFocusRequestHandled={(token) => onFocusRequestHandled(token)}
+      fileTreeDock={null}
+    >
+      {body ?? <div>file content</div>}
+    </FileViewerFrame>
+  );
 }

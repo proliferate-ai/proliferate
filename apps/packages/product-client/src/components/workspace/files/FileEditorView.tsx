@@ -96,6 +96,17 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     );
   }, [fileActions.openWithTarget]);
 
+  // The right panel mounts this view only for the active header entry, so a
+  // request that still names this target is ready for the frame to consume.
+  const viewerFocusRequestToken = useWorkspaceViewerTabsStore((s) => (
+    s.viewerFocusRequest?.targetKey === targetKey && s.activeTargetKey === targetKey
+      ? s.viewerFocusRequest.token
+      : 0
+  ));
+  const consumeViewerFocusRequest = useWorkspaceViewerTabsStore(
+    (s) => s.consumeViewerFocusRequest,
+  );
+
   const [wordWrap, setWordWrap] = useState(false);
   const changedPaths = useGitChangedPaths(materializedWorkspaceId);
   const activeDiffTarget = diffTarget ?? null;
@@ -228,6 +239,8 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     filesRequestedOpen: requestedOpen,
     onToggleFiles: handleToggleFiles,
     onRevealFilesPath: handleRevealFilesPath,
+    focusRequestToken: viewerFocusRequestToken,
+    onFocusRequestHandled: consumeViewerFocusRequest,
     fileTreeDock,
   };
 

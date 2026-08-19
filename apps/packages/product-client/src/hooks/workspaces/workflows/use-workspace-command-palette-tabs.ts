@@ -48,7 +48,6 @@ export function useWorkspaceCommandPaletteTabs() {
       workspaceId: selectedWorkspaceId,
       shellWorkspaceId: model.workspaceUiKey,
       target: tab.target,
-      mode: "focus-existing",
     });
     return true;
   }, [

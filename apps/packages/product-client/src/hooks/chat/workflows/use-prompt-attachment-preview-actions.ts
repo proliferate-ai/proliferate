@@ -61,7 +61,6 @@ export function usePromptAttachmentPreviewActions() {
         workspaceId: materializedWorkspaceId,
         shellWorkspaceId: workspaceUiKey,
         target,
-        mode: "open-or-focus",
       });
     }
     focusChatInput();

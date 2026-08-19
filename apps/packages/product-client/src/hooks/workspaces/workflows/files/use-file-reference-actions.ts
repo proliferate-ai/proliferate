@@ -222,7 +222,6 @@ export function useFileReferenceActions({
       workspaceId: snapshot.materializedWorkspaceId,
       shellWorkspaceId: snapshot.workspaceUiKey,
       target,
-      mode: "open-or-focus",
     });
     return true;
   }, [activateViewerTarget, openTarget]);

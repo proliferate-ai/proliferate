@@ -4,13 +4,18 @@ import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { useRightPanelViewerActions } from "#product/hooks/workspaces/workflows/right-panel/use-right-panel-viewer-actions";
 import {
+  fileViewerTarget,
   promptAttachmentViewerTarget,
   viewerTargetKey,
 } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 const focusChatInput = vi.hoisted(() => vi.fn());
+const activateViewerTarget = vi.hoisted(() => vi.fn());
 
 vi.mock("#product/lib/domain/focus-zone", () => ({ focusChatInput }));
+vi.mock("#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation", () => ({
+  useWorkspaceShellActivation: () => ({ activateViewerTarget }),
+}));
 
 describe("useRightPanelViewerActions", () => {
   it("closes a prompt attachment without clearing file buffers and recovers composer focus", () => {
@@ -35,6 +40,8 @@ describe("useRightPanelViewerActions", () => {
     focusChatInput.mockReset();
 
     const { result } = renderHook(() => useRightPanelViewerActions({
+      workspaceId: "workspace-1",
+      shellWorkspaceId: "logical-workspace-1",
       state,
       isCloudWorkspaceSelected: true,
       openViewerTargets: [target],
@@ -63,5 +70,41 @@ describe("useRightPanelViewerActions", () => {
       // that order, so `workflow` lands before `agents`/`background` here.
       headerOrder: ["tool:scratch", "tool:git", "tool:workflow", "tool:agents", "tool:background"],
     });
+  });
+
+  it("selects a viewer header entry through the canonical activation contract with preserve-origin", () => {
+    const target = fileViewerTarget("src/index.tsx");
+    const targetKey = viewerTargetKey(target);
+    const setActiveViewerTarget = vi.fn();
+    const updateState = vi.fn();
+    activateViewerTarget.mockReset();
+
+    const { result } = renderHook(() => useRightPanelViewerActions({
+      workspaceId: "workspace-1",
+      shellWorkspaceId: "logical-workspace-1",
+      state: { activeEntryKey: "tool:git" as const, headerOrder: ["tool:git" as const] },
+      isCloudWorkspaceSelected: false,
+      openViewerTargets: [target],
+      buffersByPath: {},
+      updateState,
+      closeViewerTarget: vi.fn(),
+      setActiveViewerTarget,
+      clearBuffer: vi.fn(),
+    }));
+
+    act(() => {
+      result.current.selectViewer(targetKey);
+    });
+
+    // The direct store bypass is gone: the canonical owner performs the
+    // selection (and its suppressed search dismissal) instead.
+    expect(setActiveViewerTarget).not.toHaveBeenCalled();
+    expect(activateViewerTarget).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      shellWorkspaceId: "logical-workspace-1",
+      target,
+      focus: "preserve-origin",
+    });
+    expect(updateState).toHaveBeenCalledOnce();
   });
 });

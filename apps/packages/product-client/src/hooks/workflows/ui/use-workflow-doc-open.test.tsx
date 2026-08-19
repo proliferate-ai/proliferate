@@ -60,7 +60,6 @@ describe("useWorkflowDocOpen", () => {
       workspaceId: "workspace-1",
       shellWorkspaceId: "logical-workspace-1",
       target: scopedTarget,
-      mode: "open-or-focus",
     });
   });
 });

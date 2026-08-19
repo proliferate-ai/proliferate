@@ -92,7 +92,6 @@ export function useHeaderTabsCloseActions({
         workspaceId: selectedWorkspaceId,
         shellWorkspaceId,
         target: fallback.target,
-        mode: "focus-existing",
       });
       return;
     }
