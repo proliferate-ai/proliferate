@@ -55,8 +55,8 @@ reason = "sandbox connect/ready choreography (attempt CAS, usage convergence) + 
 
 [[max_lines]]
 path = "server/proliferate/server/cloud/workspaces/service.py"
-max_lines = 1173
-reason = "workspace materialization ledger service (intent/report/unlink write-path + primary selection + recorded-sandbox reconciliation + scratch/repo-less read guards) + PR 5 exact-ref managed-Cloud creation and association path + cold-access repairing runtime-access resolution (S2); AnyHarness provisioning handoff split out per guides/domains.md; + git_identity_required translation (C3) + after-commit worktree retire and lost-status derivation (C7) + worker-staleness degraded surfacing (_worker_degraded, S3)"
+max_lines = 1123
+reason = "workspace materialization ledger service (intent/report/unlink write-path + primary selection + recorded-sandbox reconciliation + scratch/repo-less read guards) + PR 5 exact-ref managed-Cloud creation and association path + cold-access repairing runtime-access resolution (S2); AnyHarness provisioning handoff split out per guides/domains.md; + git_identity_required translation (C3) + lost-status derivation (C7) + worker-staleness degraded surfacing (_worker_degraded, S3)"
 
 [[max_lines]]
 path = "server/tests/integration/test_agent_gateway_api.py"

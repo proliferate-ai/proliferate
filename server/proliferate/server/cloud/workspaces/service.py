@@ -31,11 +31,9 @@ from proliferate.integrations.anyharness.models import (
 )
 from proliferate.integrations.anyharness.workspaces import (
     materialize_workspace_at_ref,
-    retire_runtime_workspace,
 )
 from proliferate.lib.infra.time.wall_clock import utcnow
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
-from proliferate.server.cloud.cloud_sandboxes.transactions import run_after_commit
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.github_app.repo_authority import require_github_cloud_repo_authority
 from proliferate.server.cloud.materialization import paths as materialization_paths
@@ -674,7 +672,6 @@ async def archive_cloud_workspace_for_user(
 ) -> WorkspaceDetail:
     workspace = await _load_user_workspace(db, user_id=user_id, workspace_id=workspace_id)
     workspace = await cloud_workspace_store.archive_cloud_workspace(db, workspace)
-    await _retire_workspace_worktree_after_commit(db, workspace)
     return await _workspace_payload(db, workspace, detail=True)
 
 
@@ -724,53 +721,6 @@ async def delete_cloud_workspace_for_user(
 ) -> None:
     workspace = await _load_user_workspace(db, user_id=user_id, workspace_id=workspace_id)
     await cloud_workspace_store.delete_cloud_workspace(db, workspace)
-    await _retire_workspace_worktree_after_commit(db, workspace)
-
-
-async def _retire_workspace_worktree_after_commit(
-    db: AsyncSession,
-    workspace: CloudWorkspaceValue,
-) -> None:
-    if (
-        workspace.workspace_kind != "repository_worktree"
-        or workspace.anyharness_workspace_id is None
-    ):
-        return
-    sandbox = await cloud_sandbox_store.load_personal_cloud_sandbox(
-        db,
-        workspace.owner_user_id,
-    )
-    if sandbox is None:
-        return
-
-    anyharness_workspace_id = workspace.anyharness_workspace_id
-    cloud_workspace_id = str(workspace.id)
-
-    async def _retire_runtime_worktree() -> None:
-        try:
-            (
-                runtime_url,
-                runtime_token,
-                _data_key,
-            ) = await cloud_sandboxes_service.load_cloud_sandbox_runtime_access(
-                sandbox,
-            )
-            await retire_runtime_workspace(
-                runtime_url,
-                runtime_token,
-                anyharness_workspace_id=anyharness_workspace_id,
-            )
-        except Exception:
-            logger.exception(
-                "failed to retire runtime worktree after cloud workspace row lifecycle change",
-                extra={
-                    "cloud_workspace_id": cloud_workspace_id,
-                    "anyharness_workspace_id": anyharness_workspace_id,
-                    "cloud_sandbox_id": str(sandbox.id),
-                },
-            )
-
-    await run_after_commit(db, _retire_runtime_worktree)
 
 
 async def get_cloud_workspace_runtime_status(
