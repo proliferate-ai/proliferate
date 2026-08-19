@@ -439,21 +439,10 @@ for raw_line in sys.stdin:
         })
     elif method == "session/new":
         native_session_id = "native-target"
-        emit({
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {
-                "sessionId": native_session_id,
-                "configOptions": [{
-                    "id": "model",
-                    "name": "Model",
-                    "category": "model",
-                    "type": "select",
-                    "currentValue": "haiku",
-                    "options": [{"value": "haiku", "name": "Haiku"}],
-                }],
-            },
-        })
+        emit({"jsonrpc": "2.0", "id": request_id, "result": {
+            "sessionId": native_session_id, "configOptions": [{"id": "model", "name": "Model",
+            "category": "model", "type": "select", "currentValue": "haiku",
+            "options": [{"value": "haiku", "name": "Haiku"}]}]}})
     elif method == "session/load":
         native_session_id = message["params"]["sessionId"]
         open(control("load-seen"), "w", encoding="utf-8").close()
