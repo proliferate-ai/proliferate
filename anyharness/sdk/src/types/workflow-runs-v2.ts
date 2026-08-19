@@ -76,6 +76,34 @@ export type WorkflowRunNodeStatusV2 =
 
 export type WorkflowRunNodeKindV2 = "defined" | "replacement" | "adhoc";
 
+/**
+ * A leg's fan-in status (rulings F1/F4), the closed set the projection
+ * serializes. `failed` carries its exact `WorkflowNodeFailureCode` in the
+ * sibling `failureCode` field, mirroring how the node itself splits `status`
+ * from `failureCode`.
+ */
+export type WorkflowLegStatusV2 =
+  | "running"
+  | "done"
+  | "cancelled"
+  | "forced_unload"
+  | "failed";
+
+/**
+ * One durable fan-in ledger row (ruling F4): which session ran a node's leg and
+ * how it finished. `legIndex` is the durable prompt-to-leg linkage — it
+ * addresses `legs[legIndex]` in the definition. Read-only; the node's scalar
+ * `sessionId` stays the representative leg for back-compat.
+ */
+export interface WorkflowRunNodeSessionV2 {
+  legIndex: number;
+  sessionId: string | null;
+  status: WorkflowLegStatusV2;
+  /** Non-null only when `status` is `"failed"`. */
+  failureCode: string | null;
+  completedAt: string | null;
+}
+
 export interface WorkflowRunV2 {
   id: string;
   invocationId: string;
@@ -104,6 +132,16 @@ export interface WorkflowRunNodeV2 {
   prompt: string;
   status: WorkflowRunNodeStatusV2;
   sessionId: string | null;
+  /**
+   * Rung 7 (ruling F4): the additive per-leg fan-in rollup, one entry per
+   * ledger row (ordered by `legIndex`). OPTIONAL on this contract on purpose —
+   * unlike the `| null` fields above, which a current runtime always serializes
+   * — because a client may talk to a runtime that predates the rollup and omits
+   * the key entirely; consumers fall back to the scalar `sessionId` when it is
+   * absent. A rollup-emitting runtime always sends an array (empty for a node
+   * with no launched legs), and a one-leg node carries exactly one entry.
+   */
+  sessions?: WorkflowRunNodeSessionV2[];
   promptId: string | null;
   failureCode: string | null;
   createdAt: string;

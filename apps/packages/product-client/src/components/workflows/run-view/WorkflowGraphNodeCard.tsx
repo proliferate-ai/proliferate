@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import type {
   WorkflowGraphNodeVM,
+  WorkflowNodeLegRollup,
   WorkflowNodeTone,
 } from "#product/domain/workflows/run-view-model";
 import { WORKFLOW_NODE_CARD_COPY } from "#product/copy/workflows/workflow-node-card-copy";
@@ -45,6 +46,30 @@ function statusDotToneFor(tone: WorkflowNodeTone): StatusDotTone {
   return byTone[tone] ?? "muted";
 }
 
+/**
+ * A parallel node's fan-in rollup (ruling F4): the "N/M done" progress mark
+ * followed by one status dot per leg, each dot an accessible `img` naming its
+ * leg and status. Rendered only when `run-view-model` resolved a rollup — a
+ * one-leg node (every definition today) resolves none, so this is inert for
+ * every non-parallel card and the card reads unchanged.
+ */
+function WorkflowNodeLegRollupRow({ rollup }: { rollup: WorkflowNodeLegRollup }) {
+  return (
+    <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 font-mono text-ui-sm text-muted-foreground">
+      <span>{WORKFLOW_NODE_CARD_COPY.legRollupLabel(rollup.finished, rollup.total)}</span>
+      <span className="flex items-center gap-1">
+        {rollup.legs.map((leg) => (
+          <StatusDot
+            key={leg.legIndex}
+            tone={statusDotToneFor(leg.tone)}
+            label={WORKFLOW_NODE_CARD_COPY.legStatusLabel(leg.legIndex, leg.status)}
+          />
+        ))}
+      </span>
+    </span>
+  );
+}
+
 export interface WorkflowGraphNodeCardProps {
   vm: WorkflowGraphNodeVM;
   /** Visually subordinate rendering for a side node anchored under another card: muted fill, indented. Structure, not color. */
@@ -78,7 +103,7 @@ export function WorkflowGraphNodeCard({
 }: WorkflowGraphNodeCardProps) {
   const [failRedoOpen, setFailRedoOpen] = useState(false);
   const [addAdhocOpen, setAddAdhocOpen] = useState(false);
-  const { node, controls, isCurrent, tone } = vm;
+  const { node, controls, isCurrent, tone, legRollup } = vm;
 
   const hasControls = controls.approve
     || controls.failRedo
@@ -196,6 +221,7 @@ export function WorkflowGraphNodeCard({
               {node.prompt.trim().length > 0 ? (
                 <span className="line-clamp-2">{node.prompt}</span>
               ) : null}
+              {legRollup ? <WorkflowNodeLegRollupRow rollup={legRollup} /> : null}
             </span>
           )}
           onSelect={() => onFocusSession(node.id)}

@@ -14449,6 +14449,45 @@
         },
         "additionalProperties": false
       },
+      "NodeSessionView": {
+        "type": "object",
+        "description": "One durable fan-in ledger row on the wire (ruling F4): which session ran a\nnode's leg and how it finished. `leg_index` is the durable prompt-to-leg\nlinkage (it addresses `legs[leg_index]` in the definition). Additive and\nread-only.",
+        "required": [
+          "legIndex",
+          "sessionId",
+          "status",
+          "failureCode",
+          "completedAt"
+        ],
+        "properties": {
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failureCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`Some` only when `status` is `failed`; the split mirrors `NodeView`'s\nown status/failure_code separation."
+          },
+          "legIndex": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowLegStatusV2"
+          }
+        }
+      },
       "NodeView": {
         "type": "object",
         "required": [
@@ -14464,6 +14503,7 @@
           "prompt",
           "status",
           "sessionId",
+          "sessions",
           "promptId",
           "failureCode",
           "createdAt",
@@ -14537,6 +14577,13 @@
               "string",
               "null"
             ]
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NodeSessionView"
+            },
+            "description": "Rung 7 (ruling F4): the additive, read-only per-leg fan-in rollup, one\nentry per `workflow_run_node_sessions` row of this node (ordered by\n`leg_index`). Always emitted — an empty array for a node that has not\nlaunched a leg yet — and the scalar `session_id` above stays the\nrepresentative leg for back-compat, so a one-leg node (every definition\ntoday) carries exactly one entry and its client behavior is unchanged."
           },
           "startedAt": {
             "type": [
@@ -20468,6 +20515,17 @@
           }
         },
         "additionalProperties": false
+      },
+      "WorkflowLegStatusV2": {
+        "type": "string",
+        "description": "The wire vocabulary for a leg's fan-in status (rulings F1/F4). The runtime's\n`WorkflowLegStatus::Failed(code)` splits into `Failed` plus a separate\n`failure_code`, mirroring `NodeView`'s own status/failure_code split so a\nclient reads one closed status set with the exact code beside it.",
+        "enum": [
+          "running",
+          "done",
+          "cancelled",
+          "forced_unload",
+          "failed"
+        ]
       },
       "WorkflowNodeKind": {
         "type": "string",

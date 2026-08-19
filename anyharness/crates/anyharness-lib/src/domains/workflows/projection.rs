@@ -12,8 +12,8 @@ use serde::Serialize;
 use utoipa::ToSchema;
 
 use super::model::{
-    WorkflowNodeKind, WorkflowNodeStatus, WorkflowNodeType, WorkflowRunDocRecord,
-    WorkflowRunNodeRecord, WorkflowRunRecord, WorkflowRunStatus,
+    WorkflowLegStatus, WorkflowNodeKind, WorkflowNodeStatus, WorkflowNodeType, WorkflowRunDocRecord,
+    WorkflowRunNodeRecord, WorkflowRunNodeSessionRecord, WorkflowRunRecord, WorkflowRunStatus,
 };
 use super::transition::RunState;
 
@@ -70,6 +70,13 @@ pub struct NodeView {
     pub status: WorkflowNodeStatus,
     #[schema(required = true)]
     pub session_id: Option<String>,
+    /// Rung 7 (ruling F4): the additive, read-only per-leg fan-in rollup, one
+    /// entry per `workflow_run_node_sessions` row of this node (ordered by
+    /// `leg_index`). Always emitted — an empty array for a node that has not
+    /// launched a leg yet — and the scalar `session_id` above stays the
+    /// representative leg for back-compat, so a one-leg node (every definition
+    /// today) carries exactly one entry and its client behavior is unchanged.
+    pub sessions: Vec<NodeSessionView>,
     #[schema(required = true)]
     pub prompt_id: Option<String>,
     #[schema(required = true)]
@@ -77,6 +84,39 @@ pub struct NodeView {
     pub created_at: String,
     #[schema(required = true)]
     pub started_at: Option<String>,
+    #[schema(required = true)]
+    pub completed_at: Option<String>,
+}
+
+/// The wire vocabulary for a leg's fan-in status (rulings F1/F4). The runtime's
+/// `WorkflowLegStatus::Failed(code)` splits into `Failed` plus a separate
+/// `failure_code`, mirroring `NodeView`'s own status/failure_code split so a
+/// client reads one closed status set with the exact code beside it.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowLegStatusV2 {
+    Running,
+    Done,
+    Cancelled,
+    ForcedUnload,
+    Failed,
+}
+
+/// One durable fan-in ledger row on the wire (ruling F4): which session ran a
+/// node's leg and how it finished. `leg_index` is the durable prompt-to-leg
+/// linkage (it addresses `legs[leg_index]` in the definition). Additive and
+/// read-only.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct NodeSessionView {
+    pub leg_index: i64,
+    #[schema(required = true)]
+    pub session_id: Option<String>,
+    pub status: WorkflowLegStatusV2,
+    /// `Some` only when `status` is `failed`; the split mirrors `NodeView`'s
+    /// own status/failure_code separation.
+    #[schema(required = true)]
+    pub failure_code: Option<String>,
     #[schema(required = true)]
     pub completed_at: Option<String>,
 }
@@ -98,7 +138,11 @@ pub struct DocView {
 pub fn project(state: &RunState, docs: &[WorkflowRunDocRecord]) -> RunProjection {
     RunProjection {
         run: run_view(&state.run),
-        nodes: state.nodes.iter().map(project_node).collect(),
+        nodes: state
+            .nodes
+            .iter()
+            .map(|node| project_node(node, &state.legs_of(&node.id)))
+            .collect(),
         docs: docs.iter().map(project_doc).collect(),
     }
 }
@@ -121,7 +165,7 @@ pub fn run_view(run: &WorkflowRunRecord) -> RunView {
     }
 }
 
-fn project_node(node: &WorkflowRunNodeRecord) -> NodeView {
+fn project_node(node: &WorkflowRunNodeRecord, legs: &[&WorkflowRunNodeSessionRecord]) -> NodeView {
     NodeView {
         id: node.id.clone(),
         run_id: node.run_id.clone(),
@@ -135,11 +179,33 @@ fn project_node(node: &WorkflowRunNodeRecord) -> NodeView {
         prompt: node.prompt.clone(),
         status: node.status,
         session_id: node.session_id.clone(),
+        sessions: legs.iter().copied().map(project_leg).collect(),
         prompt_id: node.prompt_id.clone(),
         failure_code: node.failure_code.map(|code| code.as_str().to_string()),
         created_at: node.created_at.clone(),
         started_at: node.started_at.clone(),
         completed_at: node.completed_at.clone(),
+    }
+}
+
+fn project_leg(leg: &WorkflowRunNodeSessionRecord) -> NodeSessionView {
+    // Split the runtime's `Failed(code)` into a closed status plus the code
+    // beside it, exactly as `project_node` splits the node's own status.
+    let (status, failure_code) = match leg.status {
+        WorkflowLegStatus::Running => (WorkflowLegStatusV2::Running, None),
+        WorkflowLegStatus::Done => (WorkflowLegStatusV2::Done, None),
+        WorkflowLegStatus::Cancelled => (WorkflowLegStatusV2::Cancelled, None),
+        WorkflowLegStatus::ForcedUnload => (WorkflowLegStatusV2::ForcedUnload, None),
+        WorkflowLegStatus::Failed(code) => {
+            (WorkflowLegStatusV2::Failed, Some(code.as_str().to_string()))
+        }
+    };
+    NodeSessionView {
+        leg_index: leg.leg_index,
+        session_id: leg.session_id.clone(),
+        status,
+        failure_code,
+        completed_at: leg.completed_at.clone(),
     }
 }
 

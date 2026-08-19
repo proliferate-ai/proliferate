@@ -5,6 +5,8 @@
 // it may import only AnyHarness contract types and local domain modules.
 
 import type {
+  WorkflowLegStatusV2,
+  WorkflowRunNodeSessionV2,
   WorkflowRunNodeStatusV2,
   WorkflowRunNodeV2,
   WorkflowRunProjectionV2,
@@ -55,6 +57,81 @@ export function workflowNodeStatusTone(
 ): WorkflowNodeTone {
   const byStatus: Partial<Record<string, WorkflowNodeTone>> = NODE_STATUS_TONE;
   return byStatus[status] ?? "muted";
+}
+
+/**
+ * Tone for one parallel leg's fan-in status (ruling F4's per-leg rollup). A
+ * separate closed set from `NODE_STATUS_TONE` because leg statuses are their
+ * own vocabulary (`done`/`forced_unload`, no `pending`/`awaiting_human`): a
+ * running leg is `current`, a clean finish `success`, a failure `danger`, a
+ * forced unload `warning`, a cancel the same inert `muted` a cancelled node
+ * uses. Same total-declaration / partial-read discipline as the node map so a
+ * newer runtime's unknown leg status is a muted dot, never a render throw.
+ */
+const LEG_STATUS_TONE: Record<WorkflowLegStatusV2, WorkflowNodeTone> = {
+  running: "current",
+  done: "success",
+  cancelled: "muted",
+  forced_unload: "warning",
+  failed: "danger",
+};
+
+export function workflowNodeLegTone(status: WorkflowLegStatusV2): WorkflowNodeTone {
+  const byStatus: Partial<Record<string, WorkflowNodeTone>> = LEG_STATUS_TONE;
+  return byStatus[status] ?? "muted";
+}
+
+/** One leg of a parallel node, resolved for the run view's per-leg rollup. */
+export interface WorkflowNodeLegVM {
+  legIndex: number;
+  sessionId: string | null;
+  status: WorkflowLegStatusV2;
+  failureCode: string | null;
+  tone: WorkflowNodeTone;
+}
+
+/**
+ * A parallel node's fan-in rollup (R7): the "N/M done" progress plus every
+ * leg's status. `finished` is the ADR's `legs_done` — legs that reached a
+ * terminal fan-in status (anything but `running`), matching the runtime's own
+ * completion gate ("advance once no leg is outstanding"). `legs` is ordered by
+ * `legIndex`, the durable prompt-to-leg linkage.
+ */
+export interface WorkflowNodeLegRollup {
+  total: number;
+  finished: number;
+  legs: WorkflowNodeLegVM[];
+}
+
+function toLegVM(session: WorkflowRunNodeSessionV2): WorkflowNodeLegVM {
+  return {
+    legIndex: session.legIndex,
+    sessionId: session.sessionId,
+    status: session.status,
+    failureCode: session.failureCode,
+    tone: workflowNodeLegTone(session.status),
+  };
+}
+
+/**
+ * The per-leg rollup for a node, or `null` when there is nothing to roll up.
+ * `null` is the deliberate signal to fall back to the scalar `sessionId`: it
+ * covers a runtime that predates the rollup (no `sessions` key) AND a one-leg
+ * node (the only shape any definition produces today), which is bit-identical
+ * to today's single-card behavior. A rollup surfaces only for a genuinely
+ * parallel node (two or more legs), so the "N/M" progress never renders as the
+ * noise of "1/1".
+ */
+export function workflowNodeLegRollup(
+  node: WorkflowRunNodeV2,
+): WorkflowNodeLegRollup | null {
+  const sessions = node.sessions;
+  if (!sessions || sessions.length <= 1) return null;
+  const legs = [...sessions]
+    .sort((a, b) => a.legIndex - b.legIndex)
+    .map(toLegVM);
+  const finished = legs.filter((leg) => leg.status !== "running").length;
+  return { total: legs.length, finished, legs };
 }
 
 export interface WorkflowNodeControlSet {
@@ -199,6 +276,12 @@ export interface WorkflowGraphNodeVM {
   isCurrent: boolean;
   tone: WorkflowNodeTone;
   controls: WorkflowNodeControlSet;
+  /**
+   * The per-leg fan-in rollup for a parallel node (R7), or `null` for a
+   * one-leg node or a runtime that predates the rollup — the card then reads
+   * the scalar `node.sessionId` exactly as before.
+   */
+  legRollup: WorkflowNodeLegRollup | null;
 }
 
 /**
@@ -218,6 +301,7 @@ function toNodeVM(run: WorkflowRunV2, node: WorkflowRunNodeV2): WorkflowGraphNod
     isCurrent: run.currentNodeRowId === node.id,
     tone: workflowNodeStatusTone(node.status),
     controls: workflowNodeControls(run, node),
+    legRollup: workflowNodeLegRollup(node),
   };
 }
 
