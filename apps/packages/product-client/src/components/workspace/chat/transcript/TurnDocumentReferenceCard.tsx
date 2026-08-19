@@ -24,7 +24,12 @@ export function TurnDocumentReferenceCard({
         type="button"
         variant="unstyled"
         size="unstyled"
-        onClick={() => void fileActions.openPrimary()}
+        disabled={!fileActions.canOpenPrimary}
+        onClick={() => {
+          if (fileActions.canOpenPrimary) {
+            void fileActions.openPrimary();
+          }
+        }}
         className="turn-document-reference-trigger flex w-full min-w-0 items-center justify-start gap-2.5 rounded-none px-3 py-3 text-left focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
         aria-label={`Open preview for ${resource.displayName}`}
       >

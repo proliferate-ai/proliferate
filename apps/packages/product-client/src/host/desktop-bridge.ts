@@ -87,6 +87,21 @@ export type DirectoryPickerUnavailableReason =
   | "native_host_required"
   | "picker_failed";
 
+export type DesktopPathInspectionUnavailableReason =
+  | "invalid_path"
+  | "permission_denied"
+  | "unsupported_type"
+  | "io_error";
+
+export type DesktopPathInspection =
+  | { kind: "file" }
+  | { kind: "directory" }
+  | { kind: "missing" }
+  | {
+      kind: "unavailable";
+      reason: DesktopPathInspectionUnavailableReason;
+    };
+
 
 /** A directory-picker outcome with cancellation kept distinct from a missing
  * or failed native transport. Product workflows decide how to present the
@@ -103,7 +118,7 @@ export type DirectoryPickerResult =
 export interface DesktopFilesBridge {
   pickDirectory(): Promise<DirectoryPickerResult>;
   getHomeDirectory(): Promise<string>;
-  isDirectory(path: string): Promise<boolean>;
+  inspectPath(path: string): Promise<DesktopPathInspection>;
 
   /**
    * The drag pasteboard's current change count, captured while a drag is over

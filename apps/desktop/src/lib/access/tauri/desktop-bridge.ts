@@ -19,11 +19,11 @@ import type {
 import { getRuntimeInfo, restartRuntime } from "./runtime";
 import {
   getHomeDir,
+  inspectPath,
   listAvailableEditors,
   listOpenTargets,
   openInTerminal,
   openTarget,
-  pathIsDirectory,
   pickFolder,
   revealInFinder,
 } from "./shell";
@@ -133,7 +133,7 @@ export const desktopBridge: DesktopBridge = {
       }
     },
     getHomeDirectory: getHomeDir,
-    isDirectory: pathIsDirectory,
+    inspectPath,
     getDragPasteboardChangeCount,
     readDroppedPaths: readDragDropPaths,
     listAvailableEditors,

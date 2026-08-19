@@ -40,7 +40,10 @@ function loadTargets(files: DesktopFilesBridge, pathKind: PathKind): Promise<Ope
 
 interface UseOpenInDefaultEditorResult {
   /** Open a path in the preferred external target and report whether it launched. */
-  openInDefaultEditor: (absolutePath: string) => Promise<boolean>;
+  openInDefaultEditor: (
+    absolutePath: string,
+    imperativePathKind: PathKind,
+  ) => Promise<boolean>;
   /** Open a path in a specific shell target. */
   openTarget: (targetId: string, absolutePath: string) => Promise<void>;
   /** Reveal a path in Finder. */
@@ -67,13 +70,26 @@ interface UseOpenInDefaultEditorResult {
  *  - Strips any `:line[:col]` suffix before invoking the shell command,
  *    because Desktop open-target commands take a plain path.
  */
-export function useOpenInDefaultEditor(pathKind: PathKind = "file"): UseOpenInDefaultEditorResult {
+interface LoadedTargets {
+  files: DesktopFilesBridge | null;
+  pathKind: PathKind;
+  targets: OpenTarget[];
+}
+
+export function useOpenInDefaultEditor(
+  pathKind: PathKind | null,
+): UseOpenInDefaultEditorResult {
   const host = useProductHost();
   const files = host.desktop?.files ?? null;
-  const [targets, setTargets] = useState<OpenTarget[] | null>(null);
+  const [loadedTargets, setLoadedTargets] = useState<LoadedTargets | null>(null);
   const defaultOpenInTargetId = useUserPreferencesStore(
     (state) => state.defaultOpenInTargetId,
   );
+  const targets = pathKind !== null
+    && loadedTargets?.files === files
+    && loadedTargets.pathKind === pathKind
+    ? loadedTargets.targets
+    : null;
   const availableTargets = targets ?? EMPTY_OPEN_TARGETS;
   const defaultTarget = useMemo(
     () => resolvePreferredOpenTarget(openableTargets(availableTargets), { defaultOpenInTargetId }),
@@ -82,20 +98,26 @@ export function useOpenInDefaultEditor(pathKind: PathKind = "file"): UseOpenInDe
 
   useEffect(() => {
     let cancelled = false;
-    if (!files) {
-      setTargets([]);
+    if (pathKind === null) {
+      setLoadedTargets(null);
       return;
     }
-    setTargets(null);
+    if (!files) {
+      setLoadedTargets({ files, pathKind, targets: [] });
+      return;
+    }
+    setLoadedTargets((current) => (
+      current?.files === files && current.pathKind === pathKind ? current : null
+    ));
     void loadTargets(files, pathKind).then(
       (loaded) => {
-        if (!cancelled) setTargets(loaded);
+        if (!cancelled) setLoadedTargets({ files, pathKind, targets: loaded });
       },
       () => {
         // Keep the unresolved state so an explicit open action retries target
         // discovery instead of treating a transient bridge failure as an
         // authoritative empty target list.
-        if (!cancelled) setTargets(null);
+        if (!cancelled) setLoadedTargets(null);
       },
     );
     return () => {
@@ -104,15 +126,18 @@ export function useOpenInDefaultEditor(pathKind: PathKind = "file"): UseOpenInDe
   }, [files, pathKind]);
 
   const openInDefaultEditor = useCallback(
-    async (absolutePath: string) => {
+    async (absolutePath: string, imperativePathKind: PathKind) => {
       if (!files) {
         throw new Error("Local file access is not available.");
       }
-      let list = targets;
+      let list = loadedTargets?.files === files
+        && loadedTargets.pathKind === imperativePathKind
+        ? loadedTargets.targets
+        : null;
       if (list === null) {
         try {
-          list = await loadTargets(files, pathKind);
-          setTargets(list);
+          list = await loadTargets(files, imperativePathKind);
+          setLoadedTargets({ files, pathKind: imperativePathKind, targets: list });
         } catch {
           return false;
         }
@@ -127,7 +152,7 @@ export function useOpenInDefaultEditor(pathKind: PathKind = "file"): UseOpenInDe
         return false;
       }
     },
-    [files, pathKind, targets, defaultOpenInTargetId],
+    [files, loadedTargets, defaultOpenInTargetId],
   );
 
   const copyPath = useCallback(async (path: string) => {
@@ -157,7 +182,7 @@ export function useOpenInDefaultEditor(pathKind: PathKind = "file"): UseOpenInDe
     copyPath,
     targets: availableTargets,
     defaultTarget,
-    ready: targets !== null,
+    ready: pathKind !== null && targets !== null,
   };
 }
 
