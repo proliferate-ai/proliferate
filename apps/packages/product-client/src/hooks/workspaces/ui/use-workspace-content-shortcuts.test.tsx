@@ -31,6 +31,41 @@ function createActions(overrides: Partial<{
   };
 }
 
+/** Mounts and focuses a bare focus-zone element (no nested owner). */
+function mountFocusZone(kind: string): HTMLElement {
+  const zone = document.createElement("div");
+  zone.tabIndex = 0;
+  zone.setAttribute("data-focus-zone", kind);
+  document.body.append(zone);
+  zone.focus();
+  return zone;
+}
+
+// Mounts a right-panel zone containing a file-viewer frame and focuses a
+// child inside it: an ordinary control, or (with `inDock: true`) a filter
+// input nested inside `[data-docked-file-tree]`.
+function focusInsideFileViewerFrame(options: { inDock?: boolean } = {}): { focusTarget: HTMLElement } {
+  const zone = document.createElement("div");
+  zone.tabIndex = 0;
+  zone.setAttribute("data-focus-zone", "right-panel");
+  const frame = document.createElement("div");
+  frame.setAttribute("data-file-viewer-frame", "true");
+  const focusTarget = document.createElement(options.inDock ? "input" : "button");
+  if (!options.inDock) {
+    frame.append(focusTarget);
+  } else {
+    (focusTarget as HTMLInputElement).value = "some-filter";
+    const dock = document.createElement("div");
+    dock.setAttribute("data-docked-file-tree", "true");
+    dock.append(focusTarget);
+    frame.append(dock);
+  }
+  zone.append(frame);
+  document.body.append(zone);
+  focusTarget.focus();
+  return { focusTarget };
+}
+
 const harnessState = vi.hoisted(() => ({
   selectedWorkspaceId: "workspace-1" as string | null,
 }));
@@ -103,11 +138,7 @@ describe("useWorkspaceContentShortcuts", () => {
 
   it("routes close-tab shortcuts to the right panel when focus is in the right panel", () => {
     const actions = createActions();
-    const zone = document.createElement("div");
-    zone.tabIndex = 0;
-    zone.setAttribute("data-focus-zone", "right-panel");
-    document.body.append(zone);
-    zone.focus();
+    mountFocusZone("right-panel");
 
     renderHook(() => useWorkspaceContentShortcuts(actions));
 
@@ -118,11 +149,7 @@ describe("useWorkspaceContentShortcuts", () => {
 
   it("falls back to workspace tab close when a stale right-panel close request is unhandled", () => {
     const actions = createActions();
-    const zone = document.createElement("div");
-    zone.tabIndex = 0;
-    zone.setAttribute("data-focus-zone", "right-panel");
-    document.body.append(zone);
-    zone.focus();
+    mountFocusZone("right-panel");
     vi.mocked(requestRightPanelCloseActiveTab).mockReturnValueOnce(false);
 
     renderHook(() => useWorkspaceContentShortcuts(actions));
@@ -134,11 +161,7 @@ describe("useWorkspaceContentShortcuts", () => {
 
   it("routes tab cycling to the right panel when focus is in the right panel", () => {
     const actions = createActions();
-    const zone = document.createElement("div");
-    zone.tabIndex = 0;
-    zone.setAttribute("data-focus-zone", "right-panel");
-    document.body.append(zone);
-    zone.focus();
+    mountFocusZone("right-panel");
 
     renderHook(() => useWorkspaceContentShortcuts(actions));
 
@@ -149,11 +172,7 @@ describe("useWorkspaceContentShortcuts", () => {
 
   it("falls back to workspace tab cycling when a stale right-panel focus request is unhandled", () => {
     const actions = createActions();
-    const zone = document.createElement("div");
-    zone.tabIndex = 0;
-    zone.setAttribute("data-focus-zone", "right-panel");
-    document.body.append(zone);
-    zone.focus();
+    mountFocusZone("right-panel");
     vi.mocked(requestRightPanelRelativeTab).mockReturnValueOnce(false);
 
     renderHook(() => useWorkspaceContentShortcuts(actions));
@@ -165,11 +184,7 @@ describe("useWorkspaceContentShortcuts", () => {
 
   it("routes chat-tab number shortcuts to the right panel when focus is in the right panel", () => {
     const actions = createActions();
-    const zone = document.createElement("div");
-    zone.tabIndex = 0;
-    zone.setAttribute("data-focus-zone", "right-panel");
-    document.body.append(zone);
-    zone.focus();
+    mountFocusZone("right-panel");
 
     renderHook(() => useWorkspaceContentShortcuts(actions));
 
@@ -183,11 +198,7 @@ describe("useWorkspaceContentShortcuts", () => {
 
   it("falls back to chat-tab number shortcuts when a stale right-panel focus request is unhandled", () => {
     const actions = createActions();
-    const zone = document.createElement("div");
-    zone.tabIndex = 0;
-    zone.setAttribute("data-focus-zone", "right-panel");
-    document.body.append(zone);
-    zone.focus();
+    mountFocusZone("right-panel");
     vi.mocked(requestRightPanelTabByIndex).mockReturnValueOnce(false);
 
     renderHook(() => useWorkspaceContentShortcuts(actions));
@@ -202,11 +213,7 @@ describe("useWorkspaceContentShortcuts", () => {
 
   it("keeps chat-tab number shortcuts in chat when chat owns focus", () => {
     const actions = createActions();
-    const zone = document.createElement("div");
-    zone.tabIndex = 0;
-    zone.setAttribute("data-focus-zone", "chat");
-    document.body.append(zone);
-    zone.focus();
+    mountFocusZone("chat");
 
     renderHook(() => useWorkspaceContentShortcuts(actions));
 
@@ -220,11 +227,7 @@ describe("useWorkspaceContentShortcuts", () => {
 
   it("opens chat content search when chat owns focus", () => {
     const actions = createActions();
-    const zone = document.createElement("div");
-    zone.tabIndex = 0;
-    zone.setAttribute("data-focus-zone", "chat");
-    document.body.append(zone);
-    zone.focus();
+    mountFocusZone("chat");
 
     renderHook(() => useWorkspaceContentShortcuts(actions));
 
@@ -233,18 +236,10 @@ describe("useWorkspaceContentShortcuts", () => {
     expect(useContentSearchStore.getState().surface).toBe("chat");
   });
 
-  it("routes content search to the file viewer when file viewer owns focus", () => {
+  it("routes content search to the file viewer when file viewer owns focus and reports availability", () => {
     const actions = createActions();
-    const zone = document.createElement("div");
-    zone.tabIndex = 0;
-    zone.setAttribute("data-focus-zone", "right-panel");
-    const frame = document.createElement("div");
-    frame.setAttribute("data-file-viewer-frame", "true");
-    const focusTarget = document.createElement("button");
-    frame.append(focusTarget);
-    zone.append(frame);
-    document.body.append(zone);
-    focusTarget.focus();
+    useContentSearchStore.getState().setSurfaceAvailability("file", true);
+    focusInsideFileViewerFrame();
 
     renderHook(() => useWorkspaceContentShortcuts(actions));
 
@@ -253,13 +248,25 @@ describe("useWorkspaceContentShortcuts", () => {
     expect(useContentSearchStore.getState().surface).toBe("file");
   });
 
+  // Availability defaults to false in beforeEach — the same state
+  // `FileViewerFrame` now reports for a fileDiff, binary, too-large, or
+  // still-loading target (P1-2: registration is gated on `canFindInFile`).
+  it.each(["fileDiff target", "binary", "too large", "loading"])(
+    "does not open file search via Cmd/Ctrl+F when the target is %s (unavailable)",
+    () => {
+      const actions = createActions();
+      focusInsideFileViewerFrame();
+
+      renderHook(() => useWorkspaceContentShortcuts(actions));
+
+      expect(runShortcutHandler("workspace.find-content", { source: "keyboard" })).toBe(false);
+      expect(useContentSearchStore.getState().open).toBe(false);
+    },
+  );
+
   it("declines content search when the terminal owns focus", () => {
     const actions = createActions();
-    const zone = document.createElement("div");
-    zone.tabIndex = 0;
-    zone.setAttribute("data-focus-zone", "terminal");
-    document.body.append(zone);
-    zone.focus();
+    mountFocusZone("terminal");
 
     renderHook(() => useWorkspaceContentShortcuts(actions));
 
@@ -287,13 +294,21 @@ describe("useWorkspaceContentShortcuts", () => {
     expect(useContentSearchStore.getState().surface).toBe("review");
   });
 
+  it("falls back to chat and leaves the dock filter untouched when focus is inside the docked file tree", () => {
+    const actions = createActions();
+    const { focusTarget } = focusInsideFileViewerFrame({ inDock: true });
+
+    renderHook(() => useWorkspaceContentShortcuts(actions));
+
+    expect(runShortcutHandler("workspace.find-content", { source: "keyboard" })).toBe(true);
+    expect(useContentSearchStore.getState().open).toBe(true);
+    expect(useContentSearchStore.getState().surface).toBe("chat");
+    expect((focusTarget as HTMLInputElement).value).toBe("some-filter");
+  });
+
   it("declines content search when the right panel owns focus but neither file viewer nor review document is present", () => {
     const actions = createActions();
-    const zone = document.createElement("div");
-    zone.tabIndex = 0;
-    zone.setAttribute("data-focus-zone", "right-panel");
-    document.body.append(zone);
-    zone.focus();
+    mountFocusZone("right-panel");
 
     renderHook(() => useWorkspaceContentShortcuts(actions));
 

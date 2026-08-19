@@ -125,8 +125,22 @@ function focusContentSearchInput(): void {
 
 function resolveContentSearchSurfaceForShortcut(): ContentSearchSurface | null {
   const activeElement = document.activeElement;
+  // The docked file tree renders inside `[data-file-viewer-frame]`, but it is
+  // not the file-search owner: focus there is not the file surface, and it
+  // must not fall into the right-panel branch below either (that branch
+  // would still find the ancestor frame and re-route to `file`). It follows
+  // the plain global fallback instead — chat, since the dock can never also
+  // be a review document or the terminal.
+  if (activeElement?.closest("[data-docked-file-tree]")) {
+    return "chat";
+  }
+  // File availability derives from the settled read (`canFindInFile`,
+  // registered by `FileViewerFrame`): a `fileDiff`/binary/too-large/loading
+  // target reports unavailable, and the shortcut must not open file search
+  // on it — it declines rather than opening an ineligible surface.
+  const fileAvailable = useContentSearchStore.getState().surfaceAvailability.file;
   if (activeElement?.closest("[data-file-viewer-frame]")) {
-    return "file";
+    return fileAvailable ? "file" : null;
   }
   if (activeElement?.closest("[data-git-review-document]")) {
     return "review";
@@ -134,7 +148,7 @@ function resolveContentSearchSurfaceForShortcut(): ContentSearchSurface | null {
 
   const focusZone = getFocusZone();
   if (focusZone === "right-panel") {
-    if (document.querySelector("[data-file-viewer-frame]")) {
+    if (fileAvailable && document.querySelector("[data-file-viewer-frame]")) {
       return "file";
     }
     if (document.querySelector("[data-git-review-document]")) {

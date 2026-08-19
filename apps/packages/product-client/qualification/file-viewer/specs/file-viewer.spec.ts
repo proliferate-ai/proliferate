@@ -288,7 +288,15 @@ async function openFixture(
   });
   await page.clock.setFixedTime(new Date("2026-08-19T12:00:00.000Z"));
   await page.emulateMedia({ reducedMotion: "reduce", colorScheme });
-  await page.goto(path);
+  // The fixture's `index.html` hard-codes `data-mode="dark"` and the app
+  // themes purely off that attribute (`src/config/theme.ts`), not off
+  // `prefers-color-scheme` — `emulateMedia({ colorScheme })` alone never
+  // changes anything the app renders. `main.tsx` reads an `appearance` query
+  // param and applies it as the resolved mode, so pass the requested scheme
+  // through the URL to get a genuinely different screenshot for `light`.
+  const url = new URL(path, "http://fixture.invalid");
+  url.searchParams.set("appearance", colorScheme);
+  await page.goto(`${url.pathname}${url.search}`);
   await page.evaluate(async () => {
     await document.fonts.ready;
   });

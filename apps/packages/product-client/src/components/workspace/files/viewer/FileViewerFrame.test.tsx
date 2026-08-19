@@ -22,8 +22,8 @@ import { FileViewerFrame } from "#product/components/workspace/files/viewer/File
 
 const noop = () => {};
 
-function renderFrame(overrides: Partial<Parameters<typeof FileViewerFrame>[0]> = {}) {
-  return render(
+function frameElement(overrides: Partial<Parameters<typeof FileViewerFrame>[0]> = {}) {
+  return (
     <FileViewerFrame
       filePath="src/index.tsx"
       canRenderRichPreview={false}
@@ -53,13 +53,46 @@ function renderFrame(overrides: Partial<Parameters<typeof FileViewerFrame>[0]> =
       {...overrides}
     >
       <div>file content</div>
-    </FileViewerFrame>,
+    </FileViewerFrame>
   );
+}
+
+function renderFrame(overrides: Partial<Parameters<typeof FileViewerFrame>[0]> = {}) {
+  return render(frameElement(overrides));
 }
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+describe("FileViewerFrame file surface availability", () => {
+  it("registers file as available when canFindInFile is true", () => {
+    renderFrame({ canFindInFile: true });
+    expect(mocks.setSurfaceAvailability).toHaveBeenCalledWith("file", true);
+  });
+
+  it("does not register file as available when canFindInFile is false (fileDiff/binary/too-large/loading)", () => {
+    renderFrame({ canFindInFile: false });
+    expect(mocks.setSurfaceAvailability).not.toHaveBeenCalledWith("file", true);
+    expect(mocks.setSurfaceAvailability).toHaveBeenCalledWith("file", false);
+  });
+
+  it("clears availability on unmount", () => {
+    const { unmount } = renderFrame({ canFindInFile: true });
+    mocks.setSurfaceAvailability.mockClear();
+    unmount();
+    expect(mocks.setSurfaceAvailability).toHaveBeenCalledWith("file", false);
+  });
+
+  it("re-registers availability reactively when canFindInFile changes", () => {
+    const { rerender } = render(frameElement({ canFindInFile: false }));
+    mocks.setSurfaceAvailability.mockClear();
+
+    rerender(frameElement({ canFindInFile: true }));
+
+    expect(mocks.setSurfaceAvailability).toHaveBeenCalledWith("file", true);
+  });
 });
 
 describe("FileViewerFrame breadcrumbs", () => {

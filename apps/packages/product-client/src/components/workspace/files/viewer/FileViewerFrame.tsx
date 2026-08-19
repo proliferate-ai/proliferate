@@ -100,11 +100,16 @@ export function FileViewerFrame({
     onFocusRequestHandled(focusRequestToken);
   }, [focusRequestToken, onFocusRequestHandled]);
 
+  // Availability tracks the same eligibility the Find button uses
+  // (`canFindInFile`: settled, text, not-too-large, never a diff target) —
+  // never unconditionally true. A `fileDiff`/binary/too-large/loading target
+  // must not advertise the `file` surface, so the shortcut can't open file
+  // search on it.
   const setSurfaceAvailability = useContentSearchStore((state) => state.setSurfaceAvailability);
   useEffect(() => {
-    setSurfaceAvailability("file", true);
+    setSurfaceAvailability("file", canFindInFile);
     return () => setSurfaceAvailability("file", false);
-  }, [setSurfaceAvailability]);
+  }, [canFindInFile, setSurfaceAvailability]);
 
   // Unavailable dominates any stale requested value: a workspace that lost
   // file-context availability while a dock was requested open must not show

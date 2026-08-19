@@ -70,6 +70,7 @@ const FIXED_TIME = "2026-08-19T12:00:00.000Z";
 const params = new URLSearchParams(window.location.search);
 const fixtureHost: FixtureHost = params.get("host") === "web" ? "web" : "desktop";
 const fixtureOrigin: FixtureOrigin = params.get("origin") === "remote" ? "remote" : "local";
+if (params.get("appearance") === "light" || params.get("appearance") === "dark") document.documentElement.dataset.mode = params.get("appearance")!; // overrides index.html's hard-coded data-mode="dark"
 
 const counters: FixtureCounters = {
   clipboard: 0,

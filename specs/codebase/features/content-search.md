@@ -14,7 +14,7 @@ One store (`apps/packages/product-client/src/stores/search/content-search-store.
 
 When focus is already inside the pill (`[data-content-search-overlay]`), the same shortcut does not reopen: on `file` it always reselects/refocuses the input and never cycles away, since file search must not silently switch surfaces; on `chat`/`review` it cycles between those two when review is available, otherwise it just refocuses. Placeholder/aria: "Search chat…" / "Find in chat", "Search file…" / "Find in file", and "Search changes…" / "Find in changes".
 
-The pill (`ContentSearchPill`) is a single component mounted once at the shell level (`StandardWorkspaceShell`), pinned near the shell's top-right corner (`absolute top-2 right-4`, `data-content-search-overlay`). One mount serves all three surfaces; there is no separate per-surface mount or file-search modal. The ruled placement contract is: chat sits 8px below the 46px shell tab strip; file and review sit 8px below their own 36px owned header (90px from the shell top); every surface keeps 16px clearance from its content edge. Confirm the current pixel offsets in `StandardWorkspaceShell`/`ContentSearchPill` before depending on an exact value in new code or tests.
+The pill (`ContentSearchPill`) is a single component mounted once at the shell level (`StandardWorkspaceShell`), marked with `data-content-search-overlay`. One mount serves all three surfaces; there is no separate per-surface mount or file-search modal. Placement is computed per surface, not a single fixed offset: the ruled placement contract is chat sits 8px below the 46px shell tab strip, file and review sit 8px below their own 36px owned header (90px from the shell top), and every surface keeps 16px clearance from its content edge. Confirm the current computed `top`/`right` values in `StandardWorkspaceShell`/`ContentSearchPill` before depending on an exact value in new code or tests.
 
 ## Availability
 
@@ -28,7 +28,7 @@ File content search is eligible only for an active `file` target (never `fileDif
 
 Rendered Markdown stays display-only until search is opened: the closed-to-open transition (Find button, `Cmd/Ctrl+F`, or programmatic `openSearch("file")`) does a one-way switch from rendered to source mode (`setTargetMode(targetKey, "source")`) before search focuses, and does not oscillate the mode again on query changes or next/previous navigation.
 
-`FileDiffPane` is explicitly excluded: it registers no content-search unit, a `fileDiff` target never reports `canFindInFile`, and the file surface shortcut/Find button do not apply to it. Diff rendering does not implement the file-search owner contract; do not read the diff viewers as supporting file search.
+`FileDiffPane` registers no content-search unit, and a `fileDiff` target never reports `canFindInFile`. The exclusion is enforced through availability, not a separate code path: `FileViewerFrame` registers the `file` surface as available only while `canFindInFile` is true, reactively for its whole lifetime, rather than unconditionally on mount, so a `fileDiff`, binary, too-large, or still-loading target reports `file` unavailable and neither the Find button nor the `Cmd/Ctrl+F` shortcut can open file search on it. Diff rendering does not implement the file-search owner contract; do not read the diff viewers as supporting file search.
 
 ## Focus capture and restoration
 
