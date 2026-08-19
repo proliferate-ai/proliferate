@@ -129,6 +129,43 @@ function ScrollPhysicsFixture() {
 
 window.__scrollPhysics = scrollPhysicsDriver;
 
+// TEMPORARY DIAGNOSTIC (remove before merge): intercept every programmatic
+// scrollTop write and every scroll event on the transcript viewport and log
+// them to the console (harvested from the Playwright trace on failure), so a
+// hosted-only failure shows whether writes execute, what they read back, and
+// how the native scroll interleaves.
+{
+  const proto = Element.prototype as unknown as Record<string, unknown>;
+  const desc = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop")!;
+  Object.defineProperty(Element.prototype, "scrollTop", {
+    configurable: true,
+    get(this: Element) {
+      return (desc.get as () => number).call(this);
+    },
+    set(this: Element, value: number) {
+      const isViewport = (this as HTMLElement).dataset?.transcriptVirtualizationMode !== undefined
+        || (this as HTMLElement).querySelector?.("[data-transcript-virtualization-mode]") != null;
+      (desc.set as (v: number) => void).call(this, value);
+      if (isViewport) {
+        const back = (desc.get as () => number).call(this);
+        console.log(`[diag] write t=${performance.now().toFixed(1)} want=${value} got=${back} sh=${this.scrollHeight}`);
+      }
+    },
+  });
+  void proto;
+  document.addEventListener(
+    "scroll",
+    (event) => {
+      const el = event.target as HTMLElement;
+      if (el?.querySelector?.("[data-transcript-virtualization-mode]") == null) {
+        return;
+      }
+      console.log(`[diag] scroll t=${performance.now().toFixed(1)} top=${(desc.get as () => number).call(el)} sh=${el.scrollHeight}`);
+    },
+    { capture: true, passive: true },
+  );
+}
+
 // No StrictMode: its intentional double-mount would run the transcript's
 // per-session reset/glue loop twice, which would perturb the very scroll
 // physics this fixture measures.
