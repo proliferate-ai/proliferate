@@ -30,7 +30,7 @@ describe("useAgentResourcesCache", () => {
     vi.clearAllMocks();
   });
 
-  it("invalidates launch options and gateway models after an auth-route change", async () => {
+  it("invalidates launch options after an auth-route change", async () => {
     mocks.invalidateQueries.mockResolvedValue(undefined);
     const { result } = renderHook(() => useAgentResourcesCache());
 
@@ -47,14 +47,7 @@ describe("useAgentResourcesCache", () => {
       "agents",
       "launch-options",
     ]);
-    expect(keys).toContainEqual([
-      "anyharness",
-      "account-1",
-      "runtime",
-      "http://runtime.test",
-      "agents",
-      "gateway-models",
-    ]);
+    expect(keys.some((key) => key.includes("gateway-models"))).toBe(false);
   });
 
   it("can propagate a list refetch failure to terminal-refresh callers", async () => {

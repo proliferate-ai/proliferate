@@ -1,13 +1,12 @@
 import { useMemo, useState } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import {
-  useAgentModels,
-  useUpsertAgentModelOverride,
+  useCloudHarnessLaunchOptions,
+  useCloudSandbox,
 } from "@proliferate/cloud-sdk-react";
 import {
   useAgentLaunchOptionsQuery,
-  useModelSnapshotStatusQuery,
-  useRefreshModelSnapshotMutation,
+  useRefreshHarnessLaunchOptionsMutation,
 } from "@anyharness/sdk-react";
 import { ChevronRight } from "#product/primitives/icons/core";
 import { RefreshCw } from "#product/primitives/icons/platform";
@@ -19,23 +18,7 @@ import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
 import { SettingsSection } from "#product/primitives/patterns/settings/SettingsSection";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
 import { useToastStore } from "#product/stores/toast/toast-store";
-import {
-  buildEnabledOverridePatchJson,
-  normalizeCatalogModels,
-  normalizeRuntimeLaunchModels,
-} from "#product/lib/domain/settings/harness-catalog";
-import {
-  formatSnapshotAge,
-  resolveComposedObservation,
-} from "#product/lib/domain/settings/model-snapshot-observation";
-import { useShallow } from "zustand/react/shallow";
-import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
-import {
-  isModelVisibleByPreference,
-  resolveCatalogDefaultOptIn,
-  withUpdatedModelVisibilityOverride,
-} from "#product/lib/domain/chat/models/model-visibility";
-import { isFeatureEnabled } from "#product/config/feature-flags";
+import { normalizeRuntimeLaunchModels } from "#product/lib/domain/settings/harness-catalog";
 
 interface HarnessAllModelsSectionProps {
   harnessKind: string;
@@ -44,24 +27,9 @@ interface HarnessAllModelsSectionProps {
 }
 
 /**
- * The All Models surface, re-cut to the composed observation
- * (model-catalog.md "The picker is the observation"): ONE observation per
- * harness — no per-context tabs or rows.
- *
- * - Local surface: the runtime's machine observation is the truth. The
- *   polled status route carries the model/mode lists off the same document
- *   read, the `probedAt` age, the `lastAttempt` failed-refresh indicator,
- *   and the provenance fields (attestation, install identity) rendered as
- *   diagnostics only. Manual Refresh calls the param-less refresh route —
- *   the one manual poke in the closed event set; there is no auto-probe
- *   here, because the five events are the only probe spawn sites.
- * - Cloud surface: the layered read (the cloud sandbox's observation at
- *   rest, else the shipped catalog's models as the read-time seed) with the
- *   user's override patch applied.
- *
- * Where the shipped catalog serves in place of an observation (local before
- * the first probe; cloud `origin === "catalog"`), the list is marked as
- * unverified seed data.
+ * Settings reads the selected target's launch-option response directly.
+ * Local can request a new override-free observation; cloud reads the copied
+ * target-scoped state and never seeds or overrides executable membership.
  */
 export function HarnessAllModelsSection({
   harnessKind,
@@ -72,90 +40,29 @@ export function HarnessAllModelsSection({
   const showToast = useToastStore((state) => state.show);
   const isLocal = surface === "local";
 
-  // Flag-ON (ADR agent-auth rung 6): model enable/disable is a per-user
-  // per-harness VISIBILITY preference applied at render over the observed list,
-  // on every surface. The picker already reads the same preference
-  // (model-visibility.ts), so hiding here hides everywhere. The flag-ON UI no
-  // longer writes the server agent_catalog_override table (dormant cloud arm;
-  // deletion deferred to a follow-up).
-  const evidenceOn = isFeatureEnabled("agentAuthEvidencePanes");
-  const visibilityOverrides = useUserPreferencesStore(
-    useShallow((state) => state.chatModelVisibilityOverridesByAgentKind),
-  );
-  const setPreference = useUserPreferencesStore((state) => state.set);
-
-  // Cloud (machineless) branch: the layered read off the context-free route —
-  // one composed observation per (owner, harness), the cloud sandbox's
-  // document at rest else the shipped catalog's read-time seed, with the
-  // user's override patch applied. The former per-auth-context routing
-  // (authContextId resolution off the enabled selections) is deleted with the
-  // (owner, harness) re-key (model-catalog.md §Cloud routes).
-  const agentModelsQuery = useAgentModels(harnessKind, cloudActive && !isLocal);
-  const upsertOverride = useUpsertAgentModelOverride();
-
-  // Local branch: the composed observation off the runtime's polled status
-  // route, plus the manual-refresh poke. Works signed in or out — the
-  // runtime, not the cloud session, owns this document.
-  const modelSnapshotStatusQuery = useModelSnapshotStatusQuery(harnessKind, {
+  const refreshLaunchOptions = useRefreshHarnessLaunchOptionsMutation();
+  const cloudSandbox = useCloudSandbox(!isLocal && cloudActive);
+  const cloudLaunchOptionsQuery = useCloudHarnessLaunchOptions({
+    cloudSandboxId: cloudSandbox.data?.id,
+    harnessKind,
+    enabled: !isLocal && cloudActive,
+  });
+  const runtimeLaunchOptionsQuery = useAgentLaunchOptionsQuery({
+    harnessKind,
     enabled: isLocal,
   });
-  const refreshModelSnapshot = useRefreshModelSnapshotMutation();
-  const observation = useMemo(
-    () => resolveComposedObservation(modelSnapshotStatusQuery.data),
-    [modelSnapshotStatusQuery.data],
+  const launchOptions = isLocal
+    ? runtimeLaunchOptionsQuery.data
+    : cloudLaunchOptionsQuery.data;
+  const models = useMemo(
+    () => normalizeRuntimeLaunchModels(harnessKind, launchOptions),
+    [harnessKind, launchOptions],
   );
-  const hasObservation = Boolean(observation?.probedAt);
-  // Pre-first-observation window: the runtime-resolved launch options are the
-  // shipped catalog's seed on this machine, rendered marked as unverified.
-  const runtimeLaunchOptionsQuery = useAgentLaunchOptionsQuery({
-    enabled: isLocal && !hasObservation,
-  });
 
-  const models = useMemo(() => {
-    if (isLocal) {
-      if (observation && hasObservation) {
-        return observation.models;
-      }
-      return normalizeRuntimeLaunchModels(harnessKind, runtimeLaunchOptionsQuery.data);
-    }
-    return normalizeCatalogModels(agentModelsQuery.data?.models ?? []);
-  }, [
-    isLocal,
-    observation,
-    hasObservation,
-    harnessKind,
-    runtimeLaunchOptionsQuery.data,
-    agentModelsQuery.data?.models,
-  ]);
-
-  // Seed marking: the shipped catalog serving in true absence of an
-  // observation, never overriding one.
-  const isSeed = isLocal
-    ? !hasObservation
-    : agentModelsQuery.data?.origin === "catalog";
-
-  // Each row carries its own enriched metadata; probe-only models stay sparse
-  // (Provider "—" when unmatched — no harness-name fallback). Observation
-  // rows have no override endpoint on this surface, so their toggle is
-  // read-only; the cloud layered read keeps its override toggles.
   const rows: ModelTableRow[] = models.map((model) => ({
     id: model.id,
     displayName: model.displayName,
     description: model.description,
-    provider: model.provider,
-    status: model.status,
-    effort: model.effort,
-    modes: model.modes,
-    fastMode: model.fastMode,
-    enabled: evidenceOn
-      ? isModelVisibleByPreference(
-          harnessKind,
-          model.id,
-          resolveCatalogDefaultOptIn(),
-          visibilityOverrides,
-        )
-      : model.enabled,
-    toggleDisabled: evidenceOn ? false : isLocal || upsertOverride.isPending,
   }));
 
   if (!isLocal && !cloudActive) {
@@ -178,80 +85,30 @@ export function HarnessAllModelsSection({
     if (!isLocal) {
       return;
     }
-    refreshModelSnapshot.mutate(harnessKind, {
+    refreshLaunchOptions.mutate(harnessKind, {
       onError: (error) => {
         showToast(error.message || HARNESS_PANE_COPY.catalogRefreshError(displayName));
       },
     });
   }
 
-  function handleToggle(modelId: string, enabled: boolean) {
-    if (evidenceOn) {
-      setPreference(
-        "chatModelVisibilityOverridesByAgentKind",
-        withUpdatedModelVisibilityOverride(
-          visibilityOverrides,
-          harnessKind,
-          modelId,
-          enabled,
-          resolveCatalogDefaultOptIn(),
-        ),
-      );
-      return;
-    }
-    if (isLocal) {
-      return;
-    }
-    upsertOverride.mutate(
-      {
-        harnessKind,
-        body: { patchJson: buildEnabledOverridePatchJson(models, modelId, enabled) },
-      },
-      {
-        onError: (error) => {
-          showToast(error.message || HARNESS_PANE_COPY.catalogOverrideError(displayName));
-        },
-      },
-    );
-  }
-
   const isLoading = isLocal
-    ? modelSnapshotStatusQuery.isLoading
-      || (!hasObservation && runtimeLaunchOptionsQuery.isLoading)
-    : agentModelsQuery.isLoading;
+    ? runtimeLaunchOptionsQuery.isLoading
+    : cloudSandbox.isLoading || cloudLaunchOptionsQuery.isLoading;
   const isRefreshing = isLocal
-    && (
-      refreshModelSnapshot.isPending
-      || observation?.engineState === "queued"
-      || observation?.engineState === "running"
-    );
+    && (refreshLaunchOptions.isPending || runtimeLaunchOptionsQuery.data?.state === "refreshing" || runtimeLaunchOptionsQuery.data?.state === "detecting");
   // Empty list with a probe in flight shows the probing state instead of the
   // static empty copy.
   const isProbingEmpty = models.length === 0 && isRefreshing;
 
-  // The only freshness display: the observation's age (event-driven; age
-  // never disqualifies) — or the unverified-seed line while the shipped
-  // catalog fills absence.
-  const freshnessLine = isLocal
-    ? observation && hasObservation
-      ? observation.ageSeconds != null
-        ? HARNESS_PANE_COPY.allModelsFreshRefreshedAgo(formatSnapshotAge(observation.ageSeconds))
-        : `Last refreshed ${new Date(observation.probedAt ?? "").toLocaleString()}`
-      : HARNESS_PANE_COPY.allModelsSeedDescription
-    : agentModelsQuery.data?.probedAt
-      ? `Last refreshed ${new Date(agentModelsQuery.data.probedAt).toLocaleString()}`
-      : isSeed
-        ? HARNESS_PANE_COPY.allModelsSeedDescription
-        : "";
+  const freshnessLine = launchOptions?.observedAt
+    ? `Last refreshed ${new Date(launchOptions.observedAt).toLocaleString()}`
+    : launchOptions?.state ?? "";
 
-  // Diagnostics only (model-catalog.md: "the provenance fields are not
-  // gates") — what binary and install answered, and which modes it advertised.
+  // Evidence is diagnostic only; executable membership remains the response.
   const diagnosticsLines: string[] = [];
-  if (isLocal && observation?.provenance) {
-    diagnosticsLines.push(HARNESS_PANE_COPY.allModelsProvenance(observation.provenance));
-  }
-  if (isLocal && hasObservation && observation && observation.modes.length > 0) {
-    diagnosticsLines.push(HARNESS_PANE_COPY.allModelsModes(observation.modes));
+  if (launchOptions) {
+    diagnosticsLines.push(`Basis ${launchOptions.basisRevision} · revision ${launchOptions.revision}`);
   }
 
   const [filterText, setFilterText] = useState("");
@@ -263,24 +120,21 @@ export function HarnessAllModelsSection({
       (row) =>
         row.id.toLowerCase().includes(needle)
         || row.displayName.toLowerCase().includes(needle)
-        || (row.description ?? "").toLowerCase().includes(needle)
-        || (row.provider ?? "").toLowerCase().includes(needle),
+        || (row.description ?? "").toLowerCase().includes(needle),
     );
   }, [rows, filterText]);
 
   // The quiet v2 header (design-handoff "Models section"): title + refresh
   // icon + rotating chevron on the right; ONE content line — the model count
   // in foreground with the provenance/freshness suffix muted. No badge pile,
-  // no long seed description.
+  // no long fallback description.
   const contentSuffix = isLoading
     ? HARNESS_PANE_COPY.allModelsLoading
     : isRefreshing
       ? HARNESS_PANE_COPY.allModelsProbing
-      : isLocal && observation?.lastAttemptFailed
+      : launchOptions?.state === "last_good_after_failure"
         ? HARNESS_PANE_COPY.allModelsRefreshFailedBadge
-        : isSeed
-          ? HARNESS_PANE_COPY.allModelsSeedSuffix
-          : freshnessLine;
+        : freshnessLine;
 
   return (
     <SettingsSection
@@ -371,7 +225,7 @@ export function HarnessAllModelsSection({
             {HARNESS_PANE_COPY.allModelsEmpty}
           </p>
         ) : (
-          <ModelTable models={filteredRows} onToggle={handleToggle} />
+          <ModelTable models={filteredRows} />
         )}
       </div>
       </AnimatedCollapsibleContent>

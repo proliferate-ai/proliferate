@@ -290,6 +290,15 @@ fn build_live_config_snapshot_keeps_raw_options_exact_when_mode_is_synthesized()
     assert_eq!(snapshot.raw_config_options[0].id, "provider_model");
     assert_eq!(
         snapshot
+            .models
+            .iter()
+            .map(|model| model.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["default", "sonnet"]
+    );
+    validate_canonical_live_config_current(&snapshot).expect("canonical full snapshot");
+    assert_eq!(
+        snapshot
             .normalized_controls
             .mode
             .as_ref()

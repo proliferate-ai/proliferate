@@ -1,7 +1,7 @@
 //! The probe seam: what a launch of one harness would get, materialized under a
 //! probe-owned root instead of the live one.
 //!
-//! Two entry points, split by cost (model-catalog.md, "Probe mechanics"):
+//! Two entry points, split by cost (target-observed launch-options ADR):
 //!
 //! - [`probe_auth_material`] is **read-only**: it reads `state.json` and resolves
 //!   the harness's FULL COMPOSED profile — every enabled source, exactly what a
@@ -12,11 +12,11 @@
 //!
 //! **The one substitution.** [`render_profile`] takes `runtime_home` purely as a
 //! materialization root: every path it emits is a deterministic join through
-//! [`materialize::revision_dir_path`] / [`materialize::claude_config_dir_path`] /
-//! [`materialize::codex_native_home_path`]. Handing it the scratch root relocates
-//! every env var and every [`FileSpec`] together, so the probe's configuration is
-//! byte-identical to the launch's with no branch in `render.rs`. Two consequences
-//! this buys for free:
+//! [`materialize::revision_dir_path`] / [`materialize::claude_config_dir_path`].
+//! Handing it the scratch root relocates every routed env var and every
+//! [`FileSpec`] together, so the probe's auth configuration is byte-identical to
+//! the launch's with no branch in `render.rs`. Two consequences this buys for
+//! free:
 //!
 //! - The launch GC cannot see the scratch. `gc_old_revision_dirs` enumerates
 //!   exactly `<runtime_home>/agent-auth`; `agent-auth-probe/` is a sibling.

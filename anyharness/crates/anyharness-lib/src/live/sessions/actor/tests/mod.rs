@@ -3,16 +3,24 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::command::{Resolution, SessionCommand};
-use super::config::apply::{
-    select_option_current_value_matches, should_apply_model_via_direct_setter,
+use super::config::apply::should_apply_model_via_direct_setter;
+use super::config::confirmation::{
+    ensure_config_values_confirmed, select_option_current_value_matches,
+    select_setter_response_outcome,
 };
-use super::config::persist::{load_startup_restore_snapshot, persisted_control_values};
-use super::config::queue::queue_pending_config_change;
+use super::config::handle::ensure_resolved_launch_intent_confirmed;
+use super::config::persist::{emit_live_config_update, load_startup_restore_snapshot};
+use super::config::queue::{
+    pending_model_is_in_latest_live_snapshot, queue_pending_config_change,
+};
+use super::config::restore::canonical_restore_values;
 use super::config::selection::{
     find_select_option_for_request, is_mode_config_request, is_model_config_request,
     pending_config_rank, resolve_model_variant_value, select_option_values,
 };
-use super::config::types::{tracked_config_purpose, PersistedSessionConfigState};
+use super::config::types::{
+    tracked_config_purpose, ConfigApplyOutcome, PersistedSessionConfigState,
+};
 use super::interactions::cleanup::resolve_pending_interactions;
 use super::notifications::handle::{
     handle_notification, handle_notification_with_resume_replay_filter,
@@ -21,12 +29,14 @@ use super::notifications::replay_filter::{ResumeReplayFilter, IDLE_RESUME_REPLAY
 use super::run::{select_idle_work, IdleWork, STARTUP_QUEUE_DRAIN_GRACE};
 use super::shutdown::handle::finalize_established_actor_exit;
 use super::shutdown::types::ActorExitDisposition;
+use super::startup::queue_launch_observation_refresh;
 use super::state::SessionStartupState;
 use super::turn::diagnostics::PromptDiagnostics;
 use super::turn::finish::should_emit_empty_turn_error;
 use super::turn::start::first_prompt_system_prompt_append_for_codex_prompt;
 use crate::app::test_support;
 use crate::domains::agents::model::AgentKind;
+use crate::domains::sessions::launch_intent::ResolvedLaunchIntent;
 use crate::domains::sessions::live_config::{
     normalized_key_rank, snapshot_to_record, NormalizedControlKind, SessionModelOption,
 };
@@ -34,27 +44,29 @@ use crate::domains::sessions::{model::SessionRecord, store::SessionStore};
 use crate::live::sessions::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
 use crate::live::sessions::handle::{LiveSessionExecutionSnapshot, LiveSessionHandle};
+use crate::live::sessions::model::LaunchObservationInvalidator;
 use crate::live::sessions::rendezvous::broker::{InteractionRendezvous, PermissionOutcome};
 use crate::live::sessions::sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
 use crate::persistence::Db;
 use agent_client_protocol as acp;
 use anyharness_contract::v1::{
-    InteractionKind, NormalizedSessionControl, NormalizedSessionControlValue,
-    NormalizedSessionControls, PendingInteractionPayloadSummary, PendingInteractionSource,
-    PendingInteractionSummary, PermissionInteractionOption, PermissionInteractionOptionKind,
-    SessionEventEnvelope, SessionExecutionPhase, SessionLiveConfigSnapshot, StopReason,
+    HarnessLaunchControl, HarnessLaunchControlValue, HarnessLaunchModel, InteractionKind,
+    NormalizedSessionControl, NormalizedSessionControlValue, NormalizedSessionControls,
+    PendingInteractionPayloadSummary, PendingInteractionSource, PendingInteractionSummary,
+    PermissionInteractionOption, PermissionInteractionOptionKind, SessionEventEnvelope,
+    SessionExecutionPhase, SessionLiveConfigCurrent, SessionLiveConfigSnapshot, StopReason,
 };
 use tokio::sync::{broadcast, mpsc, Mutex};
 
 mod conditional_cancel;
 mod config;
+mod config_direct_setter;
 mod config_restore;
 mod config_variants;
 mod domain_ops;
 mod notifications;
 mod prompt;
 mod queue;
-mod requested_mode;
 mod shutdown;
 mod workspace_stop;
 

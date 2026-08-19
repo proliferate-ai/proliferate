@@ -412,10 +412,7 @@ export interface LocalAutomationRunClaimResponse {
   gitOwnerSnapshot: string;
   gitRepoNameSnapshot: string;
   cloudAgentRunConfigIdSnapshot: string | null;
-  agentKindSnapshot: string | null;
-  modelIdSnapshot: string | null;
-  modeIdSnapshot: string | null;
-  reasoningEffortSnapshot: string | null;
+  agentRunConfigSnapshot: Record<string, unknown> | null;
   claimId: string;
   claimExpiresAt: string;
   anyharnessWorkspaceId: string | null;

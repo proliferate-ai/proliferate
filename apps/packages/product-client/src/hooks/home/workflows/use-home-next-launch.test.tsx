@@ -187,7 +187,6 @@ describe("useHomeNextLaunch", () => {
       outcome = await result.current.launch({
         text: "build the projected destination",
         modelSelection: { kind: "codex", modelId: "gpt-5.4" },
-        modeId: null,
         launchControlValues: {},
         target: {
           kind: "worktree",
@@ -269,7 +268,6 @@ describe("useHomeNextLaunch", () => {
       launchPromise = result.current.launch({
         text: "scope before resolve",
         modelSelection: { kind: "codex", modelId: "gpt-5.4" },
-        modeId: null,
         launchControlValues: {},
         target: {
           kind: "worktree",
@@ -311,7 +309,6 @@ describe("useHomeNextLaunch", () => {
       outcome = await result.current.launch({
         text: "start cowork on web",
         modelSelection: { kind: "codex", modelId: "gpt-5.4" },
-        modeId: null,
         launchControlValues: {},
         target: { kind: "cowork" },
       });
@@ -337,7 +334,6 @@ describe("useHomeNextLaunch", () => {
       await result.current.launch({
         text: "start cowork on desktop",
         modelSelection: { kind: "codex", modelId: "gpt-5.4" },
-        modeId: null,
         launchControlValues: {},
         target: { kind: "cowork" },
       });
@@ -358,7 +354,6 @@ describe("useHomeNextLaunch", () => {
       outcome = await result.current.launch({
         text: "start cowork on desktop",
         modelSelection: { kind: "codex", modelId: "gpt-5.4" },
-        modeId: null,
         launchControlValues: {},
         target: { kind: "cowork" },
       });
@@ -401,7 +396,6 @@ describe("useHomeNextLaunch", () => {
       outcome = await result.current.launch({
         text: "do not launch locally",
         modelSelection: { kind: "codex", modelId: "gpt-5.4" },
-        modeId: null,
         launchControlValues: {},
         target: target as HomeLaunchTarget,
       });
@@ -431,7 +425,6 @@ describe("useHomeNextLaunch", () => {
       await result.current.launch({
         text: "launch in cloud",
         modelSelection: { kind: "codex", modelId: "gpt-5.4" },
-        modeId: null,
         launchControlValues: {},
         target: {
           kind: "cloud",

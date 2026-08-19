@@ -5,7 +5,7 @@ import {
 } from "#product/lib/domain/sessions/creation/launch-controls";
 
 describe("pickLiveDefaultLaunchControls", () => {
-  it("keeps only launch controls that should become live defaults", () => {
+  it("preserves every exact observed control id and non-empty value", () => {
     expect(pickLiveDefaultLaunchControls({
       collaboration_mode: "solo",
       reasoning: "high",
@@ -17,22 +17,14 @@ describe("pickLiveDefaultLaunchControls", () => {
       collaboration_mode: "solo",
       reasoning: "high",
       fast_mode: "enabled",
+      mode: "danger",
+      access_mode: "read-only",
     });
   });
 
-  // claude's harness names the option `fast`; the live default it feeds is
-  // still `fast_mode`, so the raw id has to normalize on the way in.
-  it("normalizes claude's raw `fast` id onto fast_mode", () => {
-    expect(pickLiveDefaultLaunchControls({ fast: "on" })).toEqual({ fast_mode: "on" });
-  });
-
-  it("normalizes codex's raw `fast-mode` id onto fast_mode", () => {
-    expect(pickLiveDefaultLaunchControls({ "fast-mode": "on" })).toEqual({ fast_mode: "on" });
-  });
-
-  it("normalizes codex's raw `reasoning_effort` id onto effort", () => {
+  it("does not alias an observed raw control id", () => {
     expect(pickLiveDefaultLaunchControls({ reasoning_effort: "high" })).toEqual({
-      effort: "high",
+      reasoning_effort: "high",
     });
   });
 
@@ -54,13 +46,14 @@ describe("mergeLiveDefaultLaunchControls", () => {
       values: {
         reasoning: "high",
         collaboration_mode: "solo",
-        mode: "ignored",
+        mode: "agent",
       },
     })).toEqual({
       codex: {
         reasoning: "high",
         effort: "low",
         collaboration_mode: "solo",
+        mode: "agent",
       },
     });
   });
@@ -71,7 +64,7 @@ describe("mergeLiveDefaultLaunchControls", () => {
     expect(mergeLiveDefaultLaunchControls({
       defaults,
       agentKind: "codex",
-      values: { mode: "ignored" },
+      values: { mode: "" },
     })).toBe(defaults);
   });
 });

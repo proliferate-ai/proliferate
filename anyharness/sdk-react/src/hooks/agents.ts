@@ -71,21 +71,37 @@ export function useAgentsQuery(options?: RuntimeQueryOptions) {
 }
 
 export function useAgentLaunchOptionsQuery(options?: RuntimeQueryOptions & {
-  workspaceId?: string | null;
+  harnessKind?: string | null;
 }) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
   const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
-  const workspaceId = options?.workspaceId ?? null;
+  const harnessKind = options?.harnessKind?.trim() ?? "";
 
   return useQuery({
-    queryKey: anyHarnessAgentLaunchOptionsKey(runtimeUrl, workspaceId, cacheScopeKey),
-    enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
+    queryKey: anyHarnessAgentLaunchOptionsKey(runtimeUrl, harnessKind, cacheScopeKey),
+    enabled: (options?.enabled ?? true) && runtimeUrl.length > 0 && harnessKind.length > 0,
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.agents.getLaunchOptions(
-        workspaceId,
-        requestOptionsWithSignal(undefined, signal),
+      return client.agents.getLaunchOptions(harnessKind, requestOptionsWithSignal(undefined, signal));
+    },
+  });
+}
+
+export function useRefreshHarnessLaunchOptionsMutation() {
+  const runtime = useAnyHarnessRuntimeContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
+  return useMutation({
+    mutationFn: async (harnessKind: string) => {
+      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      return client.agents.refreshLaunchOptions(harnessKind);
+    },
+    onSuccess: async (response) => {
+      queryClient.setQueryData(
+        anyHarnessAgentLaunchOptionsKey(runtimeUrl, response.harnessKind, cacheScopeKey),
+        response,
       );
     },
   });

@@ -48,11 +48,6 @@ const stateMocks = vi.hoisted(() => {
     cloudRepoActionBySourceRoot: {},
     launchTarget: { kind: "local", sourceRoot: "/repo" },
   } as any;
-  const mode = {
-    modeOptions: [],
-    effectiveMode: null,
-    effectiveModeId: null,
-  } as any;
   const computeTargets = {
     sshTargetOptions: [],
     isLoading: false,
@@ -61,11 +56,9 @@ const stateMocks = vi.hoisted(() => {
   return {
     model,
     repository,
-    mode,
     computeTargets,
     modelArgs: null as any,
     repositoryArgs: null as any,
-    modeArgs: null as any,
     computeTargetArgs: null as any,
   };
 });
@@ -81,13 +74,6 @@ vi.mock("#product/hooks/home/derived/use-home-next-repository-selection", () => 
   useHomeNextRepositorySelection: (args: any) => {
     stateMocks.repositoryArgs = args;
     return stateMocks.repository;
-  },
-}));
-
-vi.mock("#product/hooks/home/derived/use-home-next-mode-selection", () => ({
-  useHomeNextModeSelection: (args: any) => {
-    stateMocks.modeArgs = args;
-    return stateMocks.mode;
   },
 }));
 
@@ -129,7 +115,6 @@ function resetMocks() {
   stateMocks.computeTargets.isLoading = false;
   stateMocks.modelArgs = null;
   stateMocks.repositoryArgs = null;
-  stateMocks.modeArgs = null;
   stateMocks.computeTargetArgs = null;
 }
 
@@ -149,7 +134,6 @@ function renderHomeNextState({
     repoLaunchKind,
     modelSelectionOverride: null,
     baseBranchOverride: null,
-    modeOverrideId: null,
   }));
 }
 
@@ -167,6 +151,7 @@ describe("useHomeNextState", () => {
     for (const modelAvailabilityState of [
       "loading",
       "load_error",
+      "target_unobserved",
       "no_launchable_model",
       "launchable",
     ] satisfies ModelAvailabilityState[]) {
@@ -213,15 +198,12 @@ describe("useHomeNextState", () => {
       repoLaunchKind: "worktree",
     });
 
-    expect(stateMocks.modelArgs).toMatchObject({ repoLaunchKind: "cloud" });
+    expect(stateMocks.modelArgs).toMatchObject({ launchTarget: null });
     expect(stateMocks.repositoryArgs).toMatchObject({
       destination: "repository",
       repoLaunchKind: "cloud",
     });
-    expect(stateMocks.modeArgs).toMatchObject({
-      destination: "repository",
-      repoLaunchKind: "cloud",
-    });
+    expect(stateMocks.modeArgs).toBeUndefined();
     expect(stateMocks.computeTargetArgs).toEqual({ enabled: false });
     expect(web.result.current.sshTargetOptions).toEqual([]);
     expect(web.result.current.sshTargetsLoading).toBe(false);
@@ -246,6 +228,7 @@ describe("useHomeNextState", () => {
     });
 
     expect(web.result.current.launchTarget).toMatchObject({ kind: "cloud" });
+    expect(stateMocks.modelArgs.launchTarget).toMatchObject({ kind: "cloud" });
     expect(web.result.current.targetDisabledReason).toBeNull();
     expect(web.result.current.canLaunchTarget).toBe(true);
   });

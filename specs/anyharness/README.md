@@ -13,6 +13,16 @@ Scope:
 Use this doc first to understand AnyHarness ownership. Then read the focused
 guide or spec for the layer or subsystem you are changing.
 
+## Launch-option and live-session authority
+
+`domains/agents/launch_options/` owns target-observed pre-launch state and
+exact validation. `domains/agents/launch_probe/` owns override-free detection.
+`domains/sessions/launch_intent.rs` and the session store own the atomic
+resolved intent. The live actor applies and confirms that intent before ready;
+`domains/sessions/live_config/` owns the latest full per-session snapshot and
+validated mutation. Catalog modules are distribution, presentation, and
+compatibility support only and cannot authorize executable values.
+
 ## Overarching Architecture
 
 AnyHarness is a runtime server for coding-agent work inside workspaces. The
@@ -251,9 +261,9 @@ Specs:
   `live/sessions/actor` state-machine split, actor-owned state, command
   handling, turn loop, config, notifications, interactions, and shutdown.
 - [../codebase/platforms/product/agent-distribution.md](../codebase/platforms/product/agent-distribution.md) for
-  the agents catalog/readiness model: single catalog input, trusted
-  descriptor/model projection, install/readiness topology, seed artifacts, and
-  launch resolution.
+  distribution pins, install/readiness topology, and seed artifacts; executable
+  model/control observation and launch resolution belong to
+  [MODELS.md](../FEATURE_DOCS/MODELS.md).
 - [../codebase/platforms/product/mcp-runtime.md](../codebase/platforms/product/mcp-runtime.md) for user MCP bindings, product MCP servers,
   session extensions, capability tokens, and MCP elicitation.
 - [../codebase/platforms/product/agent-features/servers.md](../codebase/platforms/product/agent-features/servers.md) for the repeatable product

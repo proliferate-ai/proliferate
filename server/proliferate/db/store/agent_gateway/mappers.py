@@ -6,11 +6,9 @@ from proliferate.db.models.cloud.agent_gateway import (
     AgentApiKey,
     AgentAuthDeliveryAck,
     AgentAuthSelection,
-    AgentCatalogOverride,
     AgentGatewayEnrollment,
     AgentGatewayEnrollmentKey,
     AgentLlmUsageImportCursor,
-    AgentModelSnapshot,
     LlmCreditGrant,
     OrgAgentPolicy,
 )
@@ -18,11 +16,9 @@ from proliferate.db.store.agent_gateway.records import (
     AgentApiKeyRecord,
     AgentAuthDeliveryAckRecord,
     AgentAuthSelectionRecord,
-    AgentCatalogOverrideRecord,
     AgentGatewayEnrollmentKeyRecord,
     AgentGatewayEnrollmentRecord,
     AgentLlmUsageImportCursorRecord,
-    AgentModelSnapshotRecord,
     LlmCreditGrantRecord,
     OrgAgentPolicyRecord,
 )
@@ -104,29 +100,6 @@ def enrollment_key_record(row: AgentGatewayEnrollmentKey) -> AgentGatewayEnrollm
         created_at=row.created_at,
         updated_at=row.updated_at,
         revoked_at=row.revoked_at,
-    )
-
-
-def model_snapshot_record(row: AgentModelSnapshot) -> AgentModelSnapshotRecord:
-    return AgentModelSnapshotRecord(
-        id=row.id,
-        harness_kind=row.harness_kind,
-        owner_user_id=row.owner_user_id,
-        snapshot_json=row.snapshot_json,
-        probed_at=row.probed_at,
-        status=row.status,
-    )
-
-
-def catalog_override_record(row: AgentCatalogOverride) -> AgentCatalogOverrideRecord:
-    return AgentCatalogOverrideRecord(
-        id=row.id,
-        owner_user_id=row.owner_user_id,
-        organization_id=row.organization_id,
-        harness_kind=row.harness_kind,
-        patch_json=row.patch_json,
-        created_at=row.created_at,
-        updated_at=row.updated_at,
     )
 
 

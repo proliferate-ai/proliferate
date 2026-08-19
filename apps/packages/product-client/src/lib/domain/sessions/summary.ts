@@ -33,10 +33,7 @@ export function buildSessionSlotPatchFromSummary(
   workspaceId: string,
   transcript: TranscriptState,
 ): SessionSlotSummaryPatch {
-  const modeId =
-    session.liveConfig?.normalizedControls.mode?.currentValue
-    ?? session.modeId
-    ?? null;
+  const modeId = session.liveConfig?.normalizedControls.mode?.currentValue ?? null;
   const title = session.title ?? null;
 
   return {
@@ -55,7 +52,7 @@ export function buildSessionSlotPatchFromSummary(
     lastPromptAt: session.lastPromptAt ?? null,
     transcript: {
       ...transcript,
-      currentModeId: modeId ?? transcript.currentModeId,
+      currentModeId: modeId,
       sessionMeta: {
         ...transcript.sessionMeta,
         title: title ?? transcript.sessionMeta.title ?? null,

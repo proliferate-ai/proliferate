@@ -184,7 +184,7 @@ impl SessionStore {
             let session_links = link_stmt
                 .query_map(
                     rusqlite::params_from_iter(session_link_params),
-                    crate::domains::sessions::links::store::map_session_link,
+                    crate::domains::sessions::links::row::map_session_link,
                 )?
                 .collect::<rusqlite::Result<Vec<_>>>()?;
             drop(link_stmt);

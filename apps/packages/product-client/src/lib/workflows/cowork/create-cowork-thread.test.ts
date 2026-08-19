@@ -10,42 +10,41 @@ import {
 import type { PendingWorkspaceEntry } from "#product/lib/domain/workspaces/creation/pending-entry";
 
 describe("createCoworkThreadWorkflow", () => {
-  it("uses the selected catalog default for an unattended thread", async () => {
+  it("sends the selected target-observed access value for an unattended thread", async () => {
     const deps = resolvedWorkflowDeps();
 
     await createCoworkThreadWorkflow({
       agentKind: "codex",
       modelId: "gpt-5.6-codex",
-      unattendedModeId: "full-access",
+      launchControlValues: { mode: "agent-full-access" },
       coworkWorkspaceDelegationEnabled: false,
       runtimeUrl: "http://127.0.0.1:4317",
     }, deps);
 
     expect(deps.createCoworkThread).toHaveBeenCalledWith(expect.objectContaining({
-      modeId: "full-access",
+      controlValues: { mode: "agent-full-access" },
     }));
     expect(deps.beginPendingWorkspace).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        initialSession: expect.objectContaining({ modeId: "full-access" }),
+        initialSession: expect.objectContaining({ launchControlValues: { mode: "agent-full-access" } }),
       }),
     );
   });
 
-  it("keeps an explicit mode ahead of the catalog default", async () => {
+  it("keeps an explicit observed access value", async () => {
     const deps = resolvedWorkflowDeps();
 
     await createCoworkThreadWorkflow({
       agentKind: "codex",
       modelId: "gpt-5.6-codex",
-      modeId: "read-only",
-      unattendedModeId: "full-access",
+      launchControlValues: { mode: "read-only" },
       coworkWorkspaceDelegationEnabled: false,
       runtimeUrl: "http://127.0.0.1:4317",
     }, deps);
 
     expect(deps.createCoworkThread).toHaveBeenCalledWith(expect.objectContaining({
-      modeId: "read-only",
+      controlValues: { mode: "read-only" },
     }));
   });
 
@@ -55,18 +54,19 @@ describe("createCoworkThreadWorkflow", () => {
     await createCoworkThreadWorkflow({
       agentKind: "grok",
       modelId: "grok-4",
-      unattendedModeId: null,
+      launchControlValues: {},
       coworkWorkspaceDelegationEnabled: false,
       runtimeUrl: "http://127.0.0.1:4317",
     }, deps);
 
     expect(deps.createCoworkThread).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(deps.createCoworkThread).mock.calls[0]?.[0]).not.toHaveProperty("modeId");
+    expect(vi.mocked(deps.createCoworkThread).mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      controlValues: {},
+    }));
   });
 
   it("keeps one Untitled chat identity while the real workspace materializes", async () => {
     const response = coworkThreadResponse();
-    const launchDefaults = deferred<Session>();
     let pendingEntry: PendingWorkspaceEntry | null = null;
     const setPendingWorkspaceEntry = vi.fn((entry: PendingWorkspaceEntry) => {
       pendingEntry = entry;
@@ -77,7 +77,6 @@ describe("createCoworkThreadWorkflow", () => {
     const beginPendingWorkspace = vi.fn<
       CreateCoworkThreadWorkflowDeps["beginPendingWorkspace"]
     >(() => "projected-session");
-    const applyLaunchDefaults = vi.fn(() => launchDefaults.promise);
 
     const deps = {
       createPendingWorkspaceAttemptId: vi.fn(() => "attempt-1"),
@@ -95,7 +94,6 @@ describe("createCoworkThreadWorkflow", () => {
       beginPendingWorkspace,
       navigateToWorkspaceShell: vi.fn(),
       createCoworkThread: vi.fn(async () => response),
-      applyLaunchDefaults,
       upsertLocalWorkspace: vi.fn(),
       upsertWorkspaceSessionRecord: vi.fn(),
       recordCreatedSession: vi.fn(),
@@ -119,8 +117,10 @@ describe("createCoworkThreadWorkflow", () => {
       runtimeUrl: "http://127.0.0.1:4317",
     }, deps);
 
-    await vi.waitFor(() => expect(applyLaunchDefaults).toHaveBeenCalledTimes(1));
-
+    await expect(workflow).resolves.toMatchObject({
+      workspace: { id: "workspace-cowork" },
+      projectedSessionId: "projected-session",
+    });
     expect(beginPendingWorkspace.mock.calls[0]?.[0].displayName).toBe("Untitled chat");
     expect(setPendingWorkspaceEntry).toHaveBeenCalledWith(expect.objectContaining({
       attemptId: "attempt-1",
@@ -129,11 +129,6 @@ describe("createCoworkThreadWorkflow", () => {
       request: { kind: "select-existing", workspaceId: "workspace-cowork" },
     }));
 
-    launchDefaults.resolve(response.session);
-    await expect(workflow).resolves.toMatchObject({
-      workspace: { id: "workspace-cowork" },
-      projectedSessionId: "projected-session",
-    });
     expect(clearPendingWorkspaceEntry).toHaveBeenCalledWith("attempt-1");
   });
 
@@ -273,15 +268,4 @@ function coworkThreadResponse(): CreateCoworkThreadResponse {
       workspaceDelegationEnabled: false,
     },
   };
-}
-
-function deferred<T>(): {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-} {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return { promise, resolve };
 }

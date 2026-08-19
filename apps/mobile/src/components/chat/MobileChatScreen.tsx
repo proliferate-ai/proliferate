@@ -7,7 +7,6 @@ import {
 } from "react-native";
 import {
   DEFAULT_DIRECT_PROMPT_AGENT_KIND,
-  DEFAULT_DIRECT_PROMPT_MODEL_ID,
   type CloudLaunchComposerSelection,
   type PendingConfigChange,
 } from "@proliferate/product-client/internal/domain/chats/cloud/composer-controls";
@@ -64,8 +63,7 @@ export function MobileChatScreen({
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(chat.sessionId);
   const [launchSelection, setLaunchSelection] = useState<CloudLaunchComposerSelection>({
     agentKind: DEFAULT_DIRECT_PROMPT_AGENT_KIND,
-    modelId: DEFAULT_DIRECT_PROMPT_MODEL_ID,
-    modeId: null,
+    modelId: null,
     controlValues: {},
   });
   const [newSessionMode, setNewSessionMode] = useState(false);

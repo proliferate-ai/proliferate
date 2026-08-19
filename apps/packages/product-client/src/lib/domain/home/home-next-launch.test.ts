@@ -298,7 +298,7 @@ describe("home-next model helpers", () => {
     expect(groups[0]?.models[1]?.isSelected).toBe(true);
   });
 
-  it("resolves model defaults from user preference, provider default, then first model", () => {
+  it("resolves only exact preferences and target-observed defaults", () => {
     const groups = buildHomeNextModelGroups(
       [agent({ kind: "codex" }), agent({ kind: "claude" })],
       [
@@ -330,7 +330,7 @@ describe("home-next model helpers", () => {
       defaultChatModelIdByAgentKind: {
         missing: "missing",
       },
-    })).toEqual({ kind: "claude", modelId: "sonnet" });
+    })).toBeNull();
   });
 });
 

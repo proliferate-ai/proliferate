@@ -5,13 +5,10 @@
 // resources the moved product tree references, so two steps run around it:
 //
 //   1. sync-generated (default, runs before tsc): copies the repo-root agent
-//      catalog (`catalogs/agents/catalog.json`) into the gitignored
-//      `src/generated/agent-catalog.json`. `bundled-agent-catalog.ts` imports
-//      that copy package-relatively (`?raw`) instead of reaching six levels up
-//      into the repo root — no checked-in duplicate, no cross-package reach.
+//      registry into the gitignored `src/generated/agent-registry.json`.
 //
 //   2. --dist (runs after tsc): mirrors every non-TypeScript file under `src/`
-//      (index.css, svg/png/jpeg/wav assets, the generated catalog, committed
+//      (index.css, svg/png/jpeg/wav assets, the generated registry, committed
 //      config JSON) into the emitted `dist/` tree so the two host Vite builds
 //      resolve the asset/catalog URLs from the package's published output.
 //
@@ -34,11 +31,10 @@ const REPO_ROOT = join(PKG_DIR, "..", "..", "..");
 const SRC_DIR = join(PKG_DIR, "src");
 const DIST_DIR = join(PKG_DIR, "dist");
 
-const CATALOG_SOURCE = join(REPO_ROOT, "catalogs", "agents", "catalog.json");
 const REGISTRY_SOURCE = join(REPO_ROOT, "catalogs", "agents", "registry.json");
 const GENERATED_DIR = join(SRC_DIR, "generated");
-const CATALOG_DEST = join(GENERATED_DIR, "agent-catalog.json");
 const REGISTRY_DEST = join(GENERATED_DIR, "agent-registry.json");
+const RETIRED_EXECUTABLE_CATALOG_DEST = join(GENERATED_DIR, "agent-catalog.json");
 
 const emitDist = process.argv.includes("--dist");
 
@@ -67,12 +63,6 @@ function syncGeneratedDocument(source, dest, label) {
 }
 
 function syncGeneratedCatalog() {
-  syncGeneratedDocument(CATALOG_SOURCE, CATALOG_DEST, "agent catalog");
-  // The registry is the method document (agent-distribution.md's "two
-  // documents") — bundled the same way as the catalog so the client can read
-  // registry-declared vocabulary (e.g. Track D's `providerConfig` kinds)
-  // without a network round trip. Nothing reads this copy yet; it is
-  // plumbing for a later PR's flip, not a behavior change on its own.
   syncGeneratedDocument(REGISTRY_SOURCE, REGISTRY_DEST, "agent registry");
 }
 
@@ -93,6 +83,9 @@ function mirrorNonCodeAssetsToDist() {
         continue;
       }
       if (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) {
+        continue;
+      }
+      if (abs === RETIRED_EXECUTABLE_CATALOG_DEST) {
         continue;
       }
       const dest = join(DIST_DIR, relative(SRC_DIR, abs));

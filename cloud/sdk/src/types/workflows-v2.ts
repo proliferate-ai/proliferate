@@ -12,7 +12,7 @@ export type WorkflowNodeTypeV2 = "agent" | "human_in_loop";
 export interface WorkflowNodeModelV2 {
   agentKind: string;
   modelId?: string | null;
-  modeId?: string | null;
+  controlValues?: Record<string, string>;
 }
 
 export interface WorkflowNodeV2 {

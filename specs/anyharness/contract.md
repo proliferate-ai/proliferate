@@ -34,8 +34,8 @@ Transport schemas must live under an explicit version folder:
 - `v1/common.rs`
 - `v1/errors.rs`
 - `v1/health.rs`
-- `v1/models.rs`
 - `v1/agents.rs`
+- `v1/session_config.rs`
 - `v1/workspaces.rs`
 - `v1/sessions.rs`
 - `v1/files.rs`
@@ -74,15 +74,6 @@ stay low-cardinality: status, source, ownership, action, counts, target, seeded
 agent names, and coarse failure kind are allowed; absolute paths, raw errors,
 archive names, checksums, and install logs are not.
 
-### `models.rs`
-
-Owns provider configuration metadata:
-
-- model catalog
-- thinking levels
-- permission modes
-- mutability flags
-
 ### `agents.rs`
 
 Owns agent-facing transport types:
@@ -91,6 +82,15 @@ Owns agent-facing transport types:
 - artifact status
 - agent summary
 - install/login/reconcile request and response shapes
+- exact target-observed `HarnessLaunchOptions` models, generic controls,
+  defaults, basis/revision, and probe state
+
+### `session_config.rs`
+
+Owns the full session-local `SessionLiveConfigSnapshot`: exact models, generic
+controls and allowed values, complete current values, monotonic source sequence,
+and compatibility presentation groupings. The exact full fields—not the
+groupings—are the active-session authority.
 
 ### `workspaces.rs`
 

@@ -1,4 +1,4 @@
-import type { CloudAgentCatalogResponse } from "@proliferate/cloud-sdk";
+import type { CloudHarnessLaunchOptionsResponse } from "@proliferate/cloud-sdk";
 import type {
   CloudChatComposerControlView,
   CloudLaunchComposerControlSelection,
@@ -8,147 +8,73 @@ import type {
 import {
   buildLaunchAgentModelControl,
   buildLaunchConfigControl,
-  fallbackLaunchComposerControls,
 } from "./composer-launch-control-builders";
 import {
-  defaultLaunchModel,
   launchComposerControls,
-  launchableCatalogAgents,
-  selectLaunchAgent,
   selectLaunchModel,
   selectedLaunchControlValue,
 } from "./composer-launch-catalog";
-import {
-  DEFAULT_DIRECT_PROMPT_AGENT_KIND,
-  DEFAULT_DIRECT_PROMPT_MODEL_ID,
-} from "./composer-launch-defaults";
+import { DEFAULT_DIRECT_PROMPT_AGENT_KIND } from "./composer-launch-defaults";
 
 export { DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS } from "./harness-availability";
-export {
-  DEFAULT_DIRECT_PROMPT_AGENT_KIND,
-  DEFAULT_DIRECT_PROMPT_MODEL_ID,
-} from "./composer-launch-defaults";
+export { DEFAULT_DIRECT_PROMPT_AGENT_KIND } from "./composer-launch-defaults";
 
 export function buildCloudLaunchComposerControls(input: {
-  catalog?: CloudAgentCatalogResponse | null;
-  launchableAgentKinds?: readonly string[] | null;
+  launchOptions?: CloudHarnessLaunchOptionsResponse | null;
   selection: CloudLaunchComposerSelection;
   onAgentModelSelect: (agentKind: string, modelId: string) => void;
   onControlSelect: (selection: CloudLaunchComposerControlSelection) => void;
 }): CloudChatComposerControlView[] {
-  const catalogAgents = launchableCatalogAgents({
-    agents: input.catalog?.agents ?? [],
-    launchableAgentKinds: input.launchableAgentKinds,
-  });
-  if (catalogAgents.length === 0) {
-    return fallbackLaunchComposerControls({
-      modelId: input.selection.modelId ?? DEFAULT_DIRECT_PROMPT_MODEL_ID,
-      onModelSelect: (modelId) =>
-        input.onAgentModelSelect(input.selection.agentKind || DEFAULT_DIRECT_PROMPT_AGENT_KIND, modelId),
-    });
+  const response = input.launchOptions;
+  if (!response?.options) {
+    return [];
   }
-
-  const selectedAgent = selectLaunchAgent(catalogAgents, input.selection.agentKind);
+  const resolved = resolveCloudLaunchSelection({ launchOptions: response, selection: input.selection });
   const modelControl = buildLaunchAgentModelControl({
-    agents: catalogAgents,
-    selectedAgentKind: selectedAgent?.kind ?? input.selection.agentKind,
-    selectedModelId: input.selection.modelId,
+    response,
+    selectedModelId: resolved.modelId,
     onSelect: input.onAgentModelSelect,
   });
-  const configControls = selectedAgent
-    ? launchComposerControls(selectedAgent)
-      .map((control) => buildLaunchConfigControl({
-        agent: selectedAgent,
-        control,
-        selection: input.selection,
-        onSelect: input.onControlSelect,
-      }))
-    : [];
-
-  return [...configControls, modelControl];
+  const configControls = launchComposerControls(response).map((control) => buildLaunchConfigControl({
+    agentKind: response.harnessKind,
+    control,
+    selection: resolved,
+    onSelect: input.onControlSelect,
+  }));
+  return modelControl ? [...configControls, modelControl] : configControls;
 }
 
 export function resolveCloudLaunchSelection(input: {
-  catalog?: CloudAgentCatalogResponse | null;
-  launchableAgentKinds?: readonly string[] | null;
+  launchOptions?: CloudHarnessLaunchOptionsResponse | null;
   selection: CloudLaunchComposerSelection;
 }): CloudLaunchComposerSelection {
-  const agents = launchableCatalogAgents({
-    agents: input.catalog?.agents ?? [],
-    launchableAgentKinds: input.launchableAgentKinds,
-  });
-  const agent = selectLaunchAgent(agents, input.selection.agentKind);
-  if (!agent) {
-    return {
-      ...input.selection,
-      agentKind: input.selection.agentKind || DEFAULT_DIRECT_PROMPT_AGENT_KIND,
-      modelId: input.selection.modelId ?? DEFAULT_DIRECT_PROMPT_MODEL_ID,
-    };
-  }
-  const modelId = selectLaunchModel(agent, input.selection.modelId)?.id
-    ?? defaultLaunchModel(agent)?.id
-    ?? agent.session.models[0]?.id
-    ?? null;
-  const modeControl = launchComposerControls(agent).find((control) =>
-    control.createField === "modeId"
-  );
-  const defaultModeId = modeControl
-    ? selectedLaunchControlValue(agent, modeControl, input.selection)
-    : input.selection.modeId;
-
-  return {
-    ...input.selection,
-    agentKind: agent.kind,
-    modelId,
-    modeId: defaultModeId ?? null,
-  };
-}
-
-export function buildLaunchSessionConfigUpdates(input: {
-  catalog?: CloudAgentCatalogResponse | null;
-  launchableAgentKinds?: readonly string[] | null;
-  selection: CloudLaunchComposerSelection;
-}): LaunchSessionConfigUpdate[] {
-  const agent = selectLaunchAgent(
-    launchableCatalogAgents({
-      agents: input.catalog?.agents ?? [],
-      launchableAgentKinds: input.launchableAgentKinds,
-    }),
-    input.selection.agentKind,
-  );
-  if (!agent) {
-    return [];
-  }
-  return launchComposerControls(agent).flatMap((control) => {
-    if (control.createField || !control.liveConfigId) {
-      return [];
-    }
-    const value = selectedLaunchControlValue(agent, control, input.selection);
-    return value ? [{ configId: control.liveConfigId, value }] : [];
-  });
-}
-
-export function buildLaunchRunConfigControlValues(input: {
-  catalog?: CloudAgentCatalogResponse | null;
-  launchableAgentKinds?: readonly string[] | null;
-  selection: CloudLaunchComposerSelection;
-}): Record<string, string> {
-  const agent = selectLaunchAgent(
-    launchableCatalogAgents({
-      agents: input.catalog?.agents ?? [],
-      launchableAgentKinds: input.launchableAgentKinds,
-    }),
-    input.selection.agentKind,
-  );
-  if (!agent) {
-    return {};
-  }
+  const response = input.launchOptions;
+  const controls = launchComposerControls(response);
   const controlValues: Record<string, string> = {};
-  for (const control of launchComposerControls(agent)) {
-    const value = selectedLaunchControlValue(agent, control, input.selection);
+  for (const control of controls) {
+    const value = selectedLaunchControlValue(control, input.selection);
     if (value) {
       controlValues[control.key] = value;
     }
   }
-  return controlValues;
+  return {
+    agentKind: response?.harnessKind ?? input.selection.agentKind ?? DEFAULT_DIRECT_PROMPT_AGENT_KIND,
+    modelId: selectLaunchModel(response, input.selection.modelId)?.id ?? null,
+    controlValues,
+  };
+}
+
+/** All first-party launch controls are sent atomically on create. */
+export function buildLaunchSessionConfigUpdates(_input: {
+  launchOptions?: CloudHarnessLaunchOptionsResponse | null;
+  selection: CloudLaunchComposerSelection;
+}): LaunchSessionConfigUpdate[] {
+  return [];
+}
+
+export function buildLaunchRunConfigControlValues(input: {
+  launchOptions?: CloudHarnessLaunchOptionsResponse | null;
+  selection: CloudLaunchComposerSelection;
+}): Record<string, string> {
+  return resolveCloudLaunchSelection(input).controlValues;
 }

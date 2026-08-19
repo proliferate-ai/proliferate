@@ -12,7 +12,9 @@ export type CoworkArtifactDetailResponse =
   components["schemas"]["CoworkArtifactDetailResponse"];
 export type CoworkThread = components["schemas"]["CoworkThread"];
 export type CreateCoworkThreadRequest =
-  components["schemas"]["CreateCoworkThreadRequest"];
+  components["schemas"]["CreateCoworkThreadRequest"] & {
+    controlValues?: Record<string, string>;
+  };
 export type CoworkManagedWorkspacesResponse =
   components["schemas"]["CoworkManagedWorkspacesResponse"];
 export type CoworkManagedWorkspaceSummary =

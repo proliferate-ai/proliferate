@@ -100,7 +100,6 @@ function isCompleteAgentOperationsAuthorityView(
     && configuration !== null
     && isNonEmptyString(configuration.agentKind)
     && optionalString(configuration.modelId)
-    && optionalString(configuration.modeId)
     && Array.isArray(value.capabilities)
     && value.capabilities.every(isRecognizedAgentOperationsCapability)
     && isNonEmptyString(value.createdAt)

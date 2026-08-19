@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MockInstance } from "vitest";
-import {
-  markModelVisibilityDefaultsReset,
-  selectPersistedUserPreferencesSlice,
-} from "#product/lib/domain/preferences/persisted-metadata";
+import { selectPersistedUserPreferencesSlice } from "#product/lib/domain/preferences/persisted-metadata";
 import {
   USER_PREFERENCE_DEFAULTS,
   type UserPreferences,
@@ -43,7 +40,6 @@ describe("user appearance preference persistence", () => {
   it("round-trips the appearance preference bounds", async () => {
     memory.values.set("user_preferences", {
       ...USER_PREFERENCE_DEFAULTS,
-      ...markModelVisibilityDefaultsReset({}),
       uiFontSizeId: "xxsmall",
       readableCodeFontSizeId: "xxxlarge",
       windowZoomId: "zoom120",

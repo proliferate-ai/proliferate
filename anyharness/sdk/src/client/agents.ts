@@ -1,6 +1,6 @@
 import type {
   AgentSummary,
-  AgentLaunchOptionsResponse,
+  HarnessLaunchOptionsResponse,
   InstallAgentRequest,
   InstallAgentResponse,
   ReconcileAgentsRequest,
@@ -26,12 +26,19 @@ export class AgentsClient {
   }
 
   async getLaunchOptions(
-    workspaceId?: string | null,
+    harnessKind: string,
     options?: AnyHarnessRequestOptions,
-  ): Promise<AgentLaunchOptionsResponse> {
-    return this.transport.get<AgentLaunchOptionsResponse>(
-      `/v1/agents/launch-options${workspaceQuery(workspaceId)}`,
+  ): Promise<HarnessLaunchOptionsResponse> {
+    return this.transport.get<HarnessLaunchOptionsResponse>(
+      `/v1/agents/${encodeURIComponent(harnessKind)}/launch-options`,
       options,
+    );
+  }
+
+  async refreshLaunchOptions(harnessKind: string): Promise<HarnessLaunchOptionsResponse> {
+    return this.transport.post<HarnessLaunchOptionsResponse>(
+      `/v1/agents/${encodeURIComponent(harnessKind)}/launch-options/refresh`,
+      {},
     );
   }
 
@@ -87,9 +94,4 @@ export class AgentsClient {
       request,
     );
   }
-}
-
-function workspaceQuery(workspaceId?: string | null): string {
-  const trimmed = workspaceId?.trim() ?? "";
-  return trimmed ? `?workspace_id=${encodeURIComponent(trimmed)}` : "";
 }

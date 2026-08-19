@@ -16,7 +16,7 @@
         "model": {
           "agentKind": "claude",
           "modelId": "sonnet",
-          "modeId": "default"
+          "controlValues": { "mode": "default" }
         }
       },
       {

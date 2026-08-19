@@ -164,7 +164,7 @@ mod tests {
     use crate::app::test_support;
     use crate::domains::reviews::mcp::context::{self, ReviewMcpRole};
     use crate::domains::reviews::mcp::definition;
-    use crate::domains::reviews::model::{ReviewKind, ReviewModeVerificationStatus};
+    use crate::domains::reviews::model::{ReviewKind, ReviewLaunchVerificationStatus};
     use crate::domains::reviews::service::{ReviewPersonaInput, StartReviewInput};
     use crate::domains::sessions::runtime::prompt_message_actor_tests::{
         build_state, temp_runtime_home,
@@ -208,7 +208,7 @@ mod tests {
                     prompt: "Review the target.".into(),
                     agent_kind: "claude".into(),
                     model_id: None,
-                    mode_id: None,
+                    control_values: Default::default(),
                 }],
             })
             .expect("start review");
@@ -227,8 +227,7 @@ mod tests {
                 "target",
                 "reviewer",
                 None,
-                None,
-                ReviewModeVerificationStatus::NotChecked,
+                ReviewLaunchVerificationStatus::NotChecked,
             )
             .expect("link reviewer session");
         state

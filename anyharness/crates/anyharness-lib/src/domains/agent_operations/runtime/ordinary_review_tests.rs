@@ -41,7 +41,7 @@ async fn invalid_choices_return_before_workspace_or_session_contention() {
                 task: None,
                 agent_kind: Some(fixture.agent_kind.clone()),
                 model_id: Some("stale-model".into()),
-                mode_id: None,
+                control_values: Default::default(),
             },
         ),
     )

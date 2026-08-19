@@ -96,9 +96,18 @@ pub(super) struct CreateCodingSessionArgs {
     #[serde(default)]
     pub harness_id: Option<String>,
     #[serde(default)]
-    pub initial_config: Option<Value>,
+    pub initial_config: Option<CodingSessionInitialConfig>,
     #[serde(default)]
     pub wake_on_completion: bool,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct CodingSessionInitialConfig {
+    #[serde(default)]
+    pub model_id: Option<String>,
+    #[serde(default)]
+    pub control_values: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -274,7 +283,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
         ),
         tool_definition(
             "get_cowork_agent_launch_options",
-            "List supported agent/model choices and recommended mode ids before creating a cowork agent inside an owned cowork workspace.",
+            "List exact target-observed agent, model, control, and default choices before creating a cowork agent inside an owned cowork workspace.",
             json!({
                 "type": "object",
                 "properties": {
@@ -294,10 +303,13 @@ fn delegation_tool_definitions() -> Vec<Value> {
                     "harnessId": { "type": "string" },
                     "initialConfig": {
                         "type": "object",
-                        "additionalProperties": true,
+                        "additionalProperties": false,
                         "properties": {
                             "modelId": { "type": "string" },
-                            "modeId": { "type": "string" }
+                            "controlValues": {
+                                "type": "object",
+                                "additionalProperties": { "type": "string" }
+                            }
                         }
                     },
                     "wakeOnCompletion": { "type": "boolean" }
@@ -416,7 +428,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
         ),
         tool_definition(
             "get_coding_session_launch_options",
-            "List supported agent/model choices and recommended fast coding mode ids before creating coding sessions inside an owned cowork-managed workspace.",
+            "Deprecated alias for get_cowork_agent_launch_options.",
             json!({
                 "type": "object",
                 "properties": {
@@ -427,7 +439,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
         ),
         tool_definition(
             "create_coding_session",
-            "Create a linked coding session inside an owned cowork-managed coding workspace and send it an initial prompt. Pass modeId from get_coding_session_launch_options for fast autonomous execution; set wakeOnCompletion to true if you want this cowork thread prompted when the coding session finishes its next turn.",
+            "Deprecated alias for create_cowork_agent.",
             json!({
                 "type": "object",
                 "properties": {
@@ -435,8 +447,17 @@ fn delegation_tool_definitions() -> Vec<Value> {
                     "prompt": { "type": "string" },
                     "label": { "type": "string" },
                     "agentKind": { "type": "string" },
-                    "modelId": { "type": "string" },
-                    "modeId": { "type": "string" },
+                    "initialConfig": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "modelId": { "type": "string" },
+                            "controlValues": {
+                                "type": "object",
+                                "additionalProperties": { "type": "string" }
+                            }
+                        }
+                    },
                     "wakeOnCompletion": { "type": "boolean" }
                 },
                 "required": ["workspaceId", "prompt"]

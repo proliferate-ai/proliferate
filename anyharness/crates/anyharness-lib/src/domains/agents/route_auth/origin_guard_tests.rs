@@ -18,13 +18,8 @@ struct HarnessPlanResolver;
 
 impl GatewayModelResolve for HarnessPlanResolver {
     fn resolve_gateway_models(&self, harness_kind: &str, _revision: i64) -> GatewayModelPlan {
-        match harness_kind {
-            "claude" => GatewayModelPlan {
-                small_fast_model: Some("claude-haiku-4-5-20251001".to_string()),
-                ..Default::default()
-            },
-            _ => GatewayModelPlan::default(),
-        }
+        let _ = harness_kind;
+        GatewayModelPlan::default()
     }
 }
 

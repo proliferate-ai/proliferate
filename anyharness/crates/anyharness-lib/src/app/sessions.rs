@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use crate::domains::activity::service::ActivityService;
 use crate::domains::activity::session_observer::ActivitySessionObserver;
+use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
 use crate::domains::goals::service::GoalService;
 use crate::domains::goals::session_observer::GoalSessionObserver;
 use crate::domains::loops::service::LoopService;
@@ -25,7 +26,9 @@ use crate::domains::sessions::subagents::delivery::{
     CompletionDeliveryStore, CompletionDeliveryWorker,
 };
 use crate::domains::sessions::subagents::hooks::SubagentSessionHooks;
-use crate::live::sessions::model::{ActorCapabilities, PermissionAdvisor, SessionEventObserver};
+use crate::live::sessions::model::{
+    ActorCapabilities, LaunchObservationInvalidator, PermissionAdvisor, SessionEventObserver,
+};
 use crate::live::sessions::product_context::AgentProductContextResolver;
 use crate::live::sessions::LiveSessionManager;
 use crate::persistence::Db;
@@ -39,6 +42,42 @@ pub(super) struct LiveSessionsWiringDeps {
     pub loop_service: Arc<LoopService>,
     pub activity_service: Arc<ActivityService>,
     pub product_context: Arc<dyn AgentProductContextResolver>,
+    pub automatic_poke_engine: Option<Arc<LaunchProbeService>>,
+}
+
+struct LaunchObservationProbeQueue {
+    tx: tokio::sync::mpsc::UnboundedSender<String>,
+}
+
+impl LaunchObservationProbeQueue {
+    fn channel() -> (Self, tokio::sync::mpsc::UnboundedReceiver<String>) {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        (Self { tx }, rx)
+    }
+}
+
+impl LaunchObservationInvalidator for LaunchObservationProbeQueue {
+    fn queue_refresh(&self, harness_kind: &str) -> bool {
+        self.tx.send(harness_kind.to_string()).is_ok()
+    }
+}
+
+fn spawn_launch_observation_probe_queue(
+    engine: Arc<LaunchProbeService>,
+) -> Arc<dyn LaunchObservationInvalidator> {
+    let (queue, mut rx) = LaunchObservationProbeQueue::channel();
+    // `wire_live_sessions` runs on the application runtime. This receiver and
+    // every probe it starts are therefore owned by that long-lived runtime,
+    // not by the per-session runtime that reports a startup contradiction and
+    // is torn down immediately afterward.
+    tokio::spawn(async move {
+        while let Some(harness_kind) = rx.recv().await {
+            engine
+                .clone()
+                .poke_harness(&harness_kind, PokeReason::LiveContradiction);
+        }
+    });
+    Arc::new(queue)
 }
 
 /// Registration order is the observer dispatch order: plans must run before
@@ -74,6 +113,10 @@ pub(super) fn wire_live_sessions(deps: &LiveSessionsWiringDeps) -> LiveSessionMa
         product_context: deps.product_context.clone(),
         observers,
         permission_advisor,
+        launch_observation_invalidator: deps
+            .automatic_poke_engine
+            .clone()
+            .map(spawn_launch_observation_probe_queue),
     };
     LiveSessionManager::new(caps)
 }
@@ -97,5 +140,37 @@ pub(super) fn wire_completion_delivery_before_sessions(db: &Db) -> CompletionDel
         session_hooks: Arc::new(SubagentSessionHooks::new(nudge_tx)),
         store,
         nudge_rx,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn contradiction_signal_survives_originating_runtime_shutdown() {
+        let (queue, mut rx) = LaunchObservationProbeQueue::channel();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("originating actor runtime");
+
+        runtime.block_on(async {
+            assert!(queue.queue_refresh("codex"));
+        });
+        drop(runtime);
+
+        assert_eq!(
+            rx.try_recv().expect("long-lived owner receives signal"),
+            "codex"
+        );
+    }
+
+    #[test]
+    fn closed_owner_queue_is_not_reported_as_queued() {
+        let (queue, rx) = LaunchObservationProbeQueue::channel();
+        drop(rx);
+
+        assert!(!queue.queue_refresh("codex"));
     }
 }

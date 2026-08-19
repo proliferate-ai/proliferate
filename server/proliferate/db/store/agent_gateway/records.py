@@ -112,27 +112,6 @@ class AgentGatewayEnrollmentKeyRecord:
 
 
 @dataclass(frozen=True)
-class AgentModelSnapshotRecord:
-    id: UUID
-    harness_kind: str
-    owner_user_id: UUID
-    snapshot_json: str
-    probed_at: datetime
-    status: str
-
-
-@dataclass(frozen=True)
-class AgentCatalogOverrideRecord:
-    id: UUID
-    owner_user_id: UUID | None
-    organization_id: UUID | None
-    harness_kind: str
-    patch_json: str
-    created_at: datetime
-    updated_at: datetime
-
-
-@dataclass(frozen=True)
 class OrgAgentPolicyRecord:
     organization_id: UUID
     allowed_routes_json: str | None

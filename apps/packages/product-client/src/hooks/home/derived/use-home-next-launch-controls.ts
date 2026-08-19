@@ -1,13 +1,8 @@
 import { useMemo } from "react";
-import { useAgentLaunchOptionsQuery } from "@anyharness/sdk-react";
-import { useShallow } from "zustand/react/shallow";
-import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
-import { useCloudAgentCatalog } from "#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import {
-  mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
+  projectHarnessLaunchOptions,
   type DesktopAgentLaunchAgent,
 } from "#product/lib/domain/agents/cloud-launch-catalog";
-import { filterTargetReadyLaunchAgents } from "#product/lib/domain/agents/target-ready-launch-agents";
 import {
   buildLaunchControlDescriptors,
 } from "#product/lib/domain/chat/models/launch-control-descriptors";
@@ -15,22 +10,24 @@ import type {
   LiveSessionControlDescriptor,
   SupportedLiveControlKey,
 } from "#product/lib/domain/chat/session-controls/session-controls";
-import type { HomeNextModelSelection } from "#product/lib/domain/home/home-next-launch";
-import { pickLiveDefaultLaunchControls } from "#product/lib/domain/sessions/creation/launch-controls";
-import { useUserPreferencesStore } from "#product/stores/preferences/user-preferences-store";
+import type {
+  HomeLaunchTarget,
+  HomeNextModelSelection,
+} from "#product/lib/domain/home/home-next-launch";
+import { useHomeTargetAgentLaunchOptions } from "#product/hooks/home/derived/use-home-target-agent-launch-options";
 
 const EMPTY_AGENTS: DesktopAgentLaunchAgent[] = [];
 
 interface UseHomeNextLaunchControlsArgs {
   modelSelection: HomeNextModelSelection | null;
-  modeId: string | null;
+  launchTarget: HomeLaunchTarget | null;
   controlOverrides: Record<string, string>;
   onSelectControl: (controlKey: string, value: string) => void;
 }
 
 export function useHomeNextLaunchControls({
   modelSelection,
-  modeId,
+  launchTarget,
   controlOverrides,
   onSelectControl,
 }: UseHomeNextLaunchControlsArgs): {
@@ -38,60 +35,30 @@ export function useHomeNextLaunchControls({
   launchControlValues: Record<string, string>;
   isLoading: boolean;
 } {
-  const cloudCatalogQuery = useCloudAgentCatalog(Boolean(modelSelection));
-  const runtimeLaunchOptions = useAgentLaunchOptionsQuery();
-  const agentCatalog = useAgentCatalog();
-  const preferences = useUserPreferencesStore(useShallow((state) => ({
-    defaultSessionModeByAgentKind: state.defaultSessionModeByAgentKind,
-    defaultLiveSessionControlValuesByAgentKind:
-      state.defaultLiveSessionControlValuesByAgentKind,
-  })));
-
+  const targetLaunchOptions = useHomeTargetAgentLaunchOptions({
+    harnessKind: modelSelection?.kind,
+    launchTarget,
+  });
   const launchAgents = useMemo(
-    () => filterTargetReadyLaunchAgents(
-      mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
-        cloudCatalogQuery.data?.agents ?? EMPTY_AGENTS,
-        runtimeLaunchOptions.data?.agents ?? null,
-      ),
-      agentCatalog.agentsByKind,
-    ),
-    [
-      agentCatalog.agentsByKind,
-      cloudCatalogQuery.data?.agents,
-      runtimeLaunchOptions.data?.agents,
-    ],
+    () => {
+      const projected = targetLaunchOptions.data
+        ? projectHarnessLaunchOptions(targetLaunchOptions.data)
+        : null;
+      return projected ? [projected] : EMPTY_AGENTS;
+    },
+    [targetLaunchOptions.data],
   );
-
-  const effectivePreferences = useMemo(() => {
-    if (!modelSelection) {
-      return preferences;
-    }
-
-    return {
-      defaultSessionModeByAgentKind: modeId
-        ? {
-          ...preferences.defaultSessionModeByAgentKind,
-          [modelSelection.kind]: modeId,
-        }
-        : preferences.defaultSessionModeByAgentKind,
-      defaultLiveSessionControlValuesByAgentKind: {
-        ...preferences.defaultLiveSessionControlValuesByAgentKind,
-        [modelSelection.kind]: {
-          ...preferences.defaultLiveSessionControlValuesByAgentKind[modelSelection.kind],
-          // Overrides are keyed by raw config id; the descriptor reads the
-          // canonical control key (claude's `fast` is `fast_mode`).
-          ...pickLiveDefaultLaunchControls(controlOverrides),
-        },
-      },
-    };
-  }, [controlOverrides, modeId, modelSelection, preferences]);
 
   const descriptors = useMemo(
     () => buildLaunchControlDescriptors({
       selection: modelSelection,
       launchAgents,
-      pendingConfigChanges: null,
-      preferences: effectivePreferences,
+      pendingConfigChanges: Object.fromEntries(Object.entries(controlOverrides).map(([key, value]) => [key, {
+          rawConfigId: key,
+          value,
+          status: "settling" as const,
+          mutationId: 0,
+        }])),
       onSelect: (
         _agentKind: string,
         controlKey: SupportedLiveControlKey,
@@ -104,7 +71,7 @@ export function useHomeNextLaunchControls({
         onSelectControl(controlKey, value);
       },
     }),
-    [effectivePreferences, launchAgents, modelSelection, onSelectControl],
+    [controlOverrides, launchAgents, modelSelection, onSelectControl],
   );
 
   const launchControlValues = useMemo(
@@ -113,12 +80,9 @@ export function useHomeNextLaunchControls({
   );
 
   return {
-    // The create-time `mode` field still comes from Home's dedicated mode
-    // selection state. Collaboration mode is a distinct live-default control
-    // and must remain available to the shared composer grouping.
-    controls: descriptors.filter((control) => control.key !== "mode"),
+    controls: descriptors,
     launchControlValues,
-    isLoading: cloudCatalogQuery.isLoading || runtimeLaunchOptions.isLoading,
+    isLoading: targetLaunchOptions.isLoading,
   };
 }
 

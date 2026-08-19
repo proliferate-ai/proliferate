@@ -41,8 +41,8 @@ Fences with the neighboring platforms:
   consumes the minted per-(subject, harness) key as an opaque value.
 - Which models a gateway key can see is enforced proxy-side by the key's
   access-group grant (model-gateway.md); agent auth never filters models.
-- Probed model snapshots and picker data belong to the
-  [model catalog](MODELS.md).
+- Target-observed harness launch options and picker data belong to
+  [Models and harness launch options](MODELS.md).
 - Readiness *projection* (the five-state ladder) belongs to
   [agent-distribution.md](../codebase/platforms/product/agent-distribution.md); agent auth supplies the
   route signal that upgrades it at launch.
@@ -61,7 +61,7 @@ Three tables in
 | --- | --- | --- | --- |
 | `agent_auth_selection` | one enabled auth source for one harness | `(user, harness_kind, surface)` | `source_kind`; for `api_key`: `api_key_id` (vault FK) + `env_var_name`; `enabled`; `provider_hint` (display-only) |
 | `agent_api_key` | one vault entry (a bare key *or* a typed provider config — see [The vault](#the-vault)) | `user` | `kind`, `title`, `value_ciphertext` (Fernet, `cloud-secret-v1`), `redacted_hint`, `status ∈ {active, revoked}` |
-| `agent_auth_harness_settings` | one harness's configuration toggles — **not auth**, see below | `(user, harness_kind, surface)` | `settings_json` (key → value per the catalog's declared settings) |
+| `agent_auth_harness_settings` | legacy storage for retired static harness settings — **not auth**, see below | `(user, harness_kind, surface)` | compatibility-only `settings_json`; no executable launch consumer |
 
 What each `source_kind` means, enables, and becomes:
 
@@ -118,9 +118,9 @@ Every other plane mirrors those sets rather than re-deriving them:
   registry gateway-slot derivation matches `render.rs`'s
   gateway/`UnsupportedRoute` split (cursor is the only non-gateway kind).
 - The TypeScript client derives the same three sets from the bundled registry
-  copy (`bundled-agent-registry.ts`) instead of re-literalling them, and the
-  harness settings pane reads its per-harness toggles from the bundled catalog
-  copy rather than a hand-copied table.
+  copy (`bundled-agent-registry.ts`) instead of re-literalling them. Catalog
+  data may decorate those harness rows for presentation, but it declares no
+  executable model, control, default, or launch delta.
 - **Org policy gates writes, not launches.**
   `PUT …/selections/{harness}` runs every org the user belongs to
   through `_enforce_org_selection_policy`
@@ -134,22 +134,14 @@ Every other plane mirrors those sets rather than re-deriving them:
   so the stored truth and the delivered document never drift for longer
   than one materialization pass.
 
-### Not auth: harness settings
+### Not auth: retired harness launch settings
 
-`agent_auth_harness_settings` stores per-harness *configuration* toggles,
-not credentials — for example claude's "Use Claude Code with Chrome"
-switch, whose catalog declaration maps it to the `--chrome` CLI flag. The
-toggles a harness offers are declared in the agent catalog
-(agent-distribution's declare side); this table stores only the user's
-chosen values, and they ride `state.json`'s per-harness `settings` map as
-a **passenger** because it is the one per-user, per-surface document
-already delivered to every runtime. At launch,
-[`resolve_settings_deltas`](../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/settings.rs)
-joins the catalog's declarations with the persisted values and emits the
-CLI-flag/env deltas — entirely outside the auth pipeline. Read
-"agent_auth" in this table's name as naming the *delivery vehicle*, not
-the content; nothing in it is a secret and nothing in it affects which
-credentials a session runs on.
+The former `agent_auth_harness_settings` passenger was configuration, never
+credential state. Static launch flag/env deltas were removed with the
+target-observed launch-option cutover: first-party launch behavior now sends
+only an exact model and `controlValues` selected from the target observation.
+No catalog-declared harness setting may change executable membership or the
+auth route used by the override-free probe.
 
 The passenger needs a vehicle: a harness only gets a `harnesses` entry
 when it has an enabled selection ("Absent means native; present-but-empty
@@ -294,7 +286,7 @@ applied document, and the UI says so:
 - **Pending → applied.** A selection write shows as *pending* on its surface
   until the runtime acknowledges the applied `state.json`. A failed delivery
   is a visible pending state — never a silently stale runtime. The
-  acknowledgement is also the trigger for the model-catalog probe
+  acknowledgement is also a trigger for the target launch-options probe
   ([MODELS.md](MODELS.md)'s auth-applied event), so the picker
   refreshes itself the moment the new world is real.
 - **A cloud switch ensures the sandbox.** A `cloud`-surface selection write
@@ -439,9 +431,12 @@ every live-session start (create, resume, fork), the runtime computes
 exactly what that world must look like for the selected sources — every
 env var to set, every env var that must *not* leak in, every file — then
 writes the files and spawns the process into that environment. The
-computation is deterministic from two local inputs (`state.json` and the
-agent catalog), which is what makes a retry idempotent and the recipes
-unit-testable as pure functions.
+computation is deterministic from applied `state.json`, the selected harness's
+auth declaration, and—only for a route whose config must enumerate provider
+models—a live gateway model-materialization plan. That plan never supplies an
+executable default or picker membership; the subsequent override-free harness
+probe is the authority. Keeping lookup outside render makes retries idempotent
+and the recipes unit-testable as pure functions.
 
 The pipeline ([route_auth/mod.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/mod.rs))
 answers four questions in order:
@@ -453,16 +448,15 @@ answers four questions in order:
    ([profile.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/profile.rs)).
    A source missing a required field is `SelectionIncomplete`; an unknown
    kind is `UnsupportedRoute`. Pure mapping, no filesystem.
-2. **What models does the world mention?** Recipes embed model names
-   (codex's `config.toml` pins a default model on the native route as well
-   as the gateway one; opencode's provider block lists models). Those names
-   come from the catalog's `session.defaults` and gateway policy through the
-   `GatewayModelResolve` seam
+2. **Does route configuration require a provider model list?** Most recipes
+   select only credentials and a provider. OpenCode's gateway provider block
+   must enumerate models before the process starts, so `GatewayModelResolve`
    ([plan.rs](../../anyharness/crates/anyharness-lib/src/domains/agents/route_auth/plan.rs))
-   — model names are catalog data, never Rust constants. The plan carries a
-   separate native default (resolved from the non-gateway auth contexts in
-   precedence order) so a native launch pins the model the user's own
-   provider serves rather than the gateway's.
+   supplies the exact live gateway `/v1/models` result. An empty result fails
+   typed; it never falls back to a seed. Codex route config selects a provider
+   but does not author a model. This materialization input is not picker truth:
+   only the harness observation produced after spawn becomes
+   `HarnessLaunchOptions`.
 3. **What must the world contain?** Render every source, in order, into
    one composed delta: env vars to set, env vars to remove, files to
    write
@@ -505,36 +499,23 @@ has its own way of accepting auth" is paid for, in one place:
 
 | Harness | Native route | Gateway route | `api_key` route |
 | --- | --- | --- | --- |
-| claude | nothing — the CLI finds its own login and config | `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` (the scoped key); optional `ANTHROPIC_SMALL_FAST_MODEL` from the catalog plan; isolated `CLAUDE_CONFIG_DIR` (stable dir, no file) | the named env var |
-| codex | isolated `CODEX_HOME=codex-native/` (stable, not revision-keyed) holding TWO files: a `config.toml` pinning only the catalog's native default model (no provider table — the credential is the user's own), and a copy of the user's own `auth.json`, because codex resolves credentials at `$CODEX_HOME/auth.json` and relocating the home relocates that lookup | isolated `CODEX_HOME=codex-home-<rev>/` with generated `config.toml` (provider `proliferate`, `base_url`, `env_key = "PROLIFERATE_GATEWAY_KEY"`, `wire_api = "responses"`, catalog gateway default model); removes ambient `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` | the named env var only |
-| opencode | nothing | isolated `XDG_CONFIG_HOME` + generated `opencode.json` adding only the `proliferate` provider (`apiKey: "{env:PROLIFERATE_GATEWAY_KEY}"`, catalog model list); **`XDG_DATA_HOME` deliberately left ambient** so natively-logged-in providers coexist | the named env var, additive beside gateway and native |
+| claude | nothing — the CLI finds its own login and config | `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` (the scoped key); isolated `CLAUDE_CONFIG_DIR` (stable dir, no executable default) | the named env var |
+| codex | the user's native auth/config world; no product-authored model default | isolated `CODEX_HOME=codex-home-<rev>/` with generated provider-only `config.toml` (`proliferate`, `base_url`, `env_key = "PROLIFERATE_GATEWAY_KEY"`, `wire_api = "responses"`); no model pin; removes ambient `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` | the named env var only |
+| opencode | nothing | isolated `XDG_CONFIG_HOME` + generated `opencode.json` adding only the `proliferate` provider (`apiKey: "{env:PROLIFERATE_GATEWAY_KEY}"`, exact live gateway model-materialization list); **`XDG_DATA_HOME` deliberately left ambient** so natively-logged-in providers coexist | the named env var, additive beside gateway and native |
 | grok | nothing | isolated `HOME=grok-home-<rev>/`, `GROK_MODELS_BASE_URL`, `XAI_API_KEY` (the scoped key) | the named env var |
 | cursor | nothing | typed refusal (`UnsupportedRoute`) — no gateway route exists for cursor | the named env var (`CURSOR_API_KEY`, cursor's registry-declared slot) |
 
 Three properties of the table itself, all load-bearing:
 
-- **Native is a route with a recipe, not the absence of one.** Four harnesses
-  render nothing natively, but codex needs an isolated `CODEX_HOME` even on the
-  user's own login, because it reads its model from `config.toml` rather than
-  from env and must not inherit whatever a developer left in `~/.codex`. Keeping
-  that in this table — rather than in a second launch-env path — is what makes
-  the native and routed homes distinct directories that cannot shadow or GC each
-  other, and what keeps every codex `config.toml` in the system emitted by one
-  function.
-- **An isolated home must carry the credential it isolates away from.** Codex
-  resolves credentials at `$CODEX_HOME/auth.json`, so setting `CODEX_HOME` moves
-  the credential lookup along with the config — a config-only isolated home
-  launches a natively-logged-in user *unauthenticated*, and nothing later repairs
-  it (the login terminal adjusts only `PATH`, so `codex login` writes `~/.codex`
-  and never the isolated home). The native recipe therefore delivers the user's
-  own `auth.json` as its second file, read at apply time from the user's real
-  codex home so the render stays pure. On macOS, codex's keychain entry is keyed
-  on `sha256(canonical CODEX_HOME)` and so is unreachable from a relocated home;
-  this is covered because the credential reader consults the keychain first and
-  materializes its payload as `auth.json` bytes — the keychain login arrives as a
-  file the relocated home can read. The one accepted residual: a token refresh
-  the child performs lands in the isolated home rather than the user's keychain,
-  which cannot diverge because every launch re-copies from the source.
+- **A route recipe does not choose a model.** Native launches leave the user's
+  native harness world intact. Routed Codex gets an isolated provider config,
+  but no `model` entry; OpenCode receives the live gateway list only because its
+  provider schema requires enumeration before spawn. The persisted
+  `ResolvedLaunchIntent` remains the sole explicit selection passed to startup.
+- **Isolation follows the selected auth route.** A routed home contains only the
+  credential/provider material needed by that route. Native auth is not copied
+  into a routed home, and a routed launch never falls back to the ambient native
+  login.
 - **Claude's ambient sanitization applies to every non-native route**, once over
   the fully composed delta rather than per recipe: the rerouting flags
   (`CLAUDE_CODE_USE_BEDROCK`/`_VERTEX`/`_FOUNDRY`, `AWS_BEARER_TOKEN_BEDROCK`)
@@ -659,7 +640,7 @@ The facts are surface-agnostic and each answers one orthogonal question:
   satisfiable.
 - **probe**: the lifecycle `{Idle, Queued, Running, Backoff}` with the
   last-success age, last-failure detail, and `next_attempt_at`, sourced from the
-  model snapshot status ([MODELS.md](MODELS.md)).
+  target's launch-options observation state ([MODELS.md](MODELS.md)).
 - **gateway**: a health slot filled by the gateway-verification rung, modeled
   now as an `Option` so the derivation's `Unavailable` arm exists.
 - **handoff**: the browser-login handoff state
@@ -840,7 +821,7 @@ Selecting a provider and pasting a key does exactly two writes: a vault
 `api_key` entry, and one opencode selection row whose `env_var_name` is the
 provider's first registry-declared env var and whose `provider_hint` is the
 provider id. The hint stays display-only, per [Not
-auth](#not-auth-harness-settings) — it is how the row later renders with
+auth](#not-auth-retired-harness-launch-settings) — it is how the row later renders with
 that provider's name and logo, and nothing at launch reads it.
 
 The **expanded-row interaction is an assumption, not an observation**: this
@@ -848,12 +829,11 @@ document specifies an inline paste field appearing in the selected row. The
 Conductor capture did not include that state, so it is marked as an
 assumption to be resolved against the reference before implementation.
 
-**§6 — Harness-specific options.** After auth, the harness's declared
-settings toggles (claude's "Use Claude Code with Chrome" being the current
-one) — the `agent_auth_harness_settings` content described in [Not
-auth](#not-auth-harness-settings). Rationale: these are options *on top of*
-a working harness, so they belong below the thing that makes it work, and
-labeling them as a separate section keeps "not auth" visible in the layout.
+**§6 — No static launch-options section.** The former catalog-declared
+harness toggles and `agent_auth_harness_settings` rider are compatibility
+storage only. Executable models and controls render from target
+`HarnessLaunchOptions` before create and from `SessionLiveConfigSnapshot`
+after handshake; the auth pane does not author a parallel launch setting.
 
 **§7 — Model list.** The probed model list
 ([MODELS.md](MODELS.md)), auto-collapsed by default, with a
@@ -944,13 +924,11 @@ With the flag off the legacy locally-derived badge is untouched. With it on:
   wired to render from the typed field ahead of the runtime adapters that
   emit it, so nothing shows until those land.
 
-**Model visibility is a per-user preference.** With the flag on, enabling or
-disabling a model in the pane's model list is a per-user per-harness
-visibility preference keyed `(harnessKind, modelId)`, applied at render over
-the observed list on every surface (the launch picker reads the same
-preference). The flag-on UI no longer writes the server
-`agent_catalog_override` table; that table and its endpoints stay in place
-for the dormant cloud arm and their removal is a follow-up.
+**Observed membership is read-only.** The pane renders the target's exact
+`HarnessLaunchOptions` model list. It may label, order, group, or search rows,
+but no preference or server override may hide a model from executable
+membership. There is no model-visibility write path, and legacy
+`agent_catalog_override` storage is not a launch-option reader or writer.
 
 ### Open verification items
 
@@ -990,9 +968,9 @@ never offered as a working option.
   `GET …/policy/violations` — org allow-lists and the drift report.
 
 Gateway enrollment/capabilities stay under `/v1/cloud/agent-gateway/`
-(model-gateway.md), and per-harness model snapshot routes belong to the
-model catalog. Renames are hard cutovers, no alias windows (all consumers
-are first-party).
+(model-gateway.md). Target-local launch options are read from
+`GET /v1/agents/{kind}/launch-options`; cloud copies are addressed by cloud
+sandbox plus harness. Exact observed identifiers cross those routes unchanged.
 
 The runtime's own surface is two routes
 ([api/http/agent_auth.rs](../../anyharness/crates/anyharness-lib/src/api/http/agent_auth.rs),
@@ -1036,7 +1014,7 @@ anyharness/
     ├── domains/agents/route_auth/
     │   ├── state.rs                           wire contract, revision guard
     │   ├── profile.rs                         sources[] → typed profile (pure)
-    │   ├── plan.rs                            catalog model-plan seam
+    │   ├── plan.rs                            live gateway materialization-plan seam
     │   ├── render.rs                          per-harness recipes (pure)
     │   ├── materialize.rs                     atomic writes, revision dirs, GC
     │   └── mod.rs                             pipeline, origin guard, typed errors

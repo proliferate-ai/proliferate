@@ -120,16 +120,15 @@ class WorkerHeartbeatResponse(_CamelModel):
     # ``desired_topology == "supervisor_owned"`` for a provisioned cloud-sandbox
     # target with runtime credentials; absent otherwise. Old-worker compatible.
     supervisor_bridge: WorkerSupervisorBridge | None = None
-    # REL-10: the server-owned verdict on whether THIS Worker may upload an
-    # agent-model snapshot, decided by the one Agent Models rule that the ingest
-    # route also enforces. Required on every new-server 200 — a successful,
+    # The server-owned verdict on whether this Worker may upload target launch
+    # options. Required on every new-server 200 — a successful,
     # authenticated heartbeat always states the verdict explicitly, and a Worker
     # that receives no field at all (an old server) fails closed to ``false``.
     # It is not desired state: it never alters Supervisor, mailbox, or binary
     # convergence. Authentication is a separate boundary — a missing, unknown, or
     # revoked Worker gets ``401 cloud_worker_unauthorized`` and no response body
     # at all, never a 200 whose verdict happens to be ``false``.
-    model_snapshot_upload_allowed: bool
+    launch_options_upload_allowed: bool
 
 
 class SetSandboxDesiredVersionsRequest(_CamelModel):

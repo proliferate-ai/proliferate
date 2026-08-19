@@ -16,31 +16,6 @@ export interface AutomationScheduleRecord extends AutomationScheduleInput {
   nextRunAt: string | null;
 }
 
-export interface AutomationRecord {
-  id: string;
-  gitOwner: string;
-  gitRepoName: string;
-  title: string;
-  prompt: string;
-  schedule: AutomationScheduleRecord;
-  ownerScope: AutomationOwnerScope;
-  ownerUserId: string | null;
-  organizationId: string | null;
-  createdByUserId: string;
-  targetMode: AutomationTargetMode;
-  cloudAgentRunConfigId: string;
-  executionTarget?: AutomationExecutionTarget;
-  agentKind?: string | null;
-  modelId?: string | null;
-  modeId?: string | null;
-  reasoningEffort?: string | null;
-  enabled: boolean;
-  pausedAt: string | null;
-  lastScheduledAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface AutomationRunRecord {
   id: string;
   automationId: string;
@@ -64,10 +39,6 @@ export interface AutomationRunRecord {
     | "cancelled";
   titleSnapshot: string;
   agentRunConfigSnapshot: Record<string, unknown> | null;
-  agentKindSnapshot?: string | null;
-  modelIdSnapshot?: string | null;
-  modeIdSnapshot?: string | null;
-  reasoningEffortSnapshot?: string | null;
   claimExpiresAt: string | null;
   dispatchStartedAt: string | null;
   dispatchedAt: string | null;

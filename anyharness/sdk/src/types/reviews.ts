@@ -5,8 +5,8 @@ export type ReviewRunStatus = components["schemas"]["ReviewRunStatus"];
 export type ReviewRoundStatus = components["schemas"]["ReviewRoundStatus"];
 export type ReviewAssignmentStatus =
   components["schemas"]["ReviewAssignmentStatus"];
-export type ReviewModeVerificationStatus =
-  components["schemas"]["ReviewModeVerificationStatus"];
+export type ReviewLaunchVerificationStatus =
+  components["schemas"]["ReviewLaunchVerificationStatus"];
 export type ReviewFeedbackDeliveryState =
   components["schemas"]["ReviewFeedbackDeliveryState"];
 export type ReviewPersonaRequest =
@@ -28,5 +28,4 @@ export type ReviewFeedbackDeliveryDetail =
 export type ReviewRoundDetail = components["schemas"]["ReviewRoundDetail"];
 export type ReviewRunDetail = components["schemas"]["ReviewRunDetail"];
 export type ReviewRunResponse = components["schemas"]["ReviewRunResponse"];
-export type SessionReviewsResponse =
-  components["schemas"]["SessionReviewsResponse"];
+export type SessionReviewsResponse = components["schemas"]["SessionReviewsResponse"];

@@ -2,129 +2,87 @@
 
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DesktopAgentLaunchCatalog } from "#product/lib/domain/agents/cloud-launch-catalog";
 import { useHomeNextLaunchControls } from "#product/hooks/home/derived/use-home-next-launch-controls";
 
-vi.mock("#product/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog", () => ({
-  useCloudAgentCatalog: () => ({ data: cloudCatalog(), isLoading: false }),
+const mocks = vi.hoisted(() => ({
+  args: null as Record<string, unknown> | null,
+  data: undefined as ReturnType<typeof response> | undefined,
 }));
 
-vi.mock("@anyharness/sdk-react", () => ({
-  useAgentLaunchOptionsQuery: () => ({
-    data: {
-      agents: [{
-        kind: "codex",
-        displayName: "Codex",
-        defaultModelId: "gpt-5.5",
-        models: [{ id: "gpt-5.5", displayName: "GPT-5.5", isDefault: true }],
-      }],
-    },
-    isLoading: false,
-  }),
-}));
-
-vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
-  useAgentCatalog: () => ({
-    agentsByKind: new Map([["codex", { readiness: "ready" }]]),
-  }),
-}));
-
-vi.mock("#product/stores/preferences/user-preferences-store", () => ({
-  useUserPreferencesStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      defaultSessionModeByAgentKind: {},
-      defaultLiveSessionControlValuesByAgentKind: {},
-    }),
+vi.mock("#product/hooks/home/derived/use-home-target-agent-launch-options", () => ({
+  useHomeTargetAgentLaunchOptions: (args: Record<string, unknown>) => {
+    mocks.args = args;
+    return {
+      data: mocks.data,
+      error: null,
+      isError: false,
+      isLoading: false,
+      isTargetUnobserved: false,
+    };
+  },
 }));
 
 describe("useHomeNextLaunchControls", () => {
   afterEach(cleanup);
 
-  // Regression: the "codex" agent kind's effort control carries rawConfigId
-  // "reasoning_effort" while overrides are read back through the NORMALIZED
-  // control key. Storing the selection under the raw id made the home stepper
-  // snap back to the default (kinds whose raw id IS "effort" round-tripped
-  // only by coincidence).
-  it("round-trips a codex effort selection through controlOverrides", () => {
-    const selections: Record<string, string> = {};
-    const { result, rerender } = renderHook(
-      ({ overrides }: { overrides: Record<string, string> }) =>
-        useHomeNextLaunchControls({
-          modelSelection: { kind: "codex", modelId: "gpt-5.5" },
-          modeId: null,
-          controlOverrides: overrides,
-          onSelectControl: (controlKey, value) => {
-            selections[controlKey] = value;
-          },
-        }),
-      { initialProps: { overrides: {} } },
-    );
+  it("preserves both independent Codex controls and exact defaults", () => {
+    mocks.data = response();
+    const launchTarget = {
+      kind: "cloud",
+      gitOwner: "owner",
+      gitRepoName: "repo",
+      baseBranch: "main",
+    } as const;
+    const { result } = renderHook(() => useHomeNextLaunchControls({
+      modelSelection: { kind: "codex", modelId: "gpt-5.6-codex" },
+      launchTarget,
+      controlOverrides: { mode: "agent-full-access" },
+      onSelectControl: vi.fn(),
+    }));
+    expect(mocks.args).toEqual({ harnessKind: "codex", launchTarget });
+    expect(result.current.controls.map((control) => control.key)).toEqual([
+      "collaboration_mode",
+      "mode",
+    ]);
+    expect(result.current.launchControlValues).toEqual({
+      collaboration_mode: "plan",
+      mode: "agent-full-access",
+    });
+  });
 
-    const effort = result.current.controls.find((control) => control.key === "effort");
-    expect(effort).toBeDefined();
-
-    effort?.onSelect("high");
-    rerender({ overrides: { ...selections } });
-
-    const reselected = result.current.controls.find((control) => control.key === "effort");
-    expect(reselected?.options.find((option) => option.selected)?.value).toBe("high");
-    expect(result.current.launchControlValues.reasoning_effort).toBe("high");
+  it("does not manufacture controls without target-observed options", () => {
+    mocks.data = undefined;
+    const { result } = renderHook(() => useHomeNextLaunchControls({
+      modelSelection: { kind: "codex", modelId: "gpt-5.6-codex" },
+      launchTarget: null,
+      controlOverrides: {},
+      onSelectControl: vi.fn(),
+    }));
+    expect(result.current.controls).toEqual([]);
+    expect(result.current.launchControlValues).toEqual({});
   });
 });
 
-function cloudCatalog(): DesktopAgentLaunchCatalog {
+function response() {
   return {
-    schemaVersion: 2,
-    catalogVersion: "test",
-    generatedAt: "2026-08-18T00:00:00Z",
-    defaultAgentKind: "codex",
-    workspaceId: null,
-    agents: [{
-      kind: "codex",
-      displayName: "Codex",
-      description: null,
-      defaultModelId: "gpt-5.5",
-      unattendedModeId: null,
-      models: [{
-        id: "gpt-5.5",
-        displayName: "GPT-5.5",
-        description: null,
-        provider: null,
-        aliases: [],
-        status: "active",
-        isDefault: true,
-        availability: null,
-        sessionDefaultControls: [],
-        modeValues: null,
-        tuningControlValues: { effort: ["low", "medium", "high", "xhigh"] },
-      }],
-      launchControls: [{
-        key: "effort",
-        label: "Effort",
-        description: null,
-        type: "select",
-        category: null,
-        defaultValue: null,
-        createField: null,
-        phase: "live_default",
-        surfaces: { start: true, session: true, automation: true, settings: true },
-        apply: {
-          createField: null,
-          liveConfigId: "reasoning_effort",
-          liveSetter: "runtime_control",
-          queueBeforeMaterialized: true,
-        },
-        missingLiveConfigPolicy: "ignore_default",
-        valueSource: "inline",
-        values: [
-          { value: "low", label: "Low", description: null, isDefault: false, status: null },
-          { value: "medium", label: "Medium", description: null, isDefault: false, status: null },
-          { value: "high", label: "High", description: null, isDefault: false, status: null },
-          { value: "xhigh", label: "Extra High", description: null, isDefault: false, status: null },
-        ],
-        queueWhileMaterializing: true,
-        mutableAfterMaterialized: true,
-      }],
-    }],
+    harnessKind: "codex", basisRevision: "basis-1", revision: 2, state: "observed",
+    options: {
+      models: [{ id: "gpt-5.6-codex", observedName: "GPT-5.6 Codex", observedDescription: null }],
+      controls: [
+        { id: "collaboration_mode", observedLabel: "Mode", observedDescription: null, values: [
+          { value: "default", observedLabel: "Default", observedDescription: null },
+          { value: "plan", observedLabel: "Plan", observedDescription: null },
+        ] },
+        { id: "mode", observedLabel: "Access", observedDescription: null, values: [
+          { value: "read-only", observedLabel: "Read only", observedDescription: null },
+          { value: "agent", observedLabel: "Agent", observedDescription: null },
+          { value: "agent-full-access", observedLabel: "Full access", observedDescription: null },
+        ] },
+      ],
+      defaults: { modelId: "gpt-5.6-codex", controlValues: {
+        collaboration_mode: "plan", mode: "agent-full-access",
+      } },
+    },
+    observedAt: null, probeAttemptedAt: null, probeFailureCode: null, readiness: "ready",
   };
 }

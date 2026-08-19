@@ -225,7 +225,7 @@ fn resolve_agent_in_scope(
 /// [`route_credentials_upgrade_status`]).
 ///
 /// The launch paths (`create_session`, `ensure_live_session`/`start_live_session`,
-/// and `resolved_workspace_launch_options`) use this. It differs from the
+/// and session launch admission use this. It differs from the
 /// settings read ([`resolve_agent`]) ONLY in env scope — workspace-composed vs
 /// host-ambient — because both are now route-aware; that shared route layer is
 /// what makes the two surfaces agree.

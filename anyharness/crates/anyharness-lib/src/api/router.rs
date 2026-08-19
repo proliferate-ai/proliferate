@@ -12,7 +12,7 @@ use url::form_urlencoded;
 
 use super::http::{
     agent_auth::{delete_agent_auth_state, put_agent_auth_state},
-    agent_gateway_catalog, agent_model_snapshot, agents, auth as http_auth, catalogs, cowork,
+    agent_launch_options, agents, auth as http_auth, catalogs, cowork,
     files, git, goals, health, hosting, loops, mobility, plans, processes, product_mcp, replay,
     repo_roots, reviews, sessions, sessions_config, sessions_events, sessions_fork,
     sessions_interactions, sessions_lifecycle, sessions_prompt, sessions_resume, subagents,
@@ -34,10 +34,6 @@ pub fn build_router(state: AppState) -> Router {
         // Agents
         .route("/agents", get(agents::list_agents))
         .route(
-            "/agents/launch-options",
-            get(agents::get_agent_launch_options),
-        )
-        .route(
             "/agents/reconcile",
             get(agents::get_reconcile_status).post(agents::reconcile_agents),
         )
@@ -51,20 +47,12 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/agents/{kind}", get(agents::get_agent))
         .route(
-            "/agents/{kind}/catalog/gateway-models",
-            get(agent_gateway_catalog::get_gateway_models),
+            "/agents/{kind}/launch-options",
+            get(agent_launch_options::get_launch_options),
         )
         .route(
-            "/agents/{kind}/catalog/refresh-gateway",
-            post(agent_gateway_catalog::refresh_gateway_models),
-        )
-        .route(
-            "/agents/{kind}/model-snapshot",
-            get(agent_model_snapshot::get_model_snapshot_status),
-        )
-        .route(
-            "/agents/{kind}/model-snapshot/refresh",
-            post(agent_model_snapshot::refresh_model_snapshot),
+            "/agents/{kind}/launch-options/refresh",
+            post(agent_launch_options::refresh_launch_options),
         )
         .route("/agents/{kind}/install", post(agents::install_agent))
         .route(

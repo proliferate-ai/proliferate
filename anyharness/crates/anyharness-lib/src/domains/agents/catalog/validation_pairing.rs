@@ -153,20 +153,6 @@ mod tests {
             .retain(|context| context.id == "anthropic-api");
         claude.auth_contexts[0].auth_slot_id = Some("anthropic".to_string());
         claude.auth_contexts[0].signals = signals.map(signal);
-        claude.session.models.retain(|model| {
-            model
-                .availability
-                .any_of
-                .contains(&"anthropic-api".to_string())
-        });
-        for model in &mut claude.session.models {
-            model.availability.any_of.retain(|id| id == "anthropic-api");
-        }
-        // Trimming to anthropic-api drops the gateway-tagged rows; drop the
-        // gateway curation too so the seedModels invariant does
-        // not trip on this signal-vocabulary fixture.
-        claude.session.gateway_policy = None;
-        claude.session.defaults.remove("gateway");
         validate_agent_catalog_document(&catalog).expect("pairing fixture must validate");
         catalog
     }

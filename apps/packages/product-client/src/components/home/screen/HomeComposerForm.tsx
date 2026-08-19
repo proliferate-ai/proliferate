@@ -60,7 +60,6 @@ interface HomeComposerFormProps {
   modelAvailabilityState: ModelAvailabilityState;
   canLaunchTarget: boolean;
   modelSelection: HomeNextModelSelection | null;
-  modeId: string | null;
   launchControlValues: Record<string, string>;
   launchTarget: HomeLaunchTarget | null;
   /** Home-scoped attachment controller owned by `HomeNextScreen` (which also
@@ -85,7 +84,6 @@ export function HomeComposerForm({
   modelAvailabilityState,
   canLaunchTarget,
   modelSelection,
-  modeId,
   launchControlValues,
   launchTarget,
   attachments,
@@ -100,7 +98,6 @@ export function HomeComposerForm({
     modelAvailabilityState,
     canLaunchTarget,
     modelSelection,
-    modeId,
     launchControlValues,
     launchTarget,
     attachments,

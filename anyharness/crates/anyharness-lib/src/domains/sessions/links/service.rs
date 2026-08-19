@@ -4,7 +4,10 @@ use super::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation, SubagentLinkCloseOutcome,
     SubagentLinkOpenOutcome,
 };
-use super::store::{InsertSubagentLinkOutcome, SessionLinkStore};
+use super::store::{InsertSubagentLinkOutcome, InsertSubagentSessionError, SessionLinkStore};
+use crate::domains::agents::launch_options::{
+    HarnessLaunchOptionStateRow, LaunchSelection, LaunchSelectionUnsupported,
+};
 use crate::domains::sessions::store::SessionStore;
 
 #[derive(Debug, Clone)]
@@ -34,6 +37,14 @@ pub enum CreateSessionLinkError {
     FanoutLimit,
     #[error(transparent)]
     Store(anyhow::Error),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CreateSubagentSessionAndLinkError {
+    #[error(transparent)]
+    LaunchSelection(LaunchSelectionUnsupported),
+    #[error(transparent)]
+    Link(#[from] CreateSessionLinkError),
 }
 
 #[derive(Clone)]
@@ -204,21 +215,28 @@ impl SessionLinkService {
     pub fn create_subagent_session_and_link_with_child_limit(
         &self,
         session: &crate::domains::sessions::model::SessionRecord,
+        intent: &crate::domains::sessions::launch_intent::ResolvedLaunchIntent,
         input: CreateSessionLinkInput,
         max_children: usize,
-    ) -> Result<SessionLinkRecord, CreateSessionLinkError> {
+        harness_kind: &str,
+        basis_revision: &dyn Fn() -> String,
+        selection: &LaunchSelection,
+    ) -> Result<(SessionLinkRecord, HarnessLaunchOptionStateRow), CreateSubagentSessionAndLinkError>
+    {
         if input.relation != SessionLinkRelation::Subagent {
             return Err(CreateSessionLinkError::Store(anyhow::anyhow!(
                 "atomic child creation requires a subagent relationship"
-            )));
+            ))
+            .into());
         }
         if input.parent_session_id == input.child_session_id {
-            return Err(CreateSessionLinkError::SelfLink);
+            return Err(CreateSessionLinkError::SelfLink.into());
         }
         if input.child_session_id != session.id {
             return Err(CreateSessionLinkError::Store(anyhow::anyhow!(
                 "subagent relationship child does not match the session being created"
-            )));
+            ))
+            .into());
         }
         if self
             .session_store
@@ -226,9 +244,7 @@ impl SessionLinkService {
             .map_err(CreateSessionLinkError::Store)?
             .is_none()
         {
-            return Err(CreateSessionLinkError::ParentNotFound(
-                input.parent_session_id,
-            ));
+            return Err(CreateSessionLinkError::ParentNotFound(input.parent_session_id).into());
         }
 
         let record = SessionLinkRecord {
@@ -247,17 +263,28 @@ impl SessionLinkService {
         };
         let outcome = self
             .store
-            .insert_subagent_session_with_child_limit(session, &record, max_children)
-            .map_err(|error| {
-                if is_unique_constraint_error(&error) {
-                    CreateSessionLinkError::Duplicate
-                } else {
-                    CreateSessionLinkError::Store(error)
+            .insert_subagent_session_with_child_limit(
+                session,
+                intent,
+                &record,
+                max_children,
+                harness_kind,
+                basis_revision,
+                selection,
+            )
+            .map_err(|error| match error {
+                InsertSubagentSessionError::FanoutLimit => {
+                    CreateSubagentSessionAndLinkError::Link(CreateSessionLinkError::FanoutLimit)
+                }
+                InsertSubagentSessionError::LaunchSelection(error) => {
+                    CreateSubagentSessionAndLinkError::LaunchSelection(error)
                 }
             })?;
         match outcome {
-            InsertSubagentLinkOutcome::Inserted => Ok(record),
-            InsertSubagentLinkOutcome::FanoutLimit => Err(CreateSessionLinkError::FanoutLimit),
+            (InsertSubagentLinkOutcome::Inserted, validated) => Ok((record, validated)),
+            (InsertSubagentLinkOutcome::FanoutLimit, _) => Err(
+                CreateSubagentSessionAndLinkError::Link(CreateSessionLinkError::FanoutLimit),
+            ),
         }
     }
 

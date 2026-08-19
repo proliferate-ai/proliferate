@@ -1,7 +1,7 @@
 //! The real heartbeat → decoded verdict → snapshot-gate choreography (REL-10).
 //!
 //! These tests drive the actual private `runtime::heartbeat_and_converge` call
-//! path — not `model_snapshot_sync::maybe_sync` directly — so the join under
+//! path — not `launch_options_sync::maybe_sync` directly — so the join under
 //! proof is the one production runs: a genuine `POST /v1/cloud/worker/heartbeat`
 //! against an instrumented cloud listener, a genuine Serde decode of the body,
 //! the genuine acknowledgement event, and the genuine admission gate.
@@ -9,12 +9,12 @@
 //! Three independent cases, each with a fresh trace collector, fresh sync state,
 //! fresh store, and fresh listeners:
 //!
-//! - `modelSnapshotUploadAllowed: false` — normal tick, zero snapshot work;
+//! - `launchOptionsUploadAllowed: false` — normal tick, zero launch-option work;
 //! - the field omitted (an old server) — identical outcome, by default-false; and
 //! - `true` — the acknowledgement precedes list/status/upload and the watermark
 //!   advances.
 //!
-//! Snapshot events are classified by tracing TARGET, never by matching one
+//! Launch-option events are classified by tracing TARGET, never by matching one
 //! current message, so renaming or adding an "expected skip" warning cannot slip
 //! past the silence assertions.
 
@@ -32,7 +32,7 @@ use crate::{
     cloud_client::CloudClient,
     config::WorkerConfig,
     identity::credentials::WorkerIdentity,
-    model_snapshot_sync::{ModelSnapshotSyncState, SNAPSHOT_SYNC_TARGET},
+    launch_options_sync::{LaunchOptionsSyncState, LAUNCH_OPTIONS_SYNC_TARGET},
     observability::HEARTBEAT_ACK_TARGET,
     store::WorkerStore,
 };
@@ -64,7 +64,7 @@ const PROBED_AT: &str = "2026-07-27T00:00:00Z";
 const WORKER_BEARER: &str = "worker-secret-token";
 
 /// A Worker config with every self-managed convergence behavior off, so the tick
-/// exercises exactly the heartbeat + snapshot-gate join and nothing else. This
+/// exercises exactly the heartbeat + launch-options gate join and nothing else. This
 /// mirrors a supervisor-free legacy target with updates disabled.
 fn test_config(dir: &TempDir, runtime: SocketAddr, cloud: SocketAddr) -> WorkerConfig {
     WorkerConfig {
@@ -99,13 +99,13 @@ fn heartbeat_body(capability: Option<bool>) -> String {
         "supervisorBridge": null
     });
     if let Some(allowed) = capability {
-        body["modelSnapshotUploadAllowed"] = serde_json::json!(allowed);
+        body["launchOptionsUploadAllowed"] = serde_json::json!(allowed);
     }
     body.to_string()
 }
 
-/// The ordinary non-snapshot work every tick does: the catalog-version poll and
-/// the heartbeat itself. Present in all three cases so "zero snapshot work" is
+/// The ordinary non-copy work every tick does: the catalog-version poll and
+/// the heartbeat itself. Present in all three cases so "zero launch-option work" is
 /// distinguishable from "zero work".
 fn runtime_routes() -> Vec<Route> {
     vec![
@@ -125,17 +125,22 @@ fn runtime_routes() -> Vec<Route> {
         ),
         (
             "GET",
-            "/v1/agents/opencode/model-snapshot".to_string(),
+            "/v1/agents/opencode/launch-options".to_string(),
             200,
             serde_json::json!({
-                "agent": "opencode",
-                "schemaVersion": 2,
-                "probedAt": PROBED_AT,
-                "stateRevision": 7,
-                "models": [{"id": "m1"}],
-                "modes": [{"id": "default"}],
-                "warnings": [],
-                "lastAttempt": {"at": PROBED_AT, "outcome": "ok"}
+                "harnessKind": "opencode",
+                "basisRevision": "basis-1",
+                "revision": 7,
+                "state": "observed",
+                "options": {
+                    "models": [{"id": "m1", "observedName": null, "observedDescription": null}],
+                    "controls": [],
+                    "defaults": {"modelId": null, "controlValues": {}}
+                },
+                "observedAt": PROBED_AT,
+                "probeAttemptedAt": PROBED_AT,
+                "probeFailureCode": null,
+                "readiness": "ready"
             })
             .to_string(),
         ),
@@ -152,23 +157,23 @@ fn cloud_routes(capability: Option<bool>) -> Vec<Route> {
         ),
         (
             "POST",
-            "/v1/cloud/agent-models/opencode/refresh".to_string(),
+            "/v1/cloud/harness-launch-options/opencode".to_string(),
             200,
             "{}".to_string(),
         ),
     ]
 }
 
-const SNAPSHOT_REQUEST_MARKERS: [&str; 3] = [
+const LAUNCH_OPTIONS_REQUEST_MARKERS: [&str; 3] = [
     "/v1/agents",
-    "/v1/agents/opencode/model-snapshot",
-    "/v1/cloud/agent-models",
+    "/v1/agents/opencode/launch-options",
+    "/v1/cloud/harness-launch-options",
 ];
 
 fn snapshot_requests(hits: &[String]) -> Vec<String> {
     hits.iter()
         .filter(|line| {
-            SNAPSHOT_REQUEST_MARKERS
+            LAUNCH_OPTIONS_REQUEST_MARKERS
                 .iter()
                 .any(|marker| line.contains(marker))
         })
@@ -181,8 +186,8 @@ struct TickOutcome {
     control: TickControl,
     runtime_hits: Vec<String>,
     cloud_hits: Vec<String>,
-    watermark_before: std::collections::HashMap<String, String>,
-    watermark_after: std::collections::HashMap<String, String>,
+    watermark_before: std::collections::HashMap<String, i64>,
+    watermark_after: std::collections::HashMap<String, i64>,
     fuse_after: bool,
 }
 
@@ -197,8 +202,8 @@ async fn run_one_tick(capability: Option<bool>, trace: &Timeline) -> TickOutcome
         worker_id: "worker-1".to_string(),
         worker_token: WORKER_BEARER.to_string(),
     };
-    let state = ModelSnapshotSyncState::new();
-    let watermark_before = state.pushed_watermarks();
+    let state = LaunchOptionsSyncState::new();
+    let watermark_before = state.pushed_revisions();
 
     let control = heartbeat_and_converge(
         &config, &cloud, &store, &identity, None, &state, false,
@@ -227,8 +232,8 @@ async fn run_one_tick(capability: Option<bool>, trace: &Timeline) -> TickOutcome
         runtime_hits: runtime.shutdown(),
         cloud_hits: cloud_server.shutdown(),
         watermark_before,
-        watermark_after: state.pushed_watermarks(),
-        fuse_after: state.is_disabled_after_forbidden(),
+        watermark_after: state.pushed_revisions(),
+        fuse_after: false,
     }
 }
 
@@ -249,12 +254,12 @@ fn sole_acknowledgement(trace: &Timeline) -> CapturedEvent {
     acknowledgements.into_iter().next().unwrap()
 }
 
-/// Every event emitted by the model-snapshot sync owner, found by TARGET so a
+/// Every event emitted by the launch-options sync owner, found by TARGET so a
 /// renamed message cannot hide.
 fn snapshot_owner_events(trace: &Timeline) -> Vec<CapturedEvent> {
     events(trace)
         .into_iter()
-        .filter(|event| event.target == SNAPSHOT_SYNC_TARGET)
+        .filter(|event| event.target == LAUNCH_OPTIONS_SYNC_TARGET)
         .collect()
 }
 
@@ -288,10 +293,10 @@ fn assert_denied_tick(outcome: &TickOutcome, trace: &Timeline) {
         outcome.cloud_hits
     );
 
-    // Zero model-snapshot work.
+    // Zero launch-options work.
     assert!(
         snapshot_requests(&outcome.runtime_hits).is_empty(),
-        "no local model-snapshot read may happen: {:?}",
+        "no local launch-options read may happen: {:?}",
         outcome.runtime_hits
     );
     assert!(
@@ -300,7 +305,7 @@ fn assert_denied_tick(outcome: &TickOutcome, trace: &Timeline) {
         outcome.cloud_hits
     );
 
-    // Zero model-snapshot state change.
+    // Zero launch-options state change.
     assert_eq!(
         outcome.watermark_after, outcome.watermark_before,
         "the watermark map must be byte-identical before and after"
@@ -310,7 +315,7 @@ fn assert_denied_tick(outcome: &TickOutcome, trace: &Timeline) {
     // Exactly one truthful acknowledgement, carrying a real boolean `false`.
     let acknowledgement = sole_acknowledgement(trace);
     assert_eq!(
-        acknowledgement.field("model_snapshot_upload_allowed"),
+        acknowledgement.field("launch_options_upload_allowed"),
         Some(&FieldValue::Bool(false)),
         "the acknowledgement must carry the typed verdict: {acknowledgement:?}"
     );
@@ -325,7 +330,7 @@ fn assert_denied_tick(outcome: &TickOutcome, trace: &Timeline) {
     let eligibility_chatter: Vec<_> = events(trace)
         .into_iter()
         .filter(|event| {
-            event.field("model_snapshot_upload_allowed").is_some()
+            event.field("launch_options_upload_allowed").is_some()
                 || event.message().to_lowercase().contains("snapshot")
         })
         .collect();
@@ -378,14 +383,14 @@ async fn a_true_verdict_acknowledges_before_listing_reading_and_uploading() {
     assert!(
         outcome
             .runtime_hits
-            .contains(&"GET /v1/agents/opencode/model-snapshot".to_string()),
+            .contains(&"GET /v1/agents/opencode/launch-options".to_string()),
         "the eligible tick reads the harness status: {:?}",
         outcome.runtime_hits
     );
     assert!(
         outcome
             .cloud_hits
-            .contains(&"POST /v1/cloud/agent-models/opencode/refresh".to_string()),
+            .contains(&"POST /v1/cloud/harness-launch-options/opencode".to_string()),
         "the eligible tick uploads the changed document: {:?}",
         outcome.cloud_hits
     );
@@ -393,7 +398,7 @@ async fn a_true_verdict_acknowledges_before_listing_reading_and_uploading() {
     // Exactly one acknowledgement, carrying a real boolean `true`.
     let acknowledgement = sole_acknowledgement(&trace);
     assert_eq!(
-        acknowledgement.field("model_snapshot_upload_allowed"),
+        acknowledgement.field("launch_options_upload_allowed"),
         Some(&FieldValue::Bool(true)),
         "the acknowledgement must carry the typed TRUE verdict, not a constant"
     );
@@ -409,9 +414,9 @@ async fn a_true_verdict_acknowledges_before_listing_reading_and_uploading() {
     .expect("acknowledgement is in the timeline");
     let list_index =
         position(&trace, is_request_containing("GET /v1/agents")).expect("list is in the timeline");
-    let status_index = position(&trace, is_request_containing("model-snapshot"))
+    let status_index = position(&trace, is_request_containing("launch-options"))
         .expect("status read is in the timeline");
-    let upload_index = position(&trace, is_request_containing("/v1/cloud/agent-models"))
+    let upload_index = position(&trace, is_request_containing("/v1/cloud/harness-launch-options"))
         .expect("upload is in the timeline");
     assert!(
         ack_index < list_index,
@@ -422,7 +427,7 @@ async fn a_true_verdict_acknowledges_before_listing_reading_and_uploading() {
     // The successful upload advanced the watermark; the fuse stayed clear.
     assert_eq!(
         outcome.watermark_after.get("opencode"),
-        Some(&PROBED_AT.to_string()),
+        Some(&7),
         "a successful eligible upload advances the expected watermark"
     );
     assert!(outcome.watermark_before.is_empty());

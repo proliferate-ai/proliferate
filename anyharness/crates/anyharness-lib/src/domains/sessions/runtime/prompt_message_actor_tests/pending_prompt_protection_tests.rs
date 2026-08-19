@@ -36,6 +36,7 @@ async fn protected_edit_cleans_prepared_attachment_without_mutating_wake_or_outb
             "Completion child",
         ))
         .expect("child session");
+    store.seed_empty_launch_intent("completion-child");
     state
         .subagent_service
         .link_child(

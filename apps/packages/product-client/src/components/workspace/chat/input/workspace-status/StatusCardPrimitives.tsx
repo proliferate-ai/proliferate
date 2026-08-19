@@ -69,6 +69,7 @@ export function StatusRow({
   onSelect,
   disabled = false,
   title,
+  dataAttributes,
 }: {
   icon?: ReactNode;
   /** Replaces the fixed-width icon slot — for avatar-group clusters. */
@@ -81,6 +82,8 @@ export function StatusRow({
   /** Disabled command-row treatment: dimmed, no hover paint, no action. */
   disabled?: boolean;
   title?: string;
+  /** Stable product-surface attributes used by UI-driven release proofs. */
+  dataAttributes?: Record<string, string | undefined>;
 }) {
   const body = (
     <>
@@ -96,7 +99,7 @@ export function StatusRow({
   );
 
   if (disabled) {
-    return <div className={`${STATUS_ROW_CLASS} opacity-25`}>{body}</div>;
+    return <div className={`${STATUS_ROW_CLASS} opacity-25`} {...dataAttributes}>{body}</div>;
   }
 
   // Only rows with their own action render as a <button>; rows whose only
@@ -112,11 +115,12 @@ export function StatusRow({
         title={title}
         onClick={onSelect}
         className={`${STATUS_ROW_CLASS} cursor-pointer hover:before:bg-hover`}
+        {...dataAttributes}
       >
         {body}
       </Button>
     )
-    : <div className={`${STATUS_ROW_CLASS} hover:before:bg-hover`}>{body}</div>;
+    : <div className={`${STATUS_ROW_CLASS} hover:before:bg-hover`} {...dataAttributes}>{body}</div>;
 
   if (!hoverItems || hoverItems.length === 0) {
     return row;

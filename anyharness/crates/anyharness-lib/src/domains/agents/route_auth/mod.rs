@@ -16,10 +16,12 @@
 //!   → RenderedRouteAuth { set, remove } merged into the launch env
 //! ```
 //!
-//! No watch/refresh: the file is read fresh per launch. Absent file, absent
-//! harness, or empty sources = native behavior (empty delta) — the harness's
-//! own login owns auth.
+//! No watch/refresh: the file is read fresh per launch. An absent file or absent
+//! harness means native behavior (empty delta), where the harness's own login
+//! owns auth. A present harness with no satisfiable sources fails closed.
 
+pub(crate) mod gateway_plan;
+mod gateway_probe;
 mod materialize;
 pub mod plan;
 pub mod probe_materialization;
@@ -27,6 +29,8 @@ pub mod profile;
 pub mod render;
 pub mod state;
 
+#[cfg(test)]
+mod gateway_plan_tests;
 #[cfg(test)]
 mod origin_guard_tests;
 #[cfg(test)]
@@ -113,8 +117,8 @@ pub(crate) fn current_server_origin() -> Option<String> {
 }
 
 /// Resolve the auth profile that a launch will actually use, including the
-/// desktop server-origin guard. Catalog classification calls this same seam so
-/// model availability cannot be computed from a route the launcher will ignore.
+/// desktop server-origin guard. Auth/readiness and the launch-options probe call
+/// this same seam so neither can reason about a route the launcher will ignore.
 pub(crate) fn resolve_launch_auth_profile(
     runtime_home: &Path,
     harness_kind: &str,
@@ -132,10 +136,10 @@ pub(crate) fn load_effective_state(
 }
 
 /// End-to-end at launch: load the state file, resolve the profile for
-/// `harness_kind`, resolve the catalog-driven [`GatewayModelPlan`], render its
-/// env delta (PURE), then apply the rendered file specs to disk (materializing
-/// isolated homes). Absent file → an empty (native) delta. This is the single
-/// entry point the session runtime calls.
+/// `harness_kind`, read the live gateway [`GatewayModelPlan`], render its env
+/// delta (PURE), then apply the rendered file specs to disk (materializing
+/// isolated routed homes). Absent file → an empty (native) delta. This is the
+/// single entry point the session runtime calls.
 ///
 /// Render consumes ONLY the plan for model values (spec §3): no constants, no
 /// lookups. Two-phase (contract §4): [`render_profile`] performs no I/O; the

@@ -48,9 +48,9 @@ pub(in crate::live::sessions) fn spawn_agent_process(
     source_agent_kind: &str,
     ready_tx: &std::sync::mpsc::Sender<anyhow::Result<String>>,
 ) -> anyhow::Result<SpawnedAgentProcess> {
-    // COUPLING: the model-snapshot probe's fast-fail path classifies a spawn
+    // COUPLING: the launch-options probe's fast-fail path classifies a spawn
     // failure by substring-matching this message and the `spawn agent subprocess`
-    // messages below (`model_snapshot::probe::ProbeError::is_spawn_failure`). If
+    // messages below (`launch_probe::probe::ProbeError::is_spawn_failure`). If
     // you wrap these in `.context(...)` or reword them, update that matcher (ideally
     // promote spawn failures to a typed error) or a broken binary will stop
     // fast-failing and wait out the probe timeout instead.

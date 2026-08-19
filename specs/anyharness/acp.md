@@ -334,7 +334,7 @@ Most of that logic lives in
 - agent descriptors
 - installation logic
 - ACP registry lookup
-- provider model catalogs
+- pre-launch `HarnessLaunchOptions` persistence or exact create validation
 
 ## Important Invariants
 

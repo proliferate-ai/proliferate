@@ -495,6 +495,40 @@ fn map_start_error_to_prompt(error: StartSessionError) -> SendPromptError {
         StartSessionError::AgentDescriptorNotFound(agent_kind) => {
             SendPromptError::Internal(anyhow::anyhow!("agent descriptor not found: {agent_kind}"))
         }
+        StartSessionError::LaunchOptionsUnavailable { agent_kind, state } => {
+            SendPromptError::InvalidPrompt(
+                crate::domains::sessions::prompt::PromptValidationError::new(
+                    "SESSION_LAUNCH_OPTIONS_UNAVAILABLE",
+                    format!(
+                        "launch options are not available for agent '{agent_kind}' (state: {state:?})"
+                    ),
+                ),
+            )
+        }
+        StartSessionError::LaunchValueUnsupported {
+            agent_kind,
+            key,
+            value,
+            state,
+        } => SendPromptError::InvalidPrompt(
+            crate::domains::sessions::prompt::PromptValidationError::new(
+                "SESSION_LAUNCH_VALUE_UNSUPPORTED",
+                format!(
+                    "launch value '{value}' for '{key}' is no longer supported for agent '{agent_kind}' (state: {state:?})"
+                ),
+            ),
+        ),
+        StartSessionError::AgentEnvOverrideUnsupported {
+            agent_kind,
+            env_var_name,
+        } => SendPromptError::InvalidPrompt(
+            crate::domains::sessions::prompt::PromptValidationError::new(
+                "SESSION_AGENT_ENV_OVERRIDE_UNSUPPORTED",
+                format!(
+                    "workspace/session environment cannot override agent-owned key '{env_var_name}' for '{agent_kind}'"
+                ),
+            ),
+        ),
         StartSessionError::Closed => SendPromptError::SessionClosed,
         StartSessionError::MissingDataKey | StartSessionError::RestartRequired(_) => {
             SendPromptError::Internal(anyhow::anyhow!(SESSION_RESTART_REQUIRED_DETAIL))

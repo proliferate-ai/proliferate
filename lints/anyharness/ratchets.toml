@@ -9,23 +9,18 @@ max_lines = 1087
 reason = "existing AnyHarness contract oversized file"
 
 [[max_lines]]
-path = "anyharness/crates/anyharness-contract/src/v1/sessions.rs"
-max_lines = 703
-reason = "existing AnyHarness contract oversized file (+caller-selected idempotent create id; stale fingerprint reduced after legacy public subagent response removal; +Forks ADR rung 2 caller-reserved fork child_session_id)"
-
-[[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/api/openapi.rs"
-max_lines = 682
+max_lines = 677
 reason = "existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1) + workflow-runs + local materialization operations + workflow-run-workspaces paths/schemas + agent install progress schemas + worktree restore path/schemas + WorktreeBaseFetch + RuntimeDiskPressure schemas (subagent registrations extracted to their owned OpenAPI document) ; -10: R1 archiving deletes the three retire path registrations, the three worktree-retention path registrations and the three WorkspaceRetire* schema registrations ; +22: R4 archiving registers the two lifecycle paths and the fourteen lifecycle schemas ; -4: R5 deletes the purge-preflight/retry path registrations and the WorkspaceCleanupOperation/WorkspacePurgePreflightResponse schema registrations ; -30: workflows gen-2 PR1 deletes the gen-1 workflow-runs and workflow-run-workspaces path/schema registrations ; +2: PR5a merges the workflow-runs OpenAPI document into the composed doc ; +16: agent-auth canonical evidence model registers the thirteen AgentAuth* schemas"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/api/router_tests.rs"
-max_lines = 1898
+max_lines = 1892
 reason = "existing AnyHarness oversized test file (+hosting PR-status route tests, +catalog version tests, +managed default-placement route test, +model-snapshot status route shape/auth tests, +agent-auth/install poke contract tests, +agent-auth/install poke-suppression proofs against the automatic_poke_engine seam (F-036 cycle-2 review item 1); the catalog-push handler tests are gone with the heartbeat transport)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/app/mod.rs"
-max_lines = 664
+max_lines = 647
 reason = "AnyHarness app wiring (+gateway model planner wiring; the gateway model resolver + probe-engine store wiring is gone with the old-chain deletion, A9) (+session mutation admission purge/retention wiring, +goal/loop/activity/feed services, +two-phase workflow-run and workflow-workspace wiring, +worktree restore runtime wiring; local materialization service wiring is now the materialization runtime valve, moved to app/materialization.rs per grid PR 7; -3: WorkspaceService construction/pass-through deleted, grid PR 8; net 0 in grid PR 9: WorkspaceRetireService joins AppState while the preflight-checker/purge/retire constructions move to the app/workspaces.rs wiring family); PR #1753 extracts process/runtime configuration helpers to app/config.rs while adding Workspace MCP composition; PR #3 moves Agent Operations graph construction to app/agent_operations.rs; PR10 removes legacy Subagents MCP wiring while adding live product-context composition ; -24: R1 archiving unwires WorkspaceRetireService and WorkspaceRetentionService (fields, constructions, the retention startup pass and the WorktreeRetentionPolicyStore import) ; +12: R4 archiving wires WorkspaceArchiveService (import, field, deps pass-through, construction, and the cfg(not(test)) sweep boot pass) ; +7 net: R5 wires QuiescePlanes and the deletion-family purge construction while the clippy fix drops the dead session_delete_workflow argument ; -10: workflows gen-2 PR1 unwires the gen-1 two-phase workflow-run and workflow-workspace services ; +26: PR4 wires the WorkflowManager (construction, extension registration, boot fence pass) ; +1: R5 (Update Flow ADR, FR-1) swaps CatalogSyncService::from_bundled() for the boot-fetch-aware from_bundled_and_staged_via_env(&runtime_home) ; -10: Lane H restores the workspaces wiring family for checkpoint-before-session plus archive/purge-after-session composition"
 
 [[max_lines]]
@@ -35,32 +30,17 @@ reason = "classifier tests incl. gateway route activation + bedrock flag-only de
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/agents/auth/launch_facts.rs"
-max_lines = 657
+max_lines = 636
 reason = "Track D provider_config credential facts: a source's already-resolved env map classifies per-key against the registry's declared flag vocabulary (registry_flag_vars), producing EnvFlag for mode-switch flags (e.g. CLAUDE_CODE_USE_BEDROCK) and presence-only Env for everything else, same secrets rule as api_key; the vocabulary unions auth.slots[] with providerConfig[] (D3-rust)"
 
 [[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/domains/agents/catalog/projection.rs"
-max_lines = 998
-reason = "family normalizer (bedrock/date/version forms) with tests (+native-default-model resolution and its tests, incl. the opencode any-non-gateway-fallback pin), plus the enrichment join (own vs foreign catalog match) and its tests relocated from agent_gateway_catalog.rs under A9's route-backend swap (ruling §3): gateway_resolver.rs is deleted (old resolver chain, its bedrock_default_model catalog-default resolution now lives in gateway_plan.rs), and the route file itself dropped to 312 lines and no longer needs an allowlist entry"
-
-[[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/domains/agents/catalog/service_tests.rs"
-max_lines = 605
-reason = "B-2 validation-cut rewrote the refusal assertions in place (single SESSION_MODEL_UNSUPPORTED); shrinks when the legacy gateway-models routes delete (C-track cutover)"
-
-[[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/domains/agents/catalog/validation.rs"
-max_lines = 609
-reason = "existing catalog validator router; unattended-mode invariants live in a focused submodule"
-
-[[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/agents/route_auth/render.rs"
-max_lines = 825
+max_lines = 680
 reason = "Track D provider_config render arm (claude/opencode generic env-set, codex aws_bedrock via built-in amazon-bedrock provider, codex azure_openai UNVERIFIED config.toml injection kept behind the registry's pending flag, cursor/grok/unknown-kind UnsupportedRoute) landed alongside the existing native/gateway recipe table, +sanitize_claude_ambient fix so a provider_config route's own rerouting flag (e.g. CLAUDE_CODE_USE_BEDROCK) survives sanitization instead of being unconditionally stripped, scoped in review cycle 1 to the keys the provider_config arm itself recorded so an api_key row named like a rerouting flag is still stripped (D3-rust)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs"
-max_lines = 1893
+max_lines = 1890
 reason = "existing AnyHarness oversized file (catalog-owned unattended default replaces local fallback helper)"
 
 [[max_lines]]
@@ -80,12 +60,12 @@ reason = "existing AnyHarness oversized file; shrank from 628 after folding plan
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/reviews/service/service_tests.rs"
-max_lines = 1510
+max_lines = 1491
 reason = "existing AnyHarness oversized test file"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs"
-max_lines = 1218
+max_lines = 1214
 reason = "existing AnyHarness oversized test file (launch-env tests moved to their owning module) + A9 Scope C resume/fork revoked-credentials regression tests (AgentNotReady at the common live-start seam) + a review-fix pin (unsatisfiable selection reports RouteAuth, not AgentNotReady, on resume) + Forks ADR rung 2 targeted-fork plumbing tests (item-less rejection, fail-closed no-child downgrade guard, idempotency conflict, unknown-outcome redispatch block; the same-payload resume test moved to checkpoint_linkage_tests.rs with the Lane H NULL-linkage pins, -65)"
 
 [[max_lines]]
@@ -95,7 +75,7 @@ reason = "R3 real-process stop suite; every case owns a real agent process and a
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/sessions/probe.rs"
-max_lines = 679
+max_lines = 642
 reason = "catalog probe with per-harness model-source fallbacks (+the three runtime-probe options: env removal, scratch workspace root, config-option-only switch suppression); shrank from 683 after the readiness resolve moved to the call boundary (grid plan PR 5c/7 — live never fetches)"
 
 [[max_lines]]
@@ -142,11 +122,6 @@ reason = "existing SDK oversized test file; legacy Subagents MCP reducer coverag
 path = "anyharness/sdk/src/reducer/transcript.ts"
 max_lines = 1515
 reason = "existing SDK oversized file; legacy Subagents MCP reducer branch removed in PR10"
-
-[[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/prompt_message_actor_tests.rs"
-max_lines = 601
-reason = "scripted-ACP prompt/queue race suite over the real actor ; +2: workflows gen-2 PR4 teaches the scripted agent program a refusal stop-reason branch"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/workflows/store.rs"

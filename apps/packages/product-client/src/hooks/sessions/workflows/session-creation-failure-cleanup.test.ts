@@ -78,7 +78,7 @@ describe("replacement session creation failure", () => {
       error: new Error("materialization failed"),
       hadExistingProjectedRecord: false,
       hasPrompt: false,
-      modeId: "agent",
+      controlValues: { mode: "agent" },
       modelId: "sonnet",
       pendingSessionId: "pending-claude",
       preserveProjectedSessionOnCreateFailure: false,
@@ -107,7 +107,7 @@ describe("replacement session creation failure", () => {
     expect(recovered).toEqual([
       expect.objectContaining({
         agentKind: "claude",
-        modeId: "agent",
+        controlValues: { mode: "agent" },
         modelId: "sonnet",
         prompt: expect.objectContaining({
           blocks: expect.arrayContaining([
@@ -142,7 +142,7 @@ describe("replacement session creation failure", () => {
       error: new Error("materialization failed"),
       hadExistingProjectedRecord: false,
       hasPrompt: false,
-      modeId: null,
+      controlValues: {},
       modelId: "sonnet",
       pendingSessionId: "pending-claude",
       preserveProjectedSessionOnCreateFailure: false,
@@ -192,7 +192,7 @@ describe("prompt-bearing session creation failure", () => {
       error,
       hadExistingProjectedRecord: false,
       hasPrompt: true,
-      modeId: "agent",
+      controlValues: { mode: "agent" },
       modelId: "sonnet",
       pendingSessionId: "pending-claude",
       preserveProjectedSessionOnCreateFailure: false,
@@ -252,7 +252,7 @@ describe("projected empty-session materialization failure", () => {
       error: new Error("materialization failed"),
       hadExistingProjectedRecord: false,
       hasPrompt: false,
-      modeId: null,
+      controlValues: {},
       modelId: "sonnet",
       pendingSessionId: "client-session:claude:recovery",
       preserveProjectedSessionOnCreateFailure: true,

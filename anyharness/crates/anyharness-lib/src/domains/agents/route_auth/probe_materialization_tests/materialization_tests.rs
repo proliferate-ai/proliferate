@@ -467,7 +467,7 @@ fn claude_removals_reach_the_spawn_env_for_gateway_and_api_key_routes() {
         home.path(),
     )
     .expect("claude is in the built-in registry");
-    let options = crate::live::sessions::probe::ProbeOptions {
+    let options = crate::domains::agents::live_ports::ProbeOptions {
         agent_kind: crate::domains::agents::model::AgentKind::Claude,
         resolved,
         auth_context: "composed".to_string(),
@@ -486,7 +486,7 @@ fn claude_removals_reach_the_spawn_env_for_gateway_and_api_key_routes() {
     ]
     .into_iter()
     .collect();
-    let merged = crate::live::sessions::probe::spawn_env_for_options(&options, &ambient);
+    let merged = crate::domains::agents::live_ports::spawn_env_for_probe(options, &ambient);
     assert!(
         !merged.contains_key("CLAUDE_CODE_USE_BEDROCK"),
         "an ambient Bedrock flag must not reach the probed child"

@@ -10,8 +10,9 @@ use crate::domains::agent_operations::model::{
 };
 use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
 use crate::domains::agents::catalog::service::ActiveCatalog;
-use crate::domains::agents::readiness::launch_options::{
-    ResolvedLaunchAgentOption, ResolvedLaunchModelOption, ResolvedWorkspaceLaunchOptions,
+use crate::domains::agents::launch_options::{
+    HarnessLaunchDefaults, HarnessLaunchModel, HarnessLaunchOptions, HarnessLaunchOptionsResponse,
+    HarnessLaunchOptionsState,
 };
 use crate::domains::sessions::admission::{
     NoControllerPolicy, SessionMutationAdmission, SessionMutationKind,
@@ -153,7 +154,7 @@ impl SubagentLifecycleMutations for State {
         workspace_id: &str,
         agent_kind: &str,
         model_id: Option<&str>,
-        _mode_id: Option<&str>,
+        _control_values: &std::collections::BTreeMap<String, String>,
         _task: String,
         parent_session_id: &str,
         _source_label: &str,
@@ -275,13 +276,10 @@ impl AgentWorkspaceOperations for Workspaces {
     }
 }
 
-struct LaunchOptions(ResolvedWorkspaceLaunchOptions);
+struct LaunchOptions(Vec<HarnessLaunchOptionsResponse>);
 
 impl AgentLaunchOptionReads for LaunchOptions {
-    fn resolved_workspace_launch_options(
-        &self,
-        _workspace_id: &str,
-    ) -> anyhow::Result<ResolvedWorkspaceLaunchOptions> {
+    fn harness_launch_options(&self) -> anyhow::Result<Vec<HarnessLaunchOptionsResponse>> {
         Ok(self.0.clone())
     }
 }
@@ -323,33 +321,32 @@ fn fixture(closed: bool) -> (Arc<AgentOperations>, Arc<State>, Arc<Queue>, Strin
     let agent = active
         .agents()
         .iter()
-        .find(|agent| !agent.session.models.is_empty())
+        .find(|agent| !agent.session.presentation_models.is_empty())
         .unwrap();
-    let model = &agent.session.models[0];
+    let model = &agent.session.presentation_models[0];
     let agent_kind = agent.kind.clone();
     let model_id = model.id.clone();
-    let launch = ResolvedWorkspaceLaunchOptions {
-        agents: vec![ResolvedLaunchAgentOption {
-            kind: agent.kind.clone(),
-            display_name: agent.display_name.clone(),
-            default_model_id: Some(model.id.clone()),
-            unattended_mode_id: agent.session.unattended_mode_id.clone(),
-            models: vec![ResolvedLaunchModelOption {
+    let launch = vec![HarnessLaunchOptionsResponse {
+        harness_kind: agent.kind.clone(),
+        basis_revision: "basis-1".into(),
+        revision: 1,
+        state: HarnessLaunchOptionsState::Observed,
+        options: Some(HarnessLaunchOptions {
+            models: vec![HarnessLaunchModel {
                 id: model.id.clone(),
-                display_name: model.display_name.clone(),
-                aliases: model.aliases.clone(),
-                is_default: true,
-                default_opt_in: None,
-                description: model.description.clone(),
-                provider: None,
-                status: Some(model.status),
-                effort: None,
-                live_effort_candidates: Vec::new(),
-                fast_mode: false,
-                modes: None,
+                observed_name: None,
+                observed_description: None,
             }],
-        }],
-    };
+            controls: Vec::new(),
+            defaults: HarnessLaunchDefaults {
+                model_id: Some(model.id.clone()),
+                control_values: Default::default(),
+            },
+        }),
+        observed_at: Some("2026-08-19T00:00:00Z".into()),
+        probe_attempted_at: "2026-08-19T00:00:00Z".into(),
+        probe_failure_code: None,
+    }];
     let mut workspace = test_workspace_record(WorkspaceKind::Local, "/tmp/workspace-a");
     workspace.id = "workspace-a".into();
     let workspaces = Arc::new(Workspaces(vec![workspace]));
@@ -452,7 +449,7 @@ async fn create_subagent_preserves_one_stable_identity_and_relationship() {
                 task: Some("research the session path".into()),
                 agent_kind: Some(agent_kind),
                 model_id: Some(model_id),
-                mode_id: None,
+                control_values: Default::default(),
             },
         )
         .await
@@ -484,7 +481,7 @@ async fn subagent_create_waits_on_the_parent_session_permit() {
                     task: Some("serialized child".into()),
                     agent_kind: Some(agent_kind),
                     model_id: Some(model_id),
-                    mode_id: None,
+                    control_values: Default::default(),
                 },
             )
             .await

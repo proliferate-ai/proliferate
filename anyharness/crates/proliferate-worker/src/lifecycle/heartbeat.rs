@@ -23,7 +23,7 @@ pub fn interval(config: &WorkerConfig) -> Duration {
 /// export), so the server row tracks it within one interval of a swap.
 /// `catalog_version` is polled fresh each tick from the runtime's own
 /// read-only version route — telemetry only, mirroring
-/// `model_snapshot_sync.rs`'s non-fatal pattern (a failed poll just omits the
+/// `launch_options_sync.rs`'s non-fatal pattern (a failed poll just omits the
 /// field this tick, never fails the heartbeat).
 pub async fn send_once(
     cloud: &CloudClient,
@@ -56,7 +56,7 @@ fn resolve_runtime_bearer_token(config: &WorkerConfig) -> Option<String> {
 /// `GET /v1/catalogs/agents/version`: the ONE read this poll makes. Never
 /// retried within a tick, never propagated as an error — a missed poll just
 /// means this heartbeat omits `catalog_version`, exactly like a missed
-/// model-snapshot sync omits that tick's upload.
+/// launch-options sync omits that tick's upload.
 async fn poll_catalog_version(config: &WorkerConfig) -> Option<String> {
     let runtime_base = config.runtime_base_url.trim_end_matches('/');
     let bearer_token = resolve_runtime_bearer_token(config);

@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use crate::domains::agent_operations::model::WorkspacePinIntent;
 use crate::domains::agents::catalog::service::ActiveCatalog;
-use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
+use crate::domains::agents::launch_options::HarnessLaunchOptionsResponse;
 use crate::domains::sessions::links::model::SessionLinkRecord;
 use crate::domains::sessions::links::service::SessionLinkService;
 use crate::domains::sessions::live_config::{
@@ -129,7 +129,7 @@ pub trait AgentSessionMutations: Send + Sync {
         workspace_id: &str,
         agent_kind: &str,
         model_id: Option<&str>,
-        mode_id: Option<&str>,
+        control_values: &std::collections::BTreeMap<String, String>,
         task: Option<String>,
         source_session_id: &str,
         source_label: &str,
@@ -158,7 +158,7 @@ impl AgentSessionMutations for SessionRuntime {
         workspace_id: &str,
         agent_kind: &str,
         model_id: Option<&str>,
-        mode_id: Option<&str>,
+        control_values: &std::collections::BTreeMap<String, String>,
         task: Option<String>,
         source_session_id: &str,
         source_label: &str,
@@ -167,7 +167,7 @@ impl AgentSessionMutations for SessionRuntime {
             workspace_id,
             agent_kind,
             model_id,
-            mode_id,
+            control_values,
             task,
             source_session_id.to_string(),
             source_label.to_string(),
@@ -218,7 +218,7 @@ pub trait SubagentLifecycleMutations: Send + Sync {
         workspace_id: &str,
         agent_kind: &str,
         model_id: Option<&str>,
-        mode_id: Option<&str>,
+        control_values: &std::collections::BTreeMap<String, String>,
         task: String,
         parent_session_id: &str,
         source_label: &str,
@@ -250,7 +250,7 @@ impl SubagentLifecycleMutations for SessionRuntime {
         workspace_id: &str,
         agent_kind: &str,
         model_id: Option<&str>,
-        mode_id: Option<&str>,
+        control_values: &std::collections::BTreeMap<String, String>,
         task: String,
         parent_session_id: &str,
         source_label: &str,
@@ -259,7 +259,7 @@ impl SubagentLifecycleMutations for SessionRuntime {
             workspace_id,
             agent_kind,
             model_id,
-            mode_id,
+            control_values,
             task,
             parent_session_id,
             source_label,
@@ -422,18 +422,12 @@ impl AgentWorkspacePinEvents for SessionRuntime {
 }
 
 pub trait AgentLaunchOptionReads: Send + Sync {
-    fn resolved_workspace_launch_options(
-        &self,
-        workspace_id: &str,
-    ) -> anyhow::Result<ResolvedWorkspaceLaunchOptions>;
+    fn harness_launch_options(&self) -> anyhow::Result<Vec<HarnessLaunchOptionsResponse>>;
 }
 
 impl AgentLaunchOptionReads for SessionRuntime {
-    fn resolved_workspace_launch_options(
-        &self,
-        workspace_id: &str,
-    ) -> anyhow::Result<ResolvedWorkspaceLaunchOptions> {
-        SessionRuntime::resolved_workspace_launch_options(self, workspace_id)
+    fn harness_launch_options(&self) -> anyhow::Result<Vec<HarnessLaunchOptionsResponse>> {
+        SessionRuntime::harness_launch_options(self)
     }
 }
 

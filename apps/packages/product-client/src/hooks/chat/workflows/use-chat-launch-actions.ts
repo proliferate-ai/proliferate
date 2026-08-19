@@ -101,9 +101,9 @@ export function useChatLaunchActions(options?: {
       && scopedCurrentLaunchIdentity?.kind === selection.kind
     ) {
       // Same-harness selection preserves the durable session. The runtime
-      // accepts catalog-authorized values beyond the live option list and may
-      // relaunch the agent process under that session. "model" is the generic
-      // config id when the session exposes no model control.
+      // validates the value against this session's canonical live snapshot,
+      // then requires exact setter readback. "model" is the generic config id
+      // when the session exposes no raw model control.
       void setActiveSessionConfigOption(scopedCurrentModelConfigId ?? "model", selection.modelId)
         .then(() => {
           setWorkspaceArrivalEvent(null);

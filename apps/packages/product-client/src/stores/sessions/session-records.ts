@@ -53,12 +53,11 @@ export function createEmptySessionRecord(
     sessionRelationship?: SessionRelationship;
   },
 ): SessionRuntimeRecord {
-  const resolvedModeId =
-    config?.liveConfig?.normalizedControls.mode?.currentValue ?? config?.modeId ?? null;
+  const currentModeId = config?.liveConfig?.normalizedControls.mode?.currentValue ?? null;
   const title = config?.title?.trim() || null;
   const transcript = {
     ...createTranscriptState(sessionId),
-    currentModeId: resolvedModeId,
+    currentModeId,
     sessionMeta: {
       ...createTranscriptState(sessionId).sessionMeta,
       title,
@@ -74,7 +73,7 @@ export function createEmptySessionRecord(
     agentKind,
     modelId: config?.modelId ?? null,
     requestedModelId: config?.requestedModelId ?? config?.modelId ?? null,
-    modeId: resolvedModeId,
+    modeId: currentModeId,
     title,
     actionCapabilities: config?.actionCapabilities ?? DEFAULT_SESSION_ACTION_CAPABILITIES,
     liveConfig: config?.liveConfig ?? null,
@@ -106,17 +105,12 @@ export function createSessionRecordFromSummary(
     sessionRelationship?: SessionRelationship;
   },
 ): SessionRuntimeRecord {
-  const modeId =
-    session.liveConfig?.normalizedControls.mode?.currentValue
-    ?? session.modeId
-    ?? null;
   const title = session.title?.trim() || options?.titleFallback?.trim() || null;
   const record = createEmptySessionRecord(session.id, session.agentKind, {
     workspaceId,
     materializedSessionId: session.id,
     modelId: session.modelId ?? null,
     requestedModelId: session.requestedModelId ?? session.modelId ?? null,
-    modeId,
     title,
     actionCapabilities: session.actionCapabilities,
     liveConfig: session.liveConfig ?? null,
@@ -153,7 +147,6 @@ export function buildOptimisticSessionCreationRecord({
   modelId,
   pendingSessionId,
   promptText,
-  resolvedModeId,
   workspaceId,
 }: {
   agentKind: string;
@@ -161,7 +154,6 @@ export function buildOptimisticSessionCreationRecord({
   modelId: string;
   pendingSessionId: string;
   promptText: string | null;
-  resolvedModeId: string | null;
   workspaceId: string;
 }): SessionRuntimeRecord {
   return {
@@ -170,7 +162,7 @@ export function buildOptimisticSessionCreationRecord({
       materializedSessionId: null,
       modelId,
       requestedModelId: modelId,
-      modeId: resolvedModeId,
+      modeId: null,
       title: existingProjectedRecord?.title ?? promptFallbackTitle(promptText),
       hasAttemptedPrompt: existingProjectedRecord?.hasAttemptedPrompt ?? false,
       optimisticPrompt: null,

@@ -1,6 +1,6 @@
 # Agent Distribution
 
-Status: target. The body is written in the ideal state. Every difference from `main` today is listed in [Current gaps](#current-gaps); the list shrinks as follow-up PRs land, and the label comes off when it is empty.
+Status: current.
 
 This document replaces `agent-catalog-readiness.md`, which was written as a migration playbook and had served its purpose.
 
@@ -30,8 +30,8 @@ Boundaries — the auth split is declare vs apply:
 - **A new harness touches both**: its auth vocabulary is a `registry.json`
   edit here; how those slots get filled and switched is agent-auth's
   contract.
-- **Model snapshot freshness and picker-facing model data** belong to the
-  model catalog.
+- **Executable models and controls** belong to the selected target's observed
+  launch-options state, not distribution.
 - **Gateway model lists** belong to the [model gateway](../../../FEATURE_DOCS/MODELS.md);
   this platform knows only whether a harness supports the gateway route,
   never which models it serves.
@@ -47,18 +47,16 @@ them:
   spec, a git fork pinned to a commit, or an ACP-registry-backed resolution
   with a fallback), the auth vocabulary (auth slots, env var names, discovery
   kinds, login policy), and launch discovery. Humans are the only writer.
-- `catalog.json` is the **lockfile**: machine-resolved proof. The producer
+- `catalog.json` is the **distribution lockfile**: machine-resolved proof. The producer
   pipeline freezes the registry's method into exact versions with
   per-platform `{url, sha256}` targets or pinned npm/git specifiers, plus
-  the ACP launch args baked into each pin. It also carries everything the
-  probe observed on exactly those versions: models, controls, defaults,
-  auth contexts, and provenance (the ACP `initialize` attestation and
-  committed snapshot files). The pipeline is the only writer; humans review
-  the diff.
+  the ACP launch args baked into each pin. It also carries presentation labels
+  and auth/install metadata, but no executable models, controls, defaults,
+  filters, or fallbacks. The pipeline is the only writer; humans review the
+  diff.
 
 One line each: the registry answers "how would you get and run this, in
-principle"; the catalog answers "exactly which bytes, and what those bytes
-were observed to do."
+principle"; the catalog answers "exactly which bytes are distributed."
 
 The split is really a split of consumers, and the most important consequence
 is what the registry's install method is NOT for: no installer on any
@@ -68,7 +66,7 @@ machine ever reads it. It exists to be resolved, not to be installed from.
 | --- | --- | --- |
 | Registry: install method (npm/git/ACP-registry specs, fallbacks) | humans | the producer pipeline ([`resolve-pins.mjs`](../../../../scripts/agent-catalog/resolve-pins.mjs)), which resolves it into catalog pins |
 | Registry: auth and launch vocabulary (auth slots, env vars, discovery kinds, login policy, executable names) | humans | the runtime, for credential classification, detection, and catalog pairing validation |
-| Catalog: pins and probe-observed facts | the pipeline | the installer and the runtime's projections |
+| Catalog: pins and presentation metadata | the pipeline | the installer and presentation surfaces |
 
 Without the registry's install section the nightly resolution would have
 nowhere reviewed to look ("is there a new opencode?" needs a declared
@@ -79,11 +77,10 @@ row above and for validating the catalog against it at load
 (`validate_agent_catalog_registry_pairing`); the install fence in
 [Installation](#installation) guarantees the method is never a fallback.
 
-Observed facts live in the lockfile because they are only true of a version:
-"codex 0.144.5 advertises these models" sits next to the pin it was observed
-on. That makes one document the revert unit: rolling back a catalog PR
-returns the fleet to the previous versions and the previous observed
-behavior together.
+Executable observations live in the target runtime's launch-options store
+because they are properties of the installed target and its current auth
+context. Rolling back a distribution catalog rolls back pins and presentation;
+the target must be re-observed under its new basis before it can launch.
 
 The ACP adapter story lives here too. Harnesses that speak ACP through an
 adapter name it in the registry (claude: our git fork
@@ -95,11 +92,9 @@ the same way.
 
 Document laws:
 
-- The catalog never contains gateway model names. Gateway models are
-  discovered live from the proxy with the harness's virtual key; the
-  catalog records only that a harness supports the gateway route (the
-  `gateway` auth context). Harness-role choices for gateway models (which
-  model serves cheap subtasks) are gateway-side configuration.
+- The catalog never contains executable model names or control vocabularies.
+  Gateway and direct-provider options are discovered from the installed
+  harness and exposed only through target-observed launch options.
 - Versions follow `YYYY-MM-DD.revision` and strictly increase whenever
   content changes
   ([`scripts/agent-catalog/check-version-discipline.mjs`](../../../../scripts/agent-catalog/check-version-discipline.mjs)).
@@ -168,8 +163,8 @@ displaces the user's binary, but nothing defers to it either. The one
 remaining carve-out is one named predicate
 ([`installer/auto_install.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/auto_install.rs)),
 deliberately not a side effect of the pass's scope. Completed installs
-poke the model-snapshot reconciler ([MODELS.md](../../../FEATURE_DOCS/MODELS.md))
-so a newly converged harness re-probes its models without extra wiring.
+poke the launch-options probe ([MODELS.md](../../../FEATURE_DOCS/MODELS.md))
+so a newly converged harness re-observes its executable options.
 The one carve-out:
 
 - Cursor never installs in cloud. Its readiness resolves through a headless
@@ -184,8 +179,8 @@ The one carve-out:
   cloud-uninstallable for a different reason: its *native* login lives in the
   macOS Keychain, which no headless Linux sandbox has and which no cloud
   surface can interactively seed. For the same keychain reason it is
-  excluded from unattended model probing and refreshed only on request
-  (model-catalog.md's probe engine).
+  excluded from unattended launch-option probing and refreshed only on request
+  ([MODELS.md](../../../FEATURE_DOCS/MODELS.md)'s probe engine).
 
 When a managed copy lands alongside a harness the user already had on
 PATH, the settings pane (`HarnessPane.tsx`) shows a one-time, dismissible
@@ -403,20 +398,19 @@ still only ever fetches once, at its own boot.
 **Convergence telemetry, never desired state**: the worker heartbeat
 carries a read-only `catalogVersion`, polled each tick from the runtime's
 own `GET /v1/catalogs/agents/version` (mirrors
-[`model_snapshot_sync.rs`](../../../../anyharness/crates/proliferate-worker/src/model_snapshot_sync.rs)'s
+[`launch_options_sync.rs`](../../../../anyharness/crates/proliferate-worker/src/launch_options_sync.rs)'s
 non-fatal pattern), and the server stores it alongside
 `anyharness_version` on the runtime-worker row purely for a fleet-
 convergence dashboard. There is no field in either direction that acts on
 this value — the catalog sync/push channel 796ff1f08 deleted stays
 deleted; this is observation only.
 
-**`agent_catalog_override` stays**, unchanged in behavior and now
-documented as the sanctioned per-tenant lever: a server-side model-overlay
-applied at snapshot read, never touching the signed artifact or the
-bundled floor. It is the one way to differ a tenant's effective catalog
-without a new publish or a new runtime release, and it is orthogonal to
-both transports above — it acts after either one already decided the
-active document.
+There is no per-tenant executable catalog overlay. Legacy
+`agent_catalog_override` storage is not read by launch-option projection and
+cannot add, remove, hide, alias, or default a model or control. A tenant differs
+only when its selected execution target reports different
+`HarnessLaunchOptions`; Cloud copies that target state verbatim by sandbox and
+harness.
 
 ### Runtime binary convergence (cloud)
 
@@ -444,13 +438,10 @@ The catalog is regenerated by the probe pipeline, nightly and on demand
    whether they moved, which is what makes an adapter bump a reviewed
    `registry.json` edit rather than an automatic pickup. Unknown hashes
    are computed by downloading; known ones are reused.
-2. Install exactly those pins and launch every harness over ACP under
-   every configured auth context, recording what each attested at
-   `initialize` and what it advertised (models, modes, controls). Snapshot
-   evidence is committed under `scripts/agent-catalog/generated/`.
-3. Collate passed snapshots into `catalog.draft.json`, finalize pins only
-   for freshly probed agents, carry unchanged agents forward, and promote
-   the draft to the lockfile byte-for-byte.
+2. Resolve and validate distribution pins plus presentation metadata into
+   `catalog.draft.json`; the pipeline never copies probe-observed executable
+   options into the document.
+3. Promote the validated draft to the lockfile byte-for-byte.
 4. A separate job with no provider credentials opens the PR. A human
    reviews the diff and merges; the merge moves the fleet by riding the
    next runtime release (the nightly app build for desktops, the runtime
@@ -466,8 +457,8 @@ back) is
 Three CI gates hold the documents honest:
 
 - [`scripts/validate-agent-catalog.mjs`](../../../../scripts/validate-agent-catalog.mjs):
-  structural invariants without a Rust toolchain, including registry
-  pairing and snapshot-evidence cross-checks.
+  structural invariants without a Rust toolchain, including registry pairing
+  and rejection of executable model/control/default/fallback fields.
 - The Rust validation
   ([`catalog/validation.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/catalog/validation.rs),
   exercised by every test and at binary load): an invalid checked-in
@@ -488,8 +479,8 @@ Per target and harness, the runtime answers what the product may offer
 | `LoginRequired` | Installed, credentials absent, and the harness has an interactive login path |
 | `Ready` | Installed, compatible, and at least one auth context is satisfied |
 
-Readiness is computed from installed artifacts plus the catalog's auth
-contexts plus detected credentials. One function owns the answer
+Readiness is computed from installed artifacts, registry-declared auth
+contexts, and detected credentials. One function owns the answer
 (`compute_readiness` in
 [`readiness/status.rs`](../../../../anyharness/crates/anyharness-lib/src/domains/agents/readiness/status.rs)),
 recomputed fresh from disk on every read — no cache, so it can never be
@@ -498,10 +489,9 @@ presence plus executable bit; the install manifest decorates the version
 string but never gates readiness. The agent-auth route can upgrade a
 credential state (a gateway selection satisfies the `gateway` context) but
 never clears `InstallRequired` or `Unsupported`; a route cannot conjure a
-binary. Launch-time validation applies the same catalog data at session
-create: an unknown model is rejected as unsupported, a model whose
-availability requires an absent auth context is rejected as gated, with
-the missing contexts named.
+binary. Launch-time validation reloads one current target observation at
+session create. Unknown models, controls, values, omissions, and basis
+mismatches fail before the actor starts; the catalog is never executable truth.
 
 Projection laws, each closing a way the projection could lie:
 
@@ -563,25 +553,6 @@ options in the composer.
 
 Deltas between this document and `main`, each struck by its follow-up PR:
 
-- [ ] `catalog.json` still carries gateway model names:
-      `session.gatewayPolicy` (`seedModels` pre-probe fallback, `roles`) and
-      gateway entries in `session.defaults`. (The `providers` client-side
-      filter that used to sit alongside them is gone — B5, superseded by
-      LiteLLM access-group tags.) The rest leaves the catalog once
-      gateway model discovery is a live `GET /v1/models` with the harness
-      key; role choices move gateway-side. The JS validator's seedModels
-      checks go with it.
-- [ ] `gateway_resolver.rs` is deleted (A9; its surviving logic relocated
-      to `catalog/projection.rs`) and `gateway_probe.rs` is trimmed to the
-      stateless `GET /v1/models` call the model-snapshot poke engine and
-      `gateway_plan.rs` both use. What's left: `gatewayPolicy.seedModels`
-      is still consumed (by `gateway_plan.rs`'s pre-probe floor and the
-      legacy gateway-models route's own pre-probe floor) — it leaves the
-      catalog only when the first bullet above does.
-- [ ] `guides/operating/agent-catalog-update.md` documents
-      `make catalog-update` and the probe-PR review procedure; until it
-      lands, the producer sections of the old readiness doc are the only
-      writeup.
 - [ ] The legacy cloud topology still exists beside the supervisor:
       [`proliferate-worker/src/anyharness_update.rs`](../../../../anyharness/crates/proliferate-worker/src/anyharness_update.rs)
       (worker-owned pgrep/kill/swap of the runtime), the worker's

@@ -6,6 +6,50 @@ that from the diff, not from habit. Consider this document in every PR. Depth
 (release validation, release worlds, the tier-3/4 contracts, manual QA) lives
 in [`specs/TESTING/`](TESTING/README.md).
 
+## Harness launch-option authority gate
+
+Changes to harness observation, session create/configuration, cloud target
+copy, or first-party launch pickers must prove the complete authority chain:
+
+- target observation covers non-empty, empty, same-basis failure,
+  basis-change invalidation, and unknown identifiers;
+- create reloads current-basis state, rejects exact non-members, and stores the
+  complete resolved intent atomically;
+- actor startup cannot publish ready until every explicit value is confirmed;
+- live mutation advances the full session snapshot, and active UI ignores
+  target/catalog state;
+- Codex `collaboration_mode` and `mode` remain independent and obsolete
+  `full-access` is absent; and
+- cloud copy is monotonic and isolated by cloud sandbox plus harness.
+
+The deterministic gate is:
+
+```bash
+cargo test -p anyharness-contract -p anyharness-lib -p proliferate-worker
+pnpm --filter @anyharness/sdk test
+pnpm --filter @anyharness/tests test
+pnpm --filter @proliferate/product-client test
+pnpm --filter @proliferate/product-client typecheck
+(cd server && uv run pytest -q)
+pnpm -C tests/intent test
+python3 scripts/check_agent_auth_secret_logs.py
+python3 scripts/check_docs.py
+```
+
+Only one Cargo/Rust invocation may run on this machine at a time; check
+`pgrep -x cargo` and `pgrep -x rustc` first. The final manual proof attaches to
+an already running named profile:
+
+```bash
+node scripts/verify-harness-launch-options.mjs \
+  --profile harness-launch-options \
+  --harness claude --harness grok --harness codex
+```
+
+The verifier never boots services, builds Rust, starts Docker, or prints
+credentials. Missing install/auth and `observed_empty` are incomplete proof,
+not a pass.
+
 ## The model
 
 Code is state and logic. Every test is defined by which state is real and

@@ -1,6 +1,5 @@
 import {
   anyHarnessAgentLaunchOptionsPrefixKey,
-  anyHarnessAgentGatewayModelsPrefixKey,
   anyHarnessAgentReconcileStatusKey,
   anyHarnessAgentsKey,
   useAnyHarnessCacheScopeKey,
@@ -59,12 +58,6 @@ export function useAgentResourcesCache() {
       invalidateAgentSetupResources(normalizedRuntimeUrl),
       queryClient.invalidateQueries({
         queryKey: anyHarnessAgentLaunchOptionsPrefixKey(
-          normalizedRuntimeUrl,
-          cacheScopeKey,
-        ),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: anyHarnessAgentGatewayModelsPrefixKey(
           normalizedRuntimeUrl,
           cacheScopeKey,
         ),

@@ -119,17 +119,19 @@ impl SessionRuntime {
 #[derive(Debug)]
 pub enum CreateAndStartSessionError {
     Invalid(String),
-    /// The requested model cannot launch under the active universe — the one
-    /// typed refusal for every unservable model intent
-    /// (`SESSION_MODEL_UNSUPPORTED`).
-    ModelUnsupported {
+    LaunchOptionsUnavailable {
         agent_kind: String,
-        model_id: String,
-        active_universe: crate::domains::agents::catalog::service::ActiveUniverse,
+        state: Option<crate::domains::agents::launch_options::HarnessLaunchOptionsState>,
     },
-    ModeUnsupported {
+    LaunchValueUnsupported {
         agent_kind: String,
-        mode_id: String,
+        key: String,
+        value: String,
+        state: crate::domains::agents::launch_options::HarnessLaunchOptionsState,
+    },
+    AgentEnvOverrideUnsupported {
+        agent_kind: String,
+        env_var_name: String,
     },
     WorkspaceNotFound,
     /// The workspace's local checkout directory has been deleted from disk.
@@ -417,6 +419,20 @@ pub(super) enum StartSessionError {
         path: String,
     },
     AgentDescriptorNotFound(String),
+    LaunchOptionsUnavailable {
+        agent_kind: String,
+        state: Option<crate::domains::agents::launch_options::HarnessLaunchOptionsState>,
+    },
+    LaunchValueUnsupported {
+        agent_kind: String,
+        key: String,
+        value: String,
+        state: crate::domains::agents::launch_options::HarnessLaunchOptionsState,
+    },
+    AgentEnvOverrideUnsupported {
+        agent_kind: String,
+        env_var_name: String,
+    },
     Closed,
     MissingDataKey,
     RestartRequired(String),
