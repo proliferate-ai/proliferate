@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   anyHarnessGitBaseWorktreeDiffFilesKey,
+  anyHarnessGitBranchDiffFilesKey,
   anyHarnessGitDiffKey,
   anyHarnessRuntimeHealthKey,
   anyHarnessSessionEventsKey,
@@ -84,6 +85,56 @@ describe("sdk-react query keys", () => {
       "origin/main",
       "src/old-app.ts",
       "src/app.ts",
+    ]);
+  });
+
+  it("adds cache generations as an optional trailing Git identity", () => {
+    const baseDiffKey = anyHarnessGitDiffKey(
+      "http://runtime.test",
+      "workspace-1",
+      "src/app.ts",
+      "base_worktree",
+      "origin/main",
+      null,
+    );
+    expect(anyHarnessGitDiffKey(
+      "http://runtime.test",
+      "workspace-1",
+      "src/app.ts",
+      "base_worktree",
+      "origin/main",
+      null,
+      "generation-2",
+    )).toEqual([...baseDiffKey, "generation-2"]);
+    expect(anyHarnessGitBranchDiffFilesKey(
+      "http://runtime.test",
+      "workspace-1",
+      "origin/main",
+      "refresh-2",
+    )).toEqual([
+      "anyharness",
+      "http://runtime.test",
+      "workspace",
+      "workspace-1",
+      "git-diff",
+      "branch-files",
+      "origin/main",
+      "refresh-2",
+    ]);
+    expect(anyHarnessGitBaseWorktreeDiffFilesKey(
+      "http://runtime.test",
+      "workspace-1",
+      "origin/main",
+      "turn-2",
+    )).toEqual([
+      "anyharness",
+      "http://runtime.test",
+      "workspace",
+      "workspace-1",
+      "git-diff",
+      "base-worktree-files",
+      "origin/main",
+      "turn-2",
     ]);
   });
 

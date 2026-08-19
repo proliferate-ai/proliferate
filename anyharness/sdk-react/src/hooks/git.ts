@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import type {
   CommitRequest,
   GitDiffOptions,
@@ -14,6 +15,11 @@ import {
 import { useAnyHarnessCacheScopeKey } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import {
+  advanceGitCacheForceEpoch,
+  invalidateGitDiffCache,
+  readGitCacheForceEpoch,
+} from "../lib/git-cache-generation.js";
+import {
   type AnyHarnessQueryTimingOptions,
   useReportAnyHarnessCacheDecision,
 } from "../lib/timing-options.js";
@@ -23,7 +29,7 @@ import {
   anyHarnessGitBaseWorktreeDiffFilesKey,
   anyHarnessGitBranchDiffFilesKey,
   anyHarnessGitDiffKey,
-  anyHarnessGitDiffScopeKey,
+  anyHarnessGitForceEpochKey,
   anyHarnessGitStatusKey,
   anyHarnessPullRequestKey,
 } from "../lib/query-keys.js";
@@ -33,6 +39,7 @@ interface WorkspaceQueryOptions {
   enabled?: boolean;
   refetchInterval?: number | false;
   refetchIntervalInBackground?: boolean;
+  staleTime?: number;
 }
 
 type TimedWorkspaceQueryOptions = WorkspaceQueryOptions & AnyHarnessQueryTimingOptions;
@@ -43,17 +50,20 @@ type TimedGitDiffQueryOptions = {
   scope?: GitDiffOptions["scope"];
   baseRef?: string | null;
   oldPath?: string | null;
+  cacheGeneration?: string | number | null;
   enabled?: boolean;
 } & AnyHarnessQueryTimingOptions;
 
 type TimedBranchDiffFilesQueryOptions =
   & WorkspaceQueryOptions
   & ListBranchDiffFilesOptions
+  & { cacheGeneration?: string | number | null }
   & AnyHarnessQueryTimingOptions;
 
 type TimedBaseWorktreeDiffFilesQueryOptions =
   & WorkspaceQueryOptions
   & ListBaseWorktreeDiffFilesOptions
+  & { cacheGeneration?: string | number | null }
   & AnyHarnessQueryTimingOptions;
 
 async function invalidateWorkspaceGit(
@@ -68,13 +78,40 @@ async function invalidateWorkspaceGit(
     queryClient.invalidateQueries({
       queryKey: anyHarnessGitBranchesKey(cacheScopeKey, workspaceId),
     }),
-    queryClient.invalidateQueries({
-      queryKey: anyHarnessGitDiffScopeKey(cacheScopeKey, workspaceId),
-    }),
+    invalidateGitDiffCache(queryClient, cacheScopeKey, workspaceId),
     queryClient.invalidateQueries({
       queryKey: anyHarnessPullRequestKey(cacheScopeKey, workspaceId),
     }),
   ]);
+  advanceGitCacheForceEpoch(queryClient, cacheScopeKey, workspaceId);
+}
+
+export function useGitCacheForceEpoch(options?: { workspaceId?: string | null }): number {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const queryClient = useQueryClient();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+  const query = useQuery({
+    queryKey: anyHarnessGitForceEpochKey(cacheScopeKey, workspaceId),
+    queryFn: () => readGitCacheForceEpoch(queryClient, cacheScopeKey, workspaceId),
+    initialData: () => readGitCacheForceEpoch(queryClient, cacheScopeKey, workspaceId),
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+  return query.data;
+}
+
+export function useAdvanceGitCacheForceEpoch(
+  options?: { workspaceId?: string | null },
+): () => number {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const queryClient = useQueryClient();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+  return useCallback(
+    () => advanceGitCacheForceEpoch(queryClient, cacheScopeKey, workspaceId),
+    [cacheScopeKey, queryClient, workspaceId],
+  );
 }
 
 export function useGitStatusQuery(options?: TimedWorkspaceQueryOptions) {
@@ -93,6 +130,7 @@ export function useGitStatusQuery(options?: TimedWorkspaceQueryOptions) {
   return useQuery({
     queryKey,
     enabled,
+    staleTime: options?.staleTime,
     refetchInterval: options?.refetchInterval,
     refetchIntervalInBackground: options?.refetchIntervalInBackground,
     queryFn: async ({ signal }) => {
@@ -118,6 +156,7 @@ export function useGitDiffQuery(options: TimedGitDiffQueryOptions) {
     options.scope,
     options.baseRef,
     options.oldPath,
+    options.cacheGeneration,
   );
   useReportAnyHarnessCacheDecision({
     category: "git.diff",
@@ -129,6 +168,9 @@ export function useGitDiffQuery(options: TimedGitDiffQueryOptions) {
   return useQuery({
     queryKey,
     enabled,
+    staleTime: options.cacheGeneration === null || options.cacheGeneration === undefined
+      ? undefined
+      : Infinity,
     queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
@@ -149,7 +191,12 @@ export function useGitBranchDiffFilesQuery(
   const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const enabled = (options?.enabled ?? true) && !!workspaceId;
-  const queryKey = anyHarnessGitBranchDiffFilesKey(cacheScopeKey, workspaceId, options?.baseRef);
+  const queryKey = anyHarnessGitBranchDiffFilesKey(
+    cacheScopeKey,
+    workspaceId,
+    options?.baseRef,
+    options?.cacheGeneration,
+  );
   useReportAnyHarnessCacheDecision({
     category: "git.branch_diff_files",
     enabled,
@@ -160,6 +207,7 @@ export function useGitBranchDiffFilesQuery(
   return useQuery({
     queryKey,
     enabled,
+    staleTime: options?.staleTime,
     refetchInterval: options?.refetchInterval,
     refetchIntervalInBackground: options?.refetchIntervalInBackground,
     queryFn: async ({ signal }) => {
@@ -180,7 +228,12 @@ export function useGitBaseWorktreeDiffFilesQuery(
   const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const enabled = (options?.enabled ?? true) && !!workspaceId;
-  const queryKey = anyHarnessGitBaseWorktreeDiffFilesKey(cacheScopeKey, workspaceId, options?.baseRef);
+  const queryKey = anyHarnessGitBaseWorktreeDiffFilesKey(
+    cacheScopeKey,
+    workspaceId,
+    options?.baseRef,
+    options?.cacheGeneration,
+  );
   useReportAnyHarnessCacheDecision({
     category: "git.base_worktree_diff_files",
     enabled,
@@ -191,6 +244,7 @@ export function useGitBaseWorktreeDiffFilesQuery(
   return useQuery({
     queryKey,
     enabled,
+    staleTime: options?.staleTime,
     refetchInterval: options?.refetchInterval,
     refetchIntervalInBackground: options?.refetchIntervalInBackground,
     queryFn: async ({ signal }) => {
