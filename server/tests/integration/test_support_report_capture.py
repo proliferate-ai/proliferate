@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from uuid import uuid4
 
 import pytest
@@ -10,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.db.models.auth import User
 from proliferate.db.store import support_reports
+from proliferate.integrations.slack.errors import SlackWebhookError
+from proliferate.server.support import notifications as support_notifications
 from proliferate.server.support import service
 from proliferate.server.support.errors import SupportReportUploadInvalid
 from proliferate.server.support.models import (
@@ -22,6 +25,13 @@ from proliferate.server.support.models import (
 def _storage(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "support_report_s3_bucket", "private-support-bucket")
     monkeypatch.setattr(settings, "support_report_s3_region", "")
+    monkeypatch.setattr(settings, "support_slack_webhook_url", "")
+    monkeypatch.setattr(logging.getLogger("proliferate"), "propagate", True)
+    monkeypatch.setattr(
+        logging.getLogger(support_notifications.__name__),
+        "disabled",
+        False,
+    )
 
     async def _fake_put_json_object(**_: object) -> None:
         return None
@@ -148,6 +158,170 @@ async def _create_and_complete(
         body=SupportReportCompleteRequest(),
     )
     return response.report_id
+
+
+async def _complete_report(
+    db_session: AsyncSession,
+    user: User,
+    report_id: str,
+) -> None:
+    response = await service.complete_support_report_upload(
+        db=db_session,
+        sender_user_id=user.id,
+        sender_email=user.email,
+        sender_display_name=None,
+        report_id=report_id,
+        body=SupportReportCompleteRequest(),
+    )
+    assert response.report_id == report_id
+
+
+async def test_completion_records_slack_receipt_after_delivery_succeeds(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = await _user(db_session)
+    created = await service.create_support_report(
+        db=db_session,
+        sender_user_id=user.id,
+        sender_email=user.email,
+        sender_display_name=None,
+        body=_create_body(),
+    )
+    calls: list[str] = []
+
+    async def _fake_post_incoming_webhook(
+        *,
+        webhook_url: str,
+        text: str,
+        blocks: list[dict[str, object]] | None = None,
+    ) -> None:
+        del text, blocks
+        calls.append(webhook_url)
+        stored_before_success = await support_reports.get_report_by_id(
+            db_session, created.report_id
+        )
+        assert stored_before_success is not None
+        assert stored_before_success.status == "completed"
+        assert stored_before_success.slack_notified_at is None
+
+    monkeypatch.setattr(settings, "support_slack_webhook_url", "https://slack.test/report")
+    monkeypatch.setattr(
+        support_notifications,
+        "post_incoming_webhook",
+        _fake_post_incoming_webhook,
+    )
+
+    await _complete_report(db_session, user, created.report_id)
+    stored = await support_reports.get_report_by_id(db_session, created.report_id)
+    assert stored is not None
+    assert stored.status == "completed"
+    assert stored.slack_notified_at is not None
+    first_receipt = stored.slack_notified_at
+    assert calls == ["https://slack.test/report"]
+
+    await _complete_report(db_session, user, created.report_id)
+    stored_after_duplicate = await support_reports.get_report_by_id(db_session, created.report_id)
+    assert stored_after_duplicate is not None
+    assert stored_after_duplicate.slack_notified_at == first_receipt
+    assert calls == ["https://slack.test/report"]
+
+
+async def test_completion_leaves_slack_receipt_null_when_webhook_is_missing(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    user = await _user(db_session)
+    created = await service.create_support_report(
+        db=db_session,
+        sender_user_id=user.id,
+        sender_email=user.email,
+        sender_display_name=None,
+        body=_create_body(),
+    )
+    calls: list[str] = []
+
+    async def _fake_post_incoming_webhook(**_: object) -> None:
+        calls.append("called")
+
+    monkeypatch.setattr(settings, "support_slack_webhook_url", "  ")
+    monkeypatch.setattr(
+        support_notifications,
+        "post_incoming_webhook",
+        _fake_post_incoming_webhook,
+    )
+
+    with caplog.at_level(logging.ERROR, logger=support_notifications.__name__):
+        await _complete_report(db_session, user, created.report_id)
+        await _complete_report(db_session, user, created.report_id)
+
+    stored = await support_reports.get_report_by_id(db_session, created.report_id)
+    assert stored is not None
+    assert stored.status == "completed"
+    assert stored.slack_notified_at is None
+    assert calls == []
+    records = [
+        record for record in caplog.records if record.name == support_notifications.__name__
+    ]
+    assert len(records) == 1
+    assert records[0].levelno == logging.ERROR
+    assert records[0].getMessage() == (
+        f"Support report {created.report_id} completed but SUPPORT_SLACK_WEBHOOK_URL "
+        "is unset — no Slack notification sent. Set the webhook secret in this environment."
+    )
+
+
+async def test_completion_leaves_slack_receipt_null_when_delivery_fails(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    user = await _user(db_session)
+    created = await service.create_support_report(
+        db=db_session,
+        sender_user_id=user.id,
+        sender_email=user.email,
+        sender_display_name=None,
+        body=_create_body(),
+    )
+    calls: list[str] = []
+
+    async def _fake_post_incoming_webhook(
+        *,
+        webhook_url: str,
+        text: str,
+        blocks: list[dict[str, object]] | None = None,
+    ) -> None:
+        del text, blocks
+        calls.append(webhook_url)
+        raise SlackWebhookError("provider unavailable")
+
+    monkeypatch.setattr(settings, "support_slack_webhook_url", "https://slack.test/report")
+    monkeypatch.setattr(
+        support_notifications,
+        "post_incoming_webhook",
+        _fake_post_incoming_webhook,
+    )
+
+    with caplog.at_level(logging.ERROR, logger=support_notifications.__name__):
+        await _complete_report(db_session, user, created.report_id)
+        await _complete_report(db_session, user, created.report_id)
+
+    stored = await support_reports.get_report_by_id(db_session, created.report_id)
+    assert stored is not None
+    assert stored.status == "completed"
+    assert stored.slack_notified_at is None
+    assert calls == ["https://slack.test/report"]
+    records = [
+        record for record in caplog.records if record.name == support_notifications.__name__
+    ]
+    assert len(records) == 1
+    assert records[0].levelno == logging.ERROR
+    assert records[0].getMessage() == (
+        f"Support report {created.report_id} Slack notification failed to deliver: "
+        "provider unavailable"
+    )
 
 
 async def test_enforcement_accepts_legacy_absent_release(
