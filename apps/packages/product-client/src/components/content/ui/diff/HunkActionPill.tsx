@@ -8,6 +8,7 @@ interface HunkActionPillProps {
   disabled: boolean;
   onRevert: () => void;
   onStageOrUnstage: () => void;
+  placement?: "line-end" | "scrollport-end";
   /**
    * How the pill reveals itself:
    * - "group-hover" (default): invisible until an ancestor `.group/hunk` is hovered.
@@ -25,6 +26,7 @@ export function HunkActionPill({
   disabled,
   onRevert,
   onStageOrUnstage,
+  placement = "line-end",
   reveal = "group-hover",
 }: HunkActionPillProps) {
   const isUnstaged = mode === "unstaged";
@@ -32,10 +34,13 @@ export function HunkActionPill({
     reveal === "group-hover"
       ? "opacity-0 pointer-events-none group-hover/hunk:opacity-100 group-hover/hunk:pointer-events-auto group-focus-within/hunk:opacity-100 group-focus-within/hunk:pointer-events-auto"
       : "opacity-100";
+  const placementClasses = placement === "scrollport-end"
+    ? "sticky right-2 ms-auto shrink-0"
+    : "absolute right-2 top-0";
 
   return (
     <div
-      className={`absolute right-2 top-0 z-10 flex items-center gap-0.5 rounded-md border border-border/50 bg-[var(--diff-view-surface)] px-0.5 py-0.5 shadow-popover transition-opacity duration-hover ${revealClasses}`}
+      className={`${placementClasses} z-10 flex items-center gap-0.5 rounded-md border border-border/50 bg-[var(--diff-view-surface)] px-0.5 py-0.5 shadow-popover transition-opacity duration-hover ${revealClasses}`}
     >
       {isUnstaged && (
         <Tooltip content="Revert hunk">

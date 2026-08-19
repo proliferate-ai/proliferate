@@ -66,46 +66,66 @@ export function GitPanelHeader({
       // naming a container, only querying one.
       className="z-20 flex shrink-0 flex-col [container-name:review-header] [container-type:inline-size] border-b border-border/70 bg-sidebar-background px-2 py-1 text-sidebar-muted-foreground"
     >
-      <div className="flex min-h-7 min-w-0 items-center gap-1">
-        <GitReviewBaseSelector
-          activeMode={changesFilter}
-          changedCount={visibleChangedCount}
-          onSelect={onFilterChange}
-        />
-        {showTargetSelector && (
-          <GitReviewTargetSelector
-            mode={changesFilter}
-            baseRef={baseRef}
-            branchRefs={branchRefs}
-            isRuntimeReady={isRuntimeReady}
-            onSelect={onBaseRefChange}
+      <div
+        className={`flex min-h-7 min-w-0 items-center gap-1 ${
+          showTargetSelector
+            ? "@max-[28rem]/review-header:flex-col @max-[28rem]/review-header:items-stretch @max-[28rem]/review-header:gap-0"
+            : ""
+        }`}
+      >
+        {showTargetSelector ? (
+          <div className="contents @max-[28rem]/review-header:grid @max-[28rem]/review-header:min-w-0 @max-[28rem]/review-header:w-full @max-[28rem]/review-header:grid-cols-2 @max-[28rem]/review-header:gap-1 @max-[28rem]/review-header:[&>button]:w-full @max-[28rem]/review-header:[&>button]:max-w-none">
+            <GitReviewBaseSelector
+              activeMode={changesFilter}
+              changedCount={visibleChangedCount}
+              onSelect={onFilterChange}
+            />
+            <GitReviewTargetSelector
+              mode={changesFilter}
+              baseRef={baseRef}
+              branchRefs={branchRefs}
+              isRuntimeReady={isRuntimeReady}
+              onSelect={onBaseRefChange}
+            />
+          </div>
+        ) : (
+          <GitReviewBaseSelector
+            activeMode={changesFilter}
+            changedCount={visibleChangedCount}
+            onSelect={onFilterChange}
           />
         )}
-        <GitPanelAggregateStats additions={additions} deletions={deletions} />
-        <div className="ms-auto flex shrink-0 items-center gap-px">
-          <PaneIconButton
-            label={allFilesCollapsed ? "Expand all diffs" : "Collapse all diffs"}
-            aria-pressed={allFilesCollapsed}
-            onClick={onToggleAllFiles}
-          >
-            {allFilesCollapsed
-              ? <ExpandAll className="icon-paired" />
-              : <CollapseAll className="icon-paired" />}
-          </PaneIconButton>
-          <GitReviewJumpToFileMenu
-            reviewEntries={reviewEntries}
-            onFocusFile={onFocusFile}
-          />
-          <GitReviewOptionsMenu
-            allFilesCollapsed={allFilesCollapsed}
-            wrapLongLines={wrapLongLines}
-            layout={layout}
-            isRuntimeReady={isRuntimeReady}
-            onToggleAllFiles={onToggleAllFiles}
-            onToggleWrap={onToggleWrap}
-            onToggleLayout={onToggleLayout}
-            onRefresh={onRefresh}
-          />
+        <div
+          className={showTargetSelector
+            ? "contents @max-[28rem]/review-header:flex @max-[28rem]/review-header:min-h-7 @max-[28rem]/review-header:w-full @max-[28rem]/review-header:min-w-0 @max-[28rem]/review-header:items-center"
+            : "contents"}
+        >
+          <GitPanelAggregateStats additions={additions} deletions={deletions} />
+          <div className="ms-auto flex shrink-0 items-center gap-px">
+            <PaneIconButton
+              label={allFilesCollapsed ? "Expand all diffs" : "Collapse all diffs"}
+              aria-pressed={allFilesCollapsed}
+              onClick={onToggleAllFiles}
+            >
+              {allFilesCollapsed
+                ? <ExpandAll className="icon-paired" />
+                : <CollapseAll className="icon-paired" />}
+            </PaneIconButton>
+            <GitReviewJumpToFileMenu
+              reviewEntries={reviewEntries}
+              onFocusFile={onFocusFile}
+            />
+            <GitReviewOptionsMenu
+              allFilesCollapsed={allFilesCollapsed}
+              wrapLongLines={wrapLongLines}
+              layout={layout}
+              isRuntimeReady={isRuntimeReady}
+              onToggleAllFiles={onToggleAllFiles}
+              onToggleWrap={onToggleWrap}
+              onToggleLayout={onToggleLayout}
+              onRefresh={onRefresh}
+            />
+          </div>
         </div>
       </div>
     </div>
