@@ -153,6 +153,58 @@ describe("non-cancelable prepend seat confirmation", () => {
     expect(viewport.scrollTop).toBe(1_781);
   });
 
+  it("re-seats after a native scroll latch swallows corrective writes", () => {
+    const handle = renderHarness();
+    const { api, viewport } = handle.current;
+    setContentHeight(viewport, 5_552);
+    // Latched viewport: while `latched` is true the scrollTop setter is inert,
+    // modeling the engine phase where a still-running native wheel/momentum
+    // scroll owns the position and a main-thread write does not take effect —
+    // the pass reads back NO advance from its own corrective attempt.
+    let top = 425;
+    let latched = false;
+    Object.defineProperty(viewport, "scrollTop", {
+      configurable: true,
+      get: () => top,
+      set: (nextTop: number) => {
+        if (latched) {
+          return;
+        }
+        const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+        top = Math.min(Math.max(0, nextTop), maxTop);
+      },
+    });
+    const capturedAnchor = { rowCount: 5, scrollHeight: 5_552, scrollTop: 425 };
+
+    // The prepend lands while the capture-driving wheel's native scroll is
+    // still latched; every writer correction in this phase is swallowed and
+    // the position erodes toward the physical top with no scroll/resize
+    // signal (the hosted trace's monotonic 355 -> ... -> 0 decay).
+    latched = true;
+    setContentHeight(viewport, 6_908);
+    act(() => {
+      api.setPinned(false);
+      api.startAboveChangeCompensation(capturedAnchor, false);
+    });
+    for (const eroded of [355, 213, 92, 0]) {
+      act(() => {
+        flushRafRound();
+      });
+      top = eroded;
+    }
+    expect(viewport.scrollTop).toBe(0);
+
+    // The native scroll completes and releases the latch. Nothing else fires:
+    // the retained non-cancelable owner itself must still hold scheduled
+    // frames and re-establish the seat, then acknowledge and drain.
+    latched = false;
+    flushRafToEmpty();
+
+    expect(handle.current.api.isPinnedToBottom).toBe(false);
+    expect(rafQueue).toEqual([]);
+    expect(viewport.scrollTop).toBe(1_781);
+  });
+
   it("protects a non-cancelable owner before its first writer pass", () => {
     const handle = renderHarness();
     const { api, viewport } = handle.current;

@@ -572,6 +572,19 @@ holds the anchored content with the measured `scrollHeight` delta in a
 stability-gated loop; the non-virtualized list relies on native browser scroll
 anchoring (`overflow-anchor`, left at its default) for the small seam.
 
+An older-history prepend installs the same kind of anchor, but as a
+non-cancelable owner: it holds the reading row's seat against upward intent and
+against the frame scheduler draining. That seat is acknowledged, and the owner
+released, only when a writer pass observes the seat held in a frame that saw no
+native scroll activity. A seated read taken while a native scroll is still
+delivering proves only the main-thread `scrollTop` at that callback — a wheel or
+momentum continuation queued before the prepend can keep eroding the position
+afterwards, and releasing on that read both stops the writer and drops the
+protection that would have re-armed it, stranding the reader at the top. Erosion
+is re-corrected through the same single writer; the retention is bounded by the
+existing quiet-extension and absolute compensation deadlines, which release the
+anchor regardless.
+
 Cards mounted above the composer (permission/question panels, slash-command
 trays, queued messages, goals, and similar dock slots) are overlays, not a
 reason to reposition existing transcript pixels. Their measured height is the
