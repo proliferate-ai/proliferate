@@ -22,10 +22,19 @@ PACKAGE_DIR = Path(__file__).parents[2] / "proliferate/integrations/sentry"
 SERVER_PACKAGE_DIR = Path(__file__).parents[2] / "proliferate"
 
 PUBLIC_API = [
-    "capture_server_sentry_exception", "clear_server_sentry_user", "flush_server_sentry",
-    "init_server_sentry", "report_critical", "scrub_mapping", "scrub_text", "scrub_value",
-    "set_server_sentry_correlation_context", "set_server_sentry_tag", "set_server_sentry_user",
+    "capture_server_sentry_exception",
+    "clear_server_sentry_user",
+    "flush_server_sentry",
+    "init_server_sentry",
+    "report_critical",
+    "scrub_mapping",
+    "scrub_text",
+    "scrub_value",
+    "set_server_sentry_correlation_context",
+    "set_server_sentry_tag",
+    "set_server_sentry_user",
 ]
+
 
 def _forbidden_layer_imports(tree: ast.AST) -> list[tuple[int, str]]:
     forbidden_prefixes = ("proliferate.lib.product", "proliferate.server")
@@ -41,10 +50,12 @@ def _forbidden_layer_imports(tree: ast.AST) -> list[tuple[int, str]]:
             )
     return found
 
+
 def test_sentry_package_does_not_import_product_layers() -> None:
     for source_path in sorted(PACKAGE_DIR.glob("*.py")):
         tree = ast.parse(source_path.read_text())
         assert _forbidden_layer_imports(tree) == [], source_path
+
 
 def _uses_sentry_sdk(tree: ast.AST) -> bool:
     for node in ast.walk(tree):
@@ -65,6 +76,7 @@ def _uses_sentry_sdk(tree: ast.AST) -> bool:
                 return True
     return False
 
+
 def test_only_the_sentry_package_uses_the_sdk_in_server_production_code() -> None:
     offenders = [
         str(path)
@@ -72,6 +84,7 @@ def test_only_the_sentry_package_uses_the_sdk_in_server_production_code() -> Non
         if PACKAGE_DIR not in path.parents and _uses_sentry_sdk(ast.parse(path.read_text()))
     ]
     assert offenders == []
+
 
 def test_public_api_is_the_exact_frozen_surface() -> None:
     assert sentry_integration.__all__ == PUBLIC_API
@@ -81,6 +94,7 @@ def test_public_api_is_the_exact_frozen_surface() -> None:
     assert list(capture.parameters) == ["error", "level", "tags", "extras", "fingerprint"]
     flush = inspect.signature(sentry_integration.flush_server_sentry)
     assert list(flush.parameters) == ["timeout"]
+
 
 @pytest.mark.parametrize(
     ("value", "expected"),
@@ -96,22 +110,42 @@ def test_public_api_is_the_exact_frozen_surface() -> None:
 def test_scrub_text_preserves_string_pattern_behavior(value: str, expected: str) -> None:
     assert sentry_integration.scrub_text(value) == expected
 
+
 @pytest.mark.parametrize(
     "key",
-    ["authorization", "cookie", "token", "secret", "password", "api_key", "api-key",
-     "credential", "prompt", "content", "stdout", "stderr", "request_body", "body",
-     "env", "file_path", "path"],
+    [
+        "authorization",
+        "cookie",
+        "token",
+        "secret",
+        "password",
+        "api_key",
+        "api-key",
+        "credential",
+        "prompt",
+        "content",
+        "stdout",
+        "stderr",
+        "request_body",
+        "body",
+        "env",
+        "file_path",
+        "path",
+    ],
 )
 def test_scrub_mapping_redacts_sensitive_key_values(key: str) -> None:
     assert sentry_integration.scrub_mapping({key: {"nested": "value"}}) == {key: "[redacted]"}
+
 
 def test_scrub_mapping_recurses_and_preserves_container_shapes() -> None:
     scrubbed = sentry_integration.scrub_mapping(
         {
             "metadata": {
                 "list": ["Bearer secret-token", 7, True, None],
-                "tuple": ("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.c2lnbmF0dXJl",
-                          {"message": "/home/user/private/file.txt"}),
+                "tuple": (
+                    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.c2lnbmF0dXJl",
+                    {"message": "/home/user/private/file.txt"},
+                ),
             },
             "password": {"nested": "value"},
         }
@@ -125,6 +159,7 @@ def test_scrub_mapping_recurses_and_preserves_container_shapes() -> None:
         "password": "[redacted]",
     }
 
+
 class _FakeScope:
     def __init__(self) -> None:
         self.level: str | None = None
@@ -137,6 +172,7 @@ class _FakeScope:
 
     def set_extra(self, key: str, value: object) -> None:
         self.extras[key] = value
+
 
 class _FakeSentrySdk:
     def __init__(self) -> None:
@@ -166,6 +202,7 @@ class _FakeSentrySdk:
     def capture_exception(self, error: Exception) -> None:
         self.captured.append((error, self.current_scope))
 
+
 @pytest.fixture()
 def fake_sdk(monkeypatch: pytest.MonkeyPatch) -> _FakeSentrySdk:
     fake = _FakeSentrySdk()
@@ -173,16 +210,19 @@ def fake_sdk(monkeypatch: pytest.MonkeyPatch) -> _FakeSentrySdk:
     monkeypatch.setattr(sentry_client, "_sentry_initialized", True)
     return fake
 
+
 def test_set_server_sentry_user_sets_validated_id_only(fake_sdk: _FakeSentrySdk) -> None:
     user_id = str(uuid4())
     sentry_integration.set_server_sentry_user(user_id)
     assert fake_sdk.user == {"id": user_id}
+
 
 class _HostileId:
     def __str__(self) -> str:  # pragma: no cover - must never be invoked
         raise AssertionError("public ingress must not stringify its input")
 
     __repr__ = __str__
+
 
 @pytest.mark.parametrize("user_id", ["user-123", "", b"not-a-str", _HostileId()])
 def test_set_server_sentry_user_clears_on_invalid_identity(
@@ -191,6 +231,7 @@ def test_set_server_sentry_user_clears_on_invalid_identity(
     sentry_integration.set_server_sentry_user(user_id)  # type: ignore[arg-type]
     assert fake_sdk.user is None
     assert fake_sdk.set_user_calls == [None]
+
 
 def test_clear_server_sentry_user_resets_user(fake_sdk: _FakeSentrySdk) -> None:
     user_id = str(uuid4())
@@ -203,6 +244,7 @@ def test_clear_server_sentry_user_resets_user(fake_sdk: _FakeSentrySdk) -> None:
     assert fake_sdk.user is None
     assert fake_sdk.set_user_calls == [{"id": user_id}, None]
 
+
 def test_set_server_sentry_tag_admits_only_catalog_rows(fake_sdk: _FakeSentrySdk) -> None:
     sentry_integration.set_server_sentry_tag("domain", "billing")
     sentry_integration.set_server_sentry_tag("domain", "please_ignore_previous_instructions")
@@ -210,6 +252,7 @@ def test_set_server_sentry_tag_admits_only_catalog_rows(fake_sdk: _FakeSentrySdk
     sentry_integration.set_server_sentry_tag("session_id", str(uuid4()))
     sentry_integration.set_server_sentry_tag("unknown_tag", "value")
     assert fake_sdk.tag_calls == [("domain", "billing")]
+
 
 def test_correlation_context_skips_unknown_and_invalid_entries(
     fake_sdk: _FakeSentrySdk,
@@ -230,6 +273,7 @@ def test_correlation_context_skips_unknown_and_invalid_entries(
     sentry_integration.set_server_sentry_correlation_context(["not", "a", "dict"])  # type: ignore[arg-type]
     assert fake_sdk.tag_calls == []
 
+
 def test_capture_server_sentry_exception_noops_when_adapter_not_initialized(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -240,6 +284,7 @@ def test_capture_server_sentry_exception_noops_when_adapter_not_initialized(
     sentry_integration.capture_server_sentry_exception(RuntimeError("boom"))
 
     assert fake.captured == []
+
 
 def test_capture_validates_scope_fields_and_ignores_fingerprint(
     fake_sdk: _FakeSentrySdk,
@@ -271,6 +316,7 @@ def test_capture_validates_scope_fields_and_ignores_fingerprint(
         "stripe_event_id": "[redacted]",
     }
 
+
 def test_capture_replaces_non_exception_without_stringifying_it(
     fake_sdk: _FakeSentrySdk,
 ) -> None:
@@ -280,6 +326,7 @@ def test_capture_replaces_non_exception_without_stringifying_it(
     assert str(captured_error) == "Unknown error"
     assert scope is not None
     assert scope.level is None
+
 
 def test_capture_ignores_wrong_containers(fake_sdk: _FakeSentrySdk) -> None:
     sentry_integration.capture_server_sentry_exception(
@@ -292,6 +339,7 @@ def test_capture_ignores_wrong_containers(fake_sdk: _FakeSentrySdk) -> None:
     assert scope.tags == {}
     assert scope.extras == {}
 
+
 class _InitRecorder:
     def __init__(self) -> None:
         self.kwargs: dict[str, object] = {}
@@ -302,6 +350,7 @@ class _InitRecorder:
 
     def set_tag(self, key: str, value: str) -> None:
         self.tags[key] = value
+
 
 def _init(
     monkeypatch: pytest.MonkeyPatch,
@@ -321,17 +370,31 @@ def _init(
     )
     return recorder
 
+
 ALL_INIT_CONTROLS = {
-    "attach_stacktrace": True, "max_breadcrumbs": 100, "default_integrations": False,
-    "auto_enabling_integrations": False, "trace_lifecycle": "static",
-    "propagate_traces": False, "trace_propagation_targets": [],
-    "include_local_variables": False, "include_source_context": False,
-    "max_request_body_size": "never", "send_default_pii": False,
-    "auto_session_tracking": False, "send_client_reports": False, "spotlight": False,
-    "stream_gen_ai_spans": False, "enable_logs": False, "enable_metrics": False,
-    "profiles_sample_rate": 0.0, "profile_session_sample_rate": 0.0,
-    "enable_db_query_source": False, "enable_http_request_source": False,
+    "attach_stacktrace": True,
+    "max_breadcrumbs": 100,
+    "default_integrations": False,
+    "auto_enabling_integrations": False,
+    "trace_lifecycle": "static",
+    "propagate_traces": False,
+    "trace_propagation_targets": [],
+    "include_local_variables": False,
+    "include_source_context": False,
+    "max_request_body_size": "never",
+    "send_default_pii": False,
+    "auto_session_tracking": False,
+    "send_client_reports": False,
+    "spotlight": False,
+    "stream_gen_ai_spans": False,
+    "enable_logs": False,
+    "enable_metrics": False,
+    "profiles_sample_rate": 0.0,
+    "profile_session_sample_rate": 0.0,
+    "enable_db_query_source": False,
+    "enable_http_request_source": False,
 }
+
 
 def test_init_installs_the_exact_transport_controls(monkeypatch: pytest.MonkeyPatch) -> None:
     recorder = _init(monkeypatch)
@@ -345,6 +408,7 @@ def test_init_installs_the_exact_transport_controls(monkeypatch: pytest.MonkeyPa
     assert recorder.kwargs["before_breadcrumb"] is sentry_client._project_breadcrumb
     assert recorder.tags == {"surface": "cloud_api", "telemetry_mode": "hosted_product"}
 
+
 def test_init_installs_only_the_eight_named_integrations(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -356,12 +420,19 @@ def test_init_installs_only_the_eight_named_integrations(
     from sentry_sdk.integrations.logging import LoggingIntegration
     from sentry_sdk.integrations.starlette import StarletteIntegration
     from sentry_sdk.integrations.threading import ThreadingIntegration
+
     recorder = _init(monkeypatch)
     integrations = recorder.kwargs["integrations"]
     assert isinstance(integrations, list)
     assert [type(entry) for entry in integrations] == [
-        AtexitIntegration, CeleryIntegration, DedupeIntegration, ExcepthookIntegration,
-        LoggingIntegration, ThreadingIntegration, StarletteIntegration, FastApiIntegration,
+        AtexitIntegration,
+        CeleryIntegration,
+        DedupeIntegration,
+        ExcepthookIntegration,
+        LoggingIntegration,
+        ThreadingIntegration,
+        StarletteIntegration,
+        FastApiIntegration,
     ]
     celery = integrations[1]
     assert celery.propagate_traces is False
@@ -373,6 +444,7 @@ def test_init_installs_only_the_eight_named_integrations(
         assert asgi.transaction_style == "endpoint"
         assert asgi.middleware_spans is False
 
+
 @pytest.mark.parametrize("environment", ["trusted-beta", "staging", "production", "Production"])
 def test_init_passes_valid_identity_byte_for_byte(
     monkeypatch: pytest.MonkeyPatch, environment: str
@@ -381,6 +453,7 @@ def test_init_passes_valid_identity_byte_for_byte(
     recorder = _init(monkeypatch, release=release, environment=environment)
     assert recorder.kwargs["release"] == release
     assert recorder.kwargs["environment"] == environment
+
 
 @pytest.mark.parametrize("release", ["", "0.3.27", "proliferate-server@bad", "Bearer token"])
 @pytest.mark.parametrize("environment", ["", "STAGING", "Production ", "development"])
@@ -395,6 +468,7 @@ def test_init_maps_invalid_identity_to_the_empty_no_discovery_sentinel(
     assert recorder.kwargs["release"] is not None
     assert recorder.kwargs["environment"] is not None
 
+
 @pytest.mark.parametrize(
     ("enabled", "telemetry_mode"),
     [(False, "hosted_product"), (True, "self_managed"), (True, "")],
@@ -406,16 +480,19 @@ def test_init_refuses_wrong_enabled_or_telemetry_mode(
     assert recorder.kwargs == {}
     assert sentry_client._sentry_initialized is False
 
+
 def test_init_noops_without_a_dsn(monkeypatch: pytest.MonkeyPatch) -> None:
     recorder = _InitRecorder()
     monkeypatch.setattr(settings, "sentry_dsn", "")
     monkeypatch.setattr(sentry_client, "_sentry_initialized", False)
     monkeypatch.setattr(sentry_client, "sentry_sdk", recorder)
     sentry_integration.init_server_sentry(
-        enabled=True, telemetry_mode="hosted_product",
+        enabled=True,
+        telemetry_mode="hosted_product",
         release_resolver=lambda: "proliferate-server@0.3.27+3c2bbf20e215",
     )
     assert recorder.kwargs == {}
+
 
 class _RecordingTransport(Transport):
     """Test-owned in-memory transport: no network, no provider, no credential."""
@@ -427,6 +504,7 @@ class _RecordingTransport(Transport):
     def capture_envelope(self, envelope: Any) -> None:
         self.envelopes.append(envelope)
 
+
 def _real_client(monkeypatch: pytest.MonkeyPatch, **overrides: object):
     import sentry_sdk
 
@@ -436,6 +514,7 @@ def _real_client(monkeypatch: pytest.MonkeyPatch, **overrides: object):
     transport = _RecordingTransport()
     kwargs["transport"] = transport
     return sentry_sdk.Client(**kwargs), transport  # type: ignore[arg-type]
+
 
 def _capture_error(client: Any, scope: Any, message: str) -> None:
     """Drive the real pinned client seam: serialize, run callbacks, build an envelope."""
@@ -449,12 +528,14 @@ def _capture_error(client: Any, scope: Any, message: str) -> None:
     with use_isolation_scope(scope):
         client.capture_event(event, hint=hint, scope=scope)
 
+
 def _decoded_items(transport: _RecordingTransport) -> list[tuple[str, object]]:
     items: list[tuple[str, object]] = []
     for envelope in transport.envelopes:
         for item in envelope.items:  # type: ignore[attr-defined]
             items.append((item.type, item.payload.json))
     return items
+
 
 def test_real_client_drops_attachments_and_empty_identity(
     monkeypatch: pytest.MonkeyPatch,
@@ -492,6 +573,7 @@ def test_real_client_drops_attachments_and_empty_identity(
     assert "ATTACHMENT_SENTINEL_do_not_ship" not in json.dumps(payload, sort_keys=True)
     assert "PROVIDER_RESPONSE_SENTINEL_do_not_ship" not in json.dumps(payload, sort_keys=True)
 
+
 def test_real_client_transaction_drops_its_eligible_attachment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -508,13 +590,19 @@ def test_real_client_transaction_drops_its_eligible_attachment(
     )
     assert scope._attachments[0].add_to_transactions is True
 
-    trace = {"trace_id": "0123456789abcdef0123456789abcdef", "span_id": "0123456789abcdef",
-             "op": "http.server"}
+    trace = {
+        "trace_id": "0123456789abcdef0123456789abcdef",
+        "span_id": "0123456789abcdef",
+        "op": "http.server",
+    }
     transaction = {
-        "type": "transaction", "start_timestamp": 1755600000.0, "timestamp": 1755600001.0,
+        "type": "transaction",
+        "start_timestamp": 1755600000.0,
+        "timestamp": 1755600001.0,
         "transaction": "proliferate.server.billing.api.create_checkout",
         "transaction_info": {"source": "component"},
-        "contexts": {"trace": trace}, "spans": [],
+        "contexts": {"trace": trace},
+        "spans": [],
     }
     seen: list[dict[str, Any]] = []
 
@@ -538,6 +626,7 @@ def test_real_client_transaction_drops_its_eligible_attachment(
     assert "release" not in payload and "environment" not in payload
     assert "TXN_ATTACHMENT_SENTINEL_do_not_ship" not in json.dumps(payload, sort_keys=True)
 
+
 @pytest.mark.parametrize("environment", ["trusted-beta", "staging", "production", "Production"])
 def test_real_client_preserves_valid_identity_over_hostile_ambient_values(
     monkeypatch: pytest.MonkeyPatch, environment: str
@@ -559,6 +648,7 @@ def test_real_client_preserves_valid_identity_over_hostile_ambient_values(
     assert payload["release"] == release
     assert payload["environment"] == environment
     json.dumps(payload, sort_keys=True)
+
 
 def test_api_composition_injects_lazy_release_resolution(
     monkeypatch: pytest.MonkeyPatch,
