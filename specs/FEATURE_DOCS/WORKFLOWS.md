@@ -78,9 +78,23 @@ migration.
 
 ## Gen-2 follow-up: existing-workspace placement and parallel nodes
 
-This section is current operating truth for the two additive capabilities the Follow-up Workflows ADR bolted onto the merged gen-2 engine: running a workflow run inside a workspace the user already owns (Feature A), and fanning one node out to N parallel sessions that each carry their own authored prompt (Feature B). They compose into the motivating case, a reviewer panel (a correctness, security, and perf reviewer) running as one parallel node in an existing PR worktree.
+This section is current operating truth for the two additive capabilities the
+Follow-up Workflows ADR bolted onto the merged gen-2 engine: running a workflow
+run inside a workspace the user already owns (Feature A), and fanning one node
+out to N parallel sessions that each carry their own authored prompt (Feature
+B). They compose into the motivating case, a reviewer panel (a correctness,
+security, and perf reviewer) running as one parallel node in an existing PR
+worktree.
 
-It owns only the follow-up delta. The gen-2 base engine it extends (the per-run actor behind `WorkflowManager`, the pure transition table, the node/session model, the client-delivered invocation snapshot) is still documented by the delivery specs under [`../../delivery/workflows-gen2/`](../../delivery/workflows-gen2/) until the full gen-1 rewrite lands; this section never restates that base, it names the seam it changed. Workspace materialization for a fresh worktree stays owned by [Workspace Placement](#workspace-placement); this section owns only the third placement mode that adopts an existing workspace instead.
+It owns only the follow-up delta. The gen-2 base engine it extends (the per-run
+actor behind `WorkflowManager`, the pure transition table, the node/session
+model, the client-delivered invocation snapshot) is still documented by the
+delivery specs under
+[`../../delivery/workflows-gen2/`](../../delivery/workflows-gen2/) until the
+full gen-1 rewrite lands; this section never restates that base, it names the
+seam it changed. Workspace materialization for a fresh worktree stays owned by
+[Workspace Placement](#workspace-placement); this section owns only the third
+placement mode that adopts an existing workspace instead.
 
 The follow-up shipped as a linear ladder of rungs, each stacked on the prior:
 
@@ -94,7 +108,10 @@ The follow-up shipped as a linear ladder of rungs, each stacked on the prior:
 | 6 | Per-leg redo | [`transition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/transition.rs), [`store.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/store.rs) |
 | 7 | The ledger on the wire (projection, SDK, run view) | [`projection.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/projection.rs), [`workflow-runs-v2.ts`](../../anyharness/sdk/src/types/workflow-runs-v2.ts), [`run-view-model.ts`](../../apps/packages/product-client/src/domain/workflows/run-view-model.ts) |
 
-Read with the [gen-2 delivery specs](../../delivery/workflows-gen2/) for the base engine, [Workspace Placement](#workspace-placement) for fresh-worktree materialization, and [`../TESTING/README.md`](../TESTING/README.md) for the test tiers cited below.
+Read with the [gen-2 delivery specs](../../delivery/workflows-gen2/) for the base
+engine, [Workspace Placement](#workspace-placement) for fresh-worktree
+materialization, and [`../TESTING/README.md`](../TESTING/README.md) for the test
+tiers cited below.
 
 ### Code map
 
@@ -126,9 +143,16 @@ apps/packages/product-client/src/
 
 ### Run-scoped context docs (rung 1)
 
-> **A run owns its own context directory.** Context docs live under `.proliferate/context/<runId>/NN-slug.md`, not the old flat `.proliferate/context/NN-slug.md`, so two runs sharing one workspace never collide on the chain-index filename. The run-scoped path is minted once by `run_context_dir_relative(run_id)` ([`render.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/render.rs)).
+> **A run owns its own context directory.** Context docs live under
+> `.proliferate/context/<runId>/NN-slug.md`, not the old flat
+> `.proliferate/context/NN-slug.md`, so two runs sharing one workspace never
+> collide on the chain-index filename. The run-scoped path is minted once by
+> `run_context_dir_relative(run_id)`
+> ([`render.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/render.rs)).
 
-The ADR budgeted three consumers of the path constant; the as-built change has five, because the client and a release scenario also construct the path (ADR erratum #1). All five agree on the run subfolder:
+The ADR budgeted three consumers of the path constant; the as-built change has
+five, because the client and a release scenario also construct the path (ADR
+erratum #1). All five agree on the run subfolder:
 
 | Consumer | Role |
 | --- | --- |
@@ -138,11 +162,13 @@ The ADR budgeted three consumers of the path constant; the as-built change has f
 | [`use-workflow-doc-open.ts`](../../apps/packages/product-client/src/hooks/workflows/ui/use-workflow-doc-open.ts) | opens a doc by building `<dir>/<runId>/<filename>` from the DTO's existing `runId`, no contract change |
 | [`t3-wf-1.ts`](../../tests/release/src/scenarios/t3-wf-1.ts) | the Tier-3 release scenario asserts the on-disk run-scoped path |
 
-Migration is nil: context docs are ephemeral, gitignored run-workspace files; old flat-path runs are terminal by the time this ships.
+Migration is nil: context docs are ephemeral, gitignored run-workspace files;
+old flat-path runs are terminal by the time this ships.
 
 ### Existing-workspace placement (rung 2, ruling F-A1)
 
-A run's placement is one of three modes on `PlacementMode` ([`definition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/definition.rs)):
+A run's placement is one of three modes on `PlacementMode`
+([`definition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/definition.rs)):
 
 | Mode | Workspace | Compensation on failure |
 | --- | --- | --- |
@@ -150,13 +176,35 @@ A run's placement is one of three modes on `PlacementMode` ([`definition.rs`](..
 | `RepoRoot` | reuses the repo root's workspace | leaves the reused workspace |
 | `ExistingWorkspace` | adopts a `workspaceId` the caller names | no-op; never touches an adopted workspace |
 
-`ExistingWorkspace` carries a required `workspaceId` (validated at [`definition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/definition.rs); `workspaceId` is rejected for any other mode). Adoption skips `ensure_workflow_workspace` entirely and validates that the named workspace exists, is repo-backed, and is alive; it records the run-to-workspace association on `workflow_runs.workspace_id` alone and never rewrites the workspace's creator context.
+`ExistingWorkspace` carries a required `workspaceId` (validated at
+[`definition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/definition.rs);
+`workspaceId` is rejected for any other mode). Adoption skips
+`ensure_workflow_workspace` entirely and validates that the named workspace
+exists, is repo-backed, and is alive; it records the run-to-workspace
+association on `workflow_runs.workspace_id` alone and never rewrites the
+workspace's creator context.
 
-> **Occupancy is re-scoped, not relaxed.** `enforces_exclusive_occupancy()` keeps the one-live-run law for `Worktree` and `RepoRoot`, and admits N concurrent runs only under `ExistingWorkspace`, where the user explicitly chose to stack work onto a workspace they own ([`definition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/definition.rs)). Both enforcement halves, the route pre-check and the store's in-transaction re-check, apply exactly this predicate, so the race protection survives the re-scoping.
+> **Occupancy is re-scoped, not relaxed.** `enforces_exclusive_occupancy()`
+> keeps the one-live-run law for `Worktree` and `RepoRoot`, and admits N
+> concurrent runs only under `ExistingWorkspace`, where the user explicitly
+> chose to stack work onto a workspace they own
+> ([`definition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/definition.rs)).
+> Both enforcement halves, the route pre-check and the store's in-transaction
+> re-check, apply exactly this predicate, so the race protection survives the
+> re-scoping.
 
-> **Concurrent runs share one working tree with no write isolation.** Sessions of concurrent runs, and the workspace's own chat sessions, coexist on one git index and working tree; coordinating write-heavy concurrent workflows is the caller's decision. The run-accept OpenAPI description states this doctrine verbatim ([`workflow_runs.rs`](../../anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs)).
+> **Concurrent runs share one working tree with no write isolation.** Sessions
+> of concurrent runs, and the workspace's own chat sessions, coexist on one git
+> index and working tree; coordinating write-heavy concurrent workflows is the
+> caller's decision. The run-accept OpenAPI description states this doctrine
+> verbatim
+> ([`workflow_runs.rs`](../../anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs)).
 
-Repository-binding is deliberately not a placement constraint: the definition's `repo_root_id` versus the adopted workspace's is left **unchecked** (ADR erratum #2, ruled "it doesn't matter"), so cross-repo adoption is acceptable. The in-code comment at the adoption block is the durable record of that intent ([`workflow_runs.rs`](../../anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs)).
+Repository-binding is deliberately not a placement constraint: the definition's
+`repo_root_id` versus the adopted workspace's is left **unchecked** (ADR
+erratum #2, ruled "it doesn't matter"), so cross-repo adoption is acceptable.
+The in-code comment at the adoption block is the durable record of that intent
+([`workflow_runs.rs`](../../anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs)).
 
 Stable placement errors:
 
@@ -166,17 +214,31 @@ Stable placement errors:
 | `existing_workspace` names an unknown workspace | `404 WORKFLOW_WORKSPACE_NOT_FOUND` |
 | Named workspace is not repo-backed / not alive | `409 WORKFLOW_WORKSPACE_NOT_ELIGIBLE` |
 
-The as-built codes carry the `WORKFLOW_` prefix; the ADR's drafted names (`WORKSPACE_NOT_FOUND` / `WORKSPACE_NOT_ELIGIBLE`) were namespaced at implementation time and are the same errors.
+The as-built codes carry the `WORKFLOW_` prefix; the ADR's drafted names
+(`WORKSPACE_NOT_FOUND` / `WORKSPACE_NOT_ELIGIBLE`) were namespaced at
+implementation time and are the same errors.
 
 ### Concurrent-run UI (rung 3, ruling F-A2)
 
-> **At most four run rails render at once, and no waiting run is ever hidden silently.** The workspace pane shows one interactive rail per concurrent run, newest-first with active runs prioritized, capped at four; the rest sit behind a paging overflow line, and any run that hits a gate, needs human review, or fails is surfaced rather than merely reachable ([`WorkflowPane.tsx`](../../apps/packages/product-client/src/components/workflows/run-view/WorkflowPane.tsx)).
+> **At most four run rails render at once, and no waiting run is ever hidden
+> silently.** The workspace pane shows one interactive rail per concurrent run,
+> newest-first with active runs prioritized, capped at four; the rest sit behind
+> a paging overflow line, and any run that hits a gate, needs human review, or
+> fails is surfaced rather than merely reachable
+> ([`WorkflowPane.tsx`](../../apps/packages/product-client/src/components/workflows/run-view/WorkflowPane.tsx)).
 
-The cap resolves a collision with the `unvirtualizedLongLists` census lint: each rail is a heavy interactive panel, so virtualization was rejected on the merits and a bounded list was chosen over a founder-gated census exception (ADR erratum #3). The single-run pane renders byte-identically to before the feature.
+The cap resolves a collision with the `unvirtualizedLongLists` census lint: each
+rail is a heavy interactive panel, so virtualization was rejected on the merits
+and a bounded list was chosen over a founder-gated census exception (ADR erratum
+#3). The single-run pane renders byte-identically to before the feature.
 
 ### Parallel nodes: the fan-in ledger (rung 4, rulings F1 and F3)
 
-The question the ledger answers is "which of a parallel node's N sessions have already finished," and it must be answerable from SQLite after a crash, never from actor memory. The durable answer is one row per leg in `workflow_run_node_sessions` ([`0076_workflow_run_node_sessions.sql`](../../anyharness/crates/anyharness-lib/src/persistence/sql/0076_workflow_run_node_sessions.sql)):
+The question the ledger answers is "which of a parallel node's N sessions have
+already finished," and it must be answerable from SQLite after a crash, never
+from actor memory. The durable answer is one row per leg in
+`workflow_run_node_sessions`
+([`0076_workflow_run_node_sessions.sql`](../../anyharness/crates/anyharness-lib/src/persistence/sql/0076_workflow_run_node_sessions.sql)):
 
 ```text
 node_row_id  TEXT  -> workflow_run_nodes(id) ON DELETE CASCADE
@@ -189,23 +251,64 @@ completed_at TEXT
 UNIQUE (node_row_id, leg_index)
 ```
 
-The node row's scalar `session_id` stays the representative (leg 0) session for back-compat. The migration is numbered 0076 (0075 is reserved for `workspace_checkpoints`), and until the grammar could express N > 1 legs, exactly one row existed per node (leg 0), so every real definition behaved identically to the pre-ledger engine ([`migrations.rs`](../../anyharness/crates/anyharness-lib/src/persistence/migrations.rs)).
+The node row's scalar `session_id` stays the representative (leg 0) session for
+back-compat. The migration is numbered 0076 (0075 is reserved for
+`workspace_checkpoints`), and until the grammar could express N > 1 legs,
+exactly one row existed per node (leg 0), so every real definition behaved
+identically to the pre-ledger engine
+([`migrations.rs`](../../anyharness/crates/anyharness-lib/src/persistence/migrations.rs)).
 
-`TurnFinished` grew a `session_id` so every finish names the leg that produced it; the 1:1 node-row shortcut is never relied on for N > 1.
+`TurnFinished` grew a `session_id` so every finish names the leg that produced
+it; the 1:1 node-row shortcut is never relied on for N > 1.
 
-> **A parallel node waits for every leg and fails iff any leg failed (F1).** Each terminal turn arm records the leg's outcome to its ledger row and holds; the aggregation branch fires only on the last outstanding leg. `RunState` carries the loaded ledger slice (`legs_total` / `legs_done`) so the pure transition table can answer completion without touching the store ([`transition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/transition.rs)). The existing harness caps (`MaxTokens` / `MaxTurnRequests`, which arrive as `HarnessCap`) bound one hung leg from holding the node open forever; a per-node timeout is a deferred exit, not built.
+> **A parallel node waits for every leg and fails iff any leg failed (F1).**
+> Each terminal turn arm records the leg's outcome to its ledger row and holds;
+> the aggregation branch fires only on the last outstanding leg. `RunState`
+> carries the loaded ledger slice (`legs_total` / `legs_done`) so the pure
+> transition table can answer completion without touching the store
+> ([`transition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/transition.rs)).
+> The existing harness caps (`MaxTokens` / `MaxTurnRequests`, which arrive as
+> `HarnessCap`) bound one hung leg from holding the node open forever; a
+> per-node timeout is a deferred exit, not built.
 
-> **The undo window stamps at node completion, not first-of-N (F3).** For a parallel node the `first_turn_finished_at` stamp is written inside the transition that flips the node to completed, not by the per-report `note_first_turn_finished` call, so the window cannot close while N-1 legs are still running; for a one-leg node first equals last and the behavior is unchanged ([`store.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/store.rs)).
+> **The undo window stamps at node completion, not first-of-N (F3).** For a
+> parallel node the `first_turn_finished_at` stamp is written inside the
+> transition that flips the node to completed, not by the per-report
+> `note_first_turn_finished` call, so the window cannot close while N-1 legs are
+> still running; for a one-leg node first equals last and the behavior is
+> unchanged ([`store.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/store.rs)).
 
-A run-terminal Cancel stamps **every** running ledger leg terminal, adhoc rows included, via `cancel_all_run_legs_tx`, so no leg is left dangling when a run is cancelled ([`store.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/store.rs)).
+A run-terminal Cancel stamps **every** running ledger leg terminal, adhoc rows
+included, via `cancel_all_run_legs_tx`, so no leg is left dangling when a run is
+cancelled ([`store.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/store.rs)).
 
 ### Parallel nodes: per-leg prompts and fan-out (rung 5, rulings F5 and F6)
 
-Ruling F5 reversed the drafted "one prompt fanned N times": a node is an ordered list of authored leg prompts, one per session, so heterogeneous panels are v1 scope. The chain stays linear at node level; legs have no edges, ordering, or inter-leg dependencies.
+Ruling F5 reversed the drafted "one prompt fanned N times": a node is an ordered
+list of authored leg prompts, one per session, so heterogeneous panels are v1
+scope. The chain stays linear at node level; legs have no edges, ordering, or
+inter-leg dependencies.
 
-> **A node's `legs` is either absent (today's 1:1 node/session) or a 2..=8 list, and `legs[0].prompt` equals the node's scalar `prompt`.** Leg 0 is the representative session and `leg_index` addresses `legs[i]` uniformly, so every consumer of the scalar prompt stays correct without knowing legs exist (`MAX_NODE_LEGS = 8`, [`definition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/definition.rs)). The invariant is pinned on all three grammar planes: runtime ([`definition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/definition.rs)), control plane ([`models_v2.py`](../../server/proliferate/server/workflows/models_v2.py), a `min_length=2, max_length=8` list with a `prompt == legs[0].prompt` validator), and the client draft ([`workflow-builder-draft.ts`](../../apps/packages/product-client/src/lib/domain/workflows/workflow-builder-draft.ts)).
+> **A node's `legs` is either absent (today's 1:1 node/session) or a 2..=8
+> list, and `legs[0].prompt` equals the node's scalar `prompt`.** Leg 0 is the
+> representative session and `leg_index` addresses `legs[i]` uniformly, so every
+> consumer of the scalar prompt stays correct without knowing legs exist
+> (`MAX_NODE_LEGS = 8`,
+> [`definition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/definition.rs)).
+> The invariant is pinned on all three grammar planes: runtime
+> ([`definition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/definition.rs)),
+> control plane
+> ([`models_v2.py`](../../server/proliferate/server/workflows/models_v2.py), a
+> `min_length=2, max_length=8` list with a `prompt == legs[0].prompt`
+> validator), and the client draft
+> ([`workflow-builder-draft.ts`](../../apps/packages/product-client/src/lib/domain/workflows/workflow-builder-draft.ts)).
 
-Fan-out (`launch_legs` in [`launch.rs`](../../anyharness/crates/anyharness-lib/src/live/workflows/launch.rs)) renders one envelope per authored prompt against the shared doc set and inputs, mints one session per leg, and inserts N ledger rows keyed by `leg_index` in the same transaction that stamps the representative session; any failure compensates every session already minted so no half-born leg lingers.
+Fan-out (`launch_legs` in
+[`launch.rs`](../../anyharness/crates/anyharness-lib/src/live/workflows/launch.rs))
+renders one envelope per authored prompt against the shared doc set and inputs,
+mints one session per leg, and inserts N ledger rows keyed by `leg_index` in the
+same transaction that stamps the representative session; any failure compensates
+every session already minted so no half-born leg lingers.
 
 ```mermaid
 flowchart TD
@@ -218,41 +321,101 @@ flowchart TD
     A -->|no| C["aggregate: fail iff any leg failed, else complete"]
 ```
 
-> **Crash-resume re-fans-out all N legs (F6).** The boot fence parks a running node node-granularly and disposes nothing; `ResumeNode` then truncates the node's ledger and relaunches every leg from the frozen definition, using the same fan-out vocabulary as whole-node redo ([`transition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/transition.rs)). This is deliberately asymmetric with per-leg redo: crash-resume re-runs everything, only manual redo can target one leg.
+> **Crash-resume re-fans-out all N legs (F6).** The boot fence parks a running
+> node node-granularly and disposes nothing; `ResumeNode` then truncates the
+> node's ledger and relaunches every leg from the frozen definition, using the
+> same fan-out vocabulary as whole-node redo
+> ([`transition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/transition.rs)).
+> This is deliberately asymmetric with per-leg redo: crash-resume re-runs
+> everything, only manual redo can target one leg.
 
-The builder authors leg prompts through `addLeg` / `removeLeg` / `updateLeg` ([`workflow-builder-draft.ts`](../../apps/packages/product-client/src/lib/domain/workflows/workflow-builder-draft.ts)): `addLeg` seeds a 2-leg fan-out from the current prompt (leg 0 mirrors it, leg 1 blank) and grows up to eight; `removeLeg` back down to one leg collapses `legs` away entirely and keeps the survivor's text as the scalar prompt; editing leg 0 mirrors into `node.prompt` to hold the invariant. Per-leg prompt typing coalesces into one undo entry per leg under the coalesce key `node:<id>:leg:<index>`, so a burst of keystrokes is one Cmd+Z, not many.
+The builder authors leg prompts through `addLeg` / `removeLeg` / `updateLeg`
+([`workflow-builder-draft.ts`](../../apps/packages/product-client/src/lib/domain/workflows/workflow-builder-draft.ts)):
+`addLeg` seeds a 2-leg fan-out from the current prompt (leg 0 mirrors it, leg 1
+blank) and grows up to eight; `removeLeg` back down to one leg collapses `legs`
+away entirely and keeps the survivor's text as the scalar prompt; editing leg 0
+mirrors into `node.prompt` to hold the invariant. Per-leg prompt typing coalesces
+into one undo entry per leg under the coalesce key `node:<id>:leg:<index>`, so a
+burst of keystrokes is one Cmd+Z, not many.
 
 ### Per-leg redo (rung 6, ruling F2)
 
-Ruling F2 reversed whole-node-only redo: the fail-redo verb accepts an optional leg identifier.
+Ruling F2 reversed whole-node-only redo: the fail-redo verb accepts an optional
+leg identifier.
 
-- **Leg-targeted** redo is the `RedoLeg` transition ([`transition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/transition.rs)): it disposes exactly that leg's session, replaces that one ledger row (fresh row, same `leg_index`, superseded row kept terminal for audit), and relaunches only that leg's prompt through the `DisposeSessionThenStartLeg` side effect ([`store.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/store.rs)). `relaunch_leg` reads the addressed leg's prompt from the frozen definition ([`launch.rs`](../../anyharness/crates/anyharness-lib/src/live/workflows/launch.rs)); sibling legs are untouched and the node stays held until the redone leg reaches the aggregation branch.
-- **Untargeted** redo is the bulk case: a whole-node redo of a running parallel node disposes **all** live legs (`DisposeSessionsThenStartLegs`), resets the ledger, and relaunches every leg.
+- **Leg-targeted** redo is the `RedoLeg` transition
+  ([`transition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/transition.rs)):
+  it disposes exactly that leg's session, replaces that one ledger row (fresh
+  row, same `leg_index`, superseded row kept terminal for audit), and relaunches
+  only that leg's prompt through the `DisposeSessionThenStartLeg` side effect
+  ([`store.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/store.rs)).
+  `relaunch_leg` reads the addressed leg's prompt from the frozen definition
+  ([`launch.rs`](../../anyharness/crates/anyharness-lib/src/live/workflows/launch.rs));
+  sibling legs are untouched and the node stays held until the redone leg
+  reaches the aggregation branch.
+- **Untargeted** redo is the bulk case: a whole-node redo of a running parallel
+  node disposes **all** live legs (`DisposeSessionsThenStartLegs`), resets the
+  ledger, and relaunches every leg.
 
-Only failed or terminal legs are redoable while the node is held; redo of a still-running leg is rejected with a stable 409. A single leg's relaunch failure stamps only its own ledger row terminal (and disposes its own running siblings under the whole-node shape), never a sibling's row ([`store.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/store.rs)).
+Only failed or terminal legs are redoable while the node is held; redo of a
+still-running leg is rejected with a stable 409. A single leg's relaunch failure
+stamps only its own ledger row terminal (and disposes its own running siblings
+under the whole-node shape), never a sibling's row
+([`store.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/store.rs)).
 
 ### The ledger on the wire (rung 7, ruling F4)
 
-The fan-in ledger surfaces to clients as an additive, read-only rollup. The run projection carries `NodeView.sessions`, always emitted (an empty array for a node that has not launched a leg), with the scalar `session_id` kept as the representative for back-compat ([`projection.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/projection.rs)). The SDK types are `WorkflowLegStatusV2` and the per-node `sessions` list on the node type ([`workflow-runs-v2.ts`](../../anyharness/sdk/src/types/workflow-runs-v2.ts)); the generated OpenAPI artifacts were regenerated to match.
+The fan-in ledger surfaces to clients as an additive, read-only rollup. The run
+projection carries `NodeView.sessions`, always emitted (an empty array for a node
+that has not launched a leg), with the scalar `session_id` kept as the
+representative for back-compat
+([`projection.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/projection.rs)).
+The SDK types are `WorkflowLegStatusV2` and the per-node `sessions` list on the
+node type
+([`workflow-runs-v2.ts`](../../anyharness/sdk/src/types/workflow-runs-v2.ts));
+the generated OpenAPI artifacts were regenerated to match.
 
-The client computes the rollup with `workflowNodeLegRollup` ([`run-view-model.ts`](../../apps/packages/product-client/src/domain/workflows/run-view-model.ts)) and renders a "N/M done" progress row with per-leg status on the node card ([`WorkflowGraphNodeCard.tsx`](../../apps/packages/product-client/src/components/workflows/run-view/WorkflowGraphNodeCard.tsx)). A one-leg node returns no rollup, so "1/1 done" never shows.
+The client computes the rollup with `workflowNodeLegRollup`
+([`run-view-model.ts`](../../apps/packages/product-client/src/domain/workflows/run-view-model.ts))
+and renders a "N/M done" progress row with per-leg status on the node card
+([`WorkflowGraphNodeCard.tsx`](../../apps/packages/product-client/src/components/workflows/run-view/WorkflowGraphNodeCard.tsx)).
+A one-leg node returns no rollup, so "1/1 done" never shows.
 
-> **The ledger required a runtime projection field, not a client/SDK-only change.** The frozen ladder called rung 7 "client/SDK-only," but the SDK `sessions` list is generated from the Rust `NodeView.sessions` projection, so a small additive Rust field was unavoidable (wire erratum). The change is still additive and back-compatible; only the "revert is client-only" note was inaccurate.
+> **The ledger required a runtime projection field, not a client/SDK-only
+> change.** The frozen ladder called rung 7 "client/SDK-only," but the SDK
+> `sessions` list is generated from the Rust `NodeView.sessions` projection, so
+> a small additive Rust field was unavoidable (wire erratum). The change is
+> still additive and back-compatible; only the "revert is client-only" note was
+> inaccurate.
 
 ### Errata against the frozen ladder
 
-The as-built chain matches the frozen ADR except for the errata the ADR itself records (five context-doc consumers not three; `repo_root_id` unchecked; the run-rail cap at four) and two implementation notes:
+The as-built chain matches the frozen ADR except for the errata the ADR itself
+records (five context-doc consumers not three; `repo_root_id` unchecked; the
+run-rail cap at four) and two implementation notes:
 
-- **Stable error names carry the `WORKFLOW_` prefix** where the ADR drafted the bare `WORKSPACE_NOT_FOUND` / `WORKSPACE_NOT_ELIGIBLE`. Same errors, namespaced.
-- **Rung 7 needed a Rust projection field** despite the ladder's "client/SDK-only" label (see the wire erratum above).
+- **Stable error names carry the `WORKFLOW_` prefix** where the ADR drafted the
+  bare `WORKSPACE_NOT_FOUND` / `WORKSPACE_NOT_ELIGIBLE`. Same errors, namespaced.
+- **Rung 7 needed a Rust projection field** despite the ladder's "client/SDK-only"
+  label (see the wire erratum above).
 
 Neither changes the settled architecture.
 
 ### Current gaps
 
-- **Fan-out leg sessions are untitled.** Only the single-session launch path titles a session "NN Node <id>" (`node_session_title` is called from `link_start_and_dispatch`, not from the per-leg `launch_legs` dispatch loop, [`launch.rs`](../../anyharness/crates/anyharness-lib/src/live/workflows/launch.rs)). A fan-out leg's session shows no chain-index title yet.
-- **Per-leg prompt editing on redo is not included.** `RedoLeg` relaunches the addressed leg from the frozen definition's stored prompt; there is no way to edit a leg's prompt as part of a redo. This was left as a parked founder question.
-- **Chat-side context-doc mentions (rung 8) ship off this chain.** The composer `contextDoc` mention kind is delivered separately (PR #2037) and is not part of the rung 1..7 stack this document is based on, so it is described in that PR's spec, not linked here.
+- **Fan-out leg sessions are untitled.** Only the single-session launch path
+  titles a session "NN Node <id>" (`node_session_title` is called from
+  `link_start_and_dispatch`, not from the per-leg `launch_legs` dispatch loop,
+  [`launch.rs`](../../anyharness/crates/anyharness-lib/src/live/workflows/launch.rs)).
+  A fan-out leg's session shows no chain-index title yet.
+- **Per-leg prompt editing on redo is not included.** `RedoLeg` relaunches the
+  addressed leg from the frozen definition's stored prompt; there is no way to
+  edit a leg's prompt as part of a redo. This was left as a parked founder
+  question.
+- **Chat-side context-doc mentions (rung 8) ship off this chain.** The composer
+  `contextDoc` mention kind is delivered separately (PR #2037) and is not part
+  of the rung 1..7 stack this document is based on, so it is described in that
+  PR's spec, not linked here.
 
 ### Failure and observability
 
@@ -265,7 +428,12 @@ Neither changes the settled architecture.
 | Crash mid-parallel-node | boot fence parks the node; resume truncates the ledger and re-fans-out all N (F6) | automatic on restart |
 | Run cancelled mid-fan-out | every running ledger leg stamped terminal (`cancel_all_run_legs_tx`) | terminal |
 
-Counters the ADR names for these paths (`workflow.placement.conflict`, `workflow.parallel.leg_finish`, `workflow.parallel.node_complete`, `workflow.parallel.redo`, `workflow.resume.refanout`) and the `legs_total`/`legs_done` projection let dashboards read fan-in state without log archaeology; see [`../OBSERVABILITY.md`](../OBSERVABILITY.md) for the per-PR observability standard.
+Counters the ADR names for these paths (`workflow.placement.conflict`,
+`workflow.parallel.leg_finish`, `workflow.parallel.node_complete`,
+`workflow.parallel.redo`, `workflow.resume.refanout`) and the
+`legs_total`/`legs_done` projection let dashboards read fan-in state without log
+archaeology; see [`../OBSERVABILITY.md`](../OBSERVABILITY.md) for the per-PR
+observability standard.
 
 ## Overview
 
