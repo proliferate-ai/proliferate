@@ -2,8 +2,9 @@
 
 Status: current procedure
 
-Use this procedure to verify hosted-client analytics and replay routing without
-changing project configuration. The system contract is
+Use this procedure to verify hosted-client analytics without changing project
+configuration. Session replay is source-disabled on every client surface, so
+there is no replay routing to verify or flip. The system contract is
 [PostHog](../../../specs/codebase/systems/engineering/analytics/posthog.md).
 
 ## Applicability
@@ -13,7 +14,7 @@ changing project configuration. The system contract is
 - **Self-hosters:** packaged Desktop does not initialize PostHog when pointed
   at a self-managed API. A fork that supplies its own Web/Mobile PostHog
   configuration owns its provider project and should still preserve the code
-  privacy and replay defaults.
+  privacy posture and the source-disabled replay boundary.
 
 ## Secret Safety
 
@@ -26,8 +27,8 @@ network requests in screenshots.
 ## Read-Only Verification
 
 1. Identify the exact client build and surface. Record its canonical release
-   id, environment, and whether telemetry/replay gates were enabled without
-   recording their secret values.
+   id, environment, and whether the telemetry gate was enabled, without
+   recording any secret value. There is no replay gate on any surface.
 2. For a named Desktop local profile, inspect only the non-secret runtime
    routing fields in:
 
@@ -48,15 +49,10 @@ network requests in screenshots.
    - sign-out produces a new anonymous identity on the next session;
    - no prompt, transcript, repo name, file path, raw URL, terminal text,
      token, or raw error is present.
-5. Desktop and Web replay are expected to be absent. Desktop and Web PostHog
-   session recording are source-disabled, so any Desktop or Web replay observed
-   in the provider is a code-or-provider truth mismatch to triage, not a gate to
-   look for or enable.
-   Synthetic replay verification applies only to a surface whose reviewed
-   source currently permits replay. For such a surface, verify input masking
-   and block/mask selectors with synthetic data only, and inspect whether
-   recorded page metadata contains workflow, workspace, or chat route ids;
-   that is a known current gap even though event URL properties are scrubbed.
+5. Replay is expected to be absent on every surface. Desktop, Web, and Mobile
+   PostHog session recording are all source-disabled and expose no toggle in any
+   build, environment, or project setting, so replay observed in the provider is
+   a code-or-provider truth mismatch to triage.
 
 ## Diagnose Missing Evidence
 
@@ -66,13 +62,11 @@ network requests in screenshots.
   in `apps/desktop/src/lib/integrations/telemetry/client.ts`.
 - Web/Mobile views missing: verify the provider initialized and the normalized
   route/screen hook ran; raw paths are intentionally not capture values.
-- Replay missing on a surface whose source permits it: confirm that surface's
-  separate replay gate. Mobile also needs the optional native replay package in
-  that build. Missing Desktop or Web replay is the expected result, not a
-  defect.
+- Replay missing anywhere: expected, not a defect; there is no gate to confirm.
 - Provider data differs from checked-in behavior: capture event name, surface,
   environment, release, observed time, and a redacted provider URL. Route
   ingestion or deduplication defects to Issue Lifecycle.
 
-Any project setting, replay gate, retention, person/profile, or provider write
-requires a separate reviewed change. This procedure does not authorize one.
+Any project setting, retention, person/profile, or provider write requires a
+separate reviewed change; re-enabling replay additionally requires a synthetic
+privacy qualification. This procedure does not authorize one.

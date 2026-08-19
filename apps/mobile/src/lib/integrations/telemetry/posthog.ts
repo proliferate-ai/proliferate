@@ -39,17 +39,10 @@ export function initializeMobilePostHog(config: MobilePostHogInitConfig): void {
     host: config.posthog.apiHost,
     captureAppLifecycleEvents: false,
     before_send: scrubPostHogCapture,
-    enableSessionReplay: config.posthog.sessionReplayEnabled,
-    sessionReplayConfig: config.posthog.sessionReplayEnabled
-      ? {
-        maskAllTextInputs: true,
-        maskAllImages: true,
-        maskAllSandboxedViews: true,
-        captureLog: false,
-        captureNetworkTelemetry: false,
-        throttleDelayMs: 1000,
-      }
-      : undefined,
+    // Source-owned fail-closed assertion (CP-C1PM): not a configuration
+    // surface. No build variable, provider setting, or runtime value reaches
+    // this literal. Re-enabling Mobile replay needs a new reviewed source PR.
+    enableSessionReplay: false,
   });
 
   void posthogClient.register({

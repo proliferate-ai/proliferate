@@ -10,8 +10,8 @@ messaging.
 
 - [Anonymous telemetry](anonymous-telemetry.md) owns install-level version,
   activation, and usage records from Desktop and Server.
-- [PostHog](posthog.md) owns hosted-client event capture, identity, and replay
-  routing.
+- [PostHog](posthog.md) owns hosted-client event capture, identity, and the
+  source-disabled replay boundary.
 - [Metabase](metabase.md) owns the checked-in analytics tables and views that a
   read-only BI client may query.
 - [Observability](../observability/README.md) owns logs, exceptions, Sentry,
@@ -52,8 +52,8 @@ deduplication boundary.
 | Identity and data | Anonymous install UUIDs; authenticated user UUIDs for daily activity; low-cardinality route/screen, version, platform, telemetry mode, activation, usage, and aggregate provider facts. |
 | Destinations | The configured Proliferate Server/Postgres database, PostHog for enabled hosted clients, and an operator-selected read-only BI client such as Metabase. |
 | Enable, disable, or no-op | Vendor adapters require their client key and telemetry gates. Anonymous telemetry has build/runtime and Server disable gates. Provider ingestion skips a provider whose required configuration is absent. |
-| Privacy and replay | First-party payloads exclude prompts, transcripts, repo names, file paths, terminal text, raw URLs, errors, and secrets. Desktop and Web recording are source-disabled; remaining replay is off by default and its masking rules are owned by the PostHog contract. |
-| Known gaps | Desktop and Web PostHog recording are source-disabled, so neither can expose route ids through recorded page URLs; Mobile has its own contract. Anonymous credential fields are accepted by the schema but currently have no Desktop emission directive. Live provider dashboards and data freshness are not enforced by repository code. |
+| Privacy and replay | First-party payloads exclude prompts, transcripts, repo names, file paths, terminal text, raw URLs, errors, and secrets. Desktop, Web, and Mobile recording are source-disabled; no client surface records, and the re-enablement contract is owned by the PostHog contract. |
+| Known gaps | Desktop, Web, and Mobile PostHog recording are source-disabled, so no client can expose route ids through recorded page URLs. Anonymous credential fields are accepted by the schema but currently have no Desktop emission directive. Live provider dashboards and data freshness are not enforced by repository code. |
 
 ## Operating Routes
 

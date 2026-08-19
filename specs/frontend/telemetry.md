@@ -105,14 +105,24 @@ session replay, and telemetry-related provider and hook ownership.
 
 ## Replay and Privacy
 
-- Session replay is opt-in and should default to disabled.
+- Client session replay is source-disabled on every surface: Desktop/Web/Mobile
+  PostHog recording and Desktop renderer Sentry replay carry no enabling flag,
+  options object, or start call, and Web/Mobile Sentry replay rates are zero.
+  No build value, environment value, optional native package, or provider-side
+  setting turns recording on.
+- Re-enabling replay anywhere requires a new reviewed source change that first
+  proves, with synthetic sensitive content, the route/screen block-and-mask
+  policy, metadata policy, log/network policy, provider arrival, and the
+  absence of prompts, transcripts, terminal text, file contents, repo/path
+  data, tokens, credentials, identity beyond the permitted opaque ID, and
+  workspace/session/workflow identifiers. The rules below are its contract.
 - Shared client payload scrubbing bounds container traversal by depth, array
   positions, and object properties. It replaces cyclic back-edges with
   `[circular]` and structural overflow with `[truncated]`, reuses a completed
   scrubbed value for repeated references, and redacts enumerable accessors
   without evaluating them. These are structural bounds; strings retain their
   existing redaction behavior and are not truncated by length.
-- When replay is enabled, workspace and settings surfaces should be blocked by
+- If replay is ever re-enabled, workspace and settings surfaces are blocked by
   default.
 - Continue using explicit masking for input areas that may contain sensitive
   text.

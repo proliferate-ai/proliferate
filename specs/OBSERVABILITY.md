@@ -175,20 +175,15 @@ change sits on:
 - **Structural, not length, bounds:** client payload scrubbing bounds depth,
   array positions, and object properties (`[circular]`, `[truncated]`) but
   does not truncate strings by length — what you put in a string field ships.
-- **Replay:** Web and Mobile set both replay rates to zero.
-  Desktop renderer replay is source-disabled and absent; no build configuration
-  can enable it.
-  Re-enablement requires a separately reviewed synthetic privacy proof of the
-  exact route/surface block-and-mask policy, metadata policy, provider arrival,
-  and absence of prompt, transcript, terminal, file, repository, path, token,
-  workspace, session, and workflow identifiers. Desktop PostHog session
-  recording is likewise source-disabled and absent; every other surface's
-  current PostHog recording behavior is owned by the PostHog system contract,
-  and where recording is permitted, recorded page metadata can contain route
-  ids even though capture-event URL properties are stripped. A new surface
-  that can display prompts, files, paths, or credentials gets
-  `[data-telemetry-block]` / `[data-telemetry-mask]` unless there is a
-  reviewed reason not to.
+- **Replay is off everywhere, in source:** Web/Mobile Sentry replay rates are
+  zero; Desktop renderer Sentry replay and Desktop/Web/Mobile PostHog session
+  recording are source-disabled and absent. No build value, environment value,
+  optional native package, or provider-side setting can start a recording, so
+  the recorded page-URL route-id gap is closed because nothing records.
+  Re-enablement anywhere requires the reviewed synthetic privacy proof in
+  [`frontend/telemetry.md`](frontend/telemetry.md); a new surface that can
+  display prompts, files, paths, or credentials gets `[data-telemetry-block]` /
+  `[data-telemetry-mask]` unless there is a reviewed reason not to.
 - **Child-agent stderr never reaches Sentry:** AnyHarness marks it with a
   dedicated tracing target the Sentry layer ignores; a startup failure keeps
   at most eight lines / 1,024 UTF-8 bytes per line locally and returns a
@@ -216,7 +211,8 @@ the fallback evidence source.
    anomaly with a stable fingerprint, or `report_critical`.
 2. New user-visible flow? Decide whether it earns a typed product event and
    whether that event is permitted for PostHog.
-3. New surface rendering user content? Apply the replay block/mask selectors.
+3. New surface rendering user content? Apply the block/mask selectors; they
+   stand even though no surface records today.
 4. New identifier worth correlating on? It must join the server request
    telemetry allowlist — it is not automatically forwarded.
 5. Touched a scrubber, telemetry gate, DSN wiring, or the Sentry crate pins?

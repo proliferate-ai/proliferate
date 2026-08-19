@@ -5,7 +5,6 @@ declare const process: {
     EXPO_PUBLIC_PROLIFERATE_ENVIRONMENT?: string;
     EXPO_PUBLIC_PROLIFERATE_POSTHOG_HOST?: string;
     EXPO_PUBLIC_PROLIFERATE_POSTHOG_KEY?: string;
-    EXPO_PUBLIC_PROLIFERATE_POSTHOG_SESSION_REPLAY_ENABLED?: string;
     EXPO_PUBLIC_PROLIFERATE_RELEASE?: string;
     EXPO_PUBLIC_PROLIFERATE_SENTRY_DSN?: string;
     EXPO_PUBLIC_PROLIFERATE_SENTRY_TRACES_SAMPLE_RATE?: string;
@@ -40,7 +39,6 @@ export interface MobileTelemetryConfig {
     enabled: boolean;
     apiKey: string | null;
     apiHost: string;
-    sessionReplayEnabled: boolean;
   };
 }
 
@@ -78,10 +76,6 @@ export function getMobileTelemetryConfig(): MobileTelemetryConfig {
       apiHost:
         process.env.EXPO_PUBLIC_PROLIFERATE_POSTHOG_HOST?.trim()
         || "https://us.i.posthog.com",
-      sessionReplayEnabled: envFlagEnabled(
-        process.env.EXPO_PUBLIC_PROLIFERATE_POSTHOG_SESSION_REPLAY_ENABLED,
-        false,
-      ),
     },
   };
 }
