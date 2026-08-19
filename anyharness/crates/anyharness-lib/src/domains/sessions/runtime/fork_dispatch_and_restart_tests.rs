@@ -184,6 +184,68 @@ async fn legacy_probe_shape_refuses_targeted_fork_end_to_end() {
     std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn stale_durable_targeted_capability_is_revoked_before_operation_or_native_fork() {
+    // A pre-start durable `targetedFork=true` is only a cache. The live legacy
+    // handshake persists false; the workflow must re-read that current truth
+    // before inserting an operation/child or sending an anchored session/fork.
+    let _env_lock = test_support::lock_env();
+    let _bearer = test_support::set_bearer_token_env(None);
+    let _data_key = test_support::set_data_key_env(None);
+    let runtime_home = temp_runtime_home("fork-stale-capability");
+    let script = write_fork_agent(&runtime_home, "legacy");
+    let _guards = install_scripted_agent_env(&script);
+    let state = build_fork_runtime_state(
+        &runtime_home,
+        Db::open_in_memory().expect("in-memory db"),
+        true,
+    );
+    let parent_id = seed_parent(
+        &state,
+        Some(r#"{"fork":true,"targetedFork":true}"#),
+    );
+    seed_three_turn_transcript(&state, &parent_id);
+
+    let error = state
+        .session_runtime
+        .fork_session(
+            &parent_id,
+            Some(before_user_message("turn-1", "item-1")),
+            Some("stale-capability-child".to_string()),
+            None,
+        )
+        .await
+        .expect_err("the current legacy handshake revokes stale targeted readiness");
+    assert!(matches!(error, ForkSessionError::Unsupported(_)));
+
+    let persisted = state
+        .session_service
+        .get_session(&parent_id)
+        .expect("get parent")
+        .expect("parent row");
+    assert!(
+        !parse_action_capabilities(persisted.action_capabilities_json.as_deref()).targeted_fork,
+        "the live legacy handshake must replace stale durable readiness"
+    );
+    assert!(fork_children(&state, &parent_id).is_empty());
+    assert!(state
+        .session_service
+        .store()
+        .find_fork_operation_by_key("stale-capability-child")
+        .expect("query fork operation")
+        .is_none());
+    assert!(
+        !read_requests(&script.request_log)
+            .iter()
+            .any(|request| request["method"] == "session/fork"),
+        "revoked targeted readiness must issue no native fork"
+    );
+
+    close_all(&state, &[parent_id.as_str()]).await;
+    drop(state);
+    std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
+}
+
 // --- (b)(ii) Restart-drift pin: cold-restart refusal -----------------------
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -13,6 +13,7 @@ use crate::live::sessions::actor::command::{
     SidedoorForkCommandResult,
 };
 use crate::live::sessions::actor::state::SessionActor;
+use crate::live::sessions::driver::native_session::native_fork_anchor_is_dispatch_ready;
 use crate::live::sessions::driver::opencode_sidedoor::SidedoorRuntime;
 use crate::live::sessions::driver::shutdown::close_native_session;
 use crate::live::sessions::handle::LiveSessionHandle;
@@ -95,6 +96,11 @@ pub(in crate::live::sessions::actor) async fn fork_native_session(
     supports_close: bool,
     provider_anchor: Option<ProviderForkAnchor>,
 ) -> Result<ForkSessionCommandResult, ForkSessionCommandError> {
+    if !native_fork_anchor_is_dispatch_ready(action_capabilities, provider_anchor.as_ref()) {
+        return Err(ForkSessionCommandError::Unsupported(
+            "agent does not advertise targeted fork support for the native anchor".to_string(),
+        ));
+    }
     verify_fork_ready(handle, store, session_id, action_capabilities).await?;
 
     let mut request =

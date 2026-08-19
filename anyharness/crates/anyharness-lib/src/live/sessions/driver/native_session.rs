@@ -41,6 +41,16 @@ pub(in crate::live::sessions) fn merge_targeted_fork_anchor_meta(
     Some(meta)
 }
 
+/// A provider anchor may ride an ACP-native fork only when the current live
+/// handshake advertises targeted readiness. Tip forks have no anchor and keep
+/// the ordinary `fork` capability gate at their dispatch seam.
+pub(in crate::live::sessions) fn native_fork_anchor_is_dispatch_ready(
+    action_capabilities: SessionActionCapabilities,
+    provider_anchor: Option<&ProviderForkAnchor>,
+) -> bool {
+    provider_anchor.is_none() || action_capabilities.targeted_fork
+}
+
 pub(in crate::live::sessions) fn is_missing_load_session_resource(
     error: &acp::Error,
     expected_uri: &str,
@@ -100,6 +110,29 @@ mod tests {
             serde_json::to_value(&merged).ok(),
             Some(serde_json::json!({"anyharness": {"lastTurnId": "turn-1"}}))
         );
+    }
+
+    #[test]
+    fn native_fork_anchor_requires_current_targeted_readiness() {
+        let anchor = ProviderForkAnchor::UpToMessageId("msg-1".to_string());
+        let tip_only = SessionActionCapabilities {
+            fork: true,
+            ..SessionActionCapabilities::default()
+        };
+        assert!(native_fork_anchor_is_dispatch_ready(tip_only, None));
+        assert!(!native_fork_anchor_is_dispatch_ready(
+            tip_only,
+            Some(&anchor)
+        ));
+
+        let targeted = SessionActionCapabilities {
+            targeted_fork: true,
+            ..tip_only
+        };
+        assert!(native_fork_anchor_is_dispatch_ready(
+            targeted,
+            Some(&anchor)
+        ));
     }
 
     #[test]
@@ -434,6 +467,16 @@ pub(in crate::live::sessions) async fn start_native_session(
             if !action_capabilities.fork {
                 let error = anyhow::anyhow!(
                     "agent does not advertise ACP session/fork with load_session support"
+                );
+                let _ = ready_tx.send(Err(anyhow::anyhow!("{error}")));
+                return Err(error);
+            }
+            if !native_fork_anchor_is_dispatch_ready(
+                action_capabilities,
+                provider_anchor.as_ref(),
+            ) {
+                let error = anyhow::anyhow!(
+                    "agent does not advertise targeted fork support for the native anchor"
                 );
                 let _ = ready_tx.send(Err(anyhow::anyhow!("{error}")));
                 return Err(error);

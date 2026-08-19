@@ -60,19 +60,11 @@ impl SessionRuntime {
 
         let capabilities = parse_action_capabilities(parent.action_capabilities_json.as_deref());
         if !capabilities.fork {
-            return Err(ForkSessionError::Unsupported(
-                "session agent does not advertise fork support".to_string(),
-            ));
+            return Err(unsupported_fork("session agent does not advertise fork support"));
         }
-        // Capability-gated per-adapter dispatch. OpenCode readiness belongs to
-        // its qualified side-door; ACP-native readiness requires an exact
-        // agent/target-domain translator (currently Claude + message_id).
         if target.is_some() && !capabilities.targeted_fork {
-            return Err(ForkSessionError::Unsupported(
-                "targeted fork is not supported by this agent".to_string(),
-            ));
+            return Err(unsupported_fork("targeted fork is not supported by this agent"));
         }
-
         // --- Idempotency identity + canonical request digest (ADR 4.4) ---
         let reserved_child_id = requested_child_id
             .clone()
@@ -116,8 +108,7 @@ impl SessionRuntime {
                 }
             };
 
-        // Derive before live start so an undecodable native target fails closed;
-        // the OpenCode side-door resolves its own vendor anchor downstream.
+        // Derive before live start; OpenCode resolves its vendor anchor downstream.
         let provider_anchor = resolve_native_provider_anchor(
             target.is_some(),
             &parent.agent_kind,
@@ -131,6 +122,14 @@ impl SessionRuntime {
             .map_err(map_start_error_to_fork)?;
         let parent = self.get_fork_parent(session_id)?;
         validate_fork_parent(&parent, &self.session_link_service)?;
+        // Stale targeted readiness must fail before allocation or anchored dispatch.
+        let capabilities = parse_action_capabilities(parent.action_capabilities_json.as_deref());
+        if !capabilities.fork {
+            return Err(unsupported_fork("session agent does not advertise fork support"));
+        }
+        if target.is_some() && !capabilities.targeted_fork {
+            return Err(unsupported_fork("targeted fork is not supported by this agent"));
+        }
         let parent_native_session_id = handle
             .native_session_id()
             .or_else(|| parent.native_session_id.clone())
@@ -528,6 +527,10 @@ impl SessionRuntime {
             }
         }
     }
+}
+
+fn unsupported_fork(message: &str) -> ForkSessionError {
+    ForkSessionError::Unsupported(message.to_string())
 }
 
 /// Canonical fork request digest: binds an idempotency key to the exact request
