@@ -74,6 +74,22 @@ fn create_entry_fails_when_parent_is_missing() {
 }
 
 #[test]
+fn create_entry_fails_when_parent_is_a_file() {
+    let dir = TestWorkspace::new();
+    std::fs::write(dir.path().join("parent-file"), "parent").expect("seed file parent");
+
+    let error = WorkspaceFilesService::create_entry(
+        dir.path(),
+        "parent-file/child",
+        CreateWorkspaceFileEntryKind::File,
+        None,
+    )
+    .expect_err("file parent should fail as not a directory");
+
+    assert!(matches!(error, FileServiceError::NotADirectory(_)));
+}
+
+#[test]
 fn create_entry_rejects_directory_content() {
     let dir = TestWorkspace::new();
 
@@ -168,6 +184,22 @@ fn rename_entry_fails_when_destination_parent_is_missing() {
         .expect_err("missing parent should fail");
 
     assert!(matches!(error, FileServiceError::NotADirectory(_)));
+}
+
+#[test]
+fn rename_entry_fails_when_destination_parent_is_a_file() {
+    let dir = TestWorkspace::new();
+    std::fs::write(dir.path().join("source.txt"), "source").expect("seed source");
+    std::fs::write(dir.path().join("parent-file"), "parent").expect("seed file parent");
+
+    let error = WorkspaceFilesService::rename_entry(dir.path(), "source.txt", "parent-file/child")
+        .expect_err("file destination parent should fail as not a directory");
+
+    assert!(matches!(error, FileServiceError::NotADirectory(_)));
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("source.txt")).expect("source remains"),
+        "source"
+    );
 }
 
 #[test]

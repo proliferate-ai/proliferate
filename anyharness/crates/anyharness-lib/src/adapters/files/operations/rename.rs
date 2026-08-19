@@ -27,17 +27,6 @@ pub fn rename_entry(
 
     let abs_to = resolve_safe_entry_path(workspace_root, new_relative_path)
         .map_err(|error| FileServiceError::from_safety(error, new_relative_path))?;
-    match std::fs::symlink_metadata(&abs_to) {
-        Ok(_) => {
-            return Err(FileServiceError::AlreadyExists(
-                new_relative_path.to_string(),
-            ));
-        }
-        Err(error) => match FileServiceError::from_io(error, new_relative_path) {
-            FileServiceError::NotFound(_) => {}
-            error => return Err(error),
-        },
-    }
     let parent = abs_to
         .parent()
         .ok_or_else(|| FileServiceError::NotADirectory(new_relative_path.to_string()))?;
@@ -56,6 +45,17 @@ pub fn rename_entry(
         return Err(FileServiceError::NotADirectory(
             new_relative_path.to_string(),
         ));
+    }
+    match std::fs::symlink_metadata(&abs_to) {
+        Ok(_) => {
+            return Err(FileServiceError::AlreadyExists(
+                new_relative_path.to_string(),
+            ));
+        }
+        Err(error) => match FileServiceError::from_io(error, new_relative_path) {
+            FileServiceError::NotFound(_) => {}
+            error => return Err(error),
+        },
     }
 
     if source_metadata.is_dir()

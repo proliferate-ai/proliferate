@@ -27,23 +27,6 @@ pub fn create_entry(
 
     let abs = resolve_safe_entry_path(workspace_root, relative_path)
         .map_err(|error| FileServiceError::from_safety(error, relative_path))?;
-    match abs.symlink_metadata() {
-        Ok(metadata) if metadata.file_type().is_symlink() => {
-            match resolve_safe_path(workspace_root, relative_path) {
-                Ok(_) | Err(SafetyError::NotFound) => {
-                    return Err(FileServiceError::AlreadyExists(relative_path.to_string()));
-                }
-                Err(error) => {
-                    return Err(FileServiceError::from_safety(error, relative_path));
-                }
-            }
-        }
-        Ok(_) => return Err(FileServiceError::AlreadyExists(relative_path.to_string())),
-        Err(error) => match FileServiceError::from_io(error, relative_path) {
-            FileServiceError::NotFound(_) => {}
-            error => return Err(error),
-        },
-    }
     let parent = abs
         .parent()
         .ok_or_else(|| FileServiceError::NotADirectory(relative_path.to_string()))?;
@@ -65,6 +48,23 @@ pub fn create_entry(
                 .unwrap_or(relative_path)
                 .to_string(),
         ));
+    }
+    match abs.symlink_metadata() {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            match resolve_safe_path(workspace_root, relative_path) {
+                Ok(_) | Err(SafetyError::NotFound) => {
+                    return Err(FileServiceError::AlreadyExists(relative_path.to_string()));
+                }
+                Err(error) => {
+                    return Err(FileServiceError::from_safety(error, relative_path));
+                }
+            }
+        }
+        Ok(_) => return Err(FileServiceError::AlreadyExists(relative_path.to_string())),
+        Err(error) => match FileServiceError::from_io(error, relative_path) {
+            FileServiceError::NotFound(_) => {}
+            error => return Err(error),
+        },
     }
 
     match kind {
