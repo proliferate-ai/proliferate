@@ -275,7 +275,7 @@ export function workflowBuilderActions(
           ? { ...node, prompt, legs: nextLegs }
           : { ...node, legs: nextLegs };
       }),
-    })),
+    }), { coalesceKey: `node:${nodeId}:leg:${legIndex}` }),
     moveNodeUp: (nodeId) => editDraft((draft) => ({
       ...draft,
       nodes: moveNode(draft.nodes, nodeId, -1),
