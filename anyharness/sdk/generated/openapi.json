@@ -125,37 +125,6 @@
         }
       }
     },
-    "/v1/agents/launch-options": {
-      "get": {
-        "tags": [
-          "agents"
-        ],
-        "operationId": "get_agent_launch_options",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "query",
-            "description": "Optional workspace scope: composes the workspace env into auth-context classification",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "List launchable agents and model options",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentLaunchOptionsResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/v1/agents/login-terminals/{terminal_id}": {
       "get": {
         "tags": [
@@ -338,98 +307,6 @@
         }
       }
     },
-    "/v1/agents/{kind}/catalog/gateway-models": {
-      "get": {
-        "tags": [
-          "catalogs"
-        ],
-        "operationId": "get_gateway_models",
-        "parameters": [
-          {
-            "name": "kind",
-            "in": "path",
-            "description": "Agent kind identifier",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Resolved gateway model plan (probe or seed)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GatewayModelsResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/agents/{kind}/catalog/refresh-gateway": {
-      "post": {
-        "tags": [
-          "catalogs"
-        ],
-        "operationId": "refresh_gateway_models",
-        "parameters": [
-          {
-            "name": "kind",
-            "in": "path",
-            "description": "Agent kind identifier",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Gateway re-probed and recorded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RefreshGatewayResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Unknown agent kind or no gateway route active",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "This runtime does not own the probe engine, or its local auth config is unusable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "Gateway probe failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/v1/agents/{kind}/install": {
       "post": {
         "tags": [
@@ -490,6 +367,108 @@
           },
           "502": {
             "description": "Download or registry failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/{kind}/launch-options": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "get_launch_options",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Harness kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Target-observed harness launch options",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HarnessLaunchOptionsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown harness kind",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/{kind}/launch-options/refresh": {
+      "post": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "refresh_launch_options",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Harness kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Refresh completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HarnessLaunchOptionsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown or uninstalled harness",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Refresh cannot run on this target",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Harness probe failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -622,108 +601,6 @@
           },
           "409": {
             "description": "Login command not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/agents/{kind}/model-snapshot": {
-      "get": {
-        "tags": [
-          "catalogs"
-        ],
-        "operationId": "get_model_snapshot_status",
-        "parameters": [
-          {
-            "name": "kind",
-            "in": "path",
-            "description": "Agent kind identifier",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The harness's composed model-snapshot status",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ModelSnapshotStatus"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Unknown agent kind",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/agents/{kind}/model-snapshot/refresh": {
-      "post": {
-        "tags": [
-          "catalogs"
-        ],
-        "operationId": "refresh_model_snapshot",
-        "parameters": [
-          {
-            "name": "kind",
-            "in": "path",
-            "description": "Agent kind identifier",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "202": {
-            "description": "Re-probe completed; the status body reflects it",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ModelSnapshotStatus"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Unknown agent kind, or the harness is not installed here",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "This runtime does not own the probe engine, or its local auth config is unusable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "The forced probe ran and failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -8310,140 +8187,6 @@
           "failed"
         ]
       },
-      "AgentLaunchModelOption": {
-        "type": "object",
-        "required": [
-          "id",
-          "displayName",
-          "isDefault"
-        ],
-        "properties": {
-          "aliases": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "defaultOptIn": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "displayName": {
-            "type": "string"
-          },
-          "effort": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ModelEffort"
-              }
-            ]
-          },
-          "fastMode": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "id": {
-            "type": "string"
-          },
-          "isDefault": {
-            "type": "boolean"
-          },
-          "modes": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "string"
-            },
-            "description": "The permission/agent modes the model supports (joined from the bundled\ncatalog's `controls.mode.values`); absent when the model has no mode\ncontrol (contract §5)."
-          },
-          "provider": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "status": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ModelCatalogStatus"
-              }
-            ]
-          }
-        }
-      },
-      "AgentLaunchOption": {
-        "type": "object",
-        "required": [
-          "kind",
-          "displayName",
-          "models"
-        ],
-        "properties": {
-          "defaultModelId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "displayName": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "string"
-          },
-          "models": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AgentLaunchModelOption"
-            }
-          },
-          "unattendedModeId": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Curated unattended mode from the selected runtime's active catalog.\nThis field intentionally serializes as `null` when no mode is vetted,\nallowing clients to distinguish that declaration from an older runtime\nthat omitted the field entirely."
-          }
-        }
-      },
-      "AgentLaunchOptionsResponse": {
-        "type": "object",
-        "required": [
-          "agents"
-        ],
-        "properties": {
-          "agents": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AgentLaunchOption"
-            }
-          },
-          "workspaceId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
       "AgentLoginTerminalRecord": {
         "type": "object",
         "required": [
@@ -10490,6 +10233,15 @@
           "agentKind": {
             "type": "string"
           },
+          "controlValues": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
           "coworkWorkspaceDelegationEnabled": {
             "type": [
               "boolean",
@@ -10500,7 +10252,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "N-1 HTTP compatibility only. First-party clients send `controlValues.mode`."
           },
           "modelId": {
             "type": [
@@ -10614,11 +10367,21 @@
           "agentKind": {
             "type": "string"
           },
+          "controlValues": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
           "modeId": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "Stateless N-1 compatibility input. The HTTP boundary translates it to\n`controlValues.mode` before the request enters the session domain."
           },
           "modelId": {
             "type": [
@@ -11459,107 +11222,6 @@
           "before_user_message"
         ]
       },
-      "GatewayModelEntry": {
-        "type": "object",
-        "description": "One enriched gateway model row (spec §1). Catalog-known ids carry the joined\ndisplay metadata; probe-only ids (the proxy serves it but the bundled\ncatalog doesn't know it) emit just `{ id, provider? }`.",
-        "required": [
-          "id"
-        ],
-        "properties": {
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Catalog description; absent when the catalog omits one or for probe-only ids."
-          },
-          "displayName": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Catalog display name; absent for probe-only ids."
-          },
-          "effort": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ModelEffort",
-                "description": "The thinking/effort control (`values` + observed `default`); absent when\nthe model has no effort control or is probe-only."
-              }
-            ]
-          },
-          "fastMode": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "description": "Whether the model carries a `fast_mode` control; absent for probe-only ids."
-          },
-          "id": {
-            "type": "string",
-            "description": "The gateway model id (always present — the render plane keys on this)."
-          },
-          "modes": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "string"
-            },
-            "description": "The permission/agent modes the model supports (`controls.mode.values`);\nabsent when the model has no mode control or is probe-only (contract §5)."
-          },
-          "provider": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Provider id from the id-prefix matcher (`claude-*`→anthropic, …); absent\nwhen no family matches."
-          },
-          "status": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ModelCatalogStatus",
-                "description": "Catalog lifecycle status; absent for probe-only ids."
-              }
-            ]
-          }
-        }
-      },
-      "GatewayModelsResponse": {
-        "type": "object",
-        "description": "Resolved gateway model plan for the local surface.",
-        "required": [
-          "models",
-          "source"
-        ],
-        "properties": {
-          "models": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/GatewayModelEntry"
-            },
-            "description": "The resolved gateway models — each id enriched with the bundled\ncatalog row (or bare `{ id, provider? }` for probe-only ids). No\nclient-side provider filtering is applied; server-side access groups\n(once B1 lands) own scoping."
-          },
-          "probedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "When a probe supplied the list (RFC3339); absent for seed."
-          },
-          "source": {
-            "type": "string",
-            "description": "`\"seed\"` (no snapshot entry yet) or `\"probe\"` (a snapshot observation\nsupplied the list)."
-          }
-        }
-      },
       "GetSessionLiveConfigResponse": {
         "type": "object",
         "description": "Response payload for fetching the current live session config snapshot.",
@@ -12315,6 +11977,192 @@
             "type": "string"
           }
         }
+      },
+      "HarnessLaunchControl": {
+        "type": "object",
+        "required": [
+          "id",
+          "values"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "observedDescription": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "observedLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HarnessLaunchControlValue"
+            }
+          }
+        }
+      },
+      "HarnessLaunchControlValue": {
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "observedDescription": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "observedLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "HarnessLaunchDefaults": {
+        "type": "object",
+        "properties": {
+          "controlValues": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "HarnessLaunchModel": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "observedDescription": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "observedName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "HarnessLaunchOptions": {
+        "type": "object",
+        "required": [
+          "models",
+          "controls",
+          "defaults"
+        ],
+        "properties": {
+          "controls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HarnessLaunchControl"
+            }
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/HarnessLaunchDefaults"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HarnessLaunchModel"
+            }
+          }
+        }
+      },
+      "HarnessLaunchOptionsResponse": {
+        "type": "object",
+        "required": [
+          "harnessKind",
+          "basisRevision",
+          "revision",
+          "state",
+          "probeAttemptedAt",
+          "readiness"
+        ],
+        "properties": {
+          "basisRevision": {
+            "type": "string"
+          },
+          "harnessKind": {
+            "type": "string"
+          },
+          "observedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "options": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HarnessLaunchOptions"
+              }
+            ]
+          },
+          "probeAttemptedAt": {
+            "type": "string"
+          },
+          "probeFailureCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "readiness": {
+            "$ref": "#/components/schemas/AgentReadinessState"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "state": {
+            "$ref": "#/components/schemas/HarnessLaunchOptionsState"
+          }
+        }
+      },
+      "HarnessLaunchOptionsState": {
+        "type": "string",
+        "enum": [
+          "detecting",
+          "refreshing",
+          "observed",
+          "observed_empty",
+          "last_good_after_failure",
+          "failed_without_observation"
+        ]
       },
       "HealthResponse": {
         "type": "object",
@@ -14068,6 +13916,12 @@
           "updatedAt"
         ],
         "properties": {
+          "fullSnapshotJson": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "normalizedControlsJson": {
             "type": "string"
           },
@@ -14237,161 +14091,6 @@
           }
         }
       },
-      "ModelCatalogStatus": {
-        "type": "string",
-        "enum": [
-          "candidate",
-          "active",
-          "deprecated",
-          "hidden"
-        ]
-      },
-      "ModelEffort": {
-        "type": "object",
-        "description": "The thinking/effort control surfaced per model: the values the model\nsupports and the observed default (the runtime joins these from the\nbundled catalog's `controls.effort.{values, observedValue}`).",
-        "required": [
-          "values"
-        ],
-        "properties": {
-          "default": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "values": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "ModelSnapshotLiveState": {
-        "type": "string",
-        "description": "The engine's live view of one harness. In-memory only, so a restart reports\n`Idle` — which is true: nothing is running.\n\n`Queued` is distinct from `Running` on purpose: a probe admitted to its slot but\nstill waiting on the machine-wide semaphore is neither \"nothing is happening\"\n(which is what `Idle` would tell a polling UI, wrongly) nor \"a harness process\nexists\".",
-        "enum": [
-          "idle",
-          "queued",
-          "running",
-          "backoff"
-        ],
-        "example": "idle"
-      },
-      "ModelSnapshotStatus": {
-        "type": "object",
-        "required": [
-          "agent",
-          "schemaVersion",
-          "probeEngine",
-          "state",
-          "modelCount",
-          "modeCount"
-        ],
-        "properties": {
-          "agent": {
-            "type": "string"
-          },
-          "attestation": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "description": "Provenance: the binary that answered. Diagnostics only."
-          },
-          "installIdentity": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "description": "Provenance: the install the observation was recorded on, as the document\ncarries it. `null` when the document is absent or recorded none."
-          },
-          "lastAttempt": {
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "lastError": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "`lastAttempt.detail` when the last attempt failed. Lifted to its own field\nso a surface can render an error without knowing the attempt shape."
-          },
-          "modeCount": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "modelCount": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "models": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            },
-            "description": "The full model list off the same document read as `modelCount`, so a\nmachineless-surface uploader (the Worker's `model_snapshot_sync`) has\nsomething to read besides raw disk access to a document it should not\nknow the layout of."
-          },
-          "modes": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            },
-            "description": "The full mode list, same rationale as `models` above."
-          },
-          "nextAttemptAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Set iff `state == backoff`."
-          },
-          "probeEngine": {
-            "type": "string",
-            "description": "`owner` | `readonly` — visible rather than mysterious when a second\nruntime shares this home.",
-            "example": "owner"
-          },
-          "probedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Last SUCCESSFUL observation. Never regresses on failure. Absent until the\nfirst observation lands."
-          },
-          "schemaVersion": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
-          "snapshotAgeSeconds": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64",
-            "description": "Server-computed so every surface renders the same age from one clock."
-          },
-          "state": {
-            "$ref": "#/components/schemas/ModelSnapshotLiveState"
-          },
-          "stateRevision": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64",
-            "description": "Provenance: the `state.json` revision the observation was probed under."
-          },
-          "warnings": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
       "NodeModel": {
         "type": "object",
         "required": [
@@ -14401,11 +14100,8 @@
           "agentKind": {
             "type": "string"
           },
-          "modeId": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "controlValues": {
+            "type": "object"
           },
           "modelId": {
             "type": [
@@ -16241,27 +15937,6 @@
           "failed"
         ]
       },
-      "RefreshGatewayResponse": {
-        "type": "object",
-        "description": "Result of a manual gateway refresh.",
-        "required": [
-          "models",
-          "probedAt"
-        ],
-        "properties": {
-          "models": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "The freshly probed model ids — exactly what the snapshot entry now\ncarries for the gateway context, with no client-side provider\nfiltering applied anywhere downstream."
-          },
-          "probedAt": {
-            "type": "string",
-            "description": "The probe timestamp (RFC3339)."
-          }
-        }
-      },
       "RenameWorkspaceFileEntryRequest": {
         "type": "object",
         "required": [
@@ -16700,7 +16375,8 @@
           "personaId",
           "personaLabel",
           "agentKind",
-          "modeVerificationStatus",
+          "controlValues",
+          "launchVerificationStatus",
           "status",
           "hasCritique",
           "deadlineAt",
@@ -16708,14 +16384,11 @@
           "updatedAt"
         ],
         "properties": {
-          "actualModeId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "agentKind": {
             "type": "string"
+          },
+          "controlValues": {
+            "type": "object"
           },
           "createdAt": {
             "type": "string"
@@ -16747,8 +16420,8 @@
           "id": {
             "type": "string"
           },
-          "modeVerificationStatus": {
-            "$ref": "#/components/schemas/ReviewModeVerificationStatus"
+          "launchVerificationStatus": {
+            "$ref": "#/components/schemas/ReviewLaunchVerificationStatus"
           },
           "modelId": {
             "type": [
@@ -16767,12 +16440,6 @@
           },
           "personaLabel": {
             "type": "string"
-          },
-          "requestedModeId": {
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "reviewRoundId": {
             "type": "string"
@@ -16928,7 +16595,7 @@
           "code"
         ]
       },
-      "ReviewModeVerificationStatus": {
+      "ReviewLaunchVerificationStatus": {
         "type": "string",
         "enum": [
           "pending",
@@ -16949,14 +16616,11 @@
           "agentKind": {
             "type": "string"
           },
+          "controlValues": {
+            "type": "object"
+          },
           "label": {
             "type": "string"
-          },
-          "modeId": {
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "modelId": {
             "type": [
@@ -18691,16 +18355,52 @@
           }
         }
       },
+      "SessionLiveConfigCurrent": {
+        "type": "object",
+        "properties": {
+          "controlValues": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "SessionLiveConfigSnapshot": {
         "type": "object",
         "description": "The current live session configuration snapshot persisted by AnyHarness.\n\nThis contains both the exact raw ACP config state and AnyHarness's\nnormalized control view for convenient client rendering.",
         "required": [
-          "rawConfigOptions",
-          "normalizedControls",
           "sourceSeq",
           "updatedAt"
         ],
         "properties": {
+          "controls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HarnessLaunchControl"
+            },
+            "description": "Independent live controls and their exact allowed values, in harness order."
+          },
+          "current": {
+            "$ref": "#/components/schemas/SessionLiveConfigCurrent",
+            "description": "Complete effective configuration for this exact native session."
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HarnessLaunchModel"
+            },
+            "description": "Models currently advertised by this exact native session, in harness order."
+          },
           "normalizedControls": {
             "$ref": "#/components/schemas/NormalizedSessionControls",
             "description": "Product-normalized view of the current live controls."
@@ -18714,7 +18414,7 @@
             "items": {
               "$ref": "#/components/schemas/RawSessionConfigOption"
             },
-            "description": "Exact raw ACP config options currently exposed by the active session."
+            "description": "Exact raw ACP config options currently exposed by the active session.\n\nDeprecated transport compatibility. First-party active-session consumers\nuse `models`, `controls`, and `current` exclusively."
           },
           "sourceSeq": {
             "type": "integer",
