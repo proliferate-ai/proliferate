@@ -5,7 +5,6 @@ from __future__ import annotations
 from proliferate.server.cloud.integrations.oauth.clients import resolve_oauth_client
 from proliferate.server.cloud.integrations.oauth.service import (
     OAUTH_CALLBACK_PATH,
-    OAUTH_WEB_COMPLETION_PATH,
     OAuthCallbackResult,
     OAuthFlowStart,
     OAuthFlowStatus,
@@ -14,6 +13,7 @@ from proliferate.server.cloud.integrations.oauth.service import (
     get_oauth_flow_status,
     start_oauth_flow,
 )
+from proliferate.server.cloud.integrations.oauth.surfaces import OAUTH_WEB_COMPLETION_PATH
 
 __all__ = [
     "OAUTH_CALLBACK_PATH",

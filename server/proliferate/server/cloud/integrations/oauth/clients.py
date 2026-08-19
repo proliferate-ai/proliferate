@@ -26,6 +26,7 @@ from proliferate.integrations.integration_oauth import (
     register_client,
 )
 from proliferate.lib.infra.encryption.fernet import decrypt_text, encrypt_text
+from proliferate.server.cloud.integrations import transactions as integration_transactions
 
 # Static-client auth methods this deployment can drive.
 SUPPORTED_STATIC_OAUTH_TOKEN_ENDPOINT_AUTH_METHODS = {
@@ -40,6 +41,12 @@ class _StaticOAuthClientConfig:
     client_id: str
     client_secret: str | None
     token_endpoint_auth_method: str
+
+
+@dataclass(frozen=True)
+class OAuthProviderAvailability:
+    available: bool
+    reason: str | None = None
 
 
 def _static_oauth_client_config(namespace: str) -> _StaticOAuthClientConfig | None:
@@ -90,6 +97,27 @@ def validate_oauth_provider_start_readiness(
         )
 
 
+def oauth_provider_availability(
+    definition: IntegrationDefinitionRecord,
+) -> OAuthProviderAvailability:
+    if definition.oauth_client_mode != "static" or definition.namespace != "slack":
+        return OAuthProviderAvailability(available=True)
+    if (
+        not app_settings.cloud_mcp_slack_enabled
+        or not app_settings.cloud_mcp_slack_distribution_ready
+    ):
+        return OAuthProviderAvailability(
+            available=False,
+            reason="distribution_required",
+        )
+    if _static_oauth_client_config(definition.namespace) is None:
+        return OAuthProviderAvailability(
+            available=False,
+            reason="provider_configuration_missing",
+        )
+    return OAuthProviderAvailability(available=True)
+
+
 # --------------------------------------------------------------------------- #
 # OAuth client resolution (DCR vs static)
 # --------------------------------------------------------------------------- #
@@ -112,6 +140,7 @@ async def _get_or_register_dcr_client(
     if cached is not None:
         return cached
 
+    await integration_transactions.release_integration_transaction(db)
     metadata = await discover_authorization_server_metadata(issuer)
     registered = await register_client(metadata, redirect_uri)
     return await upsert_oauth_client(
@@ -192,6 +221,7 @@ async def _get_static_client(
         token_endpoint_auth_method=config.token_endpoint_auth_method,
         registration_client_uri=None,
         registration_access_token_ciphertext=None,
+        replace_active=True,
     )
 
 

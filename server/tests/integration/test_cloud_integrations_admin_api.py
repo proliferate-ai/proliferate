@@ -88,6 +88,18 @@ class TestAdminDefinitions:
         assert disabled.json()["effectiveEnabled"] is False
         assert disabled.json()["policyEnabled"] is False
 
+        blocked_start = await client.post(
+            "/v1/cloud/integrations/authentications",
+            headers=auth.headers,
+            json={"definitionId": definition_id, "authKind": "none"},
+        )
+        assert blocked_start.status_code == 400
+        assert blocked_start.json()["detail"] == {
+            "code": "integration_provider_unavailable",
+            "reason": "disabled_by_org",
+            "message": "This integration is disabled by your organization.",
+        }
+
     @pytest.mark.asyncio
     async def test_admin_create_detects_oauth(
         self,
@@ -300,9 +312,49 @@ class TestAdminDefinitions:
         )
         assert response.status_code == 200, response.text
         body = response.json()
-        assert body["account"]["status"] == "setup_required"
+        assert body["account"] is None
+        assert body["attemptId"]
+        assert body["attemptGeneration"] == 1
         assert body["oauthFlowId"]
         assert body["authorizationUrl"].startswith("https://auth.custom.example.com/authorize")
+        assert body["expiresAt"]
+
+    @pytest.mark.asyncio
+    async def test_non_member_cannot_start_org_custom_definition(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        owner = await _authed_user(client, db_session, prefix="int-custom-owner")
+        org_id = await _create_org_with_role(
+            db_session,
+            user_id=owner.user_id,
+            role=ORGANIZATION_ROLE_OWNER,
+        )
+        created = await client.post(
+            f"/v1/cloud/integrations/admin/organizations/{org_id}/definitions",
+            headers=owner.headers,
+            json={
+                "displayName": "Private Custom Tools",
+                "namespace": "private-custom-tools",
+                "mcpUrl": "https://mcp.private.example.com/mcp",
+                "authKind": "none",
+            },
+        )
+        assert created.status_code == 200, created.text
+
+        outsider = await _authed_user(client, db_session, prefix="int-custom-outsider")
+        response = await client.post(
+            "/v1/cloud/integrations/authentications",
+            headers=outsider.headers,
+            json={
+                "definitionId": created.json()["definitionId"],
+                "authKind": "none",
+            },
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"]["code"] == "not_found"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
