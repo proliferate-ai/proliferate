@@ -43,6 +43,13 @@ In the review document, unchanged diff lines sit on the plain pane background
 strips with rounded ends — both scoped by `[data-git-review-document]` in
 design `product.css`.
 
+At or below the Changes header's 28rem named-container boundary, branch mode
+uses a selector row above the aggregate statistics and unchanged action
+cluster; the other targets retain one row. In unified wrap-off diffs, each
+actionable hunk's existing pill stays at the review scrollport's right edge and
+remains in keyboard order while visually hidden, revealing on focus as well as
+pointer hover. Wrap-on and split diff placement remain unchanged.
+
 Commit, publish, and pull-request dialogs may summarize change counts and
 staging state, but they do not duplicate the changed-file roster. Detailed
 paths and diff review remain in Changes, reached through Review changes.

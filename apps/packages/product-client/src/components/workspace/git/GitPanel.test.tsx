@@ -288,7 +288,7 @@ describe("GitPanel", () => {
     ))).toBe(true);
   });
 
-  it("shows the branch target selector only in branch review mode", () => {
+  it("keeps all branch controls in the named two-row narrow layout only in branch mode", () => {
     const baseProps = {
       visibleChangedCount: 1,
       additions: 1,
@@ -323,7 +323,15 @@ describe("GitPanel", () => {
     );
 
     expect(unstagedHtml).not.toContain("origin/main");
+    expect(unstagedHtml).toContain("[container-name:review-header]");
+    expect(unstagedHtml).not.toContain("@max-[28rem]/review-header:flex-col");
     expect(branchHtml).toContain("origin/main");
+    expect(branchHtml).toContain("[container-name:review-header]");
+    expect(branchHtml).toContain("@max-[28rem]/review-header:flex-col");
+    expect(branchHtml).toContain("@max-[28rem]/review-header:grid-cols-2");
+    expect(branchHtml).toContain("Collapse all diffs");
+    expect(branchHtml).toContain("Jump to file");
+    expect(branchHtml).toContain("Git review options");
   });
 
   it("renders the active changes filter as plain text until hover or open", () => {

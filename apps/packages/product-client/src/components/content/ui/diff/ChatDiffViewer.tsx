@@ -106,6 +106,7 @@ function ChatContentLine({
   const lineType = getChatLineType(line);
   const lineNumber = getChatLineNumber(line);
   const altLineNumber = line.type === "context" ? line.oldLineNum : undefined;
+  const rightPaddingClass = pill && !wrapLongLines ? "pr-2" : "pr-3";
 
   return (
     <div
@@ -118,11 +119,11 @@ function ChatContentLine({
           ? () => onHunkHover(hunkIndex)
           : undefined
       }
-      className={`diff-content-cell relative min-h-[var(--diffs-line-height)] pr-3 pl-2 ${
+      className={`diff-content-cell relative min-h-[var(--diffs-line-height)] ${rightPaddingClass} pl-2 ${
         wrapLongLines
           ? "block min-w-0 whitespace-pre-wrap break-words py-[calc((var(--diffs-line-height)-1em)/2)]"
           : "flex min-w-max items-center whitespace-pre"
-      }`}
+      } ${pill ? "group/hunk" : ""}`}
     >
       <DiffLineContent
         line={line}
@@ -244,11 +245,7 @@ function ChatContentColumn({
     >
       {rows.map((row) => {
         if (row.kind === "line") {
-          const showPill = Boolean(
-            hunkActions
-            && row.isHunkFirstRow
-            && hoveredHunkIndex === row.hunkIndex,
-          );
+          const showPill = Boolean(hunkActions && row.isHunkFirstRow);
           return (
             <ChatContentLine
               key={row.key}
@@ -266,7 +263,8 @@ function ChatContentColumn({
                   disabled={hunkActions.disabled}
                   onRevert={() => hunkActions.onRevert(row.hunkIndex)}
                   onStageOrUnstage={() => hunkActions.onStageOrUnstage(row.hunkIndex)}
-                  reveal="visible"
+                  placement={wrapLongLines ? "line-end" : "scrollport-end"}
+                  reveal={hoveredHunkIndex === row.hunkIndex ? "visible" : "group-hover"}
                 />
               ) : undefined}
             />
