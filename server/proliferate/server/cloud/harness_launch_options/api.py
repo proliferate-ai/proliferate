@@ -22,17 +22,23 @@ router = APIRouter(prefix="/harness-launch-options", tags=["cloud-harness-launch
 
 
 class LaunchOptionsCopyRequest(BaseModel):
-    model_config = ConfigDict(alias_generator=lambda value: "".join(
-        [value.split("_")[0], *[part.title() for part in value.split("_")[1:]]]
-    ), populate_by_name=True)
+    model_config = ConfigDict(
+        alias_generator=lambda value: "".join(
+            [value.split("_")[0], *[part.title() for part in value.split("_")[1:]]]
+        ),
+        populate_by_name=True,
+    )
     source_revision: int
     payload_json: str
 
 
 class LaunchModel(BaseModel):
-    model_config = ConfigDict(alias_generator=lambda value: "".join(
-        [value.split("_")[0], *[part.title() for part in value.split("_")[1:]]]
-    ), populate_by_name=True)
+    model_config = ConfigDict(
+        alias_generator=lambda value: "".join(
+            [value.split("_")[0], *[part.title() for part in value.split("_")[1:]]]
+        ),
+        populate_by_name=True,
+    )
     id: str
     observed_name: str | None
     observed_description: str | None
@@ -89,16 +95,46 @@ def _validated_payload(body: LaunchOptionsCopyRequest, harness_kind: str) -> dic
     try:
         payload = json.loads(body.payload_json)
     except (TypeError, ValueError) as error:
-        raise CloudApiError("invalid_launch_options_payload", "Launch-option payload is not valid JSON.", status_code=400) from error
+        raise CloudApiError(
+            "invalid_launch_options_payload",
+            "Launch-option payload is not valid JSON.",
+            status_code=400,
+        ) from error
     if not isinstance(payload, dict):
-        raise CloudApiError("invalid_launch_options_payload", "Launch-option payload must be an object.", status_code=400)
-    if payload.get("harnessKind") != harness_kind or payload.get("revision") != body.source_revision:
-        raise CloudApiError("invalid_launch_options_envelope", "Launch-option envelope does not match its target or revision.", status_code=400)
+        raise CloudApiError(
+            "invalid_launch_options_payload",
+            "Launch-option payload must be an object.",
+            status_code=400,
+        )
+    if (
+        payload.get("harnessKind") != harness_kind
+        or payload.get("revision") != body.source_revision
+    ):
+        raise CloudApiError(
+            "invalid_launch_options_envelope",
+            "Launch-option envelope does not match its target or revision.",
+            status_code=400,
+        )
     if "readiness" in payload:
-        raise CloudApiError("invalid_launch_options_envelope", "Copied launch-option state must not contain readiness.", status_code=400)
-    required = {"basisRevision", "state", "options", "observedAt", "probeAttemptedAt", "probeFailureCode"}
+        raise CloudApiError(
+            "invalid_launch_options_envelope",
+            "Copied launch-option state must not contain readiness.",
+            status_code=400,
+        )
+    required = {
+        "basisRevision",
+        "state",
+        "options",
+        "observedAt",
+        "probeAttemptedAt",
+        "probeFailureCode",
+    }
     if not required.issubset(payload):
-        raise CloudApiError("invalid_launch_options_envelope", "Launch-option envelope is incomplete.", status_code=400)
+        raise CloudApiError(
+            "invalid_launch_options_envelope",
+            "Launch-option envelope is incomplete.",
+            status_code=400,
+        )
     return payload
 
 
@@ -110,7 +146,11 @@ async def ingest_launch_options(
     db: AsyncSession = Depends(get_async_session),
 ) -> None:
     if auth.runtime_kind != "cloud_sandbox" or auth.cloud_sandbox_id is None:
-        raise CloudApiError("launch_options_target_required", "Launch options require a cloud sandbox target.", status_code=403)
+        raise CloudApiError(
+            "launch_options_target_required",
+            "Launch options require a cloud sandbox target.",
+            status_code=403,
+        )
     _validated_payload(body, harness_kind)
     statement = insert(HarnessLaunchOptionState).values(
         cloud_sandbox_id=auth.cloud_sandbox_id,
@@ -120,7 +160,10 @@ async def ingest_launch_options(
         copied_at=utcnow(),
     )
     statement = statement.on_conflict_do_update(
-        index_elements=[HarnessLaunchOptionState.cloud_sandbox_id, HarnessLaunchOptionState.harness_kind],
+        index_elements=[
+            HarnessLaunchOptionState.cloud_sandbox_id,
+            HarnessLaunchOptionState.harness_kind,
+        ],
         set_={
             "source_revision": statement.excluded.source_revision,
             "payload_json": statement.excluded.payload_json,
@@ -132,7 +175,9 @@ async def ingest_launch_options(
     await db.commit()
 
 
-@router.get("/sandboxes/{cloud_sandbox_id}/{harness_kind}", response_model=CopiedLaunchOptionsResponse)
+@router.get(
+    "/sandboxes/{cloud_sandbox_id}/{harness_kind}", response_model=CopiedLaunchOptionsResponse
+)
 async def get_launch_options(
     cloud_sandbox_id: UUID,
     harness_kind: str,
@@ -142,11 +187,17 @@ async def get_launch_options(
     sandbox = await db.scalar(select(CloudSandbox).where(CloudSandbox.id == cloud_sandbox_id))
     if sandbox is None or sandbox.owner_user_id != user.id:
         raise CloudApiError("cloud_sandbox_not_found", "Cloud sandbox not found.", status_code=404)
-    record = await db.scalar(select(HarnessLaunchOptionState).where(
-        HarnessLaunchOptionState.cloud_sandbox_id == cloud_sandbox_id,
-        HarnessLaunchOptionState.harness_kind == harness_kind,
-    ))
+    record = await db.scalar(
+        select(HarnessLaunchOptionState).where(
+            HarnessLaunchOptionState.cloud_sandbox_id == cloud_sandbox_id,
+            HarnessLaunchOptionState.harness_kind == harness_kind,
+        )
+    )
     if record is None:
-        raise CloudApiError("harness_launch_options_not_observed", "Harness launch options have not been observed on this target.", status_code=404)
+        raise CloudApiError(
+            "harness_launch_options_not_observed",
+            "Harness launch options have not been observed on this target.",
+            status_code=404,
+        )
     payload = json.loads(record.payload_json)
     return CopiedLaunchOptionsResponse.model_validate({**payload, "readiness": None})

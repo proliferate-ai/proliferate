@@ -37,7 +37,6 @@ from proliferate.server.workflows.errors import (
     WorkflowInvocationIneligible,
     WorkflowInvocationNotFound,
 )
-
 from proliferate.server.workflows.models import (
     WorkflowDefinitionCreateRequest,
     WorkflowDefinitionUpdateRequest,

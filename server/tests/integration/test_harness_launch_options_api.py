@@ -32,11 +32,13 @@ def _payload(harness: str, revision: int, model: str) -> dict[str, object]:
         "revision": revision,
         "state": "observed",
         "options": {
-            "models": [{
-                "id": model,
-                "observedName": None,
-                "observedDescription": None,
-            }],
+            "models": [
+                {
+                    "id": model,
+                    "observedName": None,
+                    "observedDescription": None,
+                }
+            ],
             "controls": [],
             "defaults": {"modelId": model, "controlValues": {}},
         },
@@ -66,8 +68,12 @@ async def test_copy_is_verbatim_monotonic_and_target_scoped(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    first_auth = await create_user_and_login(client, db_session, email_prefix="launch-options-copy-a")
-    second_auth = await create_user_and_login(client, db_session, email_prefix="launch-options-copy-b")
+    first_auth = await create_user_and_login(
+        client, db_session, email_prefix="launch-options-copy-a"
+    )
+    second_auth = await create_user_and_login(
+        client, db_session, email_prefix="launch-options-copy-b"
+    )
     first = await _sandbox(db_session, first_auth.user_id, "first")
     second = await _sandbox(db_session, second_auth.user_id, "second")
     first_token = await enroll_sandbox_worker(client, db_session, sandbox=first)
@@ -110,7 +116,9 @@ async def test_copied_state_is_owner_isolated_and_rejects_rebuilt_envelopes(
     db_session: AsyncSession,
 ) -> None:
     owner = await create_user_and_login(client, db_session, email_prefix="launch-options-owner")
-    stranger = await create_user_and_login(client, db_session, email_prefix="launch-options-stranger")
+    stranger = await create_user_and_login(
+        client, db_session, email_prefix="launch-options-stranger"
+    )
     sandbox = await _sandbox(db_session, owner.user_id, "owner")
     worker_token = await enroll_sandbox_worker(client, db_session, sandbox=sandbox)
     payload = _payload("grok", 1, "grok-4.6")
