@@ -5,7 +5,8 @@ import { create } from "zustand";
  * ack-gated onboarding "setting up" step (agent-auth.md, Proof C7).
  *
  * `useFirstRunAuthAdoption` records its one-shot decision here — the adopted
- * harness kinds (possibly none) and when the writes fired. The step hook
+ * harness kinds (possibly none) and when that decision settled. For a
+ * nonempty decision, settlement is also when the writes fired. The step hook
  * (`useAuthSetupOnboardingStep`) watches those selections' `applied` flags
  * and latches `settled` once the step resolved ("applied") or the ~20s grace
  * window auto-advanced it ("advanced"), so a later manual auth edit going
@@ -21,7 +22,7 @@ export type AuthSetupSettledState = "applied" | "advanced";
 interface AuthSetupOnboardingStoreState {
   /** null until the adoption decision ran; [] when it adopted nothing. */
   adoptedHarnessKinds: string[] | null;
-  /** Epoch ms of the adoption writes — the grace window counts from here. */
+  /** Epoch ms when adoption settled; nonempty decisions dispatch writes then. */
   adoptionStartedAt: number | null;
   settled: AuthSetupSettledState | null;
   recordAdoption: (harnessKinds: readonly string[], startedAt: number) => void;

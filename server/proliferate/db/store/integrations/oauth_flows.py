@@ -14,6 +14,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.integrations import CloudIntegrationOAuthFlow
+from proliferate.db.store.integrations.authorization_attempts import (
+    acquire_authorization_attempt_lock,
+)
 from proliferate.lib.infra.time.wall_clock import utcnow
 
 
@@ -78,6 +81,7 @@ async def create_oauth_flow_canceling_existing(
     db: AsyncSession,
     *,
     account_id: UUID | None,
+    attempt_id: UUID,
     owner_user_id: UUID,
     definition_id: UUID,
     state_hash: str,
@@ -102,7 +106,7 @@ async def create_oauth_flow_canceling_existing(
                 .where(
                     CloudIntegrationOAuthFlow.owner_user_id == owner_user_id,
                     CloudIntegrationOAuthFlow.definition_id == definition_id,
-                    CloudIntegrationOAuthFlow.status == "active",
+                    CloudIntegrationOAuthFlow.status.in_({"active", "exchanging"}),
                 )
                 .with_for_update()
             )
@@ -117,6 +121,7 @@ async def create_oauth_flow_canceling_existing(
         flow.updated_at = now
     created = CloudIntegrationOAuthFlow(
         account_id=account_id,
+        attempt_id=attempt_id,
         owner_user_id=owner_user_id,
         definition_id=definition_id,
         state_hash=state_hash,
@@ -170,6 +175,35 @@ async def get_oauth_flow_for_user(
     return _record(flow) if flow is not None else None
 
 
+async def get_oauth_flow_for_attempt(
+    db: AsyncSession,
+    attempt_id: UUID,
+) -> IntegrationOAuthFlowRecord | None:
+    flow = await db.scalar(
+        select(CloudIntegrationOAuthFlow)
+        .where(CloudIntegrationOAuthFlow.attempt_id == attempt_id)
+        .order_by(CloudIntegrationOAuthFlow.created_at.desc())
+        .limit(1)
+    )
+    return _record(flow) if flow is not None else None
+
+
+async def list_oauth_flows_for_attempts(
+    db: AsyncSession,
+    attempt_ids: tuple[UUID, ...],
+) -> tuple[IntegrationOAuthFlowRecord, ...]:
+    if not attempt_ids:
+        return ()
+    flows = (
+        await db.scalars(
+            select(CloudIntegrationOAuthFlow)
+            .where(CloudIntegrationOAuthFlow.attempt_id.in_(attempt_ids))
+            .order_by(CloudIntegrationOAuthFlow.created_at.desc())
+        )
+    ).all()
+    return tuple(_record(flow) for flow in flows)
+
+
 async def get_oauth_flow_by_state_hash(
     db: AsyncSession,
     state_hash: str,
@@ -189,6 +223,18 @@ async def claim_active_oauth_flow_by_state_hash(
     db: AsyncSession,
     state_hash: str,
 ) -> IntegrationOAuthFlowRecord | None:
+    identity = await db.scalar(
+        select(CloudIntegrationOAuthFlow).where(
+            CloudIntegrationOAuthFlow.state_hash == state_hash,
+        )
+    )
+    if identity is None:
+        return None
+    await acquire_authorization_attempt_lock(
+        db,
+        owner_user_id=identity.owner_user_id,
+        definition_id=identity.definition_id,
+    )
     flow = (
         await db.execute(
             select(CloudIntegrationOAuthFlow)
@@ -248,7 +294,7 @@ async def cancel_oauth_flow_for_user(
     ).scalar_one_or_none()
     if flow is None:
         return None
-    if flow.status == "active":
+    if flow.status in {"active", "exchanging"}:
         now = utcnow()
         flow.status = "cancelled"
         flow.cancelled_at = now

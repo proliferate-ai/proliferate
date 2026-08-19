@@ -210,10 +210,6 @@ path = "apps/packages/product-client/src/hooks/chat/ui/use-transcript-frame-pipe
 reason = "rung 4 frame-pipeline refactor: session re-entry / submit re-pin / tab-resume anchor restore, now driven through TranscriptFramePipeline instead of N independent rAF loops"
 
 [[transcript_scroll_writer]]
-path = "apps/packages/product-client/src/hooks/chat/ui/use-transcript-stick-to-bottom.ts"
-reason = "rung 10: NON-cancelable above-change compensation floor — never drops scrollTop below the live compensation anchor during a history prepend, restoring a direct write alongside the frame-pipeline's own writer"
-
-[[transcript_scroll_writer]]
 path = "apps/packages/product-client/src/components/workspace/chat/transcript/FullTranscriptRowList.tsx"
 reason = "transcript row list: engine-owned virtual-anchor scrollTop restore across height changes"
 

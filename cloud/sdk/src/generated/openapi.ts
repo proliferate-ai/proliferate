@@ -1969,6 +1969,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/integrations/management": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Integration Management Endpoint */
+        get: operations["list_integration_management_endpoint_v1_cloud_integrations_management_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/integrations/authentications": {
         parameters: {
             query?: never;
@@ -2031,6 +2048,23 @@ export interface paths {
         put?: never;
         /** Cancel Integration Oauth Flow Endpoint */
         post: operations["cancel_integration_oauth_flow_endpoint_v1_cloud_integrations_oauth_flows__flow_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/integrations/authorization-attempts/{attempt_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Integration Authorization Attempt Endpoint */
+        post: operations["cancel_integration_authorization_attempt_endpoint_v1_cloud_integrations_authorization_attempts__attempt_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3906,7 +3940,11 @@ export interface components {
         };
         /** AuthenticateIntegrationResponse */
         AuthenticateIntegrationResponse: {
-            account: components["schemas"]["IntegrationAccountResponse"];
+            account?: components["schemas"]["IntegrationAccountResponse"] | null;
+            /** Attemptid */
+            attemptId?: string | null;
+            /** Attemptgeneration */
+            attemptGeneration?: number | null;
             /** Oauthflowid */
             oauthFlowId?: string | null;
             /** Authorizationurl */
@@ -4124,6 +4162,10 @@ export interface components {
         BudgetLimitsResponse: {
             /** Limits */
             limits: components["schemas"]["BudgetLimit"][];
+        };
+        /** CancelIntegrationAuthorizationAttemptResponse */
+        CancelIntegrationAuthorizationAttemptResponse: {
+            attempt: components["schemas"]["IntegrationAuthorizationAttemptSummary"];
         };
         /** ClientDailyActivityRequest */
         ClientDailyActivityRequest: {
@@ -4763,6 +4805,40 @@ export interface components {
             /** Enabled */
             enabled: boolean;
         };
+        /** IntegrationAuthorizationAttemptSummary */
+        IntegrationAuthorizationAttemptSummary: {
+            /**
+             * Attemptid
+             * Format: uuid
+             */
+            attemptId: string;
+            /**
+             * Purpose
+             * @enum {string}
+             */
+            purpose: "connect" | "reauthorize" | "rotate";
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "oauth2" | "api_key" | "none";
+            /** Generation */
+            generation: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "exchanging" | "validating" | "succeeded" | "failed" | "cancelled" | "expired" | "superseded";
+            /** Authorizationurl */
+            authorizationUrl: string | null;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /** Failurecode */
+            failureCode: string | null;
+        };
         /** IntegrationCatalogItem */
         IntegrationCatalogItem: {
             /**
@@ -4839,6 +4915,26 @@ export interface components {
              */
             settingsFields: components["schemas"]["IntegrationCatalogSettingField"][];
         };
+        /** IntegrationConnectionSummary */
+        IntegrationConnectionSummary: {
+            /**
+             * Accountid
+             * Format: uuid
+             */
+            accountId: string;
+            /** Status */
+            status: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Health */
+            health: string;
+            /** Toolcount */
+            toolCount: number | null;
+            /** Tokenexpiresat */
+            tokenExpiresAt: string | null;
+            /** Lasterrorcode */
+            lastErrorCode: string | null;
+        };
         /**
          * IntegrationGatewayConfig
          * @description The AnyHarness-facing gateway config the worker writes to a dotfile.
@@ -4884,6 +4980,42 @@ export interface components {
             /** Items */
             items: components["schemas"]["IntegrationHealthItem"][];
         };
+        /** IntegrationManagementActions */
+        IntegrationManagementActions: {
+            /**
+             * Primary
+             * @enum {string}
+             */
+            primary: "connect" | "reconnect" | "open_authorization" | "none";
+            /** Secondary */
+            secondary: ("cancel" | "disconnect")[];
+        };
+        /** IntegrationManagementItem */
+        IntegrationManagementItem: {
+            /**
+             * Definitionid
+             * Format: uuid
+             */
+            definitionId: string;
+            /** Namespace */
+            namespace: string;
+            /** Displayname */
+            displayName: string;
+            /** Description */
+            description: string | null;
+            /** Authkind */
+            authKind: string;
+            connectSchema: components["schemas"]["IntegrationConnectSchema"];
+            availability: components["schemas"]["IntegrationProviderAvailability"];
+            connection: components["schemas"]["IntegrationConnectionSummary"] | null;
+            attempt: components["schemas"]["IntegrationAuthorizationAttemptSummary"] | null;
+            actions: components["schemas"]["IntegrationManagementActions"];
+        };
+        /** IntegrationManagementResponse */
+        IntegrationManagementResponse: {
+            /** Items */
+            items: components["schemas"]["IntegrationManagementItem"][];
+        };
         /** IntegrationOAuthFlowStatusResponse */
         IntegrationOAuthFlowStatusResponse: {
             /**
@@ -4906,6 +5038,13 @@ export interface components {
             callbackSurface: string;
             /** Finalsurface */
             finalSurface: string;
+        };
+        /** IntegrationProviderAvailability */
+        IntegrationProviderAvailability: {
+            /** Available */
+            available: boolean;
+            /** Reason */
+            reason: string | null;
         };
         /** LaunchControl */
         LaunchControl: {
@@ -11695,6 +11834,37 @@ export interface operations {
             };
         };
     };
+    list_integration_management_endpoint_v1_cloud_integrations_management_get: {
+        parameters: {
+            query?: {
+                organizationId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationManagementResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     authenticate_integration_endpoint_v1_cloud_integrations_authentications_post: {
         parameters: {
             query?: never;
@@ -11806,6 +11976,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntegrationOAuthFlowStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_integration_authorization_attempt_endpoint_v1_cloud_integrations_authorization_attempts__attempt_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attempt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancelIntegrationAuthorizationAttemptResponse"];
                 };
             };
             /** @description Validation Error */

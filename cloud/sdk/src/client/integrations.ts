@@ -103,7 +103,9 @@ export interface IntegrationAccount {
 }
 
 export interface AuthenticateIntegrationResponse {
-  account: IntegrationAccount;
+  account: IntegrationAccount | null;
+  attemptId: string | null;
+  attemptGeneration: number | null;
   oauthFlowId: string | null;
   authorizationUrl: string | null;
   expiresAt: string | null;
@@ -121,6 +123,79 @@ export interface IntegrationOAuthFlowStatus {
   failureCode: string | null;
   callbackSurface: string;
   finalSurface: string;
+}
+
+// ---------------------------------------------------------------------------
+// Authoritative management projection
+// ---------------------------------------------------------------------------
+
+export type IntegrationPrimaryAction =
+  | "connect"
+  | "reconnect"
+  | "open_authorization"
+  | "none";
+export type IntegrationSecondaryAction = "cancel" | "disconnect";
+export type IntegrationAttemptPurpose = "connect" | "reauthorize" | "rotate";
+export type IntegrationAttemptStatus =
+  | "active"
+  | "exchanging"
+  | "validating"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+  | "expired"
+  | "superseded";
+
+export interface IntegrationProviderAvailability {
+  available: boolean;
+  reason: string | null;
+}
+
+export interface IntegrationConnectionSummary {
+  accountId: string;
+  status: string;
+  enabled: boolean;
+  health: string;
+  toolCount: number | null;
+  tokenExpiresAt: string | null;
+  lastErrorCode: string | null;
+}
+
+export interface IntegrationAuthorizationAttemptSummary {
+  attemptId: string;
+  purpose: IntegrationAttemptPurpose;
+  method: IntegrationAuthKind;
+  generation: number;
+  status: IntegrationAttemptStatus;
+  authorizationUrl: string | null;
+  expiresAt: string;
+  failureCode: string | null;
+}
+
+export interface IntegrationManagementActions {
+  primary: IntegrationPrimaryAction;
+  secondary: IntegrationSecondaryAction[];
+}
+
+export interface IntegrationManagementItem {
+  definitionId: string;
+  namespace: string;
+  displayName: string;
+  description: string | null;
+  authKind: IntegrationAuthKind;
+  connectSchema: IntegrationConnectSchema;
+  availability: IntegrationProviderAvailability;
+  connection: IntegrationConnectionSummary | null;
+  attempt: IntegrationAuthorizationAttemptSummary | null;
+  actions: IntegrationManagementActions;
+}
+
+export interface IntegrationManagementResponse {
+  items: IntegrationManagementItem[];
+}
+
+export interface CancelIntegrationAuthorizationAttemptResponse {
+  attempt: IntegrationAuthorizationAttemptSummary;
 }
 
 // ---------------------------------------------------------------------------
@@ -190,6 +265,17 @@ export async function getIntegrationHealth(
   });
 }
 
+export async function getIntegrationManagement(
+  options: IntegrationScopeOptions = {},
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<IntegrationManagementResponse> {
+  return client.requestJson<IntegrationManagementResponse>({
+    method: "GET",
+    path: "/v1/cloud/integrations/management",
+    query: { organizationId: options.organizationId ?? undefined },
+  });
+}
+
 export async function authenticateIntegration(
   body: AuthenticateIntegrationRequest,
   client: ProliferateCloudClient = getProliferateClient(),
@@ -231,6 +317,17 @@ export async function cancelIntegrationOauthFlow(
     method: "POST",
     path: "/v1/cloud/integrations/oauth/flows/{flow_id}/cancel",
     pathParams: { flow_id: flowId },
+  });
+}
+
+export async function cancelIntegrationAuthorizationAttempt(
+  attemptId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CancelIntegrationAuthorizationAttemptResponse> {
+  return client.requestJson<CancelIntegrationAuthorizationAttemptResponse>({
+    method: "POST",
+    path: "/v1/cloud/integrations/authorization-attempts/{attempt_id}/cancel",
+    pathParams: { attempt_id: attemptId },
   });
 }
 

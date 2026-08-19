@@ -32,11 +32,20 @@ export function useAgentCatalog() {
     ),
     reconcileSnapshot: reconcileQuery.data ?? null,
     reconcileStatus: reconcileQuery.data?.status ?? "idle",
+    reconcileIsError: reconcileQuery.isError,
+    reconcileError: reconcileQuery.error,
     reconcileDataUpdatedAt: reconcileQuery.dataUpdatedAt,
     isReconciling: reconcileQuery.data?.status === "queued"
       || reconcileQuery.data?.status === "running",
     hasAgents: agents.length > 0,
-  }), [agents, reconcileQuery.data, reconcileQuery.dataUpdatedAt, reconcileResults]);
+  }), [
+    agents,
+    reconcileQuery.data,
+    reconcileQuery.dataUpdatedAt,
+    reconcileQuery.error,
+    reconcileQuery.isError,
+    reconcileResults,
+  ]);
 
   return {
     ...agentsQuery,

@@ -12,6 +12,7 @@ import {
   isExpectedMutationTelemetryError,
   isExpectedQueryTelemetryError,
 } from "#product/lib/domain/telemetry/failures";
+import { fingerprintTelemetryKey } from "#product/lib/domain/telemetry/key-fingerprint";
 
 /**
  * The narrow exception-capture dependency the query cache reports through. The
@@ -142,7 +143,7 @@ export function createAppQueryClient({
             domain: "react_query",
           },
           extras: {
-            query_hash: query.queryHash,
+            query_hash: fingerprintTelemetryKey(query.queryHash),
           },
         });
       },
@@ -166,7 +167,7 @@ export function createAppQueryClient({
             mutation_key:
               mutationKey === undefined
                 ? "unknown"
-                : hashAppQueryKey(mutationKey),
+                : fingerprintTelemetryKey(hashAppQueryKey(mutationKey)),
           },
         });
       },
