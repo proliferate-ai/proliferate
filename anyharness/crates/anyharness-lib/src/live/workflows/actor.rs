@@ -13,7 +13,7 @@ use tokio::sync::{mpsc, oneshot};
 use crate::domains::sessions::runtime::{InternalSessionCreateInput, SessionRuntime};
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::workflows::definition::WorkflowDefinition;
-use crate::domains::workflows::model::{WorkflowNodeKind, WorkflowRunNodeRecord};
+use crate::domains::workflows::model::WorkflowRunNodeRecord;
 use crate::domains::workflows::projection::RunProjection;
 use crate::domains::workflows::store::{emit_decision_events, ResolvedSideEffect, WorkflowStore};
 use super::launch::{launch_legs, launch_model};
