@@ -213,14 +213,28 @@ describe("PendingPromptList", () => {
       isBeingEdited: false,
       localOutboxDeliveryState: "unknown_after_dispatch",
     });
-    renderList({ entries: [preAckEntry] });
+    const { props } = renderList({ entries: [preAckEntry] });
 
-    const { menu } = await openRowMenu("awaiting acknowledgement", user);
-    const editItem = within(menu).getByRole("menuitem", { name: /Edit message/ });
+    const trigger = within(rowFor("awaiting acknowledgement")).getByRole("button", {
+      name: "More queued-message actions",
+    });
+    trigger.focus();
+    await user.keyboard("{Enter}");
+    const menu = await screen.findByRole("menu");
+    const editItem = within(menu).getByRole("menuitem", {
+      name: "Edit message Available once queued",
+    });
     expect(editItem.getAttribute("aria-disabled")).toBe("true");
     expect(within(editItem).getByText("Available once queued")).toBeTruthy();
     expect(within(menu).queryByRole("menuitem", { name: "Move up" })).toBeNull();
     expect(within(menu).queryByRole("menuitem", { name: "Move down" })).toBeNull();
+
+    await waitFor(() => expect(document.activeElement).toBe(editItem));
+    await user.keyboard("{Enter}");
+
+    expect(props.onBeginEdit).not.toHaveBeenCalled();
+    expect(screen.getByRole("menu")).toBe(menu);
+    expect(document.activeElement).toBe(editItem);
   });
 
   it("returns focus to the queued-message action trigger after Escape", async () => {

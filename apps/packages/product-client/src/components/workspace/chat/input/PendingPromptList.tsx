@@ -193,12 +193,15 @@ function PendingPromptRow({
   const renderEditAction = entry.showEditAction && !entry.isBeingEdited && !entry.isSending;
   const renderDeleteAction = entry.showDeleteAction && (!entry.isSending || entry.canDelete);
   const renderActionMenu = renderEditAction || isReorderEligible;
+  const editActionUnavailable = !entry.canEdit || queueMutationInFlight;
 
-  const handleBeginEdit = useCallback(() => {
-    if (entry.canEdit) {
-      onBeginEdit(entry);
+  const handleBeginEdit = useCallback((event: Event) => {
+    if (editActionUnavailable) {
+      event.preventDefault();
+      return;
     }
-  }, [entry, onBeginEdit]);
+    onBeginEdit(entry);
+  }, [editActionUnavailable, entry, onBeginEdit]);
   const handleDelete = useCallback(() => {
     if (entry.canDelete) {
       onDelete(entry);
@@ -312,16 +315,20 @@ function PendingPromptRow({
               <DropdownMenuContent align="end">
                 {renderEditAction && (
                   <DropdownMenuItem
-                    disabled={!entry.canEdit || queueMutationInFlight}
+                    aria-disabled={editActionUnavailable || undefined}
+                    data-disabled={editActionUnavailable ? "" : undefined}
                     onSelect={handleBeginEdit}
                   >
                     <Pencil className="icon-paired" aria-hidden />
                     <span className="min-w-0">
                       <span className="block">Edit message</span>
                       {!entry.canEdit && entry.editDisabledReason && (
-                        <span className="block text-ui-sm text-muted-foreground">
-                          {entry.editDisabledReason}
-                        </span>
+                        <>
+                          {" "}
+                          <span className="block text-ui-sm text-muted-foreground">
+                            {entry.editDisabledReason}
+                          </span>
+                        </>
                       )}
                     </span>
                   </DropdownMenuItem>
