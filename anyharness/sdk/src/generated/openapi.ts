@@ -3875,6 +3875,24 @@ export interface components {
             modeId?: string | null;
             modelId?: string | null;
         };
+        /**
+         * @description One durable fan-in ledger row on the wire (ruling F4): which session ran a
+         *     node's leg and how it finished. `leg_index` is the durable prompt-to-leg
+         *     linkage (it addresses `legs[leg_index]` in the definition). Additive and
+         *     read-only.
+         */
+        NodeSessionView: {
+            completedAt: string | null;
+            /**
+             * @description `Some` only when `status` is `failed`; the split mirrors `NodeView`'s
+             *     own status/failure_code separation.
+             */
+            failureCode: string | null;
+            /** Format: int64 */
+            legIndex: number;
+            sessionId: string | null;
+            status: components["schemas"]["WorkflowLegStatusV2"];
+        };
         NodeView: {
             anchorNodeRowId: string | null;
             /** Format: int64 */
@@ -3891,6 +3909,15 @@ export interface components {
             replacesNodeRowId: string | null;
             runId: string;
             sessionId: string | null;
+            /**
+             * @description Rung 7 (ruling F4): the additive, read-only per-leg fan-in rollup, one
+             *     entry per `workflow_run_node_sessions` row of this node (ordered by
+             *     `leg_index`). Always emitted — an empty array for a node that has not
+             *     launched a leg yet — and the scalar `session_id` above stays the
+             *     representative leg for back-compat, so a one-leg node (every definition
+             *     today) carries exactly one entry and its client behavior is unchanged.
+             */
+            sessions: components["schemas"]["NodeSessionView"][];
             startedAt: string | null;
             status: components["schemas"]["WorkflowNodeStatus"];
             title: string;
@@ -5347,6 +5374,14 @@ export interface components {
             /** Format: int32 */
             schemaVersion: number;
         };
+        /**
+         * @description The wire vocabulary for a leg's fan-in status (rulings F1/F4). The runtime's
+         *     `WorkflowLegStatus::Failed(code)` splits into `Failed` plus a separate
+         *     `failure_code`, mirroring `NodeView`'s own status/failure_code split so a
+         *     client reads one closed status set with the exact code beside it.
+         * @enum {string}
+         */
+        WorkflowLegStatusV2: "running" | "done" | "cancelled" | "forced_unload" | "failed";
         /** @enum {string} */
         WorkflowNodeKind: "defined" | "replacement" | "adhoc";
         /** @enum {string} */
