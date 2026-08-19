@@ -88,11 +88,6 @@ export function SidebarScrollingNavigation({
         active: workflowsActive,
         icon: <Fork />,
         label: "Workflows",
-        status: (
-          <span className="font-mono text-ui-sm uppercase tracking-[0.06em] text-sidebar-muted-foreground">
-            beta
-          </span>
-        ),
       }]
       : []),
     {
