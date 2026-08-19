@@ -176,7 +176,9 @@ Rules:
 - Completed fenced `mermaid` blocks render as diagrams through `MermaidDiagram`,
   dispatched from `renderTranscriptCodeBlock` and `renderDesktopCodeBlock`.
   Incomplete streaming mermaid fences and invalid or unsupported syntax stay on
-  `CodeBlock`. Copy always writes the original mermaid source, not SVG.
+  `CodeBlock`. A closed mermaid fence keeps its diagram while a later mermaid
+  fence is still open, including when both blocks have the same source. Copy
+  always writes the original mermaid source, not SVG.
 - Diagram SVG is sanitized with DOMPurify's SVG profile (`USE_PROFILES` svg and
   svgFilters, `FORBID_TAGS` `script` and `foreignObject`) plus the transcript
   URL policy that blocks `javascript:`, `data:`, and `vbscript:`. Mermaid is

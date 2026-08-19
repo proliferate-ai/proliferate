@@ -2,7 +2,10 @@ import { CODE_BLOCK_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-ca
 import { CodeBlock } from "#product/components/content/ui/CodeBlock";
 import { useHighlightedTokens } from "#product/hooks/ui/highlighting/use-highlighted-tokens";
 import { useResolvedMode } from "#product/hooks/theme/derived/use-resolved-mode";
-import { useMarkdownStreamingSource } from "#product/components/workspace/chat/transcript/MarkdownBody";
+import {
+  useMarkdownFencedCodeStart,
+  useMarkdownStreamingSource,
+} from "#product/components/workspace/chat/transcript/MarkdownBody";
 import {
   isIncompleteStreamingMermaidFence,
 } from "#product/lib/domain/chat/transcript/mermaid-fence";
@@ -30,11 +33,14 @@ export function MermaidDiagram({
   language: string | null;
 }) {
   const streaming = useMarkdownStreamingSource();
+  const fenceStart = useMarkdownFencedCodeStart();
   const incomplete = isIncompleteStreamingMermaidFence({
     source: streaming.source,
     code,
     language,
     isStreaming: streaming.isStreaming,
+    startOffset: fenceStart.startOffset,
+    startLine: fenceStart.startLine,
   });
   const mode = useResolvedMode();
   const tokens = useHighlightedTokens(code, language ?? "text");

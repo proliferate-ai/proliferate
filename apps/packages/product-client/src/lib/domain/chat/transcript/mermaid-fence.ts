@@ -5,10 +5,15 @@
  * `[^\s]+` token after `language-`, so callers pass `mermaid` rather than
  * `language-mermaid`. This module never re-parses class names.
  *
- * Completeness cannot be read from HAST `node.position` alone: a closed
+ * Completeness cannot be read from HAST `node.position.end` alone: a closed
  * mermaid fence that is the last block of a still-streaming message also
  * ends at EOF, same as an unclosed fence. The helper therefore looks at the
  * render-copy source for a trailing mermaid opener that still has no closer.
+ *
+ * Identity of that trailing fence uses start position, not body equality.
+ * Two fences can share a body; only the block whose start is at or after the
+ * trailing opener is incomplete. End-at-EOF stays ambiguous; start offset
+ * (or start line) is not.
  *
  * This is not a CommonMark fence parser. It only recognizes mermaid openers
  * and the closer of the mermaid fence currently open. Other languages are
@@ -33,11 +38,15 @@ export function isIncompleteStreamingMermaidFence({
   code,
   language,
   isStreaming,
+  startOffset = null,
+  startLine = null,
 }: {
   source: string;
   code: string;
   language: string | null | undefined;
   isStreaming: boolean;
+  startOffset?: number | null;
+  startLine?: number | null;
 }): boolean {
   if (!isStreaming || !isMermaidLanguage(language)) {
     return false;
@@ -46,29 +55,64 @@ export function isIncompleteStreamingMermaidFence({
   if (trailing === null) {
     return false;
   }
-  return normalizeFenceBody(trailing) === normalizeFenceBody(code);
+  if (startOffset != null) {
+    return startOffset >= trailing.startOffset;
+  }
+  if (startLine != null) {
+    return startLine >= trailing.startLine;
+  }
+  return normalizeFenceBody(trailing.body) === normalizeFenceBody(code);
 }
 
-function findTrailingUnclosedMermaidFence(source: string): string | null {
+function findTrailingUnclosedMermaidFence(source: string): {
+  body: string;
+  startOffset: number;
+  startLine: number;
+} | null {
   const lines = source.split("\n");
-  let open: { marker: string; length: number; body: string[] } | null = null;
+  let open: {
+    marker: string;
+    length: number;
+    body: string[];
+    startOffset: number;
+    startLine: number;
+  } | null = null;
+  let offset = 0;
 
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
     if (open) {
       if (isFenceCloser(line, open.marker, open.length)) {
         open = null;
-        continue;
+      } else {
+        open.body.push(line);
       }
-      open.body.push(line);
-      continue;
+    } else {
+      const opener = parseMermaidOpener(line);
+      if (opener) {
+        open = {
+          marker: opener.marker,
+          length: opener.length,
+          body: [],
+          startOffset: offset,
+          startLine: index + 1,
+        };
+      }
     }
-    const opener = parseMermaidOpener(line);
-    if (opener) {
-      open = { marker: opener.marker, length: opener.length, body: [] };
+    offset += line.length;
+    if (index < lines.length - 1) {
+      offset += 1;
     }
   }
 
-  return open ? open.body.join("\n") : null;
+  if (!open) {
+    return null;
+  }
+  return {
+    body: open.body.join("\n"),
+    startOffset: open.startOffset,
+    startLine: open.startLine,
+  };
 }
 
 function parseMermaidOpener(line: string): { marker: string; length: number } | null {

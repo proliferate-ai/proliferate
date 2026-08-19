@@ -120,6 +120,25 @@ export function useMarkdownStreamingSource(): MarkdownStreamingSource {
   return useContext(MarkdownStreamingSourceContext);
 }
 
+/**
+ * Start of the current fenced code node in the render-copy source. Completeness
+ * helpers (mermaid) use this to tell a closed fence from a later unclosed
+ * fence that happens to have the same body.
+ */
+export interface MarkdownFencedCodeStart {
+  startOffset: number | null;
+  startLine: number | null;
+}
+
+const MarkdownFencedCodeStartContext = createContext<MarkdownFencedCodeStart>({
+  startOffset: null,
+  startLine: null,
+});
+
+export function useMarkdownFencedCodeStart(): MarkdownFencedCodeStart {
+  return useContext(MarkdownFencedCodeStartContext);
+}
+
 type MdElementProps = HTMLAttributes<HTMLElement> & {
   node?: unknown;
 };
@@ -476,7 +495,7 @@ function MarkdownCode({
   dangerouslySetInnerHTML,
   renderInlineCode,
   renderCodeBlock,
-  node: _node,
+  node,
   ...rest
 }: MdCodeProps) {
   const isCodeBlock = useContext(MarkdownCodeBlockContext);
@@ -495,10 +514,14 @@ function MarkdownCode({
   if (isCodeBlock || match) {
     const language = match?.[1] ?? null;
     const renderedCodeBlock = renderCodeBlock?.({ code: codeString, language });
-    if (renderedCodeBlock !== null && renderedCodeBlock !== undefined) {
-      return <>{renderedCodeBlock}</>;
-    }
-    return <MarkdownCodeBlockShell code={codeString} label={language} />;
+    const block = renderedCodeBlock !== null && renderedCodeBlock !== undefined
+      ? renderedCodeBlock
+      : <MarkdownCodeBlockShell code={codeString} label={language} />;
+    return (
+      <MarkdownFencedCodeStartContext.Provider value={readFencedCodeStart(node)}>
+        {block}
+      </MarkdownFencedCodeStartContext.Provider>
+    );
   }
   const renderedInlineCode = renderInlineCode?.({ code: codeString, children });
   if (renderedInlineCode !== null && renderedInlineCode !== undefined) {
@@ -518,6 +541,14 @@ function markdownUrlTransform(value: string): string {
     return "";
   }
   return value;
+}
+
+function readFencedCodeStart(node: unknown): MarkdownFencedCodeStart {
+  const start = (node as HastNode | undefined)?.position?.start;
+  return {
+    startOffset: typeof start?.offset === "number" ? start.offset : null,
+    startLine: typeof start?.line === "number" ? start.line : null,
+  };
 }
 
 // Re-export for downstream consumers that import from this module.

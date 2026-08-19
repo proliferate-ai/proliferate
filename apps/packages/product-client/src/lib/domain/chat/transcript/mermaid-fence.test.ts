@@ -127,6 +127,36 @@ describe("isIncompleteStreamingMermaidFence", () => {
     })).toBe(true);
   });
 
+  it("does not flag a closed mermaid fence that shares a body with a later unclosed fence", () => {
+    const body = mermaidBody;
+    const source = [
+      "```mermaid",
+      body,
+      "```",
+      "",
+      "```mermaid",
+      body,
+    ].join("\n");
+    const trailingOpenerOffset = source.lastIndexOf("```mermaid");
+
+    expect(isIncompleteStreamingMermaidFence({
+      source,
+      code: body,
+      language: "mermaid",
+      isStreaming: true,
+      startLine: 1,
+      startOffset: 0,
+    })).toBe(false);
+    expect(isIncompleteStreamingMermaidFence({
+      source,
+      code: body,
+      language: "mermaid",
+      isStreaming: true,
+      startLine: 6,
+      startOffset: trailingOpenerOffset,
+    })).toBe(true);
+  });
+
   it("does not trip on an incomplete non-mermaid fence", () => {
     expect(isIncompleteStreamingMermaidFence({
       source: "```python\nprint(1)",

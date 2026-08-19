@@ -236,6 +236,23 @@ describe("Mermaid transcript dispatch", () => {
     expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(second);
   });
 
+  it("keeps a closed mermaid diagram when a later identical fence is still open", async () => {
+    const body = "flowchart LR\n  A --> B";
+    const { container } = render(
+      <MarkdownBody
+        content={`${mermaidMarkdown(body)}\n\n${mermaidMarkdown(body, false)}`}
+        isStreaming
+        renderCodeBlock={renderCodeBlock}
+      />,
+    );
+    await waitFor(() => {
+      expect(container.querySelectorAll("[data-mermaid-diagram='true']")).toHaveLength(1);
+    });
+    expect(renderMermaidDiagram).toHaveBeenCalledTimes(1);
+    expect(container.querySelectorAll("[data-markdown-code-block='true']")).toHaveLength(2);
+    expect(container.textContent).toContain(body);
+  });
+
   it("falls back to a code block when mermaid source is invalid", async () => {
     renderMermaidDiagram.mockResolvedValueOnce(null);
     const { container } = render(
