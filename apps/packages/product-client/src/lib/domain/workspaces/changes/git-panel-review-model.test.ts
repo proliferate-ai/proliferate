@@ -4,9 +4,12 @@ import type {
   GitPanelSection,
 } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 import {
+  buildGitPanelDiffFetchScopeKey,
   resolveGitPanelReviewEvidence,
+  resolvePermittedGitPanelDiffFetchKeys,
   summarizeGitPanelSectionStats,
 } from "#product/lib/domain/workspaces/changes/git-panel-review-model";
+import { gitReviewEntryForFile } from "#product/lib/domain/workspaces/changes/git-review-entries";
 
 describe("git panel review evidence", () => {
   it("keeps current evidence authoritative over recorded fallback", () => {
@@ -106,6 +109,62 @@ describe("git panel review evidence", () => {
       additions: 7,
       deletions: 4,
     });
+  });
+});
+
+describe("git panel diff scheduling", () => {
+  it("includes the evidence generation in the synchronous fetch scope", () => {
+    const args = {
+      activeWorkspaceId: "workspace-1",
+      baseRef: "origin/main",
+      mode: "branch" as const,
+      reviewEntries: [gitReviewEntryForFile("branch", reviewFile({
+        currentAdditions: 1,
+      }))],
+    };
+    expect(buildGitPanelDiffFetchScopeKey({ ...args, cacheGeneration: "generation-1" }))
+      .not.toBe(buildGitPanelDiffFetchScopeKey({ ...args, cacheGeneration: "generation-2" }));
+  });
+
+  it("admits at most five current-generation rows in document order", () => {
+    const reviewEntries = Array.from({ length: 6 }, (_, index) =>
+      gitReviewEntryForFile("unstaged", reviewFile({
+        path: `src/file-${index}.ts`,
+        currentAdditions: 1,
+      }))
+    );
+    const permitted = resolvePermittedGitPanelDiffFetchKeys({
+      reviewEntries,
+      visibleSectionScopes: new Set(["unstaged"]),
+      effectiveCollapsedFiles: new Set(),
+      settledDiffFetchKeys: new Set(),
+    });
+    expect([...permitted]).toEqual(reviewEntries.slice(0, 5).map((entry) => entry.key));
+  });
+
+  it("does not spend capacity on collapsed, missing, or policy-blocked rows", () => {
+    const collapsed = gitReviewEntryForFile("unstaged", reviewFile({
+      path: "src/collapsed.ts",
+      currentAdditions: 1,
+    }));
+    const missing = gitReviewEntryForFile("unstaged", reviewFile({
+      path: "src/missing.ts",
+      currentAdditions: null,
+    }));
+    const blocked = gitReviewEntryForFile("unstaged", reviewFile({
+      path: "src/blocked.ts",
+      currentAdditions: 5_001,
+    }));
+    const eligible = gitReviewEntryForFile("unstaged", reviewFile({
+      path: "src/eligible.ts",
+      currentAdditions: 1,
+    }));
+    expect([...resolvePermittedGitPanelDiffFetchKeys({
+      reviewEntries: [collapsed, missing, blocked, eligible],
+      visibleSectionScopes: new Set(["unstaged"]),
+      effectiveCollapsedFiles: new Set([collapsed.key]),
+      settledDiffFetchKeys: new Set(),
+    })]).toEqual([eligible.key]);
   });
 });
 

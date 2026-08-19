@@ -380,6 +380,13 @@ export function anyHarnessGitStatusKey(
   return [...anyHarnessWorkspaceKey(cacheScopeKey, workspaceId), "git-status"] as const;
 }
 
+export function anyHarnessGitForceEpochKey(
+  cacheScopeKey: string | null | undefined,
+  workspaceId: string | null | undefined,
+) {
+  return [...anyHarnessWorkspaceKey(cacheScopeKey, workspaceId), "git-force-epoch"] as const;
+}
+
 export function anyHarnessGitDiffKey(
   cacheScopeKey: string | null | undefined,
   workspaceId: string | null | undefined,
@@ -387,14 +394,16 @@ export function anyHarnessGitDiffKey(
   scope: string | null | undefined = "working_tree",
   baseRef: string | null | undefined = null,
   oldPath: string | null | undefined = null,
+  cacheGeneration: string | number | null | undefined = null,
 ) {
-  return [
+  const key = [
     ...anyHarnessGitDiffScopeKey(cacheScopeKey, workspaceId),
     normalizeGitDiffScope(scope),
     normalizeNullableGitArg(baseRef),
     normalizeNullableGitArg(oldPath),
     path ?? null,
   ] as const;
+  return appendCacheGeneration(key, cacheGeneration);
 }
 
 export function anyHarnessGitDiffScopeKey(
@@ -408,24 +417,37 @@ export function anyHarnessGitBranchDiffFilesKey(
   cacheScopeKey: string | null | undefined,
   workspaceId: string | null | undefined,
   baseRef: string | null | undefined = null,
+  cacheGeneration: string | number | null | undefined = null,
 ) {
-  return [
+  const key = [
     ...anyHarnessGitDiffScopeKey(cacheScopeKey, workspaceId),
     "branch-files",
     normalizeNullableGitArg(baseRef),
   ] as const;
+  return appendCacheGeneration(key, cacheGeneration);
 }
 
 export function anyHarnessGitBaseWorktreeDiffFilesKey(
   cacheScopeKey: string | null | undefined,
   workspaceId: string | null | undefined,
   baseRef: string | null | undefined = null,
+  cacheGeneration: string | number | null | undefined = null,
 ) {
-  return [
+  const key = [
     ...anyHarnessGitDiffScopeKey(cacheScopeKey, workspaceId),
     "base-worktree-files",
     normalizeNullableGitArg(baseRef),
   ] as const;
+  return appendCacheGeneration(key, cacheGeneration);
+}
+
+function appendCacheGeneration<T extends readonly unknown[]>(
+  key: T,
+  cacheGeneration: string | number | null | undefined,
+) {
+  return cacheGeneration === null || cacheGeneration === undefined
+    ? key
+    : [...key, cacheGeneration] as const;
 }
 
 function normalizeGitDiffScope(scope: string | null | undefined) {

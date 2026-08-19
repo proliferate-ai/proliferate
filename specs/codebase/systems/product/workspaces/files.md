@@ -124,6 +124,26 @@ Remote filesystem and git data belongs to SDK-react/TanStack Query:
 - branch changed files
 - diff bodies
 
+Per-file diff cache identity includes an optional evidence generation owned by
+SDK React. Changes composes that generation from a stable semantic fingerprint
+of the authoritative file-list metadata, an observation token, a
+workspace-scoped force epoch, and the completed-turn id for Last turn. The
+observation token advances on each semantic metadata transition, including a
+return to an earlier fingerprint, and persists across owner remounts while the
+Query Client remains alive. Raw query timestamps are not evidence identity:
+active-session status polling must not create a new diff generation on every
+unchanged response. The force epoch advances only after a known boundary
+settles successfully: completed-turn/error metadata invalidation, Manual
+Refresh, or an existing Git/file mutation invalidation. Branch and
+base-worktree file-list keys include the corresponding force/turn identity;
+the generation never becomes a runtime request parameter. Invalidating Git
+diff state preserves active refetches for generationless per-file, branch-list,
+and base-worktree-list consumers while generated consumers move to their new
+identity. Generation values are compact opaque hashes rather than raw roster
+metadata, and Product query error telemetry reduces Git diff keys to a redacted
+structural kind so paths, refs, workspace identity, and generation values never
+enter `query_hash`.
+
 Zustand stores only local UI/editor state:
 
 - `workspace-viewer-tabs-store.ts`: open targets, active target, per-target
@@ -200,6 +220,17 @@ remains visible with `No current diff` and Open file. Cached live-query status,
 statistics, and binary badges stay suppressed; truthful transcript-recorded
 statistics may still appear. Changes aggregate totals and jump-to-file entries
 prefer current statistics and then recorded statistics.
+
+Current diff data is presentable only when it belongs to the current semantic
+generation and its query is settled. A generation transition, background
+refetch, or invalidated query hides the prior patch, query statistics,
+binary/truncation flags, error, and patch-derived display policy. Active rows
+use the existing Loading state, concurrency-deferred rows use Waiting, and
+collapsed or inline-policy-blocked rows remain disabled without inheriting
+prior data. The five-query scheduler scopes its settled set synchronously to
+the same generation so a transition cannot admit previously settled rows.
+Same-numstat external edits with no observable metadata change remain
+undetectable until one of the known force boundaries above.
 
 Last-turn undo is transcript-backed and all-or-nothing. The UI only builds undo
 requests from top-level visible `file_change` parts that include complete patch

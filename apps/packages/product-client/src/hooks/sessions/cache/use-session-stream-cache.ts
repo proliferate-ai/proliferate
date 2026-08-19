@@ -1,4 +1,5 @@
 import {
+  advanceGitCacheForceEpoch,
   anyHarnessCoworkManagedWorkspacesKey,
   anyHarnessRuntimeKey,
   anyHarnessGitStatusKey,
@@ -93,7 +94,10 @@ export function useSessionStreamCache(): SessionStreamCache {
     invalidateGitStatus({ workspaceId }) {
       void queryClient.invalidateQueries({
         queryKey: anyHarnessGitStatusKey(cacheScopeKey, workspaceId),
-      });
+      }).then(
+        () => advanceGitCacheForceEpoch(queryClient, cacheScopeKey, workspaceId),
+        () => undefined,
+      );
     },
     refreshPrStatuses({ runtimeUrl, workspaceId }) {
       // Resolve the workspace's repo root from the cached collections; a

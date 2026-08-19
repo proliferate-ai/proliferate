@@ -16,12 +16,15 @@ import {
 import { useAnyHarnessCacheScopeKey } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import {
+  advanceGitCacheForceEpoch,
+  invalidateGitDiffCache,
+} from "../lib/git-cache-generation.js";
+import {
   type AnyHarnessQueryTimingOptions,
   useReportAnyHarnessCacheDecision,
 } from "../lib/timing-options.js";
 import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
-  anyHarnessGitDiffScopeKey,
   anyHarnessGitStatusKey,
   anyHarnessWorkspaceFileKey,
   anyHarnessWorkspaceFileSearchKey,
@@ -218,10 +221,9 @@ export function useWriteWorkspaceFileMutation(options?: { workspaceId?: string |
         queryClient.invalidateQueries({
           queryKey: anyHarnessGitStatusKey(cacheScopeKey, workspaceId),
         }),
-        queryClient.invalidateQueries({
-          queryKey: anyHarnessGitDiffScopeKey(cacheScopeKey, workspaceId),
-        }),
+        invalidateGitDiffCache(queryClient, cacheScopeKey, workspaceId),
       ]);
+      advanceGitCacheForceEpoch(queryClient, cacheScopeKey, workspaceId);
     },
   });
 }
@@ -274,9 +276,7 @@ export function useRenameWorkspaceEntryMutation(options?: { workspaceId?: string
         queryClient.invalidateQueries({
           queryKey: anyHarnessGitStatusKey(cacheScopeKey, workspaceId),
         }),
-        queryClient.invalidateQueries({
-          queryKey: anyHarnessGitDiffScopeKey(cacheScopeKey, workspaceId),
-        }),
+        invalidateGitDiffCache(queryClient, cacheScopeKey, workspaceId),
       ];
       if (response.entry.kind === "directory") {
         invalidations.push(
@@ -286,6 +286,7 @@ export function useRenameWorkspaceEntryMutation(options?: { workspaceId?: string
         );
       }
       await Promise.all(invalidations);
+      advanceGitCacheForceEpoch(queryClient, cacheScopeKey, workspaceId);
     },
   });
 }
@@ -320,9 +321,7 @@ export function useDeleteWorkspaceEntryMutation(options?: { workspaceId?: string
         queryClient.invalidateQueries({
           queryKey: anyHarnessGitStatusKey(cacheScopeKey, workspaceId),
         }),
-        queryClient.invalidateQueries({
-          queryKey: anyHarnessGitDiffScopeKey(cacheScopeKey, workspaceId),
-        }),
+        invalidateGitDiffCache(queryClient, cacheScopeKey, workspaceId),
       ];
       if (response.kind === "directory") {
         invalidations.push(
@@ -332,6 +331,7 @@ export function useDeleteWorkspaceEntryMutation(options?: { workspaceId?: string
         );
       }
       await Promise.all(invalidations);
+      advanceGitCacheForceEpoch(queryClient, cacheScopeKey, workspaceId);
     },
   });
 }
@@ -381,11 +381,12 @@ function useCreateWorkspaceEntryMutation(
             })
           : Promise.resolve(),
         kind === "file"
-          ? queryClient.invalidateQueries({
-              queryKey: anyHarnessGitDiffScopeKey(cacheScopeKey, workspaceId),
-            })
+          ? invalidateGitDiffCache(queryClient, cacheScopeKey, workspaceId)
           : Promise.resolve(),
       ]);
+      if (kind === "file") {
+        advanceGitCacheForceEpoch(queryClient, cacheScopeKey, workspaceId);
+      }
     },
   });
 }

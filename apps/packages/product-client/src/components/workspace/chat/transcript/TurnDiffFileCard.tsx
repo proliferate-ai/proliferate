@@ -18,9 +18,10 @@ interface TurnDiffFileCardProps {
   turnId: string;
   workspaceId: string | null;
   baseRef: string | null;
+  cacheGeneration: string;
   isRuntimeReady: boolean;
   runtimeBlockedReason: string | null;
-  metadataLoading: boolean;
+  metadataPending: boolean;
   metadataErrorMessage: string | null;
   fallbackAdditions: number;
   fallbackDeletions: number;
@@ -35,9 +36,10 @@ export function TurnDiffFileCard({
   turnId,
   workspaceId,
   baseRef,
+  cacheGeneration,
   isRuntimeReady,
   runtimeBlockedReason,
-  metadataLoading,
+  metadataPending,
   metadataErrorMessage,
   fallbackAdditions,
   fallbackDeletions,
@@ -48,16 +50,19 @@ export function TurnDiffFileCard({
   const {
     currentDiff,
     metadataPolicy,
-    diffQuery,
     diffErrorMessage,
     additions,
     deletions,
     patch,
     patchPolicy,
+    diffData,
+    diffPending,
   } = useTurnCurrentFilePatch({
     file,
     workspaceId,
     baseRef,
+    cacheGeneration,
+    metadataPending,
     enabled: isRuntimeReady && isExpanded,
   });
   // Turn diffs use scope=base_worktree (worktree vs merge-base), so the
@@ -67,7 +72,7 @@ export function TurnDiffFileCard({
     path: file.path,
     enabled: isRuntimeReady && Boolean(currentDiff),
   });
-  const liveDiffData = currentDiff ? diffQuery.data : null;
+  const liveDiffData = currentDiff ? diffData : null;
   const emptyDiffState = formatEmptyDiffState({
     binary: Boolean(liveDiffData?.binary || currentDiff?.binary),
     truncated: Boolean(liveDiffData?.truncated && !patch),
@@ -100,18 +105,18 @@ export function TurnDiffFileCard({
           title="Diff unavailable"
           description={runtimeBlockedReason ?? "The workspace runtime is not ready."}
         />
-      ) : metadataLoading && !currentDiff ? (
-        <TurnDiffInlineState
-          icon={<RefreshCw className="icon-paired animate-spin" />}
-          title="Loading diff"
-          description="Fetching the latest file patch."
-        />
-      ) : metadataErrorMessage && !currentDiff ? (
+      ) : metadataErrorMessage ? (
         <TurnDiffInlineState
           icon={<CircleAlert className="icon-paired" />}
           title="Diff unavailable"
           description={metadataErrorMessage}
           onOpenFile={onOpenFile}
+        />
+      ) : metadataPending ? (
+        <TurnDiffInlineState
+          icon={<RefreshCw className="icon-paired animate-spin" />}
+          title="Loading diff"
+          description="Fetching the latest file patch."
         />
       ) : !currentDiff ? (
         recordedPatch && recordedPolicy ? (
@@ -142,7 +147,7 @@ export function TurnDiffFileCard({
           title={metadataPolicy?.placeholderTitle ?? "Too large to render inline"}
           description={metadataPolicy?.placeholderDescription ?? "Open the file to inspect this change."}
         />
-      ) : diffQuery.isLoading ? (
+      ) : diffPending ? (
         <TurnDiffInlineState
           icon={<RefreshCw className="icon-paired animate-spin" />}
           title="Loading diff"

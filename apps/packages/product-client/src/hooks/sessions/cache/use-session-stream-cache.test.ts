@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
 import { createElement, type ReactNode } from "react";
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   AnyHarnessRuntime,
   anyHarnessCoworkManagedWorkspacesKey,
   anyHarnessGitStatusKey,
+  readGitCacheForceEpoch,
   anyHarnessRuntimeKey,
   anyHarnessSessionReviewsKey,
   anyHarnessSessionSubagentsKey,
@@ -55,8 +56,8 @@ describe("useSessionStreamCache", () => {
     ]);
   });
 
-  it("preserves the other stream-triggered invalidation keys", () => {
-    const { invalidateQueries, result } = renderStreamCache();
+  it("preserves invalidation keys and advances Git evidence after status settles", async () => {
+    const { invalidateQueries, queryClient, result } = renderStreamCache();
 
     act(() => {
       result.current.invalidateWorkspaceCollections(RUNTIME_URL);
@@ -98,6 +99,9 @@ describe("useSessionStreamCache", () => {
         queryKey: anyHarnessGitStatusKey(CACHE_SCOPE_KEY, "workspace-1"),
       },
     ]);
+    await waitFor(() => expect(
+      readGitCacheForceEpoch(queryClient, CACHE_SCOPE_KEY, "workspace-1"),
+    ).toBe(1));
   });
 });
 
@@ -118,5 +122,5 @@ function renderStreamCache() {
     }),
   );
   const { result } = renderHook(() => useSessionStreamCache(), { wrapper });
-  return { invalidateQueries, result };
+  return { invalidateQueries, queryClient, result };
 }

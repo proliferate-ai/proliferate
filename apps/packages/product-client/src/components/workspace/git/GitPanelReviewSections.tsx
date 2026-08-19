@@ -12,6 +12,8 @@ interface GitPanelReviewSectionsProps {
   sections: readonly GitPanelSection[];
   activeWorkspaceId: string | null;
   baseRef: string | null;
+  cacheGeneration: string;
+  metadataPending: boolean;
   layout: "unified" | "split";
   wrapLongLines: boolean;
   collapsedFiles: ReadonlySet<string>;
@@ -35,6 +37,8 @@ export function GitPanelReviewSections({
   sections,
   activeWorkspaceId,
   baseRef,
+  cacheGeneration,
+  metadataPending,
   layout,
   wrapLongLines,
   collapsedFiles,
@@ -63,6 +67,8 @@ export function GitPanelReviewSections({
               sectionScope={section.scope}
               file={file}
               baseRef={baseRef}
+              cacheGeneration={cacheGeneration}
+              metadataPending={metadataPending}
               layout={layout}
               wrapLongLines={wrapLongLines}
               collapsed={collapsedFiles.has(entry.key)}

@@ -21,6 +21,8 @@ function renderBody(overrides: Partial<Parameters<typeof GitPanelReviewBody>[0]>
     <GitPanelReviewBody
       changesFilter="working_tree_composite"
       baseRef={null}
+      cacheGeneration="generation-1"
+      metadataPending={false}
       isLoading={false}
       errorMessage={null}
       runtimeBlockedReason={null}
@@ -77,6 +79,8 @@ describe("GitPanelReviewBody loading vs empty split (Rung 4 / Q19)", () => {
       <GitPanelReviewBody
         changesFilter="working_tree_composite"
         baseRef={null}
+        cacheGeneration="generation-1"
+        metadataPending={false}
         isLoading={false}
         errorMessage={null}
         runtimeBlockedReason={null}

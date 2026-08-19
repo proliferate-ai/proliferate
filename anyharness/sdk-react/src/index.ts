@@ -66,6 +66,7 @@ export {
   anyHarnessPlanKey,
   anyHarnessPlanDocumentKey,
   anyHarnessGitStatusKey,
+  anyHarnessGitForceEpochKey,
   anyHarnessGitDiffScopeKey,
   anyHarnessGitDiffKey,
   anyHarnessGitBranchDiffFilesKey,
@@ -85,6 +86,11 @@ export {
   anyHarnessTerminalsKey,
   anyHarnessWorkspaceQueryKeyRoots,
 } from "./lib/query-keys.js";
+
+export {
+  advanceGitCacheForceEpoch,
+  readGitCacheForceEpoch,
+} from "./lib/git-cache-generation.js";
 
 export {
   anyHarnessWorkflowRunsScopeKey,
@@ -235,6 +241,8 @@ export {
 } from "./hooks/reviews.js";
 export {
   useGitStatusQuery,
+  useGitCacheForceEpoch,
+  useAdvanceGitCacheForceEpoch,
   useGitDiffQuery,
   useGitBranchDiffFilesQuery,
   useGitBaseWorktreeDiffFilesQuery,

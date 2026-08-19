@@ -21,6 +21,8 @@ import { useContentSearchStore } from "#product/stores/search/content-search-sto
 interface GitPanelReviewBodyProps {
   changesFilter: GitPanelMode;
   baseRef: string | null;
+  cacheGeneration: string;
+  metadataPending: boolean;
   isLoading: boolean;
   errorMessage: string | null;
   runtimeBlockedReason: string | null;
@@ -48,6 +50,8 @@ interface GitPanelReviewBodyProps {
 export function GitPanelReviewBody({
   changesFilter,
   baseRef,
+  cacheGeneration,
+  metadataPending,
   isLoading,
   errorMessage,
   runtimeBlockedReason,
@@ -145,6 +149,8 @@ export function GitPanelReviewBody({
                 sections={sections}
                 activeWorkspaceId={activeWorkspaceId}
                 baseRef={baseRef}
+                cacheGeneration={cacheGeneration}
+                metadataPending={metadataPending}
                 layout={layout}
                 wrapLongLines={wrapLongLines}
                 collapsedFiles={collapsedFiles}

@@ -6,10 +6,12 @@ import type {
 } from "@anyharness/sdk";
 import {
   useGitBaseWorktreeDiffFilesQuery,
+  useGitCacheForceEpoch,
   useGitDiffQuery,
   useGitStatusQuery,
 } from "@anyharness/sdk-react";
 import { useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/derived/use-hot-paint-gate";
 import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
@@ -25,6 +27,12 @@ import { resolveGitPanelWorkspaceContext } from "#product/lib/domain/workspaces/
 import { useRepoPreferencesStore } from "#product/stores/preferences/repo-preferences-store";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { collectTurnTouchedFiles } from "#product/domain/chats/transcript/last-turn-file-changes";
+import {
+  buildChangesCacheGeneration,
+  buildChangesMetadataFingerprint,
+  buildChangesMetadataListCacheGeneration,
+} from "#product/lib/domain/workspaces/changes/changes-cache-generation";
+import { observeChangesMetadata } from "#product/hooks/workspaces/cache/changes-cache-observation";
 
 const EMPTY_STATUS_FILES: GitChangedFile[] = [];
 const EMPTY_BRANCH_FILES: GitDiffFile[] = [];
@@ -42,9 +50,11 @@ export function useTurnCurrentFileDiffs({
   transcript: TranscriptState;
   workspaceId: string | null;
 }) {
+  const queryClient = useQueryClient();
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
+  const forceEpoch = useGitCacheForceEpoch({ workspaceId });
   const runtimeBlockWorkspaceId = gitPanelRuntimeBlockWorkspaceId(
     workspaceId,
     selectedLogicalWorkspaceId,
@@ -76,6 +86,7 @@ export function useTurnCurrentFileDiffs({
   const gitStatusQuery = useGitStatusQuery({
     workspaceId,
     enabled: isRuntimeReady && !hotPaintPending && touchedFiles.length > 0,
+    staleTime: Infinity,
   });
   const baseRef = resolveGitPanelBaseRef({
     repoPreferenceDefaultBranch: savedDefaultBranch,
@@ -86,6 +97,11 @@ export function useTurnCurrentFileDiffs({
   const baseWorktreeFilesQuery = useGitBaseWorktreeDiffFilesQuery({
     workspaceId,
     baseRef: activeBaseRef,
+    cacheGeneration: buildChangesMetadataListCacheGeneration({
+      forceEpoch,
+      completedTurnId: turn.turnId,
+    }),
+    staleTime: Infinity,
     enabled:
       isRuntimeReady
       && !hotPaintPending
@@ -104,14 +120,42 @@ export function useTurnCurrentFileDiffs({
     [baseWorktreeFiles, touchedFiles],
   );
   const error = baseWorktreeFilesQuery.error ?? gitStatusQuery.error;
+  const semanticFingerprint = useMemo(
+    () => buildChangesMetadataFingerprint(baseWorktreeFilesQuery.data),
+    [baseWorktreeFilesQuery.data],
+  );
+  const observationToken = observeChangesMetadata({
+    queryClient,
+    scopeKey: `turn-current-diffs:${workspaceId ?? ""}:${turn.turnId}`,
+    forceEpoch,
+    semanticFingerprint,
+  });
+  const cacheGeneration = useMemo(
+    () => buildChangesCacheGeneration({
+      kind: "last_turn",
+      semanticFingerprint,
+      observationToken,
+      forceEpoch,
+      completedTurnId: turn.turnId,
+    }),
+    [forceEpoch, observationToken, semanticFingerprint, turn.turnId],
+  );
+  const metadataPending = gitStatusQuery.isFetching
+    || gitStatusQuery.isStale
+    || gitStatusQuery.isError
+    || baseWorktreeFilesQuery.isFetching
+    || baseWorktreeFilesQuery.isStale
+    || baseWorktreeFilesQuery.isError;
 
   return {
     activeWorkspaceId: workspaceId,
     baseRef: activeBaseRef,
+    cacheGeneration,
     files: sections[0]?.files ?? [],
     isRuntimeReady,
     runtimeBlockedReason,
     isLoading: baseWorktreeFilesQuery.isLoading || gitStatusQuery.isLoading,
+    metadataPending,
     errorMessage: error instanceof Error ? error.message : null,
   };
 }
@@ -120,11 +164,15 @@ export function useTurnCurrentFilePatch({
   file,
   workspaceId,
   baseRef,
+  cacheGeneration,
+  metadataPending,
   enabled,
 }: {
   file: GitPanelReviewFile;
   workspaceId: string | null;
   baseRef: string | null;
+  cacheGeneration: string;
+  metadataPending: boolean;
   enabled: boolean;
 }) {
   const currentDiff = file.currentDiff;
@@ -144,14 +192,26 @@ export function useTurnCurrentFilePatch({
     scope: "base_worktree",
     baseRef,
     oldPath: file.oldPath,
+    cacheGeneration,
     enabled:
       enabled
+      && !metadataPending
       && Boolean(currentDiff)
       && Boolean(metadataPolicy?.canFetchInline),
   });
-  const additions = currentDiff ? diffQuery.data?.additions ?? currentDiff.additions : 0;
-  const deletions = currentDiff ? diffQuery.data?.deletions ?? currentDiff.deletions : 0;
-  const patch = currentDiff ? diffQuery.data?.patch ?? null : null;
+  const diffData = currentDiff
+    && !metadataPending
+    && !diffQuery.isFetching
+    && !diffQuery.isStale
+      ? diffQuery.data ?? null
+      : null;
+  const diffPending = metadataPending
+    || diffQuery.isLoading
+    || diffQuery.isFetching
+    || Boolean(!diffQuery.isError && diffQuery.isStale && diffQuery.data);
+  const additions = currentDiff ? diffData?.additions ?? currentDiff.additions : 0;
+  const deletions = currentDiff ? diffData?.deletions ?? currentDiff.deletions : 0;
+  const patch = currentDiff ? diffData?.patch ?? null : null;
   const patchPolicy = useMemo(
     () => patch
       ? resolveDiffDisplayPolicy({
@@ -168,7 +228,12 @@ export function useTurnCurrentFilePatch({
     currentDiff,
     metadataPolicy,
     diffQuery,
-    diffErrorMessage: currentDiff && diffQuery.isError
+    diffData,
+    diffPending,
+    diffErrorMessage: currentDiff
+      && !metadataPending
+      && !diffQuery.isFetching
+      && diffQuery.isError
       ? formatDiffErrorMessage(diffQuery.error)
       : null,
     additions,

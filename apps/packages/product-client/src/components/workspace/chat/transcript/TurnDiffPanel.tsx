@@ -124,9 +124,10 @@ export function TurnDiffPanel({
               turnId={turn.turnId}
               workspaceId={currentDiffs.activeWorkspaceId}
               baseRef={currentDiffs.baseRef}
+              cacheGeneration={currentDiffs.cacheGeneration}
               isRuntimeReady={currentDiffs.isRuntimeReady}
               runtimeBlockedReason={currentDiffs.runtimeBlockedReason}
-              metadataLoading={currentDiffs.isLoading}
+              metadataPending={currentDiffs.metadataPending}
               metadataErrorMessage={currentDiffs.errorMessage}
               fallbackAdditions={fileStats.get(file.key)?.additions ?? 0}
               fallbackDeletions={fileStats.get(file.key)?.deletions ?? 0}

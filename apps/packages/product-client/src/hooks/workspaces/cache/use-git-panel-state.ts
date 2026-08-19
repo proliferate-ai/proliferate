@@ -1,12 +1,15 @@
 import type { GitChangedFile, GitDiffFile } from "@anyharness/sdk";
 import {
   type AnyHarnessQueryTimingOptions,
+  useAdvanceGitCacheForceEpoch,
   useGitBaseWorktreeDiffFilesQuery,
   useGitBranchDiffFilesQuery,
   useGitBranchesQuery,
+  useGitCacheForceEpoch,
   useGitStatusQuery,
 } from "@anyharness/sdk-react";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useIsHotPaintGatePendingForWorkspace } from "#product/hooks/workspaces/derived/use-hot-paint-gate";
 import { useWorkspaceRuntimeBlock } from "#product/hooks/workspaces/derived/use-workspace-runtime-block";
 import { useWorkspaces } from "#product/hooks/workspaces/cache/use-workspaces";
@@ -26,6 +29,13 @@ import { useSessionSelectionStore } from "#product/stores/sessions/session-selec
 import { useSessionTranscriptStore } from "#product/stores/sessions/session-transcript-store";
 import { collectLatestCompletedTurnTouchedFiles } from "#product/domain/chats/transcript/last-turn-file-changes";
 import { collectTurnFileRevertPatchEntries } from "#product/domain/chats/transcript/turn-file-patches";
+import {
+  buildChangesCacheGeneration,
+  buildChangesMetadataFingerprint,
+  buildChangesMetadataListCacheGeneration,
+} from "#product/lib/domain/workspaces/changes/changes-cache-generation";
+import { refreshGitPanelMetadata } from "#product/lib/workflows/workspaces/changes/refresh-git-panel-metadata";
+import { observeChangesMetadata } from "#product/hooks/workspaces/cache/changes-cache-observation";
 
 const EMPTY_STATUS_FILES: GitChangedFile[] = [];
 const EMPTY_BRANCH_FILES: GitDiffFile[] = [];
@@ -37,8 +47,8 @@ interface GitPanelStateOptions {
   branchDiffFilesTimingOptions?: AnyHarnessQueryTimingOptions;
 }
 
-// Owns read-only Git panel state for changed-file surfaces. Git mutations stay
-// in the component/action hooks that own the user intent.
+// Owns the composed Git panel cache, including its explicit refresh boundary.
+// Git mutations stay in the access hooks that own the user intent.
 export function useGitPanelState(
   mode: GitPanelMode,
   options?: GitPanelStateOptions,
@@ -52,6 +62,9 @@ export function useGitPanelState(
     activeSessionId ? state.entriesById[activeSessionId]?.transcript ?? null : null
   );
   const activeWorkspaceId = selectedWorkspaceId;
+  const queryClient = useQueryClient();
+  const forceEpoch = useGitCacheForceEpoch({ workspaceId: activeWorkspaceId });
+  const advanceForceEpoch = useAdvanceGitCacheForceEpoch({ workspaceId: activeWorkspaceId });
   const runtimeBlockWorkspaceId = gitPanelRuntimeBlockWorkspaceId(
     selectedWorkspaceId,
     selectedLogicalWorkspaceId,
@@ -80,6 +93,7 @@ export function useGitPanelState(
   const gitStatusQuery = useGitStatusQuery({
     workspaceId: activeWorkspaceId,
     enabled: isRuntimeReady && !hotPaintPending,
+    staleTime: Infinity,
     ...(options?.statusTimingOptions ?? {}),
   });
 
@@ -92,12 +106,6 @@ export function useGitPanelState(
     ?? baseRef
     ?? DEFAULT_REVIEW_BASE_REF;
 
-  const branchFilesQuery = useGitBranchDiffFilesQuery({
-    workspaceId: activeWorkspaceId,
-    baseRef: activeBaseRef,
-    enabled: isRuntimeReady && !hotPaintPending && mode === "branch",
-    ...(options?.branchDiffFilesTimingOptions ?? {}),
-  });
   const lastTurnTouched = useMemo(
     () => collectLatestCompletedTurnTouchedFiles(activeTranscript),
     [activeTranscript],
@@ -108,9 +116,22 @@ export function useGitPanelState(
       : { entries: [], blockedReason: null },
     [activeTranscript, lastTurnTouched.turn],
   );
+  const branchFilesQuery = useGitBranchDiffFilesQuery({
+    workspaceId: activeWorkspaceId,
+    baseRef: activeBaseRef,
+    cacheGeneration: buildChangesMetadataListCacheGeneration({ forceEpoch }),
+    staleTime: Infinity,
+    enabled: isRuntimeReady && !hotPaintPending && mode === "branch",
+    ...(options?.branchDiffFilesTimingOptions ?? {}),
+  });
   const baseWorktreeFilesQuery = useGitBaseWorktreeDiffFilesQuery({
     workspaceId: activeWorkspaceId,
     baseRef: activeBaseRef,
+    cacheGeneration: buildChangesMetadataListCacheGeneration({
+      forceEpoch,
+      completedTurnId: lastTurnTouched.turn?.turnId ?? null,
+    }),
+    staleTime: Infinity,
     enabled: isRuntimeReady
       && !hotPaintPending
       && mode === "last_turn"
@@ -146,6 +167,50 @@ export function useGitPanelState(
     [baseWorktreeFiles, branchFiles, lastTurnTouched.files, mode, statusFiles],
   );
   const branchRefs = branchesQuery.data ?? [];
+  const evidenceKind = mode === "branch"
+    ? "branch"
+    : mode === "last_turn"
+      ? "last_turn"
+      : "working_tree";
+  const generationMetadata = mode === "branch"
+    ? branchFilesQuery.data
+    : mode === "last_turn"
+      ? baseWorktreeFilesQuery.data
+      : gitStatusQuery.data;
+  const semanticFingerprint = useMemo(
+    () => buildChangesMetadataFingerprint(generationMetadata),
+    [generationMetadata],
+  );
+  const observationToken = observeChangesMetadata({
+    queryClient,
+    scopeKey: `git-panel:${activeWorkspaceId ?? ""}:${evidenceKind}`,
+    forceEpoch,
+    semanticFingerprint,
+  });
+  const cacheGeneration = useMemo(() => {
+    return buildChangesCacheGeneration({
+      kind: evidenceKind,
+      semanticFingerprint,
+      observationToken,
+      forceEpoch,
+      completedTurnId: evidenceKind === "last_turn"
+        ? lastTurnTouched.turn?.turnId ?? null
+        : null,
+    });
+  }, [
+    evidenceKind,
+    forceEpoch,
+    lastTurnTouched.turn?.turnId,
+    observationToken,
+    semanticFingerprint,
+  ]);
+  const metadataPending = mode === "branch"
+    ? branchFilesQuery.isFetching || branchFilesQuery.isStale || branchFilesQuery.isError
+    : mode === "last_turn"
+      ? baseWorktreeFilesQuery.isFetching
+        || baseWorktreeFilesQuery.isStale
+        || baseWorktreeFilesQuery.isError
+      : gitStatusQuery.isFetching || gitStatusQuery.isStale || gitStatusQuery.isError;
 
   const totalChangedCount = mode === "branch" || mode === "last_turn"
     ? sections.reduce((count, section) => count + section.files.length, 0)
@@ -157,11 +222,32 @@ export function useGitPanelState(
       ? baseWorktreeFilesQuery.isLoading
       : gitStatusQuery.isLoading;
   const error = mode === "branch"
-    ? branchFilesQuery.error ?? gitStatusQuery.error
+    ? branchFilesQuery.error ?? gitStatusQuery.error ?? branchesQuery.error
     : mode === "last_turn"
-      ? baseWorktreeFilesQuery.error ?? gitStatusQuery.error
-      : gitStatusQuery.error;
+      ? baseWorktreeFilesQuery.error ?? gitStatusQuery.error ?? branchesQuery.error
+      : gitStatusQuery.error ?? branchesQuery.error;
   const errorMessage = error instanceof Error ? error.message : null;
+  const refetch = useCallback(async () => {
+    const refreshes: Array<() => Promise<{ isError: boolean }>> = [
+      () => gitStatusQuery.refetch(),
+      () => branchesQuery.refetch(),
+    ];
+    if (mode === "branch") {
+      refreshes.push(() => branchFilesQuery.refetch());
+    }
+    if (mode === "last_turn" && lastTurnTouched.files.length > 0) {
+      refreshes.push(() => baseWorktreeFilesQuery.refetch());
+    }
+    return refreshGitPanelMetadata({ refreshes, advanceForceEpoch });
+  }, [
+    advanceForceEpoch,
+    baseWorktreeFilesQuery.refetch,
+    branchFilesQuery.refetch,
+    branchesQuery.refetch,
+    gitStatusQuery.refetch,
+    lastTurnTouched.files.length,
+    mode,
+  ]);
 
   return {
     activeWorkspaceId,
@@ -175,22 +261,15 @@ export function useGitPanelState(
       ? sections.reduce((count, section) => count + section.files.length, 0)
       : files.length,
     activeFilterLabel,
+    cacheGeneration,
+    metadataPending,
     lastTurn: lastTurnTouched.turn,
     lastTurnRevertPatches,
     isRuntimeReady,
     runtimeBlockedReason,
     isLoading: loading,
     errorMessage,
-    refetch: async () => {
-      await gitStatusQuery.refetch();
-      await branchesQuery.refetch();
-      if (mode === "branch") {
-        await branchFilesQuery.refetch();
-      }
-      if (mode === "last_turn" && lastTurnTouched.files.length > 0) {
-        await baseWorktreeFilesQuery.refetch();
-      }
-    },
+    refetch,
   };
 }
 

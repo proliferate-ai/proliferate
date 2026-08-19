@@ -112,6 +112,26 @@ export function hashAppQueryKey(queryKey: unknown): string {
   }
 }
 
+export function hashAppQueryKeyForTelemetry(queryKey: unknown): string {
+  return hashAppQueryKey(redactSensitiveQueryKeyForTelemetry(queryKey));
+}
+
+function redactSensitiveQueryKeyForTelemetry(queryKey: unknown): unknown {
+  if (
+    Array.isArray(queryKey)
+    && queryKey[0] === "anyharness"
+    && queryKey[2] === "workspace"
+    && queryKey[4] === "git-diff"
+  ) {
+    const kind = queryKey[5] === "branch-files"
+      || queryKey[5] === "base-worktree-files"
+      ? queryKey[5]
+      : "file";
+    return ["anyharness", "workspace", "git-diff", kind, "[redacted]"];
+  }
+  return queryKey;
+}
+
 export function shouldCaptureAppQueryError(error: unknown): boolean {
   return !hasAnyHarnessRuntimeIncidentReceipt(error)
     && !isCancelledError(error)
@@ -142,7 +162,7 @@ export function createAppQueryClient({
             domain: "react_query",
           },
           extras: {
-            query_hash: query.queryHash,
+            query_hash: hashAppQueryKeyForTelemetry(query.queryKey),
           },
         });
       },
