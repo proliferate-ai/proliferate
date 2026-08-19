@@ -116,7 +116,7 @@ export function usePlanHandoffWorkflow({
   ), [effectiveSelection?.kind, launchCatalog.launchAgents]);
   const launchControlValues = useMemo(() => ({
     ...launchControlDefaults,
-    ...(controlSelection?.agentKind === effectiveSelection?.kind
+    ...(controlSelection && controlSelection.agentKind === effectiveSelection?.kind
       ? controlSelection.values
       : {}),
   }), [controlSelection, effectiveSelection?.kind, launchControlDefaults]);
