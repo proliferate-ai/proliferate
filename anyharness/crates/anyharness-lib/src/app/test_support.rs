@@ -43,16 +43,25 @@ pub(crate) fn actor_capabilities_for_store(store: &SessionStore) -> ActorCapabil
 /// Seed the successful Claude observation reported by the scripted session
 /// harness used throughout actor and workflow tests.
 pub(crate) fn seed_scripted_claude_launch_options(service: &HarnessLaunchOptionsService) {
+    seed_observed_launch_options(service, "claude");
+}
+
+/// Seed one target-observed launch-option statement for `harness_kind` so
+/// intent validation at the start seam has a current-basis observation.
+pub(crate) fn seed_observed_launch_options(
+    service: &HarnessLaunchOptionsService,
+    harness_kind: &str,
+) {
     if service
-        .read("claude")
-        .expect("read Claude launch options")
+        .read(harness_kind)
+        .expect("read launch options")
         .is_some()
     {
         return;
     }
     let started = service
-        .begin_probe("claude", "2026-08-10T23:58:00Z")
-        .expect("begin Claude launch-option observation");
+        .begin_probe(harness_kind, "2026-08-10T23:58:00Z")
+        .expect("begin launch-option observation");
     service
         .record_success(
             &started,
@@ -70,7 +79,7 @@ pub(crate) fn seed_scripted_claude_launch_options(service: &HarnessLaunchOptions
             },
             "2026-08-10T23:58:01Z",
         )
-        .expect("record scripted Claude launch-option observation");
+        .expect("record scripted launch-option observation");
 }
 
 /// Install the product-owned API-key route used by scripted Claude fixtures.

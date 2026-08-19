@@ -387,6 +387,20 @@ impl SessionStore {
     ) -> anyhow::Result<()> {
         self.db.with_tx(|conn| {
             insert_session_row(conn, session)?;
+            // Same emptiness rule as the 0076 backfill: the source runtime's
+            // requested values were validated against the source target's
+            // observations, which do not authorize launches on this target.
+            // Live values restore from the carried live snapshot; the intent
+            // must stay startable here.
+            insert_launch_intent_row(
+                conn,
+                &session.id,
+                &ResolvedLaunchIntent {
+                    model_id: None,
+                    control_values: Default::default(),
+                    created_at: session.created_at.clone(),
+                },
+            )?;
             super::mobility::restore_pending_prompt_seq_cursor(
                 conn,
                 &session.id,

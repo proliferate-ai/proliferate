@@ -673,6 +673,7 @@ async fn ensure_live_session_rejects_missing_checkout_for_existing_session() {
     );
 
     // Persist a dormant session row for that workspace directly in the store.
+    test_support::seed_observed_launch_options(&state.launch_options_service, "claude");
     let mut record = session_record("claude");
     record.workspace_id = "workspace-missing".to_string();
     state
@@ -680,6 +681,7 @@ async fn ensure_live_session_rejects_missing_checkout_for_existing_session() {
         .store()
         .insert(&record)
         .expect("insert session");
+    state.session_service.store().seed_empty_launch_intent(&record.id);
 
     let error = state
         .session_runtime
@@ -797,6 +799,7 @@ exit 0
         &workspace_path.to_string_lossy(),
     );
 
+    test_support::seed_observed_launch_options(&state.launch_options_service, "opencode");
     let mut record = session_record("opencode");
     record.workspace_id = "workspace-revoked".to_string();
     state
@@ -804,6 +807,7 @@ exit 0
         .store()
         .insert(&record)
         .expect("insert session");
+    state.session_service.store().seed_empty_launch_intent(&record.id);
 
     let error = state
         .session_runtime
@@ -903,6 +907,7 @@ exit 0
         &workspace_path.to_string_lossy(),
     );
 
+    test_support::seed_observed_launch_options(&state.launch_options_service, "opencode");
     let mut record = session_record("opencode");
     record.workspace_id = "workspace-selection-missing".to_string();
     state
@@ -910,6 +915,7 @@ exit 0
         .store()
         .insert(&record)
         .expect("insert session");
+    state.session_service.store().seed_empty_launch_intent(&record.id);
 
     let error = state
         .session_runtime
@@ -991,6 +997,7 @@ exit 0
         &workspace_path.to_string_lossy(),
     );
 
+    test_support::seed_observed_launch_options(&state.launch_options_service, "opencode");
     let mut record = session_record("opencode");
     record.workspace_id = "workspace-fork-revoked".to_string();
     record.last_prompt_at = Some("2026-03-25T00:05:00Z".to_string());
@@ -1000,6 +1007,7 @@ exit 0
         .store()
         .insert(&record)
         .expect("insert session");
+    state.session_service.store().seed_empty_launch_intent(&record.id);
 
     let error = state
         .session_runtime

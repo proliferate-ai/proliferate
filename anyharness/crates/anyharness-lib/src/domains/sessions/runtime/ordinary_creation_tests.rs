@@ -50,6 +50,7 @@ fn test_state(label: &str, program: &str) -> (AppState, AgentProgramGuard) {
         AgentSeedStore::not_configured_dev(),
     )
     .unwrap();
+    test_support::seed_scripted_claude_launch_options(&state.launch_options_service);
     test_support::seed_workspace_with_repo_root(
         &state.db,
         "workspace-1",
