@@ -12,17 +12,14 @@ pub fn read_file(
         return Err(FileServiceError::NotAFile("".to_string()));
     }
 
-    let abs = resolve_safe_path(workspace_root, relative_path).map_err(FileServiceError::Safety)?;
-
-    if !abs.exists() {
-        return Err(FileServiceError::NotFound(relative_path.to_string()));
-    }
+    let abs = resolve_safe_path(workspace_root, relative_path)
+        .map_err(|error| FileServiceError::from_safety(error, relative_path))?;
 
     let metadata = abs
         .metadata()
-        .map_err(|e| FileServiceError::Io(e.to_string()))?;
+        .map_err(|error| FileServiceError::from_io(error, relative_path))?;
 
-    if metadata.is_dir() {
+    if !metadata.is_file() {
         return Err(FileServiceError::NotAFile(relative_path.to_string()));
     }
 
@@ -44,7 +41,8 @@ pub fn read_file(
         });
     }
 
-    let data = std::fs::read(&abs).map_err(|e| FileServiceError::Io(e.to_string()))?;
+    let data =
+        std::fs::read(&abs).map_err(|error| FileServiceError::from_io(error, relative_path))?;
 
     let is_text = is_likely_text(&data);
     if !is_text {

@@ -1,3 +1,4 @@
+use std::io;
 use std::path::{Component, Path, PathBuf};
 
 const MAX_TEXT_FILE_SIZE: u64 = 1_048_576; // 1 MiB
@@ -7,7 +8,8 @@ pub fn max_text_file_size() -> u64 {
 }
 
 /// Validate that a workspace-relative path is safe, then resolve it to an
-/// absolute path guaranteed to stay inside `workspace_root`.
+/// absolute path whose canonical target is inside `workspace_root` at the
+/// time it is checked.
 pub fn resolve_safe_path(
     workspace_root: &Path,
     relative_path: &str,
@@ -15,41 +17,27 @@ pub fn resolve_safe_path(
     let rel = validate_relative_path(relative_path)?;
 
     let candidate = workspace_root.join(rel);
-    let canonical_root = workspace_root
-        .canonicalize()
-        .map_err(|e| SafetyError::IoError(e.to_string()))?;
-    let canonical_git = canonical_git_path(workspace_root)?;
+    let canonical_root = workspace_root.canonicalize().map_err(map_safety_io_error)?;
 
-    // If the target exists, canonicalize and verify containment
-    if candidate.exists() {
-        let canonical = candidate
-            .canonicalize()
-            .map_err(|e| SafetyError::IoError(e.to_string()))?;
-
-        if !canonical.starts_with(&canonical_root) {
-            return Err(SafetyError::OutsideWorkspace);
+    match candidate.symlink_metadata() {
+        Ok(_) => {
+            // An occupied final entry is resolved through its target. A
+            // dangling final symlink is therefore distinct from an ordinary
+            // absent entry and maps to NotFound rather than write/create
+            // compatibility behavior.
+            let canonical = candidate.canonicalize().map_err(map_safety_io_error)?;
+            validate_canonical_target(&canonical, &canonical_root)?;
+            Ok(canonical)
         }
-        reject_git_path(&canonical, canonical_git.as_deref())?;
-        Ok(canonical)
-    } else {
-        // For writes to new files, verify the nearest existing ancestor stays
-        // inside the workspace. This blocks symlink escapes even when multiple
-        // parent segments do not exist yet.
-        let mut current = candidate.parent();
-        while let Some(parent) = current {
-            if parent.exists() {
-                let canonical_parent = parent
-                    .canonicalize()
-                    .map_err(|e| SafetyError::IoError(e.to_string()))?;
-                if !canonical_parent.starts_with(&canonical_root) {
-                    return Err(SafetyError::OutsideWorkspace);
-                }
-                reject_git_path(&canonical_parent, canonical_git.as_deref())?;
-                break;
-            }
-            current = parent.parent();
+        Err(error) if classify_io_error(&error) == ClassifiedIoError::NotFound => {
+            // For compatibility writes to new files, verify the nearest
+            // existing ancestor. Descriptor-relative traversal is a separate
+            // hardening concern, so this check intentionally describes the
+            // filesystem state only at validation time.
+            validate_nearest_existing_ancestor(candidate.parent(), &canonical_root)?;
+            Ok(candidate)
         }
-        Ok(candidate)
+        Err(error) => Err(map_safety_io_error(error)),
     }
 }
 
@@ -66,44 +54,57 @@ pub fn resolve_safe_entry_path(
     }
 
     let candidate = workspace_root.join(rel);
-    let canonical_root = workspace_root
-        .canonicalize()
-        .map_err(|e| SafetyError::IoError(e.to_string()))?;
-    let canonical_git = canonical_git_path(workspace_root)?;
+    let canonical_root = workspace_root.canonicalize().map_err(map_safety_io_error)?;
     let file_name = candidate
         .file_name()
         .ok_or(SafetyError::InvalidPath)?
         .to_owned();
 
     if let Some(parent) = candidate.parent() {
-        if parent.exists() {
-            let canonical_parent = parent
-                .canonicalize()
-                .map_err(|e| SafetyError::IoError(e.to_string()))?;
-            if !canonical_parent.starts_with(&canonical_root) {
-                return Err(SafetyError::OutsideWorkspace);
+        match parent.symlink_metadata() {
+            Ok(_) => {
+                let canonical_parent = parent.canonicalize().map_err(map_safety_io_error)?;
+                validate_canonical_target(&canonical_parent, &canonical_root)?;
+                return Ok(canonical_parent.join(file_name));
             }
-            reject_git_path(&canonical_parent, canonical_git.as_deref())?;
-            return Ok(canonical_parent.join(file_name));
+            Err(error) if classify_io_error(&error) == ClassifiedIoError::NotFound => {}
+            Err(error) => return Err(map_safety_io_error(error)),
         }
     }
 
-    let mut current = candidate.parent();
-    while let Some(parent) = current {
-        if parent.exists() {
-            let canonical_parent = parent
-                .canonicalize()
-                .map_err(|e| SafetyError::IoError(e.to_string()))?;
-            if !canonical_parent.starts_with(&canonical_root) {
-                return Err(SafetyError::OutsideWorkspace);
-            }
-            reject_git_path(&canonical_parent, canonical_git.as_deref())?;
-            break;
-        }
-        current = parent.parent();
-    }
+    validate_nearest_existing_ancestor(candidate.parent(), &canonical_root)?;
 
     Ok(candidate)
+}
+
+fn validate_nearest_existing_ancestor(
+    mut current: Option<&Path>,
+    canonical_root: &Path,
+) -> Result<(), SafetyError> {
+    while let Some(parent) = current {
+        match parent.symlink_metadata() {
+            Ok(_) => {
+                let canonical_parent = parent.canonicalize().map_err(map_safety_io_error)?;
+                return validate_canonical_target(&canonical_parent, canonical_root);
+            }
+            Err(error) if classify_io_error(&error) == ClassifiedIoError::NotFound => {
+                current = parent.parent();
+            }
+            Err(error) => return Err(map_safety_io_error(error)),
+        }
+    }
+    Ok(())
+}
+
+fn validate_canonical_target(
+    canonical_path: &Path,
+    canonical_root: &Path,
+) -> Result<(), SafetyError> {
+    reject_git_path(canonical_path)?;
+    if !canonical_path.starts_with(canonical_root) {
+        return Err(SafetyError::OutsideWorkspace);
+    }
+    Ok(())
 }
 
 fn validate_relative_path(relative_path: &str) -> Result<&Path, SafetyError> {
@@ -136,18 +137,12 @@ fn validate_relative_path(relative_path: &str) -> Result<&Path, SafetyError> {
     Ok(rel)
 }
 
-fn canonical_git_path(workspace_root: &Path) -> Result<Option<PathBuf>, SafetyError> {
-    match workspace_root.join(".git").canonicalize() {
-        Ok(path) => Ok(Some(path)),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(SafetyError::IoError(error.to_string())),
-    }
-}
-
-fn reject_git_path(canonical_path: &Path, canonical_git: Option<&Path>) -> Result<(), SafetyError> {
-    if let Some(git_path) = canonical_git {
-        if canonical_path == git_path || canonical_path.starts_with(git_path) {
-            return Err(SafetyError::GitDirectory);
+fn reject_git_path(canonical_path: &Path) -> Result<(), SafetyError> {
+    for component in canonical_path.components() {
+        if let Component::Normal(segment) = component {
+            if segment == ".git" {
+                return Err(SafetyError::GitDirectory);
+            }
         }
     }
     Ok(())
@@ -172,14 +167,39 @@ pub fn content_version_token(data: &[u8]) -> String {
     format!("{:016x}", hasher.finish())
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClassifiedIoError {
+    NotFound,
+    PermissionDenied,
+    Unexpected,
+}
+
+pub fn classify_io_error(error: &io::Error) -> ClassifiedIoError {
+    match error.kind() {
+        io::ErrorKind::NotFound => ClassifiedIoError::NotFound,
+        io::ErrorKind::PermissionDenied => ClassifiedIoError::PermissionDenied,
+        _ => ClassifiedIoError::Unexpected,
+    }
+}
+
+fn map_safety_io_error(error: io::Error) -> SafetyError {
+    match classify_io_error(&error) {
+        ClassifiedIoError::NotFound => SafetyError::NotFound,
+        ClassifiedIoError::PermissionDenied => SafetyError::PermissionDenied,
+        ClassifiedIoError::Unexpected => SafetyError::IoError,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SafetyError {
     AbsolutePath,
     TraversalAttempt,
     InvalidPath,
     GitDirectory,
     OutsideWorkspace,
-    IoError(String),
+    NotFound,
+    PermissionDenied,
+    IoError,
 }
 
 impl std::fmt::Display for SafetyError {
@@ -190,7 +210,9 @@ impl std::fmt::Display for SafetyError {
             Self::InvalidPath => write!(f, "invalid path component"),
             Self::GitDirectory => write!(f, ".git directory access is not allowed"),
             Self::OutsideWorkspace => write!(f, "resolved path is outside the workspace"),
-            Self::IoError(e) => write!(f, "IO error during path resolution: {e}"),
+            Self::NotFound => write!(f, "path target was not found"),
+            Self::PermissionDenied => write!(f, "permission denied during path resolution"),
+            Self::IoError => write!(f, "path resolution failed"),
         }
     }
 }

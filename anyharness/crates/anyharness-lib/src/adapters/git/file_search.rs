@@ -1,12 +1,16 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::process::Command;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 
-use super::executor::{resolve_git_repo_root, run_git_ok};
+use crate::adapters::files::safety::{
+    classify_io_error, resolve_safe_path, ClassifiedIoError, SafetyError,
+};
+use crate::adapters::files::types::FileServiceError;
 
 const SNAPSHOT_TTL: Duration = Duration::from_secs(30);
 
@@ -46,7 +50,7 @@ impl WorkspaceFileSearchCache {
         workspace_path: &Path,
         query: &str,
         limit: usize,
-    ) -> anyhow::Result<Vec<WorkspaceFileSearchMatch>> {
+    ) -> Result<Vec<WorkspaceFileSearchMatch>, FileServiceError> {
         let snapshot = self.snapshot_for_workspace(workspace_id, workspace_path)?;
         Ok(search_snapshot(snapshot.as_ref(), query, limit))
     }
@@ -61,7 +65,7 @@ impl WorkspaceFileSearchCache {
         &self,
         workspace_id: &str,
         workspace_path: &Path,
-    ) -> anyhow::Result<Arc<WorkspaceFileSearchSnapshot>> {
+    ) -> Result<Arc<WorkspaceFileSearchSnapshot>, FileServiceError> {
         if let Some(snapshot) = self
             .snapshots
             .read()
@@ -83,23 +87,15 @@ impl WorkspaceFileSearchCache {
     }
 }
 
-fn build_snapshot(workspace_path: &Path) -> anyhow::Result<WorkspaceFileSearchSnapshot> {
-    let repo_root = resolve_git_repo_root(workspace_path)?;
-    let raw_paths = run_git_ok(
-        &repo_root,
-        &[
-            "ls-files",
-            "--cached",
-            "--others",
-            "--exclude-standard",
-            "-z",
-        ],
-    )?;
+fn build_snapshot(workspace_path: &Path) -> Result<WorkspaceFileSearchSnapshot, FileServiceError> {
+    let raw_paths = run_scoped_git_file_list(workspace_path)?;
 
-    let mut entries = raw_paths
-        .split('\0')
-        .filter_map(|path| build_candidate(&repo_root, path))
-        .collect::<Vec<_>>();
+    let mut entries = Vec::new();
+    for path in raw_paths.split('\0') {
+        if let Some(candidate) = build_candidate(workspace_path, path)? {
+            entries.push(candidate);
+        }
+    }
 
     entries.sort_by(|left, right| {
         left.name_lower
@@ -113,40 +109,79 @@ fn build_snapshot(workspace_path: &Path) -> anyhow::Result<WorkspaceFileSearchSn
     })
 }
 
-fn build_candidate(repo_root: &Path, relative_path: &str) -> Option<WorkspaceFileSearchCandidate> {
-    let relative_path = relative_path.trim();
+fn run_scoped_git_file_list(workspace_path: &Path) -> Result<String, FileServiceError> {
+    let output = Command::new("git")
+        .args([
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "-z",
+            "--",
+            ".",
+        ])
+        .current_dir(workspace_path)
+        .output()
+        .map_err(map_git_invocation_error)?;
+    if !output.status.success() {
+        return Err(FileServiceError::Io);
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+fn map_git_invocation_error(error: std::io::Error) -> FileServiceError {
+    match classify_io_error(&error) {
+        ClassifiedIoError::PermissionDenied => FileServiceError::PermissionDenied,
+        ClassifiedIoError::NotFound | ClassifiedIoError::Unexpected => FileServiceError::Io,
+    }
+}
+
+fn build_candidate(
+    workspace_root: &Path,
+    relative_path: &str,
+) -> Result<Option<WorkspaceFileSearchCandidate>, FileServiceError> {
     if relative_path.is_empty() {
-        return None;
+        return Ok(None);
     }
 
-    let absolute_path = repo_root.join(relative_path);
-    let metadata = std::fs::symlink_metadata(&absolute_path).ok()?;
-    let file_type = metadata.file_type();
-
-    if file_type.is_dir() {
-        return None;
-    }
-
-    if file_type.is_symlink() {
-        let target_metadata = std::fs::metadata(&absolute_path).ok()?;
-        if !target_metadata.is_file() {
-            return None;
-        }
-    } else if !file_type.is_file() {
-        return None;
+    let resolved_path = match resolve_safe_path(workspace_root, relative_path) {
+        Ok(path) => path,
+        Err(
+            SafetyError::NotFound
+            | SafetyError::OutsideWorkspace
+            | SafetyError::GitDirectory
+            | SafetyError::AbsolutePath
+            | SafetyError::TraversalAttempt
+            | SafetyError::InvalidPath,
+        ) => return Ok(None),
+        Err(SafetyError::PermissionDenied) => return Err(FileServiceError::PermissionDenied),
+        Err(SafetyError::IoError) => return Err(FileServiceError::Io),
+    };
+    let metadata = match resolved_path.metadata() {
+        Ok(metadata) => metadata,
+        Err(error) => match FileServiceError::from_io(error, relative_path) {
+            FileServiceError::NotFound(_) => return Ok(None),
+            error => return Err(error),
+        },
+    };
+    if !metadata.is_file() {
+        return Ok(None);
     }
 
     let name = Path::new(relative_path)
         .file_name()
-        .map(|name| name.to_string_lossy().into_owned())?;
+        .map(|name| name.to_string_lossy().into_owned());
+    let Some(name) = name else {
+        return Ok(None);
+    };
     let path = normalize_relative_path(relative_path);
 
-    Some(WorkspaceFileSearchCandidate {
+    Ok(Some(WorkspaceFileSearchCandidate {
         path_lower: path.to_lowercase(),
         name_lower: name.to_lowercase(),
         path,
         name,
-    })
+    }))
 }
 
 fn normalize_relative_path(path: &str) -> String {
@@ -258,7 +293,10 @@ mod tests {
 
     use uuid::Uuid;
 
-    use super::{build_snapshot, search_snapshot, WorkspaceFileSearchCache};
+    use super::{
+        build_snapshot, map_git_invocation_error, search_snapshot, WorkspaceFileSearchCache,
+    };
+    use crate::adapters::files::types::FileServiceError;
 
     struct TestRepo {
         root: PathBuf,
@@ -314,6 +352,88 @@ mod tests {
         assert!(paths.contains(&"notes/todo.md"));
         assert!(!paths.contains(&"node_modules/react/index.js"));
         assert!(!paths.contains(&"ignored.log"));
+    }
+
+    #[test]
+    fn nested_workspace_snapshot_excludes_repository_siblings() {
+        let repo = TestRepo::new();
+        repo.write("repository-sibling.txt", "outside workspace");
+        repo.write("nested-workspace/inside.txt", "inside workspace");
+        repo.write(
+            "nested-workspace/deeper/also-inside.txt",
+            "inside workspace",
+        );
+        repo.git(&["add", "."]);
+
+        let workspace = repo.root.join("nested-workspace");
+        let snapshot = build_snapshot(&workspace).expect("expected nested snapshot");
+        let paths = snapshot
+            .entries
+            .iter()
+            .map(|entry| entry.path.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(paths, vec!["deeper/also-inside.txt", "inside.txt"]);
+        assert!(!paths.contains(&"repository-sibling.txt"));
+        assert!(paths
+            .iter()
+            .all(|path| !path.starts_with("nested-workspace/")));
+    }
+
+    #[test]
+    fn git_invocation_io_mapper_keeps_permission_distinct() {
+        let denied =
+            map_git_invocation_error(std::io::Error::from(std::io::ErrorKind::PermissionDenied));
+        let missing_binary =
+            map_git_invocation_error(std::io::Error::from(std::io::ErrorKind::NotFound));
+        let unexpected = map_git_invocation_error(std::io::Error::from(std::io::ErrorKind::Other));
+
+        assert!(matches!(denied, FileServiceError::PermissionDenied));
+        assert!(matches!(missing_binary, FileServiceError::Io));
+        assert!(matches!(unexpected, FileServiceError::Io));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn snapshot_uses_workspace_authority_for_symlink_candidates() {
+        let repo = TestRepo::new();
+        repo.write("target.txt", "target");
+        repo.write("target-dir/child.txt", "child");
+        let external =
+            std::env::temp_dir().join(format!("anyharness-search-external-{}", Uuid::new_v4()));
+        fs::write(&external, "external").expect("seed external target");
+        std::os::unix::fs::symlink("target.txt", repo.root.join("file-link"))
+            .expect("seed file link");
+        std::os::unix::fs::symlink("target-dir", repo.root.join("directory-link"))
+            .expect("seed directory link");
+        std::os::unix::fs::symlink("missing", repo.root.join("dangling-link"))
+            .expect("seed dangling link");
+        std::os::unix::fs::symlink(&external, repo.root.join("escaping-link"))
+            .expect("seed escaping link");
+        std::os::unix::fs::symlink(".git", repo.root.join("git-link")).expect("seed git link");
+
+        let snapshot = build_snapshot(&repo.root).expect("expected safe snapshot");
+        let paths = snapshot
+            .entries
+            .iter()
+            .map(|entry| entry.path.as_str())
+            .collect::<Vec<_>>();
+
+        assert!(paths.contains(&"file-link"));
+        assert!(paths.contains(&"target.txt"));
+        assert!(paths.contains(&"target-dir/child.txt"));
+        assert!(!paths.contains(&"directory-link"));
+        assert!(!paths.contains(&"dangling-link"));
+        assert!(!paths.contains(&"escaping-link"));
+        assert!(!paths.contains(&"git-link"));
+
+        let link = snapshot
+            .entries
+            .iter()
+            .find(|entry| entry.path == "file-link")
+            .expect("contained file link candidate");
+        assert_eq!(link.name, "file-link");
+        let _ = fs::remove_file(external);
     }
 
     #[test]

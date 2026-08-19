@@ -8,15 +8,12 @@ pub(super) fn entry_for_path(
 ) -> Result<WorkspaceFileEntry, FileServiceError> {
     let symlink_metadata = abs
         .symlink_metadata()
-        .map_err(|e| FileServiceError::Io(e.to_string()))?;
+        .map_err(|error| FileServiceError::from_io(error, relative_path))?;
     let is_symlink = symlink_metadata.file_type().is_symlink();
     let metadata = if is_symlink {
         None
     } else {
-        Some(
-            abs.metadata()
-                .map_err(|e| FileServiceError::Io(e.to_string()))?,
-        )
+        Some(&symlink_metadata)
     };
     let kind = if is_symlink {
         WorkspaceFileKind::Symlink
@@ -26,11 +23,7 @@ pub(super) fn entry_for_path(
         WorkspaceFileKind::File
     };
     let has_children = if matches!(kind, WorkspaceFileKind::Directory) {
-        Some(
-            std::fs::read_dir(abs)
-                .map(|rd| rd.count() > 0)
-                .unwrap_or(false),
-        )
+        Some(directory_has_children(abs, relative_path)?)
     } else {
         None
     };
@@ -39,21 +32,35 @@ pub(super) fn entry_for_path(
         .and_then(|name| name.to_str())
         .unwrap_or(relative_path)
         .to_string();
-    let entry_metadata = metadata.as_ref().unwrap_or(&symlink_metadata);
+    let entry_metadata = metadata.unwrap_or(&symlink_metadata);
     let modified_at = modified_at(entry_metadata);
     Ok(WorkspaceFileEntry {
         path: relative_path.to_string(),
         name,
         kind,
         has_children,
-        size_bytes: if metadata.as_ref().is_some_and(|metadata| metadata.is_file()) {
-            metadata.as_ref().map(|metadata| metadata.len())
+        size_bytes: if metadata.is_some_and(|metadata| metadata.is_file()) {
+            metadata.map(|metadata| metadata.len())
         } else {
             None
         },
         modified_at,
         is_text: None,
     })
+}
+
+pub(super) fn directory_has_children(
+    path: &Path,
+    relative_path: &str,
+) -> Result<bool, FileServiceError> {
+    let entries =
+        std::fs::read_dir(path).map_err(|error| FileServiceError::from_io(error, relative_path))?;
+    let mut has_children = false;
+    for entry in entries {
+        entry.map_err(|error| FileServiceError::from_io(error, relative_path))?;
+        has_children = true;
+    }
+    Ok(has_children)
 }
 
 pub(super) fn modified_at(metadata: &std::fs::Metadata) -> Option<String> {
@@ -66,14 +73,4 @@ pub(super) fn modified_at(metadata: &std::fs::Metadata) -> Option<String> {
                 .map(|dt| dt.to_rfc3339())
                 .unwrap_or_default()
         })
-}
-
-pub(super) fn map_metadata_not_found(
-    error: std::io::Error,
-    relative_path: &str,
-) -> FileServiceError {
-    match error.kind() {
-        std::io::ErrorKind::NotFound => FileServiceError::NotFound(relative_path.to_string()),
-        _ => FileServiceError::Io(error.to_string()),
-    }
 }
