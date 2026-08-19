@@ -387,7 +387,7 @@ describe("FileEditorView dock controller", () => {
     await waitFor(() => expect(dock(container)).toBeTruthy());
 
     fireEvent.click(screen.getByRole("treeitem", { name: /README\.md/ }));
-    expect(openFileMock).toHaveBeenCalledWith("README.md");
+    expect(openFileMock).toHaveBeenCalledWith("README.md", { focus: "preserve-origin" });
   });
 
   it("focuses the filter on a toolbar open and restores toolbar focus on Escape close", async () => {
