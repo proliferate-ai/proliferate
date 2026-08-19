@@ -11909,6 +11909,9 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
             }
           },
           "instruction": {
@@ -11918,11 +11921,11 @@
             ]
           },
           "modeId": {
-            "description": "N-1 HTTP compatibility only. The handler translates this into\n`controlValues.mode` before the request enters the plans domain.",
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "N-1 HTTP compatibility only. The handler translates this into\n`controlValues.mode` before the request enters the plans domain."
           },
           "modelId": {
             "type": [
@@ -14110,6 +14113,9 @@
           "controlValues": {
             "type": "object",
             "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
               "type": "string"
             }
           },
@@ -16401,6 +16407,9 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
             }
           },
           "createdAt": {
@@ -16632,6 +16641,9 @@
           "controlValues": {
             "type": "object",
             "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
               "type": "string"
             }
           },

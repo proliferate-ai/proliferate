@@ -3194,8 +3194,10 @@ export interface components {
                 [key: string]: string;
             };
             instruction?: string | null;
-            /** @description N-1 HTTP compatibility only. The handler translates this into
-             *     `controlValues.mode` before the request enters the plans domain. */
+            /**
+             * @description N-1 HTTP compatibility only. The handler translates this into
+             *     `controlValues.mode` before the request enters the plans domain.
+             */
             modeId?: string | null;
             modelId?: string | null;
             origin?: null | components["schemas"]["OriginContext"];
