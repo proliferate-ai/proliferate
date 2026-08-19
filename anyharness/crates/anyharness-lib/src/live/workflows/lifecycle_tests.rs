@@ -156,12 +156,8 @@ fn create_run_rows(
             definition_json,
         })
         .expect("create run rows");
-    materialize_context(
-        workspace_root,
-        &created.docs,
-        &snapshot.definition.doc_templates,
-    )
-    .expect("materialize context");
+    materialize_context(workspace_root, run_id, &created.docs, &snapshot.definition.doc_templates)
+        .expect("materialize context");
     created
 }
 
@@ -319,7 +315,7 @@ async fn happy_path_resolves_references_teaches_the_preamble_and_completes() {
     // Both sessions received the resolved first message, in chain order.
     let doc_path = fixture
         .workspace_root
-        .join(".proliferate/context/00-plan-doc.md");
+        .join(".proliferate/context/run-happy/00-plan-doc.md");
     let doc_path = doc_path.to_string_lossy();
     assert_eq!(
         prompt_texts(&fixture.script.request_log),

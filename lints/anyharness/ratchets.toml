@@ -175,5 +175,5 @@ reason = "workflows gen-2 transition suite: one test per ADR table row plus stal
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/workflows/lifecycle_tests.rs"
-max_lines = 1070
+max_lines = 1066
 reason = "workflows gen-2 engine lifecycle suite: scripted-ACP agents drive real runs through the manager/actor (happy path, gate approve, flip, redo, undo, boot fence) with zero mocks of our machinery"

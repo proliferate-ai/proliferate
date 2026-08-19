@@ -102,8 +102,8 @@ fn materialize_seeds_docs_and_writes_the_exclude_entry_once() {
     let docs = vec![doc("plan-doc", "00-plan-doc.md"), doc("notes", "notes.md")];
     let templates = vec![template("plan-doc", "# Plan\n"), template("notes", "")];
 
-    let context_dir = materialize_context(&root, &docs, &templates).expect("materialize");
-    assert_eq!(context_dir, root.join(".proliferate/context"));
+    let context_dir = materialize_context(&root, "run-1", &docs, &templates).expect("materialize");
+    assert_eq!(context_dir, root.join(".proliferate/context/run-1"));
     assert_eq!(
         std::fs::read_to_string(context_dir.join("00-plan-doc.md")).expect("seeded"),
         "# Plan\n"
@@ -125,7 +125,7 @@ fn materialize_seeds_docs_and_writes_the_exclude_entry_once() {
 
     // Negative control for idempotence: a second materialization must not
     // duplicate the entry or clobber files.
-    materialize_context(&root, &docs, &templates).expect("re-materialize");
+    materialize_context(&root, "run-1", &docs, &templates).expect("re-materialize");
     let exclude = read_exclude(&root);
     assert_eq!(
         exclude
@@ -158,11 +158,11 @@ fn run_local_edits_survive_rematerialization() {
     let docs = vec![doc("plan-doc", "00-plan-doc.md")];
     let templates = vec![template("plan-doc", "# Plan\n")];
 
-    let context_dir = materialize_context(&root, &docs, &templates).expect("materialize");
+    let context_dir = materialize_context(&root, "run-1", &docs, &templates).expect("materialize");
     let path = context_dir.join("00-plan-doc.md");
     std::fs::write(&path, "# Plan\n\nthe agent wrote this\n").expect("edit");
 
-    materialize_context(&root, &docs, &templates).expect("re-materialize");
+    materialize_context(&root, "run-1", &docs, &templates).expect("re-materialize");
     assert_eq!(
         std::fs::read_to_string(&path).expect("read"),
         "# Plan\n\nthe agent wrote this\n",
@@ -183,7 +183,7 @@ fn worktree_workspaces_write_the_entry_into_the_common_git_dir() {
 
     let docs = vec![doc("notes", "notes.md")];
     let templates = vec![template("notes", "")];
-    materialize_context(&worktree, &docs, &templates).expect("materialize in worktree");
+    materialize_context(&worktree, "run-1", &docs, &templates).expect("materialize in worktree");
 
     // The entry lands in the MAIN clone's info/exclude (the common dir), not
     // in the worktree's private gitdir.
@@ -222,7 +222,7 @@ fn non_git_workspaces_materialize_without_an_exclude_entry() {
     let outcome = ensure_proliferate_excluded(&root).expect("exclude probe");
     let docs = vec![doc("notes", "notes.md")];
     let templates = vec![template("notes", "seeded\n")];
-    let context_dir = materialize_context(&root, &docs, &templates).expect("materialize");
+    let context_dir = materialize_context(&root, "run-1", &docs, &templates).expect("materialize");
     assert_eq!(
         std::fs::read_to_string(context_dir.join("notes.md")).expect("read"),
         "seeded\n"
@@ -243,7 +243,7 @@ fn template_bodies_seed_byte_for_byte_verbatim() {
     let body = "# Plan\n@input:ticket and @doc:plan-doc stay literal, so do {braces} and $vars\n\u{201C}smart quotes\u{201D} too\n";
     let docs = vec![doc("plan-doc", "00-plan-doc.md")];
     let templates = vec![template("plan-doc", body)];
-    let context_dir = materialize_context(&root, &docs, &templates).expect("materialize");
+    let context_dir = materialize_context(&root, "run-1", &docs, &templates).expect("materialize");
     assert_eq!(
         std::fs::read(context_dir.join("00-plan-doc.md")).expect("read"),
         body.as_bytes(),
@@ -259,7 +259,7 @@ fn doc_rows_without_templates_seed_empty_files() {
     let root = tmp.path().join("repo");
     init_repo(&root);
     let docs = vec![doc("scratch", "scratch.md")];
-    let context_dir = materialize_context(&root, &docs, &[]).expect("materialize");
+    let context_dir = materialize_context(&root, "run-1", &docs, &[]).expect("materialize");
     assert_eq!(
         std::fs::read_to_string(context_dir.join("scratch.md")).expect("read"),
         ""
@@ -328,4 +328,33 @@ fn exclude_entry_appends_below_existing_content() {
     );
     let content = read_exclude(&root);
     assert_eq!(content, format!("*.tmp\n{PROLIFERATE_EXCLUDE_ENTRY}\n"));
+}
+
+/// R3: two runs sharing one workspace never collide on doc paths — each
+/// run's docs live under its own run-scoped directory. Negative control for
+/// the old flat layout: identical filenames across runs stay disjoint files.
+#[test]
+fn concurrent_runs_materialize_into_disjoint_run_scoped_dirs() {
+    let tmp = TempDir::new("test");
+    let root = tmp.path().join("repo");
+    init_repo(&root);
+    let docs = vec![doc("plan-doc", "00-plan-doc.md")];
+
+    let dir_a = materialize_context(&root, "run-a", &docs, &[template("plan-doc", "a\n")])
+        .expect("materialize run a");
+    let dir_b = materialize_context(&root, "run-b", &docs, &[template("plan-doc", "b\n")])
+        .expect("materialize run b");
+
+    assert_ne!(dir_a, dir_b, "run-scoped dirs must be disjoint");
+    assert_eq!(dir_a, root.join(".proliferate/context/run-a"));
+    assert_eq!(dir_b, root.join(".proliferate/context/run-b"));
+    assert_eq!(
+        std::fs::read_to_string(dir_a.join("00-plan-doc.md")).expect("run a doc"),
+        "a\n",
+        "run b's seed must not clobber run a's identically named doc"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir_b.join("00-plan-doc.md")).expect("run b doc"),
+        "b\n"
+    );
 }

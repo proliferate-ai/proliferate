@@ -25,7 +25,9 @@ use super::model::{RenderedEnvelope, WorkflowNodeType, WorkflowRunDocRecord};
 use crate::domains::sessions::model::SESSION_TITLE_MAX_CHARS;
 use crate::domains::sessions::prompt::render::SYSTEM_INSTRUCTION_WRAPPER;
 
-/// Workspace-relative home of a run's context docs.
+/// Workspace-relative parent of every run's context docs. Each run gets its
+/// own subfolder ([`run_context_dir_relative`]); nothing writes into this
+/// directory directly.
 pub const CONTEXT_DIR_RELATIVE: &str = ".proliferate/context";
 
 /// The node-session title law: `NN Title`, NN = the node's chain position,
@@ -62,6 +64,14 @@ pub fn node_session_title(chain_index: Option<i64>, node_title: &str) -> String 
     clipped
 }
 
+/// Workspace-relative home of ONE run's context docs
+/// (`.proliferate/context/<run_id>/`). Run-scoping keeps concurrent runs
+/// sharing a workspace from colliding on `NN-slug.md` names, which are only
+/// unique within a run's chain.
+pub fn run_context_dir_relative(run_id: &str) -> std::path::PathBuf {
+    Path::new(CONTEXT_DIR_RELATIVE).join(run_id)
+}
+
 #[derive(Debug, Clone)]
 pub struct RenderInputs<'a> {
     pub node_type: WorkflowNodeType,
@@ -77,8 +87,8 @@ pub struct RenderInputs<'a> {
     /// The run's doc registry rows — resolution reads rows, never the
     /// definition, so run-local registrations stay authoritative.
     pub docs: &'a [WorkflowRunDocRecord],
-    /// Absolute path of the run workspace's context dir
-    /// (`<workspace>/.proliferate/context`).
+    /// Absolute path of this run's context dir
+    /// (`<workspace>/.proliferate/context/<run_id>`).
     pub context_dir: &'a Path,
 }
 

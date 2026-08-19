@@ -301,7 +301,7 @@ async fn put_places_a_run_idempotently_and_the_wire_shape_holds() {
     let managed_root = canonical_managed_worktrees_root(&fixture.runtime_home).expect("root");
     let workspace_root = managed_root.join(format!("workflows/{run_id}"));
     assert!(workspace_root.is_dir(), "run worktree materialized");
-    let seeded = workspace_root.join(".proliferate/context/00-notes.md");
+    let seeded = workspace_root.join(format!(".proliferate/context/{run_id}/00-notes.md"));
     assert_eq!(
         std::fs::read_to_string(&seeded).expect("seeded doc"),
         "# Notes\n"
