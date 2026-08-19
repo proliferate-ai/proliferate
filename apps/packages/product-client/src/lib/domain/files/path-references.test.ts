@@ -1,236 +1,228 @@
 import { describe, expect, it } from "vitest";
 import {
-  fileReferenceBasename,
+  fileReferenceCopyPath,
   inlineFileReferenceLabel,
+  normalizeRuntimeWorkspaceRoot,
   pickFuzzyPathMatch,
   resolveFileReference,
-  resolveFileReferencePrimaryAction,
+  resolveWorkspaceStatPathKind,
+  type RuntimeWorkspaceRootState,
+  type WorkspaceFilesystemOriginState,
 } from "#product/lib/domain/files/path-references";
 
-describe("pickFuzzyPathMatch", () => {
-  const tree = [
-    "apps/desktop/src/components/content/ui/MarkdownRenderer.tsx",
-    "apps/desktop/src/components/content/ui/FilePathLink.tsx",
-    "apps/desktop/src/lib/index.ts",
-    "server/src/lib/index.ts",
-  ];
+const ROOT: RuntimeWorkspaceRootState = { status: "settled", path: "/repo" };
+const LOCAL: WorkspaceFilesystemOriginState = {
+  status: "settled",
+  origin: "desktop-local",
+};
+const REMOTE: WorkspaceFilesystemOriginState = { status: "settled", origin: "remote" };
 
-  it("corrects a partial path to the unique suffix match", () => {
-    expect(pickFuzzyPathMatch("content/ui/MarkdownRenderer.tsx", tree))
-      .toBe("apps/desktop/src/components/content/ui/MarkdownRenderer.tsx");
+function resolve(overrides: Partial<Parameters<typeof resolveFileReference>[0]> = {}) {
+  return resolveFileReference({
+    rawPath: "src/App.tsx",
+    workspaceRoot: ROOT,
+    filesystemOrigin: LOCAL,
+    desktopBridgeAvailable: true,
+    ...overrides,
   });
-
-  it("returns null when the path already exists (exact match present)", () => {
-    expect(pickFuzzyPathMatch("apps/desktop/src/lib/index.ts", tree)).toBeNull();
-  });
-
-  it("returns null when the suffix is ambiguous", () => {
-    expect(pickFuzzyPathMatch("lib/index.ts", tree)).toBeNull();
-  });
-
-  it("returns null when nothing matches", () => {
-    expect(pickFuzzyPathMatch("nope/Missing.tsx", tree)).toBeNull();
-  });
-
-  it("matches case-insensitively but returns the real casing", () => {
-    expect(pickFuzzyPathMatch("content/ui/markdownrenderer.tsx", tree))
-      .toBe("apps/desktop/src/components/content/ui/MarkdownRenderer.tsx");
-  });
-});
+}
 
 describe("resolveFileReference", () => {
-  const resolveAbsolute = (path: string) => path.startsWith("/")
-    ? path
-    : `/repo/${path.startsWith("./") ? path.slice(2) : path}`;
-
-  it("resolves relative paths for sidebar opening while preserving absolute paths", () => {
-    expect(resolveFileReference({
-      rawPath: "./src/App.tsx:12",
-      workspaceRoot: "/repo",
-      resolveAbsolute,
-    })).toMatchObject({
-      path: "./src/App.tsx",
-      line: 12,
-      column: null,
-      absolutePath: "/repo/src/App.tsx",
-      workspacePath: "src/App.tsx",
+  it.each([
+    [".", ""],
+    ["./", ""],
+    ["./src/App.tsx:12:4", "src/App.tsx"],
+    ["src/./App.tsx", "src/App.tsx"],
+    ["/repo", ""],
+    ["/repo/", ""],
+    ["/repo/src/App.tsx", "src/App.tsx"],
+  ])("projects %s into workspace path %s", (rawPath, workspacePath) => {
+    expect(resolve({ rawPath })).toMatchObject({
+      displayPath: workspacePath || ".",
+      locator: {
+        authority: "workspace",
+        workspacePath,
+        localCompanionPath: workspacePath ? `/repo/${workspacePath}` : "/repo",
+      },
     });
   });
 
-  it("infers a relative workspace path when nullable metadata was omitted on the wire", () => {
-    expect(resolveFileReference({
-      rawPath: "src/App.tsx",
-      workspaceRoot: "/repo",
-      resolveAbsolute,
-      workspacePathOverride: null,
-    })).toMatchObject({
-      absolutePath: "/repo/src/App.tsx",
-      workspacePath: "src/App.tsx",
-    });
-  });
-
-  it("maps absolute paths under the workspace back to workspace-relative paths", () => {
-    expect(resolveFileReference({
-      rawPath: "/repo/src/App.tsx:12:4",
-      workspaceRoot: "/repo",
-      resolveAbsolute,
-    })).toMatchObject({
-      path: "/repo/src/App.tsx",
+  it("keeps line and column out of normalized and copied paths", () => {
+    const reference = resolve({ rawPath: " src/App.tsx:12:4 " });
+    expect(reference).toMatchObject({
+      parsedPath: "src/App.tsx",
+      displayPath: "src/App.tsx",
       line: 12,
       column: 4,
-      absolutePath: "/repo/src/App.tsx",
+    });
+    expect(fileReferenceCopyPath(reference)).toBe("/repo/src/App.tsx");
+  });
+
+  it("uses runtime root and provenance only for native companion capability", () => {
+    expect(resolve({ filesystemOrigin: REMOTE }).locator).toEqual({
+      authority: "workspace",
       workspacePath: "src/App.tsx",
+      localCompanionPath: null,
+    });
+    expect(resolve({ desktopBridgeAvailable: false }).locator).toEqual({
+      authority: "workspace",
+      workspacePath: "src/App.tsx",
+      localCompanionPath: null,
+    });
+    expect(resolve({ workspaceRoot: { status: "pending", path: null } }).locator).toEqual({
+      authority: "workspace",
+      workspacePath: "src/App.tsx",
+      localCompanionPath: null,
     });
   });
 
-  it("does not open external absolute paths in the workspace sidebar", () => {
-    expect(resolveFileReference({
-      rawPath: "/tmp/file.txt",
-      workspaceRoot: "/repo",
-      resolveAbsolute,
-      workspacePathOverride: null,
-    })).toMatchObject({
-      absolutePath: "/tmp/file.txt",
-      workspacePath: null,
-    });
-  });
-
-  it("expands a home-relative hidden path without treating it as a workspace path", () => {
-    expect(resolveFileReference({
-      rawPath: "~/.proliferate-local/dev/app/diagnostics-dev.env:12",
-      workspaceRoot: "/repo",
-      resolveAbsolute: () => null,
-      homeDirectory: "/Users/pablo/",
-    })).toMatchObject({
-      path: "~/.proliferate-local/dev/app/diagnostics-dev.env",
-      line: 12,
-      absolutePath: "/Users/pablo/.proliferate-local/dev/app/diagnostics-dev.env",
-      workspacePath: null,
-    });
-  });
-
-  it("normalizes absolute traversal before deciding workspace membership", () => {
-    expect(resolveFileReference({
-      rawPath: "/repo/sub/../../tmp/file.txt",
-      workspaceRoot: "/repo",
-      resolveAbsolute,
-      workspacePathOverride: null,
-    })).toMatchObject({
-      workspacePath: null,
-    });
-
-    expect(resolveFileReference({
-      rawPath: "/repo/src/../App.tsx",
-      workspaceRoot: "/repo",
-      resolveAbsolute,
-      workspacePathOverride: null,
-    })).toMatchObject({
-      workspacePath: "App.tsx",
-    });
-  });
-
-  it("rejects a relative path that escapes the workspace after normalization", () => {
-    expect(resolveFileReference({
-      rawPath: "src/../../tmp/file.txt",
-      workspaceRoot: "/repo",
-      resolveAbsolute,
-      workspacePathOverride: null,
-    })).toMatchObject({
-      workspacePath: null,
-    });
-  });
-});
-
-describe("resolveFileReferencePrimaryAction", () => {
   it.each([
-    [{
-      pathKind: "file" as const,
-      canOpenViewer: true,
-      canOpenExternal: true,
-      canReveal: true,
-    }, "open-viewer"],
-    [{
-      pathKind: "file" as const,
-      canOpenViewer: false,
-      canOpenExternal: true,
-      canReveal: true,
-    }, "open-external"],
-    [{
-      pathKind: "file" as const,
-      canOpenViewer: false,
-      canOpenExternal: false,
-      canReveal: true,
-    }, "unavailable"],
-    [{
-      pathKind: "directory" as const,
-      canOpenViewer: true,
-      canOpenExternal: true,
-      canReveal: true,
-    }, "reveal"],
-    [{
-      pathKind: "directory" as const,
-      canOpenViewer: true,
-      canOpenExternal: true,
-      canReveal: false,
-    }, "unavailable"],
-    [{
-      pathKind: null,
-      canOpenViewer: true,
-      canOpenExternal: true,
-      canReveal: true,
-    }, "unavailable"],
-  ])("routes %o to %s", (input, expected) => {
-    expect(resolveFileReferencePrimaryAction(input)).toBe(expected);
+    [REMOTE, true, "remote_filesystem"],
+    [{ status: "pending", origin: null } as const, true, "filesystem_origin_unavailable"],
+    [{ status: "rejected", origin: null } as const, true, "filesystem_origin_unavailable"],
+    [LOCAL, false, "native_host_required"],
+  ])("gates an external absolute path for %#", (filesystemOrigin, bridge, reason) => {
+    expect(resolve({
+      rawPath: "/tmp/file.txt",
+      filesystemOrigin,
+      desktopBridgeAvailable: bridge,
+    }).locator).toEqual({ authority: "unavailable", reason });
+  });
+
+  it("classifies authority-proven absolute and home-relative Desktop paths", () => {
+    expect(resolve({ rawPath: "/tmp/file.txt" }).locator).toEqual({
+      authority: "desktop",
+      absolutePath: "/tmp/file.txt",
+      syntax: "absolute",
+    });
+    expect(resolve({ rawPath: "~/.config/file", homeDirectory: "/Users/pablo/" }).locator)
+      .toEqual({
+        authority: "desktop",
+        absolutePath: "/Users/pablo/.config/file",
+        syntax: "home-relative",
+      });
+  });
+
+  it.each([undefined, null, "", "relative", "/bad/../home", "/bad\0home"])(
+    "fails closed for invalid native home %s",
+    (homeDirectory) => {
+      expect(resolve({ rawPath: "~/file", homeDirectory }).locator).toEqual({
+        authority: "unavailable",
+        reason: "home_unavailable",
+      });
+    },
+  );
+
+  it("does not reclassify a home expansion under the workspace", () => {
+    expect(resolve({ rawPath: "~/src/App.tsx", homeDirectory: "/repo" }).locator).toEqual({
+      authority: "desktop",
+      absolutePath: "/repo/src/App.tsx",
+      syntax: "home-relative",
+    });
+  });
+
+  it.each([
+    "https://example.com/file",
+    "file:/repo/a",
+    "mailto:a@b.test",
+    "//server/share",
+    "\\\\server\\share",
+    "\\rooted",
+    "#fragment",
+    "C:/repo/a",
+    "C:\\repo\\a",
+    "~user/file",
+    "~\\file",
+    "bad\0path",
+  ])("rejects raw unsupported syntax %s", (rawPath) => {
+    expect(resolve({ rawPath }).locator).toEqual({ authority: "unavailable", reason: "invalid" });
+  });
+
+  it.each(["../secret", "src/../secret", "/repo/src/../secret"])(
+    "rejects every traversal segment in %s",
+    (rawPath) => {
+      expect(resolve({ rawPath }).locator).toEqual({
+        authority: "unavailable",
+        reason: "traversal",
+      });
+    },
+  );
+
+  it("keeps absolute references unavailable while the runtime root is unknown", () => {
+    expect(resolve({
+      rawPath: "/repo/src/App.tsx",
+      workspaceRoot: { status: "unavailable", path: null },
+    }).locator).toEqual({ authority: "unavailable", reason: "workspace_root_unavailable" });
+  });
+
+  it("treats a supplied structured value as authoritative, including invalid strings", () => {
+    expect(resolve({
+      rawPath: "/tmp/file.txt",
+      workspacePathOverride: "src/App.tsx",
+    }).locator).toMatchObject({ authority: "workspace", workspacePath: "src/App.tsx" });
+    for (const workspacePathOverride of ["", "   ", "/repo/a", "~/a", "file:a", "#a"]) {
+      expect(resolve({ rawPath: "src/fallback.ts", workspacePathOverride }).locator)
+        .toEqual({ authority: "unavailable", reason: "invalid" });
+    }
+    expect(resolve({ rawPath: "src/fallback.ts", workspacePathOverride: "a/../b" }).locator)
+      .toEqual({ authority: "unavailable", reason: "traversal" });
+  });
+
+  it("maps structured dot paths to workspace root", () => {
+    expect(resolve({ rawPath: "/tmp/not-used", workspacePathOverride: "./" }).locator)
+      .toMatchObject({ authority: "workspace", workspacePath: "" });
+  });
+
+  it("uses neutral display and null copy data only for an empty reference", () => {
+    const empty = resolve({ rawPath: "  " });
+    expect(empty).toMatchObject({
+      parsedPath: "",
+      displayPath: "File",
+      locator: { authority: "unavailable", reason: "empty" },
+    });
+    expect(fileReferenceCopyPath(empty)).toBeNull();
+    expect(fileReferenceCopyPath(resolve({ rawPath: "../secret" }))).toBe("../secret");
+  });
+
+  it("supports / as an authoritative runtime root", () => {
+    const reference = resolve({
+      rawPath: "/src/App.tsx",
+      workspaceRoot: { status: "settled", path: "/" },
+    });
+    expect(reference.locator).toEqual({
+      authority: "workspace",
+      workspacePath: "src/App.tsx",
+      localCompanionPath: "/src/App.tsx",
+    });
   });
 });
 
-describe("inlineFileReferenceLabel", () => {
-  const resolveAbsolute = (path: string) => path;
-
-  it("renders a markdown link's path:line destination as basename plus line", () => {
-    const reference = resolveFileReference({
-      rawPath: "/Users/x/proliferate/docs/FORMATTING.md:7",
-      workspaceRoot: null,
-      resolveAbsolute,
-    });
-
-    expect(inlineFileReferenceLabel(reference)).toBe("FORMATTING.md (line 7)");
+describe("path helpers", () => {
+  it.each([
+    ["/", "/"],
+    ["/repo/./src/", "/repo/src"],
+    ["relative", null],
+    ["/repo/../tmp", null],
+    ["//server/share", null],
+  ])("normalizes runtime root %s", (input, expected) => {
+    expect(normalizeRuntimeWorkspaceRoot(input)).toBe(expected);
   });
 
-  it("prefers the workspace-relative basename when the reference is inside the workspace", () => {
-    const reference = resolveFileReference({
-      rawPath: "/repo/apps/web/src/App.tsx:42:8",
-      workspaceRoot: "/repo",
-      resolveAbsolute,
-    });
-
-    expect(inlineFileReferenceLabel(reference)).toBe("App.tsx (line 42)");
+  it("returns the unique fuzzy suffix including an exact candidate", () => {
+    expect(pickFuzzyPathMatch("src/app.ts", ["Src/App.ts"])).toBe("Src/App.ts");
+    expect(pickFuzzyPathMatch("src/app.ts", ["a/src/App.ts"])).toBe("a/src/App.ts");
+    expect(pickFuzzyPathMatch("src/app.ts", ["a/src/App.ts", "b/src/App.ts"])).toBeNull();
   });
 
-  it("keeps the path when there is no line to anchor on", () => {
-    const reference = resolveFileReference({
-      rawPath: "apps/web/src/App.tsx",
-      workspaceRoot: "/repo",
-      resolveAbsolute,
-    });
-
-    expect(inlineFileReferenceLabel(reference)).toBe("apps/web/src/App.tsx");
+  it("does not infer a symlink kind from size", () => {
+    expect(resolveWorkspaceStatPathKind({ kind: "file" })).toBe("file");
+    expect(resolveWorkspaceStatPathKind({ kind: "directory" })).toBe("directory");
+    expect(resolveWorkspaceStatPathKind({ kind: "symlink" })).toBeNull();
   });
 
-  it("tolerates a bare basename reference", () => {
-    expect(inlineFileReferenceLabel({
-      path: "FORMATTING.md",
-      workspacePath: null,
-      line: 7,
-    })).toBe("FORMATTING.md (line 7)");
-  });
-});
-
-describe("fileReferenceBasename", () => {
-  it("takes the last segment of posix and windows paths", () => {
-    expect(fileReferenceBasename("a/b/c.md")).toBe("c.md");
-    expect(fileReferenceBasename("a\\b\\c.md")).toBe("c.md");
-    expect(fileReferenceBasename("c.md")).toBe("c.md");
-    expect(fileReferenceBasename("a/b/")).toBe("b");
+  it("renders root and line labels from display paths", () => {
+    expect(inlineFileReferenceLabel({ displayPath: ".", line: null })).toBe(".");
+    expect(inlineFileReferenceLabel({ displayPath: "src/App.tsx", line: 4 }))
+      .toBe("App.tsx (line 4)");
   });
 });

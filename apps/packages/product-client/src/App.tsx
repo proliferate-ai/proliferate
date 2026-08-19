@@ -120,6 +120,14 @@ const CrashRecoveryPlaygroundPage = import.meta.env.DEV
     )
   : null
 
+const FileViewerPlaygroundPage = import.meta.env.DEV
+  ? lazy(() =>
+      import("#product/pages/FileViewerPlaygroundPage").then((m) => ({
+        default: m.FileViewerPlaygroundPage,
+      })),
+    )
+  : null
+
 interface AppProps {
   // Host-supplied routes component (Desktop/Web pass their Sentry-instrumented
   // InstrumentedRoutes; the browser fixture passes plain React Router Routes).
@@ -281,6 +289,16 @@ export function App({ RoutesComponent }: AppProps) {
               }
             />
           )}
+          {import.meta.env.DEV && FileViewerPlaygroundPage && (
+            <Route
+              path="/playground/files"
+              element={
+                <Suspense fallback={null}>
+                  <FileViewerPlaygroundPage />
+                </Suspense>
+              }
+            />
+          )}
           <Route path="*" element={<Navigate to="/" replace />} />
         </RoutesComponent>
         <SupportModalHost />
@@ -338,4 +356,3 @@ function AppMinDesktopVersionGate() {
     </Suspense>
   )
 }
-

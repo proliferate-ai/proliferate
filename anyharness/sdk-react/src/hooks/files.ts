@@ -164,7 +164,9 @@ export function useStatWorkspaceFileQuery(options: {
   const workspace = useAnyHarnessWorkspaceContext();
   const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options.workspaceId ?? workspace.workspaceId;
-  const enabled = (options.enabled ?? true) && !!workspaceId && !!options.path;
+  const enabled = (options.enabled ?? true)
+    && !!workspaceId
+    && options.path !== null;
   const queryKey = anyHarnessWorkspaceFileStatKey(cacheScopeKey, workspaceId, options.path);
   useReportAnyHarnessCacheDecision({
     category: "file.stat",

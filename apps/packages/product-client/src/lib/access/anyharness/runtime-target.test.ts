@@ -55,8 +55,10 @@ describe("resolveRuntimeTargetForWorkspace", () => {
       location: "target",
       baseUrl: "http://127.0.0.1:43210",
       anyharnessWorkspaceId: "workspace-7",
+      runtimeGeneration: 0,
       targetId: "target-1",
     });
+    expect(target).not.toHaveProperty("runtimeAccessKind");
   });
 
   it("fails closed for a target without a Desktop SSH bridge", async () => {
@@ -71,16 +73,19 @@ describe("resolveRuntimeTargetForWorkspace", () => {
   it("does not use SSH when resolving a local workspace", async () => {
     const ssh = makeSshBridge();
 
-    await expect(resolveRuntimeTargetForWorkspace(
+    const target = await resolveRuntimeTargetForWorkspace(
       "http://runtime.test",
       "workspace-local",
       ssh,
       null,
-    )).resolves.toMatchObject({
+    );
+    expect(target).toMatchObject({
       location: "local",
       baseUrl: "http://runtime.test",
       anyharnessWorkspaceId: "workspace-local",
+      runtimeGeneration: 0,
     });
+    expect(target).not.toHaveProperty("runtimeAccessKind");
     expect(ssh.getProfile).not.toHaveBeenCalled();
     expect(ssh.ensureTunnel).not.toHaveBeenCalled();
   });

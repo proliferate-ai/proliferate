@@ -1,5 +1,5 @@
 import { anyHarnessCoworkStatusKey } from "@anyharness/sdk-react";
-import type { CoworkStatus, TerminalWebSocketAuthTransport } from "@anyharness/sdk";
+import type { CoworkStatus } from "@anyharness/sdk";
 import type { DesktopSshBridge } from "@proliferate/product-client/host/desktop-bridge";
 import type { ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import type { QueryClient } from "@tanstack/react-query";
@@ -7,7 +7,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import type { CloudMobilityWorkspaceSummary } from "@proliferate/cloud-sdk/types";
 import { cloudWorkspaceConnectionQueryOptions } from "#product/hooks/access/cloud/use-cloud-workspace-connection";
-import { resolveWorkspaceConnection } from "#product/lib/access/anyharness/resolve-workspace-connection";
+import {
+  resolveWorkspaceConnection,
+  type ProductResolvedWorkspaceConnection,
+} from "#product/lib/access/anyharness/resolve-workspace-connection";
 import { buildLogicalWorkspaces } from "#product/lib/domain/workspaces/cloud/logical-workspaces";
 import { findLogicalWorkspace } from "#product/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import {
@@ -47,7 +50,7 @@ async function resolveWorkspaceConnectionWithCache(
   workspaceId: string,
   ssh: DesktopSshBridge | null,
   cloudClient: ProliferateCloudClient | null,
-) {
+): Promise<ProductResolvedWorkspaceConnection> {
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
   if (!cloudWorkspaceId) {
     return resolveWorkspaceConnection(runtimeUrl, workspaceId, ssh, cloudClient);
@@ -57,14 +60,16 @@ async function resolveWorkspaceConnectionWithCache(
     cloudWorkspaceConnectionQueryOptions(cloudWorkspaceId, cloudClient),
   );
   const connection = await withFreshCloudSandboxGatewayAccessToken(cachedConnection);
-  const webSocketAuthTransport = (
-    connection as { webSocketAuthTransport?: TerminalWebSocketAuthTransport }
-  ).webSocketAuthTransport;
   return {
-    runtimeUrl: connection.runtimeUrl,
-    authToken: connection.accessToken ?? undefined,
-    anyharnessWorkspaceId: connection.anyharnessWorkspaceId ?? "",
-    webSocketAuthTransport,
+    connection: {
+      runtimeUrl: connection.runtimeUrl,
+      authToken: connection.accessToken ?? undefined,
+      anyharnessWorkspaceId: connection.anyharnessWorkspaceId ?? "",
+      runtimeGeneration: connection.runtimeGeneration ?? 0,
+      runtimeAccessKind: "proliferate-gateway",
+      webSocketAuthTransport: "protocol",
+    },
+    filesystemOrigin: "remote",
   };
 }
 
@@ -77,7 +82,7 @@ export function useResolveWorkspaceConnection({
   cacheScopeKey,
   selectedWorkspaceId,
 }: ResolveWorkspaceConnectionInput): (workspaceId: string) => Promise<
-  Awaited<ReturnType<typeof resolveWorkspaceConnectionWithCache>>
+  ProductResolvedWorkspaceConnection
 > {
   const queryClient = useQueryClient();
   return useCallback(

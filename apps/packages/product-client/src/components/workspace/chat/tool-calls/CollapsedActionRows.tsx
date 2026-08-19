@@ -110,16 +110,18 @@ function ReadRows({ item }: { item: ToolCallItem }) {
   const fileReads = item.contentParts.filter(
     (part): part is FileReadContentPart => part.type === "file_read",
   );
-  // The SDK collapses an omitted workspacePath and an explicit null to the same
-  // value. Preserve a non-empty normalized path, but otherwise let the shared
-  // resolver classify the raw path against the current workspace root.
+  // Keep raw wire syntax separate from structured workspace metadata. Any
+  // structured string, including an invalid blank one, remains authoritative.
+  const fallbackTarget = deriveReadPathTarget(item);
   const targets = fileReads.length > 0
     ? fileReads.map((part) => ({
-      rawPath: part.workspacePath || part.path,
-      workspacePath: part.workspacePath || undefined,
-      displayName: part.basename || basename(part.workspacePath || part.path),
+      rawPath: part.path,
+      pathLabel: part.workspacePath?.trim() ? part.workspacePath : part.path,
+      workspacePath: part.workspacePath,
+      displayName: part.basename
+        || basename(part.workspacePath?.trim() ? part.workspacePath : part.path),
     }))
-    : [{ ...deriveReadPathTarget(item), workspacePath: undefined }];
+    : [{ ...fallbackTarget, pathLabel: fallbackTarget.rawPath ?? "", workspacePath: undefined }];
 
   return (
     <>
@@ -129,7 +131,8 @@ function ReadRows({ item }: { item: ToolCallItem }) {
             key={`${item.itemId}-read-${idx}`}
             icon={<CollapsedActionIcon kind="read" />}
             verb={verb}
-            pathLabel={target.rawPath}
+            rawPath={target.rawPath}
+            pathLabel={target.pathLabel}
             workspacePath={target.workspacePath}
             displayName={target.displayName}
             failed={failed}
@@ -150,6 +153,7 @@ function ReadRows({ item }: { item: ToolCallItem }) {
 function FileActionRow({
   icon,
   verb,
+  rawPath,
   pathLabel,
   workspacePath,
   displayName,
@@ -157,8 +161,9 @@ function FileActionRow({
 }: {
   icon: ReactNode;
   verb: string;
+  rawPath: string;
   pathLabel: string;
-  /** A known workspace-relative path, or absent to infer from pathLabel. */
+  /** An explicitly supplied workspace-relative path; absent to classify rawPath. */
   workspacePath: string | null | undefined;
   displayName: string;
   failed: boolean;
@@ -174,7 +179,7 @@ function FileActionRow({
       <span className="inline-flex min-w-0 items-center gap-1">
         <span className="shrink-0 text-inherit">{verb}</span>
         <ActionFileLink
-          pathLabel={pathLabel}
+          rawPath={rawPath}
           workspacePath={workspacePath}
           displayName={displayName}
         />
@@ -230,6 +235,7 @@ function ParsedCommandRows({
             key={`${item.itemId}-parsed-${idx}`}
             icon={<CollapsedActionIcon kind="read" />}
             verb={item.status === "in_progress" ? "Reading" : "Read"}
+            rawPath={command.path}
             pathLabel={command.path}
             workspacePath={undefined}
             displayName={command.name ?? basename(command.path)}

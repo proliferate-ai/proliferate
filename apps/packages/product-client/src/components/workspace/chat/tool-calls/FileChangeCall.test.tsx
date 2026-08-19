@@ -9,10 +9,13 @@ import { makeTestProductHost } from "#product/test/product-host-fixtures";
 // useProductHost().clipboard for its copy control, so a bare { desktop: null }
 // cast (no clipboard) crashes; makeTestProductHost supplies every capability.
 const webTestHost = makeTestProductHost({ desktop: null });
-const fileReferenceActionState = vi.hoisted(() => ({
+const { fileReferenceActionState, fileReferenceActionsCalls } = vi.hoisted(() => ({
+  fileReferenceActionsCalls: [] as Array<{ rawPath: string; workspacePath?: string | null }>,
+  fileReferenceActionState: {
   canOpenInSidebar: true,
   canOpenExternal: true,
   canOpenPrimary: true,
+  },
 }));
 
 function renderToStaticMarkup(ui: ReactElement) {
@@ -22,32 +25,49 @@ function renderToStaticMarkup(ui: ReactElement) {
 }
 
 vi.mock("#product/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
-  useFileReferenceActions: ({ rawPath }: { rawPath: string }) => ({
-    reference: {
-      rawPath,
-      path: rawPath,
+  useFileReferenceActions: (args: { rawPath: string; workspacePath?: string | null }) => {
+    fileReferenceActionsCalls.push(args);
+    const locator = {
+      authority: "workspace" as const,
+      workspacePath: typeof args.workspacePath === "string" ? args.workspacePath : args.rawPath,
+      localCompanionPath: null,
+    };
+    return {
+      reference: {
+      rawPath: args.rawPath,
+      parsedPath: args.rawPath,
+      displayPath: args.rawPath || "File",
       line: null,
       column: null,
-      absolutePath: `/repo/${rawPath}`,
-      workspacePath: rawPath,
-    },
-    openTargets: [],
-    canOpenInSidebar: fileReferenceActionState.canOpenInSidebar,
-    canOpenExternal: fileReferenceActionState.canOpenExternal,
-    canOpenPrimary: fileReferenceActionState.canOpenPrimary,
-    copyPath: vi.fn(),
-    openInSidebar: vi.fn(),
-    openDefault: vi.fn(),
-    openPrimary: vi.fn(),
-    openWithTarget: vi.fn(),
-    reveal: vi.fn(),
-  }),
+      locator,
+      },
+      accessState: { status: "settled", locator, kind: "file" },
+      nativePathKind: null,
+      openTargets: [],
+      defaultOpenTarget: null,
+      pathKind: "file",
+      pathKindPending: false,
+      canReveal: false,
+      primaryUnavailableReason: null,
+      copyPath: args.rawPath || null,
+      copyCurrentPath: vi.fn(),
+      canOpenInSidebar: fileReferenceActionState.canOpenInSidebar,
+      canOpenExternal: fileReferenceActionState.canOpenExternal,
+      canOpenPrimary: fileReferenceActionState.canOpenPrimary,
+      openInSidebar: vi.fn(),
+      openDefault: vi.fn(),
+      openPrimary: vi.fn(),
+      openWithTarget: vi.fn(),
+      reveal: vi.fn(),
+    };
+  },
 }));
 
 afterEach(() => {
   fileReferenceActionState.canOpenInSidebar = true;
   fileReferenceActionState.canOpenExternal = true;
   fileReferenceActionState.canOpenPrimary = true;
+  fileReferenceActionsCalls.length = 0;
 });
 
 describe("FileChangeCall", () => {
@@ -138,5 +158,23 @@ describe("FileChangeCall", () => {
     );
 
     expect(html).toContain("select-text [direction:rtl]");
+  });
+
+  it("keeps raw and explicitly blank structured destination paths separate", () => {
+    renderToStaticMarkup(
+      <FileChangeCall
+        operation="move"
+        path="old/raw.ts"
+        workspacePath="old/workspace.ts"
+        newPath="new/raw.ts"
+        newWorkspacePath=""
+        status="completed"
+      />,
+    );
+
+    expect(fileReferenceActionsCalls).toContainEqual({
+      rawPath: "new/raw.ts",
+      workspacePath: "",
+    });
   });
 });
