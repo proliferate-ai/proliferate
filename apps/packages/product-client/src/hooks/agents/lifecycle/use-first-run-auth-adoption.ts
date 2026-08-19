@@ -75,16 +75,20 @@ export function useFirstRunAuthAdoption() {
       );
     };
 
-    const selections = selectionsQuery.data;
-    const gatewayEnabled = capabilitiesQuery.data?.gatewayEnabled;
-
-    // Arbitrate every already-known terminal before returning for an earlier
-    // pending prerequisite. Precedence is stable and ownership-ordered:
-    // runtime, selections, capabilities, reconcile query, reconcile job.
     if (connectionState === "failed") {
       settleFailure("runtime_connection");
       return;
     }
+    if (connectionState === "connecting") {
+      return;
+    }
+
+    const selections = selectionsQuery.data;
+    const gatewayEnabled = capabilitiesQuery.data?.gatewayEnabled;
+
+    // With a healthy runtime, arbitrate every already-known peer terminal
+    // before returning for an earlier pending prerequisite. Precedence is
+    // selections, capabilities, reconcile query, then reconcile job.
     if (selections === undefined && selectionsQuery.isError) {
       settleFailure("selections_query", selectionsQuery.error);
       return;
@@ -105,8 +109,7 @@ export function useFirstRunAuthAdoption() {
     // Once every known terminal has had a chance to settle the one shot, any
     // still-pending prerequisite blocks only the successful adoption path.
     if (
-      connectionState === "connecting"
-      || selections === undefined
+      selections === undefined
       || gatewayEnabled === undefined
       || reconcileSnapshot === null
     ) {

@@ -264,25 +264,6 @@ describe("useFirstRunAuthAdoption", () => {
       },
       "reconcile_job",
     ],
-    [
-      "a connecting runtime does not mask an independent Cloud failure",
-      () => {
-        state.connectionState = "connecting";
-        state.capabilities.data = undefined;
-        state.capabilities.isError = true;
-        state.capabilities.error = new TypeError("capabilities payload");
-      },
-      "capabilities_query",
-    ],
-    [
-      "a connecting runtime does not mask an independent reconcile failure",
-      () => {
-        state.connectionState = "connecting";
-        state.reconcileIsError = true;
-        state.reconcileError = new TypeError("reconcile payload");
-      },
-      "reconcile_query",
-    ],
   ] as const)("settles crossed state: %s", async (_name, configure, expectedStage) => {
     configure();
     renderHook(() => useFirstRunAuthAdoption());
@@ -292,6 +273,58 @@ describe("useFirstRunAuthAdoption", () => {
     expect(diagnosticValues(diagnostics[0]!).failure_stage).toBe(expectedStage);
     expect(mocks.refetchAgents).not.toHaveBeenCalled();
   });
+
+  it.each([
+    [
+      "capabilities failure",
+      () => {
+        state.capabilities.data = undefined;
+        state.capabilities.isError = true;
+        state.capabilities.error = new TypeError("capabilities payload");
+      },
+      "capabilities_query",
+    ],
+    [
+      "reconcile failure",
+      () => {
+        state.reconcileIsError = true;
+        state.reconcileError = new TypeError("reconcile payload");
+      },
+      "reconcile_query",
+    ],
+    [
+      "failed reconcile job",
+      () => {
+        state.reconcileStatus = "failed";
+      },
+      "reconcile_job",
+    ],
+  ] as const)(
+    "keeps a connecting runtime pending despite %s, then settles once healthy",
+    async (_name, configure, expectedStage) => {
+      state.connectionState = "connecting";
+      configure();
+      const { rerender } = renderHook(() => useFirstRunAuthAdoption());
+      await flushAdoption();
+
+      expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toBeNull();
+      expect(diagnostics).toEqual([]);
+      expect(mocks.refetchAgents).not.toHaveBeenCalled();
+
+      state.connectionState = "healthy";
+      rerender();
+      await waitForDecision();
+
+      expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toEqual([]);
+      expect(diagnosticValues(diagnostics[0]!).failure_stage).toBe(expectedStage);
+      expect(diagnostics).toHaveLength(1);
+      expect(mocks.refetchAgents).not.toHaveBeenCalled();
+
+      rerender();
+      await flushAdoption();
+      expect(diagnostics).toHaveLength(1);
+    },
+  );
 
   it("uses deterministic terminal precedence when several failures coexist", async () => {
     state.connectionState = "failed";
