@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Literal
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict, TypeAdapter
+from pydantic.alias_generators import to_camel
+from pydantic.dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_product_user
+from proliferate.constants.cloud import CloudSandboxStatus
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.sandboxes import CloudSandbox, HarnessLaunchOptionState
@@ -20,59 +23,60 @@ from proliferate.server.cloud.runtime_workers.auth import WorkerAuthContext, aut
 
 router = APIRouter(prefix="/harness-launch-options", tags=["cloud-harness-launch-options"])
 
+AgentReadiness = Literal[
+    "ready",
+    "install_required",
+    "credentials_required",
+    "login_required",
+    "unsupported",
+    "error",
+]
+CAMEL_CONFIG = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
-class LaunchOptionsCopyRequest(BaseModel):
-    model_config = ConfigDict(
-        alias_generator=lambda value: "".join(
-            [value.split("_")[0], *[part.title() for part in value.split("_")[1:]]]
-        ),
-        populate_by_name=True,
-    )
+
+@dataclass(config=CAMEL_CONFIG)
+class LaunchOptionsCopyRequest:
     source_revision: int
     payload_json: str
 
 
-class LaunchModel(BaseModel):
-    model_config = ConfigDict(
-        alias_generator=lambda value: "".join(
-            [value.split("_")[0], *[part.title() for part in value.split("_")[1:]]]
-        ),
-        populate_by_name=True,
-    )
+@dataclass(config=CAMEL_CONFIG)
+class LaunchModel:
     id: str
     observed_name: str | None
     observed_description: str | None
 
 
-class LaunchControlValue(BaseModel):
-    model_config = LaunchModel.model_config
+@dataclass(config=CAMEL_CONFIG)
+class LaunchControlValue:
     value: str
     observed_label: str | None
     observed_description: str | None
 
 
-class LaunchControl(BaseModel):
-    model_config = LaunchModel.model_config
+@dataclass(config=CAMEL_CONFIG)
+class LaunchControl:
     id: str
     observed_label: str | None
     observed_description: str | None
     values: list[LaunchControlValue]
 
 
-class LaunchDefaults(BaseModel):
-    model_config = LaunchModel.model_config
+@dataclass(config=CAMEL_CONFIG)
+class LaunchDefaults:
     model_id: str | None
     control_values: dict[str, str]
 
 
-class LaunchOptions(BaseModel):
+@dataclass(config=CAMEL_CONFIG)
+class LaunchOptions:
     models: list[LaunchModel]
     controls: list[LaunchControl]
     defaults: LaunchDefaults
 
 
-class CopiedLaunchOptionsResponse(BaseModel):
-    model_config = LaunchModel.model_config
+@dataclass(config=CAMEL_CONFIG)
+class CopiedLaunchOptionsResponse:
     harness_kind: str
     basis_revision: str
     revision: int
@@ -88,12 +92,12 @@ class CopiedLaunchOptionsResponse(BaseModel):
     observed_at: str | None
     probe_attempted_at: str
     probe_failure_code: str | None
-    readiness: str | None = None
+    readiness: AgentReadiness
 
 
-def _validated_payload(body: LaunchOptionsCopyRequest, harness_kind: str) -> dict[str, Any]:
+def _validated_payload(body: LaunchOptionsCopyRequest, harness_kind: str) -> dict[str, object]:
     try:
-        payload = json.loads(body.payload_json)
+        payload: dict[str, object] = json.loads(body.payload_json)
     except (TypeError, ValueError) as error:
         raise CloudApiError(
             "invalid_launch_options_payload",
@@ -136,6 +140,11 @@ def _validated_payload(body: LaunchOptionsCopyRequest, harness_kind: str) -> dic
             status_code=400,
         )
     return payload
+
+
+def _target_readiness(status: CloudSandboxStatus) -> AgentReadiness:
+    """Translate server-owned target state into the canonical prelaunch contract."""
+    return "ready" if status == CloudSandboxStatus.ready else "error"
 
 
 @router.post("/{harness_kind}", status_code=204)
@@ -200,4 +209,6 @@ async def get_launch_options(
             status_code=404,
         )
     payload = json.loads(record.payload_json)
-    return CopiedLaunchOptionsResponse.model_validate({**payload, "readiness": None})
+    return TypeAdapter(CopiedLaunchOptionsResponse).validate_python(
+        {**payload, "readiness": _target_readiness(sandbox.status)}
+    )

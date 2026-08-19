@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::domains::agents::model::ModelCatalogStatus;
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::domains::workspaces::options::{WorkspaceCreationMode, WorkspaceCreationOptions};
 use crate::origin::OriginContext;
@@ -382,45 +381,27 @@ pub struct WorkspacePinRequestResult {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentLaunchModelOption {
+pub struct HarnessLaunchModelPresentation {
     pub id: String,
     pub display_name: String,
-    pub aliases: Vec<String>,
-    pub is_default: bool,
-    pub executable: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub unavailable_reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    pub status: ModelCatalogStatus,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub effort_values: Option<Vec<String>>,
-    pub fast_mode: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub modes: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentLaunchOption {
-    pub agent_kind: String,
+pub struct HarnessLaunchPresentation {
+    pub harness_kind: String,
     pub display_name: String,
-    pub executable: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub unavailable_reason: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub default_model_id: Option<String>,
-    pub controls: Vec<anyharness_contract::v1::HarnessLaunchControl>,
-    pub default_control_values: std::collections::BTreeMap<String, String>,
-    pub models: Vec<AgentLaunchModelOption>,
+    pub models: Vec<HarnessLaunchModelPresentation>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentLaunchOptionsView {
     pub workspace: WorkspaceIdentity,
-    pub catalog_version: String,
-    pub agents: Vec<AgentLaunchOption>,
+    pub launch_options: Vec<crate::domains::agents::launch_options::HarnessLaunchOptionsResponse>,
+    pub presentation: Vec<HarnessLaunchPresentation>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -438,8 +419,6 @@ pub enum AgentLaunchSelectionError {
     AgentUnavailable,
     #[error("model is not in the effective launch options")]
     ModelUnknown,
-    #[error("model is currently unavailable")]
-    ModelUnavailable,
     #[error("control is not in the effective launch options")]
     ControlUnknown,
     #[error("control value is not in the effective launch options")]
@@ -453,30 +432,28 @@ impl AgentLaunchOptionsView {
         model_id: Option<&str>,
         control_values: &std::collections::BTreeMap<String, String>,
     ) -> Result<ValidatedAgentLaunchSelection, AgentLaunchSelectionError> {
-        let agent = self
-            .agents
+        let response = self
+            .launch_options
             .iter()
-            .find(|agent| agent.agent_kind == agent_kind)
+            .find(|response| response.harness_kind == agent_kind)
             .ok_or(AgentLaunchSelectionError::AgentUnknown)?;
-        if !agent.executable {
-            return Err(AgentLaunchSelectionError::AgentUnavailable);
-        }
+        let options = response
+            .options
+            .as_ref()
+            .ok_or(AgentLaunchSelectionError::AgentUnavailable)?;
         let selected_model = match model_id {
             Some(model_id) => {
-                let model = agent
+                let model = options
                     .models
                     .iter()
                     .find(|model| model.id == model_id)
                     .ok_or(AgentLaunchSelectionError::ModelUnknown)?;
-                if !model.executable {
-                    return Err(AgentLaunchSelectionError::ModelUnavailable);
-                }
                 Some(model)
             }
             None => None,
         };
         for (control_id, value) in control_values {
-            let control = agent
+            let control = options
                 .controls
                 .iter()
                 .find(|control| control.id == control_id.as_str())
@@ -490,7 +467,7 @@ impl AgentLaunchOptionsView {
             }
         }
         Ok(ValidatedAgentLaunchSelection {
-            agent_kind: agent.agent_kind.clone(),
+            agent_kind: response.harness_kind.clone(),
             model_id: selected_model.map(|model| model.id.clone()),
             control_values: control_values.clone(),
         })

@@ -4414,8 +4414,11 @@ export interface components {
             probeAttemptedAt: string;
             /** Probefailurecode */
             probeFailureCode: string | null;
-            /** Readiness */
-            readiness?: string | null;
+            /**
+             * Readiness
+             * @enum {string}
+             */
+            readiness: "ready" | "install_required" | "credentials_required" | "login_required" | "unsupported" | "error";
         };
         /** CreateAdminIntegrationDefinitionRequest */
         CreateAdminIntegrationDefinitionRequest: {

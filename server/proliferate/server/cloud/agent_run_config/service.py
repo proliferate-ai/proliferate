@@ -55,6 +55,16 @@ def _raise_issue(issue: AgentRunConfigIssue | None) -> None:
         raise CloudApiError(issue.code, issue.message, status_code=400)
 
 
+def _stored_control_values(values: dict[str, str]) -> dict[str, object]:
+    """Widen validated string values at the JSON persistence boundary."""
+    return dict(values)
+
+
+def _resolved_control_values(values: dict[str, object]) -> dict[str, str]:
+    """Recover the string-only domain shape enforced by request validation."""
+    return {key: value for key, value in values.items() if isinstance(value, str)}
+
+
 async def _require_org_admin(
     db: AsyncSession,
     *,
@@ -226,7 +236,7 @@ async def create_agent_run_config(
         name=name,
         agent_kind=agent_kind,
         model_id=model_id,
-        control_values_json=body.control_values,
+        control_values_json=_stored_control_values(body.control_values),
         usable_in_personal_sandboxes=body.usable_in_personal_sandboxes,
         usable_in_shared_sandboxes=body.usable_in_shared_sandboxes,
     )
@@ -264,7 +274,9 @@ async def update_agent_run_config(
         else existing.model_id
     )
     control_values = (
-        body.control_values if body.control_values is not None else existing.control_values_json
+        body.control_values
+        if body.control_values is not None
+        else _resolved_control_values(existing.control_values_json)
     )
     _raise_issue(
         validate_config_values(
@@ -278,7 +290,11 @@ async def update_agent_run_config(
         config_id=config_id,
         name=name,
         model_id=model_id if body.model_id is not None else None,
-        control_values_json=body.control_values,
+        control_values_json=(
+            _stored_control_values(body.control_values)
+            if body.control_values is not None
+            else None
+        ),
         usable_in_personal_sandboxes=body.usable_in_personal_sandboxes,
         usable_in_shared_sandboxes=body.usable_in_shared_sandboxes,
     )

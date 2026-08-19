@@ -229,12 +229,13 @@ A definition contains at least one stage. A stage contains exactly one
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `agentKind` | yes | Catalog agent kind. |
-| `modelId` | no | Explicit catalog model. Omission means use the target default at execution. |
-| `effort` | no | Explicit model-specific effort. Requires `modelId`. |
+| `agentKind` | yes | Exact harness kind intended by the author. |
+| `modelId` | no | Exact observed model ID. Omission leaves model choice to the target at execution. |
+| `controlValues` | no | Exact observed control-ID/value pairs. Omission is an empty map. |
 
-Execution mode is not authored. Workflow sessions will use the product's
-bypass-equivalent execution mode.
+Controls are generic. Collaboration mode, access, effort, and future harness
+controls remain independent exact keys; Workflow does not collapse them into
+singleton `modeId` or `effort` fields.
 
 The string `"default"` is never an omission sentinel. If a catalog contains a
 model whose ID is `default`, selecting that model persists `"modelId":
@@ -378,7 +379,8 @@ The first editor is intentionally basic:
 - default repository or no repository;
 - input rows;
 - ordered stage cards;
-- agent, model, and effort controls sourced from the current catalog;
+- harness, model, and generic controls sourced from the selected target's
+  `HarnessLaunchOptionsResponse`;
 - ordered prompt blocks with optional goal objective;
 - inline validation; and
 - save, reload, reopen, and soft-delete behavior.
@@ -386,14 +388,14 @@ The first editor is intentionally basic:
 Desktop local mode may mount the product shell without an account. Anonymous
 users see a sign-in gate; development auth bypass shows instructions to disable
 the bypass and use real account authentication. Neither state mounts the Cloud
-workflow, catalog, or repository query tree. Authenticated Desktop requests use
+workflow, launch-options, or repository query tree. Authenticated Desktop requests use
 the verified current user's ID as their cache scope and fail closed when that
 identity is unavailable. Web remains behind its app-level authentication gate.
 
-The UI preserves array order exactly. Switching an agent or model clears an
-incompatible model or effort rather than submitting a hidden invalid value. A
-revision conflict keeps the local draft and offers a deliberate reload; it
-does not overwrite the newer server value.
+The UI preserves array order and exact IDs. It decorates only keys present in
+the selected target response and never aliases a saved selection or replaces
+it with the first row. A revision conflict keeps the local draft and offers a
+deliberate reload; it does not overwrite the newer server value.
 
 There is no canvas, execution monitor, run history, trigger UI, grants editor,
 or advanced step palette in PR1.
@@ -404,7 +406,7 @@ Tier 1 owns:
 
 - server and client validation matrices;
 - cross-language contract fixtures;
-- canonical alias normalization;
+- exact model/control ID preservation;
 - durable user-scoped CRUD against Postgres;
 - repository configuration ownership validation;
 - exact optimistic concurrency, including two writers racing on one revision;
@@ -415,7 +417,7 @@ Tier 2 scenario `T2-WFDEF-1` owns the real definition lifecycle:
 
 ```text
 sign in
-  -> create a definition with inputs, stages, catalog choices, and a repo
+  -> create a definition with inputs, stages, target-observed choices, and a repo
   -> save
   -> reload the browser
   -> reopen and verify exact values and ordering
@@ -465,9 +467,9 @@ everything else here remains authoritative.
 Cloud freezes one exact current saved-definition revision, scalar arguments,
 placement intent, and managed target into an immutable user-owned invocation.
 AnyHarness schema v2 accepts the same portable one-stage/one-prompt meaning,
-resolves model, mode, and optional effort against one existing workspace once,
-stores the concrete plan before effects, and uses the existing
-`WorkflowRunRuntime` to execute it.
+preserves the exact optional model and generic control map, stores the rendered
+envelope before effects, and uses normal session creation to validate and apply
+the complete launch intent against the execution target.
 
 This contract covers manual/test transfer. It does not own automated delivery,
 background work, target custody, workspace creation/materialization,
@@ -507,15 +509,13 @@ Closed codes:
 stage_count_not_supported
 step_count_not_supported
 goal_not_supported
-agent_catalog_selection_unavailable
-model_catalog_selection_unavailable
-effort_catalog_selection_unavailable
 default_repository_unavailable
 ```
 
-Check one stage, one prompt, no goal, current Cloud catalog identity, and an
-owner-matched non-deleted default repo. Do not claim target readiness. PUT
-reuses this collector and never drops an unsupported field.
+Check one stage, one prompt, no goal, and an owner-matched non-deleted default
+repo. Eligibility validates document structure, not executable membership or
+target readiness. PUT reuses this collector and never drops an unsupported
+field.
 
 ### Immutable invocation
 
@@ -575,9 +575,8 @@ stored typed response. Definition changes never mutate it.
 
 ## Shared execution contract
 
-Cloud maps an explicit authored model to `{kind: exact, modelId: canonicalId}`
-and omission to `{kind: targetDefault}`. Effort requires an exact model.
-Permission is always `workflowDefault`; Cloud never chooses `modeId`.
+Cloud preserves authored `agentKind`, optional exact `modelId`, and generic
+`controlValues` without aliases, defaults, or executable filtering.
 
 AnyHarness request:
 
@@ -590,9 +589,11 @@ AnyHarness request:
     "stages": [{
       "harnessConfig": {
         "agentKind": "claude",
-        "modelSelection": { "kind": "exact", "modelId": "claude-sonnet-4-5" },
-        "effort": "high",
-        "permissionPolicy": "workflowDefault"
+        "modelId": "claude-sonnet-4-5",
+        "controlValues": {
+          "effort": "high",
+          "permission_mode": "bypassPermissions"
+        }
       },
       "steps": [{
         "kind": "agent.prompt",
@@ -635,12 +636,12 @@ VersionedWorkflowRunResponse
 ```
 
 Dispatch on required integer `schemaVersion` before strict member decode; GET
-dispatches from stored version. V2 keeps `run + steps` and adds safe
-`resolvedHarness {agentKind, modelId, modeId, effort}`. It never exposes effort
-config ID, rendered prompt, launch options, or credentials.
+dispatches from stored version. V2 preserves the exact
+`{agentKind, modelId, controlValues}` intent and never exposes launch options,
+credentials, or a second catalog-shaped resolved-harness projection.
 
-Keep `WorkflowRunFailureCode` exact. V2 run/step use
-`WorkflowRunFailureCodeV2 = v1 values + session_config_apply_failed`.
+Keep `WorkflowRunFailureCode` exact. Launch-selection failures use the normal
+typed session-create failure path.
 
 ## Portable numbers
 
@@ -657,39 +658,18 @@ For a new v2 run before acceptance:
 
 1. Enforce HTTP workspace auth scope.
 2. Run `WorkspaceAccessGate::assert_can_mutate_for_workspace`.
-3. Read workspace `resolved_workspace_launch_options`.
-4. Require the agent and an exact model, or require target `default_model_id`
-   to yield one concrete model.
-5. In `domains/workflows/resolution.rs`, resolve `workflowDefault` from the
-   selected launch agent's active-catalog `unattendedModeId`; reject when the
-   selected target declares no vetted unattended mode.
-6. When the selected model has an explicit mode list, require that it contains
-   the unattended mode. A missing model-local list inherits the catalog's
-   already-validated agent-level mode vocabulary.
-7. For effort, require the selected exact model's `effort` or
-   `reasoning_effort` value and same-key active session control
-   `mapping.liveConfigId`; persist `{configId,value}`.
-8. Render, validate, and persist source + resolved plan before effects.
+3. Preserve the node's exact `agentKind`, optional `modelId`, and complete
+   `controlValues` map while rendering the prompt envelope.
+4. Persist the source and rendered envelope before effects.
+5. Create the normal InternalOnly, subagents-disabled session with that entire
+   launch selection. Session creation performs current-basis membership
+   validation, atomic intent persistence, application, and confirmation.
+6. Treat any missing/rejected/unconfirmed value as node launch failure and
+   compensate the incomplete session before sending a prompt.
 
-Workflow owns the decision to require an unattended mode. The active agent
-catalog owns which opaque mode value is vetted for the selected target; do not
-reintroduce family-specific mappings in Workflow. Do not import/edit Cowork.
-One narrow generic session/catalog read seam may expose `liveConfigId`; do not
-move Workflow execution policy into sessions/agents or broaden raw launch
-options.
-
-Resolved plan is exactly:
-
-```text
-workspaceId, agentKind, modelId, modeId,
-effortConfig: null | {configId,value}, renderedPrompt, promptId
-```
-
-Reuse the normal InternalOnly, subagents-disabled session. After start and
-before `begin_step`, call `set_live_session_config_option` when effort exists
-and require `Applied`. Queued/rejected/missing/other fails run+step as
-`session_config_apply_failed` and sends no prompt. Replay never resolves or
-executes again.
+Workflow owns no unattended-mode lookup, model-local mode inheritance,
+per-model effort mapping, or post-start config mutation. Replay reuses the
+stored source/envelope and never creates a second session or prompt.
 
 ## Persistence
 
@@ -782,7 +762,7 @@ AnyHarness pre-acceptance:
   `DIRECT_ATTACH_FORBIDDEN`;
 - blocked/retired -> `409 WORKSPACE_MUTATION_BLOCKED` / `WORKSPACE_RETIRED`;
 - access-store failure -> generic `500`;
-- unresolved agent/model/mode/effort/mapping/default ->
+- invalid current target model/control/default selection ->
   `422 WORKFLOW_RUN_TARGET_UNRESOLVABLE`;
 - invalid prompt -> existing `400 WORKFLOW_RUN_INVALID`;
 - replay mismatch -> existing `409 WORKFLOW_RUN_CONFLICT`.
@@ -832,9 +812,10 @@ Workflow SDK wrapper.
 - exact v1 component/behavior compatibility and strict v1/v2 dispatch;
 - pre-0061 file upgrade, copied rows, schema snapshot, `foreign_key_check`;
 - real SQLite races and stored-plan replay without launch lookup;
-- exact/default model, Claude/Codex mode, effort mapping, unsupported targets;
+- exact/default model and independent generic controls on supported and
+  unsupported targets;
 - access denial before acceptance;
-- effort Applied before step; every other result sends no prompt;
+- complete launch intent confirmed before step; every failure sends no prompt;
 - dropped PUT detached handoff, worker bearer, direct-attach exclusion/scope;
 - one session/prompt/turn under replay; and generated OpenAPI/SDK ratchets.
 
@@ -1713,9 +1694,9 @@ responses gain only the expanded status vocabulary.
 
 ### 3.3 Wire version distinguisher
 
-V1 and v2 responses are distinguished by `schemaVersion` and the presence of
-`resolvedHarness` (v2 only). `resolved_plan_json` is a DB-only column: it is
-never serialized on the wire in either family.
+V1 and v2 responses are distinguished by `schemaVersion`. Neither response
+publishes a catalog-shaped resolved-harness projection. Legacy
+`resolved_plan_json` storage is never serialized on the wire.
 
 ### 3.4 V1 widening supersession
 
@@ -1857,9 +1838,9 @@ actor, manager, scheduler, retry loop, or generalized orchestration framework.
 
 Exactly one prompt-dispatch classification site exists — `run_execution` in
 `domains/workflows/execution.rs`, which consumes the shared decision seam in
-`domains/workflows/dispatch.rs` (`apply_prompt_dispatch_outcome`) — plus the
-separate v2 effort-application step; these rules are written against those
-sites.
+`domains/workflows/dispatch.rs` (`apply_prompt_dispatch_outcome`). Complete
+generic controls are applied and confirmed by normal session creation before
+this site.
 
 - PUT holds the run gate through durable acceptance and execution scheduling.
 - Execution acquires the gate for `accepted -> running`, releases it while
@@ -1868,8 +1849,8 @@ sites.
   `session_id` binding. If cancellation wins that recheck, no session is
   created; if creation wins, its binding attempt happens before cancellation
   can terminalize the pending step.
-- Session startup and optional v2 effort application run outside the gate so a
-  cancel request is not blocked for their full duration.
+- Session startup runs outside the gate so a cancel request is not blocked for
+  its full duration.
 - Execution reacquires the gate for its final uncancelled CAS,
   `pending -> running`, prompt acceptance at the single dispatch site,
   persistence of a returned running `turn_id`, and any prompt-dispatch failure
@@ -1890,7 +1871,7 @@ sites.
   binding attempt. A binding infrastructure failure or process death between
   the separate session and workflow transactions remains restart-fenced
   ambiguity; only already-persisted correlation is promised.
-- Cancellation during startup or v2 effort application may terminalize the
+- Cancellation during startup may terminalize the
   still-pending step; the execution task must observe terminal/cancel intent
   before dispatch and send no prompt.
 - A session whose creation or startup already won may remain as an ordinary

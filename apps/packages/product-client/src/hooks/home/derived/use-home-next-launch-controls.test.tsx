@@ -17,7 +17,10 @@ describe("useHomeNextLaunchControls", () => {
       controlOverrides: { mode: "agent-full-access" },
       onSelectControl: vi.fn(),
     }));
-    expect(result.current.controls.map((control) => control.key)).toEqual(["collaboration_mode"]);
+    expect(result.current.controls.map((control) => control.key)).toEqual([
+      "collaboration_mode",
+      "mode",
+    ]);
     expect(result.current.launchControlValues).toEqual({
       collaboration_mode: "plan",
       mode: "agent-full-access",

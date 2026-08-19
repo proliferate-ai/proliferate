@@ -339,7 +339,7 @@ describe("review setup config", () => {
     const { request, error } = buildReviewRequest(draft, "parent-session");
 
     expect(error).toBeNull();
-    expect(draft.reviewers[0]?.controlValues.mode).toBe("");
+    expect(draft.reviewers[0]?.controlValues.mode).toBeUndefined();
     expect(request?.reviewers[0]).not.toHaveProperty("modeId");
   });
 

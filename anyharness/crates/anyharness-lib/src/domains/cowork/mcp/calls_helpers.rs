@@ -1,30 +1,16 @@
 use serde_json::{json, Value};
 
-use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
+use crate::domains::agents::launch_options::HarnessLaunchOptionsResponse;
 use crate::domains::cowork::runtime::CoworkRuntime;
 use crate::domains::sessions::links::model::SessionLinkRecord;
 use crate::domains::sessions::runtime::SendPromptOutcome;
 
-pub(super) fn launch_agents_to_json(catalog: ResolvedWorkspaceLaunchOptions) -> Vec<Value> {
-    catalog
-        .agents
+pub(super) fn launch_options_to_json(
+    launch_options: Vec<HarnessLaunchOptionsResponse>,
+) -> Vec<Value> {
+    launch_options
         .into_iter()
-        .map(|agent| {
-            json!({
-                "agentKind": agent.kind,
-                "displayName": agent.display_name,
-                "defaultModelId": agent.default_model_id,
-                "controls": agent.controls,
-                "defaultControlValues": agent.default_control_values,
-                "models": agent.models.into_iter().map(|model| {
-                    json!({
-                        "modelId": model.id,
-                        "displayName": model.display_name,
-                        "isDefault": model.is_default,
-                    })
-                }).collect::<Vec<_>>(),
-            })
-        })
+        .map(|response| json!(response))
         .collect()
 }
 

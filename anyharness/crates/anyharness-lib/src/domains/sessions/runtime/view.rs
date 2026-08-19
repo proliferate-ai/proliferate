@@ -13,7 +13,7 @@ use anyharness_contract::v1::{
     WorkspaceExecutionSummary,
 };
 
-use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
+use crate::domains::agents::launch_options::HarnessLaunchOptionsResponse;
 use crate::domains::sessions::execution_summary::{
     idle_workspace_execution_summary, session_execution_state, summarize_session_record,
     summarize_workspace_sessions,
@@ -198,12 +198,8 @@ impl SessionRuntime {
         Ok(summaries)
     }
 
-    pub fn resolved_workspace_launch_options(
-        &self,
-        workspace_id: &str,
-    ) -> anyhow::Result<ResolvedWorkspaceLaunchOptions> {
-        self.session_service
-            .resolved_workspace_launch_options(Some(workspace_id))
+    pub fn harness_launch_options(&self) -> anyhow::Result<Vec<HarnessLaunchOptionsResponse>> {
+        self.session_service.harness_launch_options()
     }
 
     pub fn live_config_snapshot(

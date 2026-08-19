@@ -76,6 +76,16 @@ fn openapi_registers_workspace_and_session_paths() {
         !paths.contains_key("/v1/sessions/{session_id}/subagents/{child_session_id}/wake"),
         "the public wake route must not remain in the contract"
     );
+    for removed in [
+        "/v1/agents/launch-options",
+        "/v1/agents/{kind}/model-snapshot",
+        "/v1/agents/{kind}/model-snapshot/refresh",
+    ] {
+        assert!(
+            !paths.contains_key(removed),
+            "removed launch-options compatibility path remains: {removed}"
+        );
+    }
 }
 
 #[test]
@@ -352,4 +362,10 @@ fn launch_option_schema_exposes_exact_models_controls_and_defaults() {
     assert!(schema["properties"].get("models").is_some());
     assert!(schema["properties"].get("controls").is_some());
     assert!(schema["properties"].get("defaults").is_some());
+
+    let create = &spec["components"]["schemas"]["CreateSessionRequest"];
+    assert!(
+        create["properties"].get("controlValues").is_some(),
+        "session create must expose the generic launch control map"
+    );
 }

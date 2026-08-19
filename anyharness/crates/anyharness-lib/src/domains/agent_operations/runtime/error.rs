@@ -113,9 +113,6 @@ impl AgentOperationsError {
             Self::LaunchSelection(AgentLaunchSelectionError::ModelUnknown) => {
                 "AGENT_LAUNCH_MODEL_UNKNOWN"
             }
-            Self::LaunchSelection(AgentLaunchSelectionError::ModelUnavailable) => {
-                "AGENT_LAUNCH_MODEL_UNAVAILABLE"
-            }
             Self::LaunchSelection(AgentLaunchSelectionError::ControlUnknown) => {
                 "AGENT_LAUNCH_CONTROL_UNKNOWN"
             }

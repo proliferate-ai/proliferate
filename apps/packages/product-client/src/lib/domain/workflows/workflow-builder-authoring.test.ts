@@ -25,6 +25,7 @@ describe("workflowBuilderHarnessOptions", () => {
         { id: "fable", label: "Fable" },
         { id: "unknown-upstream", label: "unknown-upstream" },
       ],
+      controls: [],
     }]);
   });
 

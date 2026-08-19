@@ -144,7 +144,7 @@ export interface LocalConfigControl {
   /** Which composer surface renders it, so the driver picks the right testid.
    * Grok's live-snapshot `model` control is driven through the composer model
    * picker; mode and reasoning use their promoted live composer controls. */
-  surface: "model" | "mode" | "tuning";
+  surface: "advanced" | "model" | "mode" | "tuning";
 }
 
 export interface LocalConfigSelectionContext {
@@ -220,20 +220,18 @@ export const defaultLocalConfigDriver: LocalConfigDriver = {
     // `reasoning` when both are advertised (resolveReasoningEffortControl), so
     // a shadowed `reasoning` control has no surface of its own.
     const hasEffort = normalized.some((control) => control.key === "effort");
-    // The composer likewise renders ONE promoted mode control:
-    // `collaboration_mode` wins over the legacy `mode` control when it has a
-    // real choice (resolveComposerModeControl). Cycling both through the same
-    // SessionModeControl would test the second control against the first
-    // control's readback and recreate a false #1063 rejection.
+    // The composer promotes collaboration mode while Access (`mode`) remains
+    // independently selectable in Workspace status > Advanced.
     const hasCollaborationMode = normalized.some(
       (control) => control.key === "collaboration_mode" && control.values.length >= 2,
     );
     const controls = normalized.flatMap((control) => {
-      const surface = configSurfaceFor(control.key);
+      const surface = control.key === "mode" && hasCollaborationMode
+        ? "advanced"
+        : configSurfaceFor(control.key);
       if (
         !surface
         || (control.key === "reasoning" && hasEffort)
-        || (control.key === "mode" && hasCollaborationMode)
         // LOCAL-GROK-CFG-003 is deliberately Grok-only. Other harness model
         // semantics remain owned by their existing collectors/product rulings.
         || (surface === "model" && harness !== "grok")
@@ -1105,6 +1103,9 @@ async function selectConfigValueInUi(
   if (control.surface === "tuning") {
     return selectTuningValue(page, control, value);
   }
+  if (control.surface === "advanced") {
+    return selectAdvancedValue(page, control, value);
+  }
   // Mode uses the compact stepper in the current composer. Retain the popover
   // path for any non-compact surface, but drive the stamped next-value contract
   // when present and bound the walk to one full advertised ladder.
@@ -1124,6 +1125,36 @@ async function selectConfigValueInUi(
   await sleep(CONFIG_REJECTION_WINDOW_MS);
   const readback = await readRequiredAttr(p, "[data-session-mode-trigger]", "data-session-mode-selected");
   return { accepted: readback === value, readback };
+}
+
+/** Selects an exact overflow control independently of the promoted mode chip. */
+async function selectAdvancedValue(
+  page: ProductPage,
+  control: LocalConfigControl,
+  value: string,
+): Promise<{ accepted: boolean; readback: string }> {
+  const p = page.page;
+  const trigger = p.locator("[data-workspace-status-trigger]").first();
+  await trigger.waitFor({ state: "visible", timeout: 15_000 });
+  await trigger.click();
+  const option = p.locator(
+    `[data-session-advanced-option="${cssAttr(`${control.key}:${value}`)}"]`,
+  ).first();
+  await option.waitFor({ state: "visible", timeout: 15_000 });
+  await option.click();
+  await sleep(CONFIG_REJECTION_WINDOW_MS);
+  const selected = p.locator(
+    `[data-session-advanced-control="${cssAttr(control.key)}"]` +
+      `[data-session-advanced-selected="${cssAttr(value)}"]`,
+  ).first();
+  const accepted = await selected.isVisible().catch(() => false);
+  const selectedOption = p.locator(
+    `[data-session-advanced-control="${cssAttr(control.key)}"]` +
+      "[data-session-advanced-selected]",
+  ).first();
+  const readback = (await selectedOption.getAttribute("data-session-advanced-selected")) ?? "";
+  await p.keyboard.press("Escape");
+  return { accepted, readback };
 }
 
 /**

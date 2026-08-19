@@ -17,6 +17,12 @@ import {
   isProjectedSessionMaterializationCandidate,
 } from "#product/lib/domain/sessions/creation/projected-session-materialization";
 import {
+  rawConfigValuesFromIntentSnapshot,
+  snapshotPreMaterializationConfigIntents,
+} from "#product/lib/domain/sessions/creation/config-intent-settlement";
+import { sessionIntentsForSession } from "#product/domain/sessions/intents/session-intent-state";
+import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
+import {
   isAttemptAttended,
 } from "#product/hooks/workspaces/workflows/pending-workspace-attempt-access";
 
@@ -42,6 +48,24 @@ type CreateEmptySessionWithResolvedConfig = (
 ) => Promise<string>;
 
 const inFlightProjectedSessionMaterializations = new Set<string>();
+
+function projectedLaunchControlValues(session: SessionRuntimeRecord): Record<string, string> {
+  const liveValues = session.liveConfig?.normalizedControls
+    ? Object.values(session.liveConfig.normalizedControls)
+      .flatMap((value) => Array.isArray(value) ? value : value ? [value] : [])
+      .map((control) => [control.rawConfigId, control.currentValue] as const)
+      .filter((entry): entry is readonly [string, string] => Boolean(entry[1]))
+    : [];
+  const pendingValues = rawConfigValuesFromIntentSnapshot(
+    snapshotPreMaterializationConfigIntents(
+      sessionIntentsForSession(useSessionIntentStore.getState(), session.sessionId),
+    ),
+  );
+  return {
+    ...Object.fromEntries(liveValues),
+    ...pendingValues,
+  };
+}
 
 function projectedSessionMaterializationKey(workspaceId: string, sessionId: string): string {
   return `${workspaceId}:${sessionId}`;
@@ -71,12 +95,7 @@ function materializeProjectedSession(input: {
     workspaceId: input.workspaceId,
     agentKind: input.session.agentKind,
     modelId: input.session.requestedModelId ?? input.session.modelId ?? input.session.agentKind,
-    launchControlValues: input.session.liveConfig?.normalizedControls
-      ? Object.fromEntries(Object.values(input.session.liveConfig.normalizedControls)
-        .flatMap((value) => Array.isArray(value) ? value : value ? [value] : [])
-        .map((control) => [control.rawConfigId, control.currentValue])
-        .filter((entry): entry is [string, string] => Boolean(entry[1])))
-      : {},
+    launchControlValues: projectedLaunchControlValues(input.session),
     reuseInFlightEmptySession: false,
     preserveProjectedSessionOnCreateFailure: true,
     activateOnCreate: input.activateOnCreate,

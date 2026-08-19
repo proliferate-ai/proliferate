@@ -11,9 +11,9 @@ use crate::domains::agent_operations::model::{
 };
 use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
 use crate::domains::agents::catalog::service::ActiveCatalog;
-use crate::domains::agents::readiness::launch_options::{
-    ResolvedLaunchAgentOption, ResolvedLaunchModelOption, ResolvedModelEffort,
-    ResolvedWorkspaceLaunchOptions,
+use crate::domains::agents::launch_options::{
+    HarnessLaunchDefaults, HarnessLaunchModel, HarnessLaunchOptions, HarnessLaunchOptionsResponse,
+    HarnessLaunchOptionsState,
 };
 use crate::domains::sessions::admission::{NoControllerPolicy, SessionMutationAdmission};
 use crate::domains::sessions::links::model::{
@@ -144,13 +144,10 @@ impl AgentWorkspaceOperations for Workspaces {
     }
 }
 
-struct LaunchOptions(ResolvedWorkspaceLaunchOptions);
+struct LaunchOptions(Vec<HarnessLaunchOptionsResponse>);
 
 impl AgentLaunchOptionReads for LaunchOptions {
-    fn resolved_workspace_launch_options(
-        &self,
-        _workspace_id: &str,
-    ) -> anyhow::Result<ResolvedWorkspaceLaunchOptions> {
+    fn harness_launch_options(&self) -> anyhow::Result<Vec<HarnessLaunchOptionsResponse>> {
         Ok(self.0.clone())
     }
 }
@@ -314,32 +311,27 @@ fn fixture(closed_child: bool) -> Fixture {
     let catalog_model = &catalog_agent.session.presentation_models[0];
     let agent_kind = catalog_agent.kind.clone();
     let model_id = catalog_model.id.clone();
-    let launch = ResolvedWorkspaceLaunchOptions {
-        agents: vec![ResolvedLaunchAgentOption {
-            kind: agent_kind.clone(),
-            display_name: catalog_agent.display_name.clone(),
-            default_model_id: Some(model_id.clone()),
-            controls: Vec::new(),
-            default_control_values: Default::default(),
-            models: vec![ResolvedLaunchModelOption {
+    let launch = vec![HarnessLaunchOptionsResponse {
+        harness_kind: agent_kind.clone(),
+        basis_revision: "basis-1".into(),
+        revision: 1,
+        state: HarnessLaunchOptionsState::Observed,
+        options: Some(HarnessLaunchOptions {
+            models: vec![HarnessLaunchModel {
                 id: model_id.clone(),
-                display_name: catalog_model.display_name.clone(),
-                aliases: Vec::new(),
-                is_default: true,
-                default_opt_in: None,
-                description: catalog_model.description.clone(),
-                provider: None,
-                status: Some(crate::domains::agents::model::ModelCatalogStatus::Active),
-                effort: Some(ResolvedModelEffort {
-                    values: vec!["high".into()],
-                    default: Some("high".into()),
-                }),
-                live_effort_candidates: Vec::new(),
-                fast_mode: false,
-                modes: Some(vec!["mode-a".into()]),
+                observed_name: None,
+                observed_description: None,
             }],
-        }],
-    };
+            controls: Vec::new(),
+            defaults: HarnessLaunchDefaults {
+                model_id: Some(model_id.clone()),
+                control_values: Default::default(),
+            },
+        }),
+        observed_at: Some("2026-08-19T00:00:00Z".into()),
+        probe_attempted_at: "2026-08-19T00:00:00Z".into(),
+        probe_failure_code: None,
+    }];
     let sessions = Arc::new(Sessions(vec![
         session("parent", "workspace-a", &agent_kind, &model_id),
         session("peer", "workspace-b", &agent_kind, &model_id),

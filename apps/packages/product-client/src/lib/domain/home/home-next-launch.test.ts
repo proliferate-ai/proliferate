@@ -124,7 +124,7 @@ describe("home-next branch helpers", () => {
     expect(resolveHomeNextDefaultBranchName({
       branchRefs: [],
       repoRootDefaultBranch: "main",
-    })).toEqual({ kind: "claude", modelId: "sonnet" });
+    })).toBeNull();
   });
 
   it("falls back to git default and then the first local branch without inventing main", () => {
@@ -324,7 +324,7 @@ describe("home-next model helpers", () => {
       defaultChatModelIdByAgentKind: {
         claude: "sonnet",
       },
-    })).toBeNull();
+    })).toEqual({ kind: "claude", modelId: "sonnet" });
     expect(resolveEffectiveHomeModelSelection(groups, null, {
       defaultChatAgentKind: "missing",
       defaultChatModelIdByAgentKind: {

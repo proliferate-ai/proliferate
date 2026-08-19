@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolveCurrentModelDisplayName } from "#product/lib/domain/chat/models/model-selector-current";
 
 describe("resolveCurrentModelDisplayName", () => {
-  it("uses catalog labels for config-shaped live model ids", () => {
+  it("does not alias a config-shaped live model id onto a different launch row", () => {
     expect(resolveCurrentModelDisplayName({
       activeLaunchIdentity: {
         kind: "cursor",
@@ -18,6 +18,6 @@ describe("resolveCurrentModelDisplayName", () => {
         }],
       }],
       liveConfigLabel: "composer-2.5",
-    })).toBe("Composer 2.5 Fast");
+    })).toBe("composer-2.5");
   });
 });

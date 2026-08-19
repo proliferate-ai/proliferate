@@ -14,11 +14,17 @@ from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.helpers.worker_heartbeat import enroll_sandbox_worker
 
 
-async def _sandbox(db: AsyncSession, owner_user_id: uuid.UUID, label: str) -> CloudSandbox:
+async def _sandbox(
+    db: AsyncSession,
+    owner_user_id: uuid.UUID,
+    label: str,
+    *,
+    status: CloudSandboxStatus = CloudSandboxStatus.ready,
+) -> CloudSandbox:
     row = CloudSandbox(
         owner_user_id=owner_user_id,
         provider_sandbox_id=f"launch-options-{label}-{uuid.uuid4().hex[:8]}",
-        status=CloudSandboxStatus.ready,
+        status=status,
     )
     db.add(row)
     await db.commit()
@@ -107,7 +113,45 @@ async def test_copy_is_verbatim_monotonic_and_target_scoped(
     assert second_read.status_code == 200, second_read.text
     assert first_read.json()["options"]["models"][0]["id"] == "fable"
     assert second_read.json()["options"]["models"][0]["id"] == "opus[1m]"
-    assert first_read.json()["readiness"] is None
+    assert first_read.json()["readiness"] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_readiness_is_joined_from_each_server_owned_target(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    ready_auth = await create_user_and_login(
+        client, db_session, email_prefix="launch-options-ready"
+    )
+    error_auth = await create_user_and_login(
+        client, db_session, email_prefix="launch-options-error"
+    )
+    ready = await _sandbox(db_session, ready_auth.user_id, "ready")
+    error = await _sandbox(
+        db_session,
+        error_auth.user_id,
+        "error",
+        status=CloudSandboxStatus.error,
+    )
+    ready_token = await enroll_sandbox_worker(client, db_session, sandbox=ready)
+    error_token = await enroll_sandbox_worker(client, db_session, sandbox=error)
+    payload = json.dumps(_payload("codex", 1, "gpt-5.2-codex"))
+    await _upload(client, ready_token, "codex", payload, 1)
+    await _upload(client, error_token, "codex", payload, 1)
+
+    ready_read = await client.get(
+        f"/v1/cloud/harness-launch-options/sandboxes/{ready.id}/codex",
+        headers=ready_auth.headers,
+    )
+    error_read = await client.get(
+        f"/v1/cloud/harness-launch-options/sandboxes/{error.id}/codex",
+        headers=error_auth.headers,
+    )
+    assert ready_read.status_code == 200, ready_read.text
+    assert error_read.status_code == 200, error_read.text
+    assert ready_read.json()["readiness"] == "ready"
+    assert error_read.json()["readiness"] == "error"
 
 
 @pytest.mark.asyncio

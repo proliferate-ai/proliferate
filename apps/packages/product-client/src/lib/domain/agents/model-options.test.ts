@@ -271,8 +271,8 @@ describe("isStoredDefaultModelStale", () => {
     expect(isStoredDefaultModelStale("opus", models)).toBe(false);
   });
 
-  it("is not stale when the stored id matches a model alias", () => {
-    expect(isStoredDefaultModelStale("claude-sonnet-4-6", models)).toBe(false);
+  it("is stale when the stored id matches only presentation metadata", () => {
+    expect(isStoredDefaultModelStale("claude-sonnet-4-6", models)).toBe(true);
   });
 
   it("never reports stale without a stored id or runtime models (loading/unclassified guard)", () => {

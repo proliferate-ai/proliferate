@@ -590,7 +590,7 @@ test("buildLocalSessionTabsEvidence pins the four proofs true and hashes each se
   }
 });
 
-test("enumerateControls keeps only promoted UI controls and drops shadowed reasoning and mode aliases", async () => {
+test("enumerateControls drives promoted Collaboration Mode and independent Access", async () => {
   const liveConfig = {
     rawConfigOptions: [],
     sourceSeq: 1,
@@ -644,7 +644,7 @@ test("enumerateControls keeps only promoted UI controls and drops shadowed reaso
   const controls = await defaultLocalConfigDriver.enumerateControls(world, "session-1", "claude");
   assert.deepEqual(
     controls.map((control) => `${control.key}:${control.surface}`).sort(),
-    ["collaboration_mode:mode", "effort:tuning"],
+    ["collaboration_mode:mode", "effort:tuning", "mode:advanced"],
   );
 });
 

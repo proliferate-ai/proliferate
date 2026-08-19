@@ -2,7 +2,7 @@ use serde_json::{json, Value};
 
 use super::calls_helpers::{
     coding_session_workspace_id, cowork_agent_search_response_json,
-    cowork_agent_turns_response_json, launch_agents_to_json, prompt_outcome_label,
+    cowork_agent_turns_response_json, launch_options_to_json, prompt_outcome_label,
 };
 use super::context::CoworkMcpContext;
 use super::tools::{
@@ -203,7 +203,7 @@ fn get_coding_workspace_launch_options(
     let workspaces = options
         .into_iter()
         .map(|option| {
-            let catalog = cowork_runtime.resolved_workspace_launch_options(&option.workspace.id)?;
+            let launch_options = cowork_runtime.harness_launch_options()?;
             let base_branch = cowork_runtime
                 .repo_default_branch_for_workspace(&option.workspace)?
                 .or(option.workspace.original_branch.clone())
@@ -217,7 +217,7 @@ fn get_coding_workspace_launch_options(
                 "currentBranch": option.workspace.current_branch,
                 "baseBranch": base_branch,
                 "createBlockReason": option.create_block_reason,
-                "agents": launch_agents_to_json(catalog),
+                "launchOptions": launch_options_to_json(launch_options),
             }))
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
@@ -288,12 +288,17 @@ fn get_coding_session_launch_options(
         None,
     )?;
     let default_agent_kind = parent.agent_kind.clone();
-    let catalog = cowork_runtime.resolved_workspace_launch_options(&managed.workspace_id)?;
-    let target_defaults = catalog
-        .agents
+    let launch_options = cowork_runtime.harness_launch_options()?;
+    let target_defaults = launch_options
         .iter()
-        .find(|agent| agent.kind == default_agent_kind)
-        .map(|agent| (agent.default_model_id.clone(), agent.default_control_values.clone()))
+        .find(|response| response.harness_kind == default_agent_kind)
+        .and_then(|response| response.options.as_ref())
+        .map(|options| {
+            (
+                options.defaults.model_id.clone(),
+                options.defaults.control_values.clone(),
+            )
+        })
         .unwrap_or_default();
     Ok(json!({
         "parentSessionId": parent_session_id,
@@ -305,7 +310,7 @@ fn get_coding_session_launch_options(
             "controlValues": target_defaults.1,
             "source": "target_observed_harness_launch_options"
         },
-        "agents": launch_agents_to_json(catalog),
+        "launchOptions": launch_options_to_json(launch_options),
     }))
 }
 

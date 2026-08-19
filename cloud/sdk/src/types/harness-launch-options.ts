@@ -41,5 +41,11 @@ export interface CloudHarnessLaunchOptionsResponse {
   observedAt: string | null;
   probeAttemptedAt: string;
   probeFailureCode: string | null;
-  readiness: string | null;
+  readiness:
+    | "ready"
+    | "install_required"
+    | "credentials_required"
+    | "login_required"
+    | "unsupported"
+    | "error";
 }

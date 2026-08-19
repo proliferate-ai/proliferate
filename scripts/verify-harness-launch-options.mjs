@@ -16,15 +16,17 @@ const TERMINAL_STATES = new Set([
 const args = parseArgs(process.argv.slice(2));
 const correlationId = randomUUID();
 
-main().catch((error) => {
-  console.error(JSON.stringify({
-    status: "incomplete",
-    correlationId,
-    code: error.code ?? "VERIFIER_FAILED",
-    detail: String(error.message ?? error),
-  }));
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(JSON.stringify({
+      status: "incomplete",
+      correlationId,
+      code: error.code ?? "VERIFIER_FAILED",
+      detail: String(error.message ?? error),
+    }));
+    process.exitCode = 1;
+  });
+}
 
 async function main() {
   if (!args.profile || args.harnesses.length === 0) {
@@ -156,7 +158,15 @@ async function verifyHarness(input) {
     return live && selectionMatches(live.current, selection) ? live : null;
   }, 90_000, "SESSION_READY_TIMEOUT");
 
-  const mutation = await proveMutation(input.baseUrl, session.id, ready);
+  const requiredMutationControls = input.harnessKind === "codex"
+    ? ["collaboration_mode", "mode"]
+    : [];
+  const mutation = await proveMutations(
+    input.baseUrl,
+    session.id,
+    ready,
+    requiredMutationControls,
+  );
   return {
     harnessKind: input.harnessKind,
     harnessVersion,
@@ -175,7 +185,8 @@ async function verifyHarness(input) {
     confirmation: {
       initial: true,
       mutated: mutation.confirmed,
-      mutationControlId: mutation.controlId,
+      mutationControlId: mutation.controlIds[0] ?? null,
+      mutationControlIds: mutation.controlIds,
     },
     correlationId,
   };
@@ -226,16 +237,33 @@ function chooseSelection(harnessKind, options) {
   return { modelId, controlValues };
 }
 
-async function proveMutation(baseUrl, sessionId, live) {
-  for (const control of live.controls ?? []) {
+async function proveMutations(baseUrl, sessionId, initialLive, requiredControlIds) {
+  const available = initialLive.controls ?? [];
+  const controls =
+    requiredControlIds.length > 0
+      ? requiredControlIds.map((controlId) => {
+          const control = available.find((candidate) => candidate.id === controlId);
+          if (!control) fail("LIVE_CONTROL_MISSING", `live config does not expose ${controlId}`);
+          return control;
+        })
+      : available;
+  let live = initialLive;
+  const controlIds = [];
+  const mutatedValues = {};
+  for (const control of controls) {
     const current = live.current?.controlValues?.[control.id];
     const alternative = control.values.find((candidate) => candidate.value !== current)?.value;
-    if (!alternative) continue;
+    if (!alternative) {
+      if (requiredControlIds.includes(control.id)) {
+        fail("LIVE_CONTROL_NOT_MUTABLE", `${control.id} has no independent alternative value`);
+      }
+      continue;
+    }
     await requestJson(baseUrl, `/v1/sessions/${encodeURIComponent(sessionId)}/config-options`, {
       method: "POST",
       body: { configId: control.id, value: alternative },
     });
-    await poll(async () => {
+    live = await poll(async () => {
       const next = (await requestJson(
         baseUrl,
         `/v1/sessions/${encodeURIComponent(sessionId)}/live-config`,
@@ -245,31 +273,40 @@ async function proveMutation(baseUrl, sessionId, live) {
           ? next
           : null;
     }, 60_000, "LIVE_MUTATION_TIMEOUT");
-    return { confirmed: true, controlId: control.id };
+    controlIds.push(control.id);
+    mutatedValues[control.id] = alternative;
+    if (requiredControlIds.length === 0) break;
   }
-  return { confirmed: null, controlId: null };
+  if (
+    requiredControlIds.length > 0
+    && !Object.entries(mutatedValues).every(
+      ([controlId, value]) => live.current?.controlValues?.[controlId] === value,
+    )
+  ) {
+    fail(
+      "LIVE_CONTROLS_COUPLED",
+      "mutating one required control reset another required control",
+    );
+  }
+  return {
+    confirmed: controlIds.length > 0 ? true : null,
+    controlIds,
+  };
 }
 
-function readIntent(runtimeHome, sessionId) {
+export function readIntent(runtimeHome, sessionId) {
   const dbPath = join(runtimeHome, "db.sqlite");
   if (!existsSync(dbPath)) fail("RUNTIME_DB_MISSING", "profile runtime db.sqlite is absent");
-  let output;
-  try {
-    output = execFileSync("sqlite3", [
-      "-readonly", "-json", dbPath,
-      "SELECT requested_model_id AS modelId, requested_controls_json AS controlValues FROM session_launch_intents WHERE session_id = ?;",
-      sessionId,
-    ], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  } catch {
-    // macOS sqlite3 does not support parameter arguments in all packaged
-    // versions. Session ids are UUIDs returned by the runtime, so validate and
-    // embed only that closed grammar in the read-only fallback query.
-    if (!/^[a-zA-Z0-9:_-]{1,128}$/.test(sessionId)) fail("INVALID_SESSION_ID", "runtime returned an unsafe session id");
-    output = execFileSync("sqlite3", [
-      "-readonly", "-json", dbPath,
-      `SELECT requested_model_id AS modelId, requested_controls_json AS controlValues FROM session_launch_intents WHERE session_id = '${sessionId}';`,
-    ], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  // The sqlite3 CLI does not bind trailing argv values to bare `?` parameters;
+  // on macOS it exits successfully with an empty result. Validate the runtime
+  // id against a closed grammar and issue one read-only embedded query.
+  if (!/^[a-zA-Z0-9:_-]{1,128}$/.test(sessionId)) {
+    fail("INVALID_SESSION_ID", "runtime returned an unsafe session id");
   }
+  const output = execFileSync("sqlite3", [
+    "-readonly", "-json", dbPath,
+    `SELECT requested_model_id AS modelId, requested_controls_json AS controlValues FROM session_launch_intents WHERE session_id = '${sessionId}';`,
+  ], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   const row = JSON.parse(output)[0];
   if (!row) fail("INTENT_NOT_FOUND", "session_launch_intents has no row for created session");
   return { modelId: row.modelId ?? null, controlValues: JSON.parse(row.controlValues) };

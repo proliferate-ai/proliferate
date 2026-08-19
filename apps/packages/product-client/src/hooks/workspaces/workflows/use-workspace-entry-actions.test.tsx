@@ -390,7 +390,7 @@ describe("useWorkspaceEntryActions", () => {
       workspaceId: pendingWorkspaceUiKey,
       agentKind: "claude",
       modelId: "us.anthropic.claude-sonnet-4-6",
-      modeId: "default",
+      modeId: null,
       title: "Sonnet 4.6",
       materializedSessionId: null,
     });

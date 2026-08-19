@@ -722,14 +722,11 @@ impl CoworkRuntime {
             .list_source_workspace_options(parent_session_id)
     }
 
-    pub fn resolved_workspace_launch_options(
+    pub fn harness_launch_options(
         &self,
-        workspace_id: &str,
-    ) -> anyhow::Result<
-        crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions,
-    > {
-        self.session_runtime
-            .resolved_workspace_launch_options(workspace_id)
+    ) -> anyhow::Result<Vec<crate::domains::agents::launch_options::HarnessLaunchOptionsResponse>>
+    {
+        self.session_runtime.harness_launch_options()
     }
 
     pub fn validate_managed_coding_workspace(

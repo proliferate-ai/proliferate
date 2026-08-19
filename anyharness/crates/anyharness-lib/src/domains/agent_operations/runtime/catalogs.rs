@@ -5,17 +5,11 @@ use super::{
 };
 use crate::domains::agent_operations::model::{
     AgentCapability, AgentConfigOption, AgentConfigOptionsView, AgentConfigValueOption,
-    AgentIdentity, AgentLaunchModelOption, AgentLaunchOption, AgentLaunchOptionsView,
-    WorkspaceIdentity,
-};
-use crate::domains::agents::catalog::schema::{
-    AgentCatalogAgent, AgentCatalogPresentationModel,
+    AgentIdentity, AgentLaunchOptionsView, HarnessLaunchModelPresentation,
+    HarnessLaunchPresentation, WorkspaceIdentity,
 };
 use crate::domains::agents::catalog::service::ActiveCatalog;
-use crate::domains::agents::model::ModelCatalogStatus;
-use crate::domains::agents::readiness::launch_options::{
-    ResolvedLaunchAgentOption, ResolvedLaunchModelOption, ResolvedWorkspaceLaunchOptions,
-};
+use crate::domains::agents::launch_options::HarnessLaunchOptionsResponse;
 use crate::domains::sessions::live_config::{
     EffectiveLiveConfigControl, EffectiveLiveConfigSnapshot,
 };
@@ -42,7 +36,7 @@ impl AgentOperations {
         }
         let resolved = self
             .launch_option_reads()?
-            .resolved_workspace_launch_options(&workspace.workspace_id)
+            .harness_launch_options()
             .map_err(AgentOperationsError::Internal)?;
         let catalog = self.catalog_reads()?.active_catalog();
         Ok(project_launch_options(
@@ -123,79 +117,57 @@ impl AgentOperations {
 fn project_launch_options(
     workspace: WorkspaceIdentity,
     catalog: &ActiveCatalog,
-    resolved: ResolvedWorkspaceLaunchOptions,
+    launch_options: Vec<HarnessLaunchOptionsResponse>,
 ) -> AgentLaunchOptionsView {
-    let agents = resolved
-        .agents
-        .into_iter()
-        .map(|agent| {
-            let presentation = catalog.agent(&agent.kind);
-            project_launch_agent(agent, presentation)
+    let presentation = launch_options
+        .iter()
+        .map(|response| {
+            let catalog_agent = catalog.agent(&response.harness_kind);
+            let models = response
+                .options
+                .as_ref()
+                .map(|options| {
+                    options
+                        .models
+                        .iter()
+                        .map(|model| {
+                            let catalog_model = catalog_agent.and_then(|agent| {
+                                agent
+                                    .session
+                                    .presentation_models
+                                    .iter()
+                                    .find(|candidate| candidate.id == model.id)
+                            });
+                            HarnessLaunchModelPresentation {
+                                id: model.id.clone(),
+                                display_name: model
+                                    .observed_name
+                                    .clone()
+                                    .or_else(|| {
+                                        catalog_model.map(|value| value.display_name.clone())
+                                    })
+                                    .unwrap_or_else(|| model.id.clone()),
+                                description: model.observed_description.clone().or_else(|| {
+                                    catalog_model.and_then(|value| value.description.clone())
+                                }),
+                            }
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            HarnessLaunchPresentation {
+                harness_kind: response.harness_kind.clone(),
+                display_name: catalog_agent
+                    .map(|agent| agent.display_name.clone())
+                    .unwrap_or_else(|| response.harness_kind.clone()),
+                models,
+            }
         })
         .collect();
     AgentLaunchOptionsView {
         workspace,
-        catalog_version: catalog.catalog_version().to_string(),
-        agents,
-    }
-}
-
-fn project_launch_agent(
-    resolved: ResolvedLaunchAgentOption,
-    presentation: Option<&AgentCatalogAgent>,
-) -> AgentLaunchOption {
-    let display_name = presentation
-        .map(|agent| agent.display_name.clone())
-        .unwrap_or_else(|| resolved.display_name.clone());
-    let default_model_id = resolved.default_model_id.clone();
-    let controls = resolved.controls.clone();
-    let default_control_values = resolved.default_control_values.clone();
-    let models = resolved
-        .models
-        .into_iter()
-        .map(|model| {
-            let model_presentation = presentation.and_then(|agent| {
-                agent
-                    .session
-                    .presentation_models
-                    .iter()
-                    .find(|candidate| candidate.id == model.id)
-            });
-            project_launch_model(model, model_presentation)
-        })
-        .collect();
-    AgentLaunchOption {
-        agent_kind: resolved.kind,
-        display_name,
-        executable: true,
-        unavailable_reason: None,
-        default_model_id,
-        controls,
-        default_control_values,
-        models,
-    }
-}
-
-fn project_launch_model(
-    model: ResolvedLaunchModelOption,
-    presentation: Option<&AgentCatalogPresentationModel>,
-) -> AgentLaunchModelOption {
-    AgentLaunchModelOption {
-        id: model.id,
-        display_name: presentation
-            .map(|value| value.display_name.clone())
-            .unwrap_or(model.display_name),
-        aliases: model.aliases,
-        is_default: model.is_default,
-        executable: true,
-        unavailable_reason: None,
-        description: model
-            .description
-            .or_else(|| presentation.and_then(|value| value.description.clone())),
-        status: model.status.unwrap_or(ModelCatalogStatus::Active),
-        effort_values: model.effort.map(|effort| effort.values),
-        fast_mode: model.fast_mode,
-        modes: model.modes,
+        launch_options,
+        presentation,
     }
 }
 
@@ -221,9 +193,7 @@ fn project_config_options(
     }
 }
 
-fn project_config_control(
-    control: EffectiveLiveConfigControl,
-) -> AgentConfigOption {
+fn project_config_control(control: EffectiveLiveConfigControl) -> AgentConfigOption {
     // The live actor is authoritative for every token it advertised. Keep
     // those values byte-for-byte and judge them only by the control's own
     // settable state; catalog identity/auth must not erase or canonicalize a

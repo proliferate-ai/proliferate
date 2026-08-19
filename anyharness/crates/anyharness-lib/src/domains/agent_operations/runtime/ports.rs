@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use crate::domains::agent_operations::model::WorkspacePinIntent;
 use crate::domains::agents::catalog::service::ActiveCatalog;
-use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
+use crate::domains::agents::launch_options::HarnessLaunchOptionsResponse;
 use crate::domains::sessions::links::model::SessionLinkRecord;
 use crate::domains::sessions::links::service::SessionLinkService;
 use crate::domains::sessions::live_config::{
@@ -422,18 +422,12 @@ impl AgentWorkspacePinEvents for SessionRuntime {
 }
 
 pub trait AgentLaunchOptionReads: Send + Sync {
-    fn resolved_workspace_launch_options(
-        &self,
-        workspace_id: &str,
-    ) -> anyhow::Result<ResolvedWorkspaceLaunchOptions>;
+    fn harness_launch_options(&self) -> anyhow::Result<Vec<HarnessLaunchOptionsResponse>>;
 }
 
 impl AgentLaunchOptionReads for SessionRuntime {
-    fn resolved_workspace_launch_options(
-        &self,
-        workspace_id: &str,
-    ) -> anyhow::Result<ResolvedWorkspaceLaunchOptions> {
-        SessionRuntime::resolved_workspace_launch_options(self, workspace_id)
+    fn harness_launch_options(&self) -> anyhow::Result<Vec<HarnessLaunchOptionsResponse>> {
+        SessionRuntime::harness_launch_options(self)
     }
 }
 

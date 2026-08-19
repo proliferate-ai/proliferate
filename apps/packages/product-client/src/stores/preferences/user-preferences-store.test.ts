@@ -88,11 +88,13 @@ describe("user preference migration", () => {
     const preferences = useUserPreferencesStore.getState();
     expect(preferences.defaultChatAgentKind).toBe("claude");
     expect(preferences.defaultChatModelIdByAgentKind).toEqual({
-      claude: "sonnet",
+      claude: "claude-sonnet-4-5",
     });
 
     const persisted = memory.readJson<Record<string, unknown>>("user_preferences")!;
-    expect(persisted.defaultChatModelIdByAgentKind).toEqual({ claude: "sonnet" });
+    expect(persisted.defaultChatModelIdByAgentKind).toEqual({
+      claude: "claude-sonnet-4-5",
+    });
     expect(persisted).not.toHaveProperty("defaultChatModelId");
   });
 
@@ -290,11 +292,11 @@ describe("user preference migration", () => {
 
     expect(result.changed).toBe(true);
     expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
-      claude: "haiku",
+      claude: "claude-haiku-4-5",
     });
   });
 
-  it("normalizes Claude legacy model IDs in model maps", () => {
+  it("preserves exact Claude model IDs in model maps", () => {
     const result = migrateUserPreferences({
       ...USER_PREFERENCE_DEFAULTS,
       defaultChatModelIdByAgentKind: {
@@ -303,9 +305,9 @@ describe("user preference migration", () => {
       },
     });
 
-    expect(result.changed).toBe(true);
+    expect(result.changed).toBe(false);
     expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
-      claude: "opus[1m]",
+      claude: "claude-opus-4-5",
       codex: "gpt-5.4",
     });
   });
@@ -332,6 +334,7 @@ describe("user preference migration", () => {
       claude: {
         reasoning: "extended",
         fast_mode: "enabled",
+        temperature: "1",
       },
     });
   });

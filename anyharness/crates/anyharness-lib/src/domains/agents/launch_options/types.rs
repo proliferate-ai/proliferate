@@ -94,7 +94,8 @@ pub struct HarnessLaunchOptionStateRow {
     pub probe_failure_code: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum HarnessLaunchOptionsState {
     Detecting,
     Refreshing,
@@ -104,7 +105,8 @@ pub enum HarnessLaunchOptionsState {
     FailedWithoutObservation,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HarnessLaunchOptionsResponse {
     pub harness_kind: String,
     pub basis_revision: String,
