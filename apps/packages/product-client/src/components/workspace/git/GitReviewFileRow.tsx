@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import {
   type AnyHarnessQueryTimingOptions,
   useGitDiffQuery,
@@ -26,50 +26,16 @@ import {
   resolveDiffDisplayPolicy,
 } from "#product/lib/domain/workspaces/changes/diff-display-policy";
 import { resolveGitPanelReviewEvidence } from "#product/lib/domain/workspaces/changes/git-panel-review-model";
+import {
+  reviewCardVirtualizationStyle,
+  SIDEBAR_DIFF_SURFACE_STYLE,
+} from "#product/lib/domain/workspaces/changes/git-review-file-row-layout";
 import type {
   GitPanelReviewFile,
   GitPanelReviewScope,
 } from "#product/lib/domain/workspaces/changes/git-panel-diff";
 
 type OpenFile = (path: string) => Promise<void>;
-
-// The review document renders each file as a flat section on the plain pane
-// background — unchanged diff lines carry no tint (the [data-git-review-document]
-// rules in design product.css flatten the context surface to match).
-const SIDEBAR_DIFF_SURFACE_STYLE = {
-  "--diff-view-surface-override": "var(--color-background)",
-} as CSSProperties;
-
-// Header row (min-h-9 + py) height estimate for content-visibility sizing.
-const REVIEW_CARD_HEADER_ESTIMATE_PX = 38;
-
-/**
- * Off-screen review cards skip layout/paint via content-visibility:auto —
- * without it every diff row of every file stays painted and long change
- * lists starve the WKWebView compositor (black flashes while scrolling).
- *
- * Full-height layout: diffs render at natural height (no inner 24-line
- * viewport cap), so the intrinsic-size estimate uses the full expected
- * line count (changed lines + ~50% context) rather than the old capped
- * value. This keeps the outer panel scrollbar stable for off-screen cards.
- */
-function reviewCardVirtualizationStyle({
-  collapsed,
-  changedLines,
-}: {
-  collapsed: boolean;
-  changedLines: number;
-}): CSSProperties {
-  // Estimate total rendered lines: changed lines + ~50% context lines.
-  // No cap — diffs render full height in this layout variant.
-  const estimatedLines = collapsed
-    ? 0
-    : Math.ceil(Math.max(changedLines, 1) * 1.5);
-  return {
-    contentVisibility: "auto",
-    containIntrinsicSize: `auto calc(${REVIEW_CARD_HEADER_ESTIMATE_PX}px + var(--diffs-line-height) * ${estimatedLines})`,
-  } as CSSProperties;
-}
 
 export function GitReviewFileRow({
   id,
