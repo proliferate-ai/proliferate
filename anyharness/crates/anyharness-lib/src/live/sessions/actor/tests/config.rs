@@ -12,91 +12,6 @@ fn session_model_options(ids: &[&str]) -> Vec<SessionModelOption> {
 }
 
 #[test]
-fn persisted_control_values_orders_standard_controls_before_extras() {
-    let controls = NormalizedSessionControls {
-        model: Some(NormalizedSessionControl {
-            key: "model".into(),
-            raw_config_id: "model".into(),
-            label: "Model".into(),
-            current_value: Some("default".into()),
-            settable: true,
-            values: vec![NormalizedSessionControlValue {
-                value: "default".into(),
-                label: "Default".into(),
-                description: None,
-            }],
-        }),
-        collaboration_mode: Some(NormalizedSessionControl {
-            key: "collaboration_mode".into(),
-            raw_config_id: "collaboration_mode".into(),
-            label: "Mode".into(),
-            current_value: Some("plan".into()),
-            settable: true,
-            values: vec![],
-        }),
-        mode: Some(NormalizedSessionControl {
-            key: "mode".into(),
-            raw_config_id: "mode".into(),
-            label: "Mode".into(),
-            current_value: Some("default".into()),
-            settable: true,
-            values: vec![],
-        }),
-        reasoning: Some(NormalizedSessionControl {
-            key: "reasoning".into(),
-            raw_config_id: "thinking".into(),
-            label: "Thinking".into(),
-            current_value: Some("off".into()),
-            settable: true,
-            values: vec![],
-        }),
-        effort: Some(NormalizedSessionControl {
-            key: "effort".into(),
-            raw_config_id: "reasoning_effort".into(),
-            label: "Reasoning Effort".into(),
-            current_value: Some("xhigh".into()),
-            settable: true,
-            values: vec![],
-        }),
-        fast_mode: Some(NormalizedSessionControl {
-            key: "fast_mode".into(),
-            raw_config_id: "fast_mode".into(),
-            label: "Fast Mode".into(),
-            current_value: Some("on".into()),
-            settable: true,
-            values: vec![],
-        }),
-        extras: vec![NormalizedSessionControl {
-            key: "extra:foo".into(),
-            raw_config_id: "foo".into(),
-            label: "Foo".into(),
-            current_value: Some("bar".into()),
-            settable: true,
-            values: vec![],
-        }],
-    };
-
-    let values = persisted_control_values(&controls);
-    let ids = values
-        .into_iter()
-        .map(|(_, config_id, value)| format!("{config_id}={value}"))
-        .collect::<Vec<_>>();
-
-    assert_eq!(
-        ids,
-        vec![
-            "model=default",
-            "collaboration_mode=plan",
-            "thinking=off",
-            "reasoning_effort=xhigh",
-            "fast_mode=on",
-            "mode=default",
-            "foo=bar",
-        ]
-    );
-}
-
-#[test]
 fn pending_config_rank_keeps_collaboration_mode_in_standard_order() {
     let mut collaboration_mode = acp::schema::SessionConfigOption::select(
         "collaboration_mode",
@@ -555,8 +470,9 @@ fn every_reported_live_contradiction_reaches_the_refresh_port() {
     struct RecordingInvalidator(std::sync::atomic::AtomicUsize);
 
     impl LaunchObservationInvalidator for RecordingInvalidator {
-        fn queue_refresh(&self, _harness_kind: &str) {
+        fn queue_refresh(&self, _harness_kind: &str) -> bool {
             self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            true
         }
     }
 

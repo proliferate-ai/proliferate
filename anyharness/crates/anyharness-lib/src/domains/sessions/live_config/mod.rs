@@ -52,6 +52,54 @@ pub fn effective_config_apply_state(state: ConfigApplyState) -> EffectiveConfigA
     }
 }
 
+/// Validate the full snapshot's sole authoritative current-value statement.
+/// Compatibility projections are deliberately excluded: a reported current
+/// model and every control current value must be exact members of the saved
+/// option rows. Model remains nullable in the frozen wire contract.
+pub fn validate_canonical_live_config_current(
+    snapshot: &SessionLiveConfigSnapshot,
+) -> anyhow::Result<()> {
+    if let Some(model_id) = snapshot.current.model_id.as_deref() {
+        anyhow::ensure!(
+            snapshot.models.iter().any(|model| model.id == model_id),
+            "saved current model '{model_id}' is absent from the saved live model options"
+        );
+    }
+
+    let mut control_ids = std::collections::BTreeSet::new();
+    for control in &snapshot.controls {
+        anyhow::ensure!(
+            control_ids.insert(control.id.clone()),
+            "saved live snapshot contains duplicate control '{}'",
+            control.id
+        );
+        let value = snapshot
+            .current
+            .control_values
+            .get(&control.id)
+            .ok_or_else(|| {
+                anyhow::anyhow!("saved live control '{}' has no current value", control.id)
+            })?;
+        anyhow::ensure!(
+            control
+                .values
+                .iter()
+                .any(|candidate| &candidate.value == value),
+            "saved current value '{value}' is absent from saved live control '{}'",
+            control.id
+        );
+    }
+
+    for config_id in snapshot.current.control_values.keys() {
+        anyhow::ensure!(
+            control_ids.contains(config_id),
+            "saved current value references absent live control '{config_id}'"
+        );
+    }
+
+    Ok(())
+}
+
 pub fn effective_live_config_snapshot(
     snapshot: SessionLiveConfigSnapshot,
 ) -> EffectiveLiveConfigSnapshot {
@@ -147,14 +195,21 @@ pub fn build_live_config_snapshot(
         available_models,
         legacy_mode_state,
     );
-    let models = available_models
-        .iter()
-        .map(|model| HarnessLaunchModel {
-            id: model.id.clone(),
-            observed_name: Some(model.name.clone()),
-            observed_description: model.description.clone(),
+    let models = normalized_controls
+        .model
+        .as_ref()
+        .map(|control| {
+            control
+                .values
+                .iter()
+                .map(|model| HarnessLaunchModel {
+                    id: model.value.clone(),
+                    observed_name: Some(model.label.clone()),
+                    observed_description: model.description.clone(),
+                })
+                .collect::<Vec<_>>()
         })
-        .collect::<Vec<_>>();
+        .unwrap_or_default();
     let mut live_controls = raw_config_options
         .iter()
         .filter(|option| {
@@ -175,7 +230,10 @@ pub fn build_live_config_snapshot(
                 .collect(),
         })
         .collect::<Vec<_>>();
-    if !live_controls.iter().any(|control| control.id == LEGACY_MODE_COMPAT_CONFIG_ID) {
+    if !live_controls
+        .iter()
+        .any(|control| control.id == LEGACY_MODE_COMPAT_CONFIG_ID)
+    {
         if let Some(legacy) = legacy_mode_state {
             live_controls.push(HarnessLaunchControl {
                 id: LEGACY_MODE_COMPAT_CONFIG_ID.to_string(),

@@ -9,10 +9,9 @@ use super::config::confirmation::{
     select_setter_response_outcome,
 };
 use super::config::handle::ensure_resolved_launch_intent_confirmed;
-use super::config::persist::{
-    emit_live_config_update, load_startup_restore_snapshot, persisted_control_values,
-};
+use super::config::persist::{emit_live_config_update, load_startup_restore_snapshot};
 use super::config::queue::queue_pending_config_change;
+use super::config::restore::canonical_restore_values;
 use super::config::selection::{
     find_select_option_for_request, is_mode_config_request, is_model_config_request,
     pending_config_rank, resolve_model_variant_value, select_option_values,
@@ -49,10 +48,11 @@ use crate::live::sessions::sink::{SessionEventSink, SessionEventSinkDebugSnapsho
 use crate::persistence::Db;
 use agent_client_protocol as acp;
 use anyharness_contract::v1::{
-    InteractionKind, NormalizedSessionControl, NormalizedSessionControlValue,
-    NormalizedSessionControls, PendingInteractionPayloadSummary, PendingInteractionSource,
-    PendingInteractionSummary, PermissionInteractionOption, PermissionInteractionOptionKind,
-    SessionEventEnvelope, SessionExecutionPhase, SessionLiveConfigSnapshot, StopReason,
+    HarnessLaunchControl, HarnessLaunchControlValue, HarnessLaunchModel, InteractionKind,
+    NormalizedSessionControl, NormalizedSessionControlValue, NormalizedSessionControls,
+    PendingInteractionPayloadSummary, PendingInteractionSource, PendingInteractionSummary,
+    PermissionInteractionOption, PermissionInteractionOptionKind, SessionEventEnvelope,
+    SessionExecutionPhase, SessionLiveConfigCurrent, SessionLiveConfigSnapshot, StopReason,
 };
 use tokio::sync::{broadcast, mpsc, Mutex};
 

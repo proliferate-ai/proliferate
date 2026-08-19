@@ -4,11 +4,10 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::SessionLiveConfigSnapshot;
 use tokio::sync::Mutex;
 
+use crate::domains::sessions::live_config::validate_canonical_live_config_current;
 use crate::live::sessions::actor::config::apply::apply_config_option_if_possible;
 use crate::live::sessions::actor::config::confirmation::ensure_config_values_confirmed;
-use crate::live::sessions::actor::config::persist::{
-    emit_live_config_update, persisted_control_values,
-};
+use crate::live::sessions::actor::config::persist::emit_live_config_update;
 use crate::live::sessions::actor::config::types::{
     ConfigApplyOutcome, PersistedSessionConfigState,
 };
@@ -30,7 +29,7 @@ pub(in crate::live::sessions::actor) async fn restore_persisted_live_config_if_n
     let Some(snapshot) = persisted_snapshot else {
         return Ok(());
     };
-    let desired = persisted_control_values(&snapshot.normalized_controls);
+    let desired = canonical_restore_values(snapshot)?;
     if desired.is_empty() {
         return Ok(());
     }
@@ -72,4 +71,36 @@ pub(in crate::live::sessions::actor) async fn restore_persisted_live_config_if_n
     }
 
     Ok(())
+}
+
+/// Reads resume intent only from the frozen full-snapshot vocabulary. The
+/// normalized/raw compatibility fields are presentation and rollback data;
+/// allowing them to drive restore would create a second active authority.
+///
+/// Model is first, then controls retain the exact saved harness order. The
+/// saved current map must be complete and every current value must still be a
+/// member of its own saved option row before we compare it with the new live
+/// handshake.
+pub(in crate::live::sessions::actor) fn canonical_restore_values(
+    snapshot: &SessionLiveConfigSnapshot,
+) -> anyhow::Result<Vec<(usize, String, String)>> {
+    validate_canonical_live_config_current(snapshot)?;
+    let mut desired = Vec::with_capacity(snapshot.controls.len() + 1);
+
+    if let Some(model_id) = snapshot.current.model_id.as_deref() {
+        desired.push((0, "model".to_string(), model_id.to_string()));
+    }
+
+    for (index, control) in snapshot.controls.iter().enumerate() {
+        let value = snapshot
+            .current
+            .control_values
+            .get(&control.id)
+            .ok_or_else(|| {
+                anyhow::anyhow!("saved live control '{}' has no current value", control.id)
+            })?;
+        desired.push((index + 1, control.id.clone(), value.clone()));
+    }
+
+    Ok(desired)
 }

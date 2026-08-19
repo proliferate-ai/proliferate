@@ -327,13 +327,10 @@ pub trait SessionStateDurable: Send + Sync {
     ) -> anyhow::Result<()>;
 }
 
-/// Product-side feedback for a live session whose harness statement no longer
-/// agrees with the target observation that admitted the immutable intent.
-///
-/// Live owns only the contradiction signal. App wiring decides how target
-/// observation is invalidated/refreshed, preserving the live/domain boundary.
+/// Queues target re-observation after a live contradiction; app wiring owns
+/// the long-lived refresh mechanism behind this live/domain boundary.
 pub trait LaunchObservationInvalidator: Send + Sync {
-    fn queue_refresh(&self, harness_kind: &str);
+    fn queue_refresh(&self, harness_kind: &str) -> bool;
 }
 
 /// The never-varies capability set the actor runs against; wired once at

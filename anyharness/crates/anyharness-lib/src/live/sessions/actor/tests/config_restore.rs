@@ -2,9 +2,100 @@ use super::*;
 use crate::app::test_support;
 
 #[test]
-fn load_startup_restore_snapshot_captures_controls_for_resume_replay_agents() {
-    for agent_kind in [AgentKind::Claude, AgentKind::Codex] {
-        assert_startup_restore_snapshot_captures_pre_restart_controls(agent_kind);
+fn canonical_restore_uses_current_values_and_saved_harness_order() {
+    let snapshot = SessionLiveConfigSnapshot {
+        models: vec![launch_model("m-old"), launch_model("m-saved")],
+        controls: vec![
+            launch_control("control-b", &["b-old", "b-saved"]),
+            launch_control("control-a", &["a-old", "a-saved"]),
+        ],
+        current: SessionLiveConfigCurrent {
+            model_id: Some("m-saved".into()),
+            // BTreeMap order deliberately differs from the saved harness order.
+            control_values: [
+                ("control-a".to_string(), "a-saved".to_string()),
+                ("control-b".to_string(), "b-saved".to_string()),
+            ]
+            .into_iter()
+            .collect(),
+        },
+        raw_config_options: vec![],
+        // A conflicting compatibility projection must never drive restore.
+        normalized_controls: NormalizedSessionControls {
+            effort: Some(normalized_select_control(
+                "effort",
+                "control-a",
+                "Control A",
+                "a-old",
+                &[("a-old", "Old"), ("a-saved", "Saved")],
+            )),
+            ..Default::default()
+        },
+        prompt_capabilities: Default::default(),
+        source_seq: 7,
+        updated_at: "2026-08-19T00:00:00Z".into(),
+    };
+
+    let desired = canonical_restore_values(&snapshot).expect("canonical restore values");
+    assert_eq!(
+        desired
+            .into_iter()
+            .map(|(_, config_id, value)| format!("{config_id}={value}"))
+            .collect::<Vec<_>>(),
+        vec![
+            "model=m-saved".to_string(),
+            "control-b=b-saved".to_string(),
+            "control-a=a-saved".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn canonical_restore_rejects_incomplete_or_nonmember_current_values() {
+    let mut snapshot = SessionLiveConfigSnapshot {
+        models: vec![launch_model("m-saved")],
+        controls: vec![launch_control("effort", &["low", "high"])],
+        current: SessionLiveConfigCurrent {
+            model_id: Some("m-saved".into()),
+            control_values: Default::default(),
+        },
+        raw_config_options: vec![],
+        normalized_controls: Default::default(),
+        prompt_capabilities: Default::default(),
+        source_seq: 7,
+        updated_at: "2026-08-19T00:00:00Z".into(),
+    };
+
+    let missing = canonical_restore_values(&snapshot)
+        .expect_err("every saved control must have a current value");
+    assert!(missing.to_string().contains("has no current value"));
+
+    snapshot
+        .current
+        .control_values
+        .insert("effort".into(), "removed".into());
+    let nonmember = canonical_restore_values(&snapshot)
+        .expect_err("saved current values must remain members of saved options");
+    assert!(nonmember
+        .to_string()
+        .contains("absent from saved live control"));
+
+    snapshot
+        .current
+        .control_values
+        .insert("effort".into(), "high".into());
+    snapshot.current.model_id = Some("removed-model".into());
+    let missing_model = canonical_restore_values(&snapshot)
+        .expect_err("a reported saved current model must remain a saved member");
+    assert!(missing_model
+        .to_string()
+        .contains("absent from the saved live model options"));
+}
+
+#[test]
+fn load_startup_restore_snapshot_captures_full_authority_for_every_resume() {
+    for agent_kind in AgentKind::all() {
+        assert_startup_restore_snapshot_captures_pre_restart_controls(agent_kind.clone());
     }
 }
 
@@ -45,9 +136,22 @@ fn assert_startup_restore_snapshot_captures_pre_restart_controls(agent_kind: Age
         .expect("insert session");
 
     let persisted_snapshot = SessionLiveConfigSnapshot {
-        models: Vec::new(),
-        controls: Vec::new(),
-        current: Default::default(),
+        models: vec![launch_model("model-saved")],
+        controls: vec![
+            launch_control("collaboration_mode", &["chat", "plan"]),
+            launch_control("reasoning_effort", &["medium", "xhigh"]),
+            launch_control("fast_mode", &["off", "on"]),
+        ],
+        current: SessionLiveConfigCurrent {
+            model_id: Some("model-saved".into()),
+            control_values: [
+                ("collaboration_mode".to_string(), "plan".to_string()),
+                ("reasoning_effort".to_string(), "xhigh".to_string()),
+                ("fast_mode".to_string(), "on".to_string()),
+            ]
+            .into_iter()
+            .collect(),
+        },
         raw_config_options: vec![],
         normalized_controls: NormalizedSessionControls {
             model: None,
@@ -86,14 +190,27 @@ fn assert_startup_restore_snapshot_captures_pre_restart_controls(agent_kind: Age
         )
         .expect("persist old snapshot");
 
-    let captured = load_startup_restore_snapshot(&store, "session-1", agent_kind.as_str(), true)
+    let captured = load_startup_restore_snapshot(&store, "session-1", true)
         .expect("load startup snapshot")
         .expect("snapshot exists");
 
     let replacement_snapshot = SessionLiveConfigSnapshot {
-        models: Vec::new(),
-        controls: Vec::new(),
-        current: Default::default(),
+        models: vec![launch_model("model-replacement")],
+        controls: vec![
+            launch_control("collaboration_mode", &["chat", "plan"]),
+            launch_control("reasoning_effort", &["medium", "xhigh"]),
+            launch_control("fast_mode", &["off", "on"]),
+        ],
+        current: SessionLiveConfigCurrent {
+            model_id: Some("model-replacement".into()),
+            control_values: [
+                ("collaboration_mode".to_string(), "chat".to_string()),
+                ("reasoning_effort".to_string(), "medium".to_string()),
+                ("fast_mode".to_string(), "off".to_string()),
+            ]
+            .into_iter()
+            .collect(),
+        },
         raw_config_options: vec![],
         normalized_controls: NormalizedSessionControls {
             model: None,
@@ -133,17 +250,53 @@ fn assert_startup_restore_snapshot_captures_pre_restart_controls(agent_kind: Age
         )
         .expect("persist replacement snapshot");
 
-    let controls = &captured.normalized_controls;
     assert_eq!(
         (
-            normalized_control_value(&controls.collaboration_mode),
-            normalized_control_value(&controls.effort),
-            normalized_control_value(&controls.fast_mode),
+            captured.current.model_id.as_deref(),
+            captured
+                .current
+                .control_values
+                .get("collaboration_mode")
+                .map(String::as_str),
+            captured
+                .current
+                .control_values
+                .get("reasoning_effort")
+                .map(String::as_str),
+            captured
+                .current
+                .control_values
+                .get("fast_mode")
+                .map(String::as_str),
         ),
-        (Some("plan"), Some("xhigh"), Some("on")),
+        (Some("model-saved"), Some("plan"), Some("xhigh"), Some("on")),
         "{} resume must retain the pre-overwrite snapshot",
         agent_kind.as_str()
     );
+}
+
+fn launch_model(id: &str) -> HarnessLaunchModel {
+    HarnessLaunchModel {
+        id: id.into(),
+        observed_name: Some(id.into()),
+        observed_description: None,
+    }
+}
+
+fn launch_control(id: &str, values: &[&str]) -> HarnessLaunchControl {
+    HarnessLaunchControl {
+        id: id.into(),
+        observed_label: Some(id.into()),
+        observed_description: None,
+        values: values
+            .iter()
+            .map(|value| HarnessLaunchControlValue {
+                value: (*value).into(),
+                observed_label: Some((*value).into()),
+                observed_description: None,
+            })
+            .collect(),
+    }
 }
 
 fn normalized_select_control(
@@ -168,12 +321,6 @@ fn normalized_select_control(
             })
             .collect(),
     }
-}
-
-fn normalized_control_value(control: &Option<NormalizedSessionControl>) -> Option<&str> {
-    control
-        .as_ref()
-        .and_then(|control| control.current_value.as_deref())
 }
 
 #[tokio::test]

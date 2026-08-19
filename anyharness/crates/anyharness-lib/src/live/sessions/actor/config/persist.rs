@@ -1,15 +1,13 @@
 use std::sync::Arc;
 
 use anyharness_contract::v1::{
-    ConfigOptionUpdatePayload, CurrentModeUpdatePayload, NormalizedSessionControl,
-    SessionLiveConfigSnapshot,
+    ConfigOptionUpdatePayload, CurrentModeUpdatePayload, SessionLiveConfigSnapshot,
 };
 use tokio::sync::Mutex;
 
-use crate::domains::agents::model::AgentKind;
 use crate::domains::sessions::live_config::{
-    build_live_config_snapshot, normalized_key_rank, snapshot_from_record, snapshot_to_record,
-    NormalizedControlKind,
+    build_live_config_snapshot, snapshot_from_record, snapshot_to_record,
+    validate_canonical_live_config_current,
 };
 use crate::live::sessions::actor::config::types::{ConfigPurpose, PersistedSessionConfigState};
 use crate::live::sessions::actor::state::SessionStartupState;
@@ -126,6 +124,7 @@ pub(in crate::live::sessions::actor) async fn emit_live_config_update(
         next_seq,
         updated_at.clone(),
     );
+    validate_canonical_live_config_current(&snapshot)?;
     let source_seq = snapshot.source_seq;
     let current_control_keys = snapshot
         .current
@@ -181,14 +180,9 @@ pub(in crate::live::sessions::actor) async fn emit_live_config_update(
 pub(in crate::live::sessions::actor) fn load_startup_restore_snapshot(
     store: &dyn SessionStateDurable,
     session_id: &str,
-    source_agent_kind: &str,
     resumes_durable_history: bool,
 ) -> anyhow::Result<Option<SessionLiveConfigSnapshot>> {
-    let restores_persisted_config = matches!(
-        AgentKind::parse(source_agent_kind),
-        Some(AgentKind::Claude) | Some(AgentKind::Codex)
-    );
-    if !resumes_durable_history || !restores_persisted_config {
+    if !resumes_durable_history {
         return Ok(None);
     }
 
@@ -207,72 +201,6 @@ pub(in crate::live::sessions::actor) fn emit_startup_state(
             current_mode_id: current_mode_id.clone(),
         });
     }
-}
-
-pub(in crate::live::sessions::actor) fn persisted_control_values(
-    controls: &anyharness_contract::v1::NormalizedSessionControls,
-) -> Vec<(usize, String, String)> {
-    let mut values = Vec::new();
-    push_persisted_control(
-        &mut values,
-        controls.model.as_ref(),
-        NormalizedControlKind::Model,
-    );
-    push_persisted_control(
-        &mut values,
-        controls.collaboration_mode.as_ref(),
-        NormalizedControlKind::CollaborationMode,
-    );
-    push_persisted_control(
-        &mut values,
-        controls.mode.as_ref(),
-        NormalizedControlKind::Mode,
-    );
-    push_persisted_control(
-        &mut values,
-        controls.reasoning.as_ref(),
-        NormalizedControlKind::Reasoning,
-    );
-    push_persisted_control(
-        &mut values,
-        controls.effort.as_ref(),
-        NormalizedControlKind::Effort,
-    );
-    push_persisted_control(
-        &mut values,
-        controls.fast_mode.as_ref(),
-        NormalizedControlKind::FastMode,
-    );
-    values.extend(controls.extras.iter().filter_map(|control| {
-        control.current_value.as_ref().map(|value| {
-            (
-                normalized_key_rank(NormalizedControlKind::Extra),
-                control.raw_config_id.clone(),
-                value.clone(),
-            )
-        })
-    }));
-    values.sort_by(|left, right| left.0.cmp(&right.0).then_with(|| left.1.cmp(&right.1)));
-    values
-}
-
-pub(in crate::live::sessions::actor) fn push_persisted_control(
-    values: &mut Vec<(usize, String, String)>,
-    control: Option<&NormalizedSessionControl>,
-    kind: NormalizedControlKind,
-) {
-    let Some(control) = control else {
-        return;
-    };
-    let Some(current_value) = control.current_value.as_ref() else {
-        return;
-    };
-
-    values.push((
-        normalized_key_rank(kind),
-        control.raw_config_id.clone(),
-        current_value.clone(),
-    ));
 }
 
 /// Shared startup-stage logging for `emit_live_config_update`/
