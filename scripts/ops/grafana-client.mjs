@@ -1,4 +1,4 @@
-// Real Grafana HTTP client for the E1 operator script (grafana-alerting.mjs).
+// Fixed-target Grafana HTTP client for the E1 operator and metadata inventory.
 // Contract: guides/operating/production-alerts.md
 //
 // Network-layer target lock: the base URL is derived ONLY from the frozen
@@ -13,6 +13,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+
+import { runContextualAwsCommand } from "./grafana-credential-process.mjs";
+import { readMetadataInventoryInternal } from "./grafana-metadata-inventory.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -33,6 +36,18 @@ export const CONTACT_POINT_NAME = "issue-tracker-webhook";
 
 const PROVISIONING = "/api/v1/provisioning";
 export const ALERTMANAGER_CONFIG = "/api/alertmanager/grafana/config/api/v1/alerts";
+
+function fixedWorkspaceUrl(apiPath) {
+  if (typeof apiPath !== "string" || !apiPath.startsWith("/api/") || apiPath.startsWith("//")) {
+    throw Object.assign(new Error("Invalid fixed Grafana API path"), { code: "GRAFANA_TARGET_MISMATCH" });
+  }
+  const absolute = `${WORKSPACE_BASE_URL}${apiPath}`;
+  const url = new URL(absolute);
+  if (url.origin !== WORKSPACE_BASE_URL || url.username || url.password || url.hash) {
+    throw Object.assign(new Error("Invalid fixed Grafana API origin"), { code: "GRAFANA_TARGET_MISMATCH" });
+  }
+  return absolute;
+}
 
 // Deterministic serialization used for the route/receiver byte-equality
 // guards (sorted keys, array order preserved). Local copy to keep the import
@@ -187,10 +202,20 @@ export function adminTokenProvider({ tokenPath = ADMIN_TOKEN_PATH } = {}) {
 
 // Hard identity gate before any secret resolution: the AWS caller must be in
 // the fixed target account, or we refuse to read anything.
-export async function assertOperatorAccount(execFileImpl = execFileAsync) {
+export async function assertOperatorAccount(
+  execFileImpl = execFileAsync,
+  { signal, throwIfDeadlineExpired } = {},
+) {
+  const contextual = signal !== undefined || throwIfDeadlineExpired !== undefined;
+  if (contextual && (!signal || typeof throwIfDeadlineExpired !== "function")) {
+    throw new Error("AWS credential context requires both signal and deadline guard");
+  }
   let account;
   try {
-    const { stdout } = await execFileImpl("aws", ["sts", "get-caller-identity", "--output", "json"]);
+    const args = ["sts", "get-caller-identity", "--output", "json"];
+    const { stdout } = contextual
+      ? await runContextualAwsCommand({ execFileImpl, args, signal, throwIfDeadlineExpired })
+      : await execFileImpl("aws", args);
     account = JSON.parse(stdout).Account;
   } catch {
     throw new Error("Unable to determine the AWS caller identity; refusing to resolve secrets");
@@ -203,11 +228,19 @@ export async function assertOperatorAccount(execFileImpl = execFileAsync) {
 // Resolves one field of a JSON secret from AWS Secrets Manager at execution
 // time. The value is returned to the caller and never printed; stderr from a
 // failed call is discarded so no secret material can leak through error text.
-export async function resolveSecretField(secretId, field, { execFileImpl = execFileAsync } = {}) {
-  await assertOperatorAccount(execFileImpl);
+export async function resolveSecretField(
+  secretId,
+  field,
+  { execFileImpl = execFileAsync, signal, throwIfDeadlineExpired } = {},
+) {
+  const contextual = signal !== undefined || throwIfDeadlineExpired !== undefined;
+  if (contextual && (!signal || typeof throwIfDeadlineExpired !== "function")) {
+    throw new Error("AWS credential context requires both signal and deadline guard");
+  }
+  await assertOperatorAccount(execFileImpl, { signal, throwIfDeadlineExpired });
   let stdout;
   try {
-    ({ stdout } = await execFileImpl("aws", [
+    const args = [
       "secretsmanager",
       "get-secret-value",
       "--secret-id",
@@ -218,7 +251,10 @@ export async function resolveSecretField(secretId, field, { execFileImpl = execF
       "SecretString",
       "--output",
       "text",
-    ]));
+    ];
+    ({ stdout } = contextual
+      ? await runContextualAwsCommand({ execFileImpl, args, signal, throwIfDeadlineExpired })
+      : await execFileImpl("aws", args));
   } catch {
     throw new Error(`Failed to read secret ${secretId} from AWS Secrets Manager`);
   }
@@ -242,8 +278,12 @@ export async function resolveWebhookSecret({ execFileImpl } = {}) {
 }
 
 // Dedicated Viewer token issue-tracker/sources.grafanaToken (read-only path).
-export async function resolveViewerToken({ execFileImpl } = {}) {
-  return resolveSecretField("issue-tracker/sources", "grafanaToken", { execFileImpl });
+export async function resolveViewerToken({ execFileImpl, signal, throwIfDeadlineExpired } = {}) {
+  return resolveSecretField("issue-tracker/sources", "grafanaToken", {
+    execFileImpl,
+    signal,
+    throwIfDeadlineExpired,
+  });
 }
 
 // Maps one ruler-API rule entry ({for, grafana_alert}) onto the provisioning
@@ -267,25 +307,26 @@ export function ruleFromRulerEntry(entry) {
   };
 }
 
-// A fetch-like function is the only injectable seam. `tokenProvider` returns
-// the bearer token at request time so the token never lives on the client.
+// A fetch-like function is the only transport seam. Legacy calls resolve a
+// bearer per request; inventory keeps one snapshot only in its invocation.
 export function createGrafanaClient({ fetchImpl = fetch, tokenProvider }) {
   if (typeof tokenProvider !== "function") {
     throw new Error("createGrafanaClient requires a tokenProvider function");
   }
 
   async function request(method, apiPath, body = undefined, extraHeaders = {}) {
+    const url = fixedWorkspaceUrl(apiPath);
     const headers = {
       Authorization: `Bearer ${tokenProvider()}`,
       Accept: "application/json",
       ...extraHeaders,
     };
-    const init = { method, headers };
+    const init = { method, headers, redirect: "manual" };
     if (body !== undefined) {
       headers["Content-Type"] = "application/json";
       init.body = JSON.stringify(body);
     }
-    const response = await fetchImpl(`${WORKSPACE_BASE_URL}${apiPath}`, init);
+    const response = await fetchImpl(url, init);
     if (!response.ok) {
       // Redacted by construction: path + status only. No host, no auth, no body.
       throw new Error(`Grafana ${method} ${apiPath} failed with HTTP ${response.status}`);
@@ -297,7 +338,66 @@ export function createGrafanaClient({ fetchImpl = fetch, tokenProvider }) {
     return text ? JSON.parse(text) : null;
   }
 
+  async function prepareAuthorizedGet({ signal, guard, staticPaths }) {
+    for (const apiPath of staticPaths) fixedWorkspaceUrl(apiPath);
+    guard();
+    signal.throwIfAborted();
+    let removeAbort = () => {};
+    const aborted = new Promise((_, reject) => {
+      const onAbort = () => reject(signal.reason || new Error("Inventory credential acquisition aborted"));
+      signal.addEventListener("abort", onAbort, { once: true });
+      removeAbort = () => signal.removeEventListener("abort", onAbort);
+    });
+    let provided;
+    try {
+      provided = tokenProvider({ signal, throwIfDeadlineExpired: guard });
+      provided = await Promise.race([Promise.resolve(provided), aborted]);
+      guard();
+      signal.throwIfAborted();
+    } catch {
+      throw new Error("Inventory credential is unavailable");
+    } finally {
+      removeAbort();
+    }
+    if (
+      typeof provided !== "string" ||
+      Buffer.byteLength(provided, "utf8") > 8192 ||
+      !/^[A-Za-z0-9._~+/-]+={0,}$/.test(provided)
+    ) {
+      throw new Error("Inventory credential is unavailable");
+    }
+    return async (apiPath, requestSignal) => {
+      const url = fixedWorkspaceUrl(apiPath);
+      const response = await fetchImpl(url, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${provided}`, Accept: "application/json" },
+        redirect: "manual",
+        signal: requestSignal,
+      });
+      let targetMatches = false;
+      try {
+        const received = new URL(response.url);
+        targetMatches = received.origin === WORKSPACE_BASE_URL && !received.username && !received.password;
+      } catch {
+        // Classification belongs to the inventory state machine.
+      }
+      return { response, targetMatches };
+    };
+  }
+
   return {
+    async readMetadataInventory() {
+      return readMetadataInventoryInternal({
+        target: {
+          awsAccount: TARGET.awsAccount,
+          awsRegion: TARGET.awsRegion,
+          grafanaWorkspaceId: TARGET.grafanaWorkspaceId,
+          grafanaWorkspaceName: TARGET.grafanaWorkspaceName,
+          expectedGrafanaVersion: TARGET.grafanaVersion,
+        },
+        prepareAuthorizedGet,
+      });
+    },
     // --- reads (GET only) ---
     async listAlertRules() {
       return request("GET", `${PROVISIONING}/alert-rules`);
