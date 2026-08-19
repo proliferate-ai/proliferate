@@ -6,12 +6,14 @@ import {
 } from "@proliferate/cloud-sdk-react";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import { useCloudAvailabilityState } from "#product/hooks/cloud/derived/use-cloud-availability-state";
-import { useAuthSetupOnboardingStore } from "#product/stores/agents/auth-setup-onboarding-store";
+import { useProductHost } from "#product/host/ProductHostProvider";
 import {
-  diagnosticField,
-  recordRendererDiagnostic,
-} from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
-import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-diagnostic-values";
+  runFirstRunAuthAdoption,
+  settleFirstRunAuthAdoptionFailure,
+} from "#product/lib/workflows/agents/first-run-auth-adoption";
+import { useAuthSetupOnboardingStore } from "#product/stores/agents/auth-setup-onboarding-store";
+import { recordRendererDiagnostic } from "#product/lib/infra/diagnostics/renderer-diagnostics-port";
+import { useHarnessConnectionStore } from "#product/stores/sessions/harness-connection-store";
 
 /**
  * First-run adoption of the managed gateway into auth selections (spec §9).
@@ -24,13 +26,17 @@ import { safeRendererErrorName } from "#product/lib/infra/diagnostics/renderer-d
  */
 export function useFirstRunAuthAdoption() {
   const { cloudActive } = useCloudAvailabilityState();
-  const capabilitiesQuery = useAgentGatewayCapabilities(cloudActive);
-  const selectionsQuery = useAuthSelections(null, cloudActive);
+  const isDesktop = useProductHost().desktop !== null;
+  const connectionState = useHarnessConnectionStore((state) => state.connectionState);
+  const workflowQueriesEnabled = cloudActive && isDesktop;
+  const capabilitiesQuery = useAgentGatewayCapabilities(workflowQueriesEnabled);
+  const selectionsQuery = useAuthSelections(null, workflowQueriesEnabled);
   const {
-    agents,
-    isLoading: agentsLoading,
+    refetch: refetchAgents,
     reconcileSnapshot,
     reconcileStatus,
+    reconcileIsError,
+    reconcileError,
   } = useAgentCatalog();
   const putSelections = usePutAuthSelections();
   const recordAdoption = useAuthSetupOnboardingStore(
@@ -38,90 +44,130 @@ export function useFirstRunAuthAdoption() {
   );
   const attemptedRef = useRef(false);
 
-  const selections = selectionsQuery.data;
-  const gatewayEnabled = capabilitiesQuery.data?.gatewayEnabled;
   const putMutate = putSelections.mutate;
-
-  // The runtime hydrates the bundled seed then runs an installed-only reconcile
-  // at startup; agent credential/install states are only trustworthy once that
-  // pass has SETTLED. Deciding from a mid-hydration snapshot permanently misses
-  // native creds for harnesses that hydrate after the (one-shot) decision.
-  const reconcileActive =
-    reconcileStatus === "queued" || reconcileStatus === "running";
-  const readinessSettled = reconcileSnapshot !== null && !reconcileActive;
 
   useEffect(() => {
     if (attemptedRef.current || !cloudActive) {
       return;
     }
-    // Wait until every input has settled before deciding anything.
-    if (selections === undefined || gatewayEnabled === undefined) {
+
+    // Local auth adoption does not apply on Web. Settle without using any
+    // local-runtime result so downstream readiness can distinguish no-op from
+    // a still-pending Desktop decision.
+    if (!isDesktop) {
+      attemptedRef.current = true;
+      recordAdoption([], Date.now());
       return;
     }
-    if (agentsLoading || agents.length === 0) {
+
+    const settleFailure = (
+      stage: Parameters<typeof settleFirstRunAuthAdoptionFailure>[0]["stage"],
+      error?: unknown,
+    ) => {
+      attemptedRef.current = true;
+      settleFirstRunAuthAdoptionFailure(
+        { stage, ...(error === undefined ? {} : { error }) },
+        {
+          now: Date.now,
+          recordAdoption,
+          recordDiagnostic: recordRendererDiagnostic,
+        },
+      );
+    };
+
+    if (connectionState === "connecting") {
       return;
     }
-    if (!readinessSettled) {
+    if (connectionState === "failed") {
+      settleFailure("runtime_connection");
+      return;
+    }
+
+    const selections = selectionsQuery.data;
+    if (selections === undefined) {
+      if (selectionsQuery.isError) {
+        settleFailure("selections_query", selectionsQuery.error);
+      }
+      return;
+    }
+    const gatewayEnabled = capabilitiesQuery.data?.gatewayEnabled;
+    if (gatewayEnabled === undefined) {
+      if (capabilitiesQuery.isError) {
+        settleFailure("capabilities_query", capabilitiesQuery.error);
+      }
+      return;
+    }
+
+    if (reconcileIsError) {
+      settleFailure("reconcile_query", reconcileError);
+      return;
+    }
+    if (reconcileSnapshot === null) {
+      return;
+    }
+    if (reconcileStatus === "failed") {
+      settleFailure("reconcile_job");
+      return;
+    }
+    // `idle` is the startup service's pre-admission state, not a settled scan.
+    // queued/running are likewise pending. Only completed authorizes the fresh
+    // post-reconcile read and one-shot adoption workflow.
+    if (reconcileStatus !== "completed") {
       return;
     }
 
     attemptedRef.current = true;
-    void (async () => {
-      // Lazy: the adoption planner only ever runs for an authenticated,
-      // cloud-active user, so it (and the catalog-shape helpers it pulls in)
-      // stays out of the login first-load chunk (login runtime JS budget).
-      const { planFirstRunAuthAdoption } = await import(
-        "#product/lib/domain/agents/auth-onboarding"
-      );
-      const actions = planFirstRunAuthAdoption({
-        agents,
+    void runFirstRunAuthAdoption(
+      {
         selectionCount: selections.length,
         gatewayEnabled,
-      });
-      // Ack-gated onboarding step (agent-auth.md, Proof C7): record what was
-      // adopted (possibly nothing) so the "setting up" step knows which
-      // selections' `applied` flags to await — and whether to show at all.
-      recordAdoption(
-        actions.map((action) => action.harnessKind),
-        Date.now(),
-      );
-      for (const action of actions) {
-        putMutate(
-          {
-            harnessKind: action.harnessKind,
-            surface: action.surface,
-            body: { sources: [{ sourceKind: "gateway", enabled: true }] },
-          },
-          {
-            onError: (error) => {
-              recordRendererDiagnostic({
-                name: "renderer.agent_auth.first_run_adoption_failed",
-                severity: "warn",
-                kind: "message",
-                privacy: "operational",
-                fields: {
-                  harness_kind: diagnosticField(action.harnessKind, "operational"),
-                  error_name: diagnosticField(safeRendererErrorName(error), "operational"),
-                },
-                errorClassification: "first_run_adoption_failed",
-              });
-              console.warn(
-                `[agent-auth] first-run adoption failed for ${action.harnessKind}`,
-                error,
-              );
+      },
+      {
+        now: Date.now,
+        recordAdoption,
+        recordDiagnostic: recordRendererDiagnostic,
+        readFreshAgents: async () => {
+          const result = await refetchAgents({ cancelRefetch: false });
+          return result.isError
+            ? { kind: "failure", error: result.error }
+            : { kind: "success", agents: result.data ?? [] };
+        },
+        // Lazy: the planner stays out of the login first-load chunk and is
+        // loaded only after authenticated Desktop reconciliation completes.
+        loadPlanner: async () => {
+          const { planFirstRunAuthAdoption } = await import(
+            "#product/lib/domain/agents/auth-onboarding"
+          );
+          return planFirstRunAuthAdoption;
+        },
+        writeSelection: (action, onError) => {
+          putMutate(
+            {
+              harnessKind: action.harnessKind,
+              surface: action.surface,
+              body: { sources: [{ sourceKind: "gateway", enabled: true }] },
             },
-          },
-        );
-      }
-    })();
+            { onError },
+          );
+        },
+      },
+    );
   }, [
-    agents,
-    agentsLoading,
+    capabilitiesQuery.data,
+    capabilitiesQuery.error,
+    capabilitiesQuery.isError,
     cloudActive,
-    gatewayEnabled,
-    readinessSettled,
+    connectionState,
+    isDesktop,
+    reconcileError,
+    reconcileIsError,
+    reconcileSnapshot,
+    reconcileStatus,
     recordAdoption,
-    selections,
+    refetchAgents,
+    selectionsQuery.data,
+    selectionsQuery.error,
+    selectionsQuery.isError,
     putMutate,
   ]);
 }
