@@ -12,8 +12,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::domains::agents::installer::manifest::{record_entries, ManifestArtifact};
+use crate::domains::agents::live_ports::{
+    ProbeAttestation, ProbeModelEntry, ProbeSnapshot,
+};
 use crate::domains::agents::route_auth::{GatewayModelPlan, GatewayModelResolve};
-use crate::live::sessions::probe::{ProbeModelEntry, ProbeSnapshot};
 
 use super::probe::{ProbeError, ProbeRequest, ProbeRunner, COMPOSED_AUTH_CONTEXT_LABEL};
 use super::targets::ProbeTargets;
@@ -338,7 +340,7 @@ pub(crate) fn snapshot(harness_kind: &str, models: &[String]) -> ProbeSnapshot {
         probed_at: "2026-07-26T00:00:00Z".to_string(),
         agent_kind: harness_kind.to_string(),
         auth_context: COMPOSED_AUTH_CONTEXT_LABEL.to_string(),
-        attestation: Some(crate::live::sessions::probe::ProbeAttestation {
+        attestation: Some(ProbeAttestation {
             name: harness_kind.to_string(),
             version: "9.9.9".to_string(),
             title: None,

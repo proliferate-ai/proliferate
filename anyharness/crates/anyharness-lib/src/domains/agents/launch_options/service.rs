@@ -100,8 +100,8 @@ impl HarnessLaunchOptionsService {
 
     /// Lossless executable projection of the override-free ACP probe. Unknown
     /// ids and missing prose are data, not validation failures.
-    pub fn options_from_probe(
-        snapshot: &crate::live::sessions::probe::ProbeSnapshot,
+    pub(crate) fn options_from_probe(
+        snapshot: &crate::domains::agents::live_ports::ProbeSnapshot,
     ) -> HarnessLaunchOptions {
         let models = snapshot
             .models
