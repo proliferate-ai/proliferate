@@ -9,9 +9,13 @@ use crate::live::sessions::actor::command::SessionCommand;
 impl LiveSessionHandle {
     pub async fn verify_fork_ready(
         &self,
+        requires_targeted_fork: bool,
     ) -> Result<(), LiveSessionCommandError<ForkSessionCommandError>> {
-        self.send_request(|respond_to| SessionCommand::VerifyForkReady { respond_to })
-            .await
+        self.send_request(|respond_to| SessionCommand::VerifyForkReady {
+            requires_targeted_fork,
+            respond_to,
+        })
+        .await
     }
 
     pub async fn fork(

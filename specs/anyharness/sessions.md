@@ -362,12 +362,18 @@ Fork invariants:
   matrix enables only Claude with `message_id`; Claude advertisements for the
   other target kinds stay off, and Codex `turn_id` stays off until the bridge
   provides native turn ids. Unknown, malformed, and legacy advertisements also
-  stay off. The OpenCode side-door bridge derives
+  stay off. Before allocating a fork operation, the runtime asks the live actor
+  to verify the required generic or targeted capability; the persisted
+  capability JSON is a cache and cannot authorize dispatch when a live
+  handshake update failed to persist. The OpenCode side-door bridge derives
   `targeted_fork` from the runtime-owned qualification registry (an exact
   vendor version pin) AND a loopback-only, fail-closed side-door readiness
   check; it stays off unless the registry qualifies the resolved vendor version
   and the side-door proves loopback-authenticated and off-host-unreachable.
   Every other adapter remains absent until its own per-harness bridge lands
+- native `session/fork` rejection messages and data are provider-controlled and
+  may contain transcript identifiers, so they never enter logs or public error
+  chains; the runtime records only a fixed bounded failure class and detail
 
 ### Fork boundary and the durable operation record
 

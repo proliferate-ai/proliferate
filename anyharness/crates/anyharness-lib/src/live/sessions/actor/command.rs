@@ -224,6 +224,7 @@ pub(in crate::live::sessions) enum SessionCommand {
         respond_to: oneshot::Sender<anyhow::Result<serde_json::Value>>,
     },
     VerifyForkReady {
+        requires_targeted_fork: bool,
         respond_to: oneshot::Sender<Result<(), ForkSessionCommandError>>,
     },
     Fork {

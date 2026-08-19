@@ -185,9 +185,9 @@ async fn legacy_probe_shape_refuses_targeted_fork_end_to_end() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn stale_durable_targeted_capability_is_revoked_before_operation_or_native_fork() {
-    // A pre-start durable `targetedFork=true` is only a cache. The live legacy
-    // handshake persists false; the workflow must re-read that current truth
+async fn live_targeted_readiness_wins_when_capability_persistence_fails() {
+    // A pre-start durable `targetedFork=true` is only a cache. Even when the
+    // live legacy handshake cannot persist false, actor-owned truth must reject
     // before inserting an operation/child or sending an anchored session/fork.
     let _env_lock = test_support::lock_env();
     let _bearer = test_support::set_bearer_token_env(None);
@@ -205,6 +205,19 @@ async fn stale_durable_targeted_capability_is_revoked_before_operation_or_native
         Some(r#"{"fork":true,"targetedFork":true}"#),
     );
     seed_three_turn_transcript(&state, &parent_id);
+    state
+        .db
+        .with_conn(|conn| {
+            conn.execute_batch(
+                "CREATE TRIGGER reject_capability_refresh
+                 BEFORE UPDATE OF action_capabilities_json ON sessions
+                 WHEN OLD.id = 'fork-parent'
+                 BEGIN
+                   SELECT RAISE(FAIL, 'capability refresh blocked');
+                 END;",
+            )
+        })
+        .expect("install capability refresh failure");
 
     let error = state
         .session_runtime
@@ -215,7 +228,7 @@ async fn stale_durable_targeted_capability_is_revoked_before_operation_or_native
             None,
         )
         .await
-        .expect_err("the current legacy handshake revokes stale targeted readiness");
+        .expect_err("current actor truth rejects stale durable readiness");
     assert!(matches!(error, ForkSessionError::Unsupported(_)));
 
     let persisted = state
@@ -224,8 +237,8 @@ async fn stale_durable_targeted_capability_is_revoked_before_operation_or_native
         .expect("get parent")
         .expect("parent row");
     assert!(
-        !parse_action_capabilities(persisted.action_capabilities_json.as_deref()).targeted_fork,
-        "the live legacy handshake must replace stale durable readiness"
+        parse_action_capabilities(persisted.action_capabilities_json.as_deref()).targeted_fork,
+        "the injected write failure must leave the durable negative control stale"
     );
     assert!(fork_children(&state, &parent_id).is_empty());
     assert!(state

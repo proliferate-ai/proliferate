@@ -13,7 +13,9 @@ use crate::live::sessions::actor::command::{
     SidedoorForkCommandResult,
 };
 use crate::live::sessions::actor::state::SessionActor;
-use crate::live::sessions::driver::native_session::native_fork_anchor_is_dispatch_ready;
+use crate::live::sessions::driver::native_session::{
+    native_fork_anchor_is_dispatch_ready, sanitized_native_fork_failure,
+};
 use crate::live::sessions::driver::opencode_sidedoor::SidedoorRuntime;
 use crate::live::sessions::driver::shutdown::close_native_session;
 use crate::live::sessions::handle::LiveSessionHandle;
@@ -25,12 +27,16 @@ impl SessionActor {
         command: SessionCommand,
     ) {
         match command {
-            SessionCommand::VerifyForkReady { respond_to } => {
+            SessionCommand::VerifyForkReady {
+                requires_targeted_fork,
+                respond_to,
+            } => {
                 let result = verify_fork_ready(
                     &self.handle,
                     self.caps.queue.as_ref(),
                     &self.session_id,
                     self.action_capabilities,
+                    requires_targeted_fork,
                 )
                 .await;
                 let _ = respond_to.send(result);
@@ -101,7 +107,14 @@ pub(in crate::live::sessions::actor) async fn fork_native_session(
             "agent does not advertise targeted fork support for the native anchor".to_string(),
         ));
     }
-    verify_fork_ready(handle, store, session_id, action_capabilities).await?;
+    verify_fork_ready(
+        handle,
+        store,
+        session_id,
+        action_capabilities,
+        provider_anchor.is_some(),
+    )
+    .await?;
 
     let mut request =
         acp::schema::ForkSessionRequest::new(native_session_id.to_string(), workspace_path.clone());
@@ -115,7 +128,16 @@ pub(in crate::live::sessions::actor) async fn fork_native_session(
         .send_request(request)
         .block_task()
         .await
-        .map_err(|error| ForkSessionCommandError::Failed(error.to_string()))?;
+        .map_err(|error| {
+            let (detail, error_class) = sanitized_native_fork_failure(&error);
+            tracing::warn!(
+                session_id,
+                error_class,
+                detail,
+                "ACP native session fork failed"
+            );
+            ForkSessionCommandError::Failed(detail.to_string())
+        })?;
     Ok(ForkSessionCommandResult {
         native_session_id: response.session_id.to_string(),
         supports_close,
@@ -196,10 +218,16 @@ pub(in crate::live::sessions::actor) async fn verify_fork_ready(
     store: &dyn QueueDurable,
     session_id: &str,
     action_capabilities: SessionActionCapabilities,
+    requires_targeted_fork: bool,
 ) -> Result<(), ForkSessionCommandError> {
     if !action_capabilities.fork {
         return Err(ForkSessionCommandError::Unsupported(
             "agent does not advertise ACP session/fork with load_session support".to_string(),
+        ));
+    }
+    if requires_targeted_fork && !action_capabilities.targeted_fork {
+        return Err(ForkSessionCommandError::Unsupported(
+            "agent does not advertise targeted fork support".to_string(),
         ));
     }
     if handle.is_busy() {

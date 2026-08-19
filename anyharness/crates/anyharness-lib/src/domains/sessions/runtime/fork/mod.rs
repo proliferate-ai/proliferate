@@ -122,14 +122,15 @@ impl SessionRuntime {
             .map_err(map_start_error_to_fork)?;
         let parent = self.get_fork_parent(session_id)?;
         validate_fork_parent(&parent, &self.session_link_service)?;
-        // Stale targeted readiness must fail before allocation or anchored dispatch.
+        // Durable capabilities are a cache. The live actor's handshake is the
+        // dispatch authority even when persisting its current value failed.
         let capabilities = parse_action_capabilities(parent.action_capabilities_json.as_deref());
-        if !capabilities.fork {
-            return Err(unsupported_fork("session agent does not advertise fork support"));
-        }
-        if target.is_some() && !capabilities.targeted_fork {
-            return Err(unsupported_fork("targeted fork is not supported by this agent"));
-        }
+        handle
+            .verify_fork_ready(target.is_some())
+            .await
+            .map_err(|error| {
+                map_live_fork_command_error(error, "session actor dropped fork readiness response")
+            })?;
         let parent_native_session_id = handle
             .native_session_id()
             .or_else(|| parent.native_session_id.clone())
@@ -250,7 +251,7 @@ impl SessionRuntime {
                 }
             }
         } else if child_actor_forks {
-            match handle.verify_fork_ready().await {
+            match handle.verify_fork_ready(provider_anchor.is_some()).await {
                 Ok(()) => None,
                 Err(error) => {
                     self.mark_fork_native_failure(&operation.id, &error, &now);
@@ -532,7 +533,6 @@ impl SessionRuntime {
 fn unsupported_fork(message: &str) -> ForkSessionError {
     ForkSessionError::Unsupported(message.to_string())
 }
-
 /// Canonical fork request digest: binds an idempotency key to the exact request
 /// so a repeat with the same key + payload resumes and a different payload
 /// conflicts (ADR 4.4).

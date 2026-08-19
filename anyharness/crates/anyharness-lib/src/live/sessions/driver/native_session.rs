@@ -51,6 +51,15 @@ pub(in crate::live::sessions) fn native_fork_anchor_is_dispatch_ready(
     provider_anchor.is_none() || action_capabilities.targeted_fork
 }
 
+/// Reduce an ACP `session/fork` rejection to diagnostics that are safe for
+/// logs and user-facing error chains. Provider messages/data may carry prompt
+/// content and identifiers, so neither value crosses this boundary.
+pub(in crate::live::sessions) fn sanitized_native_fork_failure(
+    _error: &acp::Error,
+) -> (&'static str, &'static str) {
+    ("ACP session/fork request failed", "provider_request_failed")
+}
+
 pub(in crate::live::sessions) fn is_missing_load_session_resource(
     error: &acp::Error,
     expected_uri: &str,
@@ -133,6 +142,28 @@ mod tests {
             targeted,
             Some(&anchor)
         ));
+    }
+
+    #[test]
+    fn native_fork_failure_diagnostics_omit_provider_message_and_data() {
+        let sentinels = [
+            "anchor-msg-secret",
+            "provider-message-secret",
+            "provider-session-secret",
+        ];
+        let error = acp::Error::new(-32603, sentinels[1]).data(serde_json::json!({
+            "upToMessageId": sentinels[0],
+            "sessionId": sentinels[2],
+        }));
+        let provider_display = error.to_string();
+        assert!(sentinels.iter().all(|value| provider_display.contains(value)));
+
+        let (detail, error_class) = sanitized_native_fork_failure(&error);
+        assert_eq!(detail, "ACP session/fork request failed");
+        assert_eq!(error_class, "provider_request_failed");
+        assert!(sentinels
+            .iter()
+            .all(|value| !detail.contains(value) && !error_class.contains(value)));
     }
 
     #[test]
@@ -516,17 +547,19 @@ pub(in crate::live::sessions) async fn start_native_session(
                     ))
                 }
                 Err(error) => {
+                    let (detail, error_class) = sanitized_native_fork_failure(&error);
                     tracing::warn!(
                         session_id = %session_id,
                         workspace_id = %workspace_id,
                         parent_native_session_id = %parent_native_session_id,
                         startup_strategy = startup_strategy_label,
                         elapsed_ms = fork_started.elapsed().as_millis(),
-                        error = %error,
+                        error_class,
+                        detail,
                         "[workspace-latency] session.actor.fork_session.failed"
                     );
-                    let _ = ready_tx.send(Err(anyhow::anyhow!("ACP fork_session: {error}")));
-                    Err(anyhow::anyhow!("ACP fork_session: {error}"))
+                    let _ = ready_tx.send(Err(anyhow::anyhow!(detail)));
+                    Err(anyhow::anyhow!(detail))
                 }
             }
         }
