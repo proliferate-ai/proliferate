@@ -85,7 +85,18 @@ pub(crate) fn seed_observed_launch_options(
 /// Install the product-owned API-key route used by scripted Claude fixtures.
 /// Capability-affecting credentials must never ride the global/workspace env
 /// that launch admission deliberately rejects.
+///
+/// Route-provided credentials never clear a native-CLI `InstallRequired` the
+/// way env credentials do (`compute_readiness` checks the native artifact only
+/// on the not-env-ready branch), so the fixture also installs a managed native
+/// CLI stub — CI has no real `claude` on PATH.
 pub(crate) fn install_scripted_claude_auth(runtime_home: &Path) {
+    let native_dir = runtime_home.join("agents/claude/native");
+    std::fs::create_dir_all(&native_dir).expect("create managed native dir");
+    let native_stub = native_dir.join("claude");
+    std::fs::write(&native_stub, "#!/bin/sh\nexit 0\n").expect("write native claude stub");
+    crate::integrations::agent_cli::executable::make_executable(&native_stub)
+        .expect("make native claude stub executable");
     let state: AgentAuthState = serde_json::from_value(serde_json::json!({
         "version": 2,
         "revision": 1,
