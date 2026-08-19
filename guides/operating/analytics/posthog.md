@@ -48,9 +48,10 @@ network requests in screenshots.
    - sign-out produces a new anonymous identity on the next session;
    - no prompt, transcript, repo name, file path, raw URL, terminal text,
      token, or raw error is present.
-5. Desktop replay is expected to be absent. Desktop PostHog session recording
-   is source-disabled, so any Desktop replay observed in the provider is a
-   code-or-provider truth mismatch to triage, not a gate to look for or enable.
+5. Desktop and Web replay are expected to be absent. Desktop and Web PostHog
+   session recording are source-disabled, so any Desktop or Web replay observed
+   in the provider is a code-or-provider truth mismatch to triage, not a gate to
+   look for or enable.
    Synthetic replay verification applies only to a surface whose reviewed
    source currently permits replay. For such a surface, verify input masking
    and block/mask selectors with synthetic data only, and inspect whether
@@ -67,7 +68,8 @@ network requests in screenshots.
   route/screen hook ran; raw paths are intentionally not capture values.
 - Replay missing on a surface whose source permits it: confirm that surface's
   separate replay gate. Mobile also needs the optional native replay package in
-  that build. Missing Desktop replay is the expected result, not a defect.
+  that build. Missing Desktop or Web replay is the expected result, not a
+  defect.
 - Provider data differs from checked-in behavior: capture event name, surface,
   environment, release, observed time, and a redacted provider URL. Route
   ingestion or deduplication defects to Issue Lifecycle.

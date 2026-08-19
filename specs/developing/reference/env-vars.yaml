@@ -1145,12 +1145,6 @@
   description: Desktop/web PostHog ingest host
   tags: [local-dev, ci, desktop, web]
 
-- name: VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED
-  secret: false
-  default: "false"
-  description: Web PostHog session recording toggle (Web only; Desktop recording is source-disabled)
-  tags: [local-dev, ci, web]
-
 # ═══════════════════════════════════════════════════════════════════════
 # Mobile: Expo Public Build Vars
 # ═══════════════════════════════════════════════════════════════════════
