@@ -1148,8 +1148,8 @@
 - name: VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED
   secret: false
   default: "false"
-  description: Desktop and Web PostHog session recording toggle
-  tags: [local-dev, ci, desktop, web]
+  description: Web PostHog session recording toggle (Web only; Desktop recording is source-disabled)
+  tags: [local-dev, ci, web]
 
 # ═══════════════════════════════════════════════════════════════════════
 # Mobile: Expo Public Build Vars

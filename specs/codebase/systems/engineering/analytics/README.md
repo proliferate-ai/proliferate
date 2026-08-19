@@ -53,7 +53,7 @@ deduplication boundary.
 | Destinations | The configured Proliferate Server/Postgres database, PostHog for enabled hosted clients, and an operator-selected read-only BI client such as Metabase. |
 | Enable, disable, or no-op | Vendor adapters require their client key and telemetry gates. Anonymous telemetry has build/runtime and Server disable gates. Provider ingestion skips a provider whose required configuration is absent. |
 | Privacy and replay | First-party payloads exclude prompts, transcripts, repo names, file paths, terminal text, raw URLs, errors, and secrets. Replay is off by default and its masking rules are owned by the PostHog contract. |
-| Known gaps | Desktop and Web replay can still expose route ids through recorded page URLs when explicitly enabled. Anonymous credential fields are accepted by the schema but currently have no Desktop emission directive. Live provider dashboards and data freshness are not enforced by repository code. |
+| Known gaps | Web replay can still expose route ids through recorded page URLs when explicitly enabled; Desktop PostHog recording is source-disabled and Mobile has its own contract. Anonymous credential fields are accepted by the schema but currently have no Desktop emission directive. Live provider dashboards and data freshness are not enforced by repository code. |
 
 ## Operating Routes
 

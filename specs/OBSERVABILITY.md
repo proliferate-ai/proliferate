@@ -181,8 +181,10 @@ change sits on:
   Re-enablement requires a separately reviewed synthetic privacy proof of the
   exact route/surface block-and-mask policy, metadata policy, provider arrival,
   and absence of prompt, transcript, terminal, file, repository, path, token,
-  workspace, session, and workflow identifiers. PostHog replay is off by
-  default; when explicitly enabled, recorded page metadata can contain route
+  workspace, session, and workflow identifiers. Desktop PostHog session
+  recording is likewise source-disabled and absent; every other surface's
+  current PostHog recording behavior is owned by the PostHog system contract,
+  and where recording is permitted, recorded page metadata can contain route
   ids even though capture-event URL properties are stripped. A new surface
   that can display prompts, files, paths, or credentials gets
   `[data-telemetry-block]` / `[data-telemetry-mask]` unless there is a

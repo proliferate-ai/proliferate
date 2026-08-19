@@ -12,9 +12,9 @@ initialized by the Server API.
 | Source components | Desktop `apps/desktop/src/lib/integrations/telemetry/{client,config,posthog}.ts`; Web `apps/web/src/lib/integrations/telemetry/{config,posthog}.ts`; Mobile `apps/mobile/src/lib/integrations/telemetry/{config,posthog}.ts`. |
 | Identity and data | Distinct id is the authenticated user UUID, and identify calls send that UUID only with no email, display name, or other person properties. Captured data is the fixed event surface below plus scrubbed low-cardinality properties and registered app/surface/environment/release context. |
 | Destination | The configured PostHog host, defaulting to `https://us.i.posthog.com`. |
-| Enable, disable, or no-op | A missing API key makes each adapter inert. Web/Mobile also honor their public telemetry-disable setting; Desktop additionally requires hosted-product routing. Replay has a separate false-by-default gate. |
-| Privacy and replay | Autocapture and automatic page views are off. Payload scrubbers remove sensitive values. Replay is off by default; enabled Desktop/Web replay masks inputs and honors block/mask selectors, and Mobile masks text, images, and sandboxed views. |
-| Known gap | When Desktop or Web replay is explicitly enabled, recorded page metadata can contain route ids even though capture-event URL properties are stripped. Mobile replay also requires the optional native replay dependency in the build. |
+| Enable, disable, or no-op | A missing API key makes each adapter inert. Web/Mobile also honor their public telemetry-disable setting; Desktop additionally requires hosted-product routing. Desktop recording is source-disabled; Web/Mobile replay has a separate false-by-default gate. |
+| Privacy and replay | Autocapture and automatic page views are off. Payload scrubbers remove sensitive values. Desktop recording is source-disabled and absent. Web replay is off by default and, when enabled, masks inputs and honors block/mask selectors; Mobile masks text, images, and sandboxed views. |
+| Known gap | When Web replay is explicitly enabled, recorded page metadata can contain route ids even though capture-event URL properties are stripped. Mobile replay also requires the optional native replay dependency in the build. |
 
 ## Desktop
 
@@ -25,14 +25,15 @@ autocapture=false
 capture_pageview=false
 capture_pageleave=false
 person_profiles=identified_only
-session recording disabled unless explicitly enabled
+disable_session_recording=true
 ```
 
-When `VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED` is true, the
-`loaded` callback explicitly starts Desktop recording. Inputs are masked and
-`[data-telemetry-mask]` / `[data-telemetry-block]` are respected. Those controls
-do not remove identifier-bearing workflow or workspace route segments from
-recorded page metadata.
+Desktop session recording is source-disabled, not false-by-default. The Desktop
+source carries no recording flag, recording options object, `loaded` callback,
+or `startSessionRecording` call, so no build value, environment value, or
+PostHog provider-side replay setting can start it. Re-enablement is a separate
+founder-approved change that must first prove a synthetic route, masking,
+metadata, and provider-arrival contract.
 
 Only these Desktop product events reach PostHog:
 
@@ -76,7 +77,17 @@ Sign-out resets the client.
 
 ## Configuration
 
-Desktop/Web:
+Desktop:
+
+```text
+VITE_PROLIFERATE_POSTHOG_KEY
+VITE_PROLIFERATE_POSTHOG_HOST
+VITE_PROLIFERATE_TELEMETRY_DISABLED
+VITE_PROLIFERATE_ENVIRONMENT
+VITE_PROLIFERATE_RELEASE
+```
+
+Web:
 
 ```text
 VITE_PROLIFERATE_POSTHOG_KEY

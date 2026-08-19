@@ -45,6 +45,38 @@ describe("getDesktopTelemetryConfig", () => {
       expect(configured.sentry).not.toHaveProperty("replaysOnErrorSampleRate");
     },
   );
+
+  it.each([
+    ["absent", undefined],
+    ["empty", ""],
+    ["boolean-looking true", "true"],
+    ["boolean-looking false", "false"],
+    ["numeric true", "1"],
+    ["numeric false", "0"],
+    ["numeric fractional", "0.5"],
+    ["numeric negative", "-1"],
+    ["malformed", "not-a-boolean"],
+  ] as const)(
+    "ignores the retired PostHog recording setting when its legacy value is %s",
+    async (_label, value) => {
+      const baselineModule = await loadConfigModule();
+      const baseline = baselineModule.getDesktopTelemetryConfig();
+
+      if (value !== undefined) {
+        vi.stubEnv("VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED", value);
+      }
+
+      const config = await loadConfigModule();
+      const configured = config.getDesktopTelemetryConfig();
+
+      expect(configured).toEqual(baseline);
+      expect(Object.keys(configured.posthog).sort()).toEqual([
+        "apiHost",
+        "apiKey",
+        "enabled",
+      ]);
+    },
+  );
 });
 
 describe("getAnonymousTelemetryEndpoint", () => {
