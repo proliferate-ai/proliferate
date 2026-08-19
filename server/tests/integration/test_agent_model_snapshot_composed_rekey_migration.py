@@ -7,12 +7,6 @@ fresh composed document; the retained rows stay as the audit trail), and that
 the re-keyed scope still carries no unique key — a racing duplicate upload
 must be a benign extra row the next write collapses, not a 500 the Worker tick
 cannot act on.
-
-The load-bearing assertion is ``_assert_matches_orm_metadata``: it compares the
-MIGRATED schema's constraint and index names against what
-``Base.metadata.create_all`` produces for the same table on a second, virgin
-database, so nothing the column drop and index re-cut leave behind can make
-migrated prod diverge from a fresh install.
 """
 
 from __future__ import annotations
@@ -60,44 +54,6 @@ async def _indexes(database_url: str) -> dict[str, tuple[str, ...]]:
             )
     finally:
         await engine.dispose()
-
-
-def _schema_names(sync_conn) -> dict[str, object]:  # type: ignore[no-untyped-def]
-    """Every named constraint/index on the table, as an order-insensitive shape."""
-    inspector = inspect(sync_conn)
-    return {
-        "pk": inspector.get_pk_constraint(_TABLE).get("name"),
-        "fks": {fk["name"] for fk in inspector.get_foreign_keys(_TABLE)},
-        "checks": {ck["name"] for ck in inspector.get_check_constraints(_TABLE)},
-        "uniques": {uq["name"] for uq in inspector.get_unique_constraints(_TABLE)},
-        "indexes": {ix["name"] for ix in inspector.get_indexes(_TABLE)},
-    }
-
-
-async def _assert_matches_orm_metadata(database_url: str) -> None:
-    from proliferate.db.models.base import Base
-
-    engine = create_async_engine(database_url, echo=False)
-    try:
-        async with engine.begin() as conn:
-            migrated = await conn.run_sync(_schema_names)
-    finally:
-        await engine.dispose()
-
-    # Prefix kept short: temporary_database appends a 33-char suffix and
-    # Postgres truncates identifiers at 63, which asyncpg refuses instead.
-    async with temporary_database("ams_composed_rekey_meta") as (_name, fresh_url):
-        fresh_engine = create_async_engine(fresh_url, echo=False)
-        try:
-            async with fresh_engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-                expected = await conn.run_sync(_schema_names)
-        finally:
-            await fresh_engine.dispose()
-
-    assert migrated == expected, (
-        f"migrated {_TABLE} diverges from Base.metadata.create_all: {migrated} != {expected}"
-    )
 
 
 async def _seed_context_keyed_rows(database_url: str) -> uuid.UUID:
@@ -237,10 +193,6 @@ async def test_composed_rekey_round_trips() -> None:
         # rows are the audit trail. Reads filter active, so the layered read
         # serves the shipped seed until the first composed upload lands.
         assert await _status_counts(database_url) == {"inactive": 3}
-
-        # The load-bearing assertion: the migrated table is name-for-name what
-        # a fresh create_all builds.
-        await _assert_matches_orm_metadata(database_url)
 
         await _assert_duplicate_active_rows_are_tolerated(database_url, user_id)
 

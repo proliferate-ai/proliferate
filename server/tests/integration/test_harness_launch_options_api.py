@@ -8,10 +8,18 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.constants.cloud import CloudSandboxStatus
 from proliferate.db.models.cloud.sandboxes import CloudSandbox, HarnessLaunchOptionState
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.helpers.worker_heartbeat import enroll_sandbox_worker
+
+
+@pytest.fixture(autouse=True)
+def _worker_cloud_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Enrollment mints an integration-gateway URL from the configured base;
+    # CI has no .env, so provide one the way production config would.
+    monkeypatch.setattr(settings, "cloud_worker_base_url", "http://cloud.test")
 
 
 async def _sandbox(

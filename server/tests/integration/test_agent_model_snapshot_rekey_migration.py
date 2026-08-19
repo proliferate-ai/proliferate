@@ -7,10 +7,9 @@ the scope carries no unique key — a racing duplicate upload must be a benign
 extra row the next write collapses, not a 500 the Worker tick cannot act on.
 
 The ORM-metadata comparison that used to live here (migrated schema ==
-``Base.metadata.create_all`` schema) moved to
-``test_agent_model_snapshot_composed_rekey_migration.py``: the ORM now models
-the post-B-3 composed shape (no ``auth_context_id``), so the comparison only
-holds at the composed re-key's revision, not at this one.
+``Base.metadata.create_all`` schema) was retired along with the
+AgentModelSnapshot ORM class: the table now survives only as a
+migration-defined shape, with no ORM class left to compare it against.
 """
 
 from __future__ import annotations
