@@ -75,38 +75,41 @@ export function useFirstRunAuthAdoption() {
       );
     };
 
-    if (connectionState === "connecting") {
-      return;
-    }
+    const selections = selectionsQuery.data;
+    const gatewayEnabled = capabilitiesQuery.data?.gatewayEnabled;
+
+    // Arbitrate every already-known terminal before returning for an earlier
+    // pending prerequisite. Precedence is stable and ownership-ordered:
+    // runtime, selections, capabilities, reconcile query, reconcile job.
     if (connectionState === "failed") {
       settleFailure("runtime_connection");
       return;
     }
-
-    const selections = selectionsQuery.data;
-    if (selections === undefined) {
-      if (selectionsQuery.isError) {
-        settleFailure("selections_query", selectionsQuery.error);
-      }
+    if (selections === undefined && selectionsQuery.isError) {
+      settleFailure("selections_query", selectionsQuery.error);
       return;
     }
-    const gatewayEnabled = capabilitiesQuery.data?.gatewayEnabled;
-    if (gatewayEnabled === undefined) {
-      if (capabilitiesQuery.isError) {
-        settleFailure("capabilities_query", capabilitiesQuery.error);
-      }
+    if (gatewayEnabled === undefined && capabilitiesQuery.isError) {
+      settleFailure("capabilities_query", capabilitiesQuery.error);
       return;
     }
-
     if (reconcileIsError) {
       settleFailure("reconcile_query", reconcileError);
       return;
     }
-    if (reconcileSnapshot === null) {
-      return;
-    }
     if (reconcileStatus === "failed") {
       settleFailure("reconcile_job");
+      return;
+    }
+
+    // Once every known terminal has had a chance to settle the one shot, any
+    // still-pending prerequisite blocks only the successful adoption path.
+    if (
+      connectionState === "connecting"
+      || selections === undefined
+      || gatewayEnabled === undefined
+      || reconcileSnapshot === null
+    ) {
       return;
     }
     // `idle` is the startup service's pre-admission state, not a settled scan.

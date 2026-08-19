@@ -236,6 +236,140 @@ describe("useFirstRunAuthAdoption", () => {
   });
 
   it.each([
+    [
+      "pending selections do not mask a capabilities failure",
+      () => {
+        state.selections.data = undefined;
+        state.capabilities.data = undefined;
+        state.capabilities.isError = true;
+        state.capabilities.error = new TypeError("capabilities payload");
+      },
+      "capabilities_query",
+    ],
+    [
+      "pending Cloud inputs do not mask a reconcile query failure",
+      () => {
+        state.selections.data = undefined;
+        state.capabilities.data = undefined;
+        state.reconcileIsError = true;
+        state.reconcileError = new TypeError("reconcile payload");
+      },
+      "reconcile_query",
+    ],
+    [
+      "pending capabilities do not mask a failed reconcile job",
+      () => {
+        state.capabilities.data = undefined;
+        state.reconcileStatus = "failed";
+      },
+      "reconcile_job",
+    ],
+    [
+      "a connecting runtime does not mask an independent Cloud failure",
+      () => {
+        state.connectionState = "connecting";
+        state.capabilities.data = undefined;
+        state.capabilities.isError = true;
+        state.capabilities.error = new TypeError("capabilities payload");
+      },
+      "capabilities_query",
+    ],
+    [
+      "a connecting runtime does not mask an independent reconcile failure",
+      () => {
+        state.connectionState = "connecting";
+        state.reconcileIsError = true;
+        state.reconcileError = new TypeError("reconcile payload");
+      },
+      "reconcile_query",
+    ],
+  ] as const)("settles crossed state: %s", async (_name, configure, expectedStage) => {
+    configure();
+    renderHook(() => useFirstRunAuthAdoption());
+    await waitForDecision();
+
+    expect(useAuthSetupOnboardingStore.getState().adoptedHarnessKinds).toEqual([]);
+    expect(diagnosticValues(diagnostics[0]!).failure_stage).toBe(expectedStage);
+    expect(mocks.refetchAgents).not.toHaveBeenCalled();
+  });
+
+  it("uses deterministic terminal precedence when several failures coexist", async () => {
+    state.connectionState = "failed";
+    state.selections.data = undefined;
+    state.selections.isError = true;
+    state.selections.error = new TypeError("selections payload");
+    state.capabilities.data = undefined;
+    state.capabilities.isError = true;
+    state.capabilities.error = new TypeError("capabilities payload");
+    state.reconcileIsError = true;
+    state.reconcileError = new TypeError("reconcile payload");
+    state.reconcileStatus = "failed";
+
+    renderHook(() => useFirstRunAuthAdoption());
+    await waitForDecision();
+
+    expect(diagnosticValues(diagnostics[0]!)).toEqual({
+      failure_stage: "runtime_connection",
+    });
+    expect(diagnostics).toHaveLength(1);
+  });
+
+  it.each([
+    [
+      "selections before capabilities and reconcile",
+      () => {
+        state.selections.data = undefined;
+        state.selections.isError = true;
+        state.selections.error = new TypeError("selections payload");
+        state.capabilities.data = undefined;
+        state.capabilities.isError = true;
+        state.capabilities.error = new TypeError("capabilities payload");
+        state.reconcileIsError = true;
+        state.reconcileError = new TypeError("reconcile payload");
+      },
+      "selections_query",
+    ],
+    [
+      "capabilities before reconcile when selections are usable",
+      () => {
+        state.selections.isError = true;
+        state.selections.error = new TypeError("background selections payload");
+        state.capabilities.data = undefined;
+        state.capabilities.isError = true;
+        state.capabilities.error = new TypeError("capabilities payload");
+        state.reconcileIsError = true;
+        state.reconcileError = new TypeError("reconcile payload");
+      },
+      "capabilities_query",
+    ],
+  ] as const)("orders terminal stages: %s", async (_name, configure, expectedStage) => {
+    configure();
+    renderHook(() => useFirstRunAuthAdoption());
+    await waitForDecision();
+
+    expect(diagnosticValues(diagnostics[0]!).failure_stage).toBe(expectedStage);
+    expect(diagnostics).toHaveLength(1);
+  });
+
+  it("does not retry after a crossed pending-plus-terminal state recovers", async () => {
+    state.selections.data = undefined;
+    state.reconcileStatus = "failed";
+    const { rerender } = renderHook(() => useFirstRunAuthAdoption());
+    await waitForDecision();
+
+    expect(diagnosticValues(diagnostics[0]!).failure_stage).toBe("reconcile_job");
+
+    state.selections.data = [];
+    state.reconcileStatus = "completed";
+    rerender();
+    await flushAdoption();
+
+    expect(mocks.refetchAgents).not.toHaveBeenCalled();
+    expect(mocks.putMutate).not.toHaveBeenCalled();
+    expect(diagnostics).toHaveLength(1);
+  });
+
+  it.each([
     ["selections", "selections_query"],
     ["capabilities", "capabilities_query"],
   ] as const)(
