@@ -24,7 +24,8 @@ export function SupportSnapshotSaveCopyButton({
     <Button
       type="button"
       variant="secondary"
-      loading={snapshot.isPreparing}
+      loading={snapshot.isBusy}
+      disabled={snapshot.snapshotActionsBlocked}
       onClick={() => { void snapshot.saveCopy(); }}
     >
       Save a copy…
