@@ -20524,6 +20524,14 @@
       "WorkflowRunFailRedoRequest": {
         "type": "object",
         "properties": {
+          "legIndex": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Rung 6: scope the redo to ONE leg of a parallel node. Absent =\nwhole-node redo (the historical behavior)."
+          },
           "prompt": {
             "type": [
               "string",

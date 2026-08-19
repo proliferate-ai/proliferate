@@ -515,6 +515,7 @@ async fn a_refusal_fails_the_run_and_fail_and_redo_replaces_the_node() {
             WorkflowCommand::FailAndRedo {
                 node_row_id: failed.id.clone(),
                 prompt: Some("Redo this cleanly".into()),
+                leg_index: None,
             },
         )
         .await;
@@ -1013,6 +1014,7 @@ async fn fail_and_redo_from_running_disposes_the_wedged_session_and_relaunches()
             WorkflowCommand::FailAndRedo {
                 node_row_id: old_id.clone(),
                 prompt: Some("redo from running".into()),
+                leg_index: None,
             },
         )
         .await;

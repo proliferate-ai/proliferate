@@ -62,6 +62,23 @@ pub(super) fn upsert_leg_at_tx(
     Ok(())
 }
 
+/// Reset ONE leg's ledger row to running (rung 6, per-leg redo): the addressed
+/// row goes back to 'running' with its completion cleared, keeping its current
+/// session_id until the relaunch re-stamps a fresh one. Sibling rows are
+/// untouched, so the fan-in gate treats only this leg as outstanding again.
+pub(super) fn reset_leg_running_tx(
+    tx: &Connection,
+    node_row_id: &str,
+    leg_index: i64,
+) -> rusqlite::Result<()> {
+    tx.execute(
+        "UPDATE workflow_run_node_sessions SET status = 'running', completed_at = NULL
+         WHERE node_row_id = ?1 AND leg_index = ?2",
+        params![node_row_id, leg_index],
+    )?;
+    Ok(())
+}
+
 /// Truncate every ledger row of a node (ruling F6): boot-fence resume
 /// re-fans-out ALL legs from the definition on a fresh generation, so the old
 /// rows are cleared before the relaunch re-inserts leg 0..N. A one-leg node has
@@ -97,6 +114,38 @@ pub(super) fn mark_leg_terminal_tx(
             params![node_row_id, status.as_str(), timestamp],
         ),
     }?;
+    Ok(())
+}
+
+/// A single-leg relaunch failure (rung-6 delta finding): the addressed leg
+/// alone is stamped with the failure; siblings still running are stamped
+/// cancelled — their live sessions are disposed by the same transition's
+/// resolved side effect — and already-terminal siblings keep their status
+/// and completion receipts. Never the whole-cohort keyless stamp, which is
+/// only correct when every row was freshly minted by one fan-out.
+pub(super) fn fail_leg_and_cancel_running_siblings_tx(
+    tx: &Connection,
+    node_row_id: &str,
+    leg_index: i64,
+    status: WorkflowLegStatus,
+    timestamp: &str,
+) -> rusqlite::Result<()> {
+    tx.execute(
+        "UPDATE workflow_run_node_sessions SET status = ?3, completed_at = ?4
+         WHERE node_row_id = ?1 AND leg_index = ?2",
+        params![node_row_id, leg_index, status.as_str(), timestamp],
+    )?;
+    tx.execute(
+        "UPDATE workflow_run_node_sessions SET status = ?3, completed_at = ?4
+         WHERE node_row_id = ?1 AND leg_index != ?2 AND status = ?5",
+        params![
+            node_row_id,
+            leg_index,
+            WorkflowLegStatus::Cancelled.as_str(),
+            timestamp,
+            WorkflowLegStatus::Running.as_str()
+        ],
+    )?;
     Ok(())
 }
 

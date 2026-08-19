@@ -5359,6 +5359,12 @@ export interface components {
             prompt: string;
         };
         WorkflowRunFailRedoRequest: {
+            /**
+             * Format: int64
+             * @description Rung 6: scope the redo to ONE leg of a parallel node. Absent =
+             *     whole-node redo (the historical behavior).
+             */
+            legIndex?: number | null;
             prompt?: string | null;
         };
         WorkflowRunFlipTypeRequest: {

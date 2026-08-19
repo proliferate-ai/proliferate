@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
 import type {
   WorkflowNodeTypeV2,
+  WorkflowRunFailRedoRequestV2,
   WorkflowRunDocV2,
   WorkflowRunNodeV2,
   WorkflowRunV2,
@@ -23,7 +24,7 @@ export type WorkflowPaneStatus = "loading" | "empty" | "ready" | "error";
 
 export interface WorkflowPaneActions {
   approve: (nodeRowId: string) => void;
-  failRedo: (nodeRowId: string, prompt?: string) => void;
+  failRedo: (nodeRowId: string, prompt?: string, legIndex?: number) => void;
   flipType: (nodeRowId: string, nodeType: WorkflowNodeTypeV2) => void;
   undoAdvance: () => void;
   resume: () => void;
@@ -171,11 +172,18 @@ export function useWorkflowPane(
     approve: (nodeRowId) => {
       void runCommand(() => mutations.approve.mutateAsync({ nodeRowId }));
     },
-    failRedo: (nodeRowId, prompt) => {
-      void runCommand(() => mutations.failRedo.mutateAsync({
-        nodeRowId,
-        request: prompt === undefined ? {} : { prompt },
-      }));
+    failRedo: (nodeRowId, prompt, legIndex) => {
+      // Rung 6 plumbing: an optional leg index scopes the redo to one leg of a
+      // parallel node. The run-view UI stays at parity (no leg picker yet); the
+      // parameter only flows through when a caller supplies it.
+      const request: WorkflowRunFailRedoRequestV2 = {};
+      if (prompt !== undefined) {
+        request.prompt = prompt;
+      }
+      if (legIndex !== undefined) {
+        request.legIndex = legIndex;
+      }
+      void runCommand(() => mutations.failRedo.mutateAsync({ nodeRowId, request }));
     },
     flipType: (nodeRowId, nodeType) => {
       void runCommand(() => mutations.flipType.mutateAsync({

@@ -145,6 +145,11 @@ export interface WorkflowRunPutRequestV2 extends WorkflowInvocationJsonV2 {
 
 export interface WorkflowRunFailRedoRequestV2 {
   prompt?: string;
+  /**
+   * Rung 6: scope the redo to ONE leg of a parallel node. Absent = whole-node
+   * redo (the historical behavior).
+   */
+  legIndex?: number;
 }
 
 export interface WorkflowRunFlipTypeRequestV2 {

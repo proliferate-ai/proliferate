@@ -11,7 +11,9 @@ use super::definition::{
     DefinitionLeg, DefinitionNode, InvocationPlacement, InvocationSnapshot, PlacementMode,
     WorkflowDefinition, DEFINITION_SCHEMA_VERSION,
 };
-use super::model::{WorkflowLegStatus, WorkflowNodeType, WorkflowRunStatus};
+use super::model::{
+    WorkflowLegStatus, WorkflowNodeStatus, WorkflowNodeType, WorkflowRunStatus,
+};
 use super::store::{
     node_leg_count, start_side_effect, NewRunParams, ResolvedSideEffect, WorkflowStore,
 };
@@ -407,6 +409,7 @@ fn a_failed_fan_out_launch_terminalizes_every_leg_it_stamped() {
         &state,
         &WorkflowEvent::NodeLaunchFailed {
             node_row_id: node_id.clone(),
+            leg_index: None,
         },
     );
 
@@ -425,4 +428,264 @@ fn a_failed_fan_out_launch_terminalizes_every_leg_it_stamped() {
         );
         assert!(leg.completed_at.is_some(), "leg {}", leg.leg_index);
     }
+}
+
+/// Drive a 3-leg node to a Failed rest state (two legs done, one failed),
+/// returning the store and the node row id at rest.
+fn failed_three_leg_run(run_id: &str) -> (WorkflowStore, String) {
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(parallel_params(run_id, 3))
+        .expect("create");
+    let node_id = created.first_node_row_id.clone();
+    let legs = vec![
+        (0i64, "sess-0".to_string()),
+        (1, "sess-1".to_string()),
+        (2, "sess-2".to_string()),
+    ];
+    store
+        .stamp_fanout(&node_id, Some("wf2-panel"), Some("claude"), &legs)
+        .expect("stamp fanout");
+
+    let finish = |session: &str, reason: TurnStopReason| WorkflowEvent::TurnFinished(TurnFinished {
+        node_row_id: node_id.clone(),
+        session_id: Some(session.into()),
+        stop_reason: reason,
+        queue_empty: true,
+    });
+    let mut state = store.load_run_state(run_id).expect("load").expect("run");
+    state = apply(&store, run_id, &state, &finish("sess-0", TurnStopReason::CleanEndTurn));
+    state = apply(&store, run_id, &state, &finish("sess-1", TurnStopReason::CleanEndTurn));
+    let state = apply(&store, run_id, &state, &finish("sess-2", TurnStopReason::Error));
+    assert_eq!(state.run.status, WorkflowRunStatus::Failed);
+    (store, node_id)
+}
+
+#[test]
+fn per_leg_redo_resets_exactly_one_ledger_row_and_leaves_siblings() {
+    let (store, node_id) = failed_three_leg_run("run-redo-leg");
+    let state = store.load_run_state("run-redo-leg").expect("load").expect("run");
+
+    let event = WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
+        node_row_id: node_id.clone(),
+        prompt: None,
+        leg_index: Some(2),
+    });
+    let transition = match next(&state, &event) {
+        Decision::Transition(transition) => transition,
+        other => panic!("expected a transition, got {other:?}"),
+    };
+    let applied = store
+        .apply_transition("run-redo-leg", &transition, &event)
+        .expect("apply redo leg");
+
+    // Leg 2 (the failed one) had no live session, so the effect just relaunches.
+    assert_eq!(
+        applied.side_effect,
+        ResolvedSideEffect::StartLeg {
+            node_row_id: node_id.clone(),
+            leg_index: 2,
+        }
+    );
+
+    let mut rows = applied.state.legs_of(&node_id);
+    rows.sort_by_key(|leg| leg.leg_index);
+    assert_eq!(rows.len(), 3);
+    // Siblings untouched: legs 0 and 1 stay Done with their completion times.
+    assert_eq!(rows[0].status, WorkflowLegStatus::Done);
+    assert!(rows[0].completed_at.is_some());
+    assert_eq!(rows[1].status, WorkflowLegStatus::Done);
+    assert!(rows[1].completed_at.is_some());
+    // The redone leg alone resets to running.
+    assert_eq!(rows[2].status, WorkflowLegStatus::Running);
+    assert!(rows[2].completed_at.is_none());
+
+    // The node revives and the run un-fails, waiting on the redone leg.
+    assert_eq!(
+        applied.state.node(&node_id).unwrap().status,
+        WorkflowNodeStatus::Running
+    );
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::Running);
+}
+
+#[test]
+fn a_redone_leg_makes_the_node_wait_then_completes_when_it_finishes() {
+    let (store, node_id) = failed_three_leg_run("run-redo-wait");
+    let state = store.load_run_state("run-redo-wait").expect("load").expect("run");
+
+    // Redo leg 2 in place.
+    let event = WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
+        node_row_id: node_id.clone(),
+        prompt: None,
+        leg_index: Some(2),
+    });
+    let redone = apply(&store, "run-redo-wait", &state, &event);
+    // The node is running again, NOT complete — it waits for the redone leg.
+    assert_eq!(redone.run.status, WorkflowRunStatus::Running);
+
+    // The actor relaunches leg 2 with a fresh session.
+    store
+        .stamp_leg_relaunch(&node_id, 2, "sess-2b", Some("wf2-panel-l2"), Some("claude"))
+        .expect("relaunch leg");
+    let relaunched = store.load_run_state("run-redo-wait").expect("load").expect("run");
+
+    // The redone leg finishing clean is the last outstanding one: the node
+    // aggregates (all legs done) and the single-node run completes.
+    let finish = WorkflowEvent::TurnFinished(TurnFinished {
+        node_row_id: node_id.clone(),
+        session_id: Some("sess-2b".into()),
+        stop_reason: TurnStopReason::CleanEndTurn,
+        queue_empty: true,
+    });
+    let completed = apply(&store, "run-redo-wait", &relaunched, &finish);
+    assert_eq!(completed.run.status, WorkflowRunStatus::Completed);
+}
+
+#[test]
+fn a_whole_node_redo_of_a_running_parallel_node_disposes_every_live_leg() {
+    // Ruling F2's bulk case: the redo replaces the WHOLE node, so every live
+    // leg session dies with it — representative-only disposal would leave the
+    // N-1 sibling agents running against a replaced node.
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(parallel_params("run-redo-all", 3))
+        .expect("create");
+    let node_id = created.first_node_row_id.clone();
+    let legs = vec![
+        (0i64, "sess-0".to_string()),
+        (1, "sess-1".to_string()),
+        (2, "sess-2".to_string()),
+    ];
+    store
+        .stamp_fanout(&node_id, Some("wf2-panel"), Some("claude"), &legs)
+        .expect("stamp fanout");
+    let state = store.load_run_state("run-redo-all").expect("load").expect("run");
+
+    // No leg index: Ruling L's redo-from-running, taken whole-node.
+    let event = WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
+        node_row_id: node_id.clone(),
+        prompt: None,
+        leg_index: None,
+    });
+    let transition = match next(&state, &event) {
+        Decision::Transition(transition) => transition,
+        other => panic!("expected a transition, got {other:?}"),
+    };
+    let applied = store
+        .apply_transition("run-redo-all", &transition, &event)
+        .expect("apply whole-node redo");
+
+    let replacement_id = applied
+        .created_node_row_id
+        .clone()
+        .expect("a whole-node redo mints a replacement row");
+    assert_eq!(
+        applied.side_effect,
+        ResolvedSideEffect::DisposeSessionsThenStartLegs {
+            session_ids: vec!["sess-0".into(), "sess-1".into(), "sess-2".into()],
+            node_row_id: replacement_id,
+        }
+    );
+}
+
+#[test]
+fn a_failed_per_leg_relaunch_terminalizes_only_the_addressed_leg() {
+    // Delta-review finding on this rung: a StartLeg relaunch that fails to
+    // start must NOT take the whole-cohort keyless stamp — Done siblings keep
+    // their receipts.
+    let (store, node_id) = failed_three_leg_run("run-leg-launch-fail");
+    let state = store.load_run_state("run-leg-launch-fail").expect("load").expect("run");
+    let redo = WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
+        node_row_id: node_id.clone(),
+        prompt: None,
+        leg_index: Some(2),
+    });
+    let redone = apply(&store, "run-leg-launch-fail", &state, &redo);
+
+    let event = WorkflowEvent::NodeLaunchFailed {
+        node_row_id: node_id.clone(),
+        leg_index: Some(2),
+    };
+    let transition = match next(&redone, &event) {
+        Decision::Transition(transition) => transition,
+        other => panic!("expected a transition, got {other:?}"),
+    };
+    let applied = store
+        .apply_transition("run-leg-launch-fail", &transition, &event)
+        .expect("apply leg launch failure");
+
+    // No sibling was running, so nothing needs disposing.
+    assert_eq!(applied.side_effect, ResolvedSideEffect::None);
+    let mut rows = applied.state.legs_of(&node_id);
+    rows.sort_by_key(|leg| leg.leg_index);
+    // Done siblings keep their receipts — status AND completion time.
+    assert_eq!(rows[0].status, WorkflowLegStatus::Done);
+    assert!(rows[0].completed_at.is_some());
+    assert_eq!(rows[1].status, WorkflowLegStatus::Done);
+    assert!(rows[1].completed_at.is_some());
+    // Only the addressed leg takes the launch failure.
+    assert_eq!(
+        rows[2].status,
+        WorkflowLegStatus::Failed(super::model::WorkflowNodeFailureCode::NodeLaunchFailed)
+    );
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::Failed);
+}
+
+#[test]
+fn a_failed_per_leg_relaunch_cancels_and_disposes_running_siblings() {
+    // The running-sibling half of the same finding: the node fails (F1), but
+    // live sibling agents are disposed and their rows stamped cancelled —
+    // never keyless-stamped 'failed', never left running under a failed run.
+    let store = test_store();
+    let created = store
+        .create_run_with_first_node(parallel_params("run-leg-fail-live", 3))
+        .expect("create");
+    let node_id = created.first_node_row_id.clone();
+    let legs = vec![
+        (0i64, "sess-0".to_string()),
+        (1, "sess-1".to_string()),
+        (2, "sess-2".to_string()),
+    ];
+    store
+        .stamp_fanout(&node_id, Some("wf2-panel"), Some("claude"), &legs)
+        .expect("stamp fanout");
+    let state = store.load_run_state("run-leg-fail-live").expect("load").expect("run");
+
+    // Per-leg redo of running leg 1 (its own session disposed by that redo).
+    let redo = WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
+        node_row_id: node_id.clone(),
+        prompt: None,
+        leg_index: Some(1),
+    });
+    let redone = apply(&store, "run-leg-fail-live", &state, &redo);
+
+    let event = WorkflowEvent::NodeLaunchFailed {
+        node_row_id: node_id.clone(),
+        leg_index: Some(1),
+    };
+    let transition = match next(&redone, &event) {
+        Decision::Transition(transition) => transition,
+        other => panic!("expected a transition, got {other:?}"),
+    };
+    let applied = store
+        .apply_transition("run-leg-fail-live", &transition, &event)
+        .expect("apply leg launch failure");
+
+    // Both live siblings are disposed; the addressed leg's session was already
+    // disposed by the redo itself and must not be double-disposed here.
+    assert_eq!(
+        applied.side_effect,
+        ResolvedSideEffect::DisposeSessions {
+            session_ids: vec!["sess-0".into(), "sess-2".into()],
+        }
+    );
+    let mut rows = applied.state.legs_of(&node_id);
+    rows.sort_by_key(|leg| leg.leg_index);
+    assert_eq!(rows[0].status, WorkflowLegStatus::Cancelled);
+    assert_eq!(
+        rows[1].status,
+        WorkflowLegStatus::Failed(super::model::WorkflowNodeFailureCode::NodeLaunchFailed)
+    );
+    assert_eq!(rows[2].status, WorkflowLegStatus::Cancelled);
+    assert_eq!(applied.state.run.status, WorkflowRunStatus::Failed);
 }

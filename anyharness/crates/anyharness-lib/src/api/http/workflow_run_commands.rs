@@ -20,9 +20,14 @@ use crate::domains::workflows::store::NodeMembership;
 use crate::domains::workflows::transition::WorkflowCommand;
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkflowRunFailRedoRequest {
     #[serde(default)]
     pub prompt: Option<String>,
+    /// Rung 6: scope the redo to ONE leg of a parallel node. Absent =
+    /// whole-node redo (the historical behavior).
+    #[serde(default)]
+    pub leg_index: Option<i64>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -124,6 +129,7 @@ pub async fn fail_redo_workflow_node(
         WorkflowCommand::FailAndRedo {
             node_row_id: node_row_id.clone(),
             prompt: body.prompt,
+            leg_index: body.leg_index,
         },
     )
     .await

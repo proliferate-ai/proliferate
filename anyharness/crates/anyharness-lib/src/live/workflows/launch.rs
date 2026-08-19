@@ -11,7 +11,10 @@ use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::runtime::{InternalSessionCreateInput, TextPromptDispatchError};
 use crate::domains::workflows::definition::{ResolveMode, WorkflowDefinition};
 use crate::domains::workflows::model::{RenderedEnvelope, WorkflowNodeKind, WorkflowRunNodeRecord};
-use crate::domains::workflows::render::{render_envelope, run_context_dir_relative, RenderInputs};
+use crate::domains::workflows::render::{
+    node_session_title, render_envelope, run_context_dir_relative, RenderInputs,
+};
+use crate::domains::workflows::transition::RunState;
 use crate::origin::OriginContext;
 
 use super::actor::{WorkflowActorDeps, DEFAULT_WORKFLOW_AGENT_KIND};
@@ -188,6 +191,202 @@ pub(super) async fn launch_legs(
     Ok(())
 }
 
+/// The fallible tail of the single-node launch, split out so `launch_node` can
+/// compensate the freshly created session on ANY failure in here. Moved off
+/// `actor.rs` to keep that seam under its 600-line ratchet.
+pub(super) async fn link_start_and_dispatch(
+    deps: &WorkflowActorDeps,
+    run_id: &str,
+    node: &WorkflowRunNodeRecord,
+    session: &SessionRecord,
+    envelope: &RenderedEnvelope,
+    agent_kind: &str,
+) -> anyhow::Result<()> {
+    // Link and stamp BEFORE start: the launch extras resolve the envelope
+    // through the sessions columns, and the extension matches turn reports
+    // through them.
+    let prompt_id = format!("wf2-{}", node.id);
+    deps.session_store
+        .link_workflow_columns(&session.id, run_id, &node.id)?;
+    title_node_session(deps, run_id, node, &session.id);
+    deps.store
+        .stamp_session(&node.id, &session.id, Some(&prompt_id), Some(agent_kind))?;
+
+    deps.session_runtime
+        .start_persisted_session(session)
+        .await
+        .map_err(|error| anyhow::anyhow!("session start failed: {error:?}"))?;
+
+    // Ruling D: the wrapped instruction blocks ride IN-BAND as leading text
+    // blocks of the first prompt — identical for every harness — and the node's
+    // first message is always the LAST block.
+    let mut texts = envelope.instruction_blocks.clone();
+    texts.push(envelope.first_message.clone());
+    match deps
+        .session_runtime
+        .send_text_blocks_prompt_with_id(&session.id, texts, prompt_id)
+        .await
+    {
+        Ok(_running_or_queued) => Ok(()),
+        Err(TextPromptDispatchError::AcknowledgementLost) => {
+            // A lost acknowledgement is never a failure claim — the turn may be
+            // running. The extension or the fence resolves the row. No
+            // compensation: the session may be live.
+            tracing::warn!(
+                run_id = %run_id,
+                node_row_id = %node.id,
+                session_id = %session.id,
+                "workflow envelope acknowledgement lost; leaving the node running",
+            );
+            Ok(())
+        }
+        Err(TextPromptDispatchError::Dispatch(error)) => {
+            Err(anyhow::anyhow!("envelope dispatch failed: {error:?}"))
+        }
+    }
+}
+
+/// Render a single node's envelope (the non-fan-out launch path). Moved off
+/// `actor.rs` to keep that seam under its 600-line ratchet. Ruling E: a defined
+/// node's prompt was validated before the snapshot froze and renders strict;
+/// redo-edited and adhoc prompts are user-typed and render lenient.
+pub(super) fn render_node_envelope(
+    deps: &WorkflowActorDeps,
+    run_id: &str,
+    state: &RunState,
+    node: &WorkflowRunNodeRecord,
+) -> anyhow::Result<RenderedEnvelope> {
+    let workspace = deps
+        .workspace_store
+        .find_by_id(&state.run.workspace_id)?
+        .ok_or_else(|| {
+            anyhow::anyhow!("workspace {} not found for render", state.run.workspace_id)
+        })?;
+    let arguments: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_str(&state.run.arguments_json)?;
+    let docs = deps.store.list_docs(run_id)?;
+    let context_dir = Path::new(&workspace.path).join(run_context_dir_relative(run_id));
+    render_envelope(&RenderInputs {
+        node_type: node.node_type,
+        prompt: &node.prompt,
+        mode: if node.kind == WorkflowNodeKind::Defined {
+            ResolveMode::Strict
+        } else {
+            ResolveMode::Lenient
+        },
+        arguments: &arguments,
+        docs: &docs,
+        context_dir: &context_dir,
+    })
+    .map_err(|error| anyhow::anyhow!("envelope render failed: {error}"))
+}
+
+/// Actor entry for per-leg redo (rung 6): resolve the node and frozen
+/// definition off the cached state, relaunch the one addressed leg, and return
+/// the freshly stamped run state so the caller can catch its cache up. Keeps
+/// the resolution + reload off `actor.rs` (its 600-line seam).
+pub(super) async fn relaunch_leg(
+    deps: &WorkflowActorDeps,
+    run_id: &str,
+    state: &RunState,
+    node_row_id: &str,
+    leg_index: i64,
+) -> anyhow::Result<Option<RunState>> {
+    let node = state
+        .node(node_row_id)
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("node row {node_row_id} not in run state"))?;
+    let definition: WorkflowDefinition = serde_json::from_str(&state.run.definition_json)?;
+    launch_one_leg(
+        deps,
+        run_id,
+        &node,
+        &definition,
+        &state.run.workspace_id,
+        &state.run.arguments_json,
+        leg_index,
+    )
+    .await?;
+    Ok(deps.store.load_run_state(run_id)?)
+}
+
+/// Per-leg redo relaunch (rung 6): render leg `leg_index`'s prompt, mint one
+/// session, re-stamp that ledger row (resetting it to running with the fresh
+/// session), then start and dispatch. Sibling legs are untouched. Any failure
+/// compensates the freshly minted session and bubbles so the actor feeds
+/// `NodeLaunchFailed` through the table, exactly as the fan-out path does.
+pub(super) async fn launch_one_leg(
+    deps: &WorkflowActorDeps,
+    run_id: &str,
+    node: &WorkflowRunNodeRecord,
+    definition: &WorkflowDefinition,
+    workspace_id: &str,
+    arguments_json: &str,
+    leg_index: i64,
+) -> anyhow::Result<()> {
+    let prompts = leg_prompts(node, definition);
+    let prompt = prompts
+        .get(leg_index as usize)
+        .ok_or_else(|| anyhow::anyhow!("leg_index {leg_index} out of range for node {}", node.id))?
+        .clone();
+    let (agent_kind, model_id, mode_id) = launch_model(node, definition);
+    let workspace = deps
+        .workspace_store
+        .find_by_id(workspace_id)?
+        .ok_or_else(|| anyhow::anyhow!("workspace {workspace_id} not found for leg redo render"))?;
+    let arguments: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_str(arguments_json)?;
+
+    let envelope = render_leg(deps, run_id, node, &workspace.path, &arguments, &prompt)?;
+    let input = InternalSessionCreateInput {
+        workspace_id: workspace.id.clone(),
+        agent_kind: agent_kind.clone(),
+        model_id: model_id.clone(),
+        mode_id: mode_id.clone(),
+        origin: OriginContext::system_local_runtime(),
+        preselected_session_id: None,
+    };
+    let session_runtime = deps.session_runtime.clone();
+    let session =
+        match tokio::task::spawn_blocking(move || session_runtime.create_persisted_internal_session(input))
+            .await
+        {
+            Ok(Ok(session)) => session,
+            Ok(Err(error)) => return Err(anyhow::anyhow!("leg session create failed: {error:?}")),
+            Err(join) => return Err(anyhow::anyhow!("leg session create join failed: {join}")),
+        };
+    // One-element leg vec so the fan-out compensation helper applies verbatim.
+    let legs = vec![(leg_index, session.clone(), envelope.clone())];
+
+    if let Err(error) = deps
+        .session_store
+        .link_workflow_columns(&session.id, run_id, &node.id)
+    {
+        compensate_all(deps, &legs).await;
+        return Err(error);
+    }
+    let prompt_id = if leg_index == 0 {
+        format!("wf2-{}", node.id)
+    } else {
+        format!("wf2-{}-l{}", node.id, leg_index)
+    };
+    if let Err(error) =
+        deps.store
+            .stamp_leg_relaunch(&node.id, leg_index, &session.id, Some(&prompt_id), Some(&agent_kind))
+    {
+        compensate_all(deps, &legs).await;
+        return Err(error);
+    }
+    if leg_index == 0 {
+        deps.store.store_rendered_envelope(&node.id, &envelope).ok();
+    }
+    if let Err(error) = start_and_dispatch(deps, run_id, node, &session, &envelope, prompt_id).await {
+        compensate_all(deps, &legs).await;
+        return Err(error);
+    }
+    Ok(())
+}
+
 /// Start one leg's session and dispatch its wrapped envelope in-band (Ruling
 /// D). A lost acknowledgement leaves the leg running (the fence resolves it);
 /// a hard dispatch error bubbles.
@@ -236,5 +435,35 @@ async fn compensate_all(deps: &WorkflowActorDeps, legs: &[(i64, SessionRecord, R
             .await
             .ok();
         deps.session_store.clear_workflow_columns(&session.id).ok();
+    }
+}
+
+/// Name the node's session after the node, before the stamp that first
+/// makes that session findable from the projection: a client raising a tab
+/// for it never has to show the harness's own guess (which echoes the
+/// first message, preamble and all) or the bare agent name.
+///
+/// Written unconditionally, and it stays: the two writers that can follow
+/// — the harness info update and the prompt-derived fallback — are both
+/// if-absent, so only a deliberate rename replaces it.
+///
+/// Cosmetic, so a failure is logged and the launch continues: an untitled
+/// node session is still a working one.
+fn title_node_session(
+    deps: &WorkflowActorDeps,
+    run_id: &str,
+    node: &WorkflowRunNodeRecord,
+    session_id: &str,
+) {
+    let title = node_session_title(node.chain_index, &node.title);
+    let now = chrono::Utc::now().to_rfc3339();
+    if let Err(error) = deps.session_store.update_title(session_id, &title, &now) {
+        tracing::warn!(
+            run_id = %run_id,
+            node_row_id = %node.id,
+            session_id = %session_id,
+            error = %error,
+            "workflow node session title write failed; leaving the session untitled",
+        );
     }
 }
