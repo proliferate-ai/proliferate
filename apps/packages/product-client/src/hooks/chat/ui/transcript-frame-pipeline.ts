@@ -42,6 +42,9 @@ export const TRANSCRIPT_GLUE_MAX_MS = 250;
 // window tight.
 const GLUE_SETTLE_QUIET_FRAMES = 1;
 
+/** Geometry-owned result of the sole transcript writer pass. */
+export type TranscriptFramePassOutcome = "corrective_position_write" | "settled";
+
 /**
  * The single snap/compensation writer the pipeline drives. Supplied once by the
  * stick-to-bottom engine, which owns pin state and the follow target.
@@ -52,7 +55,7 @@ export interface TranscriptFrameWriter {
    * apply the active above-change compensation delta while unpinned, or do
    * nothing. All writes flow through the rung-3 ownership markers inside.
    */
-  runFramePass: () => void;
+  runFramePass: () => TranscriptFramePassOutcome;
   /**
    * Current content height, used only to detect the content ResizeObserver
    * going quiet during a forced-glue window. Returns the live `scrollHeight`.
@@ -127,10 +130,12 @@ export class TranscriptFramePipeline {
   // pass; requests already present when a pass starts are satisfied by it.
   private glueDemandGeneration = 0;
   private glueServedGeneration = 0;
-  // PRO-168 (rung 12): the motion writer's own continuation handle, separate
-  // from frameHandle/glueHandle so it never contends with either's guard
-  // bookkeeping. Only ever armed when the writer reports pending motion.
-  private motionHandle: number | null = null;
+  // One continuation serves both eased motion and verification that a
+  // compensation correction survived into a later writer pass.
+  private writerContinuationHandle: number | null = null;
+  private seatAckPending = false;
+  private writerFrameTurn = 0;
+  private seatAckEligibleTurn = 0;
 
   constructor(
     private readonly raf: RafFn = defaultRaf,
@@ -140,7 +145,25 @@ export class TranscriptFramePipeline {
 
   /** Wire the single snap/compensation writer. */
   setWriter(writer: TranscriptFrameWriter): void {
+    if (this.writerContinuationHandle != null) {
+      this.caf(this.writerContinuationHandle);
+      this.writerContinuationHandle = null;
+    }
+    this.seatAckPending = false;
+    this.seatAckEligibleTurn = 0;
     this.writer = writer;
+  }
+
+  /** Run and centrally consume the geometry owner's narrow pass result. */
+  private runWriterPass(writer: TranscriptFrameWriter): void {
+    const outcome = writer.runFramePass();
+    if (outcome === "corrective_position_write") {
+      this.seatAckPending = true;
+      this.seatAckEligibleTurn = this.writerFrameTurn + 1;
+    } else if (this.writerFrameTurn >= this.seatAckEligibleTurn) {
+      this.seatAckPending = false;
+      this.seatAckEligibleTurn = 0;
+    }
   }
 
   /**
@@ -184,44 +207,40 @@ export class TranscriptFramePipeline {
         this.framePassHeight = -1;
       });
     }
-    writer.runFramePass();
+    this.runWriterPass(writer);
     // Record the height the snap just settled against so a later same-frame
     // notify re-runs only on further growth (a scrollTop write leaves it equal).
     this.framePassHeight = writer.measureContentHeight();
-    // PRO-168 (rung 12): the instant writer never reports pending motion, so
-    // this is a no-op for v1. An eased writer still mid-step keeps this
-    // pipeline (and only this pipeline) ticking until it converges.
-    this.continueMotionIfPending();
+    // Arm the shared continuation for an owed seat verifier or eased motion.
+    this.continueWriterIfPending();
   }
 
   /**
-   * PRO-168 (rung 12): while the writer's motion policy has not yet converged
-   * (`hasPendingMotion` true), keep scheduling exactly one frame at a time so
-   * the SAME writer can finish its catch-up — a self-perpetuating chain owned
-   * by this pipeline, not a second animator. Idempotent: a handle already
-   * armed is left alone.
+   * Schedule exactly one continuation while seat acknowledgment or eased
+   * motion is pending. The same writer serves both; an armed handle is reused.
    */
-  private continueMotionIfPending(): void {
+  private continueWriterIfPending(): void {
     const writer = this.writer;
-    if (writer?.hasPendingMotion?.() !== true) {
+    if (writer == null || (!this.seatAckPending && writer.hasPendingMotion?.() !== true)) {
       return;
     }
-    if (this.motionHandle != null) {
+    if (this.writerContinuationHandle != null) {
       return;
     }
-    this.motionHandle = this.raf(() => {
-      this.motionHandle = null;
+    this.writerContinuationHandle = this.raf(() => {
+      this.writerContinuationHandle = null;
+      this.writerFrameTurn += 1;
       const current = this.writer;
       // Re-check pending AT FIRE TIME, not just when this frame was armed: the
       // pass that ran since (glue, or an earlier motion tick) may have already
       // converged the writer, and re-running would waste a frame on a motion
       // step nobody needs. Mirrors glueTick's shouldContinueGlue gate, checked
       // before running rather than only after.
-      if (current == null || current.hasPendingMotion?.() !== true) {
+      if (current == null || (!this.seatAckPending && current.hasPendingMotion?.() !== true)) {
         return;
       }
-      current.runFramePass();
-      this.continueMotionIfPending();
+      this.runWriterPass(current);
+      this.continueWriterIfPending();
     });
   }
 
@@ -236,13 +255,13 @@ export class TranscriptFramePipeline {
     if (this.writer == null) {
       return;
     }
-    // Fold any pending motion continuation into the glue window: the glue
-    // loop below runs every frame regardless, so a separately-scheduled
-    // motion tick would double the same writer's pass in one frame.
-    if (this.motionHandle != null) {
-      this.caf(this.motionHandle);
-      this.motionHandle = null;
+    // Fold any writer continuation into the restarted glue owner.
+    if (this.writerContinuationHandle != null) {
+      this.caf(this.writerContinuationHandle);
+      this.writerContinuationHandle = null;
     }
+    this.seatAckPending = false;
+    this.seatAckEligibleTurn = 0;
     // Fold the pending guard-reset frame into the window and re-arm from scratch.
     if (this.frameHandle != null) {
       this.caf(this.frameHandle);
@@ -271,18 +290,16 @@ export class TranscriptFramePipeline {
   }
 
   private glueTick = (): void => {
+    this.writerFrameTurn += 1;
     const writer = this.writer;
     if (writer == null || !writer.shouldContinueGlue()) {
       this.glueActive = false;
-      // PRO-168 (rung 12): the glue window ending mid-motion (the user
-      // reclaimed control, or the viewport vanished) still hands off to the
-      // motion continuation below when the writer itself still has motion
-      // pending; when the writer is gone that check is a safe no-op.
-      this.continueMotionIfPending();
+      // Hand any still-owed writer continuation off as glue ends.
+      this.continueWriterIfPending();
       return;
     }
     const passGeneration = this.glueDemandGeneration;
-    writer.runFramePass();
+    this.runWriterPass(writer);
     this.glueServedGeneration = passGeneration;
 
     const height = writer.measureContentHeight();
@@ -298,6 +315,7 @@ export class TranscriptFramePipeline {
     if (
       (this.glueQuietFrames >= GLUE_SETTLE_QUIET_FRAMES || capElapsed)
       && !trailingEnsurePending
+      && !this.seatAckPending
     ) {
       this.glueActive = false;
       // PRO-168 (rung 12): the height-quiet/hard-cap glue terminator is about
@@ -307,7 +325,7 @@ export class TranscriptFramePipeline {
       // position trailing). Hand off to the motion continuation so it keeps
       // converging without turning glue's window into a second countdown for
       // the same thing.
-      this.continueMotionIfPending();
+      this.continueWriterIfPending();
       return;
     }
     this.glueHandle = this.raf(this.glueTick);
@@ -331,10 +349,12 @@ export class TranscriptFramePipeline {
     }
     this.glueActive = false;
     this.glueHandle = null;
-    if (this.motionHandle != null) {
-      this.caf(this.motionHandle);
+    if (this.writerContinuationHandle != null) {
+      this.caf(this.writerContinuationHandle);
     }
-    this.motionHandle = null;
+    this.writerContinuationHandle = null;
+    this.seatAckPending = false;
+    this.seatAckEligibleTurn = 0;
     this.glueServedGeneration = this.glueDemandGeneration;
   }
 
