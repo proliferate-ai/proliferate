@@ -21,6 +21,7 @@ from proliferate.lib.infra.time.wall_clock import utcnow
 class IntegrationOAuthFlowRecord:
     id: UUID
     account_id: UUID | None
+    attempt_id: UUID | None
     owner_user_id: UUID
     definition_id: UUID
     state_hash: str
@@ -48,6 +49,7 @@ def _record(flow: CloudIntegrationOAuthFlow) -> IntegrationOAuthFlowRecord:
     return IntegrationOAuthFlowRecord(
         id=flow.id,
         account_id=flow.account_id,
+        attempt_id=flow.attempt_id,
         owner_user_id=flow.owner_user_id,
         definition_id=flow.definition_id,
         state_hash=flow.state_hash,

@@ -25,6 +25,8 @@ class IntegrationOAuthClientRecord:
     redirect_uri: str
     resource: str | None
     client_id: str
+    revision: int
+    lifecycle_state: str
     client_secret_ciphertext: str | None
     client_secret_expires_at: datetime | None
     token_endpoint_auth_method: str | None
@@ -42,6 +44,8 @@ def _record(client: CloudIntegrationOAuthClient) -> IntegrationOAuthClientRecord
         redirect_uri=client.redirect_uri,
         resource=client.resource,
         client_id=client.client_id,
+        revision=client.revision,
+        lifecycle_state=client.lifecycle_state,
         client_secret_ciphertext=client.client_secret_ciphertext,
         client_secret_expires_at=client.client_secret_expires_at,
         token_endpoint_auth_method=client.token_endpoint_auth_method,
@@ -64,6 +68,7 @@ async def get_oauth_client(
                 CloudIntegrationOAuthClient.issuer == issuer,
                 CloudIntegrationOAuthClient.redirect_uri == redirect_uri,
                 CloudIntegrationOAuthClient.definition_id == definition_id,
+                CloudIntegrationOAuthClient.lifecycle_state == "active",
             )
         )
     ).scalar_one_or_none()
@@ -91,6 +96,7 @@ async def upsert_oauth_client(
                 CloudIntegrationOAuthClient.issuer == issuer,
                 CloudIntegrationOAuthClient.redirect_uri == redirect_uri,
                 CloudIntegrationOAuthClient.definition_id == definition_id,
+                CloudIntegrationOAuthClient.lifecycle_state == "active",
             )
             .with_for_update()
         )
