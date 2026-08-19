@@ -303,7 +303,11 @@ export class AnyHarnessTransport {
   readonly fetch: typeof globalThis.fetch;
 
   constructor(options: AnyHarnessClientOptions) {
-    this.baseUrl = options.baseUrl.replace(/\/+$/, "");
+    let baseUrl = options.baseUrl;
+    while (baseUrl.endsWith("/")) {
+      baseUrl = baseUrl.slice(0, -1);
+    }
+    this.baseUrl = baseUrl;
     this.authToken = options.authToken;
     this.fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
   }

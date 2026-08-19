@@ -36,7 +36,7 @@ export interface SessionStreamPruningDeps
 }
 
 export function createPendingSessionId(agentKind: string): string {
-  return `client-session:${agentKind}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+  return `client-session:${agentKind}:${Date.now()}:${globalThis.crypto.randomUUID()}`;
 }
 
 export function collectInactiveSessionStreamIds(
