@@ -1,7 +1,7 @@
 //! Test-only helpers for the route-auth module: a self-cleaning temp home and a
 //! state-file writer.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::state::state_file_path;
 
