@@ -2,6 +2,7 @@ import { AnyHarnessError } from "@anyharness/sdk";
 import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import { CancelledError, type QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
+import { fingerprintTelemetryKey } from "#product/lib/domain/telemetry/key-fingerprint";
 import {
   createAppQueryClient,
   hashAppQueryKey,
@@ -48,6 +49,32 @@ async function runFailingQuery(
   })).rejects.toBe(error);
 }
 
+async function runFailingMutation(
+  client: QueryClient,
+  error: Error,
+  mutationKey?: readonly unknown[],
+): Promise<void> {
+  const mutation = client.getMutationCache().build(client, {
+    ...(mutationKey === undefined ? {} : { mutationKey }),
+    mutationFn: async () => {
+      throw error;
+    },
+    retry: false,
+  });
+
+  await expect(mutation.execute(undefined)).rejects.toBe(error);
+}
+
+function fileError(code: string, status: number, detail?: string): AnyHarnessError {
+  return new AnyHarnessError({
+    type: "about:blank",
+    title: "File request failed",
+    status,
+    code,
+    ...(detail === undefined ? {} : { detail }),
+  });
+}
+
 function modelGatedError(instance?: string): AnyHarnessError {
   return new AnyHarnessError({
     type: "about:blank",
@@ -61,6 +88,20 @@ function modelGatedError(instance?: string): AnyHarnessError {
 
 const VALID_RUNTIME_INCIDENT_RECEIPT =
   "urn:proliferate:anyharness:incident:8fd6ea9a-1246-4ef0-a526-9cc5f86ed960";
+
+const FILE_QUERY_RESPONSES = [
+  ["INVALID_FILE_PATH", 400],
+  ["FILE_NOT_FOUND", 404],
+  ["FILE_PERMISSION_DENIED", 403],
+  ["NOT_A_DIRECTORY", 400],
+] as const;
+
+const PRIVATE_KEY_MARKERS = [
+  "src/private/credentials.txt",
+  "/Users/example/private-workspace/secret.md",
+  "/Users/example",
+  "https://runtime.example.invalid/v1/files?token=private",
+] as const;
 
 describe("createAppQueryClient query telemetry", () => {
   it.each([
@@ -103,6 +144,34 @@ describe("createAppQueryClient query telemetry", () => {
     });
   });
 
+  it.each(FILE_QUERY_RESPONSES)(
+    "does not capture file response %s while preserving query error state",
+    async (code, status) => {
+      const captureException = vi.fn();
+      const client = createAppQueryClient({ captureException });
+      const error = fileError(code, status);
+      const queryKey = ["workspace-file", code];
+
+      await runFailingQuery(client, queryKey, error);
+
+      expect(captureException).not.toHaveBeenCalled();
+      expect(client.getQueryState(queryKey)).toMatchObject({
+        status: "error",
+        error,
+      });
+    },
+  );
+
+  it("captures a non-5xx outside-workspace refusal", async () => {
+    const captureException = vi.fn();
+    const client = createAppQueryClient({ captureException });
+    const error = fileError("PATH_OUTSIDE_WORKSPACE", 400);
+
+    await runFailingQuery(client, ["workspace-file", "outside"], error);
+
+    expect(captureException).toHaveBeenCalledTimes(1);
+  });
+
   it("does not capture TanStack cancellation", () => {
     expect(shouldCaptureAppQueryError(new CancelledError())).toBe(false);
   });
@@ -142,7 +211,7 @@ describe("createAppQueryClient query telemetry", () => {
         domain: "react_query",
       },
       extras: {
-        query_hash: hashAppQueryKey(queryKey),
+        query_hash: fingerprintTelemetryKey(hashAppQueryKey(queryKey)),
       },
     });
   });
@@ -175,9 +244,64 @@ describe("createAppQueryClient query telemetry", () => {
         domain: "react_query",
       },
       extras: {
-        query_hash: hashAppQueryKey(queryKey),
+        query_hash: fingerprintTelemetryKey(hashAppQueryKey(queryKey)),
       },
     });
+  });
+
+  it.each(FILE_QUERY_RESPONSES)(
+    "captures and sanitizes file response %s when its status is 5xx",
+    async (code) => {
+      const captureException = vi.fn();
+      const client = createAppQueryClient({ captureException });
+      const detail = `caller-visible-${code}`;
+      const error = fileError(code, 503, detail);
+      const queryKey = ["workspace-file", code];
+
+      await runFailingQuery(client, queryKey, error);
+
+      expect(captureException).toHaveBeenCalledTimes(1);
+      const [capturedError, context] = captureException.mock.calls[0];
+      expect(capturedError).not.toBe(error);
+      expect(capturedError).toMatchObject({
+        message: `AnyHarness request failed (${code})`,
+        status: 503,
+        code,
+      });
+      expect(JSON.stringify(capturedError)).not.toContain(detail);
+      expect(context.extras.query_hash).toBe(
+        fingerprintTelemetryKey(hashAppQueryKey(queryKey)),
+      );
+    },
+  );
+
+  it("keeps raw cache identity but fingerprints path-bearing capture identities", async () => {
+    const captureException = vi.fn();
+    const client = createAppQueryClient({ captureException });
+    const queryKey = ["workspace-files", ...PRIVATE_KEY_MARKERS];
+    const mutationKey = ["workspace-file-mutation", ...PRIVATE_KEY_MARKERS];
+
+    await runFailingQuery(client, queryKey, new Error("Query failed"));
+    await runFailingMutation(client, new Error("Mutation failed"), mutationKey);
+
+    const serializedQueryKey = hashAppQueryKey(queryKey);
+    const serializedMutationKey = hashAppQueryKey(mutationKey);
+    const queryContext = captureException.mock.calls[0][1];
+    const mutationContext = captureException.mock.calls[1][1];
+    expect(client.getQueryCache().find({ queryKey })?.queryHash).toBe(
+      serializedQueryKey,
+    );
+    expect(serializedQueryKey).toContain(PRIVATE_KEY_MARKERS[0]);
+    expect(queryContext.extras.query_hash).toBe(
+      fingerprintTelemetryKey(serializedQueryKey),
+    );
+    expect(mutationContext.extras.mutation_key).toBe(
+      fingerprintTelemetryKey(serializedMutationKey),
+    );
+    const capturedContexts = JSON.stringify([queryContext, mutationContext]);
+    for (const marker of PRIVATE_KEY_MARKERS) {
+      expect(capturedContexts).not.toContain(marker);
+    }
   });
 
   it("captures an AnyHarness 5xx without its caller-facing detail", async () => {
@@ -213,7 +337,7 @@ describe("createAppQueryClient query telemetry", () => {
         domain: "react_query",
       },
       extras: {
-        query_hash: hashAppQueryKey(queryKey),
+        query_hash: fingerprintTelemetryKey(hashAppQueryKey(queryKey)),
       },
     });
   });
@@ -300,7 +424,7 @@ describe("createAppQueryClient query telemetry", () => {
         domain: "react_query",
       },
       extras: {
-        mutation_key: hashAppQueryKey(mutationKey),
+        mutation_key: fingerprintTelemetryKey(hashAppQueryKey(mutationKey)),
       },
     });
   });
@@ -400,10 +524,42 @@ describe("createAppQueryClient query telemetry", () => {
         domain: "react_query",
       },
       extras: {
-        mutation_key: hashAppQueryKey(mutationKey),
+        mutation_key: fingerprintTelemetryKey(hashAppQueryKey(mutationKey)),
       },
     });
   });
+
+  it("keeps an absent mutation key as the bounded unknown literal", async () => {
+    const captureException = vi.fn();
+    const client = createAppQueryClient({ captureException });
+
+    await runFailingMutation(client, new Error("Mutation failed"));
+
+    expect(captureException.mock.calls[0][1].extras).toEqual({
+      mutation_key: "unknown",
+    });
+  });
+
+  it.each(FILE_QUERY_RESPONSES)(
+    "keeps file response %s reportable for mutations",
+    async (code) => {
+      const captureException = vi.fn();
+      const client = createAppQueryClient({ captureException });
+      const error = fileError(code, 400);
+      const mutationKey = ["workspace-file-mutation", code];
+
+      await runFailingMutation(client, error, mutationKey);
+
+      expect(captureException).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ code }),
+        expect.objectContaining({
+          extras: {
+            mutation_key: fingerprintTelemetryKey(hashAppQueryKey(mutationKey)),
+          },
+        }),
+      );
+    },
+  );
 
   it.each([
     "REPO_ROOT_NOT_GIT_REPO",

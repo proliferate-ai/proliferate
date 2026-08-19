@@ -81,6 +81,16 @@ session replay, and telemetry-related provider and hook ownership.
   not apply this query disposition rule; it separately leaves only explicitly
   coded repository-selection validation states to their owning mutation
   workflow. Other mutation failures remain reportable.
+- Global query and mutation capture extras use versioned, fixed-width opaque
+  fingerprints for their serialized key identities. The underlying stable
+  serialization remains the React Query cache identity. The non-cryptographic
+  digest is diagnostic correlation only, never a cache identity, security
+  boundary, authorization input, or reversible lookup.
+- The global query handler also leaves non-5xx `INVALID_FILE_PATH`,
+  `FILE_NOT_FOUND`, `FILE_PERMISSION_DENIED`, and `NOT_A_DIRECTORY` AnyHarness
+  responses in React Query as expected file state. A 5xx carrying any of those
+  codes remains reportable, as does `PATH_OUTSIDE_WORKSPACE` unless an existing
+  status rule suppresses it. Mutation disposition remains unchanged.
 - Auth workflows treat only `AbortError`, the explicitly branded local
   interactive poll timeout, and an explicitly coded unavailable SSO slug as
   typed, rendered control states. Generic HTTP 4xx responses (including an
