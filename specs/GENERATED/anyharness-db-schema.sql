@@ -162,6 +162,22 @@ CREATE TABLE goals (
     updated_at TEXT NOT NULL
 );
 
+-- table: harness_launch_option_states
+CREATE TABLE harness_launch_option_states (
+    harness_kind TEXT PRIMARY KEY,
+    basis_revision TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    options_json TEXT,
+    observed_at TEXT,
+    probe_state TEXT NOT NULL
+      CHECK (probe_state IN ('probing', 'succeeded', 'failed')),
+    probe_attempted_at TEXT NOT NULL,
+    probe_failure_code TEXT,
+    CHECK ((options_json IS NULL) = (observed_at IS NULL)),
+    CHECK (probe_state <> 'succeeded' OR options_json IS NOT NULL),
+    CHECK ((probe_state = 'failed') = (probe_failure_code IS NOT NULL))
+);
+
 -- table: local_materialization_operation
 CREATE TABLE local_materialization_operation (
     operation_id TEXT PRIMARY KEY,
@@ -325,7 +341,7 @@ CREATE TABLE review_assignments (
     failure_reason TEXT,
     failure_detail TEXT,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL, control_values_json TEXT NOT NULL DEFAULT '{}', launch_verification_status TEXT NOT NULL DEFAULT 'pending',
     FOREIGN KEY(review_run_id) REFERENCES review_runs(id) ON DELETE CASCADE,
     FOREIGN KEY(review_round_id) REFERENCES review_rounds(id) ON DELETE CASCADE,
     FOREIGN KEY(reviewer_session_id) REFERENCES sessions(id) ON DELETE SET NULL,
@@ -506,6 +522,14 @@ CREATE TABLE session_events (
     payload_json TEXT NOT NULL
 , item_id TEXT, completion_wake_removal_key TEXT);
 
+-- table: session_launch_intents
+CREATE TABLE session_launch_intents (
+    session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+    requested_model_id TEXT,
+    requested_controls_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
 -- table: session_link_completion_deliveries
 CREATE TABLE session_link_completion_deliveries (
     delivery_id TEXT PRIMARY KEY,
@@ -575,7 +599,7 @@ CREATE TABLE session_live_config_snapshots (
     raw_config_options_json TEXT NOT NULL,
     normalized_controls_json TEXT NOT NULL,
     updated_at TEXT NOT NULL
-, prompt_capabilities_json TEXT);
+, prompt_capabilities_json TEXT, full_snapshot_json TEXT);
 
 -- table: session_pending_config_changes
 CREATE TABLE session_pending_config_changes (
