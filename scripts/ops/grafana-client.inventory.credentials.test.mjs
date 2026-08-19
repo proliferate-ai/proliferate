@@ -225,7 +225,7 @@ for (const fixture of [
   { name: "closes on SIGTERM", handler: "setTimeout(()=>process.exit(0),250)" },
   { name: "ignores SIGTERM", handler: "void 0", ignores: true },
 ]) {
-  test(`credential result is bounded while a direct child ${fixture.name}`, async () => {
+  test(`credential result is bounded while a direct child ${fixture.name}`, async (t) => {
     const runtime = controlledRuntime();
     const lifecycle = {};
     let dependentLaunches = 0;
@@ -240,6 +240,18 @@ for (const fixture of [
         dependentLaunches += 1;
       },
     });
+    let cleanupPromise;
+    const cleanup = () => {
+      cleanupPromise ??= (async () => {
+        const child = lifecycle.child;
+        if (!child) return;
+        if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+        await lifecycle.close;
+        lifecycle.output = "";
+      })();
+      return cleanupPromise;
+    };
+    t.after(cleanup);
     await once(lifecycle.child.stdout, "data");
     runtime.fireLongest();
     const result = await resultPromise;
@@ -253,7 +265,6 @@ for (const fixture of [
     }
     await lifecycle.close;
     assert.equal(lifecycle.output.includes("child-output-sentinel"), true);
-    lifecycle.output = "";
   });
 }
 
@@ -264,6 +275,9 @@ test("legacy resolver calls remain exact two-argument execFile calls", async () 
   assert.equal(calls.length, 2);
   assert.equal(calls[0].length, 2);
   assert.equal(calls[1].length, 2);
+  const viewerCalls = [];
+  assert.equal(await resolveViewerToken({ execFileImpl: validAwsImpl(viewerCalls) }), "inventory-token");
+  assert.deepEqual(viewerCalls.map((args) => args.length), [2, 2]);
   const accountCalls = [];
   await assertOperatorAccount(validAwsImpl(accountCalls));
   assert.equal(accountCalls[0].length, 2);

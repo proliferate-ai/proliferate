@@ -204,6 +204,13 @@ test("fetch rejection before a response has no HTTP status or provider prose", a
   assert.equal(JSON.stringify(result).includes("fetch-provider-prose"), false);
 });
 
+test("a synchronous response-seam defect is not fabricated into timeout", async () => {
+  const defect = new Error("response-seam-programmer-defect");
+  const response = rawResponse({ body: { database: "ok" } });
+  response.headers.get = () => { throw defect; };
+  await assert.rejects(apiResponse(response), (error) => error === defect);
+});
+
 test("deadline at the post-read checkpoint beats a returned over-limit invalid chunk", async () => {
   const runtime = controlledRuntime();
   const { result } = await apiResponse(rawResponse({ bytes: new Uint8Array(524_289),

@@ -7,9 +7,10 @@ import {
   createGrafanaClient,
 } from "./grafana-client.mjs";
 import {
-  completePlan,
   emptyPlan,
+  fixtureFetch,
   publicFixture,
+  twoPageCompletePlan,
 } from "./grafana-client.inventory.fixtures.mjs";
 
 function datasource(uid) {
@@ -44,7 +45,7 @@ function maximalPlan() {
 test("public method wires the full fixed plan with one bearer and no mutation", async () => {
   const contexts = [];
   const token = "one-principal-token";
-  const { client, trace } = publicFixture(completePlan(), { token,
+  const { client, trace } = publicFixture(twoPageCompletePlan(), { token,
     tokenProvider(context) { contexts.push(context); return token; } });
   for (const name of ["upsertAlertRule", "postAlertmanagerConfig", "upsertContactPoint", "restoreContactPoints"]) {
     client[name] = async () => { throw new Error(`inventory invoked mutation ${name}`); };
@@ -56,12 +57,15 @@ test("public method wires the full fixed plan with one bearer and no mutation", 
     "/api/health",
     "/api/datasources",
     "/api/search?type=dash-folder&limit=100&page=1",
+    "/api/search?type=dash-folder&limit=100&page=2",
     "/api/search?type=dash-db&limit=100&page=1",
+    "/api/search?type=dash-db&limit=100&page=2",
     "/api/ruler/grafana/api/v1/rules",
     "/api/v1/provisioning/contact-points",
     "/api/v1/provisioning/policies",
     "/api/access-control/user/permissions",
     "/api/serviceaccounts/search?perpage=100&page=1",
+    "/api/serviceaccounts/search?perpage=100&page=2",
     "/api/datasources/uid/z/health",
     "/api/datasources/uid/%C3%A9/health",
   ]);
@@ -87,6 +91,19 @@ test("the maximal legitimate plan is exactly 37 sequential requests", async () =
   const healthPaths = Array.from({ length: 16 }, (_, index) => `/api/datasources/uid/ds${index}/health`).sort();
   assert.deepEqual(trace.slice(21).map((entry) => entry.path), healthPaths);
   assert.ok(trace.every((entry) => entry.authorizationPresent && entry.authorizationEqual));
+});
+
+test("the redacted fixture rejects request 38 explicitly", async () => {
+  const trace = [];
+  const fetchImpl = fixtureFetch(emptyPlan(), { trace });
+  const request = () => fetchImpl(`${WORKSPACE_BASE_URL}/api/health`, {
+    method: "GET",
+    headers: { Authorization: "Bearer inventory-token" },
+    redirect: "manual",
+  });
+  for (let count = 0; count < 37; count += 1) await request();
+  await assert.rejects(request(), /request 38/);
+  assert.equal(trace.length, 38);
 });
 
 test("client retains the exact existing public method set plus inventory", () => {

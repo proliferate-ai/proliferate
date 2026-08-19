@@ -11,6 +11,7 @@ import {
   internalPrepare,
   rawResponse,
   surfaceFailure,
+  twoPageCompletePlan,
 } from "./grafana-client.inventory.fixtures.mjs";
 
 async function runPlan(plan = emptyPlan(), runtime = controlledRuntime()) {
@@ -52,8 +53,8 @@ function policyChain(depth, leaf = { receiver: "leaf" }) {
   return node;
 }
 
-test("complete projection is exact, canonically ordered, and privacy-negative", async () => {
-  const { result, trace } = await runPlan(completePlan());
+test("two-page complete projection is exact, canonically ordered, and privacy-negative", async () => {
+  const { result, trace } = await runPlan(twoPageCompletePlan());
   assert.deepEqual(result.target, INVENTORY_TARGET);
   assert.equal(result.schemaVersion, 1);
   assert.equal(result.kind, "grafana_metadata_inventory");
@@ -83,12 +84,23 @@ test("complete projection is exact, canonically ordered, and privacy-negative", 
     { uid: "z", name: "Zulu", type: "cloudwatch", access: "proxy", isDefault: false, readOnly: true },
     { uid: "é", name: "Accent", type: "prometheus", access: "proxy", isDefault: true, readOnly: false },
   ]);
+  assert.equal(result.surfaces.folders.itemCount, 102);
   assert.deepEqual(result.surfaces.folders.items, [
     { uid: "f1", title: "First" }, { uid: "f2", title: "Second" },
+    ...Array.from({ length: 100 }, (_, index) => ({
+      uid: `folder-page-one-${String(index).padStart(3, "0")}`,
+      title: `folder page one ${index}`,
+    })),
   ]);
+  assert.equal(result.surfaces.dashboards.itemCount, 102);
   assert.deepEqual(result.surfaces.dashboards.items, [
     { uid: "d1", title: "Nested", folderUid: "f1" },
     { uid: "d2", title: "Root", folderUid: null },
+    ...Array.from({ length: 100 }, (_, index) => ({
+      uid: `dashboard-page-one-${String(index).padStart(3, "0")}`,
+      title: `dashboard page one ${index}`,
+      folderUid: null,
+    })),
   ]);
   assert.deepEqual(result.surfaces.alertRules.items[0], { uid: "r1", title: "Rule", folderUid: "f1",
     ruleGroup: "g", isPaused: false, noDataState: "NoData", execErrState: "Error",
@@ -102,18 +114,34 @@ test("complete projection is exact, canonically ordered, and privacy-negative", 
     { action: "datasources:read", scopeCount: 2 },
     { action: "serviceaccounts:read", scopeCount: 1 },
   ]);
+  assert.equal(result.surfaces.serviceAccounts.itemCount, 102);
   assert.deepEqual(result.surfaces.serviceAccounts.items, [
     { id: 1, name: "A", role: "Viewer", isDisabled: true, tokenCount: 1 },
     { id: 2, name: "B", role: "Viewer", isDisabled: false, tokenCount: 0 },
+    ...Array.from({ length: 100 }, (_, index) => ({
+      id: index + 3,
+      name: `Page one ${99 - index}`,
+      role: "Viewer",
+      isDisabled: false,
+      tokenCount: 99 - index,
+    })),
   ]);
   assert.deepEqual(result.surfaces.datasourceHealth.items, [
     { uid: "z", state: "ok" },
     { uid: "é", state: "unavailable", reason: "datasource_health_failed", httpStatus: 200 },
   ]);
+  for (const collection of ["dash-folder", "dash-db"]) {
+    assert.ok(trace.some(({ path }) => path === `/api/search?type=${collection}&limit=100&page=2`));
+    assert.equal(trace.some(({ path }) => path === `/api/search?type=${collection}&limit=100&page=3`), false);
+  }
+  assert.ok(trace.some(({ path }) => path === "/api/serviceaccounts/search?perpage=100&page=2"));
+  assert.equal(trace.some(({ path }) => path === "/api/serviceaccounts/search?perpage=100&page=3"), false);
   const serialized = JSON.stringify({ result, trace });
   for (const forbidden of ["forbidden-url", "forbidden-token", "forbidden-query", "forbidden-value",
     "forbidden-setting", "forbidden-secret", "forbidden-password", "forbidden-matcher",
-    "forbidden-scope", "forbidden-login", "forbidden-plugin-message", "forbidden-health-prose"] ) {
+    "forbidden-scope", "forbidden-login", "forbidden-plugin-message", "forbidden-health-prose",
+    "forbidden-folder-page-one", "forbidden-dashboard-query-page-one",
+    "forbidden-service-account-page-one", "forbidden-service-account-avatar"] ) {
     assert.equal(serialized.includes(forbidden), false);
   }
 });
@@ -283,6 +311,19 @@ test("parsed precedence matrix selects the numbered higher row", async (t) => {
           [{ uid: "c", name: "n", type: "x", settings }]); } },
     { name: "row7 duplicate before string", expectedRow: 7, surface: "datasources", state: "malformed", reason: "invalid_shape",
       mutate(plan) { plan.set("/api/datasources", [datasource("dup"), datasource("dup", { name: "x".repeat(257) })]); } },
+    ...["labels", "annotations"].map((field) => ({
+      name: `row7 explicit null ${field} before oversized title`,
+      expectedRow: 7,
+      surface: "alertRules",
+      state: "malformed",
+      reason: "invalid_shape",
+      mutate(plan) {
+        plan.set("/api/ruler/grafana/api/v1/rules", { n: [{ rules: [{
+          grafana_alert: { uid: "rule", title: "x".repeat(257) },
+          [field]: null,
+        }] }] });
+      },
+    })),
     { name: "row2 database before bad version", expectedRow: 2, surface: "api", state: "unavailable", reason: "api_database_not_ok",
       mutate(plan) { plan.set("/api/health", { database: "bad", version: 3 }); } },
     { name: "row7 health shape before unrelated string", expectedRow: 7,
@@ -346,6 +387,39 @@ test("a selected policy shape failure is not replaced by a later-node deadline",
   const { result } = await runPlan(plan, runtime);
   assert.deepEqual(result.surfaces.notificationPolicy,
     surfaceFailure("malformed", "invalid_shape", 200));
+});
+
+test("non-deadline defects propagate from direct, paged, service, and health normalizers", async (t) => {
+  for (const [name, configure] of [
+    ["direct", (plan, response) => plan.set("/api/health", response)],
+    ["paged", (plan, response) => plan.set("/api/search?type=dash-folder&limit=100&page=1", response)],
+    ["service", (plan, response) => plan.set("/api/serviceaccounts/search?perpage=100&page=1", response)],
+    ["health", (plan, response) => {
+      plan.set("/api/datasources", [datasource("ds")]);
+      plan.set("/api/datasources/uid/ds/health", response);
+    }],
+  ]) {
+    await t.test(name, async () => {
+      const defect = new Error(`${name}-normalizer-programmer-defect`);
+      const runtime = controlledRuntime();
+      let remaining = null;
+      runtime.dependencies.monotonicNow = () => {
+        if (remaining === null) return 0;
+        if (remaining === 0) throw defect;
+        remaining -= 1;
+        return 0;
+      };
+      const body = name === "service"
+        ? { serviceAccounts: [], page: 1, perPage: 100, totalCount: 0 }
+        : name === "health" ? { status: "OK" } : name === "paged" ? [] : { database: "ok" };
+      // Pass post-read, empty-body, decode, and JSON; throw at parsed row 1.
+      const response = rawResponse({ body,
+        onRead: (index) => { if (index === 1) remaining = 6; } });
+      const plan = emptyPlan();
+      configure(plan, response);
+      await assert.rejects(runPlan(plan, runtime), (error) => error === defect);
+    });
+  }
 });
 
 test("Unicode, path, number, duplicate, and string limits fail closed before fan-out", async (t) => {
@@ -471,6 +545,27 @@ test("dynamic-key and health-string row 7/8 boundaries are exact", async () => {
     { uid: "z", state: "malformed", reason: "string_limit", httpStatus: 200 });
 });
 
+test("alert label and annotation maps default only when absent", async (t) => {
+  const absent = emptyPlan();
+  absent.set("/api/ruler/grafana/api/v1/rules", { n: [{ rules: [
+    { grafana_alert: { uid: "rule", title: "Rule" } },
+  ] }] });
+  assert.deepEqual((await runPlan(absent)).result.surfaces.alertRules.items[0], {
+    uid: "rule", title: "Rule", folderUid: null, ruleGroup: null, isPaused: false,
+    noDataState: null, execErrState: null, labelKeys: [], annotationKeys: [],
+  });
+  for (const field of ["labels", "annotations"]) {
+    await t.test(`explicit null ${field}`, async () => {
+      const plan = emptyPlan();
+      plan.set("/api/ruler/grafana/api/v1/rules", { n: [{ rules: [
+        { grafana_alert: { uid: "rule", title: "Rule" }, [field]: null },
+      ] }] });
+      assert.deepEqual((await runPlan(plan)).result.surfaces.alertRules,
+        surfaceFailure("malformed", "invalid_shape", 200));
+    });
+  }
+});
+
 test("maximum safe service-account numbers are preserved exactly", async () => {
   const plan = emptyPlan();
   setServicePages(plan, [{ serviceAccounts: [serviceAccount(Number.MAX_SAFE_INTEGER,
@@ -494,7 +589,9 @@ test("failed or oversized data-source parents produce no partial health fan-out"
   assert.equal(bounded.trace.some((entry) => entry.path.includes("/health")), false);
 });
 
-test("normalized output one-over limit replaces every surface without status or items", async () => {
+const OUTPUT_LIMIT = 1_048_576;
+
+function outputBoundaryPlan(contactCount, tuningBytes = 0) {
   const long = "x".repeat(256);
   const plan = emptyPlan();
   plan.set("/api/datasources", Array.from({ length: 500 }, (_, i) => datasource(`ds${i}`, { name: long, type: long, access: long })));
@@ -505,14 +602,83 @@ test("normalized output one-over limit replaces every surface without status or 
   plan.set("/api/ruler/grafana/api/v1/rules", { namespace: [{ rules: Array.from({ length: 500 }, (_, i) => ({
     grafana_alert: { uid: `r${i}`, title: long }, labels: {}, annotations: {},
   })) }] });
-  plan.set("/api/v1/provisioning/contact-points", Array.from({ length: 500 }, (_, i) =>
-    ({ uid: `c${i}`, name: long, type: long, settings: {} })));
-  setServicePages(plan, Array.from({ length: 5 }, (_, page) => ({
-    serviceAccounts: Array.from({ length: 100 }, (_, i) => serviceAccount(page * 100 + i + 1,
-      { name: long, role: long })), page: page + 1, perPage: 100, totalCount: 500,
-  })));
-  const { result } = await runPlan(plan);
+  const widths = [1, 1, 1, 1];
+  for (let index = 0; index < widths.length; index += 1) {
+    const addition = Math.min(tuningBytes, 255);
+    widths[index] += addition;
+    tuningBytes -= addition;
+  }
+  assert.equal(tuningBytes, 0);
+  const contacts = Array.from({ length: contactCount }, (_, index) => ({
+    uid: `c${index}`,
+    name: "n",
+    type: "x",
+    settings: { [`${index}-`.padEnd(256, "k")]: "forbidden-output-bulk-value" },
+  }));
+  contacts.push({
+    uid: "t".repeat(widths[0]),
+    name: "n".repeat(widths[1]),
+    type: "x".repeat(widths[2]),
+    settings: { ["s".repeat(widths[3])]: "forbidden-output-tuner-value" },
+  });
+  plan.set("/api/v1/provisioning/contact-points", contacts);
+  return plan;
+}
+
+function serializedBytes(result) {
+  return Buffer.byteLength(JSON.stringify(result), "utf8");
+}
+
+function assertOutputLimited(result) {
   for (const surface of Object.values(result.surfaces)) {
     assert.deepEqual(surface, surfaceFailure("unknown", "output_byte_limit"));
   }
+}
+
+test("normalized output accepts exactly 1,048,576 bytes and rejects exactly one byte more", async () => {
+  assert.equal((await runPlan(outputBoundaryPlan(0))).result.surfaces.api.state, "ok");
+  assertOutputLimited((await runPlan(outputBoundaryPlan(499))).result);
+  let accepted = 0;
+  let rejected = 499;
+  while (rejected - accepted > 1) {
+    const candidate = Math.floor((accepted + rejected) / 2);
+    const { result } = await runPlan(outputBoundaryPlan(candidate));
+    if (result.surfaces.api.reason === "output_byte_limit") rejected = candidate;
+    else accepted = candidate;
+  }
+  const baseline = await runPlan(outputBoundaryPlan(accepted));
+  const tuningBytes = OUTPUT_LIMIT - serializedBytes(baseline.result);
+  assert.ok(tuningBytes >= 0 && tuningBytes < 1_020);
+  const exactPlan = outputBoundaryPlan(accepted, tuningBytes);
+  const exact = await runPlan(exactPlan);
+  assert.equal(serializedBytes(exact.result), OUTPUT_LIMIT);
+
+  const oneOverPlan = outputBoundaryPlan(accepted, tuningBytes + 1);
+  const projectedWidth = (plan) => {
+    const item = plan.get("/api/v1/provisioning/contact-points").at(-1);
+    return item.uid.length + item.name.length + item.type.length + Object.keys(item.settings)[0].length;
+  };
+  const oneOverDelta = projectedWidth(oneOverPlan) - projectedWidth(exactPlan);
+  assert.equal(oneOverDelta, 1);
+  assert.equal(serializedBytes(exact.result) + oneOverDelta, OUTPUT_LIMIT + 1);
+  assertOutputLimited((await runPlan(oneOverPlan)).result);
+
+  const runtime = controlledRuntime();
+  const nativeStringify = JSON.stringify;
+  let advancedDuringSerialization = false;
+  let collision;
+  try {
+    JSON.stringify = function (value, ...args) {
+      if (value?.kind === "grafana_metadata_inventory") {
+        advancedDuringSerialization = true;
+        runtime.set(30_000);
+      }
+      return nativeStringify.call(this, value, ...args);
+    };
+    collision = await runPlan(oneOverPlan, runtime);
+  } finally {
+    JSON.stringify = nativeStringify;
+  }
+  assert.equal(advancedDuringSerialization, true);
+  assertOutputLimited(collision.result);
 });

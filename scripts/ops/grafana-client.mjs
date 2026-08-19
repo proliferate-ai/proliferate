@@ -27,6 +27,8 @@ export const TARGET = Object.freeze({
   grafanaWorkspaceName: "proliferate-ops",
   grafanaVersion: "10.4",
 });
+const { grafanaVersion: expectedGrafanaVersion, ...inventoryTarget } = TARGET;
+const INVENTORY_TARGET = Object.freeze({ ...inventoryTarget, expectedGrafanaVersion });
 
 // Derived exclusively from TARGET. Not configurable.
 export const WORKSPACE_BASE_URL = `https://${TARGET.grafanaWorkspaceId}.grafana-workspace.${TARGET.awsRegion}.amazonaws.com`;
@@ -281,11 +283,8 @@ export async function resolveWebhookSecret({ execFileImpl } = {}) {
 
 // Dedicated Viewer token issue-tracker/sources.grafanaToken (read-only path).
 export async function resolveViewerToken({ execFileImpl, signal, throwIfDeadlineExpired } = {}) {
-  return resolveSecretField("issue-tracker/sources", "grafanaToken", {
-    execFileImpl,
-    signal,
-    throwIfDeadlineExpired,
-  });
+  return resolveSecretField("issue-tracker/sources", "grafanaToken",
+    { execFileImpl, signal, throwIfDeadlineExpired });
 }
 
 // Maps one ruler-API rule entry ({for, grafana_alert}) onto the provisioning
@@ -343,7 +342,6 @@ export function createGrafanaClient({ fetchImpl = fetch, tokenProvider }) {
   async function prepareAuthorizedGet({ signal, guard, staticPaths }) {
     for (const apiPath of staticPaths) fixedWorkspaceUrl(apiPath);
     guard();
-    signal.throwIfAborted();
     let removeAbort = () => {};
     const aborted = new Promise((_, reject) => {
       const onAbort = () => reject(signal.reason || new Error("Inventory credential acquisition aborted"));
@@ -355,7 +353,6 @@ export function createGrafanaClient({ fetchImpl = fetch, tokenProvider }) {
       provided = tokenProvider({ signal, throwIfDeadlineExpired: guard });
       provided = await Promise.race([Promise.resolve(provided), aborted]);
       guard();
-      signal.throwIfAborted();
     } catch {
       throw new Error("Inventory credential is unavailable");
     } finally {
@@ -390,13 +387,7 @@ export function createGrafanaClient({ fetchImpl = fetch, tokenProvider }) {
   return {
     async readMetadataInventory() {
       return readMetadataInventoryInternal({
-        target: {
-          awsAccount: TARGET.awsAccount,
-          awsRegion: TARGET.awsRegion,
-          grafanaWorkspaceId: TARGET.grafanaWorkspaceId,
-          grafanaWorkspaceName: TARGET.grafanaWorkspaceName,
-          expectedGrafanaVersion: TARGET.grafanaVersion,
-        },
+        target: INVENTORY_TARGET,
         prepareAuthorizedGet,
       });
     },

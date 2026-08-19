@@ -107,6 +107,44 @@ export function completePlan() {
   return plan;
 }
 
+export function twoPageCompletePlan() {
+  const plan = completePlan();
+  for (const [type, prefix, privateField] of [
+    ["dash-folder", "folder", "forbidden-folder-page-one"],
+    ["dash-db", "dashboard", "forbidden-dashboard-query-page-one"],
+  ]) {
+    const firstPath = `/api/search?type=${type}&limit=100&page=1`;
+    const secondPath = `/api/search?type=${type}&limit=100&page=2`;
+    const finalPage = plan.get(firstPath);
+    plan.set(firstPath, Array.from({ length: 100 }, (_, index) => {
+      const ordinal = 99 - index;
+      return { type, uid: `${prefix}-page-one-${String(ordinal).padStart(3, "0")}`,
+        title: `${prefix} page one ${ordinal}`, panels: [privateField], url: privateField };
+    }));
+    plan.set(secondPath, finalPage);
+  }
+  const servicePath = "/api/serviceaccounts/search?perpage=100&page=1";
+  const finalServicePage = plan.get(servicePath).serviceAccounts;
+  plan.set(servicePath, {
+    serviceAccounts: Array.from({ length: 100 }, (_, index) => ({
+      id: 102 - index,
+      name: `Page one ${index}`,
+      role: "Viewer",
+      isDisabled: false,
+      tokens: index,
+      login: "forbidden-service-account-page-one",
+      avatarUrl: "forbidden-service-account-avatar",
+    })),
+    page: 1,
+    perPage: 100,
+    totalCount: 102,
+  });
+  plan.set("/api/serviceaccounts/search?perpage=100&page=2", {
+    serviceAccounts: finalServicePage, page: 2, perPage: 100, totalCount: 102,
+  });
+  return plan;
+}
+
 function routeValue(plan, key, call) {
   const value = plan.get(key);
   if (Array.isArray(value) && value.length > 0 &&
@@ -130,6 +168,7 @@ export function fixtureFetch(plan = emptyPlan(), { expectedToken = "inventory-to
       authorizationEqual: authorization === `Bearer ${expectedToken}`,
     };
     trace.push(call);
+    if (trace.length > 37) throw new Error("Fixture forbids request 38");
     assert.equal(url.origin, WORKSPACE_BASE_URL);
     assert.equal(init.method, "GET");
     assert.equal(init.redirect, "manual");
