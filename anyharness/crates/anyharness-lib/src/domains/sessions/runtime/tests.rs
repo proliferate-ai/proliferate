@@ -82,7 +82,7 @@ pub(super) fn session_record(agent_kind: &str) -> SessionRecord {
     }
 }
 
-fn link_record(
+pub(super) fn link_record(
     id: &str,
     relation: SessionLinkRelation,
     parent_session_id: &str,
@@ -1029,7 +1029,10 @@ exit 0
 
 /// Build an `AppState` with a seeded, on-disk local workspace and a single
 /// forkable parent session. Returns `(state, parent_id, runtime_home)`.
-fn build_forkable_fork_state(
+///
+/// `pub(super)` so `checkpoint_linkage_tests` (a sibling test module) can
+/// reuse this harness.
+pub(super) fn build_forkable_fork_state(
     caps_json: &str,
 ) -> (crate::app::AppState, String, std::path::PathBuf) {
     use crate::domains::agents::installer::seed::AgentSeedStore;
@@ -1149,6 +1152,7 @@ async fn same_key_different_payload_is_idempotency_conflict() {
         adapter_version: None,
         native_version: None,
         native_child_session_id: None,
+        checkpoint_id: None,
         created_at: "2026-03-25T00:00:00Z".to_string(),
         updated_at: "2026-03-25T00:00:00Z".to_string(),
     };
@@ -1194,6 +1198,7 @@ async fn unknown_native_outcome_blocks_redispatch_on_the_same_key() {
         adapter_version: None,
         native_version: None,
         native_child_session_id: None,
+        checkpoint_id: None,
         created_at: "2026-03-25T00:00:00Z".to_string(),
         updated_at: "2026-03-25T00:00:00Z".to_string(),
     };
@@ -1209,75 +1214,5 @@ async fn unknown_native_outcome_blocks_redispatch_on_the_same_key() {
         .await
         .expect_err("unknown native outcome blocks redispatch");
     assert!(matches!(error, ForkSessionError::NativeOutcomeUnknown));
-    let _ = std::fs::remove_dir_all(&runtime_home);
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn same_key_same_payload_resumes_the_existing_child() {
-    // The idempotency contract's success arm, shared by the insert-time
-    // UNIQUE-constraint TOCTOU fallback: a repeat with the same key + same
-    // canonical payload returns the already-persisted child, never a second.
-    use super::fork::canonical_fork_request_digest;
-    use crate::domains::sessions::links::model::SessionLinkRelation;
-    use crate::domains::sessions::model::{ForkOperationPhase, ForkOperationRecord};
-    let (state, parent_id, runtime_home) = build_forkable_fork_state(r#"{"fork":true}"#);
-
-    // Seed a completed fork: child session + fork link + a completed operation.
-    let mut child = session_record("claude");
-    child.id = "reserved-child".to_string();
-    child.workspace_id = "workspace-fork-rung2".to_string();
-    let link = link_record(
-        "fork-link-1",
-        SessionLinkRelation::Fork,
-        &parent_id,
-        "reserved-child",
-    );
-    state
-        .session_service
-        .store()
-        .insert_session_with_link(&child, &link)
-        .expect("insert child + link");
-
-    let operation = ForkOperationRecord {
-        id: uuid::Uuid::new_v4().to_string(),
-        idempotency_key: "reserved-child".to_string(),
-        request_digest: canonical_fork_request_digest(&parent_id, None),
-        parent_session_id: parent_id.clone(),
-        child_session_id: "reserved-child".to_string(),
-        phase: ForkOperationPhase::Completed,
-        anchor_turn_id: None,
-        anchor_item_id: None,
-        provider_anchor_kind: Some("tip".to_string()),
-        provider_anchor_value: None,
-        provider_anchor_inclusive: None,
-        prefix_terminal_seq: Some(0),
-        prefix_digest: Some("digest".to_string()),
-        adapter_version: None,
-        native_version: None,
-        native_child_session_id: None,
-        created_at: "2026-03-25T00:00:00Z".to_string(),
-        updated_at: "2026-03-25T00:00:00Z".to_string(),
-    };
-    state
-        .session_service
-        .store()
-        .insert_fork_operation(&operation)
-        .expect("insert operation");
-
-    let outcome = state
-        .session_runtime
-        .fork_session(&parent_id, None, Some("reserved-child".to_string()), None)
-        .await
-        .expect("same key + same payload resumes");
-    assert_eq!(outcome.session.id, "reserved-child");
-    assert_eq!(outcome.link.child_session_id, "reserved-child");
-
-    // Exactly one fork child — the resume created no second child.
-    let link_service = SessionLinkService::new(
-        SessionLinkStore::new(state.db.clone()),
-        state.session_service.store().clone(),
-    );
-    let children = link_service.list_by_parent(&parent_id).expect("list links");
-    assert_eq!(children.len(), 1);
     let _ = std::fs::remove_dir_all(&runtime_home);
 }

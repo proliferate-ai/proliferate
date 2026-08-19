@@ -1,6 +1,7 @@
 use crate::persistence::Db;
 
 mod access;
+mod checkpoints;
 mod listings;
 mod lookups;
 mod mutations;

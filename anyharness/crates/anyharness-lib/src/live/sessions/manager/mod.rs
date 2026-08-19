@@ -370,6 +370,53 @@ impl LiveSessionManager {
         seen_rx
     }
 
+    /// Register an idle handle whose actor explicitly rejects each prompt
+    /// before a turn or durable queue boundary is accepted.
+    pub(crate) async fn insert_prompt_rejecter_for_test(&self, session_id: &str) {
+        use crate::live::sessions::actor::command::{PromptAcceptError, SessionCommand};
+
+        let (command_tx, mut command_rx) = tokio::sync::mpsc::channel(1);
+        let (event_tx, _) = tokio::sync::broadcast::channel(1);
+        let handle = Arc::new(LiveSessionHandle::new_for_test(
+            session_id,
+            command_tx,
+            event_tx,
+            Some(format!("native-{session_id}")),
+            anyharness_contract::v1::SessionExecutionPhase::Idle,
+        ));
+        self.live_sessions
+            .write()
+            .await
+            .insert(session_id.to_string(), handle);
+        tokio::spawn(async move {
+            while let Some(command) = command_rx.recv().await {
+                if let SessionCommand::Prompt { respond_to, .. } = command {
+                    let _ = respond_to.send(Err(PromptAcceptError::EnqueueFailed(
+                        "injected prompt rejection".to_string(),
+                    )));
+                }
+            }
+        });
+    }
+
+    pub(crate) async fn insert_busy_session_for_test(&self, session_id: &str) {
+        let (command_tx, mut command_rx) = tokio::sync::mpsc::channel(1);
+        let (event_tx, _) = tokio::sync::broadcast::channel(1);
+        let handle = Arc::new(LiveSessionHandle::new_for_test(
+            session_id,
+            command_tx,
+            event_tx,
+            Some(format!("native-{session_id}")),
+            anyharness_contract::v1::SessionExecutionPhase::Running,
+        ));
+        handle.set_busy(true);
+        self.live_sessions
+            .write()
+            .await
+            .insert(session_id.into(), handle);
+        tokio::spawn(async move { while command_rx.recv().await.is_some() {} });
+    }
+
     pub(crate) async fn insert_cancel_observer_for_test(
         &self,
         session_id: &str,

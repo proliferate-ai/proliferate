@@ -11,6 +11,7 @@ use crate::domains::sessions::model::{AgentStartupExitError, RequestedModeApplyE
 use crate::domains::sessions::runtime::{
     CreateAndStartSessionError, EnsureLiveSessionError, SendPromptError,
 };
+use crate::domains::workspaces::checkpoints::capture::CheckpointCaptureFailure;
 
 fn workspace_attachment_error() -> WorkspaceMcpAttachmentError {
     WorkspaceMcpAttachmentError::summary_cleanup(anyhow::anyhow!(
@@ -76,6 +77,61 @@ fn product_context_failure_is_an_exact_retryable_incident() {
     assert!(!mapped
         .detail()
         .is_some_and(|detail| detail.contains("private store detail")));
+}
+
+#[test]
+fn checkpoint_capture_failures_are_typed_without_raw_diagnostics() {
+    let cases = [
+        (
+            CheckpointCaptureFailure::WorkspaceNotFound,
+            "WORKSPACE_NOT_FOUND",
+            "Workspace not found.",
+        ),
+        (
+            CheckpointCaptureFailure::CheckoutMissing,
+            "WORKSPACE_DIRECTORY_MISSING",
+            "Workspace directory is missing.",
+        ),
+        (
+            CheckpointCaptureFailure::GitLocked,
+            "WORKSPACE_GIT_LOCKED",
+            "Git is locked by index.lock.",
+        ),
+        (
+            CheckpointCaptureFailure::GitOperationInProgress,
+            "WORKSPACE_GIT_OPERATION_IN_PROGRESS",
+            "A Git operation is in progress.",
+        ),
+        (
+            CheckpointCaptureFailure::HollowCheckout,
+            "WORKSPACE_HOLLOW_CHECKOUT",
+            "The workspace directory is not the root of its Git repository.",
+        ),
+        (
+            CheckpointCaptureFailure::UnbornHead,
+            "WORKSPACE_UNBORN_HEAD",
+            "The branch has no commits yet.",
+        ),
+        (
+            CheckpointCaptureFailure::RefsVerifyFailed,
+            "CHECKPOINT_CAPTURE_FAILED",
+            "Could not capture a checkpoint before the turn.",
+        ),
+        (
+            CheckpointCaptureFailure::Internal,
+            "CHECKPOINT_CAPTURE_FAILED",
+            "Could not capture a checkpoint before the turn.",
+        ),
+    ];
+    for (failure, code, detail) in cases {
+        let mapped = map_send_prompt_error(SendPromptError::CheckpointCaptureFailed { failure });
+        assert_eq!(mapped.status(), StatusCode::CONFLICT);
+        assert_eq!(mapped.code(), Some(code));
+        assert_eq!(mapped.detail(), Some(detail));
+        assert!(!mapped.detail().is_some_and(|value| {
+            value.contains("/private/worktree") || value.contains("permission denied")
+        }));
+    }
 }
 
 #[test]

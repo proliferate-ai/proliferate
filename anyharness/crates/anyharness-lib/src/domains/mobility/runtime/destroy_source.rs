@@ -137,6 +137,26 @@ impl MobilityRuntime {
             deleted_session_ids.push(session.id.clone());
         }
 
+        // The caller holds the workspace-exclusive lease across this blocking
+        // domain pipeline. Remove checkpoint metadata/refs before the workspace
+        // row dies so moved sources cannot strand private refs forever.
+        if self
+            .checkpoint_service
+            .delete_all_for_workspace_under_exclusive_blocking(workspace_id)
+            .is_err()
+        {
+            tracing::error!(
+                workspace_id = %workspace_id,
+                closed_terminal_count = closed_terminal_ids.len(),
+                deleted_session_count = deleted_session_ids.len(),
+                failure_stage = "checkpoint_cleanup",
+                "mobility destroy-source aborted while deleting checkpoint artifacts"
+            );
+            return Err(MobilityError::Internal(anyhow::anyhow!(
+                "checkpoint cleanup failed before source destruction"
+            )));
+        }
+
         if let Err(error) = self
             .workspace_runtime
             .destroy_source_workspace_materialization(
