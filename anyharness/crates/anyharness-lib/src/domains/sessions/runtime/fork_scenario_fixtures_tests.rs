@@ -188,6 +188,31 @@ for raw_line in sys.stdin:
             barrier = await_response("delayed-parent-barrier")
             with open(control("delayed-parent-barrier-response"), "w", encoding="utf-8") as receipt:
                 receipt.write(json.dumps(barrier, separators=(",", ":")))
+    elif method == "session/prompt":
+        if os.path.exists(control("child-prompt-explicit-error")):
+            emit({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {
+                    "code": -32000,
+                    "message": "provider-secret-prompt-message",
+                    "data": {"detail": "provider-secret-prompt-data"},
+                },
+            })
+            continue
+        if os.path.exists(control("child-prompt-malformed-result")):
+            emit({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": None,
+                "error": {
+                    "code": -32000,
+                    "message": "provider-secret-malformed-message",
+                    "data": {"detail": "provider-secret-malformed-data"},
+                },
+            })
+            continue
+        emit({"jsonrpc": "2.0", "id": request_id, "result": {"stopReason": "end_turn"}})
     elif method in ("session/set_model", "session/set_mode", "session/set_config_option"):
         emit({"jsonrpc": "2.0", "id": request_id, "result": {}})
     else:

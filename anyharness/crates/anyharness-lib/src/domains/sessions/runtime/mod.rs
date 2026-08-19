@@ -48,6 +48,8 @@ pub(crate) mod fork_boundary;
 mod fork_dispatch_and_restart_tests;
 #[cfg(test)]
 mod fork_process_local_lifecycle_tests;
+#[cfg(test)]
+mod fork_prompt_terminal_protection_tests;
 pub(crate) mod fork_qualification;
 #[cfg(test)]
 mod fork_scenario_fixtures_tests;
