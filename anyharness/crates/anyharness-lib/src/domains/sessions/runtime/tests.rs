@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use super::fork::validate_fork_parent;
 use super::startup::choose_session_startup_strategy;
 use crate::app::test_support;
@@ -524,7 +522,7 @@ async fn create_and_start_session_rejects_missing_checkout_without_inserting_row
             "workspace-missing",
             "claude",
             None,
-            &BTreeMap::new(),
+            &std::collections::BTreeMap::new(),
             None,
             vec![],
             None,
