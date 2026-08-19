@@ -123,6 +123,18 @@ def test_input_names_must_be_unique() -> None:
     )
 
 
+def test_effort_without_model_is_rejected() -> None:
+    result = validate_definition_document(
+        inputs=_inputs("ticket"),
+        stages=[_stage("claude", effort="high")],
+    )
+
+    assert result == DefinitionIssue(
+        path="stages.0.harnessConfig.effort",
+        message="Choose a specific model before setting reasoning effort.",
+    )
+
+
 @pytest.mark.parametrize(
     ("prompt", "expected_message"),
     [

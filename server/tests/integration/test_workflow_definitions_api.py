@@ -316,42 +316,21 @@ async def test_optional_nested_fields_remain_omitted_and_blank_description_norma
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("harness_config", "goal", "expected_path", "expected_code"),
-    [
-        (
-            {"agentKind": "claude", "effort": "high"},
-            None,
-            "stages.0.harnessConfig.effort",
-            "invalid_workflow_definition",
-        ),
-    ],
-)
 async def test_definition_validation_rejects_effort_without_model(
     client: AsyncClient,
-    harness_config: dict[str, object],
-    goal: dict[str, object] | None,
-    expected_path: str,
-    expected_code: str,
 ) -> None:
-    user = await register_and_login(
-        client,
-        (
-            "workflow-catalog-"
-            f"{abs(hash(expected_path + str(harness_config))) % 1_000_000}@example.com"
-        ),
-    )
+    user = await register_and_login(client, "workflow-catalog-effort-without-model@example.com")
     body = _workflow_payload()
     stages = body["stages"]
     assert isinstance(stages, list)
     stage = stages[0]
     assert isinstance(stage, dict)
-    stage["harnessConfig"] = harness_config
+    stage["harnessConfig"] = {"agentKind": "claude", "effort": "high"}
     steps = stage["steps"]
     assert isinstance(steps, list)
     step = steps[0]
     assert isinstance(step, dict)
-    step["goal"] = goal
+    step["goal"] = None
 
     response = await client.post(
         "/v1/workflows",
@@ -360,8 +339,8 @@ async def test_definition_validation_rejects_effort_without_model(
     )
     assert response.status_code == 400
     detail = response.json()["detail"]
-    assert detail["code"] == expected_code
-    assert detail["path"] == expected_path
+    assert detail["code"] == "invalid_workflow_definition"
+    assert detail["path"] == "stages.0.harnessConfig.effort"
 
 
 @pytest.mark.asyncio
