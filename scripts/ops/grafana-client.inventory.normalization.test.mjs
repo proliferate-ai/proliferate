@@ -324,14 +324,14 @@ test("parsed precedence matrix selects the numbered higher row", async (t) => {
       surface: "api", state: "unavailable", reason: "api_database_not_ok",
       mutate(plan) { plan.set("/api/health", { database: "bad", version: 3 }); } },
     { name: "row7 health shape before unrelated string", selectedRule: "shape", expectedRow: 7, lowerRow: 8,
-      path: "/api/datasources/uid/ds/health", observations: 14,
+      path: "/api/datasources/uid/ds/health", observations: 12,
       state: "malformed", reason: "invalid_shape",
       expected: { uid: "ds", state: "malformed", reason: "invalid_shape", httpStatus: 200 },
       select(result) { return result.surfaces.datasourceHealth.items[0]; }, mutate(plan) {
         plan.set("/api/datasources", [datasource("ds")]);
         plan.set("/api/datasources/uid/ds/health", { message: "x".repeat(257) }); } },
     { name: "row8 health string before non-OK", selectedRule: "stringLimit", expectedRow: 8, lowerRow: 9,
-      path: "/api/datasources/uid/ds/health", observations: 15,
+      path: "/api/datasources/uid/ds/health", observations: 13,
       state: "malformed", reason: "string_limit",
       expected: { uid: "ds", state: "malformed", reason: "string_limit", httpStatus: 200 },
       select(result) { return result.surfaces.datasourceHealth.items[0]; }, mutate(plan) {

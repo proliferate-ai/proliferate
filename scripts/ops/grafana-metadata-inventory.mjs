@@ -22,8 +22,7 @@ const STATIC_PATHS = [
 const HTTP_CHECKPOINT = Object.freeze({
   FETCH_START: "fetch-start", FETCH_SETTLED: "fetch-settled", CONTENT_LENGTH: "content-length",
   DECLARED_BYTES: "declared-bytes", STREAM_READ: "stream-read", EMPTY_BODY: "empty-body",
-  DECODE: "decode", JSON: "json", HEALTH_STATE: "health-state",
-  HEALTH_PROJECT: "health-project", FINAL_OUTPUT: "final-output",
+  DECODE: "decode", JSON: "json", FINAL_OUTPUT: "final-output",
 });
 const WHOLE_DEADLINE = Symbol("whole-deadline");
 const REQUEST_DEADLINE = Symbol("request-deadline");
@@ -63,7 +62,12 @@ function guardRequestDeadline(whole, controller, runtime, deadline, expire) {
 }
 
 function raceSignal(promise, signal) {
-  if (signal.aborted) return Promise.reject(signal.reason || deadlineError(REQUEST_DEADLINE));
+  if (signal.aborted) {
+    // Already aborted: no race is installed, so consume and discard the late
+    // settlement here. Nothing may surface as an unhandled rejection.
+    Promise.resolve(promise).catch(() => {});
+    return Promise.reject(signal.reason || deadlineError(REQUEST_DEADLINE));
+  }
   let remove = () => {};
   const aborted = new Promise((_, reject) => {
     const onAbort = () => reject(signal.reason || deadlineError(REQUEST_DEADLINE));
@@ -356,13 +360,6 @@ async function datasourceHealth(result, context) {
     catch (error) { return stopNormalizationDeadline(result, "datasourceHealth", error); }
     items.push(healthChild(datasource.uid, normalized));
   }
-  // The outer health surface is assembled here rather than by a normalizer, so
-  // it owns the two remaining numbered precedence rows for its own enumeration:
-  // one checkpoint before the child-state row and one before projection.
-  try {
-    checkpoint(context.whole.guard, HTTP_CHECKPOINT.HEALTH_STATE);
-    checkpoint(context.whole.guard, HTTP_CHECKPOINT.HEALTH_PROJECT);
-  } catch (error) { return stopNormalizationDeadline(result, "datasourceHealth", error); }
   result.surfaces.datasourceHealth = completedMetadataItems(items);
   return false;
 }
