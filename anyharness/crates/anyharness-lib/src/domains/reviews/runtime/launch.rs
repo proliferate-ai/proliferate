@@ -1,5 +1,5 @@
 use super::super::model::{
-    ReviewAssignmentRecord, ReviewKind, ReviewRunRecord,
+    ReviewAssignmentRecord, ReviewKind, ReviewLaunchVerificationStatus, ReviewRunRecord,
 };
 use super::super::service::ReviewError;
 use crate::domains::sessions::runtime::CreateAndStartSessionError;

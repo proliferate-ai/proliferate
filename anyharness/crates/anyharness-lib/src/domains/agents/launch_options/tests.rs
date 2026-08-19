@@ -5,6 +5,29 @@ use crate::domains::agents::installer::manifest::{record_entries, role_name, Man
 use crate::domains::agents::model::ArtifactRole;
 use crate::persistence::Db;
 
+struct TestRuntimeHome(std::path::PathBuf);
+
+impl TestRuntimeHome {
+    fn new(label: &str) -> Self {
+        let path = std::env::temp_dir().join(format!(
+            "anyharness-launch-options-{label}-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&path).expect("create temp runtime home");
+        Self(path)
+    }
+
+    fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+impl Drop for TestRuntimeHome {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 fn options() -> HarnessLaunchOptions {
     HarnessLaunchOptions {
         models: vec![HarnessLaunchModel {
@@ -28,7 +51,7 @@ fn options() -> HarnessLaunchOptions {
 
 #[test]
 fn state_machine_preserves_last_good_and_discards_stale_completion() {
-    let home = tempfile::tempdir().unwrap();
+    let home = TestRuntimeHome::new("last-good");
     let service =
         HarnessLaunchOptionsService::new(Db::open_in_memory().unwrap(), home.path().to_path_buf());
     let first = service
@@ -63,7 +86,7 @@ fn state_machine_preserves_last_good_and_discards_stale_completion() {
 
 #[test]
 fn validation_is_exact_and_never_authors_a_fallback() {
-    let home = tempfile::tempdir().unwrap();
+    let home = TestRuntimeHome::new("validation");
     let service =
         HarnessLaunchOptionsService::new(Db::open_in_memory().unwrap(), home.path().to_path_buf());
     let started = service
@@ -89,7 +112,7 @@ fn validation_is_exact_and_never_authors_a_fallback() {
 
 #[test]
 fn native_identity_change_then_probe_failure_never_serves_old_options() {
-    let home = tempfile::tempdir().unwrap();
+    let home = TestRuntimeHome::new("native-identity");
     let manifest_entries = |native_sha: &str| {
         vec![
             ManifestArtifact {

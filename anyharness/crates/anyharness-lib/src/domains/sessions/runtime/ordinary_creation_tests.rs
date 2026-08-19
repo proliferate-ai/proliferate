@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use super::*;
@@ -70,7 +71,7 @@ fn create_known_record(runtime: &SessionRuntime, session_id: &str) -> SessionRec
             "claude",
             Some(session_id),
             None,
-            None,
+            &BTreeMap::new(),
             None,
             Vec::new(),
             None,
@@ -97,7 +98,7 @@ async fn start_failure_retires_only_new_handle_and_deletes_new_row() {
             "workspace-1",
             "claude",
             None,
-            None,
+            &BTreeMap::new(),
             None,
             "caller-session".into(),
             "Caller".into(),
@@ -132,7 +133,7 @@ async fn subagent_start_failure_compensates_both_child_and_relationship() {
             "workspace-1",
             "claude",
             None,
-            None,
+            &BTreeMap::new(),
             "initial subagent task".into(),
             parent_id,
             "Parent",
@@ -186,7 +187,7 @@ async fn subagent_fanout_failure_rolls_back_the_atomic_child_insert() {
             "workspace-1",
             "claude",
             None,
-            None,
+            &BTreeMap::new(),
             "must not survive".into(),
             parent_id,
             "Parent",

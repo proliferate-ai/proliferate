@@ -203,7 +203,9 @@ export function normalizeSessionLiveConfigSnapshot(
 ): SessionLiveConfigSnapshot {
   return {
     ...liveConfig,
-    normalizedControls: normalizeSessionControls(liveConfig.normalizedControls),
+    normalizedControls: normalizeSessionControls(
+      liveConfig.normalizedControls ?? {},
+    ),
     promptCapabilities: liveConfig.promptCapabilities ?? {
       image: false,
       audio: false,
