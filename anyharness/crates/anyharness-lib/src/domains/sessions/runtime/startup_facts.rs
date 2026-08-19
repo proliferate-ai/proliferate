@@ -14,13 +14,10 @@ use super::launch_policy::{choose_startup_strategy, SessionStartupFacts};
 /// Resolve steps only — gather the durable facts, then let the pure policy in
 /// `launch_policy` pick the strategy. The parent lookup is gated to fork
 /// children that have not yet run their own turn (`last_prompt_at` unset): the
-/// policy may need the parent native id to re-fork — either because the child
-/// never had a native id, or because its eagerly-recorded one is process-local
-/// and may be dead after a cold restart-before-first-prompt. This intentionally
-/// over-fetches for durable-fork (non-Claude) zero-turn children, where the
-/// policy ignores the parent id; that is a single harmless row read kept here so
-/// the resolve gate doesn't have to duplicate the adapter distinction. A fork
-/// child that has already run keeps its durable native id and skips the lookup.
+/// policy uses the parent/link facts only to classify incomplete durable state;
+/// they never authorize a second native fork. Process-local zero-turn children
+/// fail closed until the exact-prefix recovery owner lands. A fork child that
+/// has already run keeps its durable native id and skips the lookup.
 pub(super) fn choose_session_startup_strategy(
     record: &SessionRecord,
     session_store: &SessionStore,
@@ -34,9 +31,8 @@ pub(super) fn choose_session_startup_strategy(
     } else {
         None
     };
-    // Closure-on-restart (cardinal sin guard): a targeted fork child must
-    // never silently re-fork at the parent tip. Only fork children need the
-    // fork operation row; a non-fork session has none.
+    // Recovery provenance remains useful for corruption diagnostics, but no
+    // cold-start branch may silently re-fork at the parent tip.
     let (fork_provider_anchor, fork_target_was_targeted) = if is_fork_child {
         match session_store.find_fork_operation_by_child(&record.id)? {
             Some(operation) => {

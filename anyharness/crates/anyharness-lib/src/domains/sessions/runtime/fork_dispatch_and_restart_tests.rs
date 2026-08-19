@@ -13,9 +13,10 @@
 use std::sync::Arc;
 
 use super::fork_scenario_fixtures_tests::{
-    assert_child_anchor_provenance, before_user_message, build_fork_runtime_state, close_all,
-    fork_children, fork_wire_anchors, seed_fork_child, seed_parent, seed_three_turn_transcript,
-    wait_for_control, wait_for_fork_wire_count, write_fork_agent, ForkChildAnchor,
+    assert_child_anchor_provenance, assert_process_local_fork_wire_contract, before_user_message,
+    build_fork_runtime_state, close_all, fork_children, fork_wire_anchors, seed_fork_child,
+    seed_parent, seed_three_turn_transcript, wait_for_child_notification_text, wait_for_control,
+    wait_for_fork_wire_count, write_fork_agent, ForkChildAnchor,
 };
 use super::prompt_message_actor_tests::{
     install_scripted_agent_env, read_requests, temp_runtime_home,
@@ -23,7 +24,6 @@ use super::prompt_message_actor_tests::{
 use super::startup_facts::choose_session_startup_strategy;
 use crate::app::test_support;
 use crate::domains::sessions::model::parse_action_capabilities;
-use crate::domains::sessions::runtime::fork_anchor::ProviderForkAnchor;
 use crate::domains::sessions::runtime::{EnsureLiveSessionError, ForkSessionError};
 use crate::domains::workspaces::checkpoints::{CheckpointOrigin, CheckpointRecord};
 use crate::live::sessions::SessionStartupStrategy;
@@ -45,6 +45,7 @@ async fn targeted_fork_persists_provider_anchor_and_exact_checkpoint_after_child
     let runtime_home = temp_runtime_home("fork-dispatch");
     let script = write_fork_agent(&runtime_home, "strict");
     let _guards = install_scripted_agent_env(&script);
+    std::fs::write(script.control_dir.join("fork-race"), b"").expect("arm fork race");
     let state = build_fork_runtime_state(
         &runtime_home,
         Db::open_in_memory().expect("in-memory db"),
@@ -87,10 +88,52 @@ async fn targeted_fork_persists_provider_anchor_and_exact_checkpoint_after_child
         )
         .await
         .expect("first targeted fork dispatches");
+    std::fs::write(script.control_dir.join("release-delayed-parent"), b"")
+        .expect("release delayed parent only after child readiness");
     wait_for_fork_wire_count(&script.request_log, 1).await;
     assert_eq!(fork_wire_anchors(&script.request_log), ["msg-0"]);
     assert_child_anchor_provenance(&state, &first.session.id, "msg-0", Some(checkpoint_id));
     assert_child_event_prefix(&state, &parent_id, &first.session.id, 3);
+    wait_for_child_notification_text(&state, &first.session.id, "CHILD-BEFORE-FORK-RESULT").await;
+    wait_for_child_notification_text(&state, &first.session.id, "CHILD-AFTER-FORK-RESULT").await;
+    wait_for_control(&script.control_dir.join("delayed-parent-emitted")).await;
+    let barrier_path = script.control_dir.join("delayed-parent-barrier-response");
+    wait_for_control(&barrier_path).await;
+    let barrier: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&barrier_path).expect("read delayed-parent barrier"))
+            .expect("parse delayed-parent barrier");
+    assert_eq!(barrier["id"], "delayed-parent-barrier");
+    assert_eq!(
+        barrier["result"],
+        serde_json::json!({"outcome": {"outcome": "cancelled"}})
+    );
+    assert!(barrier.get("error").is_none());
+    let first_notifications = state
+        .session_service
+        .store()
+        .list_raw_notifications(&first.session.id)
+        .expect("list first child notifications");
+    assert!(first_notifications.iter().all(|notification| {
+        !notification
+            .payload_json
+            .contains("PARENT-REPLAY-MUST-NOT-PERSIST")
+            && !notification
+                .payload_json
+                .contains("DELAYED-PARENT-MUST-NOT-PERSIST")
+    }));
+    let first_events = state
+        .session_service
+        .list_session_event_records(&first.session.id, None, None, None, None, false)
+        .expect("list first child events")
+        .expect("first child exists");
+    assert!(
+        first_events
+            .iter()
+            .all(|event| event.event_type != "interaction_requested"),
+        "delayed parent requests must allocate no child interaction"
+    );
+    std::fs::remove_file(script.control_dir.join("fork-race"))
+        .expect("disarm race fixture before second fork");
 
     let second = state
         .session_runtime
@@ -106,6 +149,7 @@ async fn targeted_fork_persists_provider_anchor_and_exact_checkpoint_after_child
     assert_eq!(fork_wire_anchors(&script.request_log), ["msg-0", "msg-1"]);
     assert_child_anchor_provenance(&state, &second.session.id, "msg-1", None);
     assert_child_event_prefix(&state, &parent_id, &second.session.id, 6);
+    assert_process_local_fork_wire_contract(&script.request_log);
 
     let children = fork_children(&state, &parent_id);
     assert_eq!(children.len(), 2);
@@ -172,6 +216,91 @@ fn assert_child_event_prefix(
             "child snapshot copied a parent event past the resolved prefix"
         );
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn parent_permission_during_hydration_is_cancelled_without_native_fork_or_interaction() {
+    let _env_lock = test_support::lock_env();
+    let _bearer = test_support::set_bearer_token_env(None);
+    let _data_key = test_support::set_data_key_env(None);
+    let runtime_home = temp_runtime_home("fork-parent-permission");
+    let script = write_fork_agent(&runtime_home, "strict");
+    let _guards = install_scripted_agent_env(&script);
+    let state = build_fork_runtime_state(
+        &runtime_home,
+        Db::open_in_memory().expect("in-memory db"),
+        true,
+    );
+    let parent_id = seed_parent(&state, Some(r#"{"fork":true,"targetedFork":true}"#));
+    seed_three_turn_transcript(&state, &parent_id);
+    state
+        .session_runtime
+        .ensure_live_session(&parent_id, None)
+        .await
+        .expect("start parent before arming child hydration fault");
+    std::fs::write(script.control_dir.join("parent-permission-on-load"), b"")
+        .expect("arm parent permission");
+
+    state
+        .session_runtime
+        .fork_session(
+            &parent_id,
+            Some(before_user_message("turn-1", "item-1")),
+            Some("parent-permission-child".to_string()),
+            None,
+        )
+        .await
+        .expect_err("parent interaction must fail child startup");
+
+    let receipt_path = script.control_dir.join("parent-permission-response");
+    wait_for_control(&receipt_path).await;
+    let receipt: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&receipt_path).expect("read cancellation receipt"))
+            .expect("parse cancellation receipt");
+    assert_eq!(receipt["id"], "parent-permission");
+    assert_eq!(
+        receipt["result"],
+        serde_json::json!({"outcome": {"outcome": "cancelled"}})
+    );
+    assert!(receipt.get("error").is_none());
+    assert!(
+        !read_requests(&script.request_log)
+            .iter()
+            .any(|request| request["method"] == "session/fork"),
+        "hydration interaction must fail before the native fork seam"
+    );
+    let operation = state
+        .session_service
+        .store()
+        .find_fork_operation_by_key("parent-permission-child")
+        .expect("query fork operation")
+        .expect("fork operation exists");
+    assert_eq!(
+        operation.phase,
+        crate::domains::sessions::model::ForkOperationPhase::Failed
+    );
+    let child = state
+        .session_service
+        .get_session("parent-permission-child")
+        .expect("get child")
+        .expect("child exists");
+    assert_eq!(child.status, "errored");
+    let child_events = state
+        .session_service
+        .list_session_event_records("parent-permission-child", None, None, None, None, false)
+        .expect("list child events")
+        .expect("child exists");
+    assert!(
+        child_events
+            .iter()
+            .all(|event| event.event_type != "interaction_requested"),
+        "quarantined parent requests must allocate no product interaction"
+    );
+    assert_process_local_fork_wire_contract(&script.request_log);
+
+    close_all(&state, &[parent_id.as_str()]).await;
+    drop(state);
+    std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
 }
 
 // --- (b)(i) Restart-drift pin: pre-pin-bump surface ------------------------
@@ -251,10 +380,7 @@ async fn live_targeted_readiness_wins_when_capability_persistence_fails() {
         Db::open_in_memory().expect("in-memory db"),
         true,
     );
-    let parent_id = seed_parent(
-        &state,
-        Some(r#"{"fork":true,"targetedFork":true}"#),
-    );
+    let parent_id = seed_parent(&state, Some(r#"{"fork":true,"targetedFork":true}"#));
     seed_three_turn_transcript(&state, &parent_id);
     state
         .db
@@ -313,11 +439,10 @@ async fn live_targeted_readiness_wins_when_capability_persistence_fails() {
 // --- (b)(ii) Restart-drift pin: cold-restart refusal -----------------------
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn cold_restart_refuses_targeted_fork_child_missing_recorded_anchor() {
-    // A targeted fork child whose recorded provider anchor is missing must
-    // refuse to launch on a cold restart (never silently re-fork at the parent
-    // tip) and issue no native session call. The negative-control twin, with
-    // the anchor recorded, resolves to ForkFromNative carrying that anchor.
+async fn cold_restart_refuses_process_local_fork_children_without_r1_proof() {
+    // A zero-turn process-local fork child must refuse a cold launch and issue
+    // no native session call, regardless of whether its recorded anchor is
+    // intact. R1 owns the future exact-prefix recovery proof.
     let _env_lock = test_support::lock_env();
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
@@ -350,7 +475,7 @@ async fn cold_restart_refuses_targeted_fork_child_missing_recorded_anchor() {
         .expect_err("missing recorded anchor must refuse launch");
     match error {
         EnsureLiveSessionError::Internal(error) => assert!(
-            error.to_string().contains("recorded provider anchor"),
+            error.to_string().contains("exact-prefix recovery proof"),
             "unexpected refusal detail: {error}"
         ),
         other => panic!("expected an Internal launch refusal, got {other:?}"),
@@ -365,22 +490,15 @@ async fn cold_restart_refuses_targeted_fork_child_missing_recorded_anchor() {
         "the refused child must not issue any native session call"
     );
 
-    // Negative control: with the anchor recorded, the restart strategy carries
-    // it (proved directly via the pure resolver rather than a full launch).
+    // Negative control: an intact anchor still does not authorize redispatch.
     let good = state_b
         .session_service
         .get_session("good-child")
         .expect("get good child")
         .expect("good child row");
-    let strategy = choose_session_startup_strategy(&good, state_b.session_service.store())
-        .expect("recorded anchor yields a startup strategy");
-    assert_eq!(
-        strategy,
-        SessionStartupStrategy::ForkFromNative {
-            parent_native_session_id: "native-parent".to_string(),
-            provider_anchor: Some(ProviderForkAnchor::UpToMessageId("msg-1".to_string())),
-        }
-    );
+    let error = choose_session_startup_strategy(&good, state_b.session_service.store())
+        .expect_err("recorded anchor must not authorize cold redispatch");
+    assert!(error.to_string().contains("exact-prefix recovery proof"));
 
     drop(state_b);
     std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");

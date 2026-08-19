@@ -71,6 +71,7 @@ pub enum SessionStartupStrategy {
     LoadNative(String),
     LoadNativeNoFallback(String),
     ForkFromNative {
+        fork_operation_id: String,
         parent_native_session_id: String,
         provider_anchor: Option<ProviderForkAnchor>,
     },
@@ -332,6 +333,7 @@ pub struct ActorCapabilities {
     pub queue: Arc<dyn QueueDurable>,
     pub background: Arc<dyn BackgroundWorkDurable>,
     pub state: Arc<dyn SessionStateDurable>,
+    pub(crate) fork_dispatch: Arc<dyn crate::live::sessions::fork_dispatch::ForkDispatchDurable>,
     pub attachments: Arc<dyn AttachmentSource>,
     /// Resolved afresh immediately before every prompt render. Absence is not
     /// representable: product-context failure is a fail-closed turn outcome.

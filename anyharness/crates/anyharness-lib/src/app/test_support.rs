@@ -23,6 +23,7 @@ pub(crate) fn actor_capabilities_for_store(store: &SessionStore) -> ActorCapabil
         queue: Arc::new(store.clone()),
         background: Arc::new(store.clone()),
         state: Arc::new(store.clone()),
+        fork_dispatch: Arc::new(store.clone()),
         attachments: Arc::new(SessionAttachmentSource::new(
             store.clone(),
             attachment_storage,

@@ -8,8 +8,9 @@
 //! re-serialization of a parsed value — capped so one giant payload cannot
 //! push the diagnostics pipe over its per-record budget.
 
-use serde::Deserialize;
 use serde_json::value::RawValue;
+
+use super::frame_observer::{FrameHeader, FrameObserver};
 
 /// Per-frame payload cap. Frames longer than this are recorded truncated with
 /// `truncated = true`.
@@ -33,14 +34,6 @@ pub(in crate::live::sessions) enum FrameDirection {
 /// not carry them (a response has no method, a notification has no id), and
 /// absent wholesale when the line is not parseable JSON — neither case is
 /// worth suppressing the record, which still carries the raw payload.
-#[derive(Default, Deserialize)]
-struct FrameHeader<'a> {
-    #[serde(borrow, default)]
-    method: Option<&'a str>,
-    #[serde(borrow, default)]
-    id: Option<&'a RawValue>,
-}
-
 /// Streaming notification methods excluded from the tee by default: they are
 /// one record per token-ish chunk, and turn boundaries are already covered by
 /// `anyharness.turn.started/finished/failed`. Set `ANYHARNESS_ACP_TEE_FULL`
@@ -60,17 +53,58 @@ fn suppressed_streaming_frame(header: &FrameHeader<'_>, full_tee: bool) -> bool 
     matches!(header.method, Some(m) if STREAMING_METHODS.contains(&m)) && !full_tee
 }
 
+/// Closed, low-cardinality method vocabulary for diagnostics. Raw extension
+/// method names are provider-controlled and may themselves contain sensitive
+/// material, so they never become tracing fields.
+fn method_class(method: Option<&str>) -> &'static str {
+    match method {
+        Some("initialize") => "initialize",
+        Some("authenticate") => "authenticate",
+        Some("session/new") => "session_new",
+        Some("session/load") => "session_load",
+        Some("session/fork") => "session_fork",
+        Some("session/prompt") => "session_prompt",
+        Some("session/cancel") => "session_cancel",
+        Some("session/update") => "session_update",
+        Some("session/request_permission") => "session_permission",
+        Some("session/set_model")
+        | Some("session/set_mode")
+        | Some("session/set_config_option") => "session_config",
+        Some("elicitation/create") => "elicitation",
+        Some(value) if value.starts_with("fs/") => "filesystem",
+        Some(value) if value.starts_with("terminal/") => "terminal",
+        Some(value) if value.starts_with("experimental/") => "extension",
+        Some(_) => "other",
+        None => "response",
+    }
+}
+
 pub(in crate::live::sessions) fn log_frame(
+    observer: &FrameObserver,
     session_id: &str,
     direction: FrameDirection,
     line: &str,
-) {
-    log_frame_gated(session_id, direction, line, full_tee_enabled());
+) -> bool {
+    let payloads_protected = observer.observe_frame(direction, line);
+    log_frame_gated(
+        session_id,
+        direction,
+        line,
+        full_tee_enabled(),
+        payloads_protected,
+    );
+    observer.protected_request_ids_healthy()
 }
 
 /// `full_tee` is threaded as a parameter so tests can exercise both sides of
 /// the gate without racing on process-global env state.
-fn log_frame_gated(session_id: &str, direction: FrameDirection, line: &str, full_tee: bool) {
+fn log_frame_gated(
+    session_id: &str,
+    direction: FrameDirection,
+    line: &str,
+    full_tee: bool,
+    payloads_protected: bool,
+) {
     // Parsing and capping happen only when a subscriber wants the record:
     // with no diagnostics producer installed and the default console filter,
     // this is the whole cost of the tee.
@@ -83,6 +117,19 @@ fn log_frame_gated(session_id: &str, direction: FrameDirection, line: &str, full
             if suppressed_streaming_frame(&header, full_tee) {
                 return;
             }
+            if payloads_protected {
+                tracing::debug!(
+                    target: "anyharness.acp.send",
+                    session_id = %session_id,
+                    method_class = method_class(header.method),
+                    rpc_id = "",
+                    payload = "[redacted: process-local fork]",
+                    truncated = false,
+                    redacted = true,
+                    "acp frame: send"
+                );
+                return;
+            }
             let (payload, truncated) = cap_frame(line);
             tracing::debug!(
                 target: "anyharness.acp.send",
@@ -91,6 +138,7 @@ fn log_frame_gated(session_id: &str, direction: FrameDirection, line: &str, full
                 rpc_id = header.id.map(rpc_id_text).unwrap_or_default(),
                 payload,
                 truncated,
+                redacted = false,
                 "acp frame: send"
             );
         }
@@ -102,6 +150,19 @@ fn log_frame_gated(session_id: &str, direction: FrameDirection, line: &str, full
             if suppressed_streaming_frame(&header, full_tee) {
                 return;
             }
+            if payloads_protected {
+                tracing::debug!(
+                    target: "anyharness.acp.recv",
+                    session_id = %session_id,
+                    method_class = method_class(header.method),
+                    rpc_id = "",
+                    payload = "[redacted: process-local fork]",
+                    truncated = false,
+                    redacted = true,
+                    "acp frame: recv"
+                );
+                return;
+            }
             let (payload, truncated) = cap_frame(line);
             tracing::debug!(
                 target: "anyharness.acp.recv",
@@ -110,6 +171,7 @@ fn log_frame_gated(session_id: &str, direction: FrameDirection, line: &str, full
                 rpc_id = header.id.map(rpc_id_text).unwrap_or_default(),
                 payload,
                 truncated,
+                redacted = false,
                 "acp frame: recv"
             );
         }
@@ -142,9 +204,10 @@ fn cap_frame(line: &str) -> (&str, bool) {
 #[cfg(test)]
 mod tests {
     use super::{
-        cap_frame, log_frame_gated, parse_header, rpc_id_text, FrameDirection,
+        cap_frame, log_frame_gated, method_class, parse_header, rpc_id_text, FrameDirection,
         MAX_LOGGED_FRAME_BYTES,
     };
+    use crate::live::sessions::driver::frame_observer::FrameObserver;
     use std::io;
     use std::sync::{Arc, Mutex};
 
@@ -176,7 +239,7 @@ mod tests {
             .with_writer(move || SharedLogWriter(Arc::clone(&log_writer)))
             .finish();
         tracing::subscriber::with_default(subscriber, || {
-            log_frame_gated("session-1", direction, line, full_tee);
+            log_frame_gated("session-1", direction, line, full_tee, false);
         });
         let bytes = log_bytes
             .lock()
@@ -214,6 +277,58 @@ mod tests {
         let logged = capture_frame(FrameDirection::Recv, line, true);
         assert!(logged.contains("session/update"));
         assert!(logged.contains("acp frame: recv"));
+    }
+
+    #[test]
+    fn protected_process_local_fork_tee_is_header_only_even_when_full() {
+        let observer = FrameObserver::default();
+        observer.protect_process_local_fork();
+        let sentinels = [
+            "parent-native-secret",
+            "payload-secret",
+            "rpc-secret",
+            "experimental/provider/secret-method-token",
+        ];
+        let line = format!(
+            r#"{{"jsonrpc":"2.0","id":"{}","method":"{}","params":{{"sessionId":"{}","value":"{}"}}}}"#,
+            sentinels[2], sentinels[3], sentinels[0], sentinels[1]
+        );
+
+        let log_bytes = Arc::new(Mutex::new(Vec::new()));
+        let log_writer = Arc::clone(&log_bytes);
+        let subscriber = tracing_subscriber::fmt()
+            .without_time()
+            .with_ansi(false)
+            .with_max_level(tracing::Level::DEBUG)
+            .with_writer(move || SharedLogWriter(Arc::clone(&log_writer)))
+            .finish();
+        tracing::subscriber::with_default(subscriber, || {
+            for direction in [FrameDirection::Send, FrameDirection::Recv] {
+                let payloads_protected = observer.observe_frame(direction, &line);
+                log_frame_gated("product-child", direction, &line, true, payloads_protected);
+            }
+        });
+        let logged = String::from_utf8(
+            log_bytes
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone(),
+        )
+        .expect("formatted log is UTF-8");
+
+        assert!(logged.contains("extension"));
+        assert!(logged.contains("redacted=true"));
+        assert!(sentinels.iter().all(|sentinel| !logged.contains(sentinel)));
+        assert!(logged.contains("acp frame: send"));
+        assert!(logged.contains("acp frame: recv"));
+        assert_eq!(observer.observed_frames(), 2);
+    }
+
+    #[test]
+    fn provider_controlled_method_names_map_to_closed_classes() {
+        let secret_method = "experimental/provider/secret-method-token";
+        assert_eq!(method_class(Some(secret_method)), "extension");
+        assert_eq!(method_class(Some("unknown-secret-method")), "other");
     }
 
     #[test]

@@ -11,6 +11,7 @@ use crate::live::sessions::actor::capabilities::{
     action_capabilities_from_acp, persist_session_action_capabilities,
 };
 use crate::live::sessions::actor::config::apply::restore_persisted_live_config_if_needed;
+use crate::live::sessions::actor::config::diagnostics::{fixed_config_failure, ConfigFailureStage};
 use crate::live::sessions::actor::config::handle::{
     apply_requested_mode_preference, apply_requested_model_preference,
 };
@@ -31,7 +32,9 @@ use crate::live::sessions::driver::opencode_sidedoor::{
     derive_sidedoor_capability, provision_sidedoor_spawn,
 };
 use crate::live::sessions::driver::process::spawn_agent_process;
-use crate::live::sessions::driver::session_lifecycle::initialize_connection;
+use crate::live::sessions::driver::session_lifecycle::{
+    initialize_connection, initialize_protected_connection,
+};
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::sink::SessionEventSink;
@@ -129,7 +132,22 @@ impl SessionActor {
             config.caps.permission_advisor.clone(),
         ));
 
-        let (conn, shutdown_tx) = establish_connection(client, stdin, stdout).await?;
+        if let crate::live::sessions::model::SessionStartupStrategy::ForkFromNative {
+            parent_native_session_id,
+            ..
+        } = &startup_strategy
+        {
+            if client
+                .prepare_process_local_fork_epoch(parent_native_session_id)
+                .is_err()
+            {
+                let detail = "process-local fork inbound epoch could not be prepared";
+                let _ = ready_tx.send(Err(anyhow::anyhow!(detail)));
+                return Err(anyhow::anyhow!(detail));
+            }
+        }
+
+        let (conn, shutdown_tx) = establish_connection(client.clone(), stdin, stdout).await?;
 
         // Race the initialize/new-session handshake against agent-process
         // exit: an agent that dies before responding (bad install, crash on
@@ -137,15 +155,30 @@ impl SessionActor {
         // letting the caller burn the full ready timeout on a misleading
         // "waiting for authentication" message.
         let handshake = async {
-            let init_response = initialize_connection(
-                &conn,
-                &source_agent_kind,
-                &config.launch.agent,
-                &session_id,
-                &workspace_id,
-                &ready_tx,
-            )
-            .await?;
+            let init_response = if matches!(
+                &startup_strategy,
+                crate::live::sessions::model::SessionStartupStrategy::ForkFromNative { .. }
+            ) {
+                initialize_protected_connection(
+                    &conn,
+                    &source_agent_kind,
+                    &config.launch.agent,
+                    &session_id,
+                    &workspace_id,
+                    &ready_tx,
+                )
+                .await?
+            } else {
+                initialize_connection(
+                    &conn,
+                    &source_agent_kind,
+                    &config.launch.agent,
+                    &session_id,
+                    &workspace_id,
+                    &ready_tx,
+                )
+                .await?
+            };
 
             persist_session_action_capabilities(
                 config.caps.state.as_ref(),
@@ -158,6 +191,8 @@ impl SessionActor {
 
             let native = start_native_session(
                 &conn,
+                client.clone(),
+                config.caps.fork_dispatch.clone(),
                 &config.launch.workspace_path,
                 &config.launch.mcp_servers,
                 config.launch.prompts.every_prompt.as_deref(),
@@ -286,7 +321,7 @@ impl SessionActor {
             &result,
             initial_live_config_started.elapsed(),
             "failed to persist initial live config snapshot",
-            "initial_live_config",
+            ConfigFailureStage::InitialLiveConfig,
         );
         apply_requested_model_preference(
             &conn,
@@ -314,7 +349,7 @@ impl SessionActor {
             &result,
             restore_live_config_started.elapsed(),
             "failed to restore persisted live config",
-            "restore_live_config",
+            ConfigFailureStage::RestoreLiveConfig,
         );
         if let Err(error) = apply_requested_mode_preference(
             &conn,
@@ -324,7 +359,21 @@ impl SessionActor {
         )
         .await
         {
-            tracing::warn!(session_id = %session_id, error = %error, "failed to apply requested session mode");
+            let failure = fixed_config_failure(&error, ConfigFailureStage::RequestedMode);
+            tracing::warn!(
+                session_id = %session_id,
+                failure_class = failure.failure_class,
+                failure_stage = failure.failure_stage,
+                "failed to apply requested session mode"
+            );
+            if matches!(
+                &startup_strategy,
+                crate::live::sessions::model::SessionStartupStrategy::ForkFromNative { .. }
+            ) {
+                let detail = "process-local fork session configuration failed";
+                let _ = ready_tx.send(Err(anyhow::anyhow!(detail)));
+                return Err(anyhow::anyhow!(detail));
+            }
             let _ = ready_tx.send(Err(ModeApplyError::clone_for_readiness(&error)));
             return Err(error);
         }
@@ -345,13 +394,55 @@ impl SessionActor {
             &result,
             post_preferences_live_config_started.elapsed(),
             "failed to persist post-preference live config snapshot",
-            "post_preferences_live_config",
+            ConfigFailureStage::PostPreferencesLiveConfig,
         );
 
+        if let crate::live::sessions::model::SessionStartupStrategy::ForkFromNative {
+            fork_operation_id,
+            ..
+        } = &startup_strategy
+        {
+            // Acquire the in-memory publication lock while ChildStarting still
+            // denies requests. The epoch's finalizer rechecks the fault bit,
+            // then holds its mutex across the durable commit, Idle update, and
+            // ReadyChild transition without an await gap.
+            let mut execution = handle.execution.write().await;
+            let finalized_at = chrono::Utc::now().to_rfc3339();
+            if client
+                .finalize_process_local_fork_ready(|| {
+                    config.caps.fork_dispatch.finalize_startup(
+                        fork_operation_id,
+                        &session_id,
+                        &native_session_id,
+                        &finalized_at,
+                    )?;
+                    execution.phase = SessionExecutionPhase::Idle;
+                    execution.updated_at = finalized_at.clone();
+                    Ok(())
+                })
+                .is_err()
+            {
+                let detail = "durable process-local fork finalization failed";
+                tracing::warn!(
+                    fork_stage = "finalize",
+                    failure_class = "process_local_fork_finalization_failed",
+                    "process-local fork startup failed"
+                );
+                let _ = ready_tx.send(Err(anyhow::anyhow!(detail)));
+                return Err(anyhow::anyhow!(detail));
+            }
+            tracing::info!(
+                fork_stage = "finalize",
+                phase = "completed",
+                "process-local fork phase"
+            );
+        } else {
+            handle
+                .set_execution_phase(SessionExecutionPhase::Idle)
+                .await;
+        }
+
         let _ = ready_tx.send(Ok(native_session_id.to_string()));
-        handle
-            .set_execution_phase(SessionExecutionPhase::Idle)
-            .await;
         background_work_registry.rehydrate_pending().await;
         tracing::info!(
             session_id = %session_id,

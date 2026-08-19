@@ -83,11 +83,7 @@ pub async fn fork_session(
             return Ok(Json(ForkSessionResponse {
                 session: session_contract,
                 session_link: session_link_to_summary(&link),
-                child_start: Some(anyharness_contract::v1::ForkChildStartSummary {
-                    status: ForkChildStartStatus::Failed,
-                    error_code: Some("FORK_CHILD_START_FAILED".to_string()),
-                    session_id: Some(session.id),
-                }),
+                child_start: Some(child_start_summary(session.id, false)),
             }));
         }
         Err(error) => return Err(map_fork_session_error(error)),
@@ -95,12 +91,26 @@ pub async fn fork_session(
     Ok(Json(ForkSessionResponse {
         session: session_to_contract(&state, &outcome.session).await?,
         session_link: session_link_to_summary(&outcome.link),
-        child_start: Some(anyharness_contract::v1::ForkChildStartSummary {
-            status: ForkChildStartStatus::Started,
-            error_code: None,
-            session_id: Some(outcome.session.id),
-        }),
+        child_start: Some(child_start_summary(
+            outcome.session.id,
+            outcome.child_started,
+        )),
     }))
+}
+
+fn child_start_summary(
+    session_id: String,
+    child_started: bool,
+) -> anyharness_contract::v1::ForkChildStartSummary {
+    anyharness_contract::v1::ForkChildStartSummary {
+        status: if child_started {
+            ForkChildStartStatus::Started
+        } else {
+            ForkChildStartStatus::Failed
+        },
+        error_code: (!child_started).then(|| "FORK_CHILD_START_FAILED".to_string()),
+        session_id: Some(session_id),
+    }
 }
 
 fn parse_optional_fork_request(body: Bytes) -> Result<ForkSessionRequest, ApiError> {
@@ -140,5 +150,17 @@ mod tests {
         };
 
         assert!(request.target.is_none());
+    }
+
+    #[test]
+    fn reconciled_errored_child_maps_to_failed_start_summary() {
+        let summary = child_start_summary("child-1".to_string(), false);
+
+        assert_eq!(summary.status, ForkChildStartStatus::Failed);
+        assert_eq!(
+            summary.error_code.as_deref(),
+            Some("FORK_CHILD_START_FAILED")
+        );
+        assert_eq!(summary.session_id.as_deref(), Some("child-1"));
     }
 }

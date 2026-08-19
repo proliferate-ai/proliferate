@@ -1,6 +1,7 @@
 mod actor;
 mod background_work;
 mod driver;
+pub(crate) mod fork_dispatch;
 pub mod handle;
 mod manager;
 pub mod model;

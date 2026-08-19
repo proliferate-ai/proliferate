@@ -70,6 +70,7 @@ pub(super) fn wire_live_sessions(deps: &LiveSessionsWiringDeps) -> LiveSessionMa
         queue: Arc::new(store.clone()),
         background: Arc::new(store.clone()),
         state: Arc::new(store.clone()),
+        fork_dispatch: Arc::new(store.clone()),
         attachments: Arc::new(SessionAttachmentSource::new(store, attachment_storage)),
         product_context: deps.product_context.clone(),
         observers,

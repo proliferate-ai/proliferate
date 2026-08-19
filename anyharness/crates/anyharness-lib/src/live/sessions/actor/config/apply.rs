@@ -477,7 +477,6 @@ pub(in crate::live::sessions::actor) async fn apply_model_via_direct_setter(
         return Ok(ConfigApplyOutcome::NotApplied);
     }
 
-    // Params mirror acp.SetSessionModelRequest: { sessionId, modelId }.
     let params: Arc<serde_json::value::RawValue> =
         serde_json::value::to_raw_value(&serde_json::json!({
             "sessionId": native_session_id,
@@ -491,26 +490,27 @@ pub(in crate::live::sessions::actor) async fn apply_model_via_direct_setter(
         model_id = desired_model_id,
         "[model-switch] sending session/set_model"
     );
-    let response = match conn
+    if let Err(error) = conn
         .send_request(acp::AgentRequest::ExtMethodRequest(ext))
         .block_task()
         .await
     {
-        Ok(response) => response,
-        Err(error) => {
-            tracing::warn!(
-                native_session_id,
-                model_id = desired_model_id,
-                error = %error,
-                "[model-switch] agent rejected session/set_model"
-            );
-            return Err(error.into());
-        }
-    };
+        let failure = diagnostics::fixed_config_failure(
+            &error,
+            diagnostics::ConfigFailureStage::DirectModelSetter,
+        );
+        tracing::warn!(
+            native_session_id,
+            model_id = desired_model_id,
+            failure_class = failure.failure_class,
+            failure_stage = failure.failure_stage,
+            "[model-switch] agent rejected session/set_model"
+        );
+        return Err(error.into());
+    }
     tracing::info!(
         native_session_id,
         model_id = desired_model_id,
-        response = %response,
         "[model-switch] agent accepted session/set_model"
     );
 

@@ -36,22 +36,65 @@ use crate::persistence::Db;
 /// + init-level `_meta.anyharness.fork` → targeted_fork false). A `hold-fork`
 /// control file stalls the agent inside `session/fork` for the double-fork race.
 const FORK_AGENT_PY: &str = r#"#!/usr/bin/env python3
-import json, os, sys, time, uuid
+import json, os, select, sys, time, uuid
 log_path = sys.argv[-2]
 control_dir = sys.argv[-1]
 CAP_SHAPE = "__CAP_SHAPE__"
+resident_sessions = set()
+resident_anchors = {}
 def emit(payload):
     print(json.dumps(payload, separators=(",", ":")), flush=True)
+def record(payload):
+    logged = dict(payload)
+    logged["__fixturePid"] = os.getpid()
+    with open(log_path, "a", encoding="utf-8") as log:
+        log.write(json.dumps(logged, separators=(",", ":")) + "\n")
 def control(name):
     return os.path.join(control_dir, name)
+def notify(session_id, text):
+    emit({
+        "jsonrpc": "2.0",
+        "method": "session/update",
+        "params": {
+            "sessionId": session_id,
+            "update": {
+                "sessionUpdate": "agent_message_chunk",
+                "content": {"type": "text", "text": text},
+            },
+        },
+    })
+def await_response(response_id):
+    while True:
+        response_line = sys.stdin.readline()
+        if not response_line:
+            sys.exit(0)
+        response = json.loads(response_line)
+        record(response)
+        if response.get("id") == response_id and "method" not in response:
+            return response
+        if "id" in response and response.get("method") in ("session/set_model", "session/set_mode", "session/set_config_option"):
+            emit({"jsonrpc": "2.0", "id": response["id"], "result": {}})
+def await_control_servicing_config(name):
+    while not os.path.exists(control(name)):
+        readable, _, _ = select.select([sys.stdin], [], [], 0.01)
+        if not readable:
+            continue
+        line = sys.stdin.readline()
+        if not line:
+            sys.exit(0)
+        message = json.loads(line)
+        record(message)
+        if "id" in message and message.get("method") in ("session/set_model", "session/set_mode", "session/set_config_option"):
+            emit({"jsonrpc": "2.0", "id": message["id"], "result": {}})
+        elif "id" in message:
+            emit({"jsonrpc": "2.0", "id": message["id"], "error": {"code": -32601, "message": "method not found"}})
 def fork_capability():
     if CAP_SHAPE == "strict":
         return {"_meta": {"anyharness": {"schemaVersion": 1, "targetedFork": {"fileEffects": "none", "target": "message_id"}}}}
     return {}
 for raw_line in sys.stdin:
     message = json.loads(raw_line)
-    with open(log_path, "a", encoding="utf-8") as log:
-        log.write(json.dumps(message, separators=(",", ":")) + "\n")
+    record(message)
     if "id" not in message:
         continue
     request_id = message["id"]
@@ -68,13 +111,83 @@ for raw_line in sys.stdin:
     elif method == "session/new":
         emit({"jsonrpc": "2.0", "id": request_id, "result": {"sessionId": "native-new-" + uuid.uuid4().hex}})
     elif method == "session/load":
+        parent_id = message["params"]["sessionId"]
+        resident_sessions.add(parent_id)
+        resident_anchors[parent_id] = {"msg-0", "msg-1"}
+        notify(parent_id, "PARENT-REPLAY-MUST-NOT-PERSIST")
+        if os.path.exists(control("parent-permission-on-load")):
+            emit({
+                "jsonrpc": "2.0",
+                "id": "parent-permission",
+                "method": "session/request_permission",
+                "params": {
+                    "sessionId": parent_id,
+                    "toolCall": {"toolCallId": "parent-replay-tool"},
+                    "options": [],
+                },
+            })
+            response = await_response("parent-permission")
+            with open(control("parent-permission-response"), "w", encoding="utf-8") as receipt:
+                receipt.write(json.dumps(response, separators=(",", ":")))
         emit({"jsonrpc": "2.0", "id": request_id, "result": {}})
     elif method == "session/fork":
+        parent_id = message["params"]["sessionId"]
+        if parent_id not in resident_sessions:
+            emit({"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": "parent not resident"}})
+            continue
+        anchor = message.get("params", {}).get("_meta", {}).get("anyharness", {}).get("upToMessageId")
+        if anchor is not None and anchor not in resident_anchors.get(parent_id, set()):
+            emit({"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": "anchor not resident"}})
+            continue
+        if os.path.exists(control("fork-explicit-error")):
+            emit({"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": "explicit rejection"}})
+            continue
+        if os.path.exists(control("fork-malformed-result")):
+            emit({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {"sessionId": "native-malformed-child"},
+                "error": {"code": -32602, "message": "malformed both-fields response"},
+            })
+            continue
+        if os.path.exists(control("fork-malformed-typed-result")):
+            emit({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {"sessionId": {"provider-response-secret": True}},
+            })
+            continue
+        if os.path.exists(control("fork-malformed-wire")):
+            print('{"jsonrpc":"2.0","id":{"provider-secret-wire":true}}', flush=True)
+            sys.exit(0)
+        if os.path.exists(control("fork-drop")):
+            sys.exit(0)
         if os.path.exists(control("hold-fork")):
             open(control("fork-hold-seen"), "w", encoding="utf-8").close()
             while not os.path.exists(control("release-fork")):
                 time.sleep(0.01)
-        emit({"jsonrpc": "2.0", "id": request_id, "result": {"sessionId": "native-fork-" + uuid.uuid4().hex}})
+        child_id = "native-fork-" + uuid.uuid4().hex
+        if os.path.exists(control("fork-race")):
+            notify(child_id, "CHILD-BEFORE-FORK-RESULT")
+        emit({"jsonrpc": "2.0", "id": request_id, "result": {"sessionId": child_id}})
+        if os.path.exists(control("fork-race")):
+            notify(child_id, "CHILD-AFTER-FORK-RESULT")
+            await_control_servicing_config("release-delayed-parent")
+            notify(parent_id, "DELAYED-PARENT-MUST-NOT-PERSIST")
+            open(control("delayed-parent-emitted"), "w", encoding="utf-8").close()
+            emit({
+                "jsonrpc": "2.0",
+                "id": "delayed-parent-barrier",
+                "method": "session/request_permission",
+                "params": {
+                    "sessionId": parent_id,
+                    "toolCall": {"toolCallId": "delayed-parent-tool"},
+                    "options": [],
+                },
+            })
+            barrier = await_response("delayed-parent-barrier")
+            with open(control("delayed-parent-barrier-response"), "w", encoding="utf-8") as receipt:
+                receipt.write(json.dumps(barrier, separators=(",", ":")))
     elif method in ("session/set_model", "session/set_mode", "session/set_config_option"):
         emit({"jsonrpc": "2.0", "id": request_id, "result": {}})
     else:
@@ -272,6 +385,80 @@ pub(super) fn fork_wire_anchors(path: &Path) -> Vec<String> {
     anchors
 }
 
+pub(super) fn assert_process_local_fork_wire_contract(path: &Path) {
+    let requests = read_requests(path);
+    let lifecycle = requests
+        .iter()
+        .filter(|request| {
+            matches!(
+                request["method"].as_str(),
+                Some("initialize") | Some("session/load") | Some("session/fork")
+            )
+        })
+        .collect::<Vec<_>>();
+    for (index, request) in lifecycle.iter().enumerate() {
+        if request["method"] != "session/fork" {
+            continue;
+        }
+        assert!(index >= 2, "fork request must follow initialize and load");
+        assert_eq!(lifecycle[index - 2]["method"], "initialize");
+        assert_eq!(lifecycle[index - 1]["method"], "session/load");
+        assert_eq!(
+            lifecycle[index - 2]["__fixturePid"],
+            request["__fixturePid"],
+            "initialize and fork must use one process"
+        );
+        assert_eq!(
+            lifecycle[index - 1]["__fixturePid"],
+            request["__fixturePid"],
+            "parent load and fork must use one process"
+        );
+        assert_eq!(
+            lifecycle[index - 1]["params"]["sessionId"],
+            request["params"]["sessionId"],
+            "the same process must load and fork the exact parent"
+        );
+        assert_eq!(
+            lifecycle[index - 1]["params"]["_meta"]["systemPrompt"],
+            request["params"]["_meta"]["systemPrompt"],
+            "parent hydration and fork must carry the same system-prompt metadata"
+        );
+        assert!(
+            lifecycle[index - 1]["params"]["_meta"]["anyharness"]["upToMessageId"].is_null(),
+            "the fork-only anchor must not alter parent hydration"
+        );
+    }
+    assert!(
+        requests.iter().all(|request| {
+            request["method"] != "session/close"
+                || request["params"]["sessionId"] != "native-parent"
+        }),
+        "process-local hydration must not close the parent"
+    );
+}
+
+pub(super) async fn wait_for_child_notification_text(
+    state: &AppState,
+    child_id: &str,
+    expected: &str,
+) {
+    for _ in 0..500 {
+        let notifications = state
+            .session_service
+            .store()
+            .list_raw_notifications(child_id)
+            .expect("list child raw notifications");
+        if notifications
+            .iter()
+            .any(|notification| notification.payload_json.contains(expected))
+        {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("timed out waiting for child notification {expected}");
+}
+
 pub(super) fn assert_child_anchor_provenance(
     state: &AppState,
     child_id: &str,
@@ -295,11 +482,20 @@ pub(super) fn assert_child_anchor_provenance(
     );
     assert_eq!(operation.provider_anchor_inclusive, Some(true));
     assert_eq!(operation.checkpoint_id.as_deref(), expected_checkpoint_id);
-    assert!(state
+    assert!(operation.native_child_session_id.is_none());
+    let child = state
         .session_service
         .get_session(child_id)
         .expect("get child session")
-        .is_some());
+        .expect("child session exists");
+    assert_eq!(child.status, "idle");
+    assert!(
+        child
+            .native_session_id
+            .as_deref()
+            .is_some_and(|native_id| !native_id.trim().is_empty()),
+        "the child session row owns the process-local native id"
+    );
 }
 
 pub(super) async fn wait_for_control(path: &Path) {

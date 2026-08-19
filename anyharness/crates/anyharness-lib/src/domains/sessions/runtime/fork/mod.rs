@@ -24,6 +24,8 @@ use super::{
 mod checkpoint_linkage;
 mod errors;
 mod native_anchor;
+mod process_local;
+mod reconcile;
 mod sidedoor;
 
 impl SessionRuntime {
@@ -60,10 +62,14 @@ impl SessionRuntime {
 
         let capabilities = parse_action_capabilities(parent.action_capabilities_json.as_deref());
         if !capabilities.fork {
-            return Err(unsupported_fork("session agent does not advertise fork support"));
+            return Err(unsupported_fork(
+                "session agent does not advertise fork support",
+            ));
         }
         if target.is_some() && !capabilities.targeted_fork {
-            return Err(unsupported_fork("targeted fork is not supported by this agent"));
+            return Err(unsupported_fork(
+                "targeted fork is not supported by this agent",
+            ));
         }
         // --- Idempotency identity + canonical request digest (ADR 4.4) ---
         let reserved_child_id = requested_child_id
@@ -233,9 +239,13 @@ impl SessionRuntime {
         // the child actor (process-local fork id) is the one that can later land
         // in the zero-turn "stale native id" state handled by `launch_policy`.
         let child_actor_forks = super::launch_policy::fork_id_is_process_local(&parent.agent_kind);
-        // Phase marked before dispatch (ADR 4.4): a lost native outcome parks the
-        // record at `native_outcome_unknown` and blocks blind redispatch.
-        self.mark_fork_phase(&operation.id, ForkOperationPhase::NativeCallInFlight, &now);
+        // Durable-id forks dispatch here, so their phase advances here. A
+        // process-local fork dispatches later on the child actor; its operation
+        // must remain prepared through child/link/prefix persistence, and that
+        // actor performs the strict CAS at the real wire seam.
+        if !child_actor_forks {
+            self.mark_fork_phase(&operation.id, ForkOperationPhase::NativeCallInFlight, &now);
+        }
         let forked = if let Some(message_id) = sidedoor_message_id.clone() {
             // Side-door targeted fork: validated + POSTed on the parent actor.
             // The vendor fork response id becomes the child's durable native
@@ -321,10 +331,9 @@ impl SessionRuntime {
             subagent_closed_at: None,
             closed_at: None,
         };
-        // Provenance resolved once the native call returns; applied atomically
-        // with the child + link, advancing the operation to `child_persisted`
-        // (see `native_anchor::fork_child_provenance`: side-door vendor id,
-        // ACP-native derived anchor, or the tip marker — never the parent id).
+        // Provenance is applied atomically with child + link. Durable-id forks
+        // have already returned and advance to `child_persisted`; process-local
+        // forks remain `prepared` until the child actor reaches the wire seam.
         let (
             provider_anchor_kind,
             provider_anchor_value,
@@ -347,17 +356,28 @@ impl SessionRuntime {
                 .as_ref()
                 .map(|forked| forked.native_session_id.clone()),
         };
-        let insert_result = self
-            .session_service
-            .store()
-            .insert_fork_child_with_link_and_operation(
-                &child,
-                &link,
-                &operation.id,
-                &child_result,
-                child_actor_forks,
-                &now,
-            );
+        let insert_result = if child_actor_forks {
+            self.session_service
+                .store()
+                .insert_prepared_process_local_fork_child_with_link(
+                    &child,
+                    &link,
+                    &operation.id,
+                    &child_result,
+                    &now,
+                )
+        } else {
+            self.session_service
+                .store()
+                .insert_fork_child_with_link_and_operation(
+                    &child,
+                    &link,
+                    &operation.id,
+                    &child_result,
+                    false,
+                    &now,
+                )
+        };
         match &insert_result {
             Ok(copied_events) if child_actor_forks => {
                 tracing::info!(
@@ -379,18 +399,27 @@ impl SessionRuntime {
             return Err(ForkSessionError::Internal(error));
         }
 
-        let child_loaded_from_forked_native_id = forked.is_some();
-        let startup_strategy = if let Some(forked) = forked {
-            SessionStartupStrategy::LoadNativeNoFallback(forked.native_session_id)
-        } else {
-            SessionStartupStrategy::ForkFromNative {
+        if child_actor_forks {
+            return process_local::start_prepared_child(
+                self,
+                child,
+                link,
+                &operation.id,
                 parent_native_session_id,
-                provider_anchor: provider_anchor.clone(),
-            }
-        };
+                provider_anchor,
+            )
+            .await;
+        }
+
+        let forked = forked.expect("durable fork dispatch must return a native child");
+        let native_session_id = forked.native_session_id.clone();
 
         match self
-            .start_live_session(&child, startup_strategy, child.system_prompt_append.clone())
+            .start_live_session(
+                &child,
+                SessionStartupStrategy::LoadNativeNoFallback(native_session_id),
+                child.system_prompt_append.clone(),
+            )
             .await
         {
             Ok((_handle, native_session_id)) => {
@@ -411,13 +440,11 @@ impl SessionRuntime {
                 // If the native child id was persisted before failure, later
                 // resumes should retry fork startup from the parent boundary instead
                 // of looping forever on an ACP-side child id that did not load.
-                if child_loaded_from_forked_native_id {
-                    let cleared_at = chrono::Utc::now().to_rfc3339();
-                    let _ = self
-                        .session_service
-                        .store()
-                        .clear_native_session_id(&child.id, &cleared_at);
-                }
+                let cleared_at = chrono::Utc::now().to_rfc3339();
+                let _ = self
+                    .session_service
+                    .store()
+                    .clear_native_session_id(&child.id, &cleared_at);
                 // The child row exists and is a first-class resumable state
                 // (`FORK_CHILD_START_FAILED`); the operation stays at
                 // `child_persisted`, not `failed` — the child, not the fork
@@ -462,70 +489,6 @@ impl SessionRuntime {
                 error = %error,
                 "failed to advance fork operation phase"
             );
-        }
-    }
-
-    /// Reconcile a fork operation that already exists under this idempotency
-    /// key: a different canonical payload is an `IDEMPOTENCY_CONFLICT`; the same
-    /// payload resumes. Shared by the initial lookup and the insert-time
-    /// UNIQUE-constraint TOCTOU fallback so both honor identical semantics.
-    fn reconcile_existing_fork_operation(
-        &self,
-        existing: &ForkOperationRecord,
-        request_digest: &str,
-    ) -> Result<ForkSessionOutcome, ForkSessionError> {
-        if existing.request_digest != request_digest {
-            return Err(ForkSessionError::IdempotencyConflict);
-        }
-        self.resume_fork_operation(existing)
-    }
-
-    /// Resume an existing fork operation found by idempotency key (same payload).
-    /// A parked/in-flight record whose native outcome is unknown blocks
-    /// redispatch; a persisted child is returned as-is.
-    fn resume_fork_operation(
-        &self,
-        operation: &ForkOperationRecord,
-    ) -> Result<ForkSessionOutcome, ForkSessionError> {
-        use ForkOperationPhase::*;
-        match operation.phase {
-            NativeOutcomeUnknown | Prepared | NativeCallInFlight | NativeResultKnown => {
-                // No proven child: refuse to re-dispatch on the same key.
-                Err(ForkSessionError::NativeOutcomeUnknown)
-            }
-            ChildPersisted | Completed | Failed => {
-                let child = self
-                    .session_service
-                    .get_session(&operation.child_session_id)
-                    .map_err(ForkSessionError::Internal)?
-                    .ok_or_else(|| {
-                        ForkSessionError::Internal(anyhow::anyhow!(
-                            "fork operation child session missing: {}",
-                            operation.child_session_id
-                        ))
-                    })?;
-                let link = self
-                    .session_link_service
-                    .list_by_child(&operation.child_session_id)
-                    .map_err(ForkSessionError::Internal)?
-                    .into_iter()
-                    .find(|link| {
-                        link.relation == SessionLinkRelation::Fork
-                            && link.parent_session_id == operation.parent_session_id
-                    })
-                    .ok_or_else(|| {
-                        ForkSessionError::Internal(anyhow::anyhow!(
-                            "fork operation child link missing: {}",
-                            operation.child_session_id
-                        ))
-                    })?;
-                let child_started = child.status != "error" && child.status != "starting";
-                Ok(ForkSessionOutcome {
-                    session: child,
-                    link,
-                    child_started,
-                })
-            }
         }
     }
 }

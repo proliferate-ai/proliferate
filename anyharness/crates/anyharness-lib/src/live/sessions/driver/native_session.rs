@@ -1,11 +1,15 @@
 use super::*;
+use crate::domains::sessions::runtime::fork_anchor::ProviderForkAnchor;
+use crate::live::sessions::driver::inbound::InboundDoor;
+use crate::live::sessions::driver::native_fork::hydrate_parent_and_fork;
 use crate::live::sessions::driver::session_lifecycle::start_new_session;
 use crate::live::sessions::driver::types::{
     NativeSessionStartupDisposition, NativeSessionStartupState,
 };
-use crate::domains::sessions::runtime::fork_anchor::ProviderForkAnchor;
+use crate::live::sessions::fork_dispatch::ForkDispatchDurable;
 use crate::live::sessions::model::SessionStartupStrategy;
 use anyharness_contract::v1::SessionActionCapabilities;
+use std::sync::Arc;
 
 pub(in crate::live::sessions) fn build_system_prompt_meta(
     system_prompt_append: Option<&str>,
@@ -156,7 +160,9 @@ mod tests {
             "sessionId": sentinels[2],
         }));
         let provider_display = error.to_string();
-        assert!(sentinels.iter().all(|value| provider_display.contains(value)));
+        assert!(sentinels
+            .iter()
+            .all(|value| provider_display.contains(value)));
 
         let (detail, error_class) = sanitized_native_fork_failure(&error);
         assert_eq!(detail, "ACP session/fork request failed");
@@ -362,6 +368,8 @@ pub(in crate::live::sessions) fn parse_anyharness_targeted_fork_extension(
 
 pub(in crate::live::sessions) async fn start_native_session(
     conn: &acp::ConnectionTo<acp::Agent>,
+    inbound: Arc<InboundDoor>,
+    fork_dispatch: Arc<dyn ForkDispatchDurable>,
     workspace_path: &std::path::PathBuf,
     mcp_servers: &[SessionMcpServer],
     system_prompt_append: Option<&str>,
@@ -492,76 +500,26 @@ pub(in crate::live::sessions) async fn start_native_session(
             }
         }
         SessionStartupStrategy::ForkFromNative {
+            fork_operation_id,
             parent_native_session_id,
             provider_anchor,
         } => {
-            if !action_capabilities.fork {
-                let error = anyhow::anyhow!(
-                    "agent does not advertise ACP session/fork with load_session support"
-                );
-                let _ = ready_tx.send(Err(anyhow::anyhow!("{error}")));
-                return Err(error);
-            }
-            if !native_fork_anchor_is_dispatch_ready(
+            hydrate_parent_and_fork(
+                conn,
+                inbound,
+                fork_dispatch,
+                workspace_path,
+                mcp_servers,
+                system_prompt_append,
                 action_capabilities,
+                fork_operation_id,
+                parent_native_session_id,
                 provider_anchor.as_ref(),
-            ) {
-                let error = anyhow::anyhow!(
-                    "agent does not advertise targeted fork support for the native anchor"
-                );
-                let _ = ready_tx.send(Err(anyhow::anyhow!("{error}")));
-                return Err(error);
-            }
-
-            let fork_started = std::time::Instant::now();
-            let meta = merge_targeted_fork_anchor_meta(
-                build_system_prompt_meta(system_prompt_append),
-                provider_anchor.as_ref(),
-            );
-            let mut request = acp::schema::ForkSessionRequest::new(
-                parent_native_session_id.clone(),
-                workspace_path.clone(),
+                session_id,
+                workspace_id,
+                ready_tx,
             )
-            .mcp_servers(to_acp_servers(mcp_servers))
-            .meta(meta);
-            if mcp_servers.is_empty() {
-                request.mcp_servers.clear();
-            }
-
-            match conn.send_request(request).block_task().await {
-                Ok(resp) => {
-                    tracing::info!(
-                        session_id = %session_id,
-                        workspace_id = %workspace_id,
-                        parent_native_session_id = %parent_native_session_id,
-                        native_session_id = %resp.session_id,
-                        startup_strategy = startup_strategy_label,
-                        native_startup_disposition = NativeSessionStartupDisposition::CreatedFresh.as_str(),
-                        elapsed_ms = fork_started.elapsed().as_millis(),
-                        "[workspace-latency] session.actor.fork_session.completed"
-                    );
-                    Ok((
-                        resp.session_id.to_string(),
-                        NativeSessionStartupState::from_fork_session(&resp),
-                        NativeSessionStartupDisposition::CreatedFresh,
-                    ))
-                }
-                Err(error) => {
-                    let (detail, error_class) = sanitized_native_fork_failure(&error);
-                    tracing::warn!(
-                        session_id = %session_id,
-                        workspace_id = %workspace_id,
-                        parent_native_session_id = %parent_native_session_id,
-                        startup_strategy = startup_strategy_label,
-                        elapsed_ms = fork_started.elapsed().as_millis(),
-                        error_class,
-                        detail,
-                        "[workspace-latency] session.actor.fork_session.failed"
-                    );
-                    let _ = ready_tx.send(Err(anyhow::anyhow!(detail)));
-                    Err(anyhow::anyhow!(detail))
-                }
-            }
+            .await
         }
     }
 }

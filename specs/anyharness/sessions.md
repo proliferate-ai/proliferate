@@ -348,8 +348,11 @@ Fork invariants:
 - adapters with durable fork ids may fork on the parent actor and then start the
   child with `load_session`
 - adapters whose fork ids are process-local until first prompt, such as Claude,
-  start the child actor with `fork_from_native`; that child actor calls ACP
-  `session/fork` from the parent native id and owns the resulting live fork
+  start the child actor with `fork_from_native`; on that child's fresh adapter
+  process, the actor initializes ACP, loads the exact parent native session,
+  and only then calls `session/fork` on the same connection. The load carries
+  ordinary startup metadata, while a targeted provider anchor is fork-only.
+  The parent session is never closed by this hydration path
 - for adapters that cannot replay the forked transcript through child
   `load_session`, AnyHarness snapshots the parent's durable `session_events`
   into the child before startup and appends child events after that prefix
@@ -373,7 +376,14 @@ Fork invariants:
   Every other adapter remains absent until its own per-harness bridge lands
 - native `session/fork` rejection messages and data are provider-controlled and
   may contain transcript identifiers, so they never enter logs or public error
-  chains; the runtime records only a fixed bounded failure class and detail
+  chains; the runtime records only a fixed bounded failure class and detail.
+  Process-local fork connections permanently use a header-only transport tee.
+  Parent replay, delayed parent frames, unknown sessions, and all legacy ACP
+  extension requests are quarantined; rejected requests receive only fixed
+  typed cancellation-success shapes. Protocol-scoped requests are denied until
+  the exact child is durably ready. Protected response ids are bounded,
+  single-use, and must match a client request before ACP dispatch; malformed or
+  unowned envelopes fail closed with fixed diagnostics
 
 ### Fork boundary and the durable operation record
 
@@ -400,8 +410,10 @@ recovery; nothing load-bearing lives in opaque adapter `_meta`.
   checkpoint, chooses a nearest boundary, or joins through `prompt_id`.
   `checkpoint_id = NULL` therefore means that no checkpoint sat at that exact
   boundary, an explicit no-checkpoint state rather than an inferred fallback.
-  The operation is written atomically with the child session row, the `fork`
-  link, and (for snapshot adapters) the copied event prefix.
+  The operation is inserted first in `prepared`, before any native call. For a
+  process-local fork, child session + `fork` link + copied event prefix +
+  resolved operation provenance are then one transaction that keeps the
+  operation `prepared`; the child actor alone may claim the wire call.
 - Identity/idempotency. The operation key is the caller's `child_session_id` or
   an `Idempotency-Key`, bound to a canonical request digest. Same key + same
   payload resumes the in-flight operation or returns the same child; same key +
@@ -410,6 +422,14 @@ recovery; nothing load-bearing lives in opaque adapter `_meta`.
   leaves the record `native_outcome_unknown`, which blocks blind redispatch and
   preserves an orphan candidate for audited reconciliation rather than
   speculatively re-forking (surfaced as `FORK_NATIVE_OUTCOME_UNKNOWN`).
+  Process-local dispatch uses strict operation-id + child-id transitions:
+  `prepared -> native_call_in_flight` immediately before the wire call; a
+  successful response atomically writes `sessions.native_session_id` and
+  `native_result_known`; final readiness atomically writes session `idle` and
+  operation `completed`. `fork_operations.native_child_session_id` remains
+  nullable because the child session row owns Claude's process-local id. An
+  explicit provider error becomes `failed`; a disconnect, malformed response,
+  invalid child id, or locally ambiguous error becomes `native_outcome_unknown`.
 
 ### Restart and recovery
 
@@ -424,12 +444,11 @@ On a child cold start:
 - if the child recorded its own durable native id (durable-fork adapter, or a
   process-local child with `last_prompt_at` set), it loads that id with no
   fallback — re-forking would drop the child's own turns.
-- otherwise it runs the exact-prefix recovery recipe: re-fork from the parent
-  native id, reproduce the copied prefix, and verify the reproduced prefix
-  digest against the `fork_operations` provenance before going live. A mismatch
-  fails visibly (`FORK_RECOVERY_PREFIX_MISMATCH`); the child never re-forks the
-  parent's later tip. If no parent native id resolves, it falls back to the
-  child's own (possibly stale) native id rather than failing the launch.
+- otherwise it fails closed without `load_session`, `session/fork`, or fallback.
+  Exact-prefix recovery is not implemented in this slice; R1 must provide and
+  verify that proof before cold redispatch can be enabled. A prepared,
+  in-flight, known-result, or unknown-outcome operation never authorizes a
+  second native fork.
 
 AnyHarness exposes fork through typed contract fields. ACP `_meta.anyharness`
 is reserved for private runtime-to-adapter extensions and must not leak into

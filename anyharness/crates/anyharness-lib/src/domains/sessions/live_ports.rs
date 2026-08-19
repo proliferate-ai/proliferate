@@ -23,6 +23,7 @@ use crate::domains::sessions::store::completion_deliveries::{
 use crate::domains::sessions::store::pending_prompts::PendingPromptWriteError;
 use crate::domains::sessions::store::persisted_payloads::sanitize_session_event_for_sqlite;
 use crate::domains::sessions::store::SessionStore;
+use crate::live::sessions::fork_dispatch::ForkDispatchDurable;
 use crate::live::sessions::model::{
     BackgroundWorkDurable, EventPersist, QueueDurable, SessionStateDurable, TerminalTurnOutcome,
     TerminalTurnPersistenceInput,
@@ -377,6 +378,86 @@ impl SessionStateDurable for SessionStore {
             turn_id,
             item_id,
             vendor_message_id,
+            now,
+        )
+    }
+}
+
+impl ForkDispatchDurable for SessionStore {
+    fn claim_native_call(
+        &self,
+        operation_id: &str,
+        child_session_id: &str,
+        now: &str,
+    ) -> anyhow::Result<()> {
+        SessionStore::claim_process_local_fork_native_call(
+            self,
+            operation_id,
+            child_session_id,
+            now,
+        )
+    }
+
+    fn record_native_result(
+        &self,
+        operation_id: &str,
+        child_session_id: &str,
+        native_child_session_id: &str,
+        now: &str,
+    ) -> anyhow::Result<()> {
+        SessionStore::record_process_local_fork_native_result(
+            self,
+            operation_id,
+            child_session_id,
+            native_child_session_id,
+            now,
+        )
+    }
+
+    fn fail_prepared(
+        &self,
+        operation_id: &str,
+        child_session_id: &str,
+        now: &str,
+    ) -> anyhow::Result<()> {
+        SessionStore::fail_prepared_process_local_fork(self, operation_id, child_session_id, now)
+    }
+
+    fn fail_in_flight(
+        &self,
+        operation_id: &str,
+        child_session_id: &str,
+        now: &str,
+    ) -> anyhow::Result<()> {
+        SessionStore::fail_in_flight_process_local_fork(self, operation_id, child_session_id, now)
+    }
+
+    fn park_outcome_unknown(
+        &self,
+        operation_id: &str,
+        child_session_id: &str,
+        now: &str,
+    ) -> anyhow::Result<()> {
+        SessionStore::park_process_local_fork_native_outcome_unknown(
+            self,
+            operation_id,
+            child_session_id,
+            now,
+        )
+    }
+
+    fn finalize_startup(
+        &self,
+        operation_id: &str,
+        child_session_id: &str,
+        native_child_session_id: &str,
+        now: &str,
+    ) -> anyhow::Result<()> {
+        SessionStore::finalize_process_local_fork_startup(
+            self,
+            operation_id,
+            child_session_id,
+            native_child_session_id,
             now,
         )
     }

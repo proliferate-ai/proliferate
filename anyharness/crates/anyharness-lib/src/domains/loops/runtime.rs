@@ -405,8 +405,13 @@ impl LoopRuntime {
         };
         let list: LoopListWireResult = match serde_json::from_value(response) {
             Ok(list) => list,
-            Err(error) => {
-                tracing::warn!(error = %error, "loop/list returned an unexpected result shape");
+            Err(_) => {
+                tracing::warn!(
+                    method_class = "loop",
+                    failure_stage = "list_result_decode",
+                    failure_class = "invalid_provider_result",
+                    "loop/list returned an unexpected result shape"
+                );
                 return Ok(());
             }
         };

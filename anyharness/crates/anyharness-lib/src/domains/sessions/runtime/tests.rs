@@ -288,11 +288,7 @@ fn choose_startup_strategy_loads_started_fork_children_without_fresh_fallback() 
 }
 
 #[test]
-fn choose_startup_strategy_reforks_zero_turn_fork_child_with_native_id() {
-    // The bug case end-to-end through the IO layer: a fork child with an
-    // eagerly-recorded native id but no first prompt resolves the parent native
-    // id (widened gating) and re-forks instead of issuing a dead no-fallback
-    // load.
+fn choose_startup_strategy_refuses_zero_turn_process_local_fork_with_native_id() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);
 
@@ -316,20 +312,13 @@ fn choose_startup_strategy_reforks_zero_turn_fork_child_with_native_id() {
         .insert_session_with_link(&child, &link)
         .expect("insert fork child and link");
 
-    let strategy =
-        choose_session_startup_strategy(&child, &store).expect("select startup strategy");
-
-    assert_eq!(
-        strategy,
-        SessionStartupStrategy::ForkFromNative {
-            parent_native_session_id: "parent-native".to_string(),
-            provider_anchor: None,
-        }
-    );
+    let error = choose_session_startup_strategy(&child, &store)
+        .expect_err("cold process-local recovery must refuse");
+    assert!(error.to_string().contains("exact-prefix recovery proof"));
 }
 
 #[test]
-fn choose_startup_strategy_forks_unstarted_fork_children_from_parent_native_id() {
+fn choose_startup_strategy_refuses_unstarted_process_local_fork_children() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);
 
@@ -352,30 +341,18 @@ fn choose_startup_strategy_forks_unstarted_fork_children_from_parent_native_id()
         .insert_session_with_link(&child, &link)
         .expect("insert fork child and link");
 
-    let strategy =
-        choose_session_startup_strategy(&child, &store).expect("select startup strategy");
-
-    assert_eq!(
-        strategy,
-        SessionStartupStrategy::ForkFromNative {
-            parent_native_session_id: "parent-native".to_string(),
-            provider_anchor: None,
-        }
-    );
-    assert!(
-        strategy.resumes_durable_history(),
-        "fork startup appends after the copied parent transcript snapshot"
-    );
+    let error = choose_session_startup_strategy(&child, &store)
+        .expect_err("cold process-local recovery must refuse");
+    assert!(error.to_string().contains("exact-prefix recovery proof"));
 }
 
 #[test]
-fn choose_startup_strategy_reforks_snapshot_polluted_zero_turn_fork_child() {
+fn choose_startup_strategy_refuses_snapshot_polluted_zero_turn_fork_child() {
     // End-to-end guard against the snapshot-pollution trap: build the child via
     // the real fork snapshot (which copies the parent's `turn_started` events),
     // so `has_turn_started_event(child)` is true. A zero-turn Claude child must
-    // still re-fork from the parent — proving the policy keys on `last_prompt_at`
-    // and not on the polluted `turn_started` signal. This test fails if anyone
-    // reverts the fork branch to key on `has_turn_started_event`.
+    // still refuse cold recovery — proving the policy keys on `last_prompt_at`
+    // and not on the polluted `turn_started` signal.
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);
 
@@ -419,16 +396,9 @@ fn choose_startup_strategy_reforks_snapshot_polluted_zero_turn_fork_child() {
         "snapshot should have copied the parent's turn_started into the child"
     );
 
-    let strategy =
-        choose_session_startup_strategy(&child, &store).expect("select startup strategy");
-
-    assert_eq!(
-        strategy,
-        SessionStartupStrategy::ForkFromNative {
-            parent_native_session_id: "parent-native".to_string(),
-            provider_anchor: None,
-        }
-    );
+    let error = choose_session_startup_strategy(&child, &store)
+        .expect_err("cold process-local recovery must refuse");
+    assert!(error.to_string().contains("exact-prefix recovery proof"));
 }
 
 #[test]

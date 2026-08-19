@@ -44,6 +44,59 @@ pub(in crate::live::sessions) async fn initialize_connection(
     workspace_id: &str,
     ready_tx: &std::sync::mpsc::Sender<anyhow::Result<String>>,
 ) -> anyhow::Result<acp::schema::InitializeResponse> {
+    initialize_connection_with_policy(
+        conn,
+        source_agent_kind,
+        resolved_agent,
+        ProviderResponsePolicy::Ordinary,
+        session_id,
+        workspace_id,
+        ready_tx,
+    )
+    .await
+}
+
+pub(in crate::live::sessions) async fn initialize_protected_connection(
+    conn: &acp::ConnectionTo<acp::Agent>,
+    source_agent_kind: &str,
+    resolved_agent: &ResolvedAgent,
+    session_id: &str,
+    workspace_id: &str,
+    ready_tx: &std::sync::mpsc::Sender<anyhow::Result<String>>,
+) -> anyhow::Result<acp::schema::InitializeResponse> {
+    initialize_connection_with_policy(
+        conn,
+        source_agent_kind,
+        resolved_agent,
+        ProviderResponsePolicy::ProcessLocalFork,
+        session_id,
+        workspace_id,
+        ready_tx,
+    )
+    .await
+}
+
+#[derive(Clone, Copy)]
+enum ProviderResponsePolicy {
+    Ordinary,
+    ProcessLocalFork,
+}
+
+impl ProviderResponsePolicy {
+    fn protects_payloads(self) -> bool {
+        matches!(self, Self::ProcessLocalFork)
+    }
+}
+
+async fn initialize_connection_with_policy(
+    conn: &acp::ConnectionTo<acp::Agent>,
+    source_agent_kind: &str,
+    resolved_agent: &ResolvedAgent,
+    response_policy: ProviderResponsePolicy,
+    session_id: &str,
+    workspace_id: &str,
+    ready_tx: &std::sync::mpsc::Sender<anyhow::Result<String>>,
+) -> anyhow::Result<acp::schema::InitializeResponse> {
     let initialize_started = Instant::now();
     let client_capabilities = build_client_capabilities(source_agent_kind, resolved_agent);
     let init_response = match conn
@@ -66,20 +119,39 @@ pub(in crate::live::sessions) async fn initialize_connection(
             resp
         }
         Err(e) => {
-            tracing::warn!(
-                session_id = %session_id,
-                workspace_id = %workspace_id,
-                elapsed_ms = initialize_started.elapsed().as_millis(),
-                error = %e,
-                "[workspace-latency] session.actor.acp_initialize.failed"
-            );
-            let _ = ready_tx.send(Err(anyhow::anyhow!("ACP initialize: {e}")));
-            return Err(anyhow::anyhow!("ACP initialize: {e}"));
+            let error = initialize_failure(e, response_policy);
+            if response_policy.protects_payloads() {
+                tracing::warn!(
+                    session_id = %session_id,
+                    workspace_id = %workspace_id,
+                    elapsed_ms = initialize_started.elapsed().as_millis(),
+                    failure_class = "process_local_fork_initialize_failed",
+                    failure_stage = "acp_initialize",
+                    "[workspace-latency] session.actor.acp_initialize.failed"
+                );
+            } else {
+                tracing::warn!(
+                    session_id = %session_id,
+                    workspace_id = %workspace_id,
+                    elapsed_ms = initialize_started.elapsed().as_millis(),
+                    error = %error,
+                    "[workspace-latency] session.actor.acp_initialize.failed"
+                );
+            }
+            let _ = ready_tx.send(Err(anyhow::anyhow!(error.to_string())));
+            return Err(error);
         }
     };
 
     if should_attempt_advertised_auth(source_agent_kind) {
-        authenticate_if_advertised(conn, &init_response, session_id, workspace_id).await;
+        authenticate_if_advertised(
+            conn,
+            &init_response,
+            response_policy,
+            session_id,
+            workspace_id,
+        )
+        .await;
     } else if !init_response.auth_methods.is_empty() {
         tracing::info!(
             session_id = %session_id,
@@ -94,6 +166,7 @@ pub(in crate::live::sessions) async fn initialize_connection(
 async fn authenticate_if_advertised(
     conn: &acp::ConnectionTo<acp::Agent>,
     init_response: &acp::schema::InitializeResponse,
+    response_policy: ProviderResponsePolicy,
     session_id: &str,
     workspace_id: &str,
 ) {
@@ -106,11 +179,19 @@ async fn authenticate_if_advertised(
 
     let method_id = init_response.auth_methods[0].id().clone();
     let authenticate_started = Instant::now();
-    tracing::info!(
-        session_id = %session_id,
-        method_id = %method_id,
-        "agent advertises auth methods, calling authenticate"
-    );
+    if response_policy.protects_payloads() {
+        tracing::info!(
+            session_id = %session_id,
+            auth_method_count = init_response.auth_methods.len(),
+            "agent advertises auth methods, calling authenticate"
+        );
+    } else {
+        tracing::info!(
+            session_id = %session_id,
+            method_id = %method_id,
+            "agent advertises auth methods, calling authenticate"
+        );
+    }
     match conn
         .send_request(acp::schema::AuthenticateRequest::new(method_id.clone()))
         .block_task()
@@ -118,30 +199,61 @@ async fn authenticate_if_advertised(
     {
         Ok(_) => {
             tracing::info!(session_id = %session_id, "ACP authentication succeeded");
-            tracing::info!(
-                session_id = %session_id,
-                workspace_id = %workspace_id,
-                method_id = %method_id,
-                elapsed_ms = authenticate_started.elapsed().as_millis(),
-                "[workspace-latency] session.actor.acp_authenticate.completed"
-            );
+            if response_policy.protects_payloads() {
+                tracing::info!(
+                    session_id = %session_id,
+                    workspace_id = %workspace_id,
+                    elapsed_ms = authenticate_started.elapsed().as_millis(),
+                    "[workspace-latency] session.actor.acp_authenticate.completed"
+                );
+            } else {
+                tracing::info!(
+                    session_id = %session_id,
+                    workspace_id = %workspace_id,
+                    method_id = %method_id,
+                    elapsed_ms = authenticate_started.elapsed().as_millis(),
+                    "[workspace-latency] session.actor.acp_authenticate.completed"
+                );
+            }
         }
         Err(e) => {
-            tracing::warn!(
-                session_id = %session_id,
-                method_id = %method_id,
-                error = %e,
-                "ACP authenticate failed (non-fatal, will attempt new_session anyway)"
-            );
-            tracing::warn!(
-                session_id = %session_id,
-                workspace_id = %workspace_id,
-                method_id = %method_id,
-                elapsed_ms = authenticate_started.elapsed().as_millis(),
-                error = %e,
-                "[workspace-latency] session.actor.acp_authenticate.failed_non_fatal"
-            );
+            if response_policy.protects_payloads() {
+                tracing::warn!(
+                    session_id = %session_id,
+                    workspace_id = %workspace_id,
+                    elapsed_ms = authenticate_started.elapsed().as_millis(),
+                    failure_class = "process_local_fork_authenticate_failed",
+                    failure_stage = "acp_authenticate",
+                    "[workspace-latency] session.actor.acp_authenticate.failed_non_fatal"
+                );
+            } else {
+                tracing::warn!(
+                    session_id = %session_id,
+                    method_id = %method_id,
+                    error = %e,
+                    "ACP authenticate failed (non-fatal, will attempt new_session anyway)"
+                );
+                tracing::warn!(
+                    session_id = %session_id,
+                    workspace_id = %workspace_id,
+                    method_id = %method_id,
+                    elapsed_ms = authenticate_started.elapsed().as_millis(),
+                    error = %e,
+                    "[workspace-latency] session.actor.acp_authenticate.failed_non_fatal"
+                );
+            }
         }
+    }
+}
+
+fn initialize_failure(
+    error: impl std::fmt::Display,
+    response_policy: ProviderResponsePolicy,
+) -> anyhow::Error {
+    if response_policy.protects_payloads() {
+        anyhow::anyhow!("ACP initialize failed during process-local fork startup")
+    } else {
+        anyhow::anyhow!("ACP initialize: {error}")
     }
 }
 
@@ -235,6 +347,20 @@ mod tests {
         ResolvedArtifact,
     };
     use crate::domains::agents::registry::built_in_registry;
+
+    #[test]
+    fn protected_initialize_failure_omits_provider_message_and_data() {
+        let error =
+            acp::Error::invalid_params().data(serde_json::json!({"sessionId": "provider-secret"}));
+        assert!(error.to_string().contains("provider-secret"));
+
+        let protected =
+            initialize_failure(&error, ProviderResponsePolicy::ProcessLocalFork).to_string();
+        assert!(!protected.contains("provider-secret"));
+        assert!(initialize_failure(&error, ProviderResponsePolicy::Ordinary)
+            .to_string()
+            .contains("provider-secret"));
+    }
 
     #[test]
     fn client_capabilities_codex_only_advertises_request_user_input() {

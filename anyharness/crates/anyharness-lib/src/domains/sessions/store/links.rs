@@ -1,6 +1,9 @@
 use rusqlite::{params, OptionalExtension};
 
-use super::fork_operations::{mark_fork_operation_child_persisted_row, ForkOperationChildResult};
+use super::fork_operations::{
+    mark_fork_operation_child_persisted_row, mark_process_local_fork_child_prepared_row,
+    ForkOperationChildResult,
+};
 use super::sessions::{insert_session_row, map_session};
 use super::SessionStore;
 use crate::domains::sessions::links::model::{SessionLinkRecord, SessionLinkRelation};
@@ -101,6 +104,57 @@ impl SessionStore {
                 0
             };
             mark_fork_operation_child_persisted_row(conn, operation_id, result, now)?;
+            Ok(copied)
+        })
+    }
+
+    /// Insert the process-local child, fork link, and exact event prefix while
+    /// deliberately leaving the operation in `prepared`. The child actor owns
+    /// the later prepared -> in-flight CAS at the actual `session/fork` seam.
+    pub fn insert_prepared_process_local_fork_child_with_link(
+        &self,
+        record: &SessionRecord,
+        link: &SessionLinkRecord,
+        operation_id: &str,
+        result: &ForkOperationChildResult,
+        now: &str,
+    ) -> anyhow::Result<usize> {
+        anyhow::ensure!(
+            link.relation == SessionLinkRelation::Fork,
+            "fork operations are only supported for fork links"
+        );
+        anyhow::ensure!(
+            link.child_session_id == record.id,
+            "fork link child id must match inserted session"
+        );
+        anyhow::ensure!(
+            record.native_session_id.is_none() && result.native_child_session_id.is_none(),
+            "prepared process-local fork cannot have a native child id"
+        );
+        let prefix_terminal_seq = result.prefix_terminal_seq.ok_or_else(|| {
+            anyhow::anyhow!("process-local fork child requires a prefix terminal seq")
+        })?;
+
+        self.db.with_tx_anyhow(|conn| {
+            insert_session_row(conn, record)?;
+            insert_session_link_row(conn, link)?;
+            let copied = conn.execute(
+                "INSERT INTO session_events (
+                    session_id, seq, timestamp, event_type, turn_id, item_id, payload_json
+                 )
+                 SELECT ?1, seq, timestamp, event_type, turn_id, item_id, payload_json
+                 FROM session_events
+                 WHERE session_id = ?2 AND seq <= ?3
+                 ORDER BY seq ASC",
+                params![record.id, link.parent_session_id, prefix_terminal_seq],
+            )?;
+            mark_process_local_fork_child_prepared_row(
+                conn,
+                operation_id,
+                &record.id,
+                result,
+                now,
+            )?;
             Ok(copied)
         })
     }
