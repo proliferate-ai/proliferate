@@ -28,7 +28,8 @@ use crate::domains::workflows::materialize::{materialize_planned_context, plan_c
 use crate::domains::workflows::projection::{run_view, RunProjection, RunView};
 use crate::domains::workflows::store::{NewRunParams, WorkspaceOccupied};
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{WorkspaceLifecycleState, WorkspaceRecord};
+use crate::domains::workspaces::operation_gate::{WorkspaceOperationKind, WorkspaceOperationLease};
 use crate::domains::workspaces::workflow_placement::{
     ResolvedWorkflowPlacement, WorkflowPlacementError, WorkflowPlacementRequest,
 };
@@ -48,6 +49,14 @@ pub(super) const MATERIALIZATION_FAILED: &str = "WORKFLOW_WORKSPACE_MATERIALIZAT
 /// Retrying the same snapshot cannot fix it, so it is a 409, never the
 /// retry-safe 503.
 pub(super) const PLACEMENT_CONFLICT: &str = "WORKFLOW_PLACEMENT_CONFLICT";
+/// ExistingWorkspace placement (F-A1) names a workspace id this runtime does
+/// not know. 404: the reference is dangling, not a conflict.
+pub(super) const WORKSPACE_NOT_FOUND: &str = "WORKFLOW_WORKSPACE_NOT_FOUND";
+/// ExistingWorkspace placement names a real workspace that cannot host a run:
+/// archived, checkout gone, or not a local checkout. `repoConfigId` resolves
+/// independently and is never compared with the workspace's repo root.
+/// Retrying the same snapshot cannot fix an ineligible workspace — 409.
+pub(super) const WORKSPACE_NOT_ELIGIBLE: &str = "WORKFLOW_WORKSPACE_NOT_ELIGIBLE";
 
 /// The workflow-runs route table, merged into the v1 router by `build_router`
 /// — the handlers' own module carries it so `router.rs` stays under the
@@ -187,12 +196,12 @@ fn map_placement_error(error: WorkflowPlacementError) -> ApiError {
     }
 }
 
-/// A placed workspace plus what compensation must tear down if a later step
-/// fails before any row exists — populated only for the worktree mode; a
-/// repo-root placement is the user's own checkout and is never torn down.
+/// A placed workspace plus any acceptance guard and artifact that compensation
+/// must retain or tear down before rows exist. User-owned checkouts stay intact.
 struct PlacedWorkspace {
     workspace: WorkspaceRecord,
     worktree: Option<ResolvedWorkflowPlacement>,
+    operation_lease: Option<WorkspaceOperationLease>,
 }
 
 async fn place_workspace(
@@ -200,9 +209,8 @@ async fn place_workspace(
     run_id: &str,
     placement: &InvocationPlacement,
 ) -> Result<PlacedWorkspace, ApiError> {
-    // Ruling A: `placement.repoConfigId` is the runtime repo-root id,
-    // end-to-end. An id this runtime does not know is the snapshot being
-    // wrong — the 400 — never a retryable runtime failure.
+    // Ruling A: `placement.repoConfigId` is the runtime repo-root id end to end.
+    // An unknown id makes the snapshot wrong (400), never retryable.
     let repo_root = {
         let repo_root_service = state.repo_root_service.clone();
         let repo_config_id = placement.repo_config_id.clone();
@@ -218,6 +226,58 @@ async fn place_workspace(
             )
         })?
     };
+
+    // F-A1: ExistingWorkspace adopts the caller's active local checkout.
+    // repoConfigId resolves independently; adoption records only the run-row
+    // association, with no provenance rewrite or compensatable artifact.
+    if placement.mode == PlacementMode::ExistingWorkspace {
+        let workspace_id = placement
+            .workspace_id
+            .clone()
+            .expect("validate() checked existing_workspace carries a workspaceId");
+        #[cfg(test)]
+        super::workflow_runs_lease_barriers::before_acquire(&workspace_id).await;
+        // Take shared lifecycle exclusion before the authoritative row read;
+        // the actor receives it through materialization and prompt acceptance.
+        let operation_lease = state
+            .workspace_operation_gate
+            .acquire_shared(&workspace_id, WorkspaceOperationKind::SessionStart)
+            .await;
+        let workspace = {
+            let workspace_runtime = state.workspace_runtime.clone();
+            let lookup_id = workspace_id.clone();
+            run_blocking("workflow_run_adopt_workspace", move || {
+                workspace_runtime.get_workspace(&lookup_id)
+            })
+            .await?
+            .map_err(|error| ApiError::internal(format!("workspace lookup: {error}")))?
+            .ok_or_else(|| {
+                ApiError::not_found(
+                    format!("workspace {workspace_id} not found"),
+                    WORKSPACE_NOT_FOUND,
+                )
+            })?
+        };
+        if workspace.lifecycle_state != WorkspaceLifecycleState::Active {
+            return Err(ApiError::conflict(
+                format!("workspace {} is archived", workspace.id),
+                WORKSPACE_NOT_ELIGIBLE,
+            ));
+        }
+        if !workspace.has_local_checkout() || workspace.checkout_directory_missing() {
+            return Err(ApiError::conflict(
+                format!("workspace {} has no usable local checkout", workspace.id),
+                WORKSPACE_NOT_ELIGIBLE,
+            ));
+        }
+        // Cross-repository adoption is valid: neither workspace.repo_root_id nor
+        // its path is compared with the independently resolved repoConfigId.
+        return Ok(PlacedWorkspace {
+            workspace,
+            worktree: None,
+            operation_lease: Some(operation_lease),
+        });
+    }
 
     let workspace_runtime = state.workspace_runtime.clone();
     let run_id = run_id.to_string();
@@ -237,6 +297,7 @@ async fn place_workspace(
             Ok(PlacedWorkspace {
                 workspace,
                 worktree: Some(resolved),
+                operation_lease: None,
             })
         }
         // Ruling B: resolve-or-reuse the workspace already registered at the
@@ -256,16 +317,18 @@ async fn place_workspace(
             Ok(PlacedWorkspace {
                 workspace: resolution.workspace,
                 worktree: None,
+                operation_lease: None,
             })
+        }
+        PlacementMode::ExistingWorkspace => {
+            unreachable!("existing_workspace placements return before this match")
         }
     })
     .await?
     .map_err(map_placement_error)
 }
 
-/// Undo the worktree artifact a failing PUT created before rows existed, so
-/// the retry is genuinely fresh (F8 without persistence). No-op for
-/// repo-root placements.
+/// Undo a pre-row worktree artifact so retry is fresh; other modes are no-ops.
 async fn compensate_placement(state: &AppState, placed: &PlacedWorkspace) {
     let Some(resolved) = placed.worktree.clone() else {
         return;
@@ -287,7 +350,8 @@ async fn compensate_placement(state: &AppState, placed: &PlacedWorkspace) {
         (status = 201, description = "Run placed and started", body = RunProjection),
         (status = 200, description = "Idempotent replay: the existing run, untouched", body = RunProjection),
         (status = 400, description = "WORKFLOW_SNAPSHOT_INVALID (malformed body, non-UUID run id, unknown repo root id)"),
-        (status = 409, description = "WORKFLOW_PLACEMENT_CONFLICT, zero rows inserted"),
+        (status = 404, description = "WORKFLOW_WORKSPACE_NOT_FOUND (existing_workspace placement names an unknown workspace)"),
+        (status = 409, description = "WORKFLOW_PLACEMENT_CONFLICT or WORKFLOW_WORKSPACE_NOT_ELIGIBLE, zero rows inserted. Note: sessions of concurrent runs under existing_workspace placement share one working tree with no write isolation; coordinating write-heavy workflows is the caller's decision"),
         (status = 503, description = "WORKFLOW_WORKSPACE_MATERIALIZATION_FAILED, zero rows inserted"),
     ),
     tag = "workflow-runs"
@@ -355,22 +419,18 @@ pub async fn put_workflow_run(
             );
             let projection = state
                 .workflow_manager
-                .start_run_synced(&run_id)
+                .start_run_synced(&run_id, None)
                 .await
                 .map_err(map_command_error)?;
             return Ok((StatusCode::OK, Json(projection)));
         }
     }
 
-    // Disk before rows: placement, workspace, exclude entry, and context docs
-    // all succeed before one row exists — a failure past this point
-    // compensates the artifact it created, so the retry starts fresh.
-    let placed = place_workspace(&state, &run_id, &snapshot.placement).await?;
+    // Disk before rows; a later failure compensates its artifact for fresh retry.
+    let mut placed = place_workspace(&state, &run_id, &snapshot.placement).await?;
 
-    // The one-live-run pre-check (Ruling B), before this PUT touches the
-    // workspace's checkout; the store re-enforces it inside the insert
-    // transaction against races.
-    {
+    // Ruling B pre-check before checkout writes; the transaction rechecks races.
+    if snapshot.placement.enforces_exclusive_occupancy() {
         let store = state.workflow_store.clone();
         let workspace_id = placed.workspace.id.clone();
         let occupant = run_blocking("workflow_run_occupancy", move || {
@@ -460,9 +520,7 @@ pub async fn put_workflow_run(
         }
     };
 
-    // Emitted only after the insert transaction commits, so a workspace that
-    // loses the occupancy race and gets compensated away never reports a
-    // materialization it no longer has.
+    // Emit only after insert commits; compensated race losers report nothing.
     tracing::info!(
         target: WORKFLOW_WORKSPACE_MATERIALIZED_TRACING_TARGET,
         run_id = %run_id,
@@ -478,8 +536,7 @@ pub async fn put_workflow_run(
         "workflow run accepted",
     );
 
-    // The reply reads THROUGH the actor mailbox, so the body already
-    // reflects the first node's launch instead of racing it.
+    // Read through the actor mailbox so the reply reflects first-node launch.
     let status = if created.created {
         StatusCode::CREATED
     } else {
@@ -487,7 +544,7 @@ pub async fn put_workflow_run(
     };
     let projection = state
         .workflow_manager
-        .start_run_synced(&run_id)
+        .start_run_synced(&run_id, placed.operation_lease.take())
         .await
         .map_err(map_command_error)?;
     Ok((status, Json(projection)))

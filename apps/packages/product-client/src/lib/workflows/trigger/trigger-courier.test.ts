@@ -58,6 +58,38 @@ describe("runWorkflowTrigger", () => {
     expect(runBody?.definition.nodes).toHaveLength(1);
   });
 
+  it("forwards the frozen ExistingWorkspace identity unchanged", async () => {
+    const existingWorkspaceInput: TriggerCourierInput = {
+      ...input,
+      placement: {
+        repoConfigId: "repo-requested",
+        mode: "existing_workspace",
+        workspaceId: "workspace-requested",
+      },
+    };
+    const { deps } = courierFakes();
+    const frozenPlacement = {
+      repoConfigId: "repo-frozen",
+      mode: "existing_workspace" as const,
+      workspaceId: "workspace-frozen",
+    };
+    vi.mocked(deps.putInvocation).mockImplementation(async (invocationId, body) => ({
+      ...frozenInvocation(invocationId, body),
+      placement: frozenPlacement,
+    }));
+
+    await runWorkflowTrigger(deps, existingWorkspaceInput);
+
+    const runBody = vi.mocked(deps.putRun).mock.calls[0]?.[1];
+    expect(runBody?.placement).toBe(frozenPlacement);
+    expect(runBody?.placement).toEqual({
+      repoConfigId: "repo-frozen",
+      mode: "existing_workspace",
+      workspaceId: "workspace-frozen",
+    });
+    expect(runBody?.placement).not.toEqual(existingWorkspaceInput.placement);
+  });
+
   it("never places the run when the invocation fails", async () => {
     const { deps } = courierFakes({
       putInvocation: vi.fn(async () => {

@@ -4406,8 +4406,11 @@
           "400": {
             "description": "WORKFLOW_SNAPSHOT_INVALID (malformed body, non-UUID run id, unknown repo root id)"
           },
+          "404": {
+            "description": "WORKFLOW_WORKSPACE_NOT_FOUND (existing_workspace placement names an unknown workspace)"
+          },
           "409": {
-            "description": "WORKFLOW_PLACEMENT_CONFLICT, zero rows inserted"
+            "description": "WORKFLOW_PLACEMENT_CONFLICT or WORKFLOW_WORKSPACE_NOT_ELIGIBLE, zero rows inserted. Note: sessions of concurrent runs under existing_workspace placement share one working tree with no write isolation; coordinating write-heavy workflows is the caller's decision"
           },
           "503": {
             "description": "WORKFLOW_WORKSPACE_MATERIALIZATION_FAILED, zero rows inserted"
@@ -12741,6 +12744,13 @@
           },
           "repoConfigId": {
             "type": "string"
+          },
+          "workspaceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The adopted workspace, required iff `mode` is `ExistingWorkspace`\n(F-A1): the run executes in exactly this workspace, creates no\nworktree, and teardown never touches it."
           }
         }
       },
@@ -15089,7 +15099,8 @@
         "type": "string",
         "enum": [
           "worktree",
-          "repo_root"
+          "repo_root",
+          "existing_workspace"
         ]
       },
       "PlanDecisionRequest": {

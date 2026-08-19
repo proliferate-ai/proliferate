@@ -182,10 +182,11 @@ async def put_workflow_invocation_v2(
         "description": definition.description,
         "definition": definition.definition_json,
         "arguments": arguments,
-        "placement": {
-            "repoConfigId": body.placement.repo_config_id,
-            "mode": body.placement.mode,
-        },
+        "placement": body.placement.model_dump(
+            by_alias=True,
+            mode="json",
+            exclude_none=True,
+        ),
         "createdAt": created_at.isoformat().replace("+00:00", "Z"),
     }
     try:

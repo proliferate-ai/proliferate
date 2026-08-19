@@ -133,6 +133,7 @@ fn snapshot_for(
         placement: InvocationPlacement {
             repo_config_id: "rc-1".into(),
             mode: PlacementMode::Worktree,
+            workspace_id: None,
         },
     }
 }
@@ -145,8 +146,7 @@ fn create_run_rows(
 ) -> CreatedRun {
     // Production stores the courier's delivered JSON byte-verbatim; the tests
     // build the definition in code, so its serialization stands in for it.
-    let definition_json =
-        serde_json::to_string(&snapshot.definition).expect("definition json");
+    let definition_json = serde_json::to_string(&snapshot.definition).expect("definition json");
     let created = store
         .create_run_with_first_node(NewRunParams {
             run_id: run_id.into(),

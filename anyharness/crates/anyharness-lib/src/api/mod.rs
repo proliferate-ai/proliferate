@@ -20,6 +20,10 @@ mod support_window_route_tests;
 #[cfg(test)]
 mod workflow_run_command_route_tests;
 #[cfg(test)]
+mod workflow_runs_existing_workspace_lease_tests;
+#[cfg(test)]
+mod workflow_runs_existing_workspace_route_tests;
+#[cfg(test)]
 mod workflow_runs_placement_route_tests;
 #[cfg(test)]
 mod workflow_runs_route_tests;

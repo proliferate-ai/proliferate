@@ -7540,7 +7540,9 @@ export interface components {
              * Mode
              * @enum {string}
              */
-            mode: "worktree" | "repo_root";
+            mode: "worktree" | "repo_root" | "existing_workspace";
+            /** Workspaceid */
+            workspaceId?: string | null;
         };
         /** WorkflowInvocationResponse */
         WorkflowInvocationResponse: {

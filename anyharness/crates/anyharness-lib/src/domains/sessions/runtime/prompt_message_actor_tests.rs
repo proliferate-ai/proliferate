@@ -412,9 +412,7 @@ pub(crate) fn write_scripted_agent(runtime_home: &Path) -> ScriptedAgent {
         &program,
         r#"#!/usr/bin/env python3
 import json, os, sys, time
-log_path = sys.argv[-2]
-control_dir = sys.argv[-1]
-native_session_id = "native-target"
+log_path, control_dir = sys.argv[-2:]; native_session_id = "native-target"
 def emit(payload):
     print(json.dumps(payload, separators=(",", ":")), flush=True)
 def control(name):
@@ -439,6 +437,8 @@ for raw_line in sys.stdin:
         })
     elif method == "session/new":
         native_session_id = "native-target"
+        open(control("new-seen"), "w", encoding="utf-8").close()
+        while os.path.exists(control("hold-new")) and not os.path.exists(control("release-new")): time.sleep(0.01)
         emit({
             "jsonrpc": "2.0",
             "id": request_id,

@@ -126,9 +126,10 @@ impl WorkspaceCheckpointService {
     }
 
     /// Capture the workspace's current git state as a turn-start checkpoint.
-    /// The caller MUST hold the workspace's shared `SessionPrompt` lease for
-    /// the full capture→dispatch→settlement interval. SessionRuntime owns that
-    /// one non-nested lease for every prompt source, including internal ones.
+    /// The caller MUST hold one shared workspace-operation lease for the full
+    /// capture→dispatch→settlement interval. Ordinary prompts acquire
+    /// `SessionPrompt`; composite creation or launch flows may extend an
+    /// already-held shared lease. SessionRuntime keeps it non-nested.
     pub(crate) async fn capture_turn_start_under_workspace_lease(
         self: &Arc<Self>,
         workspace_id: &str,

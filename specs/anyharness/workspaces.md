@@ -381,19 +381,21 @@ checkpoint ref as an archive one.
 
 The capture cadence is turn-start: a private hook on `SessionRuntime` runs at
 every prompt dispatch seam (`runtime/prompt.rs`) just before the actor command.
-Each prompt flow owns exactly one shared `SessionPrompt` workspace-operation
-lease across resolve, capture, actor dispatch, and settlement. Ordinary runtime
-entrypoints acquire it once. A flow that already owns that lease uses
-`send_prompt_under_workspace_lease` or
+Each prompt flow owns exactly one shared workspace-operation lease across
+resolve, capture, actor dispatch, and settlement. Ordinary runtime entrypoints
+acquire `SessionPrompt` once. A creation or launch flow that already owns a
+longer-lived shared lease uses `send_prompt_under_workspace_lease` or
 `send_text_prompt_with_id_and_provenance_under_workspace_lease` (session
-creation) or `send_text_prompt_with_provenance_under_workspace_lease` (review
-Product MCP feedback), and the
-checkpoint hook calls `capture_turn_start_under_workspace_lease`; none of those
-under-lease entrypoints reacquires it, and each prompt entrypoint verifies that
-the supplied lease key matches the session's workspace. This avoids a
-nested-read deadlock behind a queued exclusive writer and prevents retention,
-purge, archive, or mobility cleanup from observing the intentional
-refs-before-row interval. Capture does not quiesce or stop live work.
+creation), `send_text_blocks_prompt_with_id_under_workspace_lease` (workflow
+first-prompt envelope), or
+`send_text_prompt_with_provenance_under_workspace_lease` (review Product MCP
+feedback), and the checkpoint hook calls
+`capture_turn_start_under_workspace_lease`; none of those under-lease
+entrypoints reacquires it, and each prompt entrypoint verifies that the supplied
+lease key matches the session's workspace. This avoids a nested-read deadlock
+behind a queued exclusive writer and prevents retention, purge, archive, or
+mobility cleanup from observing the intentional refs-before-row interval.
+Capture does not quiesce or stop live work.
 
 A busy handle (the prompt will queue) skips capture, because a snapshot labelled
 as this boundary would be dishonest. A queue-drain turn start IS a turn start

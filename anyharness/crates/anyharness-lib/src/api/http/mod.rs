@@ -48,6 +48,8 @@ pub mod support_windows;
 pub mod terminals;
 pub mod workflow_run_commands;
 pub mod workflow_runs;
+#[cfg(test)]
+pub(crate) mod workflow_runs_lease_barriers;
 pub mod workspaces;
 pub(crate) mod workspaces_contract;
 pub mod workspaces_lifecycle;
