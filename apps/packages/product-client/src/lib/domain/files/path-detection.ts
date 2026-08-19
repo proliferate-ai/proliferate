@@ -42,26 +42,67 @@ export function looksLikePath(value: string): boolean {
   return false;
 }
 
+/** One ASCII letter, `:`, then one slash — drive-root syntax, not a scheme. */
+const DRIVE_ROOT_PREFIX = /^[A-Za-z]:[\\/]/;
+/** Any scheme at all. Drive roots are exempted before this runs. */
+const ANY_URI_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
+/** Schemes refused even when they wear a `:digits` tail. */
+const EXECUTABLE_OR_FOREIGN_SCHEME =
+  /^(?:javascript|mailto|data|tel|vbscript|file|about|blob|http|https|ftp|ws|wss|vscode):/i;
+/** The whole reference is one path plus a terminal `:line[:column]`. */
+const TERMINAL_LINE_SUFFIX_ONLY = /^[^:]+:\d+(?::\d+)?$/;
+const CONTROL_CHARACTER = /[\u0000-\u001F\u007F]/;
+/** Every whitespace character except U+0020, the one the parser may hand us. */
+const DISALLOWED_WHITESPACE = /[^\S ]/;
+/** `?` and `#` are literal path characters inside an explicit link destination. */
+const GLOB_METACHARACTER = /[*[\]{}]/;
+
 /**
  * Heuristic for explicit markdown link destinations. Because the markdown
  * syntax already says "this is a link", this accepts bare filenames that would
- * be too noisy to detect in free text or inline code.
+ * be too noisy to detect in free text or inline code, and it accepts a literal
+ * U+0020 space because a repaired local destination legitimately carries one.
+ *
+ * The rejections run before the `looksLikePath` delegation on purpose: this
+ * grammar is strictly narrower than the free-text one on schemes, controls, and
+ * non-space whitespace, so no delegated `true` may escape them. `looksLikePath`
+ * itself is unchanged and still rejects all whitespace for its own callers.
+ *
+ * Detection grants no filesystem authority: everything accepted here still
+ * passes through the canonical locator, which is where traversal, drive-root
+ * availability, and workspace containment are decided.
  */
 export function looksLikeFileReferenceHref(value: string): boolean {
-  if (looksLikePath(value)) return true;
-
   const trimmed = value.trim();
   if (trimmed.length === 0 || trimmed.length > 512) return false;
-  if (/\s/.test(trimmed)) return false;
-  if (/[*?[\]{}]/.test(trimmed)) return false;
-  // Any scheme (https://, mailto:, vscode:) is not a workspace path.
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return false;
-  if (/^(javascript|mailto|data|tel|vbscript|file|about|blob):/i.test(trimmed)) return false;
+  if (CONTROL_CHARACTER.test(trimmed)) return false;
+  if (DISALLOWED_WHITESPACE.test(trimmed)) return false;
+  if (GLOB_METACHARACTER.test(trimmed)) return false;
   if (trimmed.startsWith("//")) return false;
+  if (/^www\./i.test(trimmed)) return false;
   if (trimmed.startsWith("#")) return false;
 
-  const destinationPath = stripUrlSuffix(trimmed);
-  const { path } = splitPathLineSuffix(destinationPath);
+  // A scheme is an authority grant, not a workspace path. The exact drive-root
+  // form is the sole colon exception.
+  //
+  // `name:12` is genuinely ambiguous between a scheme and a `:line` suffix
+  // (`Makefile:12` versus `javascript:1`), so the terminal-line-suffix shape
+  // reads as a file reference while the schemes that can carry executable or
+  // out-of-workspace meaning are refused outright either way.
+  if (EXECUTABLE_OR_FOREIGN_SCHEME.test(trimmed)) return false;
+  const terminalLineSuffixOnly = TERMINAL_LINE_SUFFIX_ONLY.test(trimmed);
+  if (
+    !DRIVE_ROOT_PREFIX.test(trimmed)
+    && !terminalLineSuffixOnly
+    && ANY_URI_SCHEME.test(trimmed)
+  ) {
+    return false;
+  }
+
+  if (looksLikePath(trimmed)) return true;
+
+  const { path } = splitPathLineSuffix(trimmed);
+
   const basename = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
   if (!basename) return false;
   // The markdown link syntax is already an explicit file-reference signal,
@@ -119,11 +160,6 @@ function hasFileExtension(basename: string): boolean {
   const ext = basename.slice(dot + 1);
   // 1..8 chars, alphanumeric — covers .ts, .tsx, .py, .yaml, .toml, .lock, etc.
   return /^[a-z0-9]{1,8}$/i.test(ext);
-}
-
-function stripUrlSuffix(value: string): string {
-  const suffixIndex = value.search(/[?#]/);
-  return suffixIndex >= 0 ? value.slice(0, suffixIndex) : value;
 }
 
 /**

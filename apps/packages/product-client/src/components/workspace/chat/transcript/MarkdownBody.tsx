@@ -19,6 +19,7 @@ import {
   ChatContentSearchQueryContext,
 } from "./ChatContentSearchContext";
 import { stabilizeStreamingMarkdown } from "#product/lib/domain/chat/transcript/streaming-markdown";
+import { repairTranscriptFileLinks } from "#product/lib/domain/chat/transcript/file-link-markdown";
 import { MarkdownRevealContext } from "./MarkdownRevealText";
 import {
   MarkdownCodeBlockContext,
@@ -161,10 +162,16 @@ export const MarkdownBody = memo(function MarkdownBody({
   enableContentSearch = false,
   surface = "message",
 }: MarkdownBodyProps) {
-  const parsedContent = useMemo(
-    () => (isStreaming ? stabilizeStreamingMarkdown(content) : content),
-    [content, isStreaming],
-  );
+  const parsedContent = useMemo(() => {
+    // A file viewer displays the file's own bytes: neither transformation may
+    // run there, settled or streaming. This bypass is explicit rather than an
+    // accident of which surface happens to pass isStreaming.
+    if (surface !== "message") return content;
+    // Render copy only. `content` is the authoritative transcript text and is
+    // never mutated; both passes are pure and return a new string.
+    const stabilized = isStreaming ? stabilizeStreamingMarkdown(content) : content;
+    return repairTranscriptFileLinks(stabilized);
+  }, [content, isStreaming, surface]);
   const markdownClassName = [
     // Single measure: the thread column (config/chat-layout.ts) uses the same 48rem
     // --container-transcript-thread token as the new-chat flow, and BOTH

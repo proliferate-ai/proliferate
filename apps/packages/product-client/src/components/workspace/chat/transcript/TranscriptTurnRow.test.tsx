@@ -12,6 +12,7 @@ import {
   shouldHoldAssistantRevealFrontier,
 } from "#product/hooks/chat/ui/use-assistant-reveal-frontier";
 import { resolveCompletedHistoryDisclosureLabel } from "#product/components/workspace/chat/transcript/TranscriptTurnChrome";
+import { resolveAssistantMarkdownEndResource } from "#product/lib/domain/chat/assistant-markdown-end-resource";
 
 describe("resolveTranscriptTurnDiffPanelKind", () => {
   it("uses current git diffs only for the latest completed turn row", () => {
@@ -166,6 +167,23 @@ describe("assistant end resource placement", () => {
       visualTurnCompleted: true,
       hasResource: true,
     })).toBe(true);
+  });
+
+  it("never turns a synthetic streaming closure into a card", () => {
+    // The row calls the extractor on the raw tail content and gates the render
+    // on visual turn completion. Streaming stabilization is a MarkdownBody
+    // render-copy concern and never reaches the extractor, so an unterminated
+    // tail yields no resource at all — the gate is not the only thing standing
+    // between a half-written destination and a card.
+    const streamingTail = "The result is [decision](/repo/specs/My Decision.md";
+    expect(resolveAssistantMarkdownEndResource(streamingTail)).toBeNull();
+    expect(shouldRenderAssistantEndResource({
+      rowIsLastTurnRow: true,
+      visualTurnCompleted: false,
+      hasResource: resolveAssistantMarkdownEndResource(streamingTail) !== null,
+    })).toBe(false);
+    expect(resolveAssistantMarkdownEndResource(`${streamingTail})`)?.path)
+      .toBe("/repo/specs/My Decision.md");
   });
 });
 

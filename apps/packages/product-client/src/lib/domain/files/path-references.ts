@@ -63,9 +63,33 @@ interface ResolveFileReferenceInput {
   homeDirectory?: string | null;
 }
 
+/**
+ * The one decode a raw file reference gets: a single case-insensitive `%20`
+ * pass, nothing else.
+ *
+ * A Markdown destination that survives the transcript repair carries its spaces
+ * as `%20`, so this is what turns a rendered mention back into the name the
+ * author wrote. It is deliberately not `decodeURIComponent`: general URI
+ * decoding would let `%2F`, `%5C`, `%2E%2E`, and `%00` manufacture separators,
+ * traversal, or NUL out of an inert literal. `+` is not a space here, and
+ * nothing is decoded twice, so `%2520` stays `%2520`.
+ *
+ * Accepted compatibility tradeoff: a real filename containing the literal
+ * characters `%20` resolves as a space-bearing name at this seam. That
+ * ambiguity is narrower and safer than general decoding, and it is the only
+ * meaning-changing case.
+ */
+export function decodeFileReferenceSpaces(rawReference: string): string {
+  return rawReference.replace(/%20/gi, " ");
+}
+
 /** Classify one rendered reference into exactly one filesystem authority. */
 export function resolveFileReference(args: ResolveFileReferenceInput): ResolvedFileReference {
-  const { path: parsedPath, line, column } = splitPathLineSuffix(args.rawPath.trim());
+  // Ordered exactly: trim once, decode `%20` once, never trim again, then split
+  // the terminal `:line[:column]`. Skipping the second trim is what lets an
+  // encoded terminal filename space survive into the parsed path.
+  const decodedReference = decodeFileReferenceSpaces(args.rawPath.trim());
+  const { path: parsedPath, line, column } = splitPathLineSuffix(decodedReference);
   const locator = typeof args.workspacePathOverride === "string"
     ? classifyStructuredWorkspacePath(args.workspacePathOverride, args)
     : classifyRawPath(parsedPath, args);

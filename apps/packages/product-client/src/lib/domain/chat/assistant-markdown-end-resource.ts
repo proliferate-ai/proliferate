@@ -1,7 +1,13 @@
 import {
+  repairTranscriptFileLinks,
+  scanTranscriptMarkdownLinks,
+  unescapeMarkdownDestination,
+} from "#product/lib/domain/chat/transcript/file-link-markdown";
+import {
   looksLikeFileReferenceHref,
   splitPathLineSuffix,
 } from "#product/lib/domain/files/path-detection";
+import { decodeFileReferenceSpaces } from "#product/lib/domain/files/path-references";
 
 export interface AssistantMarkdownEndResource {
   rawPath: string;
@@ -10,68 +16,53 @@ export interface AssistantMarkdownEndResource {
   typeLabel: "Document · MD";
 }
 
-const MARKDOWN_LINK_DESTINATION = /(!?)\[[^\]]*\]\(\s*(?:<([^>]+)>|((?:\\.|[^\s)])+))/g;
-
 /**
  * Resolve the last unique Markdown document linked by final assistant prose.
  * This is render-time presentation data, matching inline file-mention
  * ownership: nothing is persisted back into transcript state.
+ *
+ * It reads the same settled repaired copy and the same complete-balanced-link
+ * scan the inline mentions render from, so the card and the prose can never
+ * disagree about which document was named. It never runs streaming
+ * stabilization, so a synthetic closing delimiter can never produce a card.
+ *
+ * Decoding is the shared raw-reference `%20` rule and nothing more: encoded
+ * separators and traversal stay literal, and `?`/`#` are literal path
+ * characters rather than URL delimiters, so the card cannot be steered to a
+ * different target than the link text names.
  */
 export function resolveAssistantMarkdownEndResource(
   markdown: string | null | undefined,
 ): AssistantMarkdownEndResource | null {
   if (!markdown) return null;
 
-  const visibleMarkdown = stripMarkdownCode(markdown);
   const seen = new Set<string>();
   let resolved: AssistantMarkdownEndResource | null = null;
 
-  for (const match of visibleMarkdown.matchAll(MARKDOWN_LINK_DESTINATION)) {
-    if (match[1] === "!") continue;
-    const escapedDestination = match[2] ?? match[3] ?? "";
-    const rawPath = unescapeMarkdownDestination(escapedDestination.trim());
+  for (const link of scanTranscriptMarkdownLinks(repairTranscriptFileLinks(markdown))) {
+    if (link.isImage) continue;
+    const rawPath = decodeFileReferenceSpaces(
+      unescapeMarkdownDestination(link.destination).trim(),
+    );
     if (!looksLikeFileReferenceHref(rawPath)) continue;
 
-    const destinationPath = stripQueryAndFragment(rawPath);
-    const { path: pathWithoutLine } = splitPathLineSuffix(destinationPath);
-    const displayPath = safelyDecodePath(pathWithoutLine);
-    if (!/\.mdx?$/i.test(displayPath)) continue;
+    const { path } = splitPathLineSuffix(rawPath);
+    // Case-insensitive, and on the exact decoded path — never on a stripped or
+    // separately decoded variant.
+    if (!/\.mdx?$/i.test(path)) continue;
 
-    const key = displayPath.replace(/\\/g, "/");
+    const key = path.replace(/\\/g, "/");
     if (seen.has(key)) continue;
     seen.add(key);
     resolved = {
-      rawPath: safelyDecodePath(rawPath),
-      path: displayPath,
-      displayName: basename(displayPath),
+      rawPath,
+      path,
+      displayName: basename(path),
       typeLabel: "Document · MD",
     };
   }
 
   return resolved;
-}
-
-function stripMarkdownCode(markdown: string): string {
-  return markdown
-    .replace(/```[\s\S]*?(?:```|$)/g, "")
-    .replace(/`[^`\n]*`/g, "");
-}
-
-function unescapeMarkdownDestination(value: string): string {
-  return value.replace(/\\([\\()<>])/g, "$1");
-}
-
-function stripQueryAndFragment(value: string): string {
-  const suffixIndex = value.search(/[?#]/);
-  return suffixIndex >= 0 ? value.slice(0, suffixIndex) : value;
-}
-
-function safelyDecodePath(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
 }
 
 function basename(path: string): string {

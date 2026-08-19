@@ -119,6 +119,48 @@ describe("MarkdownBody presentation", () => {
     expect(html).not.toContain("(/tmp/project/config");
   });
 
+  it("repairs a settled local-file link in the render copy only", () => {
+    const source = "Open [notes](/repo/My Notes.md \"Read it\")";
+    const renderLink = vi.fn(({ href }: MarkdownLinkRenderInput) => (
+      <span data-workspace-file={href}>notes</span>
+    ));
+    const html = renderMarkdown(source, { renderLink });
+
+    expect(source).toBe("Open [notes](/repo/My Notes.md \"Read it\")");
+    expect(renderLink).toHaveBeenCalledWith(expect.objectContaining({
+      href: "/repo/My%20Notes.md",
+    }));
+    expect(html).toContain('data-workspace-file="/repo/My%20Notes.md"');
+  });
+
+  it("repairs a streaming local-file link after stabilizing it", () => {
+    const source = "Open [notes](/repo/My Notes.md";
+    const renderLink = vi.fn(({ href }: MarkdownLinkRenderInput) => (
+      <span data-workspace-file={href}>notes</span>
+    ));
+    const html = renderMarkdown(source, { isStreaming: true, renderLink });
+
+    expect(source).toBe("Open [notes](/repo/My Notes.md");
+    expect(html).toContain('data-workspace-file="/repo/My%20Notes.md"');
+  });
+
+  it.each([false, true])(
+    "runs neither transformation on the file-content surface (streaming: %s)",
+    (isStreaming) => {
+      const renderLink = vi.fn(() => null);
+      const html = renderMarkdown("Open [notes](/repo/My Notes.md \"Read it\")", {
+        surface: "file-content",
+        isStreaming,
+        renderLink,
+      });
+
+      // The viewer shows the file's own bytes: no repair, no synthetic close.
+      expect(html).toContain("(/repo/My Notes.md &quot;Read it&quot;)");
+      expect(renderLink).not.toHaveBeenCalled();
+      expect(html).not.toContain("%20");
+    },
+  );
+
   it("keeps content-search marks inside the presentation DOM", () => {
     const html = renderToStaticMarkup(
       <ChatContentSearchQueryContext.Provider value="readable">
