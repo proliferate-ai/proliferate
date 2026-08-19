@@ -12,9 +12,10 @@ use crate::domains::sessions::links::service::SessionLinkService;
 use crate::domains::sessions::links::store::SessionLinkStore;
 
 /// Positive Q-H4 linkage proof through the real OpenCode targeted-fork call
-/// site. The deliberately unavailable actor fails only after `fork_session`
-/// resolves the boundary and persists its operation, letting the test inspect
-/// the exact prepared/in-flight record without starting a native child.
+/// site. The scripted handle accepts the live readiness check, then drops the
+/// side-door response after `fork_session` persists its operation, letting the
+/// test inspect the exact prepared/in-flight record without starting a native
+/// child.
 #[tokio::test(flavor = "current_thread")]
 async fn checkpoint_linkage_stamps_the_boundary_checkpoint_id_onto_the_fork_operation() {
     use anyharness_contract::v1::{ForkSessionTarget, ForkSessionTargetType};
@@ -138,7 +139,7 @@ async fn checkpoint_linkage_stamps_the_boundary_checkpoint_id_onto_the_fork_oper
     state
         .session_runtime
         .acp_manager_for_test()
-        .insert_unavailable_session_for_test(&parent.id)
+        .insert_targeted_fork_ready_sidedoor_dropper_for_test(&parent.id)
         .await;
     let error = state
         .session_runtime
@@ -153,7 +154,7 @@ async fn checkpoint_linkage_stamps_the_boundary_checkpoint_id_onto_the_fork_oper
             None,
         )
         .await
-        .expect_err("the deliberately unavailable side-door actor rejects dispatch");
+        .expect_err("the side-door actor drops its post-persistence dispatch response");
     assert!(matches!(error, ForkSessionError::Internal(_)));
 
     let stored = state
