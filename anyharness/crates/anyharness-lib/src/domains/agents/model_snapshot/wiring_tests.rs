@@ -19,6 +19,7 @@ use super::test_support::{
     gateway_state, wait_until, CountingPlanProducer, FakeRunner, FixedTargets, TempRuntimeHome,
 };
 use super::{ModelSnapshotService, PokeReason, ProbeEngineConfig};
+use crate::app::test_support::lock_env;
 use crate::domains::agents::installer::progress::InstallProgressPhase;
 use crate::domains::agents::installer::reconcile::execution::probe_after_install_for_test;
 
@@ -339,11 +340,79 @@ fn the_production_exclusion_list_covers_cursor_only() {
     let targets = RuntimeProbeTargets::new(home.path().to_path_buf());
 
     assert!(!targets.allows_automatic_probe("cursor"));
-    for kind in ["claude", "codex", "opencode", "grok"] {
+    for kind in ["claude", "codex", "opencode"] {
         assert!(
             targets.allows_automatic_probe(kind),
-            "{kind} has no keychain-prompt hazard and must converge automatically"
+            "{kind} has no unattended-prompt hazard and must converge automatically"
         );
+    }
+}
+
+/// Grok's automatic probe is credential-gated (PRO-210): its mandatory ACP
+/// `authenticate` opens a browser sign-in when the world holds no credentials,
+/// so a credential-less Grok is never spawned unattended — while EITHER
+/// credential arm (native login file, enrolled agent-auth route) restores
+/// automatic convergence.
+#[test]
+fn grok_automatic_probe_requires_credentials() {
+    use crate::domains::agents::model_snapshot::targets::{ProbeTargets, RuntimeProbeTargets};
+
+    let _env = lock_env();
+    let user_home = TempRuntimeHome::new("grok-credential-gate-user");
+    let _home = EnvGuard::set("HOME", user_home.path().as_os_str());
+    let _xai = EnvGuard::remove("XAI_API_KEY");
+    let _grok_key = EnvGuard::remove("GROK_API_KEY");
+
+    let home = TempRuntimeHome::new("grok-credential-gate");
+    let targets = RuntimeProbeTargets::new(home.path().to_path_buf());
+    assert!(
+        !targets.allows_automatic_probe("grok"),
+        "a credential-less grok must not be spawned unattended"
+    );
+
+    // Arm 1: a native login file (the shape `grok login` writes).
+    std::fs::create_dir_all(user_home.path().join(".grok")).expect("create .grok");
+    std::fs::write(
+        user_home.path().join(".grok/auth.json"),
+        r#"{"https://auth.x.ai::p1":{"key":"tok","refresh_token":"r","expires_at":"2030"}}"#,
+    )
+    .expect("write grok auth");
+    assert!(targets.allows_automatic_probe("grok"));
+    std::fs::remove_file(user_home.path().join(".grok/auth.json")).expect("remove grok auth");
+    assert!(!targets.allows_automatic_probe("grok"));
+
+    // Arm 2: an enrolled agent-auth route (what the launcher injects from).
+    home.write_state_json(&gateway_state(1, &[("grok", "sk-grok")]));
+    assert!(targets.allows_automatic_probe("grok"));
+}
+
+/// Restores an env var on drop, so a panicking test cannot poison the crate-wide
+/// environment for its siblings. Every use sits under [`lock_env`].
+struct EnvGuard {
+    name: &'static str,
+    previous: Option<std::ffi::OsString>,
+}
+
+impl EnvGuard {
+    fn set(name: &'static str, value: &std::ffi::OsStr) -> Self {
+        let previous = std::env::var_os(name);
+        std::env::set_var(name, value);
+        Self { name, previous }
+    }
+
+    fn remove(name: &'static str) -> Self {
+        let previous = std::env::var_os(name);
+        std::env::remove_var(name);
+        Self { name, previous }
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        match self.previous.take() {
+            Some(value) => std::env::set_var(self.name, value),
+            None => std::env::remove_var(self.name),
+        }
     }
 }
 
