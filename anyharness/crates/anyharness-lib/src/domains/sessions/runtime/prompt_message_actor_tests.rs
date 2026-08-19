@@ -319,7 +319,7 @@ pub(crate) fn build_state(runtime_home: &Path, db: Db, seed: bool) -> AppState {
         AgentSeedStore::not_configured_dev(),
     )
     .expect("app state");
-    test_support::seed_empty_claude_launch_options(&state.launch_options_service);
+    test_support::seed_scripted_claude_launch_options(&state.launch_options_service);
     if seed {
         let caller = session("caller", "workspace-a", "idle", "Exact Sender");
         let mut target = session("target", "workspace-b", "idle", "Target");
@@ -395,7 +395,7 @@ pub(crate) fn write_scripted_agent(runtime_home: &Path) -> ScriptedAgent {
     std::fs::create_dir_all(runtime_home.join("secrets")).expect("secrets directory");
     std::fs::write(
         runtime_home.join("secrets/global.env"),
-        "ANTHROPIC_API_KEY=test-not-a-real-key\nCLAUDE_CODE_USE_BEDROCK=0\n",
+        "ANTHROPIC_API_KEY=test-not-a-real-key\n",
     )
     .expect("test credentials");
     let native = runtime_home.join("agents/claude/native/claude");
@@ -442,7 +442,17 @@ for raw_line in sys.stdin:
         emit({
             "jsonrpc": "2.0",
             "id": request_id,
-            "result": {"sessionId": native_session_id},
+            "result": {
+                "sessionId": native_session_id,
+                "configOptions": [{
+                    "id": "model",
+                    "name": "Model",
+                    "category": "model",
+                    "type": "select",
+                    "currentValue": "haiku",
+                    "options": [{"value": "haiku", "name": "Haiku"}],
+                }],
+            },
         })
     elif method == "session/load":
         native_session_id = message["params"]["sessionId"]

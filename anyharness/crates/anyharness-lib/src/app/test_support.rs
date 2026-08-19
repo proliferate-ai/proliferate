@@ -2,7 +2,8 @@ use std::ffi::OsString;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::domains::agents::launch_options::{
-    HarnessLaunchOptions, HarnessLaunchOptionsService,
+    HarnessLaunchDefaults, HarnessLaunchModel, HarnessLaunchOptions,
+    HarnessLaunchOptionsService,
 };
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::live_ports::SessionAttachmentSource;
@@ -37,8 +38,9 @@ pub(crate) fn actor_capabilities_for_store(store: &SessionStore) -> ActorCapabil
     }
 }
 
-/// Seed the successful empty Claude observation required by session tests.
-pub(crate) fn seed_empty_claude_launch_options(service: &HarnessLaunchOptionsService) {
+/// Seed the successful Claude observation reported by the scripted session
+/// harness used throughout actor and workflow tests.
+pub(crate) fn seed_scripted_claude_launch_options(service: &HarnessLaunchOptionsService) {
     if service
         .read("claude")
         .expect("read Claude launch options")
@@ -52,10 +54,21 @@ pub(crate) fn seed_empty_claude_launch_options(service: &HarnessLaunchOptionsSer
     service
         .record_success(
             &started,
-            &HarnessLaunchOptions::default(),
+            &HarnessLaunchOptions {
+                models: vec![HarnessLaunchModel {
+                    id: "haiku".to_string(),
+                    observed_name: Some("Haiku".to_string()),
+                    observed_description: None,
+                }],
+                controls: Vec::new(),
+                defaults: HarnessLaunchDefaults {
+                    model_id: Some("haiku".to_string()),
+                    control_values: Default::default(),
+                },
+            },
             "2026-08-10T23:58:01Z",
         )
-        .expect("record empty Claude launch-option observation");
+        .expect("record scripted Claude launch-option observation");
 }
 
 struct TestAgentProductContextResolver;
