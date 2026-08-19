@@ -12,6 +12,7 @@ import pytest
 
 from proliferate.config import settings
 from proliferate.integrations import sentry as sentry_integration
+from proliferate.integrations.sentry import client as sentry_client
 import proliferate.middleware.logging as logging_module
 from proliferate.middleware.logging import JsonLogFormatter, configure_server_logging
 from proliferate.middleware.request_context import (
@@ -236,8 +237,8 @@ class TestReportCritical:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         fake_sdk = _TrackingSentrySdk()
-        monkeypatch.setattr(sentry_integration, "sentry_sdk", fake_sdk)
-        monkeypatch.setattr(sentry_integration, "_sentry_initialized", True)
+        monkeypatch.setattr(sentry_client, "sentry_sdk", fake_sdk)
+        monkeypatch.setattr(sentry_client, "_sentry_initialized", True)
 
         error = RuntimeError("disk full")
         sentry_integration.report_critical(
@@ -264,7 +265,7 @@ class TestReportCritical:
             def exception(self, msg: str, *args: object, **kwargs: object) -> None:
                 calls.append((msg % args, dict(kwargs)))
 
-        monkeypatch.setattr(sentry_integration, "_report_critical_logger", _FakeLogger())
+        monkeypatch.setattr(sentry_client, "_report_critical_logger", _FakeLogger())
 
         error = RuntimeError("bad state")
         sentry_integration.report_critical(
@@ -295,7 +296,7 @@ class TestReportCritical:
             def exception(self, msg: str, *args: object, **kwargs: object) -> None:
                 calls.append((msg % args, dict(kwargs)))
 
-        monkeypatch.setattr(sentry_integration, "_report_critical_logger", _FakeLogger())
+        monkeypatch.setattr(sentry_client, "_report_critical_logger", _FakeLogger())
 
         error = RuntimeError("oops")
         sentry_integration.report_critical(error)

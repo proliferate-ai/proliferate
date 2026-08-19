@@ -51,7 +51,7 @@ Inside the file:
 - Public functions exported to product code.
 
 Examples: `anthropic.py`, `customerio.py`, `github.py`, `resend.py`,
-`sentry.py`, `anonymous_telemetry.py`.
+`anonymous_telemetry.py`.
 
 ### Shape 2: Folder, single provider
 
@@ -77,7 +77,9 @@ or any set of features that don't fit cleanly in one file.
   This is the explicit Python-package exception to the repo-wide no-barrel
   rule; use it only for integration package public APIs.
 
-Example: `slack/` with `webhooks.py` + `errors.py`.
+Examples: `slack/` with `webhooks.py` + `errors.py`; `sentry/` with `client.py`
+(SDK lifecycle and validated public ingress) + `privacy.py` (the closed
+catalogs and outbound projection), where `__init__.py` is the export boundary.
 
 Concern files should be coarse and meaningful. Do not mechanically mirror
 every endpoint, REST resource, or SDK method into its own file. Start with the
