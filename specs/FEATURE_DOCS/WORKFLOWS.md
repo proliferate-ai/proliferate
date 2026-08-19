@@ -264,8 +264,9 @@ it; the 1:1 node-row shortcut is never relied on for N > 1.
 > **A parallel node waits for every leg and fails iff any leg failed (F1).**
 > Each terminal turn arm records the leg's outcome to its ledger row and holds;
 > the aggregation branch fires only on the last outstanding leg. `RunState`
-> carries the loaded ledger slice (`legs_total` / `legs_done`) so the pure
-> transition table can answer completion without touching the store
+> carries the loaded ledger slice (`node_legs`, read per node via `legs_of()`;
+> the ADR calls these `legs_total` / `legs_done`) so the pure transition table
+> can answer completion without touching the store
 > ([`transition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/transition.rs)).
 > The existing harness caps (`MaxTokens` / `MaxTurnRequests`, which arrive as
 > `HarnessCap`) bound one hung leg from holding the node open forever; a
@@ -345,23 +346,32 @@ leg identifier.
 
 - **Leg-targeted** redo is the `RedoLeg` transition
   ([`transition.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/transition.rs)):
-  it disposes exactly that leg's session, replaces that one ledger row (fresh
-  row, same `leg_index`, superseded row kept terminal for audit), and relaunches
-  only that leg's prompt through the `DisposeSessionThenStartLeg` side effect
-  ([`store.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/store.rs)).
+  it resets that one ledger row in place back to running (`reset_leg_running_tx`
+  keeps the row's `leg_index` and its `session_id` until the relaunch re-stamps a
+  fresh one), disposes that leg's live session when the leg is still running, and
+  relaunches only that leg's prompt through the `DisposeSessionThenStartLeg`
+  side effect
+  ([`store/node_sessions.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/store/node_sessions.rs)).
   `relaunch_leg` reads the addressed leg's prompt from the frozen definition
   ([`launch.rs`](../../anyharness/crates/anyharness-lib/src/live/workflows/launch.rs));
-  sibling legs are untouched and the node stays held until the redone leg
-  reaches the aggregation branch.
-- **Untargeted** redo is the bulk case: a whole-node redo of a running parallel
-  node disposes **all** live legs (`DisposeSessionsThenStartLegs`), resets the
-  ledger, and relaunches every leg.
+  sibling rows are untouched and the node stays held until the redone leg reaches
+  the aggregation branch.
+- **Untargeted** (whole-node) redo is the bulk case: it disposes all live legs
+  and replaces the node row itself (`replaces_node_row_id`,
+  [`store.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/store.rs)),
+  re-fanning-out every leg on the fresh node row.
 
-Only failed or terminal legs are redoable while the node is held; redo of a
-still-running leg is rejected with a stable 409. A single leg's relaunch failure
-stamps only its own ledger row terminal (and disposes its own running siblings
-under the whole-node shape), never a sibling's row
-([`store.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/store.rs)).
+Per-leg redo applies at a pause (failed, needs_attention, or awaiting_human) or
+to a running chain node; there is no 409 for a still-running leg, whose live
+session is disposed and relaunched. A per-leg redo aimed at a one-leg node, or an
+out-of-range leg index, is rejected as an illegal command.
+
+When a single-leg relaunch itself fails, the failure status lands only on the
+addressed leg's row; its still-running siblings are stamped cancelled (not
+failed) and their sessions disposed, and already-terminal siblings keep their
+status and completion receipts
+([`store/node_sessions.rs`](../../anyharness/crates/anyharness-lib/src/domains/workflows/store/node_sessions.rs),
+`fail_leg_and_cancel_running_siblings_tx`).
 
 ### The ledger on the wire (rung 7, ruling F4)
 
@@ -424,16 +434,20 @@ Neither changes the settled architecture.
 | Occupancy conflict under an exclusive mode | `409 WORKFLOW_PLACEMENT_CONFLICT`, zero rows inserted | caller retries against a free workspace or uses `existing_workspace` |
 | `existing_workspace` names an unknown / ineligible workspace | `404 WORKFLOW_WORKSPACE_NOT_FOUND` / `409 WORKFLOW_WORKSPACE_NOT_ELIGIBLE` | caller names a live, repo-backed workspace |
 | A leg fails | node holds until all legs finish, then fails (F1) | per-leg redo re-runs only the failed leg (F2) |
-| Redo of a still-running leg | stable `409` | wait for the leg to reach a terminal state |
+| Per-leg redo of a running leg | that leg's live session is disposed and its ledger row reset to running, then relaunched (`RedoLeg`); siblings untouched | node re-aggregates when the redone leg finishes |
+| Per-leg redo of a one-leg node or an out-of-range leg index | rejected as an illegal command | use whole-node redo instead |
 | Crash mid-parallel-node | boot fence parks the node; resume truncates the ledger and re-fans-out all N (F6) | automatic on restart |
 | Run cancelled mid-fan-out | every running ledger leg stamped terminal (`cancel_all_run_legs_tx`) | terminal |
 
-Counters the ADR names for these paths (`workflow.placement.conflict`,
-`workflow.parallel.leg_finish`, `workflow.parallel.node_complete`,
-`workflow.parallel.redo`, `workflow.resume.refanout`) and the
-`legs_total`/`legs_done` projection let dashboards read fan-in state without log
-archaeology; see [`../OBSERVABILITY.md`](../OBSERVABILITY.md) for the per-PR
-observability standard.
+No dedicated metrics ship with this program: the workflows domain emits none of
+the counters the ADR sketched, and there is no `legs_total`/`legs_done` gauge. A
+placement conflict surfaces as the `409 WORKFLOW_PLACEMENT_CONFLICT` and a
+correlation-only log line
+([`workflow_runs.rs`](../../anyharness/crates/anyharness-lib/src/api/http/workflow_runs.rs)),
+and fan-in state is read off the projection's per-leg `NodeView.sessions` list
+rather than a metric (the client derives `total`/`finished` from it, see rung 7).
+See [`../OBSERVABILITY.md`](../OBSERVABILITY.md) for the per-PR observability
+standard a follow-up would meet if metrics are added.
 
 ## Overview
 
