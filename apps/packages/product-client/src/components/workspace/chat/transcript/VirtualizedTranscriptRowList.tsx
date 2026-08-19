@@ -24,6 +24,21 @@ import { useTranscriptReadingPosition } from "#product/hooks/chat/ui/use-transcr
 
 const VIRTUALIZER_OVERSCAN = 8;
 
+// Absolute ceiling on how long a pending prepend anchor may stay armed while
+// its request is merely believed to be in flight. The loading-window proof
+// below can never arrive when the request resolves without ever raising
+// isLoadingOlderHistory in an observable commit (the hydration path has
+// pre-await synchronous returns, so a true->false pair can coalesce into one
+// React commit), and rows/cursor then stay put. Without this bound the anchor
+// leaks for the rest of the mount and wedges older-history loading entirely,
+// since maybeLoadOlderHistory only requests while the anchor is null. Same
+// bounded-ceiling shape as PREPEND_BLANK_FALLBACK_GRACE_MS.
+const PREPEND_ANCHOR_IN_FLIGHT_MAX_MS = 3000;
+
+function nowMs(): number {
+  return typeof performance === "undefined" ? Date.now() : performance.now();
+}
+
 interface VirtualizedTranscriptRowListProps extends TranscriptRowListBaseProps {
   onFallback: (reason: string) => void;
   virtualizationMode: TranscriptVirtualizationMode;
@@ -58,6 +73,8 @@ export function VirtualizedTranscriptRowList({
   // Whether the CURRENT pending anchor's request has been observed loading;
   // "not loading, rows unchanged" only proves "resolved with no rows" after that.
   const pendingPrependLoadingSeenRef = useRef(false);
+  // When the CURRENT pending anchor was armed, for the absolute release ceiling.
+  const pendingPrependArmedAtRef = useRef(0);
   const lastOlderHistoryCursorRequestRef = useRef<number | null>(null);
   const lastPrefetchDecisionLogRef = useRef<string | null>(null);
   const lastBlankReportSignatureRef = useRef<string | null>(null);
@@ -228,6 +245,7 @@ export function VirtualizedTranscriptRowList({
     ) {
       lastOlderHistoryCursorRequestRef.current = olderHistoryCursor;
       pendingPrependLoadingSeenRef.current = false;
+      pendingPrependArmedAtRef.current = nowMs();
       pendingPrependAnchorRef.current = {
         cursor: olderHistoryCursor,
         rowCount: rows.length,
@@ -262,6 +280,7 @@ export function VirtualizedTranscriptRowList({
     lastBlankReportSignatureRef.current = null;
     pendingPrependAnchorRef.current = null;
     pendingPrependLoadingSeenRef.current = false;
+    pendingPrependArmedAtRef.current = 0;
     lastOlderHistoryCursorRequestRef.current = null;
     lastPrefetchDecisionLogRef.current = null;
     resetForSession(buildSessionRestorePlan()); // FR-2: restore finalized / bottom-pin streaming.
@@ -297,7 +316,7 @@ export function VirtualizedTranscriptRowList({
       viewport.scrollTop = anchor.scrollTop + Math.max(rawScrollHeightDelta, 0);
     });
     startAboveChangeCompensation(anchor, false);
-    prependSettleUntilRef.current = (typeof performance === "undefined" ? Date.now() : performance.now()) + PREPEND_BLANK_FALLBACK_GRACE_MS; // Ruling 3(c): bounded ceiling only.
+    prependSettleUntilRef.current = nowMs() + PREPEND_BLANK_FALLBACK_GRACE_MS; // Ruling 3(c): bounded ceiling only.
   }, [notifyProgrammaticScroll, olderHistoryCursor, pendingAnchorRef, rows.length, setPinned, startAboveChangeCompensation]);
 
   useEffect(() => {
@@ -313,13 +332,26 @@ export function VirtualizedTranscriptRowList({
     // cursor moved past the one it captured. A merely in-flight request looks
     // identical on "not loading, rows unchanged" alone; discarding it on an
     // unrelated commit in that gap loses the prepend seat entirely.
+    //
+    // The two proofs above can both be unobtainable: runHydration returns
+    // synchronously before its first await on several paths, so the loading
+    // true->false pair can coalesce into a single React 18 commit that this
+    // effect never observes as loading, while rows and cursor stay put. The
+    // absolute ceiling is the third, always-terminating release condition —
+    // without it the anchor never clears and older-history loading is wedged
+    // for the rest of the mount.
     if (
       anchor
       && anchor.rowCount === rows.length
-      && (pendingPrependLoadingSeenRef.current || anchor.cursor !== olderHistoryCursor)
+      && (
+        pendingPrependLoadingSeenRef.current
+        || anchor.cursor !== olderHistoryCursor
+        || nowMs() - pendingPrependArmedAtRef.current > PREPEND_ANCHOR_IN_FLIGHT_MAX_MS
+      )
     ) {
       pendingPrependAnchorRef.current = null;
       pendingPrependLoadingSeenRef.current = false;
+      pendingPrependArmedAtRef.current = 0;
     }
 
     const frame = window.requestAnimationFrame(() => {
@@ -330,7 +362,7 @@ export function VirtualizedTranscriptRowList({
       maybeLoadOlderHistory(viewport, "settled");
     });
     return () => { window.cancelAnimationFrame(frame); };
-  }, [isLoadingOlderHistory, maybeLoadOlderHistory, rows.length]);
+  }, [isLoadingOlderHistory, maybeLoadOlderHistory, olderHistoryCursor, rows.length]);
 
   useTranscriptCompletedTurnAnchor({
     pendingAnchorRef,
