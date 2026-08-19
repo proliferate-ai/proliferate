@@ -1,10 +1,8 @@
-//! The per-run workflow actor: one task, two inbound channels, nothing else
-//! can wake it. Commands arrive with a oneshot whose reply IS the HTTP
-//! response; turn reports arrive fire-and-forget from the session extension.
-//! In-memory state is a cache of the rows — loaded at spawn, updated only
-//! after a commit — and every decision comes from the pure transition table.
-//! Persist first, side effects inline after the commit, ordering by
-//! construction: a per-run actor is single-threaded on purpose.
+//! Per-run workflow actor: one task, three inbound channels. Commands carry a
+//! oneshot whose reply IS the HTTP response; turn reports are fire-and-forget.
+//! State is a row cache loaded at spawn and updated only after a commit; every
+//! decision comes from the pure transition table. Side effects run inline
+//! after persistence, preserving single-threaded ordering by construction.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -28,6 +26,10 @@ use crate::domains::workflows::store::{emit_decision_events, ResolvedSideEffect,
 use crate::domains::workflows::transition::{
     next, Decision, IllegalTransition, RunState, TurnFinished, WorkflowCommand, WorkflowEvent,
 };
+use crate::domains::workspaces::model::WorkspaceLifecycleState;
+use crate::domains::workspaces::operation_gate::{
+    WorkspaceOperationGate, WorkspaceOperationKind, WorkspaceOperationLease,
+};
 use crate::domains::workspaces::store::WorkspaceStore;
 use crate::observability::WORKFLOW_NOTIFICATION_STALE_TRACING_TARGET;
 use crate::origin::OriginContext;
@@ -45,6 +47,7 @@ pub(super) struct WorkflowActorDeps {
     pub session_runtime: Arc<SessionRuntime>,
     pub session_store: SessionStore,
     pub workspace_store: WorkspaceStore,
+    pub workspace_operation_gate: Arc<WorkspaceOperationGate>,
 }
 
 pub(super) struct WorkflowActor {
@@ -52,6 +55,7 @@ pub(super) struct WorkflowActor {
     pub deps: Arc<WorkflowActorDeps>,
     pub commands: mpsc::Receiver<(super::ActorRequest, CommandReply)>,
     pub notifications: mpsc::UnboundedReceiver<TurnFinished>,
+    pub launch_leases: mpsc::UnboundedReceiver<WorkspaceOperationLease>,
 }
 
 /// Why a step produced no fresh projection: the table refused it (the 409),
@@ -69,7 +73,6 @@ impl WorkflowActor {
         // hands the actor exactly this shape, and a Resume that raced a crash
         // heals through the same path at the next touch.
         self.launch_current_if_unlinked(&mut state).await;
-
         loop {
             tokio::select! {
                 command = self.commands.recv() => {
@@ -140,7 +143,7 @@ impl WorkflowActor {
                 StepError::Infra
             })?;
         *state = applied.state.clone();
-        self.perform_side_effect(state, applied.side_effect).await;
+        self.perform_side_effect(state, applied.side_effect, None).await;
         Ok(())
     }
 
@@ -148,7 +151,12 @@ impl WorkflowActor {
     /// feeds `NodeLaunchFailed` back through the table as a plain loop (the
     /// failure transition's own side effect is always `None`, so this
     /// terminates by construction).
-    async fn perform_side_effect(&self, state: &mut RunState, effect: ResolvedSideEffect) {
+    async fn perform_side_effect(
+        &self,
+        state: &mut RunState,
+        effect: ResolvedSideEffect,
+        mut workspace_lease: Option<WorkspaceOperationLease>,
+    ) {
         let mut effect = effect;
         loop {
             match effect {
@@ -176,7 +184,10 @@ impl WorkflowActor {
                     effect = ResolvedSideEffect::StartNode { node_row_id };
                 }
                 ResolvedSideEffect::StartNode { node_row_id } => {
-                    match self.launch_node(state, &node_row_id).await {
+                    match self
+                        .launch_node(state, &node_row_id, workspace_lease.take())
+                        .await
+                    {
                         Ok(()) => break,
                         Err(error) => {
                             tracing::warn!(
@@ -217,7 +228,7 @@ impl WorkflowActor {
         }
     }
 
-    async fn launch_current_if_unlinked(&self, state: &mut RunState) {
+    async fn launch_current_if_unlinked(&mut self, state: &mut RunState) {
         let unlinked_current = state
             .current_node()
             .filter(|node| {
@@ -226,9 +237,36 @@ impl WorkflowActor {
                     && node.session_id.is_none()
             })
             .map(|node| node.id.clone());
+        let workspace_lease = if unlinked_current.is_some() {
+            let gate = self.deps.workspace_operation_gate.clone();
+            let workspace_id = state.run.workspace_id.clone();
+            let acquire = gate.acquire_shared(&workspace_id, WorkspaceOperationKind::SessionStart);
+            tokio::pin!(acquire);
+            let mut handoff_open = true;
+            let workspace_lease = loop {
+                tokio::select! {
+                    biased;
+                    handoff = self.launch_leases.recv(), if handoff_open => match handoff {
+                        Some(lease) if lease.workspace_id() == workspace_id.as_str() => break lease,
+                        Some(lease) => drop(lease),
+                        None => handoff_open = false,
+                    },
+                    lease = &mut acquire => break lease,
+                }
+            };
+            Some(workspace_lease)
+        } else {
+            None
+        };
+        self.launch_leases.close();
+        while self.launch_leases.try_recv().is_ok() {}
         if let Some(node_row_id) = unlinked_current {
-            self.perform_side_effect(state, ResolvedSideEffect::StartNode { node_row_id })
-                .await;
+            self.perform_side_effect(
+                state,
+                ResolvedSideEffect::StartNode { node_row_id },
+                workspace_lease,
+            )
+            .await;
         }
     }
 
@@ -264,7 +302,42 @@ impl WorkflowActor {
     /// exactly what it is. Any failure AFTER the session row exists
     /// compensates it (the house create-then-start pattern): a half-born
     /// session must not linger in the run workspace.
-    async fn launch_node(&self, state: &mut RunState, node_row_id: &str) -> anyhow::Result<()> {
+    async fn launch_node(
+        &self,
+        state: &mut RunState,
+        node_row_id: &str,
+        workspace_lease: Option<WorkspaceOperationLease>,
+    ) -> anyhow::Result<()> {
+        // Destructive workspace lifecycle flows hold the exclusive side of
+        // this gate. The initial PUT hands its pre-lookup lease through; every
+        // later advance/redo/replay acquires here at the one launch seam.
+        let workspace_lease = match workspace_lease {
+            Some(lease) if lease.workspace_id() == state.run.workspace_id.as_str() => lease,
+            lease => {
+                drop(lease);
+                self.deps
+                    .workspace_operation_gate
+                    .acquire_shared(
+                        &state.run.workspace_id,
+                        WorkspaceOperationKind::SessionStart,
+                    )
+                    .await
+            }
+        };
+        let workspace = self
+            .deps
+            .workspace_store
+            .find_by_id(&state.run.workspace_id)?
+            .ok_or_else(|| {
+                anyhow::anyhow!("workspace {} not found for launch", state.run.workspace_id)
+            })?;
+        if workspace.lifecycle_state != WorkspaceLifecycleState::Active {
+            anyhow::bail!("workspace {} is archived", workspace.id);
+        }
+        if !workspace.has_local_checkout() || workspace.checkout_directory_missing() {
+            anyhow::bail!("workspace {} has no usable local checkout", workspace.id);
+        }
+
         let node = state
             .node(node_row_id)
             .cloned()
@@ -324,11 +397,14 @@ impl WorkflowActor {
             }
             return Err(error);
         }
+        #[cfg(test)]
+        super::launch_barriers::after_prompt_acceptance(&self.run_id).await;
 
         // Catch the cache up with the stamp.
         if let Some(fresh) = self.deps.store.load_run_state(&self.run_id)? {
             *state = fresh;
         }
+        drop(workspace_lease);
         Ok(())
     }
 

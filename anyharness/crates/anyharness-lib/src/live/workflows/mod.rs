@@ -6,6 +6,8 @@
 
 mod actor;
 #[cfg(test)]
+pub(crate) mod launch_barriers;
+#[cfg(test)]
 mod launch_tests;
 #[cfg(test)]
 mod lifecycle_tests;
@@ -21,6 +23,7 @@ use crate::domains::workflows::invariants;
 use crate::domains::workflows::projection::RunProjection;
 use crate::domains::workflows::store::WorkflowStore;
 use crate::domains::workflows::transition::{IllegalTransition, TurnFinished, WorkflowCommand};
+use crate::domains::workspaces::operation_gate::{WorkspaceOperationGate, WorkspaceOperationLease};
 use crate::domains::workspaces::store::WorkspaceStore;
 use crate::observability::WORKFLOW_NOTIFICATION_STALE_TRACING_TARGET;
 
@@ -49,8 +52,23 @@ pub enum WorkflowCommandError {
 
 #[derive(Clone)]
 struct WorkflowHandle {
+    workspace_id: String,
     commands: mpsc::Sender<(ActorRequest, CommandReply)>,
     notifications: mpsc::UnboundedSender<TurnFinished>,
+    launch_leases: mpsc::UnboundedSender<WorkspaceOperationLease>,
+}
+
+impl WorkflowHandle {
+    fn handoff_launch_lease(&self, lease: Option<WorkspaceOperationLease>) {
+        let Some(lease) = lease else {
+            return;
+        };
+        if lease.workspace_id() == self.workspace_id.as_str() {
+            // A closed handoff means the actor already chose a guard; dropping
+            // the creator's redundant guard is correct.
+            let _ = self.launch_leases.send(lease);
+        }
+    }
 }
 
 pub struct WorkflowManager {
@@ -64,6 +82,7 @@ impl WorkflowManager {
         session_runtime: Arc<SessionRuntime>,
         session_store: SessionStore,
         workspace_store: WorkspaceStore,
+        workspace_operation_gate: Arc<WorkspaceOperationGate>,
     ) -> Self {
         Self {
             deps: Arc::new(WorkflowActorDeps {
@@ -71,6 +90,7 @@ impl WorkflowManager {
                 session_runtime,
                 session_store,
                 workspace_store,
+                workspace_operation_gate,
             }),
             registry: Mutex::new(HashMap::new()),
         }
@@ -96,8 +116,14 @@ impl WorkflowManager {
     pub async fn start_run_synced(
         self: &Arc<Self>,
         run_id: &str,
+        initial_workspace_lease: Option<WorkspaceOperationLease>,
     ) -> Result<RunProjection, WorkflowCommandError> {
-        self.request(run_id, ActorRequest::ReadProjection).await
+        self.request(
+            run_id,
+            ActorRequest::ReadProjection,
+            initial_workspace_lease,
+        )
+        .await
     }
 
     /// Route one command to the run's actor and await the oneshot. The reply
@@ -108,13 +134,15 @@ impl WorkflowManager {
         run_id: &str,
         command: WorkflowCommand,
     ) -> Result<RunProjection, WorkflowCommandError> {
-        self.request(run_id, ActorRequest::Command(command)).await
+        self.request(run_id, ActorRequest::Command(command), None)
+            .await
     }
 
     async fn request(
         self: &Arc<Self>,
         run_id: &str,
         request: ActorRequest,
+        initial_workspace_lease: Option<WorkspaceOperationLease>,
     ) -> Result<RunProjection, WorkflowCommandError> {
         // Actor rematerialization reads rows; keep that SQLite load off the
         // async runtime's worker threads.
@@ -129,6 +157,7 @@ impl WorkflowManager {
                     ))
                 })??
         };
+        handle.handoff_launch_lease(initial_workspace_lease);
         let (reply_tx, reply_rx) = oneshot::channel();
         handle
             .commands
@@ -203,16 +232,21 @@ impl WorkflowManager {
         }
         let (commands_tx, commands_rx) = mpsc::channel(COMMAND_MAILBOX_CAPACITY);
         let (notifications_tx, notifications_rx) = mpsc::unbounded_channel();
+        let (launch_leases_tx, launch_leases_rx) = mpsc::unbounded_channel();
+        let workspace_id = state.run.workspace_id.clone();
         let actor = WorkflowActor {
             run_id: run_id.to_string(),
             deps: self.deps.clone(),
             commands: commands_rx,
             notifications: notifications_rx,
+            launch_leases: launch_leases_rx,
         };
         tokio::spawn(actor.run(state));
         let handle = WorkflowHandle {
+            workspace_id,
             commands: commands_tx,
             notifications: notifications_tx,
+            launch_leases: launch_leases_tx,
         };
         registry.insert(run_id.to_string(), handle.clone());
         Ok(handle)

@@ -478,14 +478,14 @@ impl AppState {
         ));
         loop_fire_executor.bind_session_runtime(&session_runtime);
         completion_delivery_wiring.spawn(&session_runtime);
-        // Workflows gen-2, in this order: fence first (no actor may accept a
-        // command against un-fenced rows), manager second, late-bind third.
+        // Workflows gen-2: fence first, manager second, late-bind third.
         let _fenced_workflow_runs = workflows::run_boot_fence(&workflow_store);
         let workflow_manager = Arc::new(WorkflowManager::new(
             workflow_store.clone(),
             session_runtime.clone(),
             SessionStore::new(db.clone()),
             WorkspaceStore::new(db.clone()),
+            workspace_operation_gate.clone(),
         ));
         workflow_session_extension.bind_manager(&workflow_manager);
         let workspace_lifecycle =
