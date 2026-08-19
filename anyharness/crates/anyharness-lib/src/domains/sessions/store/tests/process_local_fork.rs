@@ -121,7 +121,7 @@ fn native_result_transaction_rolls_back_session_when_operation_update_fails() {
         .record_process_local_fork_native_result(&operation_id, &child_id, "native-child", NOW,)
         .is_err());
     assert!(store
-        .get(&child_id)
+        .find_by_id(&child_id)
         .expect("get child")
         .expect("child exists")
         .native_session_id
@@ -137,7 +137,7 @@ fn native_result_transaction_rolls_back_session_when_operation_update_fails() {
         .record_process_local_fork_native_result(&operation_id, &child_id, "native-child", NOW)
         .expect("record result");
     let child = store
-        .get(&child_id)
+        .find_by_id(&child_id)
         .expect("get child")
         .expect("child exists");
     assert_eq!(child.native_session_id.as_deref(), Some("native-child"));
@@ -171,7 +171,7 @@ fn ready_finalization_transaction_rolls_back_idle_when_completion_fails() {
         .is_err());
     assert_eq!(
         store
-            .get(&child_id)
+            .find_by_id(&child_id)
             .expect("get child")
             .expect("child exists")
             .status,
@@ -189,7 +189,7 @@ fn ready_finalization_transaction_rolls_back_idle_when_completion_fails() {
         .expect("finalize");
     assert_eq!(
         store
-            .get(&child_id)
+            .find_by_id(&child_id)
             .expect("get child")
             .expect("child exists")
             .status,
@@ -231,7 +231,7 @@ fn definite_and_ambiguous_in_flight_failures_are_durably_distinct() {
     for child_id in [failed_child, unknown_child] {
         assert_eq!(
             store
-                .get(&child_id)
+                .find_by_id(&child_id)
                 .expect("get child")
                 .expect("child exists")
                 .status,

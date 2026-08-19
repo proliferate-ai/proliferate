@@ -308,7 +308,7 @@ mod tests {
 
     fn notification(session_id: &str, text: &str) -> acp::schema::SessionNotification {
         acp::schema::SessionNotification::new(
-            session_id,
+            session_id.to_owned(),
             acp::schema::SessionUpdate::AgentMessageChunk(acp::schema::ContentChunk::new(
                 text.into(),
             )),
