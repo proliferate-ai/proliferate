@@ -1,8 +1,8 @@
 //! The event-driven scheduler for target-observed harness launch options.
 //!
-//! `LaunchProbeService` is the domain's public face. Its rule is the one
-//! model-catalog.md states: **one composed observation per harness, refreshed by
-//! events.** A poke probes — there is no staleness gate, no fingerprint, and no
+//! `LaunchProbeService` is the domain's public face: **one composed observation
+//! per harness, refreshed by events.** A poke probes — there is no staleness
+//! gate, no fingerprint, and no
 //! TTL deciding whether to; the closed event set (startup pass, auth-apply,
 //! install completed, login-terminal exit, manual refresh) is the whole freshness
 //! model, and the engine's only jobs beyond running the probe are the lifecycle

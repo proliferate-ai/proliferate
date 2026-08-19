@@ -2,8 +2,8 @@
 //! harness child and the scratch root.
 //!
 //! `probe_agent` requires a `LocalSet` (the ACP connection uses `spawn_local`, so
-//! a bare `tokio::spawn` will not do) and carries no timeout of its own, so "the
-//! reconciler bounds each probe" (model-catalog.md). The shape is the
+//! a bare `tokio::spawn` will not do) and carries no timeout of its own, so the
+//! launch-options reconciler bounds each probe. The shape is the
 //! dedicated-thread + current-thread-runtime + `LocalSet::block_on` pattern
 //! production sessions already use.
 //!

@@ -16,9 +16,9 @@
 //!   → RenderedRouteAuth { set, remove } merged into the launch env
 //! ```
 //!
-//! No watch/refresh: the file is read fresh per launch. Absent file, absent
-//! harness, or empty sources = native behavior (empty delta) — the harness's
-//! own login owns auth.
+//! No watch/refresh: the file is read fresh per launch. An absent file or absent
+//! harness means native behavior (empty delta), where the harness's own login
+//! owns auth. A present harness with no satisfiable sources fails closed.
 
 pub(crate) mod gateway_plan;
 mod gateway_probe;

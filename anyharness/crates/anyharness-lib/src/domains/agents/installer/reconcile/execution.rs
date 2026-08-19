@@ -416,15 +416,14 @@ async fn run_reconcile_job(
             }
         };
         finish_agent_components(&progress, &kind, terminal_phase);
-        // Install-completed poke, per agent (model-catalog.md, "The snapshot
-        // reconciler"). This is the SOLE guarantor of probe-after-install ordering:
+        // Install-completed launch-options poke, per agent. This is the SOLE
+        // guarantor of probe-after-install ordering:
         // the startup poke returns at admission and so cannot promise it, while this
         // fires after the one harness that just converged, naming only that harness.
         //
         // Only on `Completed`. A `Failed` install leaves the previous binary in place
         // and nothing to re-observe; a `Skipped` one installed nothing at all. Poking
-        // either would spend a real harness spawn to re-confirm an unchanged identity
-        // the gate would then call fresh anyway.
+        // either would spend a real harness spawn to re-confirm unchanged state.
         if probe_after_install(terminal_phase) {
             LaunchProbeService::poke_optional(
                 &launch_probe,

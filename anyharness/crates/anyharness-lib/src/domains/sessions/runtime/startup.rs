@@ -416,8 +416,8 @@ impl SessionRuntime {
         let session_launch_env =
             build_session_launch_env(&resolved_agent, record.requested_model_id.as_deref())
                 .map_err(StartSessionError::Internal)?;
-        // No probe poke here, deliberately (model-catalog.md, "Freshness is
-        // event-driven"): a session launch is not one of the closed trigger set.
+        // No launch-options probe poke here, deliberately: a session launch is
+        // not one of the target-observation service's closed trigger set.
         // The gate-driven launch backstop of the superseded design deleted with
         // the staleness machinery; anything a machine missed while the runtime
         // was down is the unconditional startup pass's job.

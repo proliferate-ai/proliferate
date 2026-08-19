@@ -61,13 +61,11 @@ struct CodexArtifactRoot {
 
 /// Isolated codex homes a session's rollout may live under, newest scheme first.
 ///
-/// `codex-native` is the current native-launch home (rendered by route-auth's
-/// native recipe). `codex-local` is its predecessor and is retained on purpose:
-/// sessions created before that rename still have their rollouts there, and this
-/// collector's whole job is finding an EXISTING session's artifacts. Dropping it
-/// would silently lose mobility for every pre-rename session on the machine.
-/// Nothing writes to `codex-local` any more, so it can be dropped once no
-/// retained session predates the rename.
+/// `codex-native` and its `codex-local` predecessor are historical isolated
+/// native homes retained only for existing-session portability. New native
+/// launches inherit the user's own Codex home, but sessions created before that
+/// cutover may still have rollouts in either directory. Dropping either path
+/// would silently lose mobility for those retained sessions.
 const RUNTIME_CODEX_HOME_DIRS: &[&str] = &["codex-native", "codex-local"];
 
 fn codex_artifact_roots(home_dir: &Path, runtime_home: Option<&Path>) -> Vec<CodexArtifactRoot> {

@@ -393,21 +393,18 @@ impl AgentRuntime {
                 .await;
             }
             self.reconcile_when_idle().await;
-            // Third step: reconcile SNAPSHOTS (model-catalog.md, "Runtime
-            // startup"). One poke covers both cases the spec names — a fresh cloud
-            // sandbox probing itself at creation (the template bakes installs, but a
-            // snapshot cannot be baked: it needs the user's auth, which lands only
-            // after boot) and a desktop whose app update staled its entries. No
-            // first-boot detection exists or is needed: a machine with fresh entries
-            // no-ops in the gate.
+            // Third step: refresh target-observed launch options. One poke covers
+            // both a fresh cloud sandbox probing itself after user auth lands and a
+            // desktop restarting after its harness or auth world changed. No
+            // first-boot or static-catalog branch exists: startup is an unconditional
+            // observation trigger.
             //
             // It makes NO ordering claim about installs. `reconcile_when_idle`
             // returns at ADMISSION, not completion (`start_with_admission` spawns the
             // job and returns its snapshot), so this poke genuinely races the installs
             // it follows. That is harmless and deliberate: an entry evaluated against
-            // a mid-install manifest is either Indeterminate (absent manifest ⇒ not
-            // stale) or compares against the old identity and probes the old binary,
-            // which is a correct observation of the machine as it is right now. The
+            // a mid-install attempt may probe the old binary, which is a correct
+            // observation of the machine as it is right now. The
             // guarantee of a re-probe against the NEW binary is the per-agent
             // completion poke inside the reconcile job, which is precise about which
             // harness just changed.

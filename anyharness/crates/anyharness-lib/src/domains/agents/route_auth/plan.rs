@@ -20,7 +20,8 @@ pub struct GatewayModelPlan {
 }
 
 /// The seam the render plane calls to obtain a [`GatewayModelPlan`] for a
-/// launch. Implemented by the catalog-domain planner; render_tests use a stub.
+/// launch. Implemented by the route-auth live gateway planner; render tests use
+/// a stub.
 /// No implementation may synthesize a seed or choose a default model.
 ///
 /// Materialization only. The trait used to carry a

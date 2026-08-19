@@ -9,8 +9,8 @@ use std::time::Duration;
 use super::probe::ProbeError;
 use crate::domains::agents::route_auth::RouteAuthError;
 
-/// Why a poke fired. **This is the closed trigger set** (model-catalog.md,
-/// "Freshness is event-driven"): the unconditional startup pass, auth apply,
+/// Why a poke fired. **This is the closed event-driven trigger set**: the
+/// unconditional startup pass, auth apply,
 /// install completion, login-terminal exit, live contradiction, and manual
 /// refresh. There is no poll or timer — a poke probes, subject only to the
 /// engine's concurrency guards and the failure backoff.
