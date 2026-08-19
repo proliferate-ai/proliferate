@@ -409,7 +409,9 @@ jobs:
         run: pnpm install
 
       - name: Install Playwright chromium
-        run: pnpm exec playwright install --with-deps chromium
+        run: |
+          sudo "$(command -v node)" "$GITHUB_WORKSPACE/scripts/ci-cd/configure-playwright-apt.mjs"
+          pnpm exec playwright install --with-deps chromium
 
       - name: Build shared packages
         run: pnpm shared:build
@@ -505,7 +507,9 @@ jobs:
         run: pnpm --filter @proliferate/product-client typecheck:scroll-physics
 
       - name: Install Playwright chromium + webkit
-        run: pnpm --filter @proliferate/product-client exec playwright install --with-deps chromium webkit
+        run: |
+          sudo "$(command -v node)" "$GITHUB_WORKSPACE/scripts/ci-cd/configure-playwright-apt.mjs"
+          pnpm --filter @proliferate/product-client exec playwright install --with-deps chromium webkit
 
       - name: Run scroll-physics suite
         run: pnpm --filter @proliferate/product-client test:scroll-physics
@@ -578,7 +582,9 @@ jobs:
         run: git diff --exit-code -- cloud/sdk/src/generated/openapi.ts
 
       - name: Install Playwright chromium
-        run: pnpm -C tests/intent exec playwright install --with-deps chromium
+        run: |
+          sudo "$(command -v node)" "$GITHUB_WORKSPACE/scripts/ci-cd/configure-playwright-apt.mjs"
+          pnpm -C tests/intent exec playwright install --with-deps chromium
 
       - name: Run workflow-definition lifecycle spec
         env:
