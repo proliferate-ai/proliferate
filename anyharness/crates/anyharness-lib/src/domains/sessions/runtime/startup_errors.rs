@@ -1,8 +1,108 @@
+use crate::domains::agents::launch_options::LaunchSelectionUnsupported;
 use crate::domains::sessions::mcp_bindings::assembly::SessionMcpLaunchAssemblyError;
 use crate::domains::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
 use crate::domains::sessions::mcp_bindings::summaries::SessionMcpSummaryError;
 
-use super::{CreateAndStartSessionError, StartSessionError};
+use super::{CreateAndStartSessionError, EnsureLiveSessionError, StartSessionError};
+
+pub(super) fn map_start_session_error_to_ensure(
+    error: StartSessionError,
+) -> EnsureLiveSessionError {
+    match error {
+        StartSessionError::WorkspaceNotFound => {
+            EnsureLiveSessionError::Internal(anyhow::anyhow!("workspace not found for session"))
+        }
+        StartSessionError::WorkspaceDirectoryMissing { path } => {
+            EnsureLiveSessionError::WorkspaceDirectoryMissing { path }
+        }
+        StartSessionError::AgentDescriptorNotFound(agent_kind) => {
+            EnsureLiveSessionError::Internal(anyhow::anyhow!(
+                "agent descriptor not found: {agent_kind}"
+            ))
+        }
+        StartSessionError::LaunchOptionsUnavailable { agent_kind, state } => {
+            EnsureLiveSessionError::Invalid(format!(
+                "launch options are not available for agent '{agent_kind}' (state: {state:?})"
+            ))
+        }
+        StartSessionError::LaunchValueUnsupported {
+            agent_kind,
+            key,
+            value,
+            state,
+        } => EnsureLiveSessionError::Invalid(format!(
+            "launch value '{value}' for '{key}' is no longer supported for agent '{agent_kind}' (state: {state:?})"
+        )),
+        StartSessionError::AgentEnvOverrideUnsupported {
+            agent_kind,
+            env_var_name,
+        } => EnsureLiveSessionError::Invalid(format!(
+            "workspace/session environment cannot override agent-owned key '{env_var_name}' for '{agent_kind}'"
+        )),
+        StartSessionError::Closed => EnsureLiveSessionError::SessionClosed,
+        StartSessionError::MissingDataKey => EnsureLiveSessionError::MissingDataKey,
+        StartSessionError::RestartRequired(detail) => {
+            EnsureLiveSessionError::RestartRequired(detail)
+        }
+        StartSessionError::WorkspaceMcpAttachmentFailed(error) => {
+            EnsureLiveSessionError::WorkspaceMcpAttachmentFailed(error)
+        }
+        StartSessionError::RouteAuth(error) => EnsureLiveSessionError::RouteAuth(error),
+        StartSessionError::AgentNotReady {
+            agent_kind,
+            status,
+            detail,
+        } => EnsureLiveSessionError::AgentNotReady {
+            agent_kind,
+            status,
+            detail,
+        },
+        StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
+            EnsureLiveSessionError::Internal(error)
+        }
+    }
+}
+
+pub(super) fn map_launch_selection_unsupported(
+    agent_kind: &str,
+    unsupported: LaunchSelectionUnsupported,
+) -> StartSessionError {
+    match unsupported {
+        LaunchSelectionUnsupported::Internal(error) => StartSessionError::Internal(error),
+        LaunchSelectionUnsupported::ObservationUnavailable { state } => {
+            StartSessionError::LaunchOptionsUnavailable {
+                agent_kind: agent_kind.to_string(),
+                state,
+            }
+        }
+        LaunchSelectionUnsupported::Model { model_id, state } => {
+            StartSessionError::LaunchValueUnsupported {
+                agent_kind: agent_kind.to_string(),
+                key: "modelId".to_string(),
+                value: model_id,
+                state,
+            }
+        }
+        LaunchSelectionUnsupported::Control { control_id, state } => {
+            StartSessionError::LaunchValueUnsupported {
+                agent_kind: agent_kind.to_string(),
+                key: control_id,
+                value: "<unknown-control>".to_string(),
+                state,
+            }
+        }
+        LaunchSelectionUnsupported::ControlValue {
+            control_id,
+            value,
+            state,
+        } => StartSessionError::LaunchValueUnsupported {
+            agent_kind: agent_kind.to_string(),
+            key: control_id,
+            value,
+            state,
+        },
+    }
+}
 
 pub(super) fn map_start_session_error_to_anyhow(error: StartSessionError) -> anyhow::Error {
     match error {

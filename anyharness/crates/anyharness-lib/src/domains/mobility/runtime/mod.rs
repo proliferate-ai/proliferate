@@ -32,10 +32,13 @@ use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::store::completion_deliveries::CompletionDeliveryStore;
 use crate::domains::terminals::model::TerminalRecord;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
+use crate::domains::workspaces::checkpoints::WorkspaceCheckpointService;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::terminals::TerminalService;
 
 mod destroy_source;
+#[cfg(test)]
+mod destroy_source_tests;
 mod install;
 mod mobility_policy;
 #[cfg(test)]
@@ -47,6 +50,7 @@ pub struct MobilityRuntime {
     mobility_service: Arc<MobilityService>,
     mobility_store: MobilityStore,
     workspace_runtime: Arc<WorkspaceRuntime>,
+    checkpoint_service: Arc<WorkspaceCheckpointService>,
     session_service: Arc<SessionService>,
     session_runtime: Arc<SessionRuntime>,
     session_link_service: Arc<SessionLinkService>,
@@ -63,6 +67,7 @@ impl MobilityRuntime {
         mobility_service: Arc<MobilityService>,
         mobility_store: MobilityStore,
         workspace_runtime: Arc<WorkspaceRuntime>,
+        checkpoint_service: Arc<WorkspaceCheckpointService>,
         session_service: Arc<SessionService>,
         session_runtime: Arc<SessionRuntime>,
         session_link_service: Arc<SessionLinkService>,
@@ -76,6 +81,7 @@ impl MobilityRuntime {
             mobility_service,
             mobility_store,
             workspace_runtime,
+            checkpoint_service,
             session_service,
             session_runtime,
             session_link_service,

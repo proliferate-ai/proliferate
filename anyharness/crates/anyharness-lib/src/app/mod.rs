@@ -6,6 +6,7 @@ mod mobility;
 mod product_mcp;
 mod sessions;
 mod workflows;
+mod workspaces;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -73,8 +74,8 @@ use crate::domains::terminals::store::TerminalStore;
 use crate::domains::workflows::session_extension::WorkflowSessionExtension;
 use crate::domains::workflows::store::WorkflowStore;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
-use crate::domains::workspaces::archive::quiesce::QuiescePlanes;
 use crate::domains::workspaces::archive::WorkspaceArchiveService;
+use crate::domains::workspaces::checkpoints::WorkspaceCheckpointService;
 use crate::domains::workspaces::checkout_gate::CheckoutDeletionGate;
 use crate::domains::workspaces::deletion::purge::WorkspacePurgeService;
 use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
@@ -167,6 +168,7 @@ pub struct AppState {
     pub checkout_deletion_gate: Arc<CheckoutDeletionGate>,
     pub workspace_purge_service: Arc<WorkspacePurgeService>,
     pub workspace_archive_service: Arc<WorkspaceArchiveService>,
+    pub workspace_checkpoint_service: Arc<WorkspaceCheckpointService>,
     pub worktree_inventory_service: Arc<WorktreeInventoryService>,
     pub mobility_runtime: Arc<MobilityRuntime>,
     pub materialization_runtime: Arc<MaterializationRuntime>,
@@ -399,7 +401,7 @@ impl AppState {
             acp_manager.clone(),
             session_admission.clone(),
         ));
-        let loop_scheduler = Arc::new(LoopScheduler::new(loop_fire_executor));
+        let loop_scheduler = Arc::new(LoopScheduler::new(loop_fire_executor.clone()));
         let loop_runtime = Arc::new(LoopRuntime::new(
             loop_service.clone(),
             session_service.clone(),
@@ -434,6 +436,9 @@ impl AppState {
             activity_session_hooks,
             workflow_session_extension.clone(),
         ];
+        // Checkpoints precede SessionRuntime; workspace lifecycle wraps it later.
+        let workspace_checkpoint_service =
+            workspaces::wire_checkpoints(&db, workspace_operation_gate.clone());
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
             session_link_service.clone(),
@@ -444,13 +449,16 @@ impl AppState {
             session_extensions,
             product_mcp_launch_catalog,
             workspace_access_gate.clone(),
+            workspace_operation_gate.clone(),
             plan_service.clone(),
             plan_service.clone(),
             gateway_model_planner.clone(),
             goal_service.clone(),
             loop_service.clone(),
             activity_service.clone(),
+            workspace_checkpoint_service.clone(),
         ));
+        loop_fire_executor.bind_session_runtime(&session_runtime);
         completion_delivery_wiring.spawn(&session_runtime);
         // Workflows gen-2, in this order: fence first (no actor may accept a
         // command against un-fenced rows), manager second, late-bind third.
@@ -462,43 +470,22 @@ impl AppState {
             WorkspaceStore::new(db.clone()),
         ));
         workflow_session_extension.bind_manager(&workflow_manager);
-        // Destructive workspace family: the archive orchestrator and the
-        // row-dies-last purge orchestrator, constructed directly here. There
-        // is no wiring family struct left for this pair once the shared
-        // retire preflight checker and the old tombstone purge are gone —
-        // `app/workspaces.rs` died with them (R5).
-        let workspace_archive_service = Arc::new(WorkspaceArchiveService::new(
-            WorkspaceStore::new(db.clone()),
-            RepoRootStore::new(db.clone()),
-            workspace_operation_gate.clone(),
-            QuiescePlanes {
-                setup: workspace_setup_runtime.clone(),
-                sessions: session_runtime.clone(),
-                terminals: terminal_service.clone(),
-            },
-            session_service.clone(),
-            runtime_home.clone(),
-        ));
-        let workspace_purge_service = Arc::new(WorkspacePurgeService::new(
-            WorkspaceStore::new(db.clone()),
-            SessionStore::new(db.clone()),
-            session_delete_workflow.clone(),
-            workspace_setup_runtime.clone(),
-            session_runtime.clone(),
-            terminal_service.clone(),
-            (*repo_root_service).clone(),
-            workspace_operation_gate.clone(),
-            workspace_archive_service.clone(),
-            session_admission.clone(),
-            runtime_home.clone(),
-        ));
-        // The leftover sweep's boot pass and its slow periodic tick. Suppressed
-        // under `cfg(test)` for the same reason `automatic_poke_engine` is: a
-        // background pass that removes directories would otherwise land in the
-        // middle of suites that build real worktrees and count what is on disk.
-        // In production boots it runs unconditionally.
-        #[cfg(not(test))]
-        workspace_archive_service.clone().spawn_startup_pass();
+        let workspace_lifecycle =
+            workspaces::wire_workspace_lifecycle(workspaces::WorkspaceLifecycleWiringDeps {
+                db: db.clone(),
+                runtime_home: runtime_home.clone(),
+                checkpoint_service: workspace_checkpoint_service.clone(),
+                operation_gate: workspace_operation_gate.clone(),
+                setup_runtime: workspace_setup_runtime.clone(),
+                session_runtime: session_runtime.clone(),
+                session_service: session_service.clone(),
+                session_delete_workflow: session_delete_workflow.clone(),
+                session_admission: session_admission.clone(),
+                terminal_service: terminal_service.clone(),
+                repo_root_service: repo_root_service.clone(),
+            });
+        let workspace_archive_service = workspace_lifecycle.archive;
+        let workspace_purge_service = workspace_lifecycle.purge;
         let workspace_worktree_runtime = Arc::new(WorkspaceWorktreeRuntime::new(
             workspace_runtime.clone(),
             workspace_setup_runtime.clone(),
@@ -526,6 +513,7 @@ impl AppState {
             db: db.clone(),
             runtime_home: runtime_home.clone(),
             workspace_runtime: workspace_runtime.clone(),
+            checkpoint_service: workspace_checkpoint_service.clone(),
             session_service: session_service.clone(),
             session_runtime: session_runtime.clone(),
             session_link_service: Arc::new(session_link_service.clone()),
@@ -630,6 +618,7 @@ impl AppState {
             checkout_deletion_gate,
             workspace_purge_service,
             workspace_archive_service,
+            workspace_checkpoint_service,
             worktree_inventory_service,
             mobility_runtime,
             materialization_runtime,

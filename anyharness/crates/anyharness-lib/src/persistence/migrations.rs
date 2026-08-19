@@ -253,8 +253,12 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         include_str!("sql/0074_opencode_message_ids.sql"),
     ),
     (
-        "0075_harness_launch_options",
-        include_str!("sql/0075_harness_launch_options.sql"),
+        "0075_workspace_checkpoints",
+        include_str!("sql/0075_workspace_checkpoints.sql"),
+    ),
+    (
+        "0076_harness_launch_options",
+        include_str!("sql/0076_harness_launch_options.sql"),
     ),
 ];
 

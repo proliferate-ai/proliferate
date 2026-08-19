@@ -177,7 +177,9 @@ fn emulated_loop_fire_holds_the_session_permit_before_prompt_delivery() {
         .1;
     let permit = body.find(".acquire(").expect("session permit");
     let handle = body.find("get_handle(").expect("live handle lookup");
-    let prompt = body.find("send_prompt(").expect("prompt delivery");
+    let prompt = body
+        .find("send_text_prompt_with_provenance_on_existing_handle(")
+        .expect("checkpoint-aware prompt delivery");
     let accounting = body.find("run_domain_op(").expect("durable accounting");
     assert!(permit < handle && handle < prompt && prompt < accounting);
 }

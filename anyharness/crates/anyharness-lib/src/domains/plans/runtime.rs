@@ -210,7 +210,8 @@ impl PlanRuntime {
         let handoff_id = uuid::Uuid::new_v4().to_string();
         let prompt_status = match self
             .session_runtime
-            .send_prompt(
+            .send_prompt_under_workspace_lease(
+                &plan.workspace_id,
                 &target_session_id,
                 vec![PromptInputBlock::Text { text: prompt }],
                 None,

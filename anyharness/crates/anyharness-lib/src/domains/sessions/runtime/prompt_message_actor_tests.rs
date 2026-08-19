@@ -433,7 +433,7 @@ for raw_line in sys.stdin:
             "id": request_id,
             "result": {
                 "protocolVersion": 1,
-                "agentCapabilities": {"loadSession": True},
+                "agentCapabilities": {"loadSession": True, "promptCapabilities": {"image": True}},
                 "authMethods": [],
             },
         })

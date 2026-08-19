@@ -260,7 +260,8 @@ impl SessionRuntime {
             return Ok(started);
         };
         match self
-            .send_text_prompt_with_id_and_provenance(
+            .send_text_prompt_with_id_and_provenance_under_workspace_lease(
+                &record.workspace_id,
                 &record.id,
                 task,
                 format!("agent-create-{}", uuid::Uuid::new_v4()),

@@ -10,37 +10,39 @@ pub fn list_entries(
     workspace_root: &Path,
     relative_dir: &str,
 ) -> Result<ListWorkspaceFilesResult, FileServiceError> {
-    let abs = resolve_safe_path(workspace_root, relative_dir).map_err(FileServiceError::Safety)?;
+    let abs = resolve_safe_path(workspace_root, relative_dir)
+        .map_err(|error| FileServiceError::from_safety(error, relative_dir))?;
 
-    if !abs.is_dir() {
+    let directory_metadata = abs
+        .metadata()
+        .map_err(|error| FileServiceError::from_io(error, relative_dir))?;
+    if !directory_metadata.is_dir() {
         return Err(FileServiceError::NotADirectory(relative_dir.to_string()));
     }
 
     let mut entries = Vec::new();
-    let read_dir = std::fs::read_dir(&abs).map_err(|e| FileServiceError::Io(e.to_string()))?;
+    let read_dir =
+        std::fs::read_dir(&abs).map_err(|error| FileServiceError::from_io(error, relative_dir))?;
 
-    for entry in read_dir {
-        let entry = entry.map_err(|e| FileServiceError::Io(e.to_string()))?;
-        let file_name = entry.file_name();
+    for directory_entry in read_dir {
+        let directory_entry =
+            directory_entry.map_err(|error| FileServiceError::from_io(error, relative_dir))?;
+        let file_name = directory_entry.file_name();
         let name = file_name.to_string_lossy().to_string();
 
         if name == ".git" {
             continue;
         }
 
-        let entry_path = entry.path();
+        let entry_path = directory_entry.path();
         let symlink_metadata = entry_path
             .symlink_metadata()
-            .map_err(|e| FileServiceError::Io(e.to_string()))?;
+            .map_err(|error| FileServiceError::from_io(error, &child_path(relative_dir, &name)))?;
         let is_symlink = symlink_metadata.file_type().is_symlink();
         let metadata = if is_symlink {
             None
         } else {
-            Some(
-                entry
-                    .metadata()
-                    .map_err(|e| FileServiceError::Io(e.to_string()))?,
-            )
+            Some(&symlink_metadata)
         };
 
         let kind = if is_symlink {
@@ -51,31 +53,23 @@ pub fn list_entries(
             WorkspaceFileKind::File
         };
 
-        let child_path = if relative_dir.is_empty() {
-            name.clone()
-        } else {
-            format!("{}/{}", relative_dir, name)
-        };
+        let child_path = child_path(relative_dir, &name);
 
         let has_children = if matches!(kind, WorkspaceFileKind::Directory) {
-            Some(
-                std::fs::read_dir(entry.path())
-                    .map(|rd| rd.count() > 0)
-                    .unwrap_or(false),
-            )
+            Some(entry::directory_has_children(&entry_path, &child_path)?)
         } else {
             None
         };
 
-        let entry_metadata = metadata.as_ref().unwrap_or(&symlink_metadata);
+        let entry_metadata = metadata.unwrap_or(&symlink_metadata);
 
         entries.push(WorkspaceFileEntry {
             path: child_path,
             name,
             kind,
             has_children,
-            size_bytes: if metadata.as_ref().is_some_and(|metadata| metadata.is_file()) {
-                metadata.as_ref().map(|metadata| metadata.len())
+            size_bytes: if metadata.is_some_and(|metadata| metadata.is_file()) {
+                metadata.map(|metadata| metadata.len())
             } else {
                 None
             },
@@ -98,4 +92,12 @@ pub fn list_entries(
         directory_path: relative_dir.to_string(),
         entries,
     })
+}
+
+fn child_path(relative_dir: &str, name: &str) -> String {
+    if relative_dir.is_empty() {
+        name.to_string()
+    } else {
+        format!("{relative_dir}/{name}")
+    }
 }

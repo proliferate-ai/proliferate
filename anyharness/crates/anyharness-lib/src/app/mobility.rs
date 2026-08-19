@@ -17,6 +17,7 @@ use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::store::completion_deliveries::CompletionDeliveryStore;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
+use crate::domains::workspaces::checkpoints::WorkspaceCheckpointService;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::terminals::TerminalService;
 use crate::persistence::Db;
@@ -25,6 +26,7 @@ pub(super) struct MobilityWiringDeps {
     pub db: Db,
     pub runtime_home: PathBuf,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
+    pub checkpoint_service: Arc<WorkspaceCheckpointService>,
     pub session_service: Arc<SessionService>,
     pub session_runtime: Arc<SessionRuntime>,
     pub session_link_service: Arc<SessionLinkService>,
@@ -45,6 +47,7 @@ pub(super) fn wire_mobility(deps: MobilityWiringDeps) -> Arc<MobilityRuntime> {
         service,
         MobilityStore::new(deps.db.clone()),
         deps.workspace_runtime,
+        deps.checkpoint_service,
         deps.session_service,
         deps.session_runtime,
         deps.session_link_service,

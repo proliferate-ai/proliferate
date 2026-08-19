@@ -20,8 +20,8 @@ reason = "existing AnyHarness oversized test file (+hosting PR-status route test
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/app/mod.rs"
-max_lines = 657
-reason = "AnyHarness app wiring (+gateway model planner wiring; the gateway model resolver + probe-engine store wiring is gone with the old-chain deletion, A9) (+session mutation admission purge/retention wiring, +goal/loop/activity/feed services, +two-phase workflow-run and workflow-workspace wiring, +worktree restore runtime wiring; local materialization service wiring is now the materialization runtime valve, moved to app/materialization.rs per grid PR 7; -3: WorkspaceService construction/pass-through deleted, grid PR 8; net 0 in grid PR 9: WorkspaceRetireService joins AppState while the preflight-checker/purge/retire constructions move to the app/workspaces.rs wiring family); PR #1753 extracts process/runtime configuration helpers to app/config.rs while adding Workspace MCP composition; PR #3 moves Agent Operations graph construction to app/agent_operations.rs; PR10 removes legacy Subagents MCP wiring while adding live product-context composition ; -24: R1 archiving unwires WorkspaceRetireService and WorkspaceRetentionService (fields, constructions, the retention startup pass and the WorktreeRetentionPolicyStore import) ; +12: R4 archiving wires WorkspaceArchiveService (import, field, deps pass-through, construction, and the cfg(not(test)) sweep boot pass) ; +7 net: R5 wires QuiescePlanes and the deletion-family purge construction while the clippy fix drops the dead session_delete_workflow argument ; -10: workflows gen-2 PR1 unwires the gen-1 two-phase workflow-run and workflow-workspace services ; +26: PR4 wires the WorkflowManager (construction, extension registration, boot fence pass) ; +1: R5 (Update Flow ADR, FR-1) swaps CatalogSyncService::from_bundled() for the boot-fetch-aware from_bundled_and_staged_via_env(&runtime_home)"
+max_lines = 647
+reason = "AnyHarness app wiring (+gateway model planner wiring; the gateway model resolver + probe-engine store wiring is gone with the old-chain deletion, A9) (+session mutation admission purge/retention wiring, +goal/loop/activity/feed services, +two-phase workflow-run and workflow-workspace wiring, +worktree restore runtime wiring; local materialization service wiring is now the materialization runtime valve, moved to app/materialization.rs per grid PR 7; -3: WorkspaceService construction/pass-through deleted, grid PR 8; net 0 in grid PR 9: WorkspaceRetireService joins AppState while the preflight-checker/purge/retire constructions move to the app/workspaces.rs wiring family); PR #1753 extracts process/runtime configuration helpers to app/config.rs while adding Workspace MCP composition; PR #3 moves Agent Operations graph construction to app/agent_operations.rs; PR10 removes legacy Subagents MCP wiring while adding live product-context composition ; -24: R1 archiving unwires WorkspaceRetireService and WorkspaceRetentionService (fields, constructions, the retention startup pass and the WorktreeRetentionPolicyStore import) ; +12: R4 archiving wires WorkspaceArchiveService (import, field, deps pass-through, construction, and the cfg(not(test)) sweep boot pass) ; +7 net: R5 wires QuiescePlanes and the deletion-family purge construction while the clippy fix drops the dead session_delete_workflow argument ; -10: workflows gen-2 PR1 unwires the gen-1 two-phase workflow-run and workflow-workspace services ; +26: PR4 wires the WorkflowManager (construction, extension registration, boot fence pass) ; +1: R5 (Update Flow ADR, FR-1) swaps CatalogSyncService::from_bundled() for the boot-fetch-aware from_bundled_and_staged_via_env(&runtime_home) ; -10: Lane H restores the workspaces wiring family for checkpoint-before-session plus archive/purge-after-session composition"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/agents/auth/context_tests.rs"
@@ -40,7 +40,7 @@ reason = "Track D provider_config render arm (claude/opencode generic env-set, c
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs"
-max_lines = 1893
+max_lines = 1890
 reason = "existing AnyHarness oversized file (catalog-owned unattended default replaces local fallback helper)"
 
 [[max_lines]]
@@ -65,8 +65,8 @@ reason = "existing AnyHarness oversized test file"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs"
-max_lines = 1283
-reason = "existing AnyHarness oversized test file (launch-env tests moved to their owning module) + A9 Scope C resume/fork revoked-credentials regression tests (AgentNotReady at the common live-start seam) + a review-fix pin (unsatisfiable selection reports RouteAuth, not AgentNotReady, on resume) + Forks ADR rung 2 targeted-fork plumbing tests (item-less rejection, fail-closed no-child downgrade guard, idempotency conflict, unknown-outcome redispatch block, same-payload resume shared by the insert-time TOCTOU fallback)"
+max_lines = 1218
+reason = "existing AnyHarness oversized test file (launch-env tests moved to their owning module) + A9 Scope C resume/fork revoked-credentials regression tests (AgentNotReady at the common live-start seam) + a review-fix pin (unsatisfiable selection reports RouteAuth, not AgentNotReady, on resume) + Forks ADR rung 2 targeted-fork plumbing tests (item-less rejection, fail-closed no-child downgrade guard, idempotency conflict, unknown-outcome redispatch block; the same-payload resume test moved to checkpoint_linkage_tests.rs with the Lane H NULL-linkage pins, -65)"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/sessions/actor/tests/workspace_stop.rs"
@@ -122,11 +122,6 @@ reason = "existing SDK oversized test file; legacy Subagents MCP reducer coverag
 path = "anyharness/sdk/src/reducer/transcript.ts"
 max_lines = 1515
 reason = "existing SDK oversized file; legacy Subagents MCP reducer branch removed in PR10"
-
-[[max_lines]]
-path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/prompt.rs"
-max_lines = 609
-reason = "session prompt dispatch ; +39: workflows gen-2 PR4 adds send_text_blocks_prompt_with_id (the workflow envelope's multi-block twin) sharing one send_payload_prompt_with_id seam with the text path"
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/domains/sessions/runtime/prompt_message_actor_tests.rs"

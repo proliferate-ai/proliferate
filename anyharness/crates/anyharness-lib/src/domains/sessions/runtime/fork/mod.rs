@@ -11,7 +11,7 @@ use crate::domains::sessions::model::{
 use crate::domains::sessions::runtime::fork_boundary;
 use crate::domains::sessions::store::fork_operations::ForkOperationChildResult;
 use crate::live::sessions::SessionStartupStrategy;
-use crate::live::sessions::{ForkSessionCommandResult, LiveSessionCommandError};
+use crate::live::sessions::ForkSessionCommandResult;
 
 use self::errors::{
     map_fork_target_error, map_live_fork_command_error, map_start_error_to_fork,
@@ -64,9 +64,9 @@ impl SessionRuntime {
                 "session agent does not advertise fork support".to_string(),
             ));
         }
-        // Capability-gated per-adapter dispatch (flag default OFF). No adapter
-        // advertises `targeted_fork` until the rung-3 bridges land, so a
-        // targeted request fails closed and tip-fork behavior is unchanged.
+        // Capability-gated per-adapter dispatch. OpenCode advertises
+        // `targeted_fork` only after its qualified side-door is ready; every
+        // other adapter stays false until its own bridge lands.
         if target.is_some() && !capabilities.targeted_fork {
             return Err(ForkSessionError::Unsupported(
                 "targeted fork is not supported by this agent".to_string(),
@@ -168,6 +168,18 @@ impl SessionRuntime {
         let sidedoor_native_version =
             self.resolve_sidedoor_native_version(session_id, &sidedoor_message_id);
 
+        // Checkpoints (Lane H, Q-H4): a targeted fork references the boundary
+        // checkpoint via `checkpoint_id`. This path is LOOKUP, not capture —
+        // under the ruled turn-start cadence the checkpoint already exists (or
+        // does not). Flag-off, or no checkpoint at the boundary, leaves it NULL
+        // and the fork proceeds unchanged.
+        let checkpoint_id = match anchor_turn_id.as_deref() {
+            Some(turn_id) => self
+                .checkpoint_service
+                .find_checkpoint_id_for_boundary(&parent.id, turn_id),
+            None => None,
+        };
+
         // --- Persist the durable operation in `prepared` before any native call ---
         let now = chrono::Utc::now().to_rfc3339();
         let operation = ForkOperationRecord {
@@ -187,6 +199,7 @@ impl SessionRuntime {
             adapter_version: None,
             native_version: None,
             native_child_session_id: None,
+            checkpoint_id,
             created_at: now.clone(),
             updated_at: now.clone(),
         };

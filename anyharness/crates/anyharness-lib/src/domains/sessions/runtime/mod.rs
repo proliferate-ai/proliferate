@@ -22,12 +22,23 @@ use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::route_auth::{GatewayModelResolve, RouteAuthError};
 use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
+use crate::domains::workspaces::checkpoints::WorkspaceCheckpointService;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::sessions::LiveSessionManager;
 
 mod agent_creation;
+#[cfg(test)]
+mod checkpoint_dispatch_tests;
+mod checkpoint_hook;
+#[cfg(test)]
+mod checkpoint_linkage_tests;
+#[cfg(test)]
+mod checkpoint_queue_settlement_tests;
 mod config;
 mod creation;
+#[cfg(test)]
+mod dispatch_classification_tests;
 mod fork;
 pub(crate) mod fork_boundary;
 pub(crate) mod fork_qualification;
@@ -44,12 +55,15 @@ mod lifecycle_tests;
 pub(crate) mod opencode_sidedoor_client;
 mod pending_prompts;
 mod prompt;
+mod prompt_dispatch;
+mod prompt_lease;
 #[cfg(test)]
 pub(crate) mod prompt_message_actor_tests;
 #[cfg(test)]
 mod prompt_message_cold_start_tests;
 #[cfg(test)]
 mod prompt_message_tests;
+mod prompt_queue;
 mod replay;
 mod startup;
 mod startup_errors;
@@ -62,7 +76,7 @@ mod workspace_mcp_attachment;
 pub use agent_creation::{CreateOrdinaryAgentSessionError, CreateSubagentAgentSessionError};
 pub(crate) use creation::{InternalSessionCreateError, InternalSessionCreateInput};
 pub(crate) use lifecycle::LiveTurnCancelOutcome;
-pub(crate) use prompt::TextPromptDispatchError;
+pub(crate) use prompt_dispatch::TextPromptDispatchError;
 
 pub struct SessionRuntime {
     session_service: Arc<SessionService>,
@@ -74,6 +88,7 @@ pub struct SessionRuntime {
     session_extensions: Vec<Arc<dyn SessionExtension>>,
     product_mcp_launch_catalog: ProductMcpLaunchCatalog,
     access_gate: Arc<WorkspaceAccessGate>,
+    workspace_operation_gate: Arc<WorkspaceOperationGate>,
     plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
     plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
     /// Catalog-driven gateway model planner: supplies the render plane's
@@ -82,6 +97,10 @@ pub struct SessionRuntime {
     active_goal_resolver: Arc<dyn ActiveGoalResolver>,
     loops_resolver: Arc<dyn LoopsResolver>,
     activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
+    /// Checkpoints (Lane H): the turn-start capture hook lives at the prompt
+    /// dispatch seam (`prompt.rs`), and fork linkage reads the boundary
+    /// checkpoint through this handle. Behind `ANYHARNESS_CHECKPOINT_CAPTURE`.
+    checkpoint_service: Arc<WorkspaceCheckpointService>,
 }
 
 impl SessionRuntime {
@@ -203,6 +222,13 @@ pub enum SendPromptError {
     ProductContextUnavailable {
         incident_id: String,
         error: crate::live::sessions::product_context::AgentProductContextResolutionError,
+    },
+    /// Checkpoints (Lane H, Q-H1 abort policy): a turn-start checkpoint capture
+    /// failed and [`TURN_START_CAPTURE_FAILURE_POLICY`](crate::domains::workspaces::checkpoints::flags::TURN_START_CAPTURE_FAILURE_POLICY)
+    /// is `Abort`, so the prompt is refused rather than run uncheckpointed. The
+    /// turn never started; the caller may retry.
+    CheckpointCaptureFailed {
+        failure: crate::domains::workspaces::checkpoints::capture::CheckpointCaptureFailure,
     },
     Internal(anyhow::Error),
 }
@@ -439,12 +465,14 @@ impl SessionRuntime {
         session_extensions: Vec<Arc<dyn SessionExtension>>,
         product_mcp_launch_catalog: ProductMcpLaunchCatalog,
         access_gate: Arc<WorkspaceAccessGate>,
+        workspace_operation_gate: Arc<WorkspaceOperationGate>,
         plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
         plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
         gateway_model_resolver: Arc<dyn GatewayModelResolve>,
         active_goal_resolver: Arc<dyn ActiveGoalResolver>,
         loops_resolver: Arc<dyn LoopsResolver>,
         activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
+        checkpoint_service: Arc<WorkspaceCheckpointService>,
     ) -> Self {
         Self {
             session_service,
@@ -456,12 +484,14 @@ impl SessionRuntime {
             session_extensions,
             product_mcp_launch_catalog,
             access_gate,
+            workspace_operation_gate,
             plan_reference_resolver,
             plan_interaction_link_resolver,
             gateway_model_resolver,
             active_goal_resolver,
             loops_resolver,
             activity_roster_resolver,
+            checkpoint_service,
         }
     }
 

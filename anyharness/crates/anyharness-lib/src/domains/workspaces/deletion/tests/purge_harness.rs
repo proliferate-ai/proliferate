@@ -82,7 +82,13 @@ impl Harness {
                 "HEAD",
             ],
         );
-        self.seed_row(id, "worktree", &path, "repo-root-1", &self.repo_root.display().to_string());
+        self.seed_row(
+            id,
+            "worktree",
+            &path,
+            "repo-root-1",
+            &self.repo_root.display().to_string(),
+        );
         path
     }
 
@@ -91,6 +97,7 @@ impl Harness {
     pub(super) fn local_workspace(&self, id: &str) -> PathBuf {
         let path = self.base.join("local").join(id);
         std::fs::create_dir_all(&path).expect("create local checkout");
+        init_repo(&path);
         std::fs::write(path.join("hand-written.txt"), "mine\n").expect("write local file");
         self.seed_row(
             id,
@@ -119,7 +126,13 @@ impl Harness {
                 "HEAD",
             ],
         );
-        self.seed_row(id, "worktree", &path, "repo-root-1", &self.repo_root.display().to_string());
+        self.seed_row(
+            id,
+            "worktree",
+            &path,
+            "repo-root-1",
+            &self.repo_root.display().to_string(),
+        );
         path
     }
 
@@ -203,7 +216,14 @@ impl Harness {
             .collect()
     }
 
-    fn seed_row(&self, id: &str, kind: &str, path: &Path, repo_root_id: &str, repo_root_path: &str) {
+    fn seed_row(
+        &self,
+        id: &str,
+        kind: &str,
+        path: &Path,
+        repo_root_id: &str,
+        repo_root_path: &str,
+    ) {
         let path = path.display().to_string();
         let now = "2026-08-13T00:00:00Z";
         self.state
@@ -311,7 +331,11 @@ pub(super) fn delete_admin_registration_only(repo_root: &Path, worktree: &Path) 
     panic!("no admin registration found for {}", worktree.display());
 }
 
-pub(super) fn session_record(id: &str, workspace_id: &str, native_session_id: Option<&str>) -> SessionRecord {
+pub(super) fn session_record(
+    id: &str,
+    workspace_id: &str,
+    native_session_id: Option<&str>,
+) -> SessionRecord {
     SessionRecord {
         id: id.to_string(),
         workspace_id: workspace_id.to_string(),

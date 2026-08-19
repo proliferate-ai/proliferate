@@ -139,7 +139,7 @@ CREATE TABLE fork_operations (
     native_child_session_id TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
-);
+, checkpoint_id TEXT);
 
 -- table: goals
 CREATE TABLE goals (
@@ -726,6 +726,27 @@ CREATE TABLE workspace_access_modes (
     updated_at TEXT NOT NULL
 );
 
+-- table: workspace_checkpoints
+CREATE TABLE workspace_checkpoints (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    origin TEXT NOT NULL CHECK (origin IN ('turn_start','fork_boundary','safety')),
+    session_id TEXT,
+    turn_id TEXT,
+    prompt_id TEXT,
+    fork_operation_id TEXT,
+    revert_operation_id TEXT,
+    head_sha TEXT NOT NULL,
+    work_tree_oid TEXT NOT NULL,
+    index_tree_oid TEXT NOT NULL,
+    work_tree_anchored INTEGER NOT NULL,
+    index_tree_anchored INTEGER NOT NULL,
+    notices_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    expired_at TEXT
+);
+
 -- table: workspace_setup_state
 CREATE TABLE workspace_setup_state (
     workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -1001,6 +1022,12 @@ CREATE INDEX idx_workflow_run_nodes_run_id ON workflow_run_nodes(run_id);
 
 -- index: idx_workflow_runs_workspace_id
 CREATE INDEX idx_workflow_runs_workspace_id ON workflow_runs(workspace_id);
+
+-- index: idx_workspace_checkpoints_session_turn
+CREATE INDEX idx_workspace_checkpoints_session_turn ON workspace_checkpoints(session_id, turn_id);
+
+-- index: idx_workspace_checkpoints_ws_created
+CREATE INDEX idx_workspace_checkpoints_ws_created ON workspace_checkpoints(workspace_id, created_at);
 
 -- index: idx_workspaces_lifecycle
 CREATE INDEX idx_workspaces_lifecycle

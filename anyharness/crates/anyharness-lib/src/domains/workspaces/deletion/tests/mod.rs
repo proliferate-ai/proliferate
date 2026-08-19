@@ -16,6 +16,7 @@
 //! alone clears those once the sessions are already gone — this test is the
 //! direct proof of that cascade, not an assumption.
 
+mod purge_checkpoint_tests;
 mod purge_harness;
 mod purge_tests;
 
@@ -62,10 +63,8 @@ fn deleting_session_artifacts_then_the_row_clears_sessions_and_workspace_scoped_
         .expect("set setup run");
     seed_workspace_scoped_dependents(&db);
 
-    let runtime_home = std::env::temp_dir().join(format!(
-        "anyharness-deletion-test-{}",
-        uuid::Uuid::new_v4()
-    ));
+    let runtime_home =
+        std::env::temp_dir().join(format!("anyharness-deletion-test-{}", uuid::Uuid::new_v4()));
     let session_delete_workflow = test_session_delete_workflow(db.clone());
 
     // The split surfaces purge itself composes: artifacts + session graph

@@ -64,6 +64,9 @@ pub(super) fn map_service_error(e: FileServiceError) -> ApiError {
         FileServiceError::NotFound(path) => {
             ApiError::not_found(format!("file not found: {path}"), "FILE_NOT_FOUND")
         }
+        FileServiceError::PermissionDenied => {
+            ApiError::forbidden("file access denied", "FILE_PERMISSION_DENIED")
+        }
         FileServiceError::AlreadyExists(path) => ApiError::conflict(
             format!("file already exists: {path}"),
             "FILE_ALREADY_EXISTS",
@@ -97,21 +100,37 @@ pub(super) fn map_service_error(e: FileServiceError) -> ApiError {
         FileServiceError::VersionMismatch { path, .. } => {
             ApiError::conflict(format!("version mismatch for: {path}"), "VERSION_MISMATCH")
         }
-        FileServiceError::Io(error) => ApiError::internal(format!("file I/O error: {error}")),
+        FileServiceError::Io => ApiError::internal_with_safe_log(
+            "File operation failed.",
+            "workspace file operation failed",
+        ),
     }
 }
 
 fn map_safety_error(error: SafetyError) -> ApiError {
-    let detail = error.to_string();
-    let code = match &error {
-        SafetyError::OutsideWorkspace => "PATH_OUTSIDE_WORKSPACE",
-        SafetyError::AbsolutePath
+    match error {
+        SafetyError::NotFound => ApiError::not_found("file not found", "FILE_NOT_FOUND"),
+        SafetyError::NotADirectory => {
+            ApiError::bad_request("path component is not a directory", "NOT_A_DIRECTORY")
+        }
+        SafetyError::PermissionDenied => {
+            ApiError::forbidden("file access denied", "FILE_PERMISSION_DENIED")
+        }
+        SafetyError::IoError => ApiError::internal_with_safe_log(
+            "File operation failed.",
+            "workspace file path resolution failed",
+        ),
+        SafetyError::OutsideWorkspace => ApiError::bad_request(
+            SafetyError::OutsideWorkspace.to_string(),
+            "PATH_OUTSIDE_WORKSPACE",
+        ),
+        invalid @ (SafetyError::AbsolutePath
         | SafetyError::TraversalAttempt
         | SafetyError::InvalidPath
-        | SafetyError::GitDirectory
-        | SafetyError::IoError(_) => "INVALID_FILE_PATH",
-    };
-    ApiError::bad_request(detail, code)
+        | SafetyError::GitDirectory) => {
+            ApiError::bad_request(invalid.to_string(), "INVALID_FILE_PATH")
+        }
+    }
 }
 
 #[utoipa::path(
@@ -489,5 +508,86 @@ fn create_kind_to_internal(
         ContractCreateWorkspaceFileEntryKind::Directory => {
             InternalCreateWorkspaceFileEntryKind::Directory
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::http::StatusCode;
+
+    use super::{map_safety_error, map_service_error};
+    use crate::adapters::files::safety::SafetyError;
+    use crate::adapters::files::service::FileServiceError;
+
+    #[test]
+    fn permission_denial_has_stable_forbidden_problem() {
+        let error = map_service_error(FileServiceError::PermissionDenied);
+
+        assert_eq!(error.status(), StatusCode::FORBIDDEN);
+        assert_eq!(error.code(), Some("FILE_PERMISSION_DENIED"));
+        assert_eq!(error.detail(), Some("file access denied"));
+
+        let safety_error = map_safety_error(SafetyError::PermissionDenied);
+        assert_eq!(safety_error.status(), StatusCode::FORBIDDEN);
+        assert_eq!(safety_error.code(), Some("FILE_PERMISSION_DENIED"));
+    }
+
+    #[test]
+    fn non_directory_component_has_stable_bad_request_problem() {
+        let error = map_service_error(FileServiceError::NotADirectory(
+            "parent-file/missing/child.txt".to_string(),
+        ));
+
+        assert_eq!(error.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(error.code(), Some("NOT_A_DIRECTORY"));
+        assert_eq!(
+            error.detail(),
+            Some("not a directory: parent-file/missing/child.txt")
+        );
+
+        let safety_error = map_safety_error(SafetyError::NotADirectory);
+        assert_eq!(safety_error.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(safety_error.code(), Some("NOT_A_DIRECTORY"));
+        assert_eq!(
+            safety_error.detail(),
+            Some("path component is not a directory")
+        );
+    }
+
+    #[test]
+    fn not_found_and_safety_refusals_keep_exact_problem_codes() {
+        let missing = map_service_error(FileServiceError::NotFound("missing.txt".to_string()));
+        assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+        assert_eq!(missing.code(), Some("FILE_NOT_FOUND"));
+
+        let outside = map_safety_error(SafetyError::OutsideWorkspace);
+        assert_eq!(outside.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(outside.code(), Some("PATH_OUTSIDE_WORKSPACE"));
+
+        let git = map_safety_error(SafetyError::GitDirectory);
+        assert_eq!(git.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(git.code(), Some("INVALID_FILE_PATH"));
+    }
+
+    #[test]
+    fn unexpected_io_problem_is_generic_and_path_free() {
+        let service_error = FileServiceError::from_io(
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "seeded OS error for /private/customer/repository.txt",
+            ),
+            "private/customer/repository.txt",
+        );
+        let error = map_service_error(service_error);
+
+        assert_eq!(error.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(error.code(), None);
+        assert_eq!(error.detail(), Some("File operation failed."));
+        assert!(!error.detail().unwrap_or_default().contains("private"));
+        assert!(!error.detail().unwrap_or_default().contains("seeded"));
+
+        let safety_error = map_safety_error(SafetyError::IoError);
+        assert_eq!(safety_error.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(safety_error.detail(), Some("File operation failed."));
     }
 }

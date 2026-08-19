@@ -356,6 +356,7 @@ fn prompt_code(error: &SendPromptError) -> &'static str {
         SendPromptError::InvalidPrompt(error) => error.code,
         SendPromptError::WorkspaceMcpAttachmentFailed(_) => WORKSPACE_MCP_ATTACHMENT_CODE,
         SendPromptError::ProductContextUnavailable { .. } => AGENT_PRODUCT_CONTEXT_UNAVAILABLE_CODE,
+        SendPromptError::CheckpointCaptureFailed { failure } => failure.code(),
         SendPromptError::Internal(_) => "AGENT_OPERATIONS_INTERNAL",
     }
 }
@@ -464,6 +465,7 @@ fn prompt_public_message(error: &SendPromptError) -> String {
         SendPromptError::ProductContextUnavailable { .. } => {
             AGENT_PRODUCT_CONTEXT_UNAVAILABLE_DETAIL.into()
         }
+        SendPromptError::CheckpointCaptureFailed { failure } => failure.detail().into(),
         SendPromptError::Internal(_) => "Agent operations failed.".into(),
     }
 }
@@ -481,6 +483,7 @@ fn message_public_message(error: &SendPromptError) -> String {
         SendPromptError::ProductContextUnavailable { .. } => {
             AGENT_PRODUCT_CONTEXT_UNAVAILABLE_DETAIL.into()
         }
+        SendPromptError::CheckpointCaptureFailed { failure } => failure.detail().into(),
         SendPromptError::Internal(_) => "Agent operations failed.".into(),
     }
 }
