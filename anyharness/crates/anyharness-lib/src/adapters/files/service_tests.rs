@@ -75,11 +75,12 @@ fn create_entry_fails_when_parent_is_missing() {
 #[test]
 fn create_entry_fails_when_parent_is_a_file() {
     let dir = TestWorkspace::new();
-    std::fs::write(dir.path().join("parent-file"), "parent").expect("seed file parent");
+    let workspace_root = dir.path().canonicalize().expect("canonical workspace root");
+    std::fs::write(workspace_root.join("parent-file"), "parent").expect("seed file parent");
 
     for path in ["parent-file/child", "parent-file/missing/child"] {
         let error = WorkspaceFilesService::create_entry(
-            dir.path(),
+            &workspace_root,
             path,
             CreateWorkspaceFileEntryKind::File,
             None,
