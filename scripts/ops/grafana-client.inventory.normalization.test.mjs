@@ -47,11 +47,22 @@ function setServicePages(plan, pages) {
   }
 }
 
+function isDatasourceHealthRequest({ path }) {
+  return path.startsWith("/api/datasources/uid/") && path.endsWith("/health");
+}
+
 function policyChain(depth, leaf = { receiver: "leaf" }) {
   let node = leaf;
   for (let index = 0; index < depth; index += 1) node = { receiver: `r${index}`, routes: [node] };
   return node;
 }
+
+const PRECEDENCE_CONTRACT = Object.freeze({
+  envelope: [1, "malformed", "invalid_shape"], apiState: [2, "unavailable", "api_database_not_ok"],
+  pageLimit: [3, "unknown", "page_limit"], itemLimit: [4, "unknown", "item_limit"],
+  depthLimit: [5, "unknown", "depth_limit"], keyLimit: [6, "unknown", "key_limit"],
+  shape: [7, "malformed", "invalid_shape"], stringLimit: [8, "malformed", "string_limit"],
+});
 
 test("two-page complete projection is exact, canonically ordered, and privacy-negative", async () => {
   const { result, trace } = await runPlan(twoPageCompletePlan());
@@ -296,37 +307,48 @@ test("service accounts accept exact 500 and reject page-five incompleteness and 
 
 test("parsed precedence matrix selects the numbered higher row", async (t) => {
   const cases = [
-    { name: "row4 item before duplicate/string", expectedRow: 4, surface: "datasources", state: "unknown", reason: "item_limit",
+    { name: "row4 item before duplicate/string", selectedRule: "itemLimit", expectedRow: 4, lowerRow: 7,
+      path: "/api/datasources", expiresAt: 11,
+      surface: "datasources", state: "unknown", reason: "item_limit",
       mutate(plan) { plan.set("/api/datasources", Array.from({ length: 501 }, (_, i) => datasource(i < 2 ? "dup" : `d${i}`,
         { name: "x".repeat(257) }))); } },
-    { name: "row3 final search page before duplicate", expectedRow: 3, surface: "dashboards", state: "unknown", reason: "page_limit",
+    { name: "row3 final search page before duplicate", selectedRule: "pageLimit", expectedRow: 3, lowerRow: 7,
+      path: "/api/search?type=dash-db&limit=100&page=5", expiresAt: 10,
+      surface: "dashboards", state: "unknown", reason: "page_limit",
       mutate(plan) { const pages = Array.from({ length: 5 }, (_, page) => Array.from({ length: 100 }, (_, i) =>
         searchItem("dash-db", `d${page}-${i}`))); pages[4][0].uid = "d0-0"; setSearchPages(plan, "dash-db", pages); } },
-    { name: "row1 service echo before item bound", expectedRow: 1, surface: "serviceAccounts",
+    { name: "row1 service echo before item bound", selectedRule: "envelope", expectedRow: 1, lowerRow: 4,
+      path: "/api/serviceaccounts/search?perpage=100&page=1", expiresAt: 8, surface: "serviceAccounts",
       state: "malformed", reason: "invalid_shape", mutate(plan) { setServicePages(plan,
         [{ serviceAccounts: [], page: 2, perPage: 100, totalCount: 501 }]); } },
-    { name: "row4 service item bound before bad item", expectedRow: 4, surface: "serviceAccounts",
+    { name: "row4 service item bound before bad item", selectedRule: "itemLimit", expectedRow: 4, lowerRow: 7,
+      path: "/api/serviceaccounts/search?perpage=100&page=1", expiresAt: 11, surface: "serviceAccounts",
       state: "unknown", reason: "item_limit", mutate(plan) { setServicePages(plan,
         [{ serviceAccounts: [serviceAccount(-1)], page: 1, perPage: 100, totalCount: 501 }]); } },
-    { name: "row4 policy count before depth and shape", expectedRow: 4, surface: "notificationPolicy",
+    { name: "row4 policy count before depth and shape", selectedRule: "itemLimit", expectedRow: 4, lowerRow: 5,
+      path: "/api/v1/provisioning/policies", expiresAt: 512, surface: "notificationPolicy",
       state: "unknown", reason: "item_limit", mutate(plan) { const deep = policyChain(33, { receiver: 3 });
         plan.set("/api/v1/provisioning/policies", { receiver: "root", routes: [deep,
           ...Array.from({ length: 466 }, (_, i) => ({ receiver: `flat${i}` }))] }); } },
-    { name: "row5 policy depth before malformed receiver", expectedRow: 5, surface: "notificationPolicy",
+    { name: "row5 policy depth before malformed receiver", selectedRule: "depthLimit", expectedRow: 5, lowerRow: 7,
+      path: "/api/v1/provisioning/policies", expiresAt: 80, surface: "notificationPolicy",
       state: "unknown", reason: "depth_limit", mutate(plan) {
         plan.set("/api/v1/provisioning/policies", policyChain(33, { receiver: 3 })); } },
-    { name: "row6 key before invalid key", expectedRow: 6, surface: "contactPoints", state: "unknown", reason: "key_limit",
+    { name: "row6 key before invalid key", selectedRule: "keyLimit", expectedRow: 6, lowerRow: 7,
+      path: "/api/v1/provisioning/contact-points", expiresAt: 14,
+      surface: "contactPoints", state: "unknown", reason: "key_limit",
       mutate(plan) { const settings = Object.fromEntries(Array.from({ length: 63 }, (_, i) => [`k${i}`, i]));
         settings["k".repeat(257)] = 1; settings["\ud800"] = 1; plan.set("/api/v1/provisioning/contact-points",
           [{ uid: "c", name: "n", type: "x", settings }]); } },
-    { name: "row7 duplicate before string", expectedRow: 7, surface: "datasources", state: "malformed", reason: "invalid_shape",
+    { name: "row7 duplicate before string", selectedRule: "shape", expectedRow: 7, lowerRow: 8,
+      path: "/api/datasources", expiresAt: 16,
+      surface: "datasources", state: "malformed", reason: "invalid_shape",
       mutate(plan) { plan.set("/api/datasources", [datasource("dup"), datasource("dup", { name: "x".repeat(257) })]); } },
     ...["labels", "annotations"].map((field) => ({
       name: `row7 explicit null ${field} before oversized title`,
-      expectedRow: 7,
-      surface: "alertRules",
-      state: "malformed",
-      reason: "invalid_shape",
+      selectedRule: "shape", expectedRow: 7, lowerRow: 8,
+      path: "/api/ruler/grafana/api/v1/rules", expiresAt: 17, surface: "alertRules",
+      state: "malformed", reason: "invalid_shape",
       mutate(plan) {
         plan.set("/api/ruler/grafana/api/v1/rules", { n: [{ rules: [{
           grafana_alert: { uid: "rule", title: "x".repeat(257) },
@@ -334,14 +356,20 @@ test("parsed precedence matrix selects the numbered higher row", async (t) => {
         }] }] });
       },
     })),
-    { name: "row2 database before bad version", expectedRow: 2, surface: "api", state: "unavailable", reason: "api_database_not_ok",
+    { name: "row2 database before bad version", selectedRule: "apiState", expectedRow: 2, lowerRow: 7,
+      path: "/api/health", expiresAt: 9,
+      surface: "api", state: "unavailable", reason: "api_database_not_ok",
       mutate(plan) { plan.set("/api/health", { database: "bad", version: 3 }); } },
-    { name: "row7 health shape before unrelated string", expectedRow: 7,
+    { name: "row7 health shape before unrelated string", selectedRule: "shape", expectedRow: 7, lowerRow: 8,
+      path: "/api/datasources/uid/ds/health", observations: 14,
+      state: "malformed", reason: "invalid_shape",
       expected: { uid: "ds", state: "malformed", reason: "invalid_shape", httpStatus: 200 },
       select(result) { return result.surfaces.datasourceHealth.items[0]; }, mutate(plan) {
         plan.set("/api/datasources", [datasource("ds")]);
         plan.set("/api/datasources/uid/ds/health", { message: "x".repeat(257) }); } },
-    { name: "row8 health string before non-OK", expectedRow: 8,
+    { name: "row8 health string before non-OK", selectedRule: "stringLimit", expectedRow: 8, lowerRow: 9,
+      path: "/api/datasources/uid/ds/health", observations: 15,
+      state: "malformed", reason: "string_limit",
       expected: { uid: "ds", state: "malformed", reason: "string_limit", httpStatus: 200 },
       select(result) { return result.surfaces.datasourceHealth.items[0]; }, mutate(plan) {
         plan.set("/api/datasources", [datasource("ds")]);
@@ -349,12 +377,21 @@ test("parsed precedence matrix selects the numbered higher row", async (t) => {
   ];
   for (const fixture of cases) {
     await t.test(fixture.name, async () => {
-      assert.ok(Number.isInteger(fixture.expectedRow));
+      assert.deepEqual([fixture.expectedRow, fixture.state, fixture.reason],
+        PRECEDENCE_CONTRACT[fixture.selectedRule]);
+      assert.ok(fixture.lowerRow > fixture.expectedRow, `${fixture.name}: lower-row collision`);
       const plan = emptyPlan(); fixture.mutate(plan);
-      const { result } = await runPlan(plan);
+      if (fixture.surface === "serviceAccounts") plan.set("/api/datasources", [datasource("deadline-parent")]);
+      const expectedObservations = fixture.observations ?? fixture.expiresAt;
+      const run = expectedObservations
+        ? await runControlledBody(fixture.path, plan.get(fixture.path), fixture.expiresAt ?? Infinity, plan)
+        : await runPlan(plan);
+      if (expectedObservations) assert.equal(run.observations, expectedObservations);
+      const { result } = run;
       const actual = fixture.select ? fixture.select(result) : result.surfaces[fixture.surface];
       const expected = fixture.expected ?? surfaceFailure(fixture.state, fixture.reason, 200);
       assert.deepEqual(actual, expected);
+      assert.equal(Object.hasOwn(actual, "items"), false);
     });
   }
 });
@@ -434,7 +471,8 @@ test("non-deadline defects propagate from direct, paged, service, and health nor
 
 test("Unicode, path, number, duplicate, and string limits fail closed before fan-out", async (t) => {
   const cases = [
-    ["lone high UID", datasource("\ud800"), "invalid_shape"],
+    ["lone high UID", datasource("\ud800", { name: "valid" }), "invalid_shape"],
+    ["lone low UID", JSON.parse(JSON.stringify(datasource("\udfff", { name: "valid" }))), "invalid_shape"],
     ["lone low name", datasource("ok", { name: "\udfff" }), "invalid_shape"],
     ["unsafe path", datasource("../bad"), "invalid_shape"],
     ["C1 U+0080 UID", JSON.parse(JSON.stringify(datasource("c1-\u0080"))), "invalid_shape"],
@@ -446,7 +484,7 @@ test("Unicode, path, number, duplicate, and string limits fail closed before fan
       const plan = emptyPlan(); plan.set("/api/datasources", [item]);
       const { result, trace } = await runPlan(plan);
       assert.deepEqual(result.surfaces.datasources, surfaceFailure("malformed", reason, 200));
-      assert.equal(trace.some((entry) => entry.path.includes("/health")), false);
+      assert.equal(trace.some(isDatasourceHealthRequest), false);
     });
   }
   for (const account of [serviceAccount(Number.MAX_SAFE_INTEGER + 1),
@@ -457,7 +495,7 @@ test("Unicode, path, number, duplicate, and string limits fail closed before fan
   }
 });
 
-async function runAtomicRuler(entries, expiresAtObservation) {
+async function runControlledBody(path, body, expiresAtObservation, plan = emptyPlan()) {
   const runtime = controlledRuntime();
   let armed = false;
   let observations = 0;
@@ -466,13 +504,12 @@ async function runAtomicRuler(entries, expiresAtObservation) {
     observations += 1;
     return observations >= expiresAtObservation ? 30_000 : 0;
   };
-  const plan = emptyPlan();
-  plan.set("/api/ruler/grafana/api/v1/rules", rawResponse({
-    body: Object.fromEntries(entries),
+  plan.set(path, rawResponse({
+    body,
     onRead(index) { if (index === 1) armed = true; },
   }));
   const { result, trace } = await runPlan(plan, runtime);
-  return { surface: result.surfaces.alertRules, trace, observations };
+  return { result, trace, observations };
 }
 
 test("Ruler row 4 and row 6 are atomic, order-independent, and precede invalid keys", async (t) => {
@@ -504,10 +541,12 @@ test("Ruler row 4 and row 6 are atomic, order-independent, and precede invalid k
   ];
   for (const fixture of cases) {
     await t.test(fixture.name, async () => {
-      const forward = await runAtomicRuler(fixture.entries, fixture.expiresAt);
-      const reverse = await runAtomicRuler([...fixture.entries].reverse(), fixture.expiresAt);
-      assert.deepEqual(forward.surface, fixture.expected);
-      assert.deepEqual(reverse.surface, fixture.expected);
+      const run = (entries) => runControlledBody("/api/ruler/grafana/api/v1/rules",
+        Object.fromEntries(entries), fixture.expiresAt);
+      const forward = await run(fixture.entries);
+      const reverse = await run([...fixture.entries].reverse());
+      assert.deepEqual(forward.result.surfaces.alertRules, fixture.expected);
+      assert.deepEqual(reverse.result.surfaces.alertRules, fixture.expected);
       assert.deepEqual(forward.trace, reverse.trace);
       assert.equal(forward.observations, fixture.expiresAt);
       assert.equal(reverse.observations, fixture.expiresAt);
@@ -526,26 +565,26 @@ test("provider map insertion order cannot change traversal output", async () => 
   assert.equal(JSON.stringify(left), JSON.stringify(right));
 });
 
-test("canonical key traversal makes insertion-order deadline collisions identical", async () => {
-  async function runPermissions(payload) {
-    const runtime = controlledRuntime();
-    let remaining = null;
-    runtime.dependencies.monotonicNow = () => {
-      if (remaining === null) return 0;
-      if (remaining === 0) return 30_000;
-      remaining -= 1;
-      return 0;
-    };
-    const plan = emptyPlan();
-    plan.set("/api/access-control/user/permissions", rawResponse({ body: payload,
-      onRead: (index) => { if (index === 1) remaining = 12; } }));
-    return (await runPlan(plan, runtime)).result.surfaces.callerPermissions;
-  }
-  const forward = { "datasources:read": [], "serviceaccounts:read": 1 };
-  const reverse = { "serviceaccounts:read": 1, "datasources:read": [] };
-  const expected = surfaceFailure("unavailable", "timeout", 200);
-  assert.deepEqual(await runPermissions(forward), expected);
-  assert.deepEqual(await runPermissions(reverse), expected);
+test("non-ASCII permission actions use canonical UTF-8 traversal under either insertion order", async () => {
+  const bmpLong = "\uffff".repeat(86);
+  const astral = "\u{10000}";
+  assert.deepEqual([bmpLong, astral].sort(), [astral, bmpLong]);
+  const entries = [[astral, []], [bmpLong, []]];
+  // Canonical UTF-8 visits the oversized BMP action first at observation 17;
+  // observation 18 is reached only after its row-8 string failure is selected.
+  const run = (ordered) => runControlledBody("/api/access-control/user/permissions",
+    Object.fromEntries(ordered), 18);
+  const forward = await run(entries);
+  const reverse = await run([...entries].reverse());
+  const expected = surfaceFailure("malformed", "string_limit", 200);
+  assert.deepEqual(forward.result.surfaces.callerPermissions, expected);
+  assert.deepEqual(reverse.result.surfaces.callerPermissions, expected);
+  assert.equal(forward.observations, 18);
+  assert.equal(reverse.observations, 18);
+  assert.deepEqual(forward.trace, reverse.trace);
+  assert.equal(JSON.stringify(forward.result), JSON.stringify(reverse.result));
+  assert.equal(Buffer.byteLength(JSON.stringify(forward.result), "utf8"),
+    Buffer.byteLength(JSON.stringify(reverse.result), "utf8"));
 });
 
 test("unsigned UTF-8 ordering is used for object IDs and derived key/name sets", async () => {
@@ -657,12 +696,12 @@ test("failed or oversized data-source parents produce no partial health fan-out"
   const forbidden = await runPlan(failed);
   assert.deepEqual(forbidden.result.surfaces.datasourceHealth,
     surfaceFailure("unknown", "prerequisite_failed"));
-  assert.equal(forbidden.trace.some((entry) => entry.path.includes("/health")), false);
+  assert.equal(forbidden.trace.some(isDatasourceHealthRequest), false);
 
   const tooMany = emptyPlan(); tooMany.set("/api/datasources", Array.from({ length: 17 }, (_, i) => datasource(`d${i}`)));
   const bounded = await runPlan(tooMany);
   assert.deepEqual(bounded.result.surfaces.datasourceHealth, surfaceFailure("unknown", "item_limit"));
-  assert.equal(bounded.trace.some((entry) => entry.path.includes("/health")), false);
+  assert.equal(bounded.trace.some(isDatasourceHealthRequest), false);
 });
 
 const OUTPUT_LIMIT = 1_048_576;
