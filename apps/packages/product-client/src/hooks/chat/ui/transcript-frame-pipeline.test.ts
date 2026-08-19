@@ -13,6 +13,7 @@ import {
  */
 class FakeFrames {
   time = 0;
+  cancelled: number[] = [];
   private seq = 0;
   private queue: Array<{ handle: number; cb: () => void }> = [];
 
@@ -23,6 +24,7 @@ class FakeFrames {
   };
 
   caf = (handle: number): void => {
+    this.cancelled.push(handle);
     this.queue = this.queue.filter((entry) => entry.handle !== handle);
   };
 
@@ -30,6 +32,10 @@ class FakeFrames {
 
   get pending(): number {
     return this.queue.length;
+  }
+
+  get pendingHandles(): number[] {
+    return this.queue.map(({ handle }) => handle);
   }
 
   /** Fire every frame queued as of now (a snapshot), advancing the clock once. */
@@ -240,6 +246,44 @@ describe("TranscriptFramePipeline", () => {
     // A content-resize request arriving mid-glue must not schedule a second,
     // competing frame: exactly one frame is pending (the glue tick).
     pipeline.requestFrame();
+    expect(frames.pending).toBe(1);
+  });
+
+  it("ensureGlue preserves the first pending handle through rapid position events", () => {
+    const { frames, pipeline } = makePipeline();
+    let passes = 0;
+    pipeline.setWriter({
+      runFramePass: () => {
+        passes += 1;
+      },
+      measureContentHeight: () => 500,
+      shouldContinueGlue: () => true,
+    });
+
+    pipeline.ensureGlue();
+    const [firstHandle] = frames.pendingHandles;
+    pipeline.ensureGlue();
+    pipeline.ensureGlue();
+    pipeline.ensureGlue();
+
+    expect(frames.pendingHandles).toEqual([firstHandle]);
+    expect(frames.cancelled).toEqual([]);
+    frames.flushFrame();
+    expect(passes).toBe(1);
+  });
+
+  it("beginGlue still restarts a fresh owner window", () => {
+    const { frames, pipeline } = makePipeline();
+    pipeline.setWriter({
+      runFramePass: () => undefined,
+      measureContentHeight: () => 500,
+      shouldContinueGlue: () => true,
+    });
+    pipeline.beginGlue();
+    const [firstHandle] = frames.pendingHandles;
+    pipeline.beginGlue();
+    expect(frames.cancelled).toEqual([firstHandle]);
+    expect(frames.pendingHandles).not.toContain(firstHandle);
     expect(frames.pending).toBe(1);
   });
 
