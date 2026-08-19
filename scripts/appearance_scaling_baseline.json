@@ -213,7 +213,7 @@
     "apps/packages/product-client/src/components/workspace/chat/transcript/TurnDiffPanelHeader.tsx|z-0": 1,
     "apps/packages/product-client/src/components/workspace/chat/transcript/TurnDiffPanelHeader.tsx|z-10": 1,
     "apps/packages/product-client/src/components/workspace/cowork/CoworkWorkspaceShell.tsx|z-10": 3,
-    "apps/packages/product-client/src/components/workspace/files/viewer/FileViewerFrame.tsx|z-20": 1,
+    "apps/packages/product-client/src/components/workspace/files/viewer/FileViewerToolbar.tsx|z-20": 1,
     "apps/packages/product-client/src/components/workspace/git/GitPanelHeader.tsx|z-20": 1,
     "apps/packages/product-client/src/components/workspace/git/GitReviewFileSectionShell.tsx|z-10": 1,
     "apps/packages/product-client/src/components/workspace/open-target/FilePathContextMenuContent.tsx|z-10": 1,
