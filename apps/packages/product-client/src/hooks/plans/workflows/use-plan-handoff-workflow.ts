@@ -140,7 +140,9 @@ export function usePlanHandoffWorkflow({
           agentKind,
           values: {
             ...launchControlDefaults,
-            ...(controlSelection?.agentKind === agentKind ? controlSelection.values : {}),
+            ...(controlSelection && controlSelection.agentKind === agentKind
+              ? controlSelection.values
+              : {}),
             [rawConfigId]: value,
           },
         });
