@@ -72,17 +72,8 @@ function restoreFocusTo(surface: ContentSearchSurface, origin: HTMLElement | nul
   }
 }
 
-interface ContentSearchPillProps {
-  /** Whether the right-panel rail currently participates in layout. */
-  rightPanelOpen: boolean;
-  /** Rail content width when open, pre-floor-clamp. */
-  rightPanelWidth: number;
-}
-
-export function ContentSearchPill({
-  rightPanelOpen,
-  rightPanelWidth,
-}: ContentSearchPillProps) {
+/** `rightPanelOpen`: whether the rail participates in layout; `rightPanelWidth`: rail content width when open, pre-floor-clamp. */
+export function ContentSearchPill({ rightPanelOpen, rightPanelWidth }: { rightPanelOpen: boolean; rightPanelWidth: number }) {
   const inputRef = useRef<HTMLInputElement>(null);
   // Captures document.activeElement on each closed-to-open transition, and
   // the surface that was open when it was captured, so a later close can
