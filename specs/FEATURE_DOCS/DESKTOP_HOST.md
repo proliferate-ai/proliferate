@@ -95,6 +95,20 @@ deployment selection, links, storage, clipboard, telemetry, and Cloud behavior
 use their normal ProductHost groups rather than being duplicated in the
 Desktop bridge.
 
+Desktop-local path inspection is one narrow typed bridge operation. The host
+accepts an absolute candidate and returns exactly `file`, `directory`,
+`missing`, or `unavailable` with the bounded reason `invalid_path`,
+`permission_denied`, `unsupported_type`, or `io_error`. The renderer adapter
+validates that exact path-free union from an unknown native payload; malformed
+payloads reject with fixed protocol copy, and native transport failures remain
+rejections. Inspection follows the final filesystem link and reports metadata
+at that moment. It neither establishes that a reference belongs to the local
+machine nor guarantees that a later open will succeed.
+
+Home-directory lookup is also fail closed. Desktop caches a successful native
+lookup, but rejection remains rejection; there is no development or browser
+fallback path.
+
 The initial DesktopBridge may implement methods for the known inventoried
 consumers before those call sites migrate, as Desktop Host Adoption did. New
 methods beyond that inventory remain demand-driven: add one only when an

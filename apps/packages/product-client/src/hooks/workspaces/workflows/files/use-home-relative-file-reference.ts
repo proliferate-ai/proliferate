@@ -31,23 +31,32 @@ export function useHomeRelativeFileReference(
   const needsHomeDirectory = isHomeRelativeFileReference(rawPath);
   const [homeDirectory, setHomeDirectory] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [rejected, setRejected] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     if (!needsHomeDirectory || !files) {
       setHomeDirectory(null);
       setPending(false);
+      setRejected(false);
       return;
     }
 
     setHomeDirectory(null);
     setPending(true);
+    setRejected(false);
     void loadHomeDirectory(files).then(
       (path) => {
-        if (!cancelled) setHomeDirectory(path);
+        if (!cancelled) {
+          setHomeDirectory(path);
+          setRejected(false);
+        }
       },
       () => {
-        if (!cancelled) setHomeDirectory(null);
+        if (!cancelled) {
+          setHomeDirectory(null);
+          setRejected(true);
+        }
       },
     ).finally(() => {
       if (!cancelled) setPending(false);
@@ -61,22 +70,28 @@ export function useHomeRelativeFileReference(
     if (!needsHomeDirectory || !files) {
       return null;
     }
+    if (rejected) {
+      return null;
+    }
     if (homeDirectory) {
       return homeDirectory;
     }
     try {
       const path = await loadHomeDirectory(files);
       setHomeDirectory(path);
+      setRejected(false);
       return path;
     } catch {
+      setRejected(true);
       return null;
     }
-  }, [files, homeDirectory, needsHomeDirectory]);
+  }, [files, homeDirectory, needsHomeDirectory, rejected]);
 
   return {
     homeDirectory,
     needsHomeDirectory,
     pending,
+    rejected,
     resolveHomeDirectory,
   };
 }

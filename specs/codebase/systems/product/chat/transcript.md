@@ -144,12 +144,15 @@ Rules:
   path. Resolve it through the Desktop host's home-directory bridge before
   classifying or opening it; Web keeps the reference unavailable. Hidden path
   segments such as `~/.config` follow the same rule as any other home-relative
-  path.
+  path. A rejected home lookup remains unavailable and never substitutes
+  `/tmp` for inspection, target discovery, open, or reveal.
 - Once the assistant reveal frontier settles, the final unique Markdown file
   reference also renders as a compact end-resource card after prose. Its
   default subtitle identifies `Document · MD`; hover/focus changes that
   subtitle to `Open preview`. It remains completion chrome: never expose it
-  while transport text is still buffered or its final opacity is settling.
+  while transport text is still buffered or its final opacity is settling. Its
+  trigger consumes the file-reference action's `canOpenPrimary` capability and
+  stays disabled, with a guarded handler, until that capability is true.
 - While prose is streaming, a trailing incomplete local-file link is closed
   only in the Markdown render copy so its file mention appears as soon as the
   destination begins. Never persist the synthetic delimiter or expose the raw
