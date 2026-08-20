@@ -265,14 +265,18 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
       - name: Cargo test
-        run: cargo test --workspace
+        run: cargo nextest run --workspace
 
       # The workspace run above builds this package with default features, so
       # the internal-only export path and its dogfood proof would never be
       # evaluated without this step.
       - name: Cargo test internal diagnostics export
-        run: cargo test -p proliferate-diagnostics-collector --features internal-dogfood-export
+        run: cargo nextest run -p proliferate-diagnostics-collector --features internal-dogfood-export
 
   sdk-build:
     name: Build SDK
