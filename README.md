@@ -209,3 +209,5 @@ Contributing? See the [Contribution Guide](./CONTRIBUTING.md).
 ## License
 
 [AGPL-3.0](./LICENSE)
+
+<!-- exp/rust-sccache: non-Rust no-op commit to measure sccache hit rate on run 2 -->
