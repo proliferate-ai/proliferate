@@ -404,3 +404,50 @@ describe("buildLaunchControlDescriptors", () => {
     });
   });
 });
+
+describe("buildLaunchControlDescriptors raw-id normalization", () => {
+  it("normalizes raw observed control ids to composer presentation keys", () => {
+    // Post-cutover projections carry RAW ids in `key` too (key === liveConfigId).
+    const controls = buildLaunchControlDescriptors({
+      selection: { kind: "codex", modelId: "gpt-5.5" },
+      launchAgents: [
+        {
+          kind: "codex",
+          launchControls: [
+            control("reasoning_effort", "Reasoning effort", "medium", "reasoning_effort"),
+            control("fast-mode", "Fast mode", "off", "fast-mode"),
+          ],
+          models: [{ id: "gpt-5.5" }],
+        },
+      ],
+      pendingConfigChanges: null,
+      onSelect: vi.fn(),
+    });
+
+    // Negative control against the cutover regression: raw ids must land on
+    // the promoted composer keys, not fall into overflow chips.
+    expect(controls.map((c) => c.key)).toEqual(["effort", "fast_mode"]);
+    // The wire truth stays the raw observed id.
+    expect(controls.map((c) => c.rawConfigId)).toEqual(["reasoning_effort", "fast-mode"]);
+  });
+
+  it("preserves an unknown raw control id instead of filtering it", () => {
+    const [descriptor] = buildLaunchControlDescriptors({
+      selection: { kind: "codex", modelId: "gpt-5.5" },
+      launchAgents: [
+        {
+          kind: "codex",
+          launchControls: [
+            control("web-search", "Web search", "off", "web-search"),
+          ],
+          models: [{ id: "gpt-5.5" }],
+        },
+      ],
+      pendingConfigChanges: null,
+      onSelect: vi.fn(),
+    });
+
+    expect(descriptor?.key).toBe("web-search");
+    expect(descriptor?.rawConfigId).toBe("web-search");
+  });
+});
