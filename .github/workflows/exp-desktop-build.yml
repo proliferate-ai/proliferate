@@ -13,6 +13,8 @@
 #
 # This workflow and this comment block must be deleted before this branch
 # merges to main.
+#
+# Push 2/2: warm-cache measurement run (rust-cache should hit this time).
 name: EXPERIMENT Desktop build speed (TEMPORARY)
 
 on:
