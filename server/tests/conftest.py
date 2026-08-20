@@ -63,9 +63,14 @@ async def test_engine(migrated_test_database):  # type: ignore[no-untyped-def]
     resolves through this fixture.
 
     Fixture ordering is unchanged: the pre-test truncate still runs before any
-    fixture that depends on ``test_engine`` can seed rows, and the post-test
-    truncate still runs after those fixtures tear down, because teardown is the
-    reverse of setup and this fixture is the first of the chain to be set up.
+    fixture that depends on ``test_engine`` can seed rows.
+
+    The truncate runs before each test only, not after: every test already
+    starts from a clean slate via this same call, so an after-test truncate
+    only ever cleaned the database at process exit -- which the CI job never
+    reads back. The Postgres service container is torn down with the runner,
+    and the session-scoped ``migrated_test_database`` fixture drops the whole
+    database unconditionally regardless of its contents.
 
     Tests that build their own throwaway database (``temporary_database``) are
     self-isolating and correctly opt out of the shared-database reset.
@@ -76,8 +81,6 @@ async def test_engine(migrated_test_database):  # type: ignore[no-untyped-def]
     try:
         yield engine
     finally:
-        await _cancel_test_background_tasks()
-        await truncate_all_tables(engine)
         await engine.dispose()
 
 
