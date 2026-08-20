@@ -263,9 +263,18 @@ jobs:
       - name: Setup Rust stable
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Setup mold linker
+        uses: rui314/setup-mold@v1
+
       - uses: Swatinem/rust-cache@v2
 
       - name: Cargo test
+        env:
+          # Embeds mold's own command-line invocation into the .comment
+          # section of every linked binary, so the verification step below
+          # can prove mold (not the stock ld) actually performed the link,
+          # beyond just observing that the setup-mold step ran.
+          MOLD_DEBUG: "1"
         run: cargo test --workspace
 
       # The workspace run above builds this package with default features, so
@@ -273,6 +282,46 @@ jobs:
       # evaluated without this step.
       - name: Cargo test internal diagnostics export
         run: cargo test -p proliferate-diagnostics-collector --features internal-dogfood-export
+
+      # Experiment proof step (mold-linker measurement, never to be merged):
+      # confirm mold actually performed the link for a real test binary,
+      # rather than just observing that the setup-mold step executed. A
+      # first pass here picked an arbitrary (alphabetically-first) binary
+      # in target/debug/deps and it turned out to be apps/desktop/src-tauri
+      # ("proliferate"/proliferate_supervisor), which tauri-build links with
+      # LLD explicitly regardless of the system `ld` -- so check that one
+      # BY NAME to document the bypass, and separately check the
+      # anyharness-lib unittest binary (the 226k-line crate this experiment
+      # is actually about) to see whether mold linked it.
+      - name: Verify mold linked the test binaries
+        run: |
+          echo "cc's default linker binary:"
+          cc -print-prog-name=ld
+          readlink -f "$(cc -print-prog-name=ld)" || true
+          echo "---"
+          echo "resolved /usr/bin/ld:"
+          readlink -f /usr/bin/ld
+          mold --version
+          echo "==="
+          check_comment() {
+            local label="$1" glob="$2"
+            local bin
+            bin=$(find target/debug/deps -maxdepth 1 -type f -executable -name "$glob" ! -name "*.d" | head -n 1)
+            if [ -z "$bin" ]; then
+              echo "$label: no binary matched $glob"
+              return
+            fi
+            echo "--- $label: $bin ---"
+            readelf -p .comment "$bin" || true
+            if readelf -p .comment "$bin" | grep -qi mold; then
+              echo "RESULT ($label): mold confirmed as the linker"
+            else
+              echo "RESULT ($label): mold string NOT found in .comment (some other linker was used)"
+            fi
+          }
+          check_comment "anyharness-lib (the crate this experiment targets)" "anyharness_lib-*"
+          check_comment "apps/desktop/src-tauri (tauri-build may force LLD)" "proliferate_supervisor-*"
+          check_comment "anyharness-contract" "anyharness_contract-*"
 
   sdk-build:
     name: Build SDK
