@@ -8,15 +8,18 @@ import { useChatLaunchCatalog } from "#product/hooks/chat/derived/use-chat-launc
 
 const mocks = vi.hoisted(() => ({
   query: { data: undefined as Record<string, unknown> | undefined, isLoading: false, isError: false, error: null as Error | null },
+  otherResponses: [] as Array<Record<string, unknown> | null>,
+  readyAgentKinds: new Set(["claude"]),
 }));
 
 vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
   useAgentCatalog: () => ({
-    readyAgentKinds: new Set(["claude"]), isLoading: false, isError: false, error: null,
+    readyAgentKinds: mocks.readyAgentKinds, isLoading: false, isError: false, error: null,
   }),
 }));
 vi.mock("#product/hooks/access/anyharness/agents/use-workspace-agent-launch-options", () => ({
   useWorkspaceAgentLaunchOptionsQuery: () => mocks.query,
+  useWorkspaceAgentsLaunchOptionsListQuery: () => mocks.otherResponses,
 }));
 vi.mock("#product/hooks/workspaces/facade/use-selected-cloud-runtime-state", () => ({
   useSelectedCloudRuntimeState: () => ({ connectionInfo: null }),
@@ -25,6 +28,8 @@ vi.mock("#product/hooks/workspaces/facade/use-selected-cloud-runtime-state", () 
 describe("useChatLaunchCatalog", () => {
   beforeEach(() => {
     mocks.query = { data: response(["fable", "unknown-upstream"]), isLoading: false, isError: false, error: null };
+    mocks.otherResponses = [];
+    mocks.readyAgentKinds = new Set(["claude"]);
     useSessionSelectionStore.setState({ selectedWorkspaceId: "workspace-1" });
     useUserPreferencesStore.setState({
       defaultChatAgentKind: "claude",
@@ -60,14 +65,40 @@ describe("useChatLaunchCatalog", () => {
     }));
     expect(result.current.groups[0]?.models.map((model) => model.modelId)).toEqual(["live-only"]);
   });
+
+  it("keeps every other ready harness listed while a session is active", () => {
+    mocks.readyAgentKinds = new Set(["claude", "codex"]);
+    mocks.otherResponses = [response(["gpt-5.6-sol"], "codex")];
+    const { result } = renderHook(() => useChatLaunchCatalog({
+      activeSelection: { kind: "claude", modelId: "live-only" },
+      activeModelControl: {
+        kind: "claude",
+        values: [{ value: "live-only", label: "Live only" }],
+      },
+    }));
+    // Negative control against the cutover regression: an active live control
+    // must not collapse the picker to the active harness alone.
+    expect(result.current.groups.map((group) => group.kind)).toEqual(["claude", "codex"]);
+    expect(result.current.groups[0]?.models.map((model) => model.modelId)).toEqual(["live-only"]);
+    expect(result.current.groups[1]?.models.map((model) => model.modelId)).toEqual(["gpt-5.6-sol"]);
+    expect(result.current.groups[1]?.models[0]?.actionKind).toBe("open_new_chat");
+  });
+
+  it("omits an unresolved other harness without failing the catalog", () => {
+    mocks.readyAgentKinds = new Set(["claude", "codex"]);
+    mocks.otherResponses = [null];
+    const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
+    expect(result.current.groups.map((group) => group.kind)).toEqual(["claude"]);
+    expect(result.current.error).toBeNull();
+  });
 });
 
-function response(ids: string[]) {
+function response(ids: string[], harnessKind = "claude") {
   return {
-    harnessKind: "claude", basisRevision: "basis-1", revision: 5, state: "observed",
+    harnessKind, basisRevision: "basis-1", revision: 5, state: "observed",
     options: {
       models: ids.map((id) => ({ id, observedName: id === "fable" ? "Fable" : null, observedDescription: null })),
-      controls: [], defaults: { modelId: "fable", controlValues: {} },
+      controls: [], defaults: { modelId: ids[0] ?? null, controlValues: {} },
     },
     observedAt: null, probeAttemptedAt: null, probeFailureCode: null, readiness: "ready",
   };

@@ -97,6 +97,7 @@ export {
   useAgentsQuery,
   useWorkspaceAgentsQuery,
   useAgentLaunchOptionsQuery,
+  useAgentLaunchOptionsListQuery,
   useRefreshHarnessLaunchOptionsMutation,
   useAgentReconcileStatusQuery,
   useWorkspaceAgentReconcileStatusQuery,
