@@ -146,6 +146,35 @@ anyharness .../domains/sessions/response_formatting.rs
   file links with the complete workspace-root path, never abbreviated
 ```
 
+`transcript-markdown.tsx`'s `renderTranscriptLink`/`renderTranscriptInlineCode`
+pair is injected across every current transcript-owned Markdown surface, with
+the injection matched to whether the surface's text is assistant/skill-authored
+or user-authored. Assistant/skill-authored bodies wire both renderers, so
+path-like inline code becomes a file reference the same as an explicit link.
+User-authored bodies wire `renderLink` only, so a link a user actually typed
+still opens the file but a backticked path a user typed stays inert code —
+never reinterpreted without a separate product decision:
+
+```text
+apps/packages/product-client/src/components/workspace/chat/tool-calls/SkillsToolResultRow.tsx
+  assistant/skill-authored — instructions and resource-body MarkdownBody
+  calls wire both renderLink and renderInlineCode
+
+apps/packages/product-client/src/components/workspace/chat/transcript/TranscriptAgentGroupBlock.tsx
+  assistant-authored — the delegated-agent result MarkdownBody wires both
+  renderLink and renderInlineCode
+
+apps/packages/product-client/src/components/workspace/chat/tool-calls/cowork/CoworkCodingToolLedger.tsx
+  user-authored — the disclosed coding prompt wires renderLink only
+
+apps/packages/product-client/src/components/workspace/activity/background-pane/BackgroundSubagentView.tsx
+  user-authored — the "Initial prompt" panel wires renderLink only;
+  SubagentLaunchLedger no longer owns any prompt Markdown
+
+apps/packages/product-client/src/components/workspace/chat/content/PromptContentRenderer.tsx
+  user-authored precedent the matrix above follows — wires renderLink only
+```
+
 Rules:
 
 - Detection happens at render time from raw markdown; do not store parsed file

@@ -34,6 +34,12 @@ vi.mock("#product/hooks/chat/derived/use-active-session-transcript-state", () =>
 vi.mock("#product/hooks/activity/derived/use-feed-stream", () => ({
   useFeedStream: (...args: unknown[]) => useFeedStreamMock(...args),
 }));
+const renderTranscriptLinkMock = vi.fn(() => null);
+const renderTranscriptInlineCodeMock = vi.fn(() => null);
+vi.mock("#product/components/workspace/chat/transcript/transcript-markdown", () => ({
+  renderTranscriptLink: (...args: unknown[]) => renderTranscriptLinkMock(...args),
+  renderTranscriptInlineCode: (...args: unknown[]) => renderTranscriptInlineCodeMock(...args),
+}));
 // Mirrors AgentsPaneDetail.test.tsx's convention: MessageList's own row
 // rendering is its own test's responsibility. Here we assert on the
 // `transcript` prop it receives, which is where BackgroundSubagentView's
@@ -142,6 +148,8 @@ afterEach(() => {
   sessionAgentKind = "claude";
   useFeedStreamMock.mockClear();
   messageListPropsSpy.mockClear();
+  renderTranscriptLinkMock.mockClear();
+  renderTranscriptInlineCodeMock.mockClear();
   cleanup();
 });
 
@@ -178,6 +186,32 @@ describe("BackgroundSubagentView", () => {
 
     expect(screen.getByText("Initial prompt")).toBeTruthy();
     expect(screen.getByText("Inspect the transcript pipeline.")).toBeTruthy();
+  });
+
+  it("wires only the link transcript renderer into the initial-prompt body (user-authored)", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = launchToolCallItem({
+      rawInput: {
+        run_in_background: true,
+        prompt: "See [config](/repo/config.json) and `src/index.ts`.",
+      },
+    });
+    transcript.itemsById[item.itemId] = item;
+    transcriptState = { transcript };
+
+    render(
+      <BackgroundSubagentView
+        subagent={makeSubagent()}
+        sessionId="session-1"
+        workspaceId="workspace-1"
+        onBack={() => {}}
+      />,
+    );
+
+    expect(renderTranscriptLinkMock).toHaveBeenCalled();
+    // The prompt is user-authored: backticked text must stay inert, so the
+    // inline-code renderer is never injected even though the content has one.
+    expect(renderTranscriptInlineCodeMock).not.toHaveBeenCalled();
   });
 
   it("omits the initial-prompt panel when no launch tool call correlates", () => {

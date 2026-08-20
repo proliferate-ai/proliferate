@@ -5,6 +5,7 @@ import { MessageSquare } from "#product/primitives/icons/product";
 import { Button } from "#product/primitives/Button";
 import { MarkdownBody } from "#product/components/workspace/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "#product/components/content/ui/desktop-markdown-code-block";
+import { renderTranscriptLink } from "#product/components/workspace/chat/transcript/transcript-markdown";
 import { ToolActionDetailsPanel } from "#product/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "#product/domain/chats/tools/tool-call-layout";
 import type { CoworkCodingAction } from "#product/domain/chats/tools/cowork-coding-tool-presentation";
@@ -147,6 +148,7 @@ function PromptActionRow({
                   content={prompt}
                   className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                   renderCodeBlock={renderDesktopCodeBlock}
+                  renderLink={renderTranscriptLink}
                 />
               </div>
             </AutoHideScrollArea>

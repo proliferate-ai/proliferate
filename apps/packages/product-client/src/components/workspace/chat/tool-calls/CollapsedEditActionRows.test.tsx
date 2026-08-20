@@ -165,6 +165,28 @@ describe("CollapsedEditActionRows", () => {
     });
   });
 
+  it("keeps an unavailable filename as inert text, not a pointer dead zone over the row's toggle layer", () => {
+    fileReferenceOpenState.canOpenPrimary = false;
+
+    render(<EditRows item={editItem({ patch: true })} />);
+
+    // Unavailable: the filename is inert text, not a button — clicking it
+    // does not open the file.
+    expect(screen.queryByRole("button", { name: "edit-1.ts" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open edit-1.ts" })).toBeNull();
+    const filenameLabel = screen.getByText("edit-1.ts");
+    expect(filenameLabel.tagName).toBe("SPAN");
+    // Never re-enables pointer events over the row's toggle layer: the
+    // ancestor wraps everything in `pointer-events-none`, and only the
+    // actionable Button variants opt back in with `pointer-events-auto`.
+    // The inert label carries no such override, so a real click on its
+    // screen position still hits the toggle overlay underneath.
+    expect(filenameLabel.className).not.toContain("pointer-events-auto");
+
+    fireEvent.click(filenameLabel);
+    expect(openPrimaryMock).not.toHaveBeenCalled();
+  });
+
   it("keeps workspacePath for a plain edit with no newPath", () => {
     const item = editItem();
     const part = item.contentParts[0];
