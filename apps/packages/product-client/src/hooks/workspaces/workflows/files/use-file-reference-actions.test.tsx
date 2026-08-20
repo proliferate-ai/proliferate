@@ -2,8 +2,9 @@
 
 import { AnyHarnessError } from "@anyharness/sdk";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
+import { fileViewerTarget, viewerTargetKey } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 const pathMocks = vi.hoisted(() => ({
   value: {
@@ -43,6 +44,7 @@ const editorMocks = vi.hoisted(() => ({
 const viewerMocks = vi.hoisted(() => ({
   openTarget: vi.fn(),
   activateViewerTarget: vi.fn(),
+  requestViewerLocation: vi.fn(),
 }));
 
 const bridgeMocks = vi.hoisted(() => ({
@@ -98,8 +100,14 @@ vi.mock("#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation
 
 vi.mock("#product/stores/editor/workspace-viewer-tabs-store", () => ({
   useWorkspaceViewerTabsStore: (
-    selector: (state: { openTarget: typeof viewerMocks.openTarget }) => unknown,
-  ) => selector({ openTarget: viewerMocks.openTarget }),
+    selector: (state: {
+      openTarget: typeof viewerMocks.openTarget;
+      requestViewerLocation: typeof viewerMocks.requestViewerLocation;
+    }) => unknown,
+  ) => selector({
+    openTarget: viewerMocks.openTarget,
+    requestViewerLocation: viewerMocks.requestViewerLocation,
+  }),
 }));
 
 vi.mock("#product/stores/sessions/session-selection-store", () => ({
@@ -577,6 +585,95 @@ describe("useFileReferenceActions", () => {
     expect(editorMocks.openInDefaultEditor).not.toHaveBeenCalled();
     expect(bridgeMocks.openTarget).not.toHaveBeenCalled();
     expect(bridgeMocks.reveal).not.toHaveBeenCalled();
+  });
+
+  describe("location request enqueue (03D)", () => {
+    beforeEach(() => {
+      viewerMocks.activateViewerTarget.mockReturnValue({
+        result: "completed",
+        surface: "viewer",
+        shellActivationEpoch: 1,
+      });
+    });
+
+    it("enqueues the final target's location for an exact workspace file with a valid line", async () => {
+      const { result } = renderHook(() => useFileReferenceActions({ rawPath: "src/App.tsx:40" }));
+
+      await expect(result.current.openPrimary()).resolves.toBe("open-viewer");
+
+      expect(viewerMocks.requestViewerLocation).toHaveBeenCalledWith(
+        viewerTargetKey(fileViewerTarget("src/App.tsx")),
+        40,
+      );
+    });
+
+    it("enqueues again on an identical repeat activation", async () => {
+      const { result } = renderHook(() => useFileReferenceActions({ rawPath: "src/App.tsx:40" }));
+
+      await expect(result.current.openPrimary()).resolves.toBe("open-viewer");
+      await expect(result.current.openPrimary()).resolves.toBe("open-viewer");
+
+      expect(viewerMocks.requestViewerLocation).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([
+      ["src/App.tsx", null],
+      ["src/App.tsx:0", 0],
+      ["src/App.tsx:", null],
+    ])("does not enqueue for an absent or non-positive line (%s)", async (rawPath) => {
+      const { result } = renderHook(() => useFileReferenceActions({ rawPath }));
+
+      await expect(result.current.openPrimary()).resolves.toBe("open-viewer");
+
+      expect(viewerMocks.requestViewerLocation).not.toHaveBeenCalled();
+    });
+
+    it("does not enqueue for a directory target", async () => {
+      statMocks.data = { kind: "directory" };
+      const { result } = renderHook(() => useFileReferenceActions({
+        rawPath: "src:12",
+        workspacePath: "src",
+      }));
+
+      await result.current.openPrimary();
+
+      expect(viewerMocks.openTarget).not.toHaveBeenCalled();
+      expect(viewerMocks.requestViewerLocation).not.toHaveBeenCalled();
+    });
+
+    it("does not enqueue when the shell activation outcome is stale", async () => {
+      viewerMocks.activateViewerTarget.mockReturnValue({
+        result: "stale",
+        surface: "viewer",
+        reason: "workspace-changed",
+      });
+      const { result } = renderHook(() => useFileReferenceActions({ rawPath: "src/App.tsx:40" }));
+
+      await expect(result.current.openPrimary()).resolves.toBe("open-viewer");
+
+      expect(viewerMocks.requestViewerLocation).not.toHaveBeenCalled();
+    });
+
+    it("enqueues only the corrected target's location after fuzzy recovery", async () => {
+      statMocks.data = undefined as never;
+      statMocks.error = problem("FILE_NOT_FOUND", 404);
+      fuzzyMocks.resolve.mockResolvedValue({
+        status: "match",
+        workspacePath: "Apps/Web/SRC/App.tsx",
+      });
+      const { result } = renderHook(() => useFileReferenceActions({ rawPath: "src/App.tsx:40" }));
+
+      await act(async () => {
+        await expect(result.current.openPrimary()).resolves.toBe("open-viewer");
+      });
+      await waitFor(() => expect(result.current.accessState.status).toBe("settled"));
+
+      expect(viewerMocks.requestViewerLocation).toHaveBeenCalledTimes(1);
+      expect(viewerMocks.requestViewerLocation).toHaveBeenCalledWith(
+        viewerTargetKey(fileViewerTarget("Apps/Web/SRC/App.tsx")),
+        40,
+      );
+    });
   });
 });
 

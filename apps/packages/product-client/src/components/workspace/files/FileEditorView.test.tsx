@@ -428,4 +428,47 @@ describe("FileEditorView", () => {
 
     expect(useWorkspaceViewerTabsStore.getState().modeByTargetKey[targetKey]).toBe("source");
   });
+
+  it("forces a rendered target to source once on a location request, without fighting a later user toggle", () => {
+    const target = fileViewerTarget("README.md");
+    const targetKey = viewerTargetKey(target);
+    useWorkspaceViewerTabsStore.setState({
+      materializedWorkspaceId: "workspace-1",
+    });
+    useWorkspaceViewerTabsStore.getState().openTarget(target);
+    readWorkspaceFileQuery.mockReturnValue({
+      data: {
+        content: "# Hello\n\nBody line.\n",
+        isText: true,
+        path: "README.md",
+        sizeBytes: 20,
+        tooLarge: false,
+        versionToken: "v1",
+      },
+      error: null,
+      isLoading: false,
+    });
+    render(createElement(FileEditorView, {
+      filePath: "README.md",
+      targetKey,
+    }));
+
+    // Markdown defaults to the rendered view until a location request forces
+    // source mode once, because rendered Markdown has no source-line geometry.
+    expect(useWorkspaceViewerTabsStore.getState().modeByTargetKey[targetKey]).toBe("rendered");
+
+    act(() => {
+      useWorkspaceViewerTabsStore.getState().requestViewerLocation(targetKey, 2);
+    });
+
+    expect(useWorkspaceViewerTabsStore.getState().modeByTargetKey[targetKey]).toBe("source");
+    // The consuming FileSourceView applies and clears the request itself.
+    expect(useWorkspaceViewerTabsStore.getState().viewerLocationRequest).toBeNull();
+
+    // A later explicit user choice back to rendered is never fought.
+    act(() => {
+      useWorkspaceViewerTabsStore.getState().setTargetMode(targetKey, "rendered");
+    });
+    expect(useWorkspaceViewerTabsStore.getState().modeByTargetKey[targetKey]).toBe("rendered");
+  });
 });

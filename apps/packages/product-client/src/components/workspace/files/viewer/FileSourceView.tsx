@@ -49,12 +49,22 @@ interface FileSourceViewProps {
   code: string;
   filePath: string;
   wordWrap: boolean;
+  /**
+   * A one-shot source-line jump for the active target, or `0` when none is
+   * pending; `locationRequestLine` only matters alongside a non-zero token.
+   */
+  locationRequestToken?: number;
+  locationRequestLine?: number | null;
+  onLocationRequestConsumed?: (token: number) => void;
 }
 
 export function FileSourceView({
   code,
   filePath,
   wordWrap,
+  locationRequestToken = 0,
+  locationRequestLine = null,
+  onLocationRequestConsumed,
 }: FileSourceViewProps) {
   const highlightedLines = useHighlightedLines(code, filePath);
   const fallbackLines = useMemo(
@@ -148,6 +158,44 @@ export function FileSourceView({
 
     virtualizer.scrollToIndex(lineNumber - 1, { align: "center" });
   }, [activeMatchId, contentSearchUnitId, virtualizer]);
+
+  // 03D: sole consumer of a pending viewer location request. Content is
+  // always present once mounted, so no extra readiness gate is needed. A ref
+  // (not the effect deps) gates re-application: only a new token re-fires,
+  // so an unrelated re-render never re-scrolls, while a repeat activation
+  // with a new token always re-centers even onto an unchanged line.
+  const appliedLocationTokenRef = useRef(0);
+  useEffect(() => {
+    if (!locationRequestToken || locationRequestToken === appliedLocationTokenRef.current) {
+      return;
+    }
+    if (locationRequestLine === null) {
+      return;
+    }
+    appliedLocationTokenRef.current = locationRequestToken;
+    const clampedLine = Math.min(Math.max(1, locationRequestLine), Math.max(lines.length, 1));
+
+    // Virtualized branch trusts the virtualizer's own offsets; the
+    // non-virtualized (<2000 line) branch lays rows out in normal document
+    // flow instead, so it queries the rendered row and centers it directly.
+    if (shouldVirtualize) {
+      virtualizer.scrollToIndex(clampedLine - 1, { align: "center" });
+    } else {
+      const row = scrollRef.current?.querySelector<HTMLElement>(
+        `[data-source-line][data-line="${clampedLine}"]`,
+      );
+      row?.scrollIntoView({ block: "center" });
+    }
+
+    onLocationRequestConsumed?.(locationRequestToken);
+  }, [
+    locationRequestToken,
+    locationRequestLine,
+    lines.length,
+    shouldVirtualize,
+    virtualizer,
+    onLocationRequestConsumed,
+  ]);
 
   useEffect(() => {
     registerContentSearchUnit({

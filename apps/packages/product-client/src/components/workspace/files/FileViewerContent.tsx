@@ -18,6 +18,10 @@ interface FileViewerContentProps {
   diffLayout: "unified" | "split";
   canShowRichPreview: boolean;
   wordWrap: boolean;
+  /** See `FileSourceView`'s matching props; forwarded only to that view. */
+  locationRequestToken?: number;
+  locationRequestLine?: number | null;
+  onLocationRequestConsumed?: (token: number) => void;
 }
 
 export function FileViewerContent({
@@ -29,6 +33,9 @@ export function FileViewerContent({
   diffLayout,
   canShowRichPreview,
   wordWrap,
+  locationRequestToken,
+  locationRequestLine,
+  onLocationRequestConsumed,
 }: FileViewerContentProps) {
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -53,6 +60,9 @@ export function FileViewerContent({
           code={read.content ?? ""}
           filePath={filePath}
           wordWrap={wordWrap}
+          locationRequestToken={locationRequestToken}
+          locationRequestLine={locationRequestLine}
+          onLocationRequestConsumed={onLocationRequestConsumed}
         />
       )}
     </div>
