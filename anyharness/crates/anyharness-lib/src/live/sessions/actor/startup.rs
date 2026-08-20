@@ -340,6 +340,9 @@ impl SessionActor {
         // Established sessions instead restore their already-confirmed full
         // snapshot so later live mutations remain authoritative.
         if startup_restore_snapshot.is_none() {
+            // Only non-posture controls are ever dropped here, so the mode
+            // projection can never diverge from a dropped value and needs no
+            // compensating clear.
             if let Err(error) = apply_resolved_launch_intent(
                 &conn,
                 &native_session_id,

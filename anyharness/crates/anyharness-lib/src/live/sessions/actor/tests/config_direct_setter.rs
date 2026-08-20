@@ -49,13 +49,13 @@ impl acp::JsonRpcRequest for LegacySetModelRequest {
     type Response = serde_json::Value;
 }
 
-struct FakeAcpConnection {
-    conn: acp::ConnectionTo<acp::Agent>,
+pub(super) struct FakeAcpConnection {
+    pub(super) conn: acp::ConnectionTo<acp::Agent>,
     _client_shutdown: oneshot::Sender<()>,
     _agent_shutdown: oneshot::Sender<()>,
 }
 
-async fn fake_connection(response: serde_json::Value) -> FakeAcpConnection {
+pub(super) async fn fake_connection(response: serde_json::Value) -> FakeAcpConnection {
     let (client_io, agent_io) = tokio::io::duplex(64 * 1024);
     let (client_read, client_write) = tokio::io::split(client_io);
     let (agent_read, agent_write) = tokio::io::split(agent_io);
