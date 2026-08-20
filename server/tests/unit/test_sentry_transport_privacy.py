@@ -178,12 +178,8 @@ def test_empty_release_and_environment_sentinels_are_removed(factory_name: str) 
 
 # --- tags, extras, user, request ---------------------------------------------
 
-# Fixed, structurally valid ids. These used to be `str(uuid4())` and
-# `uuid4().hex`, but a value generated at collection time lands in the
-# parametrize id, so every process collected a differently-named test. Nothing
-# here depends on the ids being fresh, only on their shape: a dashed UUID and a
-# bare 32-char hex. Determinism matters because pytest-xdist refuses to run when
-# its workers disagree about which tests exist.
+# Fixed ids (were uuid4() at collection time, which lands in parametrize ids and
+# breaks pytest-xdist's requirement that workers agree on collected test names).
 VALID_UUID = "c3f1a8d2-5b47-4e19-9a6c-0d8e2f7b41ca"
 VALID_UUID_HEX = "0f3c2a9d6b8e4f1aa7c25d3e9b64108f"
 
