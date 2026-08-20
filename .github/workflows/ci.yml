@@ -420,9 +420,23 @@ jobs:
       - name: Enforce /login runtime budget
         run: node scripts/measure-login-runtime-budget.mjs
 
+  # EXPERIMENT (exp/frontend-shard): "Test product client" is the pole of this
+  # job (~338s of the job's ~8m38s-9m13s wall clock). Sharded 3-way via
+  # vitest's native --shard to see whether the job's wall clock drops below
+  # 3 minutes. Only "Install dependencies" and "Build shared packages" are
+  # true prerequisites of "Test product client" (product-client imports
+  # @proliferate/design/@proliferate/cloud-sdk(-react) through package.json
+  # `exports` that resolve to `dist`, so the build must precede every shard).
+  # Typecheck, the python-only checks, and the two other focused vitest
+  # invocations are independent of sharding and gated to shard 1 only so
+  # shards 2-3 do not re-run work "Test product client" does not need.
   shared-frontend-packages:
     name: Shared frontend packages
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -438,6 +452,7 @@ jobs:
         run: pnpm install
 
       - name: Typecheck shared packages
+        if: matrix.shard == 1
         run: pnpm shared:typecheck
 
       - name: Build shared packages
@@ -447,22 +462,26 @@ jobs:
       # sit with the python guards in repo-shape (that job installs no node and
       # has no dist/theme.css to read). Both modes are checked in one pass.
       - uses: actions/setup-python@v7
+        if: matrix.shard == 1
         with:
           python-version: "3.12"
 
       - name: Check Mobile ProductClient export resolution
+        if: matrix.shard == 1
         run: python3 scripts/check_mobile_product_client_export.py --preflight
 
       - name: Check theme contrast floors
+        if: matrix.shard == 1
         run: |
           python3 -m unittest scripts/test_check_theme_contrast.py
           python3 scripts/check_theme_contrast.py --table
 
       - name: Test ProductClient domain
+        if: matrix.shard == 1
         run: pnpm --filter @proliferate/product-client exec vitest run src/domain
 
       - name: Test product client
-        run: pnpm --filter @proliferate/product-client test
+        run: pnpm --filter @proliferate/product-client test -- --shard=${{ matrix.shard }}/3
 
       # Focused Tier-1 gate for the workflow authoring surface: builder save
       # gating (title + unresolved-reference blocks), schema-version refusal,
@@ -471,6 +490,7 @@ jobs:
       # Tier 1). Keep this exact-file signal in addition to the package suite
       # so regressions remain immediately named.
       - name: Test workflow authoring surface
+        if: matrix.shard == 1
         run: pnpm --filter @proliferate/product-client exec vitest run src/components/workflows/builder-v2/WorkflowBuilderSurface.test.tsx src/components/workflows/main/WorkflowsMainSurface.test.tsx
 
   # Scroll-physics tier (specs/TESTING.md): the real transcript renderer driven
