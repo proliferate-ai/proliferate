@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -263,6 +263,26 @@ describe("FileViewerFrame body/content slots", () => {
     const content = container.querySelector("[data-file-viewer-content]") as HTMLElement;
     expect(content.contains(dock)).toBe(false);
     expect(within(content).getByText("file content")).toBeTruthy();
+  });
+
+  // The DOM-fallback PopoverButton wraps the content area with
+  // preserveContextualSelection so real file text keeps platform
+  // select-word-then-menu behavior instead of the chrome-flash clear.
+  it("preserves a contextual selection in the content area (DOM-path opt-out)", () => {
+    const { container } = renderFrame();
+    const content = container.querySelector("[data-file-viewer-content]") as HTMLElement;
+    const textNode = within(content).getByText("file content");
+    const trigger = textNode.parentElement as HTMLElement;
+    const selection = window.getSelection()!;
+    const range = document.createRange();
+    range.selectNodeContents(textNode);
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    fireEvent.contextMenu(trigger);
+
+    expect(selection.rangeCount).toBe(1);
+    selection.removeAllRanges();
   });
 });
 

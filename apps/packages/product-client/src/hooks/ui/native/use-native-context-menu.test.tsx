@@ -59,11 +59,15 @@ function makeDesktopBridge(showContextMenu: DesktopBridge["nativeUi"]["showConte
 function Harness({
   buildItems,
   onDomMenu,
+  preserveContextualSelection,
 }: {
   buildItems: () => Array<{ id: string; label: string }>;
   onDomMenu: () => void;
+  preserveContextualSelection?: boolean;
 }) {
-  const { onContextMenuCapture, showNativeMenu } = useNativeContextMenu(buildItems);
+  const { onContextMenuCapture, showNativeMenu } = useNativeContextMenu(buildItems, {
+    preserveContextualSelection,
+  });
 
   return (
     <div
@@ -86,19 +90,36 @@ function renderHarness({
   desktop,
   buildItems = () => [{ id: "item", label: "Item" }],
   onDomMenu = vi.fn(),
+  preserveContextualSelection,
 }: {
   desktop: DesktopBridge | null;
   buildItems?: () => Array<{ id: string; label: string }>;
   onDomMenu?: () => void;
+  preserveContextualSelection?: boolean;
 }) {
   return {
     onDomMenu,
     ...render(
       <ProductHostProvider host={makeHost(desktop)}>
-        <Harness buildItems={buildItems} onDomMenu={onDomMenu} />
+        <Harness
+          buildItems={buildItems}
+          onDomMenu={onDomMenu}
+          preserveContextualSelection={preserveContextualSelection}
+        />
       </ProductHostProvider>,
     ),
   };
+}
+
+function selectChildTextNode() {
+  const child = screen.getByTestId("child");
+  const selection = window.getSelection();
+  if (!selection) throw new Error("jsdom selection unavailable");
+  const range = document.createRange();
+  range.selectNodeContents(child);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return selection;
 }
 
 describe("useNativeContextMenu", () => {
@@ -161,5 +182,64 @@ describe("useNativeContextMenu", () => {
     expect(showContextMenu).toHaveBeenCalledTimes(1);
     expect(buildItems).toHaveBeenCalledTimes(1);
     expect(onDomMenu).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears a contextual selection touching the target once it commits to replacing the menu", () => {
+    const showContextMenu = vi.fn().mockResolvedValue(true);
+    renderHarness({ desktop: makeDesktopBridge(showContextMenu) });
+    const selection = selectChildTextNode();
+    expect(selection.isCollapsed).toBe(false);
+
+    fireEvent.contextMenu(screen.getByTestId("child"));
+
+    expect(selection.rangeCount).toBe(0);
+  });
+
+  it("preserves the selection when preserveContextualSelection is true", () => {
+    const showContextMenu = vi.fn().mockResolvedValue(true);
+    renderHarness({
+      desktop: makeDesktopBridge(showContextMenu),
+      preserveContextualSelection: true,
+    });
+    const selection = selectChildTextNode();
+
+    fireEvent.contextMenu(screen.getByTestId("child"));
+
+    expect(selection.rangeCount).toBe(1);
+  });
+
+  it("does not clear the selection when there is no native UI to replace the menu", () => {
+    renderHarness({ desktop: null });
+    const selection = selectChildTextNode();
+
+    fireEvent.contextMenu(screen.getByTestId("child"));
+
+    expect(selection.rangeCount).toBe(1);
+  });
+
+  it("does not clear the selection when there are no items to show", () => {
+    const showContextMenu = vi.fn().mockResolvedValue(true);
+    renderHarness({
+      desktop: makeDesktopBridge(showContextMenu),
+      buildItems: () => [],
+    });
+    const selection = selectChildTextNode();
+
+    fireEvent.contextMenu(screen.getByTestId("child"));
+
+    expect(selection.rangeCount).toBe(1);
+    expect(showContextMenu).not.toHaveBeenCalled();
+  });
+
+  it("stays cleared when native display rejects and re-dispatches the DOM fallback", async () => {
+    const showContextMenu = vi.fn().mockResolvedValue(false);
+    const { onDomMenu } = renderHarness({ desktop: makeDesktopBridge(showContextMenu) });
+    const selection = selectChildTextNode();
+
+    fireEvent.contextMenu(screen.getByTestId("child"));
+
+    expect(selection.rangeCount).toBe(0);
+    await waitFor(() => expect(onDomMenu).toHaveBeenCalledTimes(1));
+    expect(selection.rangeCount).toBe(0);
   });
 });

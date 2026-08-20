@@ -258,7 +258,12 @@ subview, containing (left to right, via `FileViewerToolbar`):
   preview` (omitted for `fileDiff` and non-previewable targets). Native menus
   carry no checkmark state, so toggles read as "Enable/Disable …" verbs. The
   content-area context-menu trigger wraps only `[data-file-viewer-content]`,
-  never the docked file tree.
+  never the docked file tree. Both the native context-menu hook and its DOM
+  popover fallback pass `preserveContextualSelection: true` here, so
+  right-clicking real source or rendered file text keeps the platform's
+  select-word-then-open-menu behavior instead of the chrome-flash clear that
+  other context-menu triggers (toolbar, breadcrumbs, file tree) apply by
+  default.
 - **Open-in split action**: rendered only when Slice 01D's
   `useFileReferenceActions` reports a settled local `nativePathKind`,
   non-empty `openTargets`, and a non-null `defaultOpenTarget` — fail-closed,

@@ -191,6 +191,9 @@ function FileViewerContentContextMenu({
   return (
     <PopoverButton
       triggerMode="contextMenu"
+      // Content, not chrome: real file text keeps the platform's
+      // select-word-then-menu behavior instead of the chrome-flash clear.
+      preserveContextualSelection
       // C4: a fixed width tuned for this menu's longest item ("Rich
       // preview" + trailing "On"/"Off"); narrower than
       // `POPOVER_SURFACE_CLASS`'s own `min-w-[240px]` deliberately, this is
