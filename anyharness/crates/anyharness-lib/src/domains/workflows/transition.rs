@@ -89,6 +89,11 @@ pub enum WorkflowCommand {
     FailAndRedo {
         node_row_id: String,
         prompt: Option<String>,
+        /// A per-row model override for the replacement. `None` keeps the
+        /// row's inherited resolution (the frozen definition for a chain
+        /// row, the launch pick for an adhoc row); `Some` outranks it for
+        /// this replacement only and never rewrites the sealed snapshot.
+        model: Option<super::definition::NodeModel>,
     },
     FlipType {
         node_row_id: String,
@@ -504,6 +509,7 @@ fn on_command(state: &RunState, command: &WorkflowCommand) -> Decision {
         WorkflowCommand::FailAndRedo {
             node_row_id,
             prompt,
+            model,
         } => {
             let Some(node) = state.node(node_row_id) else {
                 return illegal(state, command.as_str(), None, "unknown node row");
@@ -572,9 +578,16 @@ fn on_command(state: &RunState, command: &WorkflowCommand) -> Decision {
                     } else {
                         node.rendered_envelope.clone()
                     },
-                    // An adhoc redo keeps its launch pick; a chain replacement
-                    // resolves through the frozen definition it inherits.
-                    model: if adhoc { node.model.clone() } else { None },
+                    // An explicit override outranks the inherited resolution
+                    // for this replacement only — the frozen definition is
+                    // never rewritten. Without one, an adhoc redo keeps its
+                    // launch pick and a chain replacement resolves through the
+                    // frozen definition it inherits.
+                    model: match model {
+                        Some(model) => Some(model.clone()),
+                        None if adhoc => node.model.clone(),
+                        None => None,
+                    },
                 },
                 // Ruling L: redo of a mid-flight node disposes the session it
                 // is taking over from; pause states hold no live turn to kill.

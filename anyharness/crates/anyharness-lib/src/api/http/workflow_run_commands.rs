@@ -23,6 +23,8 @@ use crate::domains::workflows::transition::WorkflowCommand;
 pub struct WorkflowRunFailRedoRequest {
     #[serde(default)]
     pub prompt: Option<String>,
+    #[serde(default)]
+    pub model: Option<NodeModel>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -124,6 +126,7 @@ pub async fn fail_redo_workflow_node(
         WorkflowCommand::FailAndRedo {
             node_row_id: node_row_id.clone(),
             prompt: body.prompt,
+            model: body.model,
         },
     )
     .await
