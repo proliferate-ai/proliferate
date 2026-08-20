@@ -214,7 +214,13 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
   // consumption, with the same only-on-transition discipline as the two
   // forcers above — rendered Markdown has no stable source-line geometry, but
   // a later explicit user toggle back to rendered is never fought.
-  const prevLocationRequestTokenRef = useRef(viewerLocationRequestToken);
+  // Seed at 0 (not the current token) so a location request already pending
+  // at mount time — e.g. the viewer remounting via useFileReferenceActions
+  // .openViewer, which mints the token synchronously with activation — still
+  // counts as a new request and forces source mode. Mirrors
+  // FileSourceView's appliedLocationTokenRef, which starts at 0 for the same
+  // reason.
+  const prevLocationRequestTokenRef = useRef(0);
   useEffect(() => {
     const isNewRequest = viewerLocationRequestToken !== 0
       && viewerLocationRequestToken !== prevLocationRequestTokenRef.current;

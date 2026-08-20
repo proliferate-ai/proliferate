@@ -4,7 +4,6 @@ import { AnyHarnessError } from "@anyharness/sdk";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
-import { fileViewerTarget, viewerTargetKey } from "#product/lib/domain/workspaces/viewer/viewer-target";
 
 const pathMocks = vi.hoisted(() => ({
   value: {
@@ -586,112 +585,16 @@ describe("useFileReferenceActions", () => {
     expect(bridgeMocks.openTarget).not.toHaveBeenCalled();
     expect(bridgeMocks.reveal).not.toHaveBeenCalled();
   });
-
-  describe("location request enqueue (03D)", () => {
-    beforeEach(() => {
-      viewerMocks.activateViewerTarget.mockReturnValue({
-        result: "completed",
-        surface: "viewer",
-        shellActivationEpoch: 1,
-      });
-    });
-
-    it("enqueues the final target's location for an exact workspace file with a valid line", async () => {
-      const { result } = renderHook(() => useFileReferenceActions({ rawPath: "src/App.tsx:40" }));
-
-      await expect(result.current.openPrimary()).resolves.toBe("open-viewer");
-
-      expect(viewerMocks.requestViewerLocation).toHaveBeenCalledWith(
-        viewerTargetKey(fileViewerTarget("src/App.tsx")),
-        40,
-      );
-    });
-
-    it("enqueues again on an identical repeat activation", async () => {
-      const { result } = renderHook(() => useFileReferenceActions({ rawPath: "src/App.tsx:40" }));
-
-      await expect(result.current.openPrimary()).resolves.toBe("open-viewer");
-      await expect(result.current.openPrimary()).resolves.toBe("open-viewer");
-
-      expect(viewerMocks.requestViewerLocation).toHaveBeenCalledTimes(2);
-    });
-
-    it.each([
-      ["src/App.tsx", null],
-      ["src/App.tsx:0", 0],
-      ["src/App.tsx:", null],
-    ])("does not enqueue for an absent or non-positive line (%s)", async (rawPath) => {
-      const { result } = renderHook(() => useFileReferenceActions({ rawPath }));
-
-      await expect(result.current.openPrimary()).resolves.toBe("open-viewer");
-
-      expect(viewerMocks.requestViewerLocation).not.toHaveBeenCalled();
-    });
-
-    it("does not enqueue for a directory target", async () => {
-      statMocks.data = { kind: "directory" };
-      const { result } = renderHook(() => useFileReferenceActions({
-        rawPath: "src:12",
-        workspacePath: "src",
-      }));
-
-      await result.current.openPrimary();
-
-      expect(viewerMocks.openTarget).not.toHaveBeenCalled();
-      expect(viewerMocks.requestViewerLocation).not.toHaveBeenCalled();
-    });
-
-    it("does not enqueue when the shell activation outcome is stale", async () => {
-      viewerMocks.activateViewerTarget.mockReturnValue({
-        result: "stale",
-        surface: "viewer",
-        reason: "workspace-changed",
-      });
-      const { result } = renderHook(() => useFileReferenceActions({ rawPath: "src/App.tsx:40" }));
-
-      await expect(result.current.openPrimary()).resolves.toBe("open-viewer");
-
-      expect(viewerMocks.requestViewerLocation).not.toHaveBeenCalled();
-    });
-
-    it("enqueues only the corrected target's location after fuzzy recovery", async () => {
-      statMocks.data = undefined as never;
-      statMocks.error = problem("FILE_NOT_FOUND", 404);
-      fuzzyMocks.resolve.mockResolvedValue({
-        status: "match",
-        workspacePath: "Apps/Web/SRC/App.tsx",
-      });
-      const { result } = renderHook(() => useFileReferenceActions({ rawPath: "src/App.tsx:40" }));
-
-      await act(async () => {
-        await expect(result.current.openPrimary()).resolves.toBe("open-viewer");
-      });
-      await waitFor(() => expect(result.current.accessState.status).toBe("settled"));
-
-      expect(viewerMocks.requestViewerLocation).toHaveBeenCalledTimes(1);
-      expect(viewerMocks.requestViewerLocation).toHaveBeenCalledWith(
-        viewerTargetKey(fileViewerTarget("Apps/Web/SRC/App.tsx")),
-        40,
-      );
-    });
-  });
 });
 
+// "location request enqueue (03D)" moved to use-file-reference-actions.location.test.tsx (600-line cap).
 function problem(code: string, status: number): AnyHarnessError {
-  return new AnyHarnessError({
-    type: "about:blank",
-    title: "File request failed",
-    status,
-    code,
-  });
+  return new AnyHarnessError({ type: "about:blank", title: "File request failed", status, code });
 }
 
-async function consumeMissingRecovery(result: {
-  readonly current: ReturnType<typeof useFileReferenceActions>;
-}) {
+async function consumeMissingRecovery(
+  result: { readonly current: ReturnType<typeof useFileReferenceActions> },
+) {
   await act(async () => void await result.current.openPrimary());
-  await waitFor(() => expect(result.current.accessState).toEqual({
-    status: "unavailable",
-    reason: "not_found",
-  }));
+  await waitFor(() => expect(result.current.accessState).toEqual({ status: "unavailable", reason: "not_found" }));
 }

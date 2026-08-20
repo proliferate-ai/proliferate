@@ -471,4 +471,41 @@ describe("FileEditorView", () => {
     });
     expect(useWorkspaceViewerTabsStore.getState().modeByTargetKey[targetKey]).toBe("rendered");
   });
+
+  it("forces source mode on mount when a location request is already pending (closed-target reopen)", () => {
+    const target = fileViewerTarget("README.md");
+    const targetKey = viewerTargetKey(target);
+    useWorkspaceViewerTabsStore.setState({
+      materializedWorkspaceId: "workspace-1",
+    });
+    // Mirrors useFileReferenceActions.openViewer: the location request token
+    // is minted synchronously with activation, so by the time FileEditorView
+    // mounts (e.g. RightPanelContent remounting it for a previously closed
+    // target) a non-zero token is already present on first render.
+    useWorkspaceViewerTabsStore.getState().openTarget(target);
+    useWorkspaceViewerTabsStore.getState().requestViewerLocation(targetKey, 3);
+    readWorkspaceFileQuery.mockReturnValue({
+      data: {
+        content: "# Hello\n\nBody line.\n",
+        isText: true,
+        path: "README.md",
+        sizeBytes: 20,
+        tooLarge: false,
+        versionToken: "v1",
+      },
+      error: null,
+      isLoading: false,
+    });
+
+    render(createElement(FileEditorView, {
+      filePath: "README.md",
+      targetKey,
+    }));
+
+    // With the old ref seeding (useRef(viewerLocationRequestToken)), the
+    // pending token at mount is indistinguishable from "already seen" and the
+    // force never fires, leaving rendered Markdown stuck with no source-line
+    // geometry to jump to.
+    expect(useWorkspaceViewerTabsStore.getState().modeByTargetKey[targetKey]).toBe("source");
+  });
 });

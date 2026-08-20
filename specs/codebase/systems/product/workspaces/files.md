@@ -261,10 +261,13 @@ active target, even before content loads — a location request can only be
 applied by a mounted `FileSourceView` that already has file content and a
 requested row, so it is deliberately left pending across a loading target
 rather than invalidated. `FileEditorView` forces the target to source mode
-once, on the request's transition to a new token, exactly like the two
-landed find-in-file forcers — because rendered Markdown has no stable
-source-line geometry — and never fights a later explicit user toggle back to
-rendered. `FileSourceView` itself clamps the requested line to the last
+once, on the request's transition to a new token — including the transition
+observed on mount, when the viewer remounts onto a target that already has a
+pending request (e.g. `useFileReferenceActions.openViewer` minting the token
+synchronously with activation while `RightPanelContent` mounts a fresh
+`FileEditorView`) — exactly like the two landed find-in-file forcers, because
+rendered Markdown has no stable source-line geometry, and never fights a
+later explicit user toggle back to rendered. `FileSourceView` itself clamps the requested line to the last
 displayed row, centers it (`virtualizer.scrollToIndex(…, {align:"center"})`
 when virtualized; `[data-source-line][data-line]…scrollIntoView({block:
 "center"})` on the non-virtualized `<2000`-line path, which does not trust
