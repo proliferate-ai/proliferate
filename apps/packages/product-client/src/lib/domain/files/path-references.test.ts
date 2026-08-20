@@ -58,6 +58,67 @@ describe("resolveFileReference", () => {
     expect(fileReferenceCopyPath(reference)).toBe("/repo/src/App.tsx");
   });
 
+  it.each([
+    ["/repo/My%20Notes.md:7", "/repo/My Notes.md", 7, null],
+    ["/repo/My%20Notes.md:7:3", "/repo/My Notes.md", 7, 3],
+    ["/repo/my%20notes.md", "/repo/my notes.md", null, null],
+    ["/repo/My%2520Notes.md", "/repo/My%2520Notes.md", null, null],
+    ["/repo/a%2Fb.md", "/repo/a%2Fb.md", null, null],
+    ["/repo/a%5Cb.md", "/repo/a%5Cb.md", null, null],
+    ["/repo/a%00b.md", "/repo/a%00b.md", null, null],
+    ["/repo/a%23b.md", "/repo/a%23b.md", null, null],
+    ["/repo/a+b.md", "/repo/a+b.md", null, null],
+    ["/repo/literal%2520name.md", "/repo/literal%2520name.md", null, null],
+  ])("decodes %s with one case-insensitive %%20 pass and nothing else", (
+    rawPath,
+    parsedPath,
+    line,
+    column,
+  ) => {
+    expect(resolve({ rawPath })).toMatchObject({ parsedPath, line, column });
+  });
+
+  it("keeps an encoded terminal filename space, because nothing trims after decode", () => {
+    // `%20` immediately before `:7` becomes a real trailing space in the parsed
+    // path; a second trim would silently rename the file being opened.
+    expect(resolve({ rawPath: "/repo/Notes%20:7" })).toMatchObject({
+      parsedPath: "/repo/Notes ",
+      line: 7,
+    });
+    expect(resolve({ rawPath: "  /repo/Notes%20  " })).toMatchObject({
+      // The outer trim happens once, before the decode; the space the decode
+      // produces at the end of the name is part of the filename and survives.
+      parsedPath: "/repo/Notes ",
+    });
+  });
+
+  it("never manufactures a separator or traversal out of an encoding", () => {
+    expect(resolve({ rawPath: "/repo/%2E%2E/secret" }).locator).toEqual({
+      authority: "workspace",
+      workspacePath: "%2E%2E/secret",
+      localCompanionPath: "/repo/%2E%2E/secret",
+    });
+    // A repaired `../` reference is only syntactically parseable; the canonical
+    // locator is what refuses it.
+    expect(resolve({ rawPath: "../My%20Notes.md" }).locator).toEqual({
+      authority: "unavailable",
+      reason: "traversal",
+    });
+  });
+
+  it("leaves an authoritative structured workspace path byte-identical", () => {
+    // The compatibility decoder applies to raw references only. A runtime
+    // workspacePath is already authoritative data.
+    expect(resolve({
+      rawPath: "ignored/raw.md",
+      workspacePathOverride: "docs/literal%20name.md",
+    }).locator).toEqual({
+      authority: "workspace",
+      workspacePath: "docs/literal%20name.md",
+      localCompanionPath: "/repo/docs/literal%20name.md",
+    });
+  });
+
   it("uses runtime root and provenance only for native companion capability", () => {
     expect(resolve({ filesystemOrigin: REMOTE }).locator).toEqual({
       authority: "workspace",
