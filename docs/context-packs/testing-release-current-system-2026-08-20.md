@@ -103,7 +103,7 @@ Notes grounded in code:
 
 ## 4. Test tiers and where they run
 
-Source of truth: [`specs/TESTING.md`](/Users/pablohansen/proliferate/specs/TESTING.md), depth docs under `specs/TESTING/`.
+Source of truth: [`specs/TESTING.md`](../../specs/TESTING.md), depth docs under `specs/TESTING/`.
 
 ```mermaid
 flowchart LR

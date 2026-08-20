@@ -18,7 +18,7 @@ Every repository claim carries a `file:line`, a PR number, or a commit SHA. Wher
 
 There are two different things in this codebase called "auth", they share almost no machinery, and conflating them is the single largest source of the feeling that onboarding is broken. **Product identity** is the user signing in to Proliferate: fastapi-users, JWTs, GitHub / Google / Apple / password / enterprise SSO, plus a desktop PKCE browser flow. **Agent auth** is the credential a coding harness (Claude Code, Codex, Cursor, OpenCode, Grok) presents to a model provider when the runtime launches it. Separate tables, separate APIs, separate storage, separate failure modes, separate UI. `[fact]` The routers are physically separate packages: `server/proliferate/server/accounts/` for identity and `server/proliferate/server/cloud/agent_gateway/` for agent auth.
 
-Product identity is in good shape and is not gated by anything. `[fact]` Access tokens live 7 days and refresh tokens 30 days (`server/proliferate/constants/auth.py:7-8`), every token embeds a monotonic `token_generation` so a single integer bump is the "log out everywhere" primitive (`server/proliferate/db/models/auth.py:44-52`), and the desktop exchange is a real PKCE flow with an S256 challenge and a 60-second one-time code (`server/proliferate/constants/auth.py:4,9`, `server/proliferate/db/models/auth.py:64-84`).
+Product identity is in good shape and is not gated by anything. `[fact]` Access tokens live 7 days and refresh tokens 30 days (`server/proliferate/constants/auth.py:7-8`), every token embeds a monotonic `token_generation` so a single integer bump is the "log out everywhere" primitive (`server/proliferate/db/models/auth.py:43-52`), and the desktop exchange is a real PKCE flow with an S256 challenge and a 60-second one-time code (`server/proliferate/constants/auth.py:4,9`, `server/proliferate/db/models/auth.py:64-84`).
 
 Agent auth is also, on paper, complete. `[fact]` The selection model is `(user_id, harness_kind, surface, source_kind, env_var_name)` with `surface IN ('local','cloud')` and `source_kind IN ('gateway','api_key')` (`server/proliferate/db/models/cloud/agent_gateway.py:99-131`), the absence of rows means "use the harness's own native login", the server renders a `state.json` v2 document per surface, and the Rust runtime turns that document into per-launch environment and config files through a profile / plan / render / materialize pipeline (`anyharness/crates/anyharness-lib/src/domains/agents/route_auth/`). A seven-rung implementation ladder for this landed between 2026-08-15 and 2026-08-16 (`[fact]` PRs #1916, #1925, #1935, #1939, #1941, #1943, #1944, all merged).
 
@@ -30,7 +30,7 @@ The gap between "complete on paper" and "feels broken" is four specific things, 
 
 **Three: even with the flag on, two display states are unreachable.** `[fact]` `derive_agent_auth_state` reaches `Authenticated` only through a `Tier1Trial` fact and `Unavailable` only through gateway health (`anyharness/crates/anyharness-lib/src/domains/agents/auth_state.rs:316-383`), but the only production constructor of `AuthRuntimeInputs` hardwires `trial: None, gateway: None` (`anyharness/crates/anyharness-lib/src/domains/agents/launch_probe/mod.rs:297-307`) and `handoff` is always `None` (`anyharness/crates/anyharness-lib/src/domains/agents/auth_state.rs:546`). `[fact]` The enabling flags `tier1_trial_enabled` and `gateway_health_enabled` no longer exist anywhere in `anyharness/`; they were removed by the launch-options cutover (#2070).
 
-**Four: typed refusals arrive as raw strings.** `[fact]` The runtime emits seven precise codes (`AGENT_ROUTE_SELECTION_MISSING`, `AGENT_ROUTE_SELECTION_INCOMPLETE`, `AGENT_ROUTE_STATE_STALE`, and four more) at `anyharness/crates/anyharness-lib/src/domains/agents/route_auth/mod.rs:93-104`, mapped to HTTP 409 or 500 at `anyharness/crates/anyharness-lib/src/api/http/sessions_errors.rs:175-186`. `[fact]` A repo-wide grep for `AGENT_ROUTE` under `apps/` returns nothing, and `formatSessionCreateFailureMessage` falls through to `error.message` for any unrecognised code (`apps/packages/product-client/src/lib/domain/sessions/creation/create-session-error.ts:49`). `[fact]` The user therefore sees a toast headlined "Chat not opened" whose cause line is the raw Rust error string (`apps/packages/product-client/src/hooks/chat/workflows/use-chat-launch-actions.ts:305-312`), with no route to the settings pane that would fix it.
+**Four: typed refusals arrive as raw strings.** `[fact]` The runtime emits seven precise codes (`AGENT_ROUTE_SELECTION_MISSING`, `AGENT_ROUTE_SELECTION_INCOMPLETE`, `AGENT_ROUTE_STATE_STALE`, and four more) at `anyharness/crates/anyharness-lib/src/domains/agents/route_auth/mod.rs:93-104`, mapped to HTTP 409 or 500 at `anyharness/crates/anyharness-lib/src/api/http/sessions_errors.rs:175-186`. `[fact]` A repo-wide grep for `AGENT_ROUTE` under `apps/` returns nothing, and `formatSessionCreateFailureMessage` falls through to `error.message` for any unrecognised code (`apps/packages/product-client/src/lib/domain/sessions/creation/create-session-error.ts:49-54`). `[fact]` The user therefore sees a toast headlined "Chat not opened" whose cause line is the raw Rust error string (`apps/packages/product-client/src/hooks/chat/workflows/use-chat-launch-actions.ts:305-312`), with no route to the settings pane that would fix it.
 
 What is genuinely absent, as opposed to merely dark: there is no telemetry event anywhere in the agent-auth funnel (`[fact]` `apps/packages/product-client/src/lib/domain/telemetry/events.ts` catalogs sign-in, agent seed, chat, cloud workspace and connector events but nothing for selection, apply, probe, enrollment or agent login), and the gateway verification worker that would prove an enrollment actually works is off by default (`[fact]` `agent_gateway_verification_enabled: bool = False` at `server/proliferate/config.py:433`, gate at `server/proliferate/server/cloud/agent_gateway/worker.py:164-172`). `[inference]` Together these mean nobody, including us, can currently measure where first-run agent auth fails.
 
@@ -120,8 +120,8 @@ Boundary rules that hold today, each verified:
 
 | Model | Line | Purpose |
 | --- | --- | --- |
-| `OAuthAccount` | 24 | fastapi-users OAuth account link |
-| `User` | 33 | product user; carries `token_generation` |
+| `OAuthAccount` | 28 | fastapi-users OAuth account link |
+| `User` | 32 | product user; carries `token_generation` |
 | `DesktopAuthCode` | 64 | one-time PKCE code for desktop token exchange |
 | `AuthIdentity` | 87 | provider identity binding |
 | `ProviderGrant` | 115 | encrypted provider access and refresh tokens |
@@ -147,7 +147,7 @@ The revoke-all primitive, verbatim `[fact]`:
     )
 ```
 
-(`server/proliferate/db/models/auth.py:44-52`, enforced in `server/proliferate/auth/jwt.py:20-52`.)
+(`server/proliferate/db/models/auth.py:43-52`, enforced in `server/proliferate/auth/jwt.py:20-63`.)
 
 The desktop code exchange `[fact]` (`server/proliferate/db/models/auth.py:64-84`):
 
@@ -276,7 +276,7 @@ This is the happy path and the one most first users hit, because Claude Code or 
 2. User clicks GitHub. `[fact]` `signInWithGitHub` clears any published auth issue, checks control-plane reachability (throws a 503-shaped `AuthRequestError` if unreachable), then checks `GET /auth/desktop/github/availability` and throws "GitHub sign-in is not configured for this environment" if the server has no client id (`apps/desktop/src/lib/integrations/auth/orchestration-provider-flow.ts:45-79`, server route at `server/proliferate/server/accounts/desktop/api.py:141`).
 3. `[fact]` A pending PKCE record is created and stored, then the system browser is opened (`orchestration-provider-flow.ts:93-104`).
 4. `[fact]` GitHub redirects to the server callback, which mints a `DesktopAuthCode` and deep-links back to `proliferate://auth/callback` (`server/proliferate/server/accounts/desktop/api.py:204`, scheme constants at `server/proliferate/constants/auth.py:22-25`).
-5. `[fact]` The app races the deep-link callback against a poll of `GET /auth/desktop/poll`, whichever lands first (`orchestration-provider-flow.ts:106-127`, server route at `desktop/api.py:230`). `[inference]` The race exists because deep links are unreliable on macOS when the app was cold-started by the browser.
+5. `[fact]` The app races the deep-link callback against a poll of `POST /auth/desktop/poll`, whichever lands first (`orchestration-provider-flow.ts:106-127`, `pollGitHubDesktopSession` at `apps/desktop/src/lib/integrations/auth/proliferate-auth.ts:193-211`, server route at `desktop/api.py:230`). `[inference]` The race exists because deep links are unreliable on macOS when the app was cold-started by the browser.
 6. `[fact]` The code is exchanged at `POST /auth/desktop/token` with the verifier; the server recomputes the S256 challenge and refuses with `desktop_code_verifier_invalid` or a PKCE-verification failure on mismatch (`server/proliferate/server/accounts/desktop/service.py:476-522`).
 7. `[fact]` Signup hooks schedule gateway enrollment out of band (`server/proliferate/server/accounts/desktop/service.py:448` calling `signup_hook.py:78`).
 8. `[fact]` The desktop runtime reconciles installed agents, discovering while idle (`apps/packages/product-client/src/hooks/agents/derived/use-agent-catalog.ts:20-38`); the pure install decision lives at `anyharness/crates/anyharness-lib/src/domains/agents/installer/auto_install.rs`.
@@ -314,7 +314,7 @@ Had the pane rendered, the intended path continues `[fact]`: `POST /agent-auth/k
 
 1. `[fact]` `resolve_launch_route_auth` loads the state document, matches the harness, and either returns a route or a typed error (`anyharness/crates/anyharness-lib/src/domains/agents/route_auth/mod.rs:148`). Helper predicates `launch_route_provides_credentials` (line 200) and `launch_route_selection_failure` (line 252) let readiness reason about the route without duplicating the decision.
 2. `[fact]` The error maps to HTTP: `SelectionMissing`, `SelectionIncomplete`, `UnsupportedRoute`, `UnknownHarness` and `StaleStateRevision` become 409; `MalformedStateFile` and `Materialize` become 500 (`anyharness/crates/anyharness-lib/src/api/http/sessions_errors.rs:175-186`).
-3. `[fact]` The client has no mapping for any of these codes; `formatSessionCreateFailureMessage` handles only `SESSION_MODEL_UNSUPPORTED`, `SESSION_MODE_UNSUPPORTED` and `WORKSPACE_DIRECTORY_MISSING`, then falls through to `error.message` (`apps/packages/product-client/src/lib/domain/sessions/creation/create-session-error.ts:49`).
+3. `[fact]` The client has no mapping for any of these codes; `formatSessionCreateFailureMessage` handles only `SESSION_MODEL_UNSUPPORTED`, `SESSION_MODE_UNSUPPORTED` and `WORKSPACE_DIRECTORY_MISSING`, then falls through to `error.message` (`apps/packages/product-client/src/lib/domain/sessions/creation/create-session-error.ts:49-54`).
 4. `[fact]` The toast is built at `apps/packages/product-client/src/hooks/chat/workflows/use-chat-launch-actions.ts:305-312` with headline "Chat not opened", a consequence line saying the draft is preserved, and the raw string as the cause.
 
 | Runtime condition | Code | HTTP | What the user actually sees |
@@ -345,7 +345,7 @@ Had the pane rendered, the intended path continues `[fact]`: `POST /agent-auth/k
 
 | Harness | Slots | Gateway | Provider configs | Cardinality |
 | --- | --- | --- | --- | --- |
-| `claude` | `anthropic` (required), `gateway` | yes | `aws_bedrock`, `azure_openai` (both `pending: true`) | `single` |
+| `claude` | `anthropic` (required), `gateway` | yes | `aws_bedrock`, `azure_openai` (`azure_openai` only is `pending: true`) | `single` |
 | `codex` | `openai`, `gateway` | yes | `aws_bedrock`; `azure_openai` `pending: true` | |
 | `cursor` | `cursor` only | no | none | |
 | `opencode` | `openai`, `anthropic`, `gemini`, `opencode-zen`, `gateway` (none required) | yes | `aws_bedrock`, `azure_openai` (neither pending) | multi |
@@ -478,7 +478,7 @@ Each named lead, with its verdict. Leads that did not verify are kept and marked
 | 7 | Separate prod and dev GitHub Apps | `[fact]` **VERIFIED STRUCTURALLY.** Config carries exactly one GitHub App per deployment (`server/proliferate/config.py:217-241`: `github_app_id`, `github_app_slug`, `github_app_client_id`, `github_app_client_secret`, `github_app_webhook_secret`, `github_app_callback_base_url`, `github_app_private_key`), and `guides/local/github-app-manual-qa.md` prescribes registering a separate dev App with an ngrok callback base. The actual app IDs are secrets and are not in the repository. |
 | 8 | Three-layer feature-worktree auth doc under `specs/developing/local/` | `[fact]` **PATH DOES NOT VERIFY.** The document exists but lives at `guides/local/feature-worktree-auth.md` (181 lines, Layer A `VITE_DEV_DISABLE_AUTH=true`, Layer B real backend session in single-org mode, Layer C). `specs/developing/` contains only `README.md` and `reference/`. |
 
-`[fact]` Additional current state worth recording: the spec `specs/FEATURE_DOCS/AGENT_AUTH.md` is 1230 lines and carries `Status: target`, meaning it describes the intended system, not necessarily the shipped one. Its "Current gaps" checklist at lines 1117-1231 contains two entries that are now stale:
+`[fact]` Additional current state worth recording: the spec `specs/FEATURE_DOCS/AGENT_AUTH.md` is 1230 lines and carries `Status: target`, meaning it describes the intended system, not necessarily the shipped one. Its "Current gaps" checklist at lines 1117-1230 contains two entries that are now stale:
 
 - `[fact]` The claim that the client's typed-vault gate is hardcoded to an empty list is stale: `getSupportedProviderConfigKinds` is registry-derived (`apps/packages/product-client/src/lib/domain/settings/provider-config-fields.ts:118-168`).
 - `[fact]` The claim that a stale `CURSOR_API_KEY` justification survives in `model_snapshot/targets.rs` is stale: the module moved to `launch_probe/targets.rs` and the comment now cites only the macOS keychain prompt (`anyharness/crates/anyharness-lib/src/domains/agents/launch_probe/targets.rs:16-26`).
@@ -660,7 +660,7 @@ Each decision states the tension, the options, and what the current code implies
 
 **Tension.** `[fact]` Seven precise codes exist and none is mapped client-side; the user gets a raw string with no action.
 
-**Options.** (a) Add a code-to-presentation map alongside the existing session-error map (`create-session-error.ts:49`), each entry carrying a headline, a cause and a primary action. (b) Go further and give each code a deep link into the exact settings pane and harness that would repair it. (c) Have the server, not the client, own the presentation and return a structured problem document with a suggested action.
+**Options.** (a) Add a code-to-presentation map alongside the existing session-error map (`create-session-error.ts:49-54`), each entry carrying a headline, a cause and a primary action. (b) Go further and give each code a deep link into the exact settings pane and harness that would repair it. (c) Have the server, not the client, own the presentation and return a structured problem document with a suggested action.
 
 **What the code implies.** `[fact]` The web app already does (a) well for a different domain: `apps/web/src/lib/domain/auth/web-auth-errors.ts` carries per-code title, description, status label and primary plus secondary actions. `[inference]` That file is a working template, so the marginal cost of (a) is low and (b) is a small extension of it. Option (c) conflicts with the current boundary in which the runtime, not the control plane, produces these codes.
 
