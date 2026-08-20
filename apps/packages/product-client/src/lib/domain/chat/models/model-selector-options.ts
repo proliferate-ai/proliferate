@@ -58,13 +58,14 @@ export function buildModelSelectorGroups(
   unsupportedModelKeys: ReadonlySet<string> = EMPTY_UNSUPPORTED_KEYS,
 ): ModelSelectorGroup[] {
   const sourceAgentsByKind = new Map(agents.map((agent) => [agent.kind, agent]));
-  const matchingActiveAgents = activeModelControl?.values.length
-    ? agents.filter((agent) => agent.kind === activeModelControl.kind)
-    : [];
+  // The active session's live model statement is authoritative for ITS harness
+  // only (resolveSelectorModels swaps in the live values for the matching
+  // kind). Every other observed harness keeps its group so cross-harness rows
+  // stay reachable as open_new_chat; a live control whose harness is absent
+  // from the observed list still gets a synthesized group.
   const sourceAgents = activeModelControl?.values.length
-    ? matchingActiveAgents.length > 0
-      ? matchingActiveAgents
-      : [agentFromActiveModelControl(activeModelControl)]
+    && !agents.some((agent) => agent.kind === activeModelControl.kind)
+    ? [agentFromActiveModelControl(activeModelControl), ...agents]
     : agents;
   return sourceAgents
     .map((agent) => ({

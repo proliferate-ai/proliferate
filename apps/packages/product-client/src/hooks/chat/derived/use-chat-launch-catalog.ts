@@ -23,7 +23,10 @@ import {
 } from "#product/lib/domain/agents/cloud-launch-catalog";
 import { useAgentCatalog } from "#product/hooks/agents/derived/use-agent-catalog";
 import { useSelectedCloudRuntimeState } from "#product/hooks/workspaces/facade/use-selected-cloud-runtime-state";
-import { useWorkspaceAgentLaunchOptionsQuery } from "#product/hooks/access/anyharness/agents/use-workspace-agent-launch-options";
+import {
+  useWorkspaceAgentLaunchOptionsQuery,
+  useWorkspaceAgentsLaunchOptionsListQuery,
+} from "#product/hooks/access/anyharness/agents/use-workspace-agent-launch-options";
 
 const EMPTY_AGENTS: DesktopAgentLaunchAgent[] = [];
 
@@ -53,6 +56,22 @@ export function useChatLaunchCatalog({
     harnessKind: requestedHarnessKind,
     cloudConnectionInfo: selectedCloudRuntime.connectionInfo,
   });
+  // Every OTHER ready harness stays in the catalog too: the requested kind's
+  // query above keeps driving loading/error/snapshot semantics, while these
+  // are additive best-effort — an unresolved kind is simply absent until its
+  // observation arrives. On a cloud workspace the SANDBOX's ready list is the
+  // authority; agentCatalog reads the local desktop runtime.
+  const cloudReadyAgentKinds = selectedCloudRuntime.connectionInfo?.readyAgentKinds;
+  const otherReadyHarnessKinds = useMemo(
+    () => [...(cloudReadyAgentKinds ?? agentCatalog.readyAgentKinds)]
+      .filter((kind) => kind !== requestedHarnessKind),
+    [agentCatalog.readyAgentKinds, cloudReadyAgentKinds, requestedHarnessKind],
+  );
+  const otherRuntimeLaunchOptions = useWorkspaceAgentsLaunchOptionsListQuery({
+    workspaceId: selectedWorkspaceId,
+    harnessKinds: otherReadyHarnessKinds,
+    cloudConnectionInfo: selectedCloudRuntime.connectionInfo,
+  });
   const hasCloudTargetReadiness = Boolean(selectedCloudRuntime.connectionInfo);
   const catalogLoading = runtimeLaunchOptions.isLoading
     || (!requestedHarnessKind && agentCatalog.isLoading);
@@ -68,12 +87,15 @@ export function useChatLaunchCatalog({
 
   const launchAgents = useMemo(
     () => {
-      const projected = runtimeLaunchOptions.data
-        ? projectHarnessLaunchOptions(runtimeLaunchOptions.data)
-        : null;
-      return projected ? [projected] : EMPTY_AGENTS;
+      const projected = [runtimeLaunchOptions.data, ...otherRuntimeLaunchOptions]
+        .flatMap((response) => {
+          const agent = response ? projectHarnessLaunchOptions(response) : null;
+          return agent ? [agent] : [];
+        });
+      return projected.length > 0 ? projected : EMPTY_AGENTS;
     },
     [
+      otherRuntimeLaunchOptions,
       runtimeLaunchOptions.data,
     ],
   );

@@ -1,5 +1,8 @@
 import type { HarnessLaunchOptionsResponse } from "@anyharness/sdk";
-import { useAgentLaunchOptionsQuery } from "@anyharness/sdk-react";
+import {
+  useAgentLaunchOptionsListQuery,
+  useAgentLaunchOptionsQuery,
+} from "@anyharness/sdk-react";
 import type { CloudHarnessLaunchOptionsResponse } from "@proliferate/cloud-sdk";
 import {
   useCloudHarnessLaunchOptions,
@@ -83,6 +86,32 @@ export function useHomeTargetAgentLaunchOptions({
     isTargetUnobserved: false,
   };
 }
+
+/**
+ * Additive fan-out companion: launch options for the OTHER ready harnesses on
+ * the same execution target, one response (or `null` while unresolved) per
+ * kind. Local-runtime targets only — a cloud launch reads its sandbox's copied
+ * observation per kind and keeps today's single-kind behavior (the cloud copy
+ * store has no list read yet; recorded follow-up).
+ */
+export function useHomeTargetOtherAgentsLaunchOptions({
+  harnessKinds,
+  launchTarget,
+}: {
+  harnessKinds: readonly string[];
+  launchTarget: HomeLaunchTarget | null;
+}): Array<HarnessLaunchOptionsResponse | null> {
+  const isLocalRuntimeTarget = launchTarget !== null && launchTarget.kind !== "cloud";
+  const responses = useAgentLaunchOptionsListQuery({
+    harnessKinds,
+    enabled: isLocalRuntimeTarget,
+  });
+  // Stable empty reference: a fresh [] here would recompute the whole
+  // downstream memo chain on every cloud/no-target render.
+  return isLocalRuntimeTarget ? responses : EMPTY_RESPONSES;
+}
+
+const EMPTY_RESPONSES: Array<HarnessLaunchOptionsResponse | null> = [];
 
 function isNotFound(error: unknown): boolean {
   return Boolean(
