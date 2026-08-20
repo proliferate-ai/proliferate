@@ -211,10 +211,10 @@ body {
 }
 
 @keyframes om-wave {
-  0% { transform: scale(0); opacity: 0; }
-  16% { transform: scale(1); opacity: 1; }
-  44% { transform: scale(1); opacity: 1; }
-  62%, 100% { transform: scale(0); opacity: 0; }
+  0% { opacity: 0; }
+  16% { opacity: 1; }
+  44% { opacity: 1; }
+  62%, 100% { opacity: 0; }
 }
 
 @keyframes om-dot {
@@ -282,7 +282,9 @@ body {
 
 /* Wave sweeps column-major: delay order transposes the grid (col * 3 + row). */
 .dot-cell-loader[data-variant="wave"] .dot-cell-loader__dot {
-  transform: scale(0);
+  /* Opacity keeps the column wave without a permanent transform animation.
+     In WKWebView, that transform makes each frame recompute animation extents
+     across the document and can exhaust a renderer after a full-list fallback. */
   animation: om-wave var(--activity-dot-cell-wave-cycle) var(--ease-standard) infinite;
   animation-delay: calc(var(--activity-dot-cell-wave-step) * (var(--om-c) * 3 + var(--om-r)));
 }
