@@ -52,18 +52,26 @@ def migrated_test_database():  # type: ignore[no-untyped-def]
 
 @pytest_asyncio.fixture
 async def test_engine(migrated_test_database):  # type: ignore[no-untyped-def]
+    """The migrated test database, truncated clean before and after the test.
+
+    Every route a test has into Postgres runs through this fixture: `db_session`
+    and `client` here, `cloud_client` in `tests/e2e/cloud/conftest.py`, and the
+    per-module app/session fixtures that request one of those. Owning the reset
+    here means the truncate fires exactly for the tests whose fixture closure
+    reaches the database. It used to run from an autouse fixture instead, so all
+    2,973 collected tests paid it; only 1,057 of them ever open a connection, and
+    truncating 79 tables twice around the other 1,916 is pure overhead.
+
+    The reset itself is unchanged: `truncate_all_tables` before the test and
+    again after it, on the same engine, over the same tables in the same order.
+    """
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+    await _cancel_test_background_tasks()
+    await truncate_all_tables(engine)
     yield engine
+    await _cancel_test_background_tasks()
+    await truncate_all_tables(engine)
     await engine.dispose()
-
-
-@pytest_asyncio.fixture(autouse=True)
-async def reset_test_database(test_engine) -> AsyncGenerator[None, None]:  # type: ignore[no-untyped-def]
-    await _cancel_test_background_tasks()
-    await truncate_all_tables(test_engine)
-    yield
-    await _cancel_test_background_tasks()
-    await truncate_all_tables(test_engine)
 
 
 @pytest_asyncio.fixture
