@@ -87,6 +87,11 @@ const platforms = [
   },
   {
     key: "darwin-x86_64",
+    // Intel desktop builds are paused 2026-08-20 (release-desktop.yml
+    // build-desktop matrix), so this platform's artifacts are expected to be
+    // absent from every run until they resume. Optional: a missing Intel
+    // artifact is not a manifest-generation failure.
+    optional: true,
     artifactMatcher: (relPath, name) =>
       pathIncludes(relPath, "desktop-x86_64-apple-darwin") &&
       /(x64|x86_64).*\.app\.tar\.gz$/i.test(name),
@@ -109,12 +114,13 @@ for (const platform of platforms) {
   const sigFiles = findFiles(artifactsDir, platform.sigMatcher);
   const artifactFiles = findFiles(artifactsDir, platform.artifactMatcher);
 
-  if (sigFiles.length === 0) {
-    errors.push(`Missing signature file for ${platform.key}`);
-    continue;
-  }
-  if (artifactFiles.length === 0) {
-    errors.push(`Missing artifact file for ${platform.key}`);
+  if (sigFiles.length === 0 || artifactFiles.length === 0) {
+    if (platform.optional) {
+      console.warn(`Skipping ${platform.key}: no artifacts found (optional platform).`);
+      continue;
+    }
+    if (sigFiles.length === 0) errors.push(`Missing signature file for ${platform.key}`);
+    if (artifactFiles.length === 0) errors.push(`Missing artifact file for ${platform.key}`);
     continue;
   }
 

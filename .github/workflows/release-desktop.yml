@@ -102,9 +102,10 @@ jobs:
           - os: macos-15
             target: aarch64-apple-darwin
             runner_os: macos
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
-            runner_os: macos
+          # Intel builds paused 2026-08-20; restore by re-adding this matrix entry.
+          # - os: macos-15-intel
+          #   target: x86_64-apple-darwin
+          #   runner_os: macos
 
     runs-on: ${{ matrix.os }}
 
@@ -856,7 +857,14 @@ jobs:
           dmg_aarch64=$(find all-artifacts -type f -name "Proliferate_${version}_aarch64.dmg" | head -n 1)
           dmg_x64=$(find all-artifacts -type f -name "Proliferate_${version}_x64.dmg" | head -n 1)
           [[ -n "$dmg_aarch64" ]] || { echo "::error::Missing aarch64 DMG for cask bump"; exit 1; }
-          [[ -n "$dmg_x64" ]] || { echo "::error::Missing x64 DMG for cask bump"; exit 1; }
+          if [[ -z "$dmg_x64" ]]; then
+            # Intel builds paused 2026-08-20 (see build-desktop matrix): the cask
+            # format is a single universal formula requiring both arches, so
+            # there is no safe partial bump while x86_64 artifacts don't exist.
+            # Skip rather than publish a cask pinned to a stale Intel binary.
+            echo "::warning::No x64 DMG produced (Intel builds paused); skipping Homebrew cask bump until Intel builds resume."
+            exit 0
+          fi
           sha_aarch64=$(shasum -a 256 "$dmg_aarch64" | awk '{print $1}')
           sha_x64=$(shasum -a 256 "$dmg_x64" | awk '{print $1}')
 
