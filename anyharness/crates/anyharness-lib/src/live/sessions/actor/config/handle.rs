@@ -59,6 +59,7 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
     }
 
     let mut pending = intent.control_values.clone();
+    let mut dropped_control_ids: Vec<String> = Vec::new();
     let ordered_ids = startup_state
         .config_options
         .iter()
@@ -83,6 +84,24 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
                 return Err(error);
             }
         };
+        // Create-time validation runs against the harness-level observation,
+        // but some harnesses narrow a control's value set per model (codex
+        // reasoning_effort). A value the live session no longer offers after
+        // the model applied is dropped to the session default rather than
+        // failing the whole start; a refusal of an offered value stays fatal.
+        if matches!(outcome, ConfigApplyOutcome::NotApplied) {
+            log_initial_config_apply(session_id, agent_kind, &config_id, "membership_dropped");
+            tracing::warn!(
+                session_id,
+                harness_kind = agent_kind,
+                control_id = %config_id,
+                value = %value,
+                event = "session.initial_config.dropped",
+                "requested control value is absent from the live session; launching with its default"
+            );
+            dropped_control_ids.push(config_id);
+            continue;
+        }
         log_initial_config_apply(
             session_id,
             agent_kind,
@@ -99,51 +118,85 @@ pub(in crate::live::sessions::actor) async fn apply_resolved_launch_intent(
     // live statement and can positively confirm through set_mode/read-back.
     if let Some(value) = pending.remove("mode") {
         if !startup_state.legacy_mode_contains_value(&value) {
-            log_initial_config_apply(session_id, agent_kind, "mode", "membership_rejected");
-            anyhow::bail!("requested control 'mode' value '{value}' is absent from the live {agent_kind} session");
-        }
+            log_initial_config_apply(session_id, agent_kind, "mode", "membership_dropped");
+            tracing::warn!(
+                session_id,
+                harness_kind = agent_kind,
+                control_id = "mode",
+                value = %value,
+                event = "session.initial_config.dropped",
+                "requested control value is absent from the live session; launching with its default"
+            );
+            dropped_control_ids.push("mode".to_string());
+        } else {
         let outcome = match apply_mode_via_direct_setter_legacy(
-            conn,
-            native_session_id,
-            startup_state,
-            &value,
-        )
-        .await
-        {
-            Ok(outcome) => outcome,
-            Err(error) => {
-                log_initial_config_apply(session_id, agent_kind, "mode", "apply_failed");
-                return Err(error);
-            }
-        };
-        log_initial_config_apply(
-            session_id,
-            agent_kind,
-            "mode",
-            confirmed_result_code(outcome),
-        );
-        anyhow::ensure!(
-            matches!(outcome, ConfigApplyOutcome::NoChange | ConfigApplyOutcome::AppliedAuthoritative),
-            "requested control 'mode' value '{value}' was not confirmed by the live {agent_kind} session"
-        );
+                conn,
+                native_session_id,
+                startup_state,
+                &value,
+            )
+            .await
+            {
+                Ok(outcome) => outcome,
+                Err(error) => {
+                    log_initial_config_apply(session_id, agent_kind, "mode", "apply_failed");
+                    return Err(error);
+                }
+            };
+            log_initial_config_apply(
+                session_id,
+                agent_kind,
+                "mode",
+                confirmed_result_code(outcome),
+            );
+            anyhow::ensure!(
+                matches!(outcome, ConfigApplyOutcome::NoChange | ConfigApplyOutcome::AppliedAuthoritative),
+                "requested control 'mode' value '{value}' was not confirmed by the live {agent_kind} session"
+            );
+        }
     }
-    anyhow::ensure!(
-        pending.is_empty(),
-        "requested controls are absent from the live {agent_kind} session: {:?}",
-        pending.keys().collect::<Vec<_>>()
-    );
-    if let Err(error) = ensure_resolved_launch_intent_confirmed(startup_state, intent) {
+    // A control id the live statement never surfaced at all is the same
+    // per-model narrowing class: drop it rather than failing the start.
+    for (config_id, value) in pending {
+        log_initial_config_apply(session_id, agent_kind, &config_id, "membership_dropped");
+        tracing::warn!(
+            session_id,
+            harness_kind = agent_kind,
+            control_id = %config_id,
+            value = %value,
+            event = "session.initial_config.dropped",
+            "requested control is absent from the live session; launching with its default"
+        );
+        dropped_control_ids.push(config_id);
+    }
+    let confirmed_intent = intent_without_dropped_controls(intent, &dropped_control_ids);
+    if let Err(error) = ensure_resolved_launch_intent_confirmed(startup_state, &confirmed_intent) {
         log_initial_config_apply(session_id, agent_kind, "complete_intent", "final_mismatch");
         return Err(error);
     }
     tracing::info!(
         harness = agent_kind,
         selected_model = intent.model_id.is_some(),
-        selected_control_count = intent.control_values.len(),
+        selected_control_count = confirmed_intent.control_values.len(),
+        dropped_control_count = dropped_control_ids.len(),
         event = "session.launch_intent.confirmed",
-        "confirmed every explicit launch intent value"
+        "confirmed every applicable explicit launch intent value"
     );
     Ok(())
+}
+
+pub(in crate::live::sessions::actor) fn intent_without_dropped_controls(
+    intent: &ResolvedLaunchIntent,
+    dropped_control_ids: &[String],
+) -> ResolvedLaunchIntent {
+    if dropped_control_ids.is_empty() {
+        return intent.clone();
+    }
+    let mut confirmed = intent.clone();
+    confirmed
+        .control_values
+        .retain(|config_id, _| !dropped_control_ids.contains(config_id));
+    confirmed
 }
 
 pub(in crate::live::sessions::actor) fn ensure_resolved_launch_intent_confirmed(
