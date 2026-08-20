@@ -59,10 +59,13 @@ export function useChatLaunchCatalog({
   // Every OTHER ready harness stays in the catalog too: the requested kind's
   // query above keeps driving loading/error/snapshot semantics, while these
   // are additive best-effort — an unresolved kind is simply absent until its
-  // observation arrives.
+  // observation arrives. On a cloud workspace the SANDBOX's ready list is the
+  // authority; agentCatalog reads the local desktop runtime.
+  const cloudReadyAgentKinds = selectedCloudRuntime.connectionInfo?.readyAgentKinds;
   const otherReadyHarnessKinds = useMemo(
-    () => [...agentCatalog.readyAgentKinds].filter((kind) => kind !== requestedHarnessKind),
-    [agentCatalog.readyAgentKinds, requestedHarnessKind],
+    () => [...(cloudReadyAgentKinds ?? agentCatalog.readyAgentKinds)]
+      .filter((kind) => kind !== requestedHarnessKind),
+    [agentCatalog.readyAgentKinds, cloudReadyAgentKinds, requestedHarnessKind],
   );
   const otherRuntimeLaunchOptions = useWorkspaceAgentsLaunchOptionsListQuery({
     workspaceId: selectedWorkspaceId,

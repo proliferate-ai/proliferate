@@ -84,6 +84,9 @@ export function useWorkspaceAgentsLaunchOptionsListQuery({
       enabled: Boolean(
         cloudConnectionInfo && gatewayRuntimeUrl && gatewayWorkspaceId && harnessKind,
       ),
+      // Additive best-effort fan-out: a kind the sandbox does not serve must
+      // resolve to an absent group quickly, not retry-loop against a 404.
+      retry: false,
       queryFn: async ({ signal }: { signal?: AbortSignal }) => {
         if (!cloudConnectionInfo) {
           throw new Error("Cloud workspace connection is unavailable.");
