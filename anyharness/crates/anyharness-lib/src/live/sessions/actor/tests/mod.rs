@@ -9,8 +9,8 @@ use super::config::confirmation::{
     select_setter_response_outcome,
 };
 use super::config::handle::{
-    ensure_resolved_launch_intent_confirmed, initial_control_disposition,
-    intent_without_dropped_controls, InitialControlDisposition,
+    apply_resolved_launch_intent, ensure_resolved_launch_intent_confirmed,
+    initial_control_disposition, intent_without_dropped_controls, InitialControlDisposition,
 };
 use super::config::persist::{emit_live_config_update, load_startup_restore_snapshot};
 use super::config::queue::{

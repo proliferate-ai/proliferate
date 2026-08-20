@@ -109,9 +109,157 @@ fn disposition_drops_only_values_the_live_statement_does_not_offer() {
         initial_control_disposition(&startup_state, "reasoning_effort", "max"),
         InitialControlDisposition::Drop,
     );
-    // A control the live statement never surfaced at all.
+}
+
+#[test]
+fn disposition_refuses_posture_controls_the_live_statement_does_not_offer() {
+    // Posture controls decide what the agent is allowed to do; an unoffered
+    // value must refuse the start rather than launch at the harness default.
+    let startup_state = SessionStartupState {
+        current_mode_id: None,
+        legacy_mode_state: None,
+        config_options: vec![
+            approval_policy_option(),
+            collaboration_mode_option(),
+            reasoning_effort_option(),
+        ],
+        current_model_id: Some("gpt-5.5".to_string()),
+        available_models: session_model_options(&["gpt-5.5"]),
+        prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+    };
+
     assert_eq!(
-        initial_control_disposition(&startup_state, "fast-mode", "on"),
+        initial_control_disposition(&startup_state, "approval_policy", "never"),
+        InitialControlDisposition::Refuse,
+    );
+    assert_eq!(
+        initial_control_disposition(&startup_state, "collaboration_mode", "plan"),
+        InitialControlDisposition::Refuse,
+    );
+    // Negative control for the carve-out scope: the quality knob in the very
+    // same live statement is still eligible for the soft drop.
+    assert_eq!(
+        initial_control_disposition(&startup_state, "reasoning_effort", "max"),
         InitialControlDisposition::Drop,
     );
+}
+
+fn reasoning_effort_option() -> acp::schema::SessionConfigOption {
+    acp::schema::SessionConfigOption::select(
+        "reasoning_effort",
+        "Reasoning effort",
+        "xhigh",
+        vec![
+            acp::schema::SessionConfigSelectOption::new("low", "Low"),
+            acp::schema::SessionConfigSelectOption::new("xhigh", "Xhigh"),
+        ],
+    )
+}
+
+fn approval_policy_option() -> acp::schema::SessionConfigOption {
+    acp::schema::SessionConfigOption::select(
+        "approval_policy",
+        "Approval policy",
+        "on-request",
+        vec![
+            acp::schema::SessionConfigSelectOption::new("on-request", "On request"),
+            acp::schema::SessionConfigSelectOption::new("on-failure", "On failure"),
+        ],
+    )
+}
+
+fn collaboration_mode_option() -> acp::schema::SessionConfigOption {
+    acp::schema::SessionConfigOption::select(
+        "collaboration_mode",
+        "Collaboration",
+        "chat",
+        vec![acp::schema::SessionConfigSelectOption::new("chat", "Chat")],
+    )
+}
+
+fn seam_startup_state() -> SessionStartupState {
+    SessionStartupState {
+        current_mode_id: None,
+        legacy_mode_state: None,
+        config_options: vec![approval_policy_option(), reasoning_effort_option()],
+        current_model_id: Some("gpt-5.5".to_string()),
+        available_models: session_model_options(&["gpt-5.5"]),
+        prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+    }
+}
+
+fn seam_intent(config_id: &str, value: &str) -> ResolvedLaunchIntent {
+    ResolvedLaunchIntent {
+        model_id: None,
+        control_values: [(config_id.to_string(), value.to_string())]
+            .into_iter()
+            .collect(),
+        created_at: "2026-08-19T00:00:00Z".to_string(),
+    }
+}
+
+/// Seam coverage for `apply_resolved_launch_intent` itself. Every case here is
+/// decided by the pre-wire membership check, so the fake connection is never
+/// asked to answer a request.
+#[tokio::test(flavor = "current_thread")]
+async fn launch_intent_seam_drops_only_unoffered_quality_values() {
+    tokio::task::LocalSet::new()
+        .run_until(async {
+            let fake = super::config_direct_setter::fake_connection(
+                serde_json::json!({ "ok": true }),
+            )
+            .await;
+
+            // A control id the live statement never surfaced at all is a
+            // vocabulary disagreement and stays fatal.
+            let mut startup_state = seam_startup_state();
+            let error = apply_resolved_launch_intent(
+                &fake.conn,
+                "native-1",
+                "session-1",
+                "codex",
+                &seam_intent("web_search", "on"),
+                &mut startup_state,
+            )
+            .await
+            .expect_err("a never-surfaced control id must refuse the start");
+            assert!(
+                error.to_string().contains("web_search"),
+                "unexpected error: {error}"
+            );
+
+            // A posture control whose value the live statement does not offer
+            // stays fatal rather than launching at the harness default.
+            let mut startup_state = seam_startup_state();
+            let error = apply_resolved_launch_intent(
+                &fake.conn,
+                "native-1",
+                "session-1",
+                "codex",
+                &seam_intent("approval_policy", "never"),
+                &mut startup_state,
+            )
+            .await
+            .expect_err("an unoffered posture value must refuse the start");
+            assert!(
+                error.to_string().contains("approval_policy"),
+                "unexpected error: {error}"
+            );
+
+            // Negative control for both branches above: the same seam, same
+            // live statement, with a quality control whose requested value the
+            // applied model no longer offers, starts cleanly on the default.
+            let mut startup_state = seam_startup_state();
+            apply_resolved_launch_intent(
+                &fake.conn,
+                "native-1",
+                "session-1",
+                "codex",
+                &seam_intent("reasoning_effort", "max"),
+                &mut startup_state,
+            )
+            .await
+            .expect("an unoffered quality value must be dropped, not fatal");
+        })
+        .await;
 }

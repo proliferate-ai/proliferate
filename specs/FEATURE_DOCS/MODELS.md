@@ -183,17 +183,35 @@ then:
    explicit intent.
 
 The explicit model stays fail-closed: an absent or unconfirmed model fails
-startup and cleans up the incomplete native session. Controls carry one
-carve-out for per-model narrowing: some harnesses shrink a control's allowed
-values under the applied model (codex `reasoning_effort`), so a control value
-the live statement does not offer is dropped to the live session default with a
-`membership_dropped` result and a `session.initial_config.dropped` event, and
-the final aggregate check runs against the intent minus the dropped controls. A
-dropped mode also clears the session's requested-mode projection. An OFFERED
-value that is rejected, timed out, or unconfirmed by its setter read-back still
-fails startup and cleans up the incomplete native session. A contradiction
-queues a new override-free target probe; configured session values never become
-target defaults.
+startup and cleans up the incomplete native session.
+
+Controls carry exactly one carve-out, for per-model value narrowing on quality
+controls. Some harnesses shrink a control's allowed values under the applied
+model (codex `reasoning_effort` loses `max` under some models), which the
+harness-level observation cannot see at create time. A control that the live
+statement still surfaces, whose requested value that statement no longer
+offers, and that is not a posture control, is therefore dropped to the live
+session default with a `membership_dropped` result and a
+`session.initial_config.dropped` event; the final aggregate check then runs
+against the intent minus the dropped controls.
+
+Everything else stays fail-closed, because a silent default is worse than a
+refused start:
+
+- Posture controls are never dropped. Collaboration mode, the mode and
+  approval-policy family, and sandbox mode decide what the agent is allowed to
+  do, so launching one at the harness default after the user explicitly
+  selected against it would silently change behavior. An unoffered posture
+  value fails startup.
+- A control id the live statement never surfaced at all fails startup. That is
+  a vocabulary disagreement between the create-time observation and the live
+  session, not per-model narrowing, and dropping it would make every future
+  selection for that control a silent perpetual no-op.
+- An OFFERED value that is rejected, timed out, or unconfirmed by its setter
+  read-back fails startup and cleans up the incomplete native session.
+
+A contradiction queues a new override-free target probe; configured session
+values never become target defaults.
 
 ## Active session configuration
 
