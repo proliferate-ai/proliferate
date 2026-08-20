@@ -265,6 +265,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # EXPERIMENT (exp/rust-build-timings, never merge): capture per-crate
+      # compile timing data to inform a future split of anyharness-lib.
+      - name: Cargo build with timings
+        run: cargo build --workspace --tests --timings=html,json
+
       - name: Cargo test
         run: cargo test --workspace
 
@@ -273,6 +278,17 @@ jobs:
       # evaluated without this step.
       - name: Cargo test internal diagnostics export
         run: cargo test -p proliferate-diagnostics-collector --features internal-dogfood-export
+
+      # EXPERIMENT (exp/rust-build-timings, never merge): upload the timing
+      # report produced above for offline analysis.
+      - name: Upload cargo timings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-timings
+          path: target/cargo-timings/
+          if-no-files-found: warn
+          retention-days: 7
 
   sdk-build:
     name: Build SDK
