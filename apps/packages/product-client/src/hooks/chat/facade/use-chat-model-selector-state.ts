@@ -163,8 +163,12 @@ export function useChatModelSelectorState(options?: {
   const activeLaunchAgentKind = scopedActiveSessionId ? currentSelection?.kind ?? null : null;
   const selectLaunchControl = useChatLaunchControlActions({ activeLaunchAgentKind });
 
+  // Launch descriptors stay built while a session is active: between create
+  // and the first live snapshot the composer would otherwise render a bare
+  // model pill with no controls. ChatInput merges these with the live
+  // descriptors and the live statement wins per key the moment it arrives.
   const launchControls = useMemo(
-    () => scopedActiveSessionId ? [] : buildLaunchControlDescriptors({
+    () => buildLaunchControlDescriptors({
       selection: currentSelection,
       launchAgents: launchCatalog.launchAgents,
       pendingConfigChanges: scopedPendingConfigChanges,
@@ -174,7 +178,6 @@ export function useChatModelSelectorState(options?: {
       currentSelection,
       launchCatalog.launchAgents,
       selectLaunchControl,
-      scopedActiveSessionId,
       scopedPendingConfigChanges,
     ],
   );
