@@ -251,6 +251,20 @@ jobs:
   cargo-check:
     name: Cargo check & test
     runs-on: ubuntu-latest
+    # EXPERIMENT (exp/rust-sccache-nextest, base ci/cargo-cache-and-dedupe):
+    # combine two independently-measured wins on this job. sccache targets
+    # the workspace-crate compile phase (Swatinem/rust-cache deliberately
+    # discards workspace-crate build artifacts, so unchanged crates still
+    # recompile on every PR; sccache keyed by rustc invocation inputs can hit
+    # for those even when the target-dir cache does not carry them forward).
+    # CARGO_INCREMENTAL=0 is required: incremental compilation defeats
+    # sccache's ability to reuse cached object output. nextest targets the
+    # test execution phase. The two wins are on different phases and should
+    # partially compose.
+    env:
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
+      CARGO_INCREMENTAL: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -263,16 +277,23 @@ jobs:
       - name: Setup Rust stable
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+
       - uses: Swatinem/rust-cache@v2
 
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
       - name: Cargo test
-        run: cargo test --workspace
+        run: cargo nextest run --workspace
 
       # The workspace run above builds this package with default features, so
       # the internal-only export path and its dogfood proof would never be
       # evaluated without this step.
       - name: Cargo test internal diagnostics export
-        run: cargo test -p proliferate-diagnostics-collector --features internal-dogfood-export
+        run: cargo nextest run -p proliferate-diagnostics-collector --features internal-dogfood-export
 
   sdk-build:
     name: Build SDK
