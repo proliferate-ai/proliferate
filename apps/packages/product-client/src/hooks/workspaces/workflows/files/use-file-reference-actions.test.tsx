@@ -2,7 +2,7 @@
 
 import { AnyHarnessError } from "@anyharness/sdk";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useFileReferenceActions } from "#product/hooks/workspaces/workflows/files/use-file-reference-actions";
 
 const pathMocks = vi.hoisted(() => ({
@@ -43,6 +43,7 @@ const editorMocks = vi.hoisted(() => ({
 const viewerMocks = vi.hoisted(() => ({
   openTarget: vi.fn(),
   activateViewerTarget: vi.fn(),
+  requestViewerLocation: vi.fn(),
 }));
 
 const bridgeMocks = vi.hoisted(() => ({
@@ -98,8 +99,14 @@ vi.mock("#product/hooks/workspaces/workflows/tabs/use-workspace-shell-activation
 
 vi.mock("#product/stores/editor/workspace-viewer-tabs-store", () => ({
   useWorkspaceViewerTabsStore: (
-    selector: (state: { openTarget: typeof viewerMocks.openTarget }) => unknown,
-  ) => selector({ openTarget: viewerMocks.openTarget }),
+    selector: (state: {
+      openTarget: typeof viewerMocks.openTarget;
+      requestViewerLocation: typeof viewerMocks.requestViewerLocation;
+    }) => unknown,
+  ) => selector({
+    openTarget: viewerMocks.openTarget,
+    requestViewerLocation: viewerMocks.requestViewerLocation,
+  }),
 }));
 
 vi.mock("#product/stores/sessions/session-selection-store", () => ({
@@ -580,21 +587,14 @@ describe("useFileReferenceActions", () => {
   });
 });
 
+// "location request enqueue (03D)" moved to use-file-reference-actions.location.test.tsx (600-line cap).
 function problem(code: string, status: number): AnyHarnessError {
-  return new AnyHarnessError({
-    type: "about:blank",
-    title: "File request failed",
-    status,
-    code,
-  });
+  return new AnyHarnessError({ type: "about:blank", title: "File request failed", status, code });
 }
 
-async function consumeMissingRecovery(result: {
-  readonly current: ReturnType<typeof useFileReferenceActions>;
-}) {
+async function consumeMissingRecovery(
+  result: { readonly current: ReturnType<typeof useFileReferenceActions> },
+) {
   await act(async () => void await result.current.openPrimary());
-  await waitFor(() => expect(result.current.accessState).toEqual({
-    status: "unavailable",
-    reason: "not_found",
-  }));
+  await waitFor(() => expect(result.current.accessState).toEqual({ status: "unavailable", reason: "not_found" }));
 }

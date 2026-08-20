@@ -107,6 +107,24 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     (s) => s.consumeViewerFocusRequest,
   );
 
+  // Mirrors the focus-token selector above, but the location request is
+  // consumed by the mounted FileSourceView (ruling 03D-4), not this frame —
+  // this component only reads the two primitives it needs for the
+  // once-on-transition source-mode force below and to forward to the view.
+  const viewerLocationRequestToken = useWorkspaceViewerTabsStore((s) => (
+    s.viewerLocationRequest?.targetKey === targetKey && s.activeTargetKey === targetKey
+      ? s.viewerLocationRequest.token
+      : 0
+  ));
+  const viewerLocationRequestLine = useWorkspaceViewerTabsStore((s) => (
+    s.viewerLocationRequest?.targetKey === targetKey && s.activeTargetKey === targetKey
+      ? s.viewerLocationRequest.line
+      : null
+  ));
+  const consumeViewerLocationRequest = useWorkspaceViewerTabsStore(
+    (s) => s.consumeViewerLocationRequest,
+  );
+
   const [wordWrap, setWordWrap] = useState(false);
   const changedPaths = useGitChangedPaths(materializedWorkspaceId);
   const activeDiffTarget = diffTarget ?? null;
@@ -191,6 +209,27 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
       setTargetMode(targetKey, "source");
     }
   }, [fileSearchActive, canFindInFile, normalizedEffectiveMode, setTargetMode, targetKey]);
+
+  // Ruling 03D-9: a valid location request forces source mode once, at
+  // consumption, with the same only-on-transition discipline as the two
+  // forcers above — rendered Markdown has no stable source-line geometry, but
+  // a later explicit user toggle back to rendered is never fought.
+  // Seed at 0 (not the current token) so a location request already pending
+  // at mount time — e.g. the viewer remounting via useFileReferenceActions
+  // .openViewer, which mints the token synchronously with activation — still
+  // counts as a new request and forces source mode. Mirrors
+  // FileSourceView's appliedLocationTokenRef, which starts at 0 for the same
+  // reason.
+  const prevLocationRequestTokenRef = useRef(0);
+  useEffect(() => {
+    const isNewRequest = viewerLocationRequestToken !== 0
+      && viewerLocationRequestToken !== prevLocationRequestTokenRef.current;
+    prevLocationRequestTokenRef.current = viewerLocationRequestToken;
+    if (!isNewRequest || normalizedEffectiveMode !== "rendered") {
+      return;
+    }
+    setTargetMode(targetKey, "source");
+  }, [viewerLocationRequestToken, normalizedEffectiveMode, setTargetMode, targetKey]);
 
   const fileTreeDock = dockVisible ? (
     <DockedFileTree
@@ -287,6 +326,9 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
       diffLayout={diffLayout}
       canShowRichPreview={canShowRichPreview}
       wordWrap={wordWrap}
+      locationRequestToken={viewerLocationRequestToken}
+      locationRequestLine={viewerLocationRequestLine}
+      onLocationRequestConsumed={consumeViewerLocationRequest}
     />,
   );
 }

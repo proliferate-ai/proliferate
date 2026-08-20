@@ -129,7 +129,8 @@ Remote filesystem and git data belongs to SDK-react/TanStack Query:
 Zustand stores only local UI/editor state:
 
 - `workspace-viewer-tabs-store.ts`: open targets, active target, per-target
-  mode/layout
+  mode/layout, and the session-only `viewerFocusRequest`/`viewerLocationRequest`
+  one-shot tokens (see File Viewing's Source-location navigation)
 - `workspace-file-tree-ui-store.ts`: expanded folders, selected folder,
   create draft
 - `workspace-file-buffers-store.ts`: local editable drafts, base version token,
@@ -236,6 +237,45 @@ neither wired nor deleted here, and removing them (plus their pinning tests)
 requires a separately scoped constitution review because it crosses
 tab-close/right-panel owners. Do not read that scaffolding as evidence the
 viewer is or was editable.
+
+### Source-location navigation
+
+Activating a workspace file reference carrying `:line` (`:line:column` also
+parses, but column is unconsumed) opens/focuses the ordinary path-only
+`fileViewerTarget` and, separately, enqueues a one-shot source-line jump on
+`workspace-viewer-tabs-store.ts`'s `viewerLocationRequest` — a sibling of the
+landed `viewerFocusRequest` token (same session-only, non-persisted,
+monotonic-token, target-key-gated shape). The target's public identity and
+key stay path-only; the line is never encoded into `ViewerTargetKey`, tab
+keys, right-panel keys, or persisted preferences.
+
+`useFileReferenceActions.openViewer` is the sole enqueue seam: it mints the
+request only after a non-`stale` shell activation outcome, only for a
+positive-integer parsed line (`:0` and an absent suffix never enqueue — the
+path still opens ordinarily), and only for `kind: "file"` targets (never
+`fileDiff`). A fuzzy-corrected reference enqueues the corrected target's line,
+not the originally typed path's.
+
+Unlike the focus token — consumable by the frame the instant it names the
+active target, even before content loads — a location request can only be
+applied by a mounted `FileSourceView` that already has file content and a
+requested row, so it is deliberately left pending across a loading target
+rather than invalidated. `FileEditorView` forces the target to source mode
+once, on the request's transition to a new token — including the transition
+observed on mount, when the viewer remounts onto a target that already has a
+pending request (e.g. `useFileReferenceActions.openViewer` minting the token
+synchronously with activation while `RightPanelContent` mounts a fresh
+`FileEditorView`) — exactly like the two landed find-in-file forcers, because
+rendered Markdown has no stable source-line geometry, and never fights a
+later explicit user toggle back to rendered. `FileSourceView` itself clamps the requested line to the last
+displayed row, centers it (`virtualizer.scrollToIndex(…, {align:"center"})`
+when virtualized; `[data-source-line][data-line]…scrollIntoView({block:
+"center"})` on the non-virtualized `<2000`-line path, which does not trust
+virtualizer offsets), and consumes the request only after applying the jump.
+A repeat activation — even onto the identical line — mints a fresh token and
+re-centers. There is no jumped-line highlight; rows keep their existing
+hover-only styling. Column is parsed and threaded nowhere: it stays a
+deferred, unconsumed field pending stable per-line column geometry.
 
 ### Header
 

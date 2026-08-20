@@ -26,7 +26,7 @@ import {
   type FileReferencePrimaryAction,
 } from "#product/lib/domain/files/path-references";
 import { resolveSelectedWorkspaceIdentity } from "#product/lib/domain/workspaces/selection/workspace-ui-key";
-import { fileViewerTarget } from "#product/lib/domain/workspaces/viewer/viewer-target";
+import { fileViewerTarget, viewerTargetKey } from "#product/lib/domain/workspaces/viewer/viewer-target";
 import { useWorkspacePath } from "#product/providers/WorkspacePathProvider";
 import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useWorkspaceViewerTabsStore } from "#product/stores/editor/workspace-viewer-tabs-store";
@@ -46,6 +46,7 @@ export function useFileReferenceActions({
   const host = useProductHost();
   const files = host.desktop?.files ?? null;
   const openTarget = useWorkspaceViewerTabsStore((state) => state.openTarget);
+  const requestViewerLocation = useWorkspaceViewerTabsStore((state) => state.requestViewerLocation);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
@@ -211,20 +212,35 @@ export function useFileReferenceActions({
     await clipboardRef.current.writeText(current);
   }, []);
 
-  const openViewer = useCallback((path: string, snapshot: typeof latestRef.current) => {
+  // Ruling 03D-6: `:0` and negatives never enqueue a jump; the path still
+  // opens ordinarily. `splitPathLineSuffix` only ever parses `\d+`, but this
+  // stays defensive against any non-integer/non-positive value reaching here.
+  const openViewer = useCallback((
+    path: string,
+    snapshot: typeof latestRef.current,
+    line: number | null,
+  ) => {
     if (
       currentRouteRevisionRef.current !== snapshot.routeRevision
       || !snapshot.materializedWorkspaceId
     ) return false;
     const target = fileViewerTarget(path);
     openTarget(target);
-    activateViewerTarget({
+    const outcome = activateViewerTarget({
       workspaceId: snapshot.materializedWorkspaceId,
       shellWorkspaceId: snapshot.workspaceUiKey,
       target,
     });
+    if (
+      outcome?.result === "completed"
+      && typeof line === "number"
+      && Number.isInteger(line)
+      && line > 0
+    ) {
+      requestViewerLocation(viewerTargetKey(target), line);
+    }
     return true;
-  }, [activateViewerTarget, openTarget]);
+  }, [activateViewerTarget, openTarget, requestViewerLocation]);
 
   const openInSidebar = useCallback(async () => {
     const snapshot = latestRef.current;
@@ -234,7 +250,7 @@ export function useFileReferenceActions({
       || snapshot.accessState.kind !== "file"
       || snapshot.accessState.locator.authority !== "workspace"
     ) return;
-    openViewer(snapshot.accessState.locator.workspacePath, snapshot);
+    openViewer(snapshot.accessState.locator.workspacePath, snapshot, snapshot.reference.line);
   }, [openViewer, routeRevision]);
 
   const recoverMissing = useCallback(async (
@@ -273,13 +289,18 @@ export function useFileReferenceActions({
         });
         return "unavailable";
       }
-      const corrected = resolveFileReference({
+      // Ruling 03D-3: keep the full resolved reference (not just `.locator`)
+      // so the corrected reference's parsed `line` survives to enqueue for
+      // the corrected target only — the discarded-`.locator` shape used to
+      // silently drop it here.
+      const correctedReference = resolveFileReference({
         rawPath: snapshot.reference.rawPath,
         workspacePathOverride: outcome.workspacePath,
         workspaceRoot,
         filesystemOrigin,
         desktopBridgeAvailable: files !== null,
-      }).locator;
+      });
+      const corrected = correctedReference.locator;
       if (corrected.authority !== "workspace") {
         setRecovery({
           recoveryRevision: snapshot.recoveryRevision,
@@ -293,7 +314,9 @@ export function useFileReferenceActions({
         status: "settled",
         locator: corrected,
       });
-      return openViewer(corrected.workspacePath, snapshot) ? "open-viewer" : "unavailable";
+      return openViewer(corrected.workspacePath, snapshot, correctedReference.line)
+        ? "open-viewer"
+        : "unavailable";
     } catch (error) {
       setRecovery({
         recoveryRevision: snapshot.recoveryRevision,
@@ -317,7 +340,9 @@ export function useFileReferenceActions({
     if (state.status !== "settled") return "unavailable";
     if (state.locator.authority === "workspace") {
       if (state.kind !== "file") return "unavailable";
-      return openViewer(state.locator.workspacePath, snapshot) ? "open-viewer" : "unavailable";
+      return openViewer(state.locator.workspacePath, snapshot, snapshot.reference.line)
+        ? "open-viewer"
+        : "unavailable";
     }
     if (state.kind === "directory") {
       await nativeActions.reveal();
