@@ -140,9 +140,26 @@ function launchControlToDescriptor(input: {
 function normalizeLaunchControlKey(
   key: string,
 ): SupportedLiveControlKey | null {
-  // The observed id is executable truth. The type predates arbitrary ACP
-  // controls, but dropping an unknown id here would turn a rendering helper
-  // into an availability filter. Preserve it until the view-model types are
-  // generalized in their owning package.
-  return key as SupportedLiveControlKey;
+  // Post-cutover the projection carries RAW observed control ids (codex
+  // `reasoning_effort`, `fast-mode`). The descriptor `key` is presentation
+  // identity only — composer promotion (effort stepper, fast-mode toggle) and
+  // preference round-trips match on the normalized spelling, while the wire
+  // truth stays `rawConfigId`. Map the known raw shapes; an unknown id is
+  // preserved because dropping it here would turn a rendering helper into an
+  // availability filter.
+  switch (key.toLowerCase().replace(/-/g, "_")) {
+    case "effort":
+    case "reasoning_effort":
+      return "effort";
+    case "fast_mode":
+      return "fast_mode";
+    case "collaboration_mode":
+      return "collaboration_mode";
+    case "mode":
+      return "mode";
+    case "reasoning":
+      return "reasoning";
+    default:
+      return key as SupportedLiveControlKey;
+  }
 }
