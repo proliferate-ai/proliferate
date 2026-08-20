@@ -1,0 +1,40 @@
+# Product copy-style (PROD-COPY-STYLE). Enforced by scripts/check_copy_style.py.
+#
+# PRODUCT_SENSE.md line 11 states the standard: "No em-dashes in ANY product
+# text. No AI tells." The em dash is the classic AI tell, and in a product whose
+# copy is largely model-drafted it is the one that slips through most often. The
+# rule's neighbours in that doc (the type ramp, design attribution, toast copy)
+# are each mechanically enforced; this one was not, so it had drifted into ten
+# shipped strings by the time this guard was written.
+#
+# The census was empty once the introducing sweep fixed those ten sites, so this
+# is an absolute ban with no ledger and no ratchet.
+#
+# In-code scope kept in the checker (structural, not grandfathering): SCANNED_ROOTS
+# (the product copy trees), EXTENSIONS, SKIPPED_DIR_NAMES, and the string-literal
+# scanner that skips comments so an em dash in a comment is never flagged.
+
+[[rule]]
+id = "PROD-COPY-STYLE-001"
+title = "no em-dash in user-facing product copy"
+owner = "product"
+status = "law"
+enforced_by = "scripts/check_copy_style.py"
+mode = "lint"
+scope = "apps/packages/product-client/src/copy/** (.ts/.tsx)"
+
+rule = """A string literal in the product copy trees must not contain an em dash
+(U+2014). Only string literals are scanned; an em dash in a code comment or in
+prose about a rule is untouched, because a comment is not product text."""
+
+alternative = """Split the sentence at the em dash, or use the punctuation the
+clause wants: a period between two full clauses, a colon before a list or an
+explanation, a comma for an aside."""
+
+why = """The em dash is the AI tell PRODUCT_SENSE.md line 11 bans from product
+text. Every neighbouring rule in that doc is enforced by a checker; leaving this
+one as prose is why it drifted into ten shipped strings. Enforcing it keeps the
+product's voice out of the uncanny valley its own taste doc names."""
+
+example_bad = "\"Showing shipped catalog models — not yet verified by a probe.\""
+example_good = "\"Showing shipped catalog models. Not yet verified by a probe.\""

@@ -69,6 +69,11 @@ jobs:
           python3 -m unittest scripts/test_check_toast_copy.py
           python3 scripts/check_toast_copy.py
 
+      - name: Check product copy style
+        run: |
+          python3 -m unittest scripts/test_check_copy_style.py
+          python3 scripts/check_copy_style.py
+
       - name: Check agent-auth secret logs
         run: |
           python3 -m unittest scripts/test_check_agent_auth_secret_logs.py

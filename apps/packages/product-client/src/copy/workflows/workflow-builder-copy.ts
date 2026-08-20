@@ -121,7 +121,7 @@ export const WORKFLOW_BUILDER_COPY = {
   docProducingNodeLabel: "Written by",
   docProducingNodePlaceholder: "Select a step",
   docProducingNodeOption: (position: number, title: string) =>
-    title.trim().length > 0 ? `Step ${position} — ${title}` : `Step ${position}`,
+    title.trim().length > 0 ? `Step ${position}: ${title}` : `Step ${position}`,
   docProducingNodeUnavailableOption: (nodeId: string) => `Unavailable step (${nodeId})`,
   docBodyLabel: "Starting body",
   docBodyPlaceholder: "# Findings\n\n## Answers\n",

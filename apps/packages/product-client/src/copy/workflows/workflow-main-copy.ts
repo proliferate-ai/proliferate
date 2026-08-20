@@ -49,7 +49,7 @@ export const WORKFLOW_MAIN_COPY = {
 
   legacyGroupTitle: "Legacy",
   legacyGroupDescription:
-    "Saved before workflows were rebuilt. These cannot be opened or run here — rebuild the ones you still want, then delete them.",
+    "Saved before workflows were rebuilt. These cannot be opened or run here. Rebuild the ones you still want, then delete them.",
   legacyBadgeLabel: "v1",
   legacyDeleteLabel: (title: string) => `Delete ${title}`,
 
