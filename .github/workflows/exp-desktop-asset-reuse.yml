@@ -20,9 +20,21 @@
 #
 # This file is temporary and must be deleted before any real merge of the
 # caching approach into release-desktop.yml.
+#
+# Trigger note: GitHub only allows `workflow_dispatch` to fire for a workflow
+# file that already exists on the repo's default branch — a brand-new
+# workflow file on a feature branch cannot be dispatched via the API/CLI
+# until it is merged. Since merging to main is out of scope for this
+# experiment (same constraint the sibling exp/desktop-build-speed probe hit),
+# this mirrors that probe's pattern: `push` to this exact branch is the real
+# trigger, gated by a branch filter so it can never fire on any other ref.
+# `workflow_dispatch` is kept alongside it to document the intended
+# long-term interface once/if this graduates into a real workflow.
 name: "EXPERIMENTAL - Desktop asset reuse probe"
 
 on:
+  push:
+    branches: [exp/desktop-asset-reuse]
   workflow_dispatch:
     inputs:
       note:
@@ -30,6 +42,10 @@ on:
         type: string
         required: false
         default: ""
+
+concurrency:
+  group: exp-desktop-asset-reuse
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -50,8 +66,13 @@ jobs:
       PROLIFERATE_RELEASE_VERSION: "asset-reuse-probe-${{ github.run_id }}"
     steps:
       - name: Note
+        env:
+          DISPATCH_NOTE: ${{ inputs.note }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
-          echo "Probe note: ${{ inputs.note }}"
+          echo "Probe note: $DISPATCH_NOTE"
+          echo "Trigger: ${{ github.event_name }}"
+          echo "Commit message: $COMMIT_MESSAGE"
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
