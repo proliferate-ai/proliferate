@@ -10,7 +10,6 @@ from __future__ import annotations
 import datetime as dt
 import json
 from typing import Any
-from uuid import uuid4
 
 import pytest
 
@@ -179,7 +178,14 @@ def test_empty_release_and_environment_sentinels_are_removed(factory_name: str) 
 
 # --- tags, extras, user, request ---------------------------------------------
 
-VALID_UUID = str(uuid4())
+# Fixed, structurally valid ids. These used to be `str(uuid4())` and
+# `uuid4().hex`, but a value generated at collection time lands in the
+# parametrize id, so every process collected a differently-named test. Nothing
+# here depends on the ids being fresh, only on their shape: a dashed UUID and a
+# bare 32-char hex. Determinism matters because pytest-xdist refuses to run when
+# its workers disagree about which tests exist.
+VALID_UUID = "c3f1a8d2-5b47-4e19-9a6c-0d8e2f7b41ca"
+VALID_UUID_HEX = "0f3c2a9d6b8e4f1aa7c25d3e9b64108f"
 
 @pytest.mark.parametrize(
     ("key", "value", "survives"),
@@ -193,7 +199,7 @@ VALID_UUID = str(uuid4())
         ("cloud_workspace_id", VALID_UUID, True), ("cloud_target_id", VALID_UUID, True),
         ("sandbox_profile_id", VALID_UUID, True), ("cloud_sandbox_id", VALID_UUID, True),
         ("enrollment_key_id", VALID_UUID, True), ("user_id", VALID_UUID.upper(), True),
-        ("support_report_id", uuid4().hex, True), ("support_report_id", VALID_UUID, False),
+        ("support_report_id", VALID_UUID_HEX, True), ("support_report_id", VALID_UUID, False),
         ("tenant_id", f"user:{VALID_UUID}", True), ("tenant_id", f"org:{VALID_UUID}", True),
         ("tenant_id", f"team:{VALID_UUID}", False), ("critical_failure", "true", True),
         ("critical_failure", "True", False), ("domain", "billing", True),
