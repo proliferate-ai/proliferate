@@ -9,7 +9,9 @@ import { useChatLaunchCatalog } from "#product/hooks/chat/derived/use-chat-launc
 const mocks = vi.hoisted(() => ({
   query: { data: undefined as Record<string, unknown> | undefined, isLoading: false, isError: false, error: null as Error | null },
   otherResponses: [] as Array<Record<string, unknown> | null>,
+  otherKindsRequested: null as readonly string[] | null,
   readyAgentKinds: new Set(["claude"]),
+  cloudConnectionInfo: null as Record<string, unknown> | null,
 }));
 
 vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
@@ -19,17 +21,22 @@ vi.mock("#product/hooks/agents/derived/use-agent-catalog", () => ({
 }));
 vi.mock("#product/hooks/access/anyharness/agents/use-workspace-agent-launch-options", () => ({
   useWorkspaceAgentLaunchOptionsQuery: () => mocks.query,
-  useWorkspaceAgentsLaunchOptionsListQuery: () => mocks.otherResponses,
+  useWorkspaceAgentsLaunchOptionsListQuery: (args: { harnessKinds: readonly string[] }) => {
+    mocks.otherKindsRequested = args.harnessKinds;
+    return mocks.otherResponses;
+  },
 }));
 vi.mock("#product/hooks/workspaces/facade/use-selected-cloud-runtime-state", () => ({
-  useSelectedCloudRuntimeState: () => ({ connectionInfo: null }),
+  useSelectedCloudRuntimeState: () => ({ connectionInfo: mocks.cloudConnectionInfo }),
 }));
 
 describe("useChatLaunchCatalog", () => {
   beforeEach(() => {
     mocks.query = { data: response(["fable", "unknown-upstream"]), isLoading: false, isError: false, error: null };
     mocks.otherResponses = [];
+    mocks.otherKindsRequested = null;
     mocks.readyAgentKinds = new Set(["claude"]);
+    mocks.cloudConnectionInfo = null;
     useSessionSelectionStore.setState({ selectedWorkspaceId: "workspace-1" });
     useUserPreferencesStore.setState({
       defaultChatAgentKind: "claude",
@@ -82,6 +89,17 @@ describe("useChatLaunchCatalog", () => {
     expect(result.current.groups[0]?.models.map((model) => model.modelId)).toEqual(["live-only"]);
     expect(result.current.groups[1]?.models.map((model) => model.modelId)).toEqual(["gpt-5.6-sol"]);
     expect(result.current.groups[1]?.models[0]?.actionKind).toBe("open_new_chat");
+  });
+
+  it("fans out over the sandbox ready list on a cloud workspace, not the local one", () => {
+    mocks.readyAgentKinds = new Set(["claude", "codex"]);
+    mocks.cloudConnectionInfo = { readyAgentKinds: ["claude", "grok"] };
+    mocks.otherResponses = [response(["grok-4.6"], "grok")];
+    const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
+    // Negative control: the LOCAL runtime's ready list (codex) must not drive
+    // the cloud fan-out; the sandbox connection's list (grok) is the authority.
+    expect(mocks.otherKindsRequested).toEqual(["grok"]);
+    expect(result.current.groups.map((group) => group.kind)).toEqual(["claude", "grok"]);
   });
 
   it("omits an unresolved other harness without failing the catalog", () => {

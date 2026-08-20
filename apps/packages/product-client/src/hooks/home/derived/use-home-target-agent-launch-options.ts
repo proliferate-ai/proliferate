@@ -106,8 +106,12 @@ export function useHomeTargetOtherAgentsLaunchOptions({
     harnessKinds,
     enabled: isLocalRuntimeTarget,
   });
-  return isLocalRuntimeTarget ? responses : [];
+  // Stable empty reference: a fresh [] here would recompute the whole
+  // downstream memo chain on every cloud/no-target render.
+  return isLocalRuntimeTarget ? responses : EMPTY_RESPONSES;
 }
+
+const EMPTY_RESPONSES: Array<HarnessLaunchOptionsResponse | null> = [];
 
 function isNotFound(error: unknown): boolean {
   return Boolean(
