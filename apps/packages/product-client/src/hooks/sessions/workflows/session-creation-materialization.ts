@@ -35,10 +35,12 @@ import {
   sessionIntentsForSession,
 } from "#product/domain/sessions/intents/session-intent-state";
 import {
-  configValuesFromIntentSnapshot,
   planCreationConfigIntentSettlement,
+  rawConfigValuesFromIntentSnapshot,
   snapshotPreMaterializationConfigIntents,
 } from "#product/lib/domain/sessions/creation/config-intent-settlement";
+import { filterControlValuesToObservation } from "#product/lib/domain/sessions/creation/launch-control-observation-filter";
+import { getAgentLaunchOptions } from "#product/lib/access/anyharness/agents";
 import { useSessionIntentStore } from "#product/stores/sessions/session-intent-store";
 import type { CreateSessionWithResolvedConfigOptions } from "#product/hooks/sessions/workflows/session-creation-types";
 import { resolveDesktopRuntimeUrlForWorkspace } from "#product/hooks/sessions/workflows/session-creation-runtime";
@@ -196,11 +198,26 @@ async function runSessionCreationMaterialization({
   const configIntentSnapshot = snapshotPreMaterializationConfigIntents(
     sessionIntentsForSession(useSessionIntentStore.getState(), pendingSessionId),
   );
-  const controlValues = {
+  // Run-time refresh of the target's observed launch options: the runtime
+  // exact-validates control keys against raw observed ids, so the merged
+  // selection (which may carry pre-cutover normalized keys from persisted
+  // preferences) is filtered to the current observation. Omission remains
+  // omission; on fetch failure nothing validatable exists, so send none.
+  const launchOptionsObservation = await getAgentLaunchOptions(
+    targetConnection,
+    options.agentKind,
+    requestOptions,
+  ).catch(() => null);
+  const controlValues = filterControlValuesToObservation({
     ...(frozenDefaultLiveSessionControlValuesByAgentKind[options.agentKind] ?? {}),
     ...(options.launchControlValues ?? {}),
-    ...configValuesFromIntentSnapshot(configIntentSnapshot),
-  };
+    ...rawConfigValuesFromIntentSnapshot(configIntentSnapshot),
+  }, launchOptionsObservation);
+  // The options fetch widened the window since the last supersession check;
+  // re-check before committing a runtime session.
+  if (await discardIfSuperseded(pendingSessionId, lifecycle)) {
+    return pendingSessionId;
+  }
   assertDirectSessionCreateSupported(target);
   const session: Session = await createSession(targetConnection, {
     ...(options.runtimeSessionId ? { sessionId: options.runtimeSessionId } : {}),
