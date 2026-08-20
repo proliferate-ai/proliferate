@@ -285,7 +285,14 @@ jobs:
 
       # Experiment proof step (mold-linker measurement, never to be merged):
       # confirm mold actually performed the link for a real test binary,
-      # rather than just observing that the setup-mold step executed.
+      # rather than just observing that the setup-mold step executed. A
+      # first pass here picked an arbitrary (alphabetically-first) binary
+      # in target/debug/deps and it turned out to be apps/desktop/src-tauri
+      # ("proliferate"/proliferate_supervisor), which tauri-build links with
+      # LLD explicitly regardless of the system `ld` -- so check that one
+      # BY NAME to document the bypass, and separately check the
+      # anyharness-lib unittest binary (the 226k-line crate this experiment
+      # is actually about) to see whether mold linked it.
       - name: Verify mold linked the test binaries
         run: |
           echo "cc's default linker binary:"
@@ -295,17 +302,26 @@ jobs:
           echo "resolved /usr/bin/ld:"
           readlink -f /usr/bin/ld
           mold --version
-          echo "---"
-          bin=$(find target/debug/deps -maxdepth 1 -type f -executable ! -name "*.d" | head -n 1)
-          echo "Inspecting built test binary: $bin"
-          file "$bin"
-          echo "readelf -p .comment (MOLD_DEBUG embeds mold's invocation here):"
-          readelf -p .comment "$bin" || true
-          if readelf -p .comment "$bin" | grep -qi mold; then
-            echo "RESULT: mold confirmed as the linker for $bin"
-          else
-            echo "RESULT: mold string NOT found in .comment for $bin"
-          fi
+          echo "==="
+          check_comment() {
+            local label="$1" glob="$2"
+            local bin
+            bin=$(find target/debug/deps -maxdepth 1 -type f -executable -name "$glob" ! -name "*.d" | head -n 1)
+            if [ -z "$bin" ]; then
+              echo "$label: no binary matched $glob"
+              return
+            fi
+            echo "--- $label: $bin ---"
+            readelf -p .comment "$bin" || true
+            if readelf -p .comment "$bin" | grep -qi mold; then
+              echo "RESULT ($label): mold confirmed as the linker"
+            else
+              echo "RESULT ($label): mold string NOT found in .comment (some other linker was used)"
+            fi
+          }
+          check_comment "anyharness-lib (the crate this experiment targets)" "anyharness_lib-*"
+          check_comment "apps/desktop/src-tauri (tauri-build may force LLD)" "proliferate_supervisor-*"
+          check_comment "anyharness-contract" "anyharness_contract-*"
 
   sdk-build:
     name: Build SDK
