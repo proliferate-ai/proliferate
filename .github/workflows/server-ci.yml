@@ -288,12 +288,24 @@ jobs:
             x86_64-unknown-linux-musl
             aarch64-unknown-linux-musl
 
+      # This job compiles the same 3 crates (anyharness, proliferate-worker,
+      # proliferate-supervisor) for 2 targets with no cache today, so every run
+      # pays a full from-scratch registry download plus workspace-dependency
+      # compile twice. `cross` (used for the aarch64 build below) bind-mounts
+      # the repo root, including target/, into its build container by default,
+      # so a host-side target/ cache benefits both the native x86_64 build and
+      # the cross-compiled aarch64 build. Same pattern already used for
+      # `cross` builds elsewhere in this repo (see release-e2e.yml).
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+
       - name: Install musl-tools
         run: sudo apt-get update && sudo apt-get install -y musl-tools
         working-directory: .
 
       - name: Install cross for aarch64
-        run: cargo install cross --git https://github.com/cross-rs/cross
+        run: cargo install cross --git https://github.com/cross-rs/cross --locked
         working-directory: .
 
       - name: Build self-hosted Linux runtime (x86_64)
